@@ -1,44 +1,22 @@
-# Python
+# Ignore virtual environment directories
+venvs/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
 lib64/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ipynb_checkpoints/
+bin/
+include/
+lib/
+share/
 
-# Node.js
-node_modules/
-
-# Configuration and Logs
-config/config.yaml
+# Ignore generated files and directories
 logs/
+*.pyc
 
-# Virtual Environment
-pyvenv.cfg
-
-# Generated Scripts
-run_with_openvino.sh
-
-# Environment variables
+# Ignore development and configuration files
+config/*.yaml
+*.db
+*.sqlite3
 .env
-
-# Operating System
-.DS_Store
-
-# AutoBot Temporary and Cache Files
-autobot-vue/node_modules
-frontend/admin_gui/node_modules
-data/chromadb/chroma.sqlite3
-static/*
-autobot-vue/dist
-frontend/admin_gui/dist
-logs/*
-data/audit.log
-data/chat_history.json
-data/reliability_stats.json
+.vscode/
+dist/
+build/
+*.log
