@@ -35,7 +35,7 @@ RUN_OPENVINO_SCRIPT="run_with_openvino.sh"
 LOGS_DIR="logs"
 DOCS_DIR="docs"
 STATIC_DIR="frontend/static"
-FRONTEND_DIR="frontend/admin_gui"
+FRONTEND_DIR="autobot-vue"
 
 echo "🔧 Starting AutoBot setup..."
 
@@ -127,8 +127,6 @@ rm -rf ../../frontend/templates/*
 # Install dependencies
 echo "📦 Installing dependencies..."
 npm install
-npm install --save-dev @types/react @types/react-dom @vitejs/plugin-react @types/babel__core @types/babel__generator @types/babel__template @types/babel__traverse
-npm install @mui/material @emotion/react @emotion/styled
 
 # Build frontend
 echo "🏗️ Building frontend..."
@@ -150,7 +148,7 @@ rm -rf $STATIC_DIR/*
 
 # Check if dist directory exists and contains files
 echo "🔍 Checking for build output..."
-DIST_PATH="/home/kali/Desktop/AutoBot/$FRONTEND_DIR/dist"
+DIST_PATH=\"$(pwd)/$FRONTEND_DIR/dist\"
 STATIC_PATH="/home/kali/Desktop/AutoBot/$STATIC_DIR"
 if [ -d "$DIST_PATH" ] && [ "$(ls -A $DIST_PATH)" ]; then
     # Copy build files to static directory with force overwrite

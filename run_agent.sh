@@ -5,16 +5,19 @@
 echo "Starting AutoBot application..."
 
 # Start the FastAPI backend in a new terminal
-echo "Starting FastAPI backend..."
-xterm -e "cd /home/kali/Desktop/AutoBot && python main.py; bash" &
+echo "Starting FastAPI backend on port 8000..."
+# Assuming your main.py uses an environment variable or argument for port,
+# or you are using uvicorn which can be configured.
+# Example using uvicorn with a common pattern:
+# uvicorn main:app --host 0.0.0.0 --port 8000 &
+# For simplicity, we'll assume python main.py starts on 8000 or can be configured.
+python main.py &
 
-# Wait a bit to ensure backend is starting
-sleep 3
+# Serve the static frontend files using a simple HTTP server
+echo "Serving static frontend files from frontend/static on port 8080..."
+cd frontend/static
+python -m http.server 8080 &
 
-# Start the Vue.js frontend development server
-echo "Starting Vue.js frontend..."
-cd /home/kali/Desktop/AutoBot/autobot-vue
-npm run dev -- --port=5174 &
-
-echo "AutoBot application started. Backend on port 8000, Vue.js Frontend on port 5174."
-echo "You can access the frontend at http://localhost:5174/"
+echo "AutoBot application started."
+echo "Backend available on port 8000."
+echo "Frontend available at http://localhost:8080/"

@@ -3,7 +3,7 @@ import yaml
 import requests
 import torch
 import time
-import logging
+import logging # Keep logging import
 from dotenv import load_dotenv
 import asyncio # Import asyncio
 import json # Import json
@@ -33,6 +33,10 @@ class LocalLLM:
 local_llm = LocalLLM()
 
 # Placeholder for Google Generative AI (palm)
+
+# Import necessary transformers and torch components
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
 class MockPalm:
     class QuotaExceededError(Exception):
         pass
@@ -125,6 +129,7 @@ class LLMInterface:
         return resolved_content.strip()
 
     async def check_ollama_connection(self) -> bool:
+        
         """
         Checks if the Ollama server is reachable and if the configured Ollama models are available.
         """
@@ -285,6 +290,10 @@ class LLMInterface:
             "temperature": temperature,
             # Ollama uses 'format' for structured output, typically 'json'
             "format": "json" if structured_output else "",
+            # Include device if specified in kwargs
+            **({\"options\": {\"num_gpu\": kwargs.pop(\'device\').split(\':\')[-1]}} 
+               if \'device\' in kwargs and kwargs[\'device\'].startswith(\'cuda\') else {}),
+            **({\"options\": {\"device\": kwargs.pop(\'device\')}} if \'device\' in kwargs and not kwargs[\'device\'].startswith(\'cuda\') else {}),
             **kwargs
         }
         
