@@ -20,3 +20,5 @@ config/*.yaml
 dist/
 build/
 *.log
+
+*:Zone.Identifier
