@@ -9,14 +9,25 @@ from docx import Document as DocxDocument # To avoid conflict with Document clas
 from pypdf import PdfReader
 import re
 import yaml
+from dotenv import load_dotenv # Import load_dotenv
 from sentence_transformers import SentenceTransformer
 
 class KnowledgeBase:
     def __init__(self, config_path="config/config.yaml"):
+        # Ensure absolute path for config_path
+        self.config_path = os.path.abspath(config_path)
+        
         self.config = self._load_config(config_path)
         kb_config = self.config['knowledge_base']
         
-        self.db_path = kb_config['db_path']
+        self.network_share_path = kb_config.get('network_share_path')
+        # Load network username and password from config or environment variables
+ self.network_username = kb_config.get('network_username', os.getenv('NETWORK_SHARE_USERNAME'))
+ self.network_password = kb_config.get('network_password', os.getenv('NETWORK_SHARE_PASSWORD'))
+
+        self.db_path = self._resolve_path(kb_config['db_path'])
+ # Resolve chroma path immediately after loading from config
+ self.chromadb_path = self._resolve_path(kb_config['chromadb_path'])
         self.vector_store_type = kb_config['vector_store_type']
         self.chromadb_path = kb_config['chromadb_path']
         self.embedding_model_name = kb_config['embedding_model']
@@ -29,8 +40,15 @@ class KnowledgeBase:
         self._init_vector_store()
 
     def _load_config(self, config_path):
+        # Use the absolute config path
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
+
+    def _resolve_path(self, configured_path: str) -> str:
+        """Resolves the final path by potentially prepending the network share path."""
+        if self.network_share_path and not os.path.isabs(configured_path):
+            return os.path.join(self.network_share_path, configured_path)
+        return configured_path
 
     def _get_embedding_function(self):
         # Using SentenceTransformer for embeddings
