@@ -24,3 +24,7 @@ build/
 *:Zone.Identifier
 *.Identifier
 backend/data/chats/*
+
+# Data directories (user data, chats, messages)
+data/chats/
+data/messages/

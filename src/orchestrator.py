@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 import uuid
 import time
 import traceback
+from datetime import datetime # Import datetime
 import re # Import re
 
 from src.llm_interface import LLMInterface
@@ -167,6 +168,11 @@ class Orchestrator:
                 print("Knowledge Base disabled in configuration. Skipping initialization.")
                 self.knowledge_base = None
 
+        # Load project status
+        self.project_status = self._load_status()
+        await event_manager.publish("log_message", {"level": "INFO", "message": f"Project status loaded."})
+        print("Project status loaded on startup.")
+
     def _load_config(self, config_path):
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
@@ -187,6 +193,15 @@ class Orchestrator:
         self.agent_paused = False
         await event_manager.publish("log_message", {"level": "INFO", "message": "Agent resumed"})
         print("Agent resumed")
+
+    def _load_status(self) -> str:
+        """Reads the project status from docs/status.md."""
+        status_path = "docs/status.md"
+        try:
+            with open(status_path, 'r') as f:
+                return f.read()
+        except FileNotFoundError:
+            return "Project status file (docs/status.md) not found. This is the initial state."
 
     async def generate_task_plan(self, goal: str, messages: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         if messages is None:
@@ -214,6 +229,7 @@ class Orchestrator:
         
         # Use the system prompt loaded from file
         system_prompt_parts = [
+            f"Current Project Status:\n{self.project_status}\n\n", # Include project status
             self.llm_interface.orchestrator_system_prompt,
             "You have access to the following tools. You MUST use these tools to achieve the user's goal. Each item below is a tool you can directly instruct to use. Do NOT list the tool descriptions, only the tool names and their parameters as shown below:",
         ]
@@ -627,6 +643,22 @@ If the user's request is purely conversational and does not require a tool, resp
     async def generate_next_action(self, goal: str, messages: Optional[List[Dict[str, str]]]):
         """Generate the next action in the execution sequence."""
         return await self.generate_task_plan(goal, messages)
+
+    def _document_completed_task(self, goal: str, results: List[Dict[str, Any]]):
+        """Documents the completed task in docs/tasks.md."""
+        doc_path = "docs/tasks.md"
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        markdown_content = f"## Goal: {goal}\n\n"
+        markdown_content += f"**Date:** {timestamp}\n\n"
+        markdown_content += "**Results:**\n\n"
+        for i, result in enumerate(results):
+            markdown_content += f"Task {i+1}: Status: {result.get('status')}, Message: {result.get('message', 'N/A')}\n"
+        markdown_content += "---\n\n" # Separator for tasks
+        
+        with open(doc_path, "a") as f:
+            f.write(markdown_content)
+        print(f"Documented completed goal in {doc_path}")
 
 # Example Usage (for testing)
 if __name__ == "__main__":

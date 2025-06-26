@@ -62,10 +62,10 @@ sudo apt update && sudo apt install -y make build-essential libssl-dev zlib1g-de
 curl https://pyenv.run | bash
 
 # Add to shell
-echo -e '\nexport PYENV_ROOT=\"\$HOME/.pyenv\"' >> ~/.bashrc
-echo 'command -v pyenv >/dev/null || export PATH=\"\$PYENV_ROOT/bin:\$PATH\"' >> ~/.bashrc
-echo 'eval \"\$(pyenv init -)\"' >> ~/.bashrc
-exec \"\$SHELL\"
+echo -e '\\nexport PYENV_ROOT=\\\"\\$HOME/.pyenv\\\"' >> ~/.bashrc
+echo 'command -v pyenv >/dev/null || export PATH=\\\"\\$PYENV_ROOT/bin:\\$PATH\\\"' >> ~/.bashrc
+echo 'eval \\\"\\$(pyenv init -)\\\"' >> ~/.bashrc
+exec \\\"\\$SHELL\\\"
 
 # Then install Python
 pyenv install $PYTHON_VERSION
@@ -221,7 +221,7 @@ echo "✅ OpenVINO installation attempted."
 
 # Check for Intel NPU drivers on system
 echo "🔍 Checking for Intel NPU driver support..."
-if lspci | grep -i "neural\|npu\|ai" > /dev/null 2>&1; then
+if lspci | grep -i "neural\\|npu\\|ai" > /dev/null 2>&1; then
     echo "✅ Intel NPU hardware detected via lspci"
     
     # Check if Intel NPU driver is installed
