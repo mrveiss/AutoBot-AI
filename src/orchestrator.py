@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 import uuid
 import time
 import traceback
+from datetime import datetime # Import datetime
 import re # Import re
 
 from src.llm_interface import LLMInterface
@@ -82,6 +83,11 @@ class Orchestrator:
         await event_manager.publish("log_message", {"level": "INFO", "message": f"Available tools collected: {json.dumps(self.available_tools, indent=2)}"})
         print("Available tools collected on startup.")
 
+        # Load project status
+        self.project_status = self._load_status()
+        await event_manager.publish("log_message", {"level": "INFO", "message": f"Project status loaded."})
+        print("Project status loaded on startup.")
+
     def _load_config(self, config_path):
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
@@ -91,6 +97,15 @@ class Orchestrator:
         print(f"Phi-2 enabled status set to: {self.phi2_enabled}")
         asyncio.create_task(event_manager.publish("settings_update", {"phi2_enabled": enabled}))
 
+    def _load_status(self) -> str:
+        """Reads the project status from docs/status.md."""
+        status_path = "docs/status.md"
+        try:
+            with open(status_path, 'r') as f:
+                return f.read()
+        except FileNotFoundError:
+            return "Project status file (docs/status.md) not found. This is the initial state."
+
     async def generate_task_plan(self, goal: str):
         # Always use the orchestrator LLM for planning
         target_llm_model = self.orchestrator_llm_model
@@ -99,7 +114,27 @@ class Orchestrator:
         await event_manager.publish("log_message", {"level": "INFO", "message": f"Generating plan using Orchestrator LLM: {target_llm_model}"})
         print(f"Generating plan using Orchestrator LLM: {target_llm_model}")
 
-        retrieved_context = self.knowledge_base.search(goal, n_results=3)
+        retrieved_context = None
+        rag_cache_key = f"rag_cache:{goal}"
+        rag_cache_ttl = self.config.get('task_transport', {}).get('redis_cache', {}).get('rag_cache_ttl', 3600) # Default to 1 hour
+
+        if self.redis_client:
+            try:
+                cached_result = self.redis_client.get(rag_cache_key)
+                if cached_result:
+                    retrieved_context = json.loads(cached_result)
+                    await event_manager.publish("log_message", {"level": "INFO", "message": f"Retrieved context from Redis cache for goal: {goal}"})
+            except Exception as e:
+                await event_manager.publish("log_message", {"level": "ERROR", "message": f"Error retrieving RAG cache for goal '{goal}': {e}"})
+
+        if retrieved_context is None:
+            retrieved_context = self.knowledge_base.search(goal, n_results=3)
+            if self.redis_client and retrieved_context:
+                try:
+                    self.redis_client.setex(rag_cache_key, rag_cache_ttl, json.dumps(retrieved_context))
+                    await event_manager.publish("log_message", {"level": "INFO", "message": f"Stored context in Redis cache for goal: {goal}"})
+                except Exception as e:
+                    await event_manager.publish("log_message", {"level": "ERROR", "message": f"Error storing RAG cache for goal '{goal}': {e}"})
         context_str = ""
         if retrieved_context:
             context_str = "\n\nRelevant Context from Knowledge Base:\n"
@@ -112,6 +147,7 @@ class Orchestrator:
         
         # Use the system prompt loaded from file
         system_prompt_parts = [
+            f"Current Project Status:\n{self.project_status}\n\n", # Include project status
             self.llm_interface.orchestrator_system_prompt,
             "You have access to the following tools. You MUST use these tools to achieve the user's goal. Each item below is a tool you can directly instruct to use. Do NOT list the tool descriptions, only the tool names and their parameters as shown below:",
         ]
@@ -229,40 +265,52 @@ Prioritize using the most specific tool for the job. For example, use 'Manage se
         await event_manager.publish("orchestrator_dispatch", {"task_id": task_id, "payload": task_payload})
         print(f"Orchestrator dispatching task {task_id}...")
 
-        result = {"status": "error", "message": "Task dispatch failed."}
-        try:
-            if self.task_transport_type == "redis" and self.redis_client:
-                self.redis_client.publish("orchestrator_tasks", json.dumps(task_payload))
-                print(f"Task {task_id} published to Redis channel 'orchestrator_tasks'.")
-                
-                response_channel = f"worker_results_{task_id}"
-                pubsub = self.redis_client.pubsub()
-                pubsub.subscribe(response_channel)
-                print(f"Orchestrator waiting for result on '{response_channel}'.")
-                
-                timeout = 300 # seconds
-                start_time = time.time()
-                for message in pubsub.listen():
-                    if message['type'] == 'message':
-                        result = json.loads(message['data'])
-                        await event_manager.publish("orchestrator_result_received", {"task_id": task_id, "result": result})
-                        pubsub.unsubscribe(response_channel)
-                        break
-                    if time.time() - start_time > timeout:
-                        await event_manager.publish("error", {"message": f"Task {task_id} timed out after {timeout}s."})
-                        pubsub.unsubscribe(response_channel)
-                        result = {"status": "error", "message": "Task timed out."}
-                        break
-            elif self.task_transport_type == "local":
-                print(f"Executing task {task_id} locally.")
-                result = await self.local_worker.execute_task(task_payload)
-                await event_manager.publish("orchestrator_result_received", {"task_id": task_id, "result": result})
-            else:
+        max_retries = 3 # Define maximum retries
+        result = {"status": "error", "message": "Task dispatch failed after retries."} # Default error result
+
+        for attempt in range(max_retries + 1):
+            try:
+                if self.task_transport_type == "redis" and self.redis_client:
+                    self.redis_client.publish("orchestrator_tasks", json.dumps(task_payload))
+                    print(f"Attempt {attempt+1}/{max_retries+1}: Task {task_id} published to Redis channel 'orchestrator_tasks'.")
+
+                    response_channel = f"worker_results_{task_id}"
+                    pubsub = self.redis_client.pubsub()
+                    pubsub.subscribe(response_channel)
+                    print(f"Attempt {attempt+1}/{max_retries+1}: Orchestrator waiting for result on '{response_channel}'.")
+
+                    timeout = 300 # seconds
+                    start_time = time.time()
+                    for message in pubsub.listen():
+                        if message['type'] == 'message':
+                            result = json.loads(message['data'])
+                            await event_manager.publish("orchestrator_result_received", {"task_id": task_id, "result": result})
+                            pubsub.unsubscribe(response_channel)
+                            break # Break out of listen loop
+                        if time.time() - start_time > timeout:
+                            await event_manager.publish("error", {"message": f"Attempt {attempt+1}/{max_retries+1}: Task {task_id} timed out after {timeout}s."})
+                            pubsub.unsubscribe(response_channel)
+                            result = {"status": "error", "message": "Task timed out."}
+                            break # Break out of listen loop
+                elif self.task_transport_type == "local":
+                    print(f"Attempt {attempt+1}/{max_retries+1}: Executing task {task_id} locally.")
+                    result = await self.local_worker.execute_task(task_payload)
+                    await event_manager.publish("orchestrator_result_received", {"task_id": task_id, "result": result})
+                else:
+                    await event_manager.publish("error", {"message": f"Attempt {attempt+1}/{max_retries+1}: Unsupported task transport type: {self.task_transport_type}"})
+                    result = {"status": "error", "message": "Unsupported task transport type."}
+
+                if result['status'] != "error":
+                    break # Break out of retry loop if successful
+                else:
+                    await event_manager.publish("log_message", {"level": "WARNING", "message": f"Attempt {attempt+1}/{max_retries+1} for task {task_id} failed with error: {result.get('message', 'Unknown error')}. Retrying..."})
+                    await asyncio.sleep(2) # Wait before retrying
+
+            except Exception as e:
+                result = {"status": "error", "message": f"Attempt {attempt+1}/{max_retries+1}: Exception during task dispatch: {e}"}
                 await event_manager.publish("error", {"message": f"Unsupported task transport type: {self.task_transport_type}"})
-                result = {"status": "error", "message": "Unsupported task transport type."}
-        except Exception as e:
-            result = {"status": "error", "message": f"Exception during task dispatch: {e}"}
-            await event_manager.publish("error", {"message": f"Orchestrator dispatch exception: {e}"})
+                await event_manager.publish("error", {"message": f"Attempt {attempt+1}/{max_retries+1}: Orchestrator dispatch exception: {e}. Retrying..."})
+                await asyncio.sleep(2) # Wait before retrying
 
         # Diagnostics integration
         if result['status'] == "error":
@@ -274,7 +322,7 @@ Prioritize using the most specific tool for the job. For example, use 'Manage se
                 if permission_granted:
                     await event_manager.publish("log_message", {"level": "INFO", "message": f"User granted permission for task {task_id} fixes. Retrying or applying fix strategy..."})
                     # Here, implement retry/fallback/plan rewriting logic based on report and permission
-                    # For now, just log that permission was granted.
+                    # A basic retry has been implemented above. More advanced logic would go here.
                     # A more advanced system would re-dispatch the task or modify the plan.
                 else:
                     await event_manager.publish("log_message", {"level": "WARNING", "message": f"User denied permission for task {task_id} fixes. Task will not be retried/fixed automatically."})
@@ -282,7 +330,7 @@ Prioritize using the most specific tool for the job. For example, use 'Manage se
                 await event_manager.publish("log_message", {"level": "INFO", "message": f"Auto-applying fixes for task {task_id}."})
                 # Implement auto-retry/fallback/plan rewriting here
         else:
-            await self.diagnostics.log_success(task_payload)
+            await self.diagnostics.log_success(task_payload, result.get('message', 'Success'))
 
         return result
 
@@ -340,8 +388,28 @@ Prioritize using the most specific tool for the job. For example, use 'Manage se
                 # For now, continue to allow other tasks to attempt execution
         
         await event_manager.publish("goal_execution_complete", {"goal": goal, "results": results, "llm_response": plan_text})
+        
+        # Auto-document the completed task
+        self._document_completed_task(goal, results)
+        
         print("\nGoal execution complete.")
         return {"status": "completed", "results": results, "llm_response": plan_text}
+
+    def _document_completed_task(self, goal: str, results: List[Dict[str, Any]]):
+        """Documents the completed task in docs/tasks.md."""
+        doc_path = "docs/tasks.md"
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        markdown_content = f"## Goal: {goal}\n\n"
+        markdown_content += f"**Date:** {timestamp}\n\n"
+        markdown_content += "**Results:**\n\n"
+        for i, result in enumerate(results):
+            markdown_content += f"Task {i+1}: Status: {result.get('status')}, Message: {result.get('message', 'N/A')}\n"
+        markdown_content += "---\n\n" # Separator for tasks
+        
+        with open(doc_path, "a") as f:
+            f.write(markdown_content)
+        print(f"Documented completed goal in {doc_path}")
 
 # Example Usage (for testing)
 if __name__ == "__main__":

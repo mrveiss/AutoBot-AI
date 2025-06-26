@@ -6,6 +6,7 @@ agent_behavior:
 
 llm_config:
   default_llm: "ollama_tinyllama" # Orchestrator LLM (Phase 1)
+  fallback_strategy: ["orchestrator", "task", "openai"] # Order of LLM types/aliases to try on failure
   task_llm: "ollama_phi2" # Task LLM (Phase 2) - for more complex tasks
   ollama:
     host: "http://localhost:11434"
@@ -67,6 +68,9 @@ task_transport:
   redis:
     host: "localhost"
     port: 6379
+  redis_cache:
+    # Time-to-live (TTL) for cached items in seconds (e.g., RAG results)
+    rag_cache_ttl: 3600
   grpc:
     host: "localhost"
     port: 50051

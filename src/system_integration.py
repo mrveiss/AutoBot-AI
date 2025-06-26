@@ -6,6 +6,10 @@ from typing import Dict, Any, List, Optional
 
 class SystemIntegration:
     def __init__(self):
+        # Define a list of potentially dangerous commands to disallow
+        self._disallowed_commands = [
+            'rm -rf', 'format c:', 'del /s /q' # Add more as needed
+        ]
         self.os_type = platform.system()
         print(f"SystemIntegration initialized for OS: {self.os_type}")
 
@@ -23,7 +27,7 @@ class SystemIntegration:
         except subprocess.CalledProcessError as e:
             return {"status": "error", "message": f"Command failed with exit code {e.returncode}", "output": e.stdout.strip(), "error": e.stderr.strip()}
         except FileNotFoundError:
-            return {"status": "error", "message": f"Command not found: {command[0]}", "output": "", "error": ""}
+            return {"status": "command_not_found", "message": f"Command not found: {command[0]}", "output": "", "error": ""}
         except Exception as e:
             return {"status": "error", "message": f"An unexpected error occurred: {e}", "output": "", "error": str(e)}
 
@@ -144,6 +148,12 @@ class SystemIntegration:
         """Executes a general system command."""
         # This is similar to execute_shell_command in worker_node, but kept here for abstraction
         # and potential future OS-specific enhancements (e.g., direct API calls instead of shell)
+        return self._run_command([command], shell=True)
+
+    def execute_system_command(self, command: str) -> Dict[str, Any]:
+        """Executes a general system command with basic sandboxing."""
+        if any(command.strip().lower().startswith(disallowed.lower()) for disallowed in self._disallowed_commands):
+            return {"status": "error", "message": f"Execution of command starting with '{command.split()[0]}' is disallowed for security reasons."}
         return self._run_command([command], shell=True)
 
     # --- Windows-specific (pywin32/COM - placeholders) ---
