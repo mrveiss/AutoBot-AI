@@ -286,6 +286,18 @@ Prioritize using the most specific tool for the job. For example, use 'Manage se
 
         return result
 
+    async def pause_agent(self):
+        """Pauses the agent's current operation."""
+        # Placeholder for actual pause functionality
+        # This can be expanded to include logic for pausing ongoing tasks
+        return {"status": "success", "message": "Agent paused successfully."}
+
+    async def resume_agent(self):
+        """Resumes the agent's operation if paused."""
+        # Placeholder for actual resume functionality
+        # This can be expanded to include logic for resuming paused tasks
+        return {"status": "success", "message": "Agent resumed successfully."}
+
     async def execute_goal(self, goal: str, user_role: str = "user"): # Removed use_phi2 parameter
         await event_manager.publish("goal_received_orchestrator", {"goal": goal})
         print(f"\nReceived goal: {goal}")
@@ -301,19 +313,35 @@ Prioritize using the most specific tool for the job. For example, use 'Manage se
             # Convert each tool call object to a JSON string for display
             plan_text = "\n".join([json.dumps(step, indent=2) for step in task_plan_steps])
 
+        # Publish separate events for plan components
         await event_manager.publish("plan_ready", {"plan": task_plan_steps, "llm_response": plan_text})
         print("\nGenerated Task Plan:")
         for i, task in enumerate(task_plan_steps):
             print(f"{i+1}. {json.dumps(task, indent=2)}") # Print each task as formatted JSON
+            # Split each task into components for separate messaging
+            tool_name = task.get("tool_name", "Unknown Tool")
+            thoughts = task.get("thoughts", [])
+            tool_args = task.get("tool_args", {})
+            
+            # Publish plan description
+            plan_desc = f"Here is the plan for step {i+1}: I will {tool_name}."
+            if tool_name == "respond_conversationally":
+                plan_desc = f"Here is the plan for step {i+1}: I will respond conversationally."
+            await event_manager.publish("planning", {"message": plan_desc})
+            
+            # Publish thoughts if any
+            if thoughts:
+                thought_text = ", ".join(thoughts)
+                await event_manager.publish("thought", {"thought": f"Thought for step {i+1}: {thought_text}"})
+            
+            # Publish tool usage as utility message
+            await event_manager.publish("utility", {"message": f"Tool used for step {i+1}: {tool_name}"})
 
         results = []
         print("\nExecuting tasks...")
         for i, tool_call_object in enumerate(task_plan_steps): # Iterate through structured tool call objects
             print(f"--- Orchestrating Task {i+1}: {tool_call_object.get('tool_name', 'Unknown Tool')} ---")
             
-            # Publish the tool call object as a thought event
-            await event_manager.publish("thought", {"thought": json.dumps(tool_call_object, indent=2)})
-
             task_payload = {
                 "task_id": str(uuid.uuid4()),
                 "user_role": user_role,

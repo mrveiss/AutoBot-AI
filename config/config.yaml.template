@@ -1,94 +1,16 @@
-# Agent Configuration
-backend_port: 8000
+# AutoBot Configuration File
 
-agent_behavior:
-  debug_mode: false # Set to true to enable extended debug logging and features
+backend:
+  cors_origins:
+    - "http://localhost"
+    - "http://localhost:5173"
+    - "http://127.0.0.1:5173"
+    - "http://localhost:8080"
+    - "http://127.0.0.1:8080"
+  ollama_endpoint: "http://localhost:11434/api/generate"
+  ollama_model: "llama2"
+  chat_data_dir: "data/chats"
+  server_host: "0.0.0.0"
+  server_port: 8001
 
-llm_config:
-  default_llm: "ollama_tinyllama" # Orchestrator LLM (Phase 1)
-  task_llm: "ollama_phi2" # Task LLM (Phase 2) - for more complex tasks
-  ollama:
-    host: "http://localhost:11434"
-    models:
-      tinyllama: "tinyllama"
-      phi2: "phi2" # Assuming phi2 is also available via Ollama
-  openai:
-    api_key: "YOUR_OPENAI_API_KEY"
-    model: "gpt-3.5-turbo"
-  transformers: # For local models like Phi-2 if not via Ollama
-    model_path: "./models/phi2" # Placeholder for local Phi-2 path
-    device: "auto" # "cpu", "cuda", "npu" (for OpenVINO)
-
-hardware_acceleration:
-  priority: ["openvino", "cuda", "onnxruntime", "cpu"] # Order of preference
-  openvino:
-    device: "AUTO" # "CPU", "GPU", "GNA", "NPU"
-  onnxruntime:
-    providers: ["CPUExecutionProvider"] # "CUDAExecutionProvider", "OpenVINOExecutionProvider"
-
-vnc_config:
-  enabled: true
-  vnc_port: 5900 # Default VNC port
-  websocket_port: 6080 # Port for websockify
-  password: "your_vnc_password" # IMPORTANT: Change this to a strong password
-
-security_config:
-  enable_auth: false # Set to true to enable authentication and permission checks
-  audit_log_file: "data/audit.log" # Path to the audit log file
-  allowed_users: # Example: username -> password (for simple demo, use proper hashing in production)
-    admin: "adminpass"
-    user: "userpass"
-  roles:
-    admin:
-      permissions:
-        - "allow_all" # Grants all permissions
-    user:
-      permissions:
-        - "allow_goal_submission"
-        - "allow_file_upload"
-        - "allow_kb_read"
-        - "allow_kb_search"
-        - "allow_gui_type_text"
-        - "allow_gui_read_text"
-        - "allow_system_query_info"
-        - "allow_system_execute_command" # Be careful with this permission!
-    guest:
-      permissions:
-        - "allow_kb_read"
-        - "allow_kb_search"
-
-logging_config:
-  level: "INFO" # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  log_file: "agent.log"
-  enable_audit_log: true
-
-task_transport:
-  type: "local" # "local", "redis", "grpc"
-  redis:
-    host: "localhost"
-    port: 6379
-  grpc:
-    host: "localhost"
-    port: 50051
-
-knowledge_base:
-  db_path: "data/knowledge_base.db" # SQLite database path
-  vector_store_type: "chromadb" # "chromadb" or "faiss"
-  chromadb_path: "data/chromadb" # Directory for ChromaDB persistence
-  embedding_model: "all-MiniLM-L6-v2" # Sentence Transformers model name
-  chunk_size: 500
-  chunk_overlap: 50
-
-diagnostics:
-  enabled: true
-  use_llm_for_analysis: true
-  use_web_search_for_analysis: true
-  auto_apply_fixes: false # Requires user permission if false
-  reliability_stats_file: "data/reliability_stats.json"
-
-voice_interface:
-  enabled: false # Set to true to enable voice features
-  continuous_listening: false # If true, agent continuously listens for commands
-  push_to_talk_key: "space" # Key to hold for push-to-talk mode (e.g., 'space', 'alt', 'ctrl')
-  stt_engine: "google" # "google" (online), "vosk" (offline - requires vosk model download)
-  tts_engine: "pyttsx3" # "pyttsx3" (offline), "coqui" (offline - requires coqui-tts installation)
+# Other configuration sections can be added as needed

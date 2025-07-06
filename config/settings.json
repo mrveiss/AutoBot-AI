@@ -1,0 +1,24 @@
+{
+  "message_display": {
+    "show_thoughts": true,
+    "show_json": false,
+    "show_utility": false,
+    "show_planning": true,
+    "show_debug": false
+  },
+  "chat": {
+    "auto_scroll": true,
+    "max_messages": 100
+  },
+  "backend": {
+    "use_phi2": true,
+    "api_endpoint": "http://localhost:8001",
+    "ollama_endpoint": "http://localhost:11434/api/generate",
+    "ollama_model": "phi:2.7b",
+    "streaming": true
+  },
+  "ui": {
+    "theme": "light",
+    "font_size": "medium"
+  }
+}
