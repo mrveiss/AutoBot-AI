@@ -17,4 +17,24 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  server: {
+    headers: {
+      'X-Content-Type-Options': 'nosniff'
+      // Removed Content-Security-Policy to avoid unneeded headers
+    }
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: '.',
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+        // Add cache-busting hash to asset filenames
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        chunkFileNames: 'js/[name]-[hash].js',
+        entryFileNames: 'js/[name]-[hash].js',
+      },
+    },
+  }
 })
