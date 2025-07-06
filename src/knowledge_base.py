@@ -2,12 +2,14 @@
 import os
 import sqlite3
 import chromadb
+import logging
 from chromadb.utils import embedding_functions
 from typing import List, Dict, Any, Optional
 import pandas as pd
 from docx import Document as DocxDocument # To avoid conflict with Document class in other libraries
 from pypdf import PdfReader
 import re
+import json
 import yaml
 from dotenv import load_dotenv # Import load_dotenv
 from sentence_transformers import SentenceTransformer
@@ -22,12 +24,12 @@ class KnowledgeBase:
         
         self.network_share_path = kb_config.get('network_share_path')
         # Load network username and password from config or environment variables
- self.network_username = kb_config.get('network_username', os.getenv('NETWORK_SHARE_USERNAME'))
- self.network_password = kb_config.get('network_password', os.getenv('NETWORK_SHARE_PASSWORD'))
+        self.network_username = kb_config.get('network_username', os.getenv('NETWORK_SHARE_USERNAME'))
+        self.network_password = kb_config.get('network_password', os.getenv('NETWORK_SHARE_PASSWORD'))
 
         self.db_path = self._resolve_path(kb_config['db_path'])
- # Resolve chroma path immediately after loading from config
- self.chromadb_path = self._resolve_path(kb_config['chromadb_path'])
+        # Resolve chroma path immediately after loading from config
+        self.chromadb_path = self._resolve_path(kb_config['chromadb_path'])
         self.vector_store_type = kb_config['vector_store_type']
         self.chromadb_path = kb_config['chromadb_path']
         self.embedding_model_name = kb_config['embedding_model']
@@ -58,6 +60,10 @@ class KnowledgeBase:
         )
 
     def _init_sqlite_db(self):
+        """
+        Initializes the SQLite database for storing structured facts and document metadata.
+        Creates necessary tables if they do not exist.
+        """
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -85,9 +91,13 @@ class KnowledgeBase:
         """)
         conn.commit()
         conn.close()
-        print(f"SQLite DB initialized at {self.db_path}")
+        logging.info(f"SQLite DB initialized at {self.db_path}")
 
     def _init_vector_store(self):
+        """
+        Initializes the vector store for semantic search capabilities.
+        Supports ChromaDB and has a placeholder for FAISS integration.
+        """
         if self.vector_store_type == "chromadb":
             os.makedirs(self.chromadb_path, exist_ok=True)
             self.chroma_client = chromadb.PersistentClient(path=self.chromadb_path)
@@ -95,11 +105,11 @@ class KnowledgeBase:
                 name="autobot_knowledge",
                 embedding_function=self.embedding_function
             )
-            print(f"ChromaDB initialized at {self.chromadb_path}")
+            logging.info(f"ChromaDB initialized at {self.chromadb_path}")
         elif self.vector_store_type == "faiss":
             # FAISS integration would require more setup (e.g., storing index on disk)
             # For now, this is a placeholder.
-            print("FAISS integration not fully implemented. Using ChromaDB as default.")
+            logging.warning("FAISS integration not fully implemented. Using ChromaDB as default.")
             # Fallback to ChromaDB if FAISS is selected but not fully implemented
             os.makedirs(self.chromadb_path, exist_ok=True)
             self.chroma_client = chromadb.PersistentClient(path=self.chromadb_path)
@@ -191,11 +201,11 @@ class KnowledgeBase:
                 metadatas=metadatas,
                 ids=ids
             )
-            print(f"Added {len(chunks)} chunks from {file_path} to ChromaDB.")
+            logging.info(f"Added {len(chunks)} chunks from {file_path} to ChromaDB.")
             return {"status": "success", "message": f"File '{file_path}' processed and added to KB.", "doc_id": doc_id, "num_chunks": len(chunks)}
         except Exception as e:
-            print(f"Error adding file {file_path} to KB: {e}")
-            return {"status": "error", "message": f"Error adding file to KB: {e}"}
+            logging.error(f"Error adding file {file_path} to KB: {str(e)}")
+            return {"status": "error", "message": f"Error adding file to KB: {str(e)}"}
 
     def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """
@@ -209,17 +219,17 @@ class KnowledgeBase:
             )
             
             retrieved_info = []
-            if results and results['documents']:
+            if results and 'documents' in results and results['documents'] and len(results['documents']) > 0:
                 for i in range(len(results['documents'][0])):
                     retrieved_info.append({
                         "content": results['documents'][0][i],
-                        "metadata": results['metadatas'][0][i],
-                        "distance": results['distances'][0][i]
+                        "metadata": results['metadatas'][0][i] if 'metadatas' in results and results['metadatas'] and len(results['metadatas']) > 0 else {},
+                        "distance": results['distances'][0][i] if 'distances' in results and results['distances'] and len(results['distances']) > 0 else 0.0
                     })
-            print(f"Found {len(retrieved_info)} relevant chunks for query: '{query}'")
+            logging.info(f"Found {len(retrieved_info)} relevant chunks for query: '{query}'")
             return retrieved_info
         except Exception as e:
-            print(f"Error searching knowledge base: {e}")
+            logging.error(f"Error searching knowledge base: {str(e)}")
             return []
 
     def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -236,11 +246,11 @@ class KnowledgeBase:
             )
             fact_id = cursor.lastrowid
             conn.commit()
-            print(f"Fact stored with ID: {fact_id}")
+            logging.info(f"Fact stored with ID: {fact_id}")
             return {"status": "success", "message": "Fact stored successfully.", "fact_id": fact_id}
         except Exception as e:
-            print(f"Error storing fact: {e}")
-            return {"status": "error", "message": f"Error storing fact: {e}"}
+            logging.error(f"Error storing fact: {str(e)}")
+            return {"status": "error", "message": f"Error storing fact: {str(e)}"}
         finally:
             conn.close()
 
@@ -268,10 +278,10 @@ class KnowledgeBase:
                     "timestamp": row[3]
                 }
                 facts.append(fact)
-            print(f"Retrieved {len(facts)} facts.")
+            logging.info(f"Retrieved {len(facts)} facts.")
             return facts
         except Exception as e:
-            print(f"Error retrieving facts: {e}")
+            logging.error(f"Error retrieving facts: {str(e)}")
             return []
         finally:
             conn.close()

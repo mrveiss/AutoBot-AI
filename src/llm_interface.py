@@ -289,13 +289,17 @@ class LLMInterface:
             "stream": False,
             "temperature": temperature,
             # Ollama uses 'format' for structured output, typically 'json'
-            "format": "json" if structured_output else "",
-            # Include device if specified in kwargs
-            **({\"options\": {\"num_gpu\": kwargs.pop(\'device\').split(\':\')[-1]}} 
-               if \'device\' in kwargs and kwargs[\'device\'].startswith(\'cuda\') else {}),
-            **({\"options\": {\"device\": kwargs.pop(\'device\')}} if \'device\' in kwargs and not kwargs[\'device\'].startswith(\'cuda\') else {}),
-            **kwargs
+            "format": "json" if structured_output else ""
         }
+        # Include device if specified in kwargs
+        if 'device' in kwargs:
+            device_value = kwargs.pop('device')
+            if device_value.startswith('cuda'):
+                data["options"] = {"num_gpu": device_value.split(':')[-1]}
+            else:
+                data["options"] = {"device": device_value}
+        # Merge remaining kwargs
+        data.update(kwargs)
         
         print(f"Ollama Request URL: {url}")
         print(f"Ollama Request Headers: {headers}")
