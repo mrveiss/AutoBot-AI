@@ -3,7 +3,7 @@
     "show_thoughts": false,
     "show_json": false,
     "show_utility": false,
-    "show_planning": true,
+    "show_planning": false,
     "show_debug": false
   },
   "chat": {
@@ -13,8 +13,6 @@
   },
   "backend": {
     "api_endpoint": "http://localhost:8001",
-    "ollama_endpoint": "http://localhost:11434/api/generate",
-    "ollama_model": "phi:2.7b",
     "server_host": "0.0.0.0",
     "server_port": 8001,
     "chat_data_dir": "data/chats",
@@ -32,6 +30,62 @@
     "timeout": 60,
     "max_retries": 3,
     "streaming": true,
+    "llm": {
+      "provider_type": "local",
+      "local": {
+        "provider": "lmstudio",
+        "providers": {
+          "ollama": {
+            "endpoint": "http://localhost:11434/api/generate",
+            "models": [
+              "deepseek-r1:14b",
+              "phi:2.7b",
+              "mixtral:8x7b",
+              "tinyllama:latest"
+            ],
+            "selected_model": "llama2"
+          },
+          "lmstudio": {
+            "endpoint": "http://127.0.0.1:1234",
+            "models": [
+              "google/gemma-3-1b",
+              "deepseek-coder-6.7b-instruct",
+              "wizardcoder-python-13b-v1.0",
+              "text-embedding-nomic-embed-text-v1.5",
+              "qwen2.5-7b-instruct-1m",
+              "text-embedding-ogai-embedder",
+              "text-embedding-embedder_collection"
+            ],
+            "selected_model": "google/gemma-3-1b"
+          }
+        }
+      },
+      "cloud": {
+        "provider": "openai",
+        "providers": {
+          "openai": {
+            "api_key": "",
+            "endpoint": "https://api.openai.com/v1/chat/completions",
+            "models": [
+              "gpt-3.5-turbo",
+              "gpt-4"
+            ],
+            "selected_model": "gpt-3.5-turbo"
+          },
+          "anthropic": {
+            "api_key": "",
+            "endpoint": "https://api.anthropic.com/v1/complete",
+            "models": [
+              "claude-2.0",
+              "claude-instant-1.2"
+            ],
+            "selected_model": "claude-2.0"
+          }
+        }
+      }
+    },
+    "ollama_endpoint": "http://localhost:11434/api/generate",
+    "ollama_model": "phi:2.7b",
     "use_phi2": true
   },
   "ui": {
@@ -71,6 +125,16 @@
     "vector_storage": {
       "enabled": true,
       "update_frequency_days": 7
+    },
+    "chromadb": {
+      "enabled": true,
+      "path": "data/chromadb/chroma.sqlite3",
+      "collection_name": "autobot_memory"
+    },
+    "redis": {
+      "enabled": true,
+      "host": "localhost",
+      "port": 6379
     }
   },
   "prompts": {

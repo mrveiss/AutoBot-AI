@@ -10,35 +10,36 @@
       </nav>
     </header>
     <main class="app-content">
-      <section v-if="activeTab === 'chat'" class="chat-section">
-       
-        <div class="chat-window">
-          <ChatInterface v-if="activeChatId" :key="activeChatId" />
-        </div>
-      </section>
+    <section v-if="activeTab === 'chat'" class="chat-section">
+      <div class="chat-window">
+        <ChatInterface v-if="activeChatId" :key="activeChatId" />
+      </div>
+    </section>
       <section v-else-if="activeTab === 'settings'" class="settings-section">
         <SettingsPanel />
       </section>
       <section v-else-if="activeTab === 'files'" class="files-section">
         <FileBrowser />
       </section>
-      <section v-else-if="activeTab === 'history'" class="history-section">
+    <section v-else-if="activeTab === 'history'" class="history-section">
+      <div class="chat-window">
         <HistoryView />
-      </section>
+      </div>
+    </section>
     </main>
-    <footer class="app-footer">
-      <div class="performance-stats">
+    <footer class="app-footer" :class="{ 'collapsed': isFooterCollapsed }">
+      <div class="footer-toggle" @click="toggleFooter">
+        <span>{{ isFooterCollapsed ? 'Expand' : 'Collapse' }} System Info</span>
+      </div>
+      <div class="performance-stats" v-if="!isFooterCollapsed">
         <h4>System Performance</h4>
         <canvas id="performanceGraph" width="400" height="100"></canvas>
-        <div class="load-stats">
-          <span>CPU Load: {{ performanceData.cpuLoad }}%</span>
-          <span>Memory Usage: {{ performanceData.memoryUsage }}%</span>
-          <span>GPU Usage: {{ performanceData.gpuUsage }}%</span>
-        </div>
       </div>
-      <div class="action-buttons">
-        <button @click="handlePauseAgent" :disabled="isAgentPaused">Pause Agent</button>
-        <button @click="handleResumeAgent" :disabled="!isAgentPaused">Resume Agent</button>
+      <div class="load-stats">
+        <span>Current LLM: {{ getCurrentLLM() }}</span>
+        <span>CPU Load: {{ performanceData.cpuLoad }}%</span>
+        <span>Memory Usage: {{ performanceData.memoryUsage }}%</span>
+        <span>GPU Usage: {{ performanceData.gpuUsage }}%</span>
       </div>
     </footer>
   </div>
@@ -158,6 +159,14 @@ export default {
       alert('Resume Agent functionality is a placeholder. Full implementation pending.');
     };
 
+    const handleToggleAgent = () => {
+      if (isAgentPaused.value) {
+        handleResumeAgent();
+      } else {
+        handlePauseAgent();
+      }
+    };
+
     // Initialize with a default chat session
     handleNewChat();
 
@@ -246,6 +255,53 @@ export default {
       setInterval(updatePerformanceData, 5000);
     }, 100);
 
+    // Load settings from local storage or use a default structure
+    const settings = ref({});
+    
+    const loadSettings = () => {
+      const savedSettings = localStorage.getItem('chat_settings');
+      if (savedSettings) {
+        try {
+          settings.value = JSON.parse(savedSettings);
+        } catch (e) {
+          console.error('Error parsing saved settings:', e);
+          settings.value = { backend: { llm: { provider_type: 'local', local: { provider: 'ollama', providers: { ollama: { selected_model: 'Not selected' } } }, cloud: { provider: 'openai', providers: { openai: { selected_model: 'Not selected' } } } } } };
+        }
+      } else {
+        settings.value = { backend: { llm: { provider_type: 'local', local: { provider: 'ollama', providers: { ollama: { selected_model: 'Not selected' } } }, cloud: { provider: 'openai', providers: { openai: { selected_model: 'Not selected' } } } } } };
+      }
+    };
+    
+    const getCurrentLLM = () => {
+      try {
+        if (settings.value && settings.value.backend && settings.value.backend.llm) {
+          const llm = settings.value.backend.llm;
+          if (llm.provider_type === 'local') {
+            return `${llm.local.provider.charAt(0).toUpperCase() + llm.local.provider.slice(1)} - ${llm.local.providers[llm.local.provider].selected_model || 'Not selected'}`;
+          } else {
+            return `${llm.cloud.provider.charAt(0).toUpperCase() + llm.cloud.provider.slice(1)} - ${llm.cloud.providers[llm.cloud.provider].selected_model || 'Not selected'}`;
+          }
+        }
+      } catch (error) {
+        console.error('Error accessing LLM settings:', error);
+      }
+      return 'Not selected';
+    };
+    
+    onMounted(() => {
+      loadSettings();
+      // Set up an interval to check for settings updates
+      setInterval(() => {
+        loadSettings();
+      }, 5000); // Check every 5 seconds
+    });
+    
+    const isFooterCollapsed = ref(false);
+    
+    const toggleFooter = () => {
+      isFooterCollapsed.value = !isFooterCollapsed.value;
+    };
+    
     return {
       activeTab,
       isAgentPaused,
@@ -257,7 +313,12 @@ export default {
       handleResetChat,
       handlePauseAgent,
       handleResumeAgent,
-      performanceData
+      handleToggleAgent,
+      performanceData,
+      settings,
+      isFooterCollapsed,
+      toggleFooter,
+      getCurrentLLM
     };
   },
 };
@@ -342,45 +403,7 @@ export default {
   box-sizing: border-box;
 }
 
-.chat-sidebar {
-  width: clamp(150px, 15vw, 200px); /* Responsive width */
-  border-right: 1px solid #e9ecef;
-  padding: clamp(5px, 1vw, 10px);
-  overflow-y: auto;
-  background-color: #f8f9fa;
-}
 
-.chat-sidebar h3 {
-  margin: 0 0 clamp(5px, 1vw, 10px) 0;
-  font-size: clamp(14px, 1.8vw, 16px);
-  color: #007bff;
-}
-
-.chat-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.chat-list li {
-  padding: clamp(5px, 0.8vw, 8px) clamp(5px, 1vw, 10px);
-  cursor: pointer;
-  border-radius: 4px;
-  margin-bottom: 2px;
-  transition: background-color 0.2s;
-  font-size: clamp(12px, 1.5vw, 14px);
-  overflow-x: auto; /* Add scrollbar if content overflows */
-  white-space: nowrap; /* Prevent text wrapping to ensure scrollbar works */
-}
-
-.chat-list li:hover {
-  background-color: rgba(0, 123, 255, 0.1);
-}
-
-.chat-list li.active-chat {
-  background-color: #007bff;
-  color: white;
-}
 
 .chat-window {
   flex: 1;
@@ -393,12 +416,31 @@ export default {
   padding: clamp(5px, 1vw, 10px) clamp(10px, 2vw, 20px);
   border-top: 1px solid #dee2e6;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
   position: sticky;
   bottom: 0;
   z-index: 1000; /* Ensure footer stays on bottom */
   flex-wrap: wrap;
+  transition: height 0.3s ease;
+}
+
+.app-footer.collapsed {
+  padding: clamp(2px, 0.5vw, 5px) clamp(10px, 2vw, 20px);
+}
+
+.footer-toggle {
+  cursor: pointer;
+  margin-bottom: clamp(5px, 0.5vw, 10px);
+  font-size: clamp(12px, 1.5vw, 14px);
+  color: #007bff;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.footer-toggle:hover {
+  text-decoration: underline;
 }
 
 .action-buttons {
@@ -457,11 +499,8 @@ button:disabled, .control-button:disabled, .action-buttons button:disabled {
   cursor: not-allowed;
 }
 
+
 @media (max-width: 768px) {
-  .chat-sidebar {
-    width: 120px; /* Smaller width on mobile */
-  }
-  
   .action-buttons {
     flex-wrap: wrap;
     justify-content: space-around;
