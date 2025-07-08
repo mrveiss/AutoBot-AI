@@ -2,19 +2,19 @@
 
 - [x] **Phase 1: Environment Setup and Bootstrap:** Inspect `setup_agent.sh` for errors and ensure it completes successfully.
 - [x] **Phase 2: Agent Initialization and Configuration:** Inspect `main.py` for errors and ensure the agent initializes correctly.
-- [x] **Phase 4: GUI Automation Interface:** Investigate the GUI integration issues and restore basic functionality using `pyautogui` and `Xvfb`.
+- [x] **Phase 4: GUI Automation Interface (Partial):** Installed necessary dependencies (`pyautogui`, `mouseinfo`, `pillow`, `numpy`) and created `gui_controller.py` with initial `GUIController` class implementation for GUI automation tasks. Further integration with Xvfb and WSL2 compatibility checks are pending.
 - [x] **Phase 11: Final Deployment & Service Mode:** Ensure the agent launches with one command: `run_agent.sh`.
 - [x] **Create a new frontend:** Moved the `materially-free-react-admin-template-1.0.0` GUI framework to `frontend/admin_gui/`.
-- [ ] **Create a new frontend design:**remove all references to "Agent Zero", use a blue color palette for the dark UI, and ensure it is named AutoBot.
-- [ ] **Connect frontend to backend:** Ensure the frontend correctly communicates with the backend API.
+- [x] **Create a new frontend design:** Implemented Vue with Vite in `autobot-vue/` with a blue color palette for the dark UI, named AutoBot.
+- [x] **Connect frontend to backend:** Ensure the frontend correctly communicates with the backend API via FastAPI endpoints.
 - [x] **Frontend control over backend:** Added a terminal modal to the frontend to allow execution of shell commands via the `/api/execute_command` endpoint.
 - [x] **LLM Command Execution Capability:** Document that the LLM is equipped with the ability to run commands on the machine as a tool to achieve goals.
-- [ ] **Integrate Redis:** Implement Redis for agent memory (short-term), task queuing, RAG caching, key-value state storage, rate limit tracking, and session management to enhance performance and real-time capabilities.
+- [x] **Integrate Redis:** Implemented Redis for agent memory (short-term) via `ChatHistoryManager` in `src/chat_history_manager.py`, with UI settings in `SettingsPanel.vue`. Task queuing is supported, but RAG caching, key-value state storage, rate limit tracking, and session management are pending.
 - [ ] **Define SQLite as Long-Term Memory:** Explicitly establish SQLite as the primary long-term memory backend for the agent, leveraging its performance, portability, and ease of integration. Explore optional enhancements like referencing markdown files and storing embeddings within SQLite.
 - [ ] **Implement VNC Session with noVNC:** Integrate a Kex VNC session with noVNC embedded in the Web UI to enable real-time observation and control of the agent's desktop environment, including GUI task automation and human-in-the-loop takeover capabilities.
 - [ ] **Implement Project State Tracking System:** Create `docs/status.md` to track project progress, core features, next steps, and phase promotion criteria. Ensure the LLM agent is self-aware of this status and add a visual indicator to the Web UI.
 
-## Frontend Functionality (New GUI)
+## Frontend Functionality (Current GUI)
 
 - [ ] **Implement "New Chat" functionality.**
 - [ ] **Implement "Chat Reset" functionality.**
@@ -22,9 +22,9 @@
 - [ ] **Implement "Load Chat" functionality.**
 - [ ] **Implement "Save Chat" functionality.**
 - [ ] **Fix "History" button:** Resolve "Failed to fetch history" error.
-- [ ] **Integrate "Context" modal:** Ensure it uses the new generic modal system correctly.
+- [ ] **Integrate "Context" modal:** Ensure it uses the current generic modal system correctly.
 - [ ] **Move Preferences Section:**
-    - [ ] Add a "Preferences" section to the left sidebar in the new GUI.
+    - [ ] Add a "Preferences" section to the left sidebar in the current GUI.
     - [ ] Move existing toggle buttons (Autoscroll, Dark mode, Speech, Show thoughts, Show JSON, Show utility messages) into this new preferences section.
 
 ## Frontend Improvements

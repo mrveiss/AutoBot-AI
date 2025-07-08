@@ -27,6 +27,57 @@
           <label>Message Retention (Days)</label>
           <input type="number" v-model="settings.chat.message_retention_days" min="1" max="365" />
         </div>
+        <div v-if="activeBackendSubTab === 'memory'" class="sub-tab-content">
+          <h3>Memory Settings</h3>
+          <div class="setting-item">
+            <label>Enable Long-Term Memory</label>
+            <input type="checkbox" v-model="settings.memory.long_term.enabled" />
+          </div>
+          <div class="setting-item">
+            <label>Long-Term Memory Retention (Days)</label>
+            <input type="number" v-model="settings.memory.long_term.retention_days" min="1" max="365" :disabled="!settings.memory.long_term.enabled" />
+          </div>
+          <div class="setting-item">
+            <label>Enable Short-Term Memory</label>
+            <input type="checkbox" v-model="settings.memory.short_term.enabled" />
+          </div>
+          <div class="setting-item">
+            <label>Short-Term Memory Duration (Minutes)</label>
+            <input type="number" v-model="settings.memory.short_term.duration_minutes" min="1" max="1440" :disabled="!settings.memory.short_term.enabled" />
+          </div>
+          <div class="setting-item">
+            <label>Enable Vector Storage</label>
+            <input type="checkbox" v-model="settings.memory.vector_storage.enabled" />
+          </div>
+          <div class="setting-item">
+            <label>Vector Storage Update Frequency (Days)</label>
+            <input type="number" v-model="settings.memory.vector_storage.update_frequency_days" min="1" max="30" :disabled="!settings.memory.vector_storage.enabled" />
+          </div>
+          <div class="setting-item">
+            <label>Enable ChromaDB</label>
+            <input type="checkbox" v-model="settings.memory.chromadb.enabled" />
+          </div>
+          <div class="setting-item">
+            <label>ChromaDB Path</label>
+            <input type="text" v-model="settings.memory.chromadb.path" :disabled="!settings.memory.chromadb.enabled" placeholder="data/chromadb/chroma.sqlite3" />
+          </div>
+          <div class="setting-item">
+            <label>ChromaDB Collection Name</label>
+            <input type="text" v-model="settings.memory.chromadb.collection_name" :disabled="!settings.memory.chromadb.enabled" placeholder="autobot_memory" />
+          </div>
+          <div class="setting-item">
+            <label>Enable Redis for Chat History</label>
+            <input type="checkbox" v-model="settings.memory.redis.enabled" />
+          </div>
+          <div class="setting-item">
+            <label>Redis Host</label>
+            <input type="text" v-model="settings.memory.redis.host" :disabled="!settings.memory.redis.enabled" placeholder="localhost" />
+          </div>
+          <div class="setting-item">
+            <label>Redis Port</label>
+            <input type="number" v-model="settings.memory.redis.port" min="1" max="65535" :disabled="!settings.memory.redis.enabled" placeholder="6379" />
+          </div>
+        </div>
       </div>
 
       <!-- Backend Settings -->
@@ -43,6 +94,12 @@
             @click="activeBackendSubTab = 'llm'"
           >
             LLM
+          </button>
+          <button 
+            :class="{ active: activeBackendSubTab === 'memory' }"
+            @click="activeBackendSubTab = 'memory'"
+          >
+            Memory
           </button>
         </div>
         <div v-if="activeBackendSubTab === 'general'" class="sub-tab-content">
@@ -62,6 +119,22 @@
           <div class="setting-item">
             <label>Chat Data Directory</label>
             <input type="text" v-model="settings.backend.chat_data_dir" />
+          </div>
+          <div class="setting-item">
+            <label>Chat History File</label>
+            <input type="text" v-model="settings.backend.chat_history_file" placeholder="data/chat_history.json" />
+          </div>
+          <div class="setting-item">
+            <label>Knowledge Base DB</label>
+            <input type="text" v-model="settings.backend.knowledge_base_db" placeholder="data/knowledge_base.db" />
+          </div>
+          <div class="setting-item">
+            <label>Reliability Stats File</label>
+            <input type="text" v-model="settings.backend.reliability_stats_file" placeholder="data/reliability_stats.json" />
+          </div>
+          <div class="setting-item">
+            <label>Audit Log File</label>
+            <input type="text" v-model="settings.backend.audit_log_file" placeholder="data/audit.log" />
           </div>
           <div class="setting-item">
             <label>CORS Origins (comma separated)</label>
@@ -198,6 +271,7 @@
           <input type="number" v-model="settings.voice_interface.speech_rate" min="0.5" max="2.0" step="0.1" :disabled="!settings.voice_interface.enabled" />
         </div>
       </div>
+
       
       <!-- System Prompts Settings -->
       <div v-if="activeTab === 'prompts'" class="settings-section">
@@ -219,6 +293,9 @@
               <button @click="settings.prompts.selectedPrompt = null">Cancel</button>
             </div>
           </div>
+        </div>
+        <div class="setting-item">
+          <button class="control-button small" @click="loadPrompts">Load Prompts</button>
         </div>
       </div>
     </div>
@@ -269,12 +346,14 @@ export default {
         server_host: '0.0.0.0',
         server_port: 8001,
         chat_data_dir: 'data/chats',
+        chat_history_file: 'data/chat_history.json',
+        knowledge_base_db: 'data/knowledge_base.db',
+        reliability_stats_file: 'data/reliability_stats.json',
+        audit_log_file: 'data/audit.log',
         cors_origins: [
           'http://localhost',
           'http://localhost:5173',
-          'http://127.0.0.1:5173',
-          'http://localhost:8080',
-          'http://127.0.0.1:8080'
+          'http://127.0.0.1:5173'
         ],
         timeout: 60,
         max_retries: 3,
@@ -304,6 +383,20 @@ export default {
         enabled: false,
         voice: 'default',
         speech_rate: 1.0
+      },
+      memory: {
+        long_term: {
+          enabled: true,
+          retention_days: 30
+        },
+        short_term: {
+          enabled: true,
+          duration_minutes: 30
+        },
+        vector_storage: {
+          enabled: true,
+          update_frequency_days: 7
+        }
       },
       prompts: {
         list: [],
@@ -374,6 +467,10 @@ export default {
         server_host: '0.0.0.0',
         server_port: 8001,
         chat_data_dir: 'data/chats',
+        chat_history_file: 'data/chat_history.json',
+        knowledge_base_db: 'data/knowledge_base.db',
+        reliability_stats_file: 'data/reliability_stats.json',
+        audit_log_file: 'data/audit.log',
         cors_origins: [
           'http://localhost',
           'http://localhost:5173',
@@ -410,6 +507,20 @@ export default {
         voice: 'default',
         speech_rate: 1.0
       },
+      memory: {
+        long_term: {
+          enabled: true,
+          retention_days: 30
+        },
+        short_term: {
+          enabled: true,
+          duration_minutes: 30
+        },
+        vector_storage: {
+          enabled: true,
+          update_frequency_days: 7
+        }
+      },
       prompts: {
         list: [],
         selectedPrompt: null,
@@ -425,7 +536,12 @@ export default {
         if (response.ok) {
           const backendSettings = await response.json();
           // Merge backend settings with local defaults to ensure all properties exist
-          settings.value = deepMerge(defaultSettings(), backendSettings);
+          const mergedSettings = deepMerge(defaultSettings(), backendSettings);
+          // Ensure memory settings are included even if not in backend data
+          if (!mergedSettings.memory) {
+            mergedSettings.memory = defaultSettings().memory;
+          }
+          settings.value = mergedSettings;
           // Save to local storage as well
           localStorage.setItem('chat_settings', JSON.stringify(settings.value));
         } else {
@@ -440,6 +556,7 @@ export default {
 
     // Function to save settings to local storage and backend
     const saveSettings = async () => {
+      // Ensure memory settings are included in the saved data
       localStorage.setItem('chat_settings', JSON.stringify(settings.value));
       try {
         const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings`, {
@@ -452,7 +569,7 @@ export default {
         if (!response.ok) {
           console.error('Failed to save settings to backend:', response.statusText);
         } else {
-          console.log('Settings saved successfully to backend.');
+          console.log('Settings, including memory configurations, saved successfully to backend.');
         }
       } catch (error) {
         console.error('Error saving settings to backend:', error);

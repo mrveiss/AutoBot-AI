@@ -43,12 +43,12 @@
 
 - [ ] **Phase 8: Interface and Web Control Panel:**
     - [ ] Use NoVNC or WebSocket proxy to stream desktop
-    - [ ] Show logs, currently running task, and options to interrupt/resume
+    - [x] Show logs, currently running task, and options to interrupt/resume
     - [ ] Allow human-in-the-loop takeover if needed (interrupt/takeover button)
-    - [ ] **Embed noVNC in the Web UI:** Integrate an iframe or dynamic viewer in `web/index.html` to display the Kex VNC session, enabling real-time observation and control.
+    - [ ] **Embed noVNC in the Web UI:** Integrate an iframe or dynamic viewer in `autobot-vue/index.html` to display the Kex VNC session, enabling real-time observation and control.
 
 - [ ] **Phase 9: Redis Integration for Enhanced Performance:**
-    - [ ] Implement Redis for agent memory (short-term interactions, thoughts, commands, execution trees).
+    - [x] Implement Redis for agent memory (short-term interactions, thoughts, commands, execution trees) via `ChatHistoryManager` in `src/chat_history_manager.py`.
     - [ ] Implement RAG (Retrieval-Augmented Generation) caching for document chunks or embeddings.
     - [ ] Use Redis for key-value state storage (e.g., `llm_state:idle`, `last_model:phi-2`, `user_override:true`).
     - [ ] Implement rate limit tracking for external API usage (e.g., OpenAI) using TTLs and counters.
@@ -86,8 +86,8 @@
 
 ## Frontend Improvements (General)
 
-- [ ] **Create a new frontend design:** Remove all references to "Agent Zero", use a blue color palette for the dark UI, and ensure it is named AutoBot.
-- [ ] **Connect frontend to backend:** Ensure the frontend correctly communicates with the backend API.
+- [x] **Create a new frontend design:** Implemented Vue with Vite in `autobot-vue/` with a blue color palette for the dark UI, named AutoBot.
+- [x] **Connect frontend to backend:** Ensure the frontend correctly communicates with the backend API via FastAPI endpoints.
 
 ## Phase 15: Web Interaction
 
