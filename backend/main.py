@@ -14,6 +14,15 @@ import uuid
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Import ChatHistoryManager
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from src.chat_history_manager import ChatHistoryManager
+
+# Initialize chat history manager with Redis support
+chat_history_manager = ChatHistoryManager(use_redis=True, redis_host="localhost", redis_port=6379)
+
 app = FastAPI()
 
 # Load configuration from YAML file or environment variables
@@ -26,6 +35,7 @@ def load_config():
             "http://127.0.0.1:5173",
             "http://localhost:8080",
             "http://127.0.0.1:8080",
+            "*",  # Temporarily allow all origins for debugging
         ],
         "ollama_endpoint": os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate"),
         "ollama_model": os.getenv("OLLAMA_MODEL", "llama2"),
@@ -67,6 +77,9 @@ def load_config():
                 if 'cors_origins' in backend_settings and backend_settings['cors_origins']:
                     config['cors_origins'] = backend_settings.get('cors_origins')
                     logger.info(f"Overriding cors_origins from frontend settings: {config['cors_origins']}")
+                # Log memory settings if available to confirm they are loaded
+                if 'memory' in settings:
+                    logger.info(f"Memory settings loaded from frontend settings: {settings['memory']}")
         except Exception as e:
             logger.error(f"Error loading backend settings from {settings_file}: {str(e)}")
     
@@ -337,10 +350,51 @@ async def get_settings():
         logger.error(f"Error loading settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error loading settings: {str(e)}")
 
+@app.post("/api/settings/backend")
+async def update_backend_settings(settings_data: Settings):
+    try:
+        # Load current settings
+        current_settings = {}
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, 'r') as f:
+                current_settings = json.load(f)
+        
+        # Update only backend-related settings
+        if 'backend' in settings_data.settings:
+            current_settings['backend'] = settings_data.settings['backend']
+            with open(SETTINGS_FILE, 'w') as f:
+                json.dump(current_settings, f, indent=2)
+            logger.info("Updated backend settings")
+            # Reload config after settings are saved
+            global config
+            config = load_config()
+            logger.info(f"Updated backend configuration: {json.dumps(config, indent=2)}")
+            return {"status": "success"}
+        else:
+            logger.error("No backend settings provided")
+            raise HTTPException(status_code=400, detail="No backend settings provided")
+    except Exception as e:
+        logger.error(f"Error updating backend settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating backend settings: {str(e)}")
+
+@app.get("/api/settings/backend")
+async def get_backend_settings():
+    try:
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, 'r') as f:
+                settings = json.load(f)
+                return settings.get('backend', {})
+        logger.info("No settings file found, returning empty dict for backend settings")
+        return {}
+    except Exception as e:
+        logger.error(f"Error loading backend settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error loading backend settings: {str(e)}")
+
 @app.get("/api/prompts")
 async def get_prompts():
     try:
-        prompts_dir = "prompts"
+        # Adjust path to look for prompts directory at project root
+        prompts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "prompts"))
         default_prompts_dir = os.path.join(prompts_dir, "default")
         prompts = []
         defaults = {}
@@ -386,8 +440,9 @@ async def get_prompts():
 async def save_prompt(prompt_id: str, request: dict):
     try:
         content = request.get("content", "")
-        # Derive the file path from the prompt_id
-        file_path = os.path.join("prompts", prompt_id.replace('_', '/'))
+        # Derive the file path from the prompt_id, relative to project root
+        prompts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "prompts"))
+        file_path = os.path.join(prompts_dir, prompt_id.replace('_', '/'))
         # Ensure the directory exists
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         # Write the content to the file
@@ -396,12 +451,12 @@ async def save_prompt(prompt_id: str, request: dict):
         logger.info(f"Saved prompt {prompt_id} to {file_path}")
         # Return the updated prompt data
         prompt_name = os.path.basename(file_path).rsplit('.', 1)[0]
-        prompt_type = os.path.dirname(file_path).replace('prompts/', '') if 'prompts/' in file_path else os.path.dirname(file_path)
+        prompt_type = os.path.dirname(file_path).replace(prompts_dir + '/', '') if prompts_dir in file_path else os.path.dirname(file_path)
         return {
             "id": prompt_id,
             "name": prompt_name,
             "type": prompt_type if prompt_type else "custom",
-            "path": file_path.replace('prompts/', '') if 'prompts/' in file_path else file_path,
+            "path": file_path.replace(prompts_dir + '/', '') if prompts_dir in file_path else file_path,
             "content": content
         }
     except Exception as e:
@@ -411,24 +466,25 @@ async def save_prompt(prompt_id: str, request: dict):
 @app.post("/api/prompts/{prompt_id}/revert")
 async def revert_prompt(prompt_id: str):
     try:
+        prompts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "prompts"))
         # Check if there is a default version of this prompt
-        default_file_path = os.path.join("prompts", "default", prompt_id.replace('_', '/'))
+        default_file_path = os.path.join(prompts_dir, "default", prompt_id.replace('_', '/'))
         if os.path.exists(default_file_path):
             with open(default_file_path, 'r', encoding='utf-8') as f:
                 default_content = f.read()
             # Save the default content to the custom prompt location
-            custom_file_path = os.path.join("prompts", prompt_id.replace('_', '/'))
+            custom_file_path = os.path.join(prompts_dir, prompt_id.replace('_', '/'))
             os.makedirs(os.path.dirname(custom_file_path), exist_ok=True)
             with open(custom_file_path, 'w', encoding='utf-8') as f:
                 f.write(default_content)
             logger.info(f"Reverted prompt {prompt_id} to default")
             prompt_name = os.path.basename(custom_file_path).rsplit('.', 1)[0]
-            prompt_type = os.path.dirname(custom_file_path).replace('prompts/', '') if 'prompts/' in custom_file_path else os.path.dirname(custom_file_path)
+            prompt_type = os.path.dirname(custom_file_path).replace(prompts_dir + '/', '') if prompts_dir in custom_file_path else os.path.dirname(custom_file_path)
             return {
                 "id": prompt_id,
                 "name": prompt_name,
                 "type": prompt_type if prompt_type else "custom",
-                "path": custom_file_path.replace('prompts/', '') if 'prompts/' in custom_file_path else custom_file_path,
+                "path": custom_file_path.replace(prompts_dir + '/', '') if prompts_dir in custom_file_path else custom_file_path,
                 "content": default_content
             }
         else:
