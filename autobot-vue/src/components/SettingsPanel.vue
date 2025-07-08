@@ -27,61 +27,10 @@
           <label>Message Retention (Days)</label>
           <input type="number" v-model="settings.chat.message_retention_days" min="1" max="365" />
         </div>
-        <div v-if="activeBackendSubTab === 'memory'" class="sub-tab-content">
-          <h3>Memory Settings</h3>
-          <div class="setting-item">
-            <label>Enable Long-Term Memory</label>
-            <input type="checkbox" v-model="settings.memory.long_term.enabled" />
-          </div>
-          <div class="setting-item">
-            <label>Long-Term Memory Retention (Days)</label>
-            <input type="number" v-model="settings.memory.long_term.retention_days" min="1" max="365" :disabled="!settings.memory.long_term.enabled" />
-          </div>
-          <div class="setting-item">
-            <label>Enable Short-Term Memory</label>
-            <input type="checkbox" v-model="settings.memory.short_term.enabled" />
-          </div>
-          <div class="setting-item">
-            <label>Short-Term Memory Duration (Minutes)</label>
-            <input type="number" v-model="settings.memory.short_term.duration_minutes" min="1" max="1440" :disabled="!settings.memory.short_term.enabled" />
-          </div>
-          <div class="setting-item">
-            <label>Enable Vector Storage</label>
-            <input type="checkbox" v-model="settings.memory.vector_storage.enabled" />
-          </div>
-          <div class="setting-item">
-            <label>Vector Storage Update Frequency (Days)</label>
-            <input type="number" v-model="settings.memory.vector_storage.update_frequency_days" min="1" max="30" :disabled="!settings.memory.vector_storage.enabled" />
-          </div>
-          <div class="setting-item">
-            <label>Enable ChromaDB</label>
-            <input type="checkbox" v-model="settings.memory.chromadb.enabled" />
-          </div>
-          <div class="setting-item">
-            <label>ChromaDB Path</label>
-            <input type="text" v-model="settings.memory.chromadb.path" :disabled="!settings.memory.chromadb.enabled" placeholder="data/chromadb/chroma.sqlite3" />
-          </div>
-          <div class="setting-item">
-            <label>ChromaDB Collection Name</label>
-            <input type="text" v-model="settings.memory.chromadb.collection_name" :disabled="!settings.memory.chromadb.enabled" placeholder="autobot_memory" />
-          </div>
-          <div class="setting-item">
-            <label>Enable Redis for Chat History</label>
-            <input type="checkbox" v-model="settings.memory.redis.enabled" />
-          </div>
-          <div class="setting-item">
-            <label>Redis Host</label>
-            <input type="text" v-model="settings.memory.redis.host" :disabled="!settings.memory.redis.enabled" placeholder="localhost" />
-          </div>
-          <div class="setting-item">
-            <label>Redis Port</label>
-            <input type="number" v-model="settings.memory.redis.port" min="1" max="65535" :disabled="!settings.memory.redis.enabled" placeholder="6379" />
-          </div>
-        </div>
       </div>
 
       <!-- Backend Settings -->
-      <div v-if="activeTab === 'backend'" class="settings-section">
+      <div v-if="activeTab === 'backend' && isSettingsLoaded" class="settings-section">
         <div class="sub-tabs">
           <button 
             :class="{ active: activeBackendSubTab === 'general' }"
@@ -144,12 +93,95 @@
         <div v-if="activeBackendSubTab === 'llm'" class="sub-tab-content">
           <h3>LLM Settings</h3>
           <div class="setting-item">
-            <label>Ollama Endpoint</label>
-            <input type="text" v-model="settings.backend.ollama_endpoint" />
+            <label>Current LLM in Use</label>
+            <span style="font-weight: bold;">
+              {{ settings.backend.llm.provider_type === 'local' ? 
+                settings.backend.llm.local.provider.charAt(0).toUpperCase() + settings.backend.llm.local.provider.slice(1) + ' - ' + 
+                (settings.backend.llm.local.providers[settings.backend.llm.local.provider].selected_model || 'Not selected') : 
+                settings.backend.llm.cloud.provider.charAt(0).toUpperCase() + settings.backend.llm.cloud.provider.slice(1) + ' - ' + 
+                (settings.backend.llm.cloud.providers[settings.backend.llm.cloud.provider].selected_model || 'Not selected') }}
+            </span>
           </div>
           <div class="setting-item">
-            <label>Model</label>
-            <input type="text" v-model="settings.backend.ollama_model" />
+            <label>Provider Type</label>
+            <select v-model="settings.backend.llm.provider_type" @change="onProviderTypeChange">
+              <option value="local">Local LLM</option>
+              <option value="cloud">Cloud LLM</option>
+            </select>
+          </div>
+          <div v-if="settings.backend.llm.provider_type === 'local'">
+            <div class="setting-item">
+              <label>Local Provider</label>
+              <select v-model="settings.backend.llm.local.provider" @change="onLocalProviderChange">
+                <option value="ollama">Ollama</option>
+                <option value="lmstudio">LM Studio</option>
+              </select>
+            </div>
+            <div v-if="settings.backend.llm.local.provider === 'ollama'">
+              <div class="setting-item">
+                <label>Ollama Endpoint</label>
+                <input type="text" v-model="settings.backend.llm.local.providers.ollama.endpoint" />
+              </div>
+              <div class="setting-item">
+                <label>Model</label>
+                <select v-model="settings.backend.llm.local.providers.ollama.selected_model">
+                  <option v-for="model in settings.backend.llm.local.providers.ollama.models" :key="model" :value="model">{{ model }}</option>
+                </select>
+              </div>
+            </div>
+            <div v-else-if="settings.backend.llm.local.provider === 'lmstudio'">
+              <div class="setting-item">
+                <label>LM Studio Endpoint</label>
+                <input type="text" v-model="settings.backend.llm.local.providers.lmstudio.endpoint" />
+              </div>
+              <div class="setting-item">
+                <label>Model</label>
+                <select v-model="settings.backend.llm.local.providers.lmstudio.selected_model">
+                  <option v-for="model in settings.backend.llm.local.providers.lmstudio.models" :key="model" :value="model">{{ model }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="settings.backend.llm.provider_type === 'cloud'">
+            <div class="setting-item">
+              <label>Cloud Provider</label>
+              <select v-model="settings.backend.llm.cloud.provider" @change="onCloudProviderChange">
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </div>
+            <div v-if="settings.backend.llm.cloud.provider === 'openai'">
+              <div class="setting-item">
+                <label>API Key</label>
+                <input type="password" v-model="settings.backend.llm.cloud.providers.openai.api_key" placeholder="Enter API Key" />
+              </div>
+              <div class="setting-item">
+                <label>Endpoint</label>
+                <input type="text" v-model="settings.backend.llm.cloud.providers.openai.endpoint" />
+              </div>
+              <div class="setting-item">
+                <label>Model</label>
+                <select v-model="settings.backend.llm.cloud.providers.openai.selected_model">
+                  <option v-for="model in settings.backend.llm.cloud.providers.openai.models" :key="model" :value="model">{{ model }}</option>
+                </select>
+              </div>
+            </div>
+            <div v-else-if="settings.backend.llm.cloud.provider === 'anthropic'">
+              <div class="setting-item">
+                <label>API Key</label>
+                <input type="password" v-model="settings.backend.llm.cloud.providers.anthropic.api_key" placeholder="Enter API Key" />
+              </div>
+              <div class="setting-item">
+                <label>Endpoint</label>
+                <input type="text" v-model="settings.backend.llm.cloud.providers.anthropic.endpoint" />
+              </div>
+              <div class="setting-item">
+                <label>Model</label>
+                <select v-model="settings.backend.llm.cloud.providers.anthropic.selected_model">
+                  <option v-for="model in settings.backend.llm.cloud.providers.anthropic.models" :key="model" :value="model">{{ model }}</option>
+                </select>
+              </div>
+            </div>
           </div>
           <div class="setting-item">
             <label>Timeout (seconds)</label>
@@ -163,11 +195,67 @@
             <label>Enable Streaming</label>
             <input type="checkbox" v-model="settings.backend.streaming" />
           </div>
+          <div class="settings-actions">
+            <button @click="loadModels">Refresh Models</button>
+          </div>
+        </div>
+        <div v-if="activeBackendSubTab === 'memory'" class="sub-tab-content">
+          <h3>Memory Settings</h3>
+          <div class="setting-item" v-if="settings.memory && settings.memory.long_term">
+            <label>Enable Long-Term Memory</label>
+            <input type="checkbox" v-model="settings.memory.long_term.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.long_term">
+            <label>Long-Term Memory Retention (Days)</label>
+            <input type="number" v-model="settings.memory.long_term.retention_days" min="1" max="365" :disabled="!settings.memory.long_term.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.short_term">
+            <label>Enable Short-Term Memory</label>
+            <input type="checkbox" v-model="settings.memory.short_term.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.short_term">
+            <label>Short-Term Memory Duration (Minutes)</label>
+            <input type="number" v-model="settings.memory.short_term.duration_minutes" min="1" max="1440" :disabled="!settings.memory.short_term.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.vector_storage">
+            <label>Enable Vector Storage</label>
+            <input type="checkbox" v-model="settings.memory.vector_storage.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.vector_storage">
+            <label>Vector Storage Update Frequency (Days)</label>
+            <input type="number" v-model="settings.memory.vector_storage.update_frequency_days" min="1" max="30" :disabled="!settings.memory.vector_storage.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.chromadb">
+            <label>Enable ChromaDB</label>
+            <input type="checkbox" v-model="settings.memory.chromadb.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.chromadb">
+            <label>ChromaDB Path</label>
+            <input type="text" v-model="settings.memory.chromadb.path" :disabled="!settings.memory.chromadb.enabled" placeholder="data/chromadb/chroma.sqlite3" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.chromadb">
+            <label>ChromaDB Collection Name</label>
+            <input type="text" v-model="settings.memory.chromadb.collection_name" :disabled="!settings.memory.chromadb.enabled" placeholder="autobot_memory" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.redis">
+            <label>Enable Redis for Chat History</label>
+            <input type="checkbox" v-model="settings.memory.redis.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.redis">
+            <label class="with-description">Redis Host
+              <span class="description">Redis is used for storing and retrieving chat history efficiently, providing faster access compared to file-based storage.</span>
+            </label>
+            <input type="text" v-model="settings.memory.redis.host" :disabled="!settings.memory.redis.enabled" placeholder="localhost" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.redis">
+            <label>Redis Port</label>
+            <input type="number" v-model="settings.memory.redis.port" min="1" max="65535" :disabled="!settings.memory.redis.enabled" placeholder="6379" />
+          </div>
         </div>
       </div>
 
       <!-- UI Settings -->
-      <div v-if="activeTab === 'ui'" class="settings-section">
+      <div v-if="activeTab === 'ui' && isSettingsLoaded" class="settings-section">
         <h3>UI Settings</h3>
         <div class="setting-item">
           <label>Theme</label>
@@ -204,7 +292,7 @@
       </div>
 
       <!-- Security Settings -->
-      <div v-if="activeTab === 'security'" class="settings-section">
+      <div v-if="activeTab === 'security' && isSettingsLoaded" class="settings-section">
         <h3>Security Settings</h3>
         <div class="setting-item">
           <label>Enable Encryption</label>
@@ -217,7 +305,7 @@
       </div>
 
       <!-- Logging Settings -->
-      <div v-if="activeTab === 'logging'" class="settings-section">
+      <div v-if="activeTab === 'logging' && isSettingsLoaded" class="settings-section">
         <h3>Logging Settings</h3>
         <div class="setting-item">
           <label>Log Level</label>
@@ -239,7 +327,7 @@
       </div>
 
       <!-- Knowledge Base Settings -->
-      <div v-if="activeTab === 'knowledgeBase'" class="settings-section">
+      <div v-if="activeTab === 'knowledgeBase' && isSettingsLoaded" class="settings-section">
         <h3>Knowledge Base</h3>
         <div class="setting-item">
           <label>Enable Knowledge Base</label>
@@ -252,7 +340,7 @@
       </div>
 
       <!-- Voice Interface Settings -->
-      <div v-if="activeTab === 'voiceInterface'" class="settings-section">
+      <div v-if="activeTab === 'voiceInterface' && isSettingsLoaded" class="settings-section">
         <h3>Voice Interface</h3>
         <div class="setting-item">
           <label>Enable Voice Interface</label>
@@ -274,7 +362,7 @@
 
       
       <!-- System Prompts Settings -->
-      <div v-if="activeTab === 'prompts'" class="settings-section">
+      <div v-if="activeTab === 'prompts' && isSettingsLoaded" class="settings-section">
         <h3>System Prompts</h3>
         <div class="prompts-container">
           <div class="prompts-list">
@@ -322,89 +410,12 @@ export default {
       { id: 'voiceInterface', label: 'Voice Interface' },
       { id: 'prompts', label: 'System Prompts' }
     ];
-    const activeTab = ref('chat');
-    const activeBackendSubTab = ref('general');
+    const activeTab = ref('backend');
+    const activeBackendSubTab = ref('memory');
 
-    // Settings structure to match a comprehensive config file
-    const settings = ref({
-      message_display: {
-        show_thoughts: true,
-        show_json: false,
-        show_utility: false,
-        show_planning: true,
-        show_debug: false
-      },
-      chat: {
-        auto_scroll: true,
-        max_messages: 100,
-        message_retention_days: 30
-      },
-      backend: {
-        api_endpoint: 'http://localhost:8001',
-        ollama_endpoint: 'http://localhost:11434/api/generate',
-        ollama_model: 'llama2',
-        server_host: '0.0.0.0',
-        server_port: 8001,
-        chat_data_dir: 'data/chats',
-        chat_history_file: 'data/chat_history.json',
-        knowledge_base_db: 'data/knowledge_base.db',
-        reliability_stats_file: 'data/reliability_stats.json',
-        audit_log_file: 'data/audit.log',
-        cors_origins: [
-          'http://localhost',
-          'http://localhost:5173',
-          'http://127.0.0.1:5173'
-        ],
-        timeout: 60,
-        max_retries: 3,
-        streaming: false
-      },
-      ui: {
-        theme: 'light',
-        font_size: 'medium',
-        language: 'en',
-        animations: true,
-        developer_mode: false
-      },
-      security: {
-        enable_encryption: false,
-        session_timeout_minutes: 30
-      },
-      logging: {
-        log_level: 'info',
-        log_to_file: false,
-        log_file_path: '/var/log/autobot.log'
-      },
-      knowledge_base: {
-        enabled: true,
-        update_frequency_days: 7
-      },
-      voice_interface: {
-        enabled: false,
-        voice: 'default',
-        speech_rate: 1.0
-      },
-      memory: {
-        long_term: {
-          enabled: true,
-          retention_days: 30
-        },
-        short_term: {
-          enabled: true,
-          duration_minutes: 30
-        },
-        vector_storage: {
-          enabled: true,
-          update_frequency_days: 7
-        }
-      },
-      prompts: {
-        list: [],
-        selectedPrompt: null,
-        editedContent: '',
-        defaults: {}
-      }
-    });
+    // Settings structure will be populated from backend or local storage
+    const settings = ref({});
+    const isSettingsLoaded = ref(false);
 
     // Computed property for CORS origins as a string for input field
     const corsOriginsString = computed({
@@ -417,18 +428,11 @@ export default {
     });
 
     onMounted(async () => {
-      // Load settings from backend first, then local storage
+      // Load settings from backend
       await loadSettingsFromBackend();
-      const savedSettings = localStorage.getItem('chat_settings');
-      if (savedSettings) {
-        try {
-          const parsedSettings = JSON.parse(savedSettings);
-          // Merge with defaults to ensure all properties exist, prioritizing backend then local storage
-          settings.value = deepMerge(deepMerge(defaultSettings(), settings.value), parsedSettings);
-        } catch (e) {
-          console.error('Error parsing saved settings:', e);
-        }
-      }
+      isSettingsLoaded.value = true;
+      // Load models after settings are loaded
+      await loadModels();
     });
 
     // Function to deep merge objects
@@ -446,14 +450,14 @@ export default {
       return output;
     };
 
-    // Default settings structure
+    // Default settings structure if backend or local storage fails
     const defaultSettings = () => ({
       message_display: {
         show_thoughts: true,
         show_json: false,
         show_utility: false,
         show_planning: true,
-        show_debug: true  // Enabled by default for developer mode
+        show_debug: false
       },
       chat: {
         auto_scroll: true,
@@ -461,26 +465,53 @@ export default {
         message_retention_days: 30
       },
       backend: {
-        api_endpoint: 'http://localhost:8001',
-        ollama_endpoint: 'http://localhost:11434/api/generate',
-        ollama_model: 'llama2',
-        server_host: '0.0.0.0',
-        server_port: 8001,
-        chat_data_dir: 'data/chats',
-        chat_history_file: 'data/chat_history.json',
-        knowledge_base_db: 'data/knowledge_base.db',
-        reliability_stats_file: 'data/reliability_stats.json',
-        audit_log_file: 'data/audit.log',
-        cors_origins: [
-          'http://localhost',
-          'http://localhost:5173',
-          'http://127.0.0.1:5173',
-          'http://localhost:8080',
-          'http://127.0.0.1:8080'
-        ],
+        api_endpoint: '',
+        server_host: '',
+        server_port: 0,
+        chat_data_dir: '',
+        chat_history_file: '',
+        knowledge_base_db: '',
+        reliability_stats_file: '',
+        audit_log_file: '',
+        cors_origins: [],
         timeout: 60,
         max_retries: 3,
-        streaming: false
+        streaming: false,
+        llm: {
+          provider_type: 'local', // 'local' or 'cloud'
+          local: {
+            provider: 'ollama', // Default local provider
+            providers: {
+              ollama: {
+                endpoint: '',
+                models: [],
+                selected_model: ''
+              },
+              lmstudio: {
+                endpoint: '',
+                models: [],
+                selected_model: ''
+              }
+            }
+          },
+          cloud: {
+            provider: 'openai', // Default cloud provider
+            providers: {
+              openai: {
+                api_key: '',
+                endpoint: '',
+                models: [],
+                selected_model: ''
+              },
+              anthropic: {
+                api_key: '',
+                endpoint: '',
+                models: [],
+                selected_model: ''
+              }
+            }
+          }
+        }
       },
       ui: {
         theme: 'light',
@@ -494,9 +525,9 @@ export default {
         session_timeout_minutes: 30
       },
       logging: {
-        log_level: 'debug',  // Set to debug by default for developer mode
+        log_level: 'info',
         log_to_file: false,
-        log_file_path: '/var/log/autobot.log'
+        log_file_path: ''
       },
       knowledge_base: {
         enabled: true,
@@ -519,6 +550,16 @@ export default {
         vector_storage: {
           enabled: true,
           update_frequency_days: 7
+        },
+        chromadb: {
+          enabled: true,
+          path: '',
+          collection_name: ''
+        },
+        redis: {
+          enabled: false,
+          host: '',
+          port: 0
         }
       },
       prompts: {
@@ -532,23 +573,65 @@ export default {
     // Function to load settings from backend
     const loadSettingsFromBackend = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings`);
+        // Use a fallback endpoint if not set in settings yet
+        let apiEndpoint = 'http://localhost:8001';
+        if (settings.value.backend && settings.value.backend.api_endpoint) {
+          apiEndpoint = settings.value.backend.api_endpoint;
+        }
+        const response = await fetch(`${apiEndpoint}/api/settings`);
         if (response.ok) {
-          const backendSettings = await response.json();
-          // Merge backend settings with local defaults to ensure all properties exist
-          const mergedSettings = deepMerge(defaultSettings(), backendSettings);
-          // Ensure memory settings are included even if not in backend data
-          if (!mergedSettings.memory) {
-            mergedSettings.memory = defaultSettings().memory;
+          try {
+            const backendSettings = await response.json();
+            settings.value = deepMerge(defaultSettings(), backendSettings);
+            // Save to local storage as well
+            localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+          } catch (jsonError) {
+            console.error('Error parsing JSON from backend response:', jsonError);
+            // Load from local storage if JSON parsing fails
+            const savedSettings = localStorage.getItem('chat_settings');
+            if (savedSettings) {
+              try {
+                const parsedSettings = JSON.parse(savedSettings);
+                settings.value = deepMerge(defaultSettings(), parsedSettings);
+              } catch (e) {
+                console.error('Error parsing saved settings:', e);
+                settings.value = defaultSettings();
+              }
+            } else {
+              settings.value = defaultSettings();
+            }
           }
-          settings.value = mergedSettings;
-          // Save to local storage as well
-          localStorage.setItem('chat_settings', JSON.stringify(settings.value));
         } else {
-          console.error('Failed to load settings from backend:', response.statusText);
+          console.error('Failed to load settings from backend:', response.status, response.statusText);
+          // Load from local storage if backend fails
+          const savedSettings = localStorage.getItem('chat_settings');
+          if (savedSettings) {
+            try {
+              const parsedSettings = JSON.parse(savedSettings);
+              settings.value = deepMerge(defaultSettings(), parsedSettings);
+            } catch (e) {
+              console.error('Error parsing saved settings:', e);
+              settings.value = defaultSettings();
+            }
+          } else {
+            settings.value = defaultSettings();
+          }
         }
       } catch (error) {
         console.error('Error loading settings from backend:', error);
+        // Load from local storage if backend fails
+        const savedSettings = localStorage.getItem('chat_settings');
+        if (savedSettings) {
+          try {
+            const parsedSettings = JSON.parse(savedSettings);
+            settings.value = deepMerge(defaultSettings(), parsedSettings);
+          } catch (e) {
+            console.error('Error parsing saved settings:', e);
+            settings.value = defaultSettings();
+          }
+        } else {
+          settings.value = defaultSettings();
+        }
       }
       // Load prompts after settings are loaded
       await loadPrompts();
@@ -559,7 +642,8 @@ export default {
       // Ensure memory settings are included in the saved data
       localStorage.setItem('chat_settings', JSON.stringify(settings.value));
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings`, {
+        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
+        const response = await fetch(`${apiEndpoint}/api/settings`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -567,7 +651,7 @@ export default {
           body: JSON.stringify({ settings: settings.value })
         });
         if (!response.ok) {
-          console.error('Failed to save settings to backend:', response.statusText);
+          console.error('Failed to save settings to backend:', response.status, response.statusText);
         } else {
           console.log('Settings, including memory configurations, saved successfully to backend.');
         }
@@ -584,13 +668,18 @@ export default {
     // Function to load prompts from backend
     const loadPrompts = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts`);
+        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
+        const response = await fetch(`${apiEndpoint}/api/prompts`);
         if (response.ok) {
-          const promptsData = await response.json();
-          settings.value.prompts.list = promptsData.prompts || [];
-          settings.value.prompts.defaults = promptsData.defaults || {};
+          try {
+            const promptsData = await response.json();
+            settings.value.prompts.list = promptsData.prompts || [];
+            settings.value.prompts.defaults = promptsData.defaults || {};
+          } catch (jsonError) {
+            console.error('Error parsing JSON for prompts:', jsonError);
+          }
         } else {
-          console.error('Failed to load prompts from backend:', response.statusText);
+          console.error('Failed to load prompts from backend:', response.status, response.statusText);
         }
       } catch (error) {
         console.error('Error loading prompts from backend:', error);
@@ -608,7 +697,8 @@ export default {
       if (!settings.value.prompts.selectedPrompt) return;
       try {
         const promptId = settings.value.prompts.selectedPrompt.id;
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}`, {
+        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
+        const response = await fetch(`${apiEndpoint}/api/prompts/${promptId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -626,17 +716,99 @@ export default {
           settings.value.prompts.selectedPrompt = null;
           settings.value.prompts.editedContent = '';
         } else {
-          console.error('Failed to save prompt to backend:', response.statusText);
+          console.error('Failed to save prompt to backend:', response.status, response.statusText);
         }
       } catch (error) {
         console.error('Error saving prompt to backend:', error);
       }
     };
 
+    // Function to load models from the selected provider
+    const loadModels = async () => {
+      try {
+        let endpoint = '';
+        if (settings.value.backend.llm.provider_type === 'local') {
+          const provider = settings.value.backend.llm.local.provider;
+          endpoint = settings.value.backend.llm.local.providers[provider].endpoint;
+          // For Ollama, we need to adjust the endpoint to get the list of models
+          if (provider === 'ollama' && endpoint.includes('/api/generate')) {
+            endpoint = endpoint.replace('/api/generate', '/api/tags');
+          }
+          // Ensure LM Studio endpoint is correct for model listing
+          if (provider === 'lmstudio' && !endpoint.endsWith('/v1/models')) {
+            if (endpoint.endsWith('/')) {
+              endpoint = endpoint + 'v1/models';
+            } else {
+              endpoint = endpoint + '/v1/models';
+            }
+          }
+        } else {
+          // For cloud providers, models are predefined or fetched differently
+          return;
+        }
+        
+        if (!endpoint) {
+          console.error('No endpoint defined for model loading');
+          return;
+        }
+        
+        console.log('Attempting to load models from endpoint:', endpoint);
+        const response = await fetch(endpoint, {
+          // Adding a timeout to prevent hanging on unreachable endpoints
+          signal: AbortSignal.timeout(10000) // 10 seconds timeout
+        });
+        if (response.ok) {
+          try {
+            const data = await response.json();
+            console.log('Model data received:', data);
+            if (settings.value.backend.llm.provider_type === 'local') {
+              const provider = settings.value.backend.llm.local.provider;
+              if (provider === 'ollama' && data.models) {
+                settings.value.backend.llm.local.providers.ollama.models = data.models.map(model => model.name);
+                if (!settings.value.backend.llm.local.providers.ollama.selected_model && data.models.length > 0) {
+                  settings.value.backend.llm.local.providers.ollama.selected_model = data.models[0].name;
+                }
+              } else if (provider === 'lmstudio' && data.data) {
+                settings.value.backend.llm.local.providers.lmstudio.models = data.data.map(model => model.id);
+                if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.data.length > 0) {
+                  settings.value.backend.llm.local.providers.lmstudio.selected_model = data.data[0].id;
+                }
+              } else if (provider === 'lmstudio') {
+                // Handle case where endpoint might return different structure
+                console.log('LM Studio response:', data);
+                if (Array.isArray(data)) {
+                  settings.value.backend.llm.local.providers.lmstudio.models = data.map(model => model.id || model.name);
+                  if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.length > 0) {
+                    settings.value.backend.llm.local.providers.lmstudio.selected_model = data[0].id || data[0].name;
+                  }
+                }
+              }
+            }
+          } catch (jsonError) {
+            console.error('Error parsing JSON for models:', jsonError);
+          }
+        } else {
+          console.error('Failed to load models:', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('Error loading models:', error);
+        // Don't let fetch errors break the UI
+        if (settings.value.backend.llm.provider_type === 'local') {
+          const provider = settings.value.backend.llm.local.provider;
+          if (provider === 'ollama') {
+            settings.value.backend.llm.local.providers.ollama.models = [];
+          } else if (provider === 'lmstudio') {
+            settings.value.backend.llm.local.providers.lmstudio.models = [];
+          }
+        }
+      }
+    };
+
     // Function to revert a prompt to default
     const revertPromptToDefault = async (promptId) => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}/revert`, {
+        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
+        const response = await fetch(`${apiEndpoint}/api/prompts/${promptId}/revert`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -655,10 +827,55 @@ export default {
             settings.value.prompts.editedContent = updatedPrompt.content || '';
           }
         } else {
-          console.error('Failed to revert prompt to default:', response.statusText);
+          console.error('Failed to revert prompt to default:', response.status, response.statusText);
         }
       } catch (error) {
         console.error('Error reverting prompt to default:', error);
+      }
+    };
+
+    const onProviderTypeChange = async () => {
+      await loadModels();
+      await saveSettings();
+      await notifyBackendOfProviderChange();
+    };
+
+    const onLocalProviderChange = async () => {
+      await loadModels();
+      await saveSettings();
+      await notifyBackendOfProviderChange();
+    };
+
+    const onCloudProviderChange = async () => {
+      await saveSettings();
+      await notifyBackendOfProviderChange();
+    };
+
+    const notifyBackendOfProviderChange = async () => {
+      try {
+        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
+        const providerData = {
+          provider_type: settings.value.backend.llm.provider_type,
+          local_provider: settings.value.backend.llm.provider_type === 'local' ? settings.value.backend.llm.local.provider : '',
+          local_model: settings.value.backend.llm.provider_type === 'local' ? settings.value.backend.llm.local.providers[settings.value.backend.llm.local.provider].selected_model : '',
+          cloud_provider: settings.value.backend.llm.provider_type === 'cloud' ? settings.value.backend.llm.cloud.provider : '',
+          cloud_model: settings.value.backend.llm.provider_type === 'cloud' ? settings.value.backend.llm.cloud.providers[settings.value.backend.llm.cloud.provider].selected_model : ''
+        };
+        console.log('Notifying backend of provider change:', providerData);
+        const response = await fetch(`${apiEndpoint}/api/llm/provider`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(providerData)
+        });
+        if (response.ok) {
+          console.log('Backend notified of provider change successfully');
+        } else {
+          console.error('Failed to notify backend of provider change:', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('Error notifying backend of provider change:', error);
       }
     };
 
@@ -671,7 +888,12 @@ export default {
       corsOriginsString,
       selectPrompt,
       savePrompt,
-      revertPromptToDefault
+      revertPromptToDefault,
+      isSettingsLoaded,
+      onProviderTypeChange,
+      onLocalProviderChange,
+      onCloudProviderChange,
+      notifyBackendOfProviderChange
     };
   }
 };
@@ -902,6 +1124,18 @@ export default {
 .setting-item label {
   flex: 1;
   font-weight: 500;
+}
+
+.setting-item label.with-description {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-item label .description {
+  font-size: clamp(10px, 1.2vw, 12px);
+  color: #6c757d;
+  font-weight: normal;
+  margin-top: 2px;
 }
 
 .setting-item input[type="checkbox"],

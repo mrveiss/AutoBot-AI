@@ -55,6 +55,7 @@
             <button class="control-button" @click="startBackendServer" :disabled="backendStarting">
               {{ backendStarting ? 'Starting...' : 'Start Backend Server' }}
             </button>
+            <button @click="handleToggleAgent" class="control-button">{{ isAgentPaused ? 'Resume Agent' : 'Pause Agent' }}</button>
           </div>
         </div>
       </div>
@@ -69,7 +70,6 @@
     <div class="chat-input">
       <textarea id="chat-input" v-model="inputMessage" placeholder="Type your message or goal for AutoBot..." @keyup.enter="sendMessage"></textarea>
       <button @click="sendMessage">Send</button>
-      <button @click="sidebarCollapsed = !sidebarCollapsed" class="history-button">History</button>
     </div>
   </div>
 </template>
@@ -112,6 +112,7 @@ export default {
     const backendStarting = ref(false);
     const chatList = ref([]);
     const currentChatId = ref(null);
+    const isAgentPaused = ref(false);
     const prompts = ref([]);
     const defaults = ref({});
     let eventSource = null;
@@ -123,13 +124,8 @@ export default {
       if (persistedMessages) {
         messages.value = JSON.parse(persistedMessages);
       } else {
-        // If no persisted messages or after reset, show initial message
-        messages.value.push({
-          sender: 'bot',
-          text: 'Hello! How can I assist you today?',
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
-        });
+        // No default welcome message
+        messages.value = [];
       }
       
       // Load settings from local storage if available
@@ -493,14 +489,7 @@ export default {
       } else if (type === 'utility') {
         return `<div class="utility-message"><strong>Utility:</strong> <span style="color: #6c757d;">${text.replace(/\{.*?\}/g, '').replace(/\[.*?\]/g, '').replace(/"/g, '').trim()}</span></div>`;
       } else if (type === 'response') {
-        try {
-          const jsonObj = JSON.parse(text);
-          if (jsonObj.sequence && jsonObj.sequence.length > 0 && jsonObj.sequence[0][0] === 'text') {
-            return `<div class="response-message"><strong>Response:</strong> ${jsonObj.sequence[0][1]}</div>`;
-          }
-        } catch (e) {
-          return `<div class="response-message"><strong>Response:</strong> ${text}</div>`;
-        }
+        // For response type, display the text directly
         return `<div class="response-message"><strong>Response:</strong> ${text}</div>`;
       }
       return text;
@@ -538,12 +527,72 @@ export default {
             });
           }
 
-          const response = await fetch(`${settings.value.backend.api_endpoint}/api/chat`, {
+          // Ensure the correct endpoint based on the selected LLM provider and model
+          let apiEndpoint = settings.value.backend.api_endpoint;
+          let chatEndpoint = '/api/chat';
+          let requestFormat = 'default';
+          if (settings.value.backend.llm && settings.value.backend.llm.provider_type) {
+            if (settings.value.backend.llm.provider_type === 'local') {
+              const provider = settings.value.backend.llm.local.provider;
+              if (provider && settings.value.backend.llm.local.providers[provider]) {
+                apiEndpoint = settings.value.backend.llm.local.providers[provider].endpoint || apiEndpoint;
+                if (provider === 'lmstudio') {
+                  chatEndpoint = '/v1/chat/completions';
+                  requestFormat = 'openai';
+                }
+              }
+            } else if (settings.value.backend.llm.provider_type === 'cloud') {
+              const provider = settings.value.backend.llm.cloud.provider;
+              if (provider && settings.value.backend.llm.cloud.providers[provider]) {
+                apiEndpoint = settings.value.backend.llm.cloud.providers[provider].endpoint || apiEndpoint;
+                chatEndpoint = '/v1/chat/completions';
+                requestFormat = 'openai';
+              }
+            }
+          }
+          console.log('Using API endpoint for chat request:', apiEndpoint, 'with endpoint:', chatEndpoint);
+          
+          // Format the request body based on the provider
+          let formattedBody = requestBody;
+          if (requestFormat === 'openai') {
+            const originalData = JSON.parse(requestBody);
+            const model = settings.value.backend.llm.provider_type === 'local' 
+              ? settings.value.backend.llm.local.providers[settings.value.backend.llm.local.provider].selected_model
+              : settings.value.backend.llm.cloud.providers[settings.value.backend.llm.cloud.provider].selected_model;
+            formattedBody = JSON.stringify({
+              model: model || 'default-model',
+              messages: [
+                { role: 'user', content: originalData.message }
+              ],
+              stream: settings.value.backend.streaming || false,
+              tools: [
+                {
+                  type: "function",
+                  function: {
+                    name: "fetch_wikipedia_content",
+                    description: "Search Wikipedia and fetch the introduction of the most relevant article. Use this if the user is asking for something that is likely on Wikipedia.",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        search_query: {
+                          type: "string",
+                          description: "Search query for finding the Wikipedia article"
+                        }
+                      },
+                      required: ["search_query"]
+                    }
+                  }
+                }
+              ]
+            });
+          }
+          
+          const response = await fetch(`${apiEndpoint}${chatEndpoint}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
-            body: requestBody
+            body: formattedBody
           });
           if (response.ok) {
             const contentType = response.headers.get('content-type');
@@ -577,6 +626,16 @@ export default {
               console.log('Raw bot response:', botResponse);
               let responseText = botResponse.text || JSON.stringify(botResponse);
               let responseType = botResponse.type || 'response';
+              
+              // Handle OpenAI-compatible response format for non-streaming
+              if (botResponse.object === 'chat.completion' && botResponse.choices && botResponse.choices.length > 0) {
+                const choice = botResponse.choices[0];
+                if (choice.message && choice.message.content) {
+                  responseText = choice.message.content;
+                  responseType = 'response';
+                }
+              }
+              
               if (settings.value.message_display.show_json) {
                 messages.value.push({
                   sender: 'debug',
@@ -664,6 +723,7 @@ export default {
       let fullJsonText = '';
       let fullUtilityText = '';
       let fullPlanningText = '';
+      let currentToolCall = null; // To accumulate tool call data across chunks
       
       console.log('Streaming response started:', response);
       const reader = response.body.getReader();
@@ -719,139 +779,253 @@ export default {
           
           // Parse the chunk to extract JSON data
           try {
-            // SSE format is "data: {json}\n\n"
-            const dataMatch = chunk.match(/data: (.*?)(?:\n\n|$)/);
-            if (dataMatch && dataMatch[1]) {
-              const dataStr = dataMatch[1].trim();
-              // Only add debug message for JSON parsing if it's not already logged
-              if (settings.value.message_display.show_debug && !messages.value.some(msg => msg.type === 'debug' && msg.text.includes('Attempting to parse JSON') && msg.text.includes(dataStr))) {
-                messages.value.push({
-                  sender: 'debug',
-                  text: `Attempting to parse JSON: ${dataStr}`,
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'debug'
-                });
-              }
-              console.log('Attempting to parse JSON:', dataStr);
-              try {
-                const data = JSON.parse(dataStr);
-                console.log('Parsed data:', data);
-              if (data.text) {
-                // Determine message type and update the appropriate text accumulator
-                if (data.type === 'thought') {
-                  fullThoughtText += data.text;
-                  const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
-                  if (lastThoughtMessageIndex >= 0) {
-                    messages.value[lastThoughtMessageIndex].text = fullThoughtText;
-                  } else if (settings.value.message_display.show_thoughts) {
-                    messages.value.push({
-                      sender: 'bot',
-                      text: fullThoughtText,
-                      timestamp: new Date().toLocaleTimeString(),
-                      type: 'thought',
-                      final: false
-                    });
-                  }
-                } else if (data.type === 'json') {
-                  fullJsonText += data.text;
-                  const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
-                  if (lastJsonMessageIndex >= 0) {
-                    messages.value[lastJsonMessageIndex].text = fullJsonText;
-                  } else if (settings.value.message_display.show_json) {
-                    messages.value.push({
-                      sender: 'bot',
-                      text: fullJsonText,
-                      timestamp: new Date().toLocaleTimeString(),
-                      type: 'json',
-                      final: false
-                    });
-                  }
-                } else if (data.type === 'utility') {
-                  fullUtilityText += data.text;
-                  const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
-                  if (lastUtilityMessageIndex >= 0) {
-                    messages.value[lastUtilityMessageIndex].text = fullUtilityText;
-                  } else if (settings.value.message_display.show_utility) {
-                    messages.value.push({
-                      sender: 'bot',
-                      text: fullUtilityText,
-                      timestamp: new Date().toLocaleTimeString(),
-                      type: 'utility',
-                      final: false
-                    });
-                  }
-                } else if (data.type === 'planning') {
-                  fullPlanningText += data.text;
-                  const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
-                  if (lastPlanningMessageIndex >= 0) {
-                    messages.value[lastPlanningMessageIndex].text = fullPlanningText;
-                  } else if (settings.value.message_display.show_planning) {
-                    messages.value.push({
-                      sender: 'bot',
-                      text: fullPlanningText,
-                      timestamp: new Date().toLocaleTimeString(),
-                      type: 'planning',
-                      final: false
-                    });
-                  }
-                } else {
-                  fullResponseText += data.text;
-                  const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-                  if (lastBotMessageIndex >= 0) {
-                    messages.value[lastBotMessageIndex].text = fullResponseText;
-                  } else {
-                    messages.value.push({
-                      sender: 'bot',
-                      text: fullResponseText,
-                      timestamp: new Date().toLocaleTimeString(),
-                      type: 'response',
-                      final: false
-                    });
-                  }
-                }
-                  // Scroll to the latest message if autoscroll is enabled
-                  nextTick(() => {
-                    if (chatMessages.value && settings.value.chat.auto_scroll) {
-                      chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
-                    }
+            // Handle multiple data events in a single chunk
+            const dataMatches = chunk.split('\n').filter(line => line.startsWith('data: '));
+            if (dataMatches.length > 0) {
+              for (const dataLine of dataMatches) {
+                const dataStr = dataLine.replace('data: ', '').trim();
+                if (!dataStr) continue; // Skip empty data lines
+                
+                if (settings.value.message_display.show_debug && !messages.value.some(msg => msg.type === 'debug' && msg.text.includes('Attempting to parse JSON') && msg.text.includes(dataStr))) {
+                  messages.value.push({
+                    sender: 'debug',
+                    text: `Attempting to parse JSON: ${dataStr}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    type: 'debug'
                   });
                 }
-                if (data.done) {
-                  console.log('Streaming done signal received.');
-                  // Mark the last bot message as final for each type
-                  const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-                  if (lastBotMessageIndex >= 0) {
-                    messages.value[lastBotMessageIndex].final = true;
+                console.log('Attempting to parse JSON:', dataStr);
+                
+                try {
+                  const data = JSON.parse(dataStr);
+                  console.log('Parsed data:', data);
+                  
+                  // Check if this is an OpenAI-compatible response chunk
+                  if (data.object === 'chat.completion.chunk' && data.choices && data.choices.length > 0) {
+                    const choice = data.choices[0];
+                    if (choice.delta) {
+                      if (choice.delta.content) {
+                        fullResponseText += choice.delta.content;
+                        const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
+                        if (lastBotMessageIndex >= 0) {
+                          messages.value[lastBotMessageIndex].text = fullResponseText;
+                        } else {
+                          messages.value.push({
+                            sender: 'bot',
+                            text: fullResponseText,
+                            timestamp: new Date().toLocaleTimeString(),
+                            type: 'response',
+                            final: false
+                          });
+                        }
+                        // Scroll to the latest message if autoscroll is enabled
+                        nextTick(() => {
+                          if (chatMessages.value && settings.value.chat.auto_scroll) {
+                            chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+                          }
+                        });
+                      }
+                      if (choice.delta.tool_calls) {
+                          const toolCallDelta = choice.delta.tool_calls[0];
+                          if (toolCallDelta.function) {
+                              if (toolCallDelta.function.name) {
+                                  // Initialize currentToolCall if it's a new tool call
+                                  if (!currentToolCall || currentToolCall.id !== toolCallDelta.id) {
+                                      currentToolCall = {
+                                          id: toolCallDelta.id,
+                                          name: toolCallDelta.function.name,
+                                          arguments: ''
+                                      };
+                                  }
+                              }
+                              if (toolCallDelta.function.arguments) {
+                                  if (currentToolCall) {
+                                      currentToolCall.arguments += toolCallDelta.function.arguments;
+                                  }
+                              }
+                          }
+                      }
+                    }
+                    if (choice.finish_reason) {
+                      if (choice.finish_reason === 'tool_calls' && data.choices[0].message && data.choices[0].message.tool_calls) {
+                        console.log('Tool call requested:', data.choices[0].message.tool_calls);
+                        messages.value.push({
+                          sender: 'debug',
+                          text: `Tool call requested: ${JSON.stringify(data.choices[0].message.tool_calls, null, 2)}`,
+                          timestamp: new Date().toLocaleTimeString(),
+                          type: 'debug'
+                        });
+                        // Stop streaming when a tool call is requested
+                        reader.cancel();
+                        
+                        // Simulate tool execution for demonstration
+                        const toolCall = currentToolCall; // Use the accumulated tool call
+                        if (toolCall && (toolCall.name === 'fetch_wikipedia_content' || toolCall.name === 'get_wikipedia_content')) {
+                          try {
+                            const args = JSON.parse(toolCall.arguments || '{}');
+                            const searchQuery = args.search_query || 'unknown query';
+                            messages.value.push({
+                              sender: 'bot',
+                              text: `Fetching Wikipedia content for "${searchQuery}"...`,
+                              timestamp: new Date().toLocaleTimeString(),
+                              type: 'utility'
+                            });
+                            // Simulated response (since actual execution would require backend support)
+                            messages.value.push({
+                              sender: 'bot',
+                              text: `Wikipedia content for "${searchQuery}": [Simulated response] This is a placeholder for the actual Wikipedia content that would be fetched.`,
+                              timestamp: new Date().toLocaleTimeString(),
+                              type: 'response',
+                              final: true
+                            });
+                            saveMessagesToStorage();
+                          } catch (error) {
+                            messages.value.push({
+                              sender: 'debug',
+                              text: `Error processing tool call arguments: ${error.message}`,
+                              timestamp: new Date().toLocaleTimeString(),
+                              type: 'debug'
+                            });
+                          }
+                        }
+                        // Mark the last bot message as final if it exists
+                        const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
+                        if (lastBotMessageIndex >= 0) {
+                          messages.value[lastBotMessageIndex].final = true;
+                        }
+                        saveMessagesToStorage();
+                        currentToolCall = null; // Reset for next tool call
+                        return; // Stop further processing of this stream
+                      }
+                      console.log('Streaming done signal received from OpenAI API.');
+                      // Mark the last bot message as final
+                      const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
+                      if (lastBotMessageIndex >= 0) {
+                        messages.value[lastBotMessageIndex].final = true;
+                      }
+                      // Save messages after streaming completes
+                      saveMessagesToStorage();
+                      reader.cancel(); // Stop reading further
+                      return;
+                    }
+                  } else if (data.text) {
+                    // Handle custom format if present
+                    // Determine message type and update the appropriate text accumulator
+                    if (data.type === 'thought') {
+                      fullThoughtText += data.text;
+                      const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
+                      if (lastThoughtMessageIndex >= 0) {
+                        messages.value[lastThoughtMessageIndex].text = fullThoughtText;
+                      } else if (settings.value.message_display.show_thoughts) {
+                        messages.value.push({
+                          sender: 'bot',
+                          text: fullThoughtText,
+                          timestamp: new Date().toLocaleTimeString(),
+                          type: 'thought',
+                          final: false
+                        });
+                      }
+                    } else if (data.type === 'json') {
+                      fullJsonText += data.text;
+                      const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
+                      if (lastJsonMessageIndex >= 0) {
+                        messages.value[lastJsonMessageIndex].text = fullJsonText;
+                      } else if (settings.value.message_display.show_json) {
+                        messages.value.push({
+                          sender: 'bot',
+                          text: fullJsonText,
+                          timestamp: new Date().toLocaleTimeString(),
+                          type: 'json',
+                          final: false
+                        });
+                      }
+                    } else if (data.type === 'utility') {
+                      fullUtilityText += data.text;
+                      const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
+                      if (lastUtilityMessageIndex >= 0) {
+                        messages.value[lastUtilityMessageIndex].text = fullUtilityText;
+                      } else if (settings.value.message_display.show_utility) {
+                        messages.value.push({
+                          sender: 'bot',
+                          text: fullUtilityText,
+                          timestamp: new Date().toLocaleTimeString(),
+                          type: 'utility',
+                          final: false
+                        });
+                      }
+                    } else if (data.type === 'planning') {
+                      fullPlanningText += data.text;
+                      const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
+                      if (lastPlanningMessageIndex >= 0) {
+                        messages.value[lastPlanningMessageIndex].text = fullPlanningText;
+                      } else if (settings.value.message_display.show_planning) {
+                        messages.value.push({
+                          sender: 'bot',
+                          text: fullPlanningText,
+                          timestamp: new Date().toLocaleTimeString(),
+                          type: 'planning',
+                          final: false
+                        });
+                      }
+                    } else {
+                      fullResponseText += data.text;
+                      const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
+                      if (lastBotMessageIndex >= 0) {
+                        messages.value[lastBotMessageIndex].text = fullResponseText;
+                      } else {
+                        messages.value.push({
+                          sender: 'bot',
+                          text: fullResponseText,
+                          timestamp: new Date().toLocaleTimeString(),
+                          type: 'response',
+                          final: false
+                        });
+                      }
+                    }
+                    // Scroll to the latest message if autoscroll is enabled
+                    nextTick(() => {
+                      if (chatMessages.value && settings.value.chat.auto_scroll) {
+                        chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+                      }
+                    });
                   }
-                  const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
-                  if (lastThoughtMessageIndex >= 0) {
-                    messages.value[lastThoughtMessageIndex].final = true;
+                  if (data.done) {
+                    console.log('Streaming done signal received.');
+                    // Mark the last bot message as final for each type
+                    const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
+                    if (lastBotMessageIndex >= 0) {
+                      messages.value[lastBotMessageIndex].final = true;
+                    }
+                    const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
+                    if (lastThoughtMessageIndex >= 0) {
+                      messages.value[lastThoughtMessageIndex].final = true;
+                    }
+                    const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
+                    if (lastJsonMessageIndex >= 0) {
+                      messages.value[lastJsonMessageIndex].final = true;
+                    }
+                    const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
+                    if (lastUtilityMessageIndex >= 0) {
+                      messages.value[lastUtilityMessageIndex].final = true;
+                    }
+                    const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
+                    if (lastPlanningMessageIndex >= 0) {
+                      messages.value[lastPlanningMessageIndex].final = true;
+                    }
+                    // Save messages after streaming completes
+                    saveMessagesToStorage();
+                    reader.cancel(); // Stop reading further
+                    return;
                   }
-                  const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
-                  if (lastJsonMessageIndex >= 0) {
-                    messages.value[lastJsonMessageIndex].final = true;
-                  }
-                  const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
-                  if (lastUtilityMessageIndex >= 0) {
-                    messages.value[lastUtilityMessageIndex].final = true;
-                  }
-                  const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
-                  if (lastPlanningMessageIndex >= 0) {
-                    messages.value[lastPlanningMessageIndex].final = true;
-                  }
-                  // Save messages after streaming completes
-                  saveMessagesToStorage();
-                  reader.cancel(); // Stop reading further
-                  return;
+                } catch (error) {
+                  console.error('Error parsing JSON data:', error, 'from data:', dataStr);
+                  messages.value.push({
+                    sender: 'debug',
+                    text: `Error parsing JSON data: ${error.message} from data: ${dataStr}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    type: 'debug'
+                  });
                 }
-              } catch (error) {
-                console.error('Error parsing JSON data:', error, 'from data:', dataStr);
-                messages.value.push({
-                  sender: 'debug',
-                  text: `Error parsing JSON data: ${error.message} from data: ${dataStr}`,
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'debug'
-                });
               }
             } else {
               messages.value.push({
@@ -958,18 +1132,13 @@ export default {
           }
         });
         if (response.ok) {
-          messages.value = [{
-            sender: 'bot',
-            text: 'Hello! How can I assist you today?',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          }];
-          messages.value.push({
-            sender: 'bot',
-            text: 'Chat reset successfully.',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
+      messages.value = [];
+      messages.value.push({
+        sender: 'bot',
+        text: 'Chat reset successfully.',
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'response'
+      });
         } else {
           console.error('Failed to reset chat:', response.statusText);
           messages.value.push({
@@ -1116,12 +1285,6 @@ export default {
           }
         } else {
           messages.value = [];
-          messages.value.push({
-            sender: 'bot',
-            text: 'No chat history found. How can I assist you?',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
         }
       }
     };
@@ -1482,7 +1645,8 @@ export default {
       editChatName,
       refreshChatList,
       deleteSpecificChat,
-      groupedPrompts
+      groupedPrompts,
+      isAgentPaused
     };
   }
 };
@@ -1696,6 +1860,8 @@ export default {
   background-color: white; /* Ensure background to avoid transparency */
   padding: clamp(5px, 1vw, 10px) 0;
   z-index: 10; /* Ensure it stays above other content if needed */
+  margin-left: clamp(10px, 1.5vw, 15px);
+  width: calc(100% - clamp(10px, 1.5vw, 15px));
 }
 
 .chat-input textarea {
@@ -1722,13 +1888,6 @@ export default {
   font-size: clamp(12px, 1.5vw, 14px);
 }
 
-.history-button {
-  background-color: #6c757d;
-}
-
-.history-button:hover {
-  background-color: #5a6268;
-}
 
 .chat-input button:hover {
   background-color: #0056b3;
