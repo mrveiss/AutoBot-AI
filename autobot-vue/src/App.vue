@@ -11,16 +11,7 @@
     </header>
     <main class="app-content">
       <section v-if="activeTab === 'chat'" class="chat-section">
-        <div class="chat-sidebar">
-          <h3>Chats</h3>
-          <ul class="chat-list">
-            <li v-for="chat in chatSessions" :key="chat.id" 
-                :class="{ 'active-chat': chat.id === activeChatId }"
-                @click="activeChatId = chat.id">
-              {{ chat.name }}
-            </li>
-          </ul>
-        </div>
+       
         <div class="chat-window">
           <ChatInterface v-if="activeChatId" :key="activeChatId" />
         </div>
@@ -36,11 +27,16 @@
       </section>
     </main>
     <footer class="app-footer">
+      <div class="performance-stats">
+        <h4>System Performance</h4>
+        <canvas id="performanceGraph" width="400" height="100"></canvas>
+        <div class="load-stats">
+          <span>CPU Load: {{ performanceData.cpuLoad }}%</span>
+          <span>Memory Usage: {{ performanceData.memoryUsage }}%</span>
+          <span>GPU Usage: {{ performanceData.gpuUsage }}%</span>
+        </div>
+      </div>
       <div class="action-buttons">
-        <button @click="handleNewChat">New Chat</button>
-        <button @click="handleSaveChat">Save Chat</button>
-        <button @click="handleLoadChat">Load Chat</button>
-        <button @click="handleResetChat">Reset Chat</button>
         <button @click="handlePauseAgent" :disabled="isAgentPaused">Pause Agent</button>
         <button @click="handleResumeAgent" :disabled="!isAgentPaused">Resume Agent</button>
       </div>
@@ -49,7 +45,7 @@
 </template>
 
 <script>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import ChatInterface from './components/ChatInterface.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import FileBrowser from './components/FileBrowser.vue';
@@ -165,6 +161,91 @@ export default {
     // Initialize with a default chat session
     handleNewChat();
 
+    const performanceData = ref({
+      cpuLoad: 0,
+      memoryUsage: 0,
+      gpuUsage: 0
+    });
+
+    // Function to update performance data (placeholder for real data)
+    const updatePerformanceData = () => {
+      // Simulate fetching performance data
+      performanceData.value.cpuLoad = Math.floor(Math.random() * 100);
+      performanceData.value.memoryUsage = Math.floor(Math.random() * 100);
+      performanceData.value.gpuUsage = Math.floor(Math.random() * 100);
+      drawPerformanceGraph();
+    };
+
+    // Function to draw performance graph
+    const drawPerformanceGraph = () => {
+      const canvas = document.getElementById('performanceGraph');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw grid lines
+        ctx.strokeStyle = '#e9ecef';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 100; i += 20) {
+          ctx.beginPath();
+          ctx.moveTo(50 + (i * 3), 20);
+          ctx.lineTo(50 + (i * 3), 80);
+          ctx.stroke();
+        }
+        
+        // CPU Load - Blue
+        ctx.fillStyle = '#007bff';
+        ctx.fillRect(50, 25, performanceData.value.cpuLoad * 3, 15);
+        
+        // Memory Usage - Green
+        ctx.fillStyle = '#28a745';
+        ctx.fillRect(50, 45, performanceData.value.memoryUsage * 3, 15);
+        
+        // GPU Usage - Red
+        ctx.fillStyle = '#dc3545';
+        ctx.fillRect(50, 65, performanceData.value.gpuUsage * 3, 15);
+        
+        // Labels
+        ctx.fillStyle = '#000';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText('CPU', 40, 35);
+        ctx.fillText('Memory', 40, 55);
+        ctx.fillText('GPU', 40, 75);
+        
+        // Percentage labels on bars
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#fff';
+        if (performanceData.value.cpuLoad > 10) {
+          ctx.fillText(`${performanceData.value.cpuLoad}%`, 55, 35);
+        } else {
+          ctx.fillStyle = '#000';
+          ctx.fillText(`${performanceData.value.cpuLoad}%`, 55 + (performanceData.value.cpuLoad * 3), 35);
+        }
+        if (performanceData.value.memoryUsage > 10) {
+          ctx.fillStyle = '#fff';
+          ctx.fillText(`${performanceData.value.memoryUsage}%`, 55, 55);
+        } else {
+          ctx.fillStyle = '#000';
+          ctx.fillText(`${performanceData.value.memoryUsage}%`, 55 + (performanceData.value.memoryUsage * 3), 55);
+        }
+        if (performanceData.value.gpuUsage > 10) {
+          ctx.fillStyle = '#fff';
+          ctx.fillText(`${performanceData.value.gpuUsage}%`, 55, 75);
+        } else {
+          ctx.fillStyle = '#000';
+          ctx.fillText(`${performanceData.value.gpuUsage}%`, 55 + (performanceData.value.gpuUsage * 3), 75);
+        }
+      }
+    };
+
+    // Update performance data initially and periodically
+    // Use a timeout as a workaround if onMounted causes issues
+    setTimeout(() => {
+      updatePerformanceData();
+      setInterval(updatePerformanceData, 5000);
+    }, 100);
+
     return {
       activeTab,
       isAgentPaused,
@@ -176,6 +257,7 @@ export default {
       handleResetChat,
       handlePauseAgent,
       handleResumeAgent,
+      performanceData
     };
   },
 };
@@ -311,10 +393,12 @@ export default {
   padding: clamp(5px, 1vw, 10px) clamp(10px, 2vw, 20px);
   border-top: 1px solid #dee2e6;
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: center;
   position: sticky;
   bottom: 0;
   z-index: 1000; /* Ensure footer stays on bottom */
+  flex-wrap: wrap;
 }
 
 .action-buttons {
@@ -322,11 +406,37 @@ export default {
   flex-wrap: wrap;
   justify-content: center;
   gap: clamp(5px, 1vw, 10px);
-  width: 100%;
-  max-width: 1200px; /* Limit width on large screens */
+  max-width: 600px; /* Limit width on large screens */
 }
 
-.action-buttons button {
+.performance-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 600px;
+}
+
+.performance-stats h4 {
+  margin: 0 0 clamp(5px, 0.5vw, 10px) 0;
+  font-size: clamp(12px, 1.5vw, 14px);
+  color: #007bff;
+}
+
+#performanceGraph {
+  background-color: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+}
+
+.load-stats {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+  margin-top: clamp(5px, 0.5vw, 10px);
+  font-size: clamp(10px, 1.2vw, 12px);
+}
+
+button, .control-button, .action-buttons button {
   background-color: #007bff;
   color: white;
   border: none;
@@ -338,11 +448,11 @@ export default {
   min-width: fit-content; /* Ensure buttons don't shrink too much */
 }
 
-.action-buttons button:hover {
+button:hover, .control-button:hover, .action-buttons button:hover {
   background-color: #0056b3;
 }
 
-.action-buttons button:disabled {
+button:disabled, .control-button:disabled, .action-buttons button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
 }

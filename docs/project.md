@@ -162,17 +162,17 @@ class KnowledgeBase:
 
 ### Tasks
 
-* [x] Build minimal frontend in `web/` using HTML/JS or Flask UI
+* [x] Build frontend in `autobot-vue/` using Vue with Vite
 * [ ] Use NoVNC or WebSocket proxy to stream desktop
-* [ ] Show logs, currently running task, and options to interrupt/resume
+* [x] Show logs, currently running task, and options to interrupt/resume
 * [ ] Allow human-in-the-loop takeover if needed (interrupt/takeover button)
-* [ ] **Embed noVNC in the Web UI:** Integrate an iframe or dynamic viewer in `web/index.html` to display the Kex VNC session, enabling real-time observation and control.
+* [ ] **Embed noVNC in the Web UI:** Integrate an iframe or dynamic viewer in `autobot-vue/index.html` to display the Kex VNC session, enabling real-time observation and control.
 
 ### Prompt
 
 ```bash
-# Run web server
-python3 -m http.server --directory web 8080
+# Run frontend development server
+cd autobot-vue && npm run dev
 ```
 
 ## Phase 9: Redis Integration for Enhanced Performance
@@ -181,7 +181,7 @@ python3 -m http.server --directory web 8080
 
 * [x] Install Redis server and Python client library (`redis-py`).
 * [x] Configure Redis connection parameters in `config/config.yaml`.
-* [ ] Implement Redis for agent memory (short-term interactions, thoughts, commands, execution trees).
+* [x] Implement Redis for agent memory (short-term interactions, thoughts, commands, execution trees) via `ChatHistoryManager` in `src/chat_history_manager.py`.
 * [x] Utilize Redis as a task queue for incoming subtasks, supporting multi-threaded or distributed systems.
 * [ ] Implement RAG (Retrieval-Augmented Generation) caching for document chunks or embeddings.
 * [ ] Use Redis for key-value state storage (e.g., `llm_state:idle`, `last_model:phi-2`, `user_override:true`).
@@ -351,8 +351,8 @@ graph TD
     end
 ```
 
-*   **Control Panel Frontend (Manus Style):** Web-based UI focusing on a real-time event stream. Configuration integrated contextually or via specific commands/panels.
-*   **Control Panel Backend:** Provides API/WebSocket endpoints, relays commands, and streams events.
+*   **Control Panel Frontend (Manus Style):** Web-based UI built with Vue and Vite in `autobot-vue/`, focusing on a real-time event stream. Configuration integrated contextually or via specific commands/panels.
+*   **Control Panel Backend:** Provides API/WebSocket endpoints using FastAPI in `backend/main.py`, relays commands, and streams events.
 *   **Orchestrator / Core Agent Engine:** Central controller. Manages tasks, plans, dispatches work locally or to workers, manages worker lifecycle, aggregates results, and generates the UI event stream. **Can leverage local hardware acceleration via its LLM Interface Module and dispatch tasks based on worker hardware capabilities.**
 *   **LLM Interface Module (Local/Remote, GPU/NPU Aware):** Provides unified access to LLMs. **Crucially, this module is responsible for detecting available hardware accelerators (GPU via CUDA/ROCm, potentially NPUs via specific libraries) and configuring local LLM backends (Ollama, LMStudio, or direct library integrations like PyTorch/Transformers/ONNX Runtime) to utilize them based on user settings provided via the Control Panel.** It abstracts the complexities of hardware-specific configurations (e.g., setting device IDs, memory allocation, quantization levels, GPU layer offloading).
 *   **OS Interaction Module (Local/Remote):** Provides cross-platform OS interaction (commands, files, processes). **May assist in detecting hardware information (e.g., querying GPU details via NVIDIA-SMI or ROCm tools) for reporting or configuration purposes.**
@@ -365,8 +365,8 @@ graph TD
 ### Technology Stack
 
 *   **Core Logic, Backend, Orchestrator, Workers:** Python 3.x
-*   **Control Panel Backend Framework:** FastAPI or Flask.
-*   **Control Panel Frontend:** React, Vue, or Svelte.
+*   **Control Panel Backend Framework:** FastAPI.
+*   **Control Panel Frontend:** Vue with Vite.
 *   **Task Queue/Dispatch:** Redis, RabbitMQ, ZeroMQ, or gRPC.
 *   **OS Interaction:** Python standard libraries, `psutil`, `pysmbclient`.
 *   **Knowledge Base:** SQLite, ChromaDB/FAISS.
@@ -669,15 +669,15 @@ The `LLM Interface Module`, running on the Orchestrator and potentially Worker N
 The LLM Configuration section in the Control Panel will be significantly enhanced:
 
 *   **Backend Selection:** Choose LLM backend.
-*   **Endpoint/API Key Management:** Configure connection details.
-*   **Model Selection:** Specify the model.
+*   **Endpoint/API Key Management:** Configure connection details in the 'Backend' -> 'LLM' tab.
+*   **Model Selection:** Specify the model in the 'Backend' -> 'LLM' tab.
 *   **Hardware Acceleration Settings (Per Backend/Node where applicable):**
-    *   **Enable Acceleration:** Checkbox to enable/disable GPU or NPU usage for the selected local backend.
-    *   **Device Selection:** Dropdown to select a specific GPU/NPU if multiple are detected (e.g., `cuda:0`, `cuda:1`).
-    *   **GPU Layer Offload:** Slider or input to specify how many model layers to offload to the GPU (common in libraries like `llama.cpp` used by Ollama/LM Studio).
-    *   **Quantization/Precision:** Options to select model precision (e.g., FP16, INT8) if supported by the backend and model.
-    *   **(Advanced):** Potentially fields for VRAM limits or other backend-specific tuning parameters.
-*   **Default Parameters:** Standard generation parameters (temperature, max tokens).
+    *   **Enable Acceleration:** Checkbox to enable/disable GPU or NPU usage for the selected local backend (to be implemented).
+    *   **Device Selection:** Dropdown to select a specific GPU/NPU if multiple are detected (e.g., `cuda:0`, `cuda:1`) (to be implemented).
+    *   **GPU Layer Offload:** Slider or input to specify how many model layers to offload to the GPU (common in libraries like `llama.cpp` used by Ollama/LM Studio) (to be implemented).
+    *   **Quantization/Precision:** Options to select model precision (e.g., FP16, INT8) if supported by the backend and model (to be implemented).
+    *   **(Advanced):** Potentially fields for VRAM limits or other backend-specific tuning parameters (to be implemented).
+*   **Default Parameters:** Standard generation parameters (temperature, max tokens) (to be implemented).
 
 This revised approach allows users fine-grained control over hardware utilization for local LLMs on both the main controller and worker nodes, while abstracting the underlying complexity through the `LLM Interface Module`.
 
