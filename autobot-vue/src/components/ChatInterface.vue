@@ -97,11 +97,11 @@ export default {
         max_messages: 100
       },
       backend: {
-        use_phi2: true,
-        api_endpoint: 'http://localhost:8001',
-        ollama_endpoint: 'http://localhost:11434/api/generate',
-        ollama_model: 'phi:2.7b',
-        streaming: true
+        use_phi2: false,
+        api_endpoint: '',
+        ollama_endpoint: '',
+        ollama_model: '',
+        streaming: false
       },
       ui: {
         theme: 'light', // Options: 'light', 'dark'
@@ -112,9 +112,11 @@ export default {
     const backendStarting = ref(false);
     const chatList = ref([]);
     const currentChatId = ref(null);
+    const prompts = ref([]);
+    const defaults = ref({});
     let eventSource = null;
 
-    onMounted(() => {
+    onMounted(async () => {
       // Check if there are persisted messages for this chat session
       const chatId = window.location.hash.split('chatId=')[1] || 'default';
       const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
@@ -135,6 +137,11 @@ export default {
       if (savedSettings) {
         settings.value = JSON.parse(savedSettings);
       }
+      
+      // Fetch backend settings to override with latest configuration
+      await fetchBackendSettings();
+      // Load system prompts on initialization
+      await loadPrompts();
     });
     
     // Function to save settings to local storage and backend
@@ -156,9 +163,241 @@ export default {
       }
     };
 
+    // Function to save backend-specific settings
+    const saveBackendSettings = async () => {
+      try {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings/backend`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ settings: { backend: settings.value.backend } })
+        });
+        if (!response.ok) {
+          console.error('Failed to save backend settings:', response.statusText);
+          messages.value.push({
+            sender: 'debug',
+            text: `Failed to save backend settings: ${response.statusText}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'debug'
+          });
+        } else {
+          messages.value.push({
+            sender: 'debug',
+            text: `Backend settings saved successfully.`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'debug'
+          });
+        }
+      } catch (error) {
+        console.error('Error saving backend settings:', error);
+        messages.value.push({
+          sender: 'debug',
+          text: `Error saving backend settings: ${error.message}`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'debug'
+        });
+      }
+    };
+
+    // Function to fetch backend settings
+    const fetchBackendSettings = async () => {
+      try {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings/backend`);
+        if (response.ok) {
+          const backendSettings = await response.json();
+          settings.value.backend = { ...settings.value.backend, ...backendSettings };
+          messages.value.push({
+            sender: 'debug',
+            text: `Backend settings loaded successfully.`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'debug'
+          });
+        } else {
+          console.error('Failed to load backend settings:', response.statusText);
+          messages.value.push({
+            sender: 'debug',
+            text: `Failed to load backend settings: ${response.statusText}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'debug'
+          });
+        }
+      } catch (error) {
+        console.error('Error loading backend settings:', error);
+        messages.value.push({
+          sender: 'debug',
+          text: `Error loading backend settings: ${error.message}`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'debug'
+        });
+      }
+    };
+
+    // Function to load system prompts from backend
+    const loadPrompts = async () => {
+      try {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts`);
+        if (response.ok) {
+          const data = await response.json();
+          prompts.value = data.prompts || [];
+          defaults.value = data.defaults || {};
+          messages.value.push({
+            sender: 'debug',
+            text: `Loaded ${prompts.value.length} system prompts from backend.`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'debug'
+          });
+        } else {
+          console.error('Failed to load system prompts:', response.statusText);
+          messages.value.push({
+            sender: 'debug',
+            text: `Failed to load system prompts: ${response.statusText}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'debug'
+          });
+        }
+      } catch (error) {
+        console.error('Error loading system prompts:', error);
+        messages.value.push({
+          sender: 'debug',
+          text: `Error loading system prompts: ${error.message}`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'debug'
+        });
+      }
+    };
+
+    // Computed property to group prompts by type
+    const groupedPrompts = computed(() => {
+      const grouped = {};
+      prompts.value.forEach(prompt => {
+        const type = prompt.type || 'custom';
+        if (!grouped[type]) {
+          grouped[type] = { type, prompts: [] };
+        }
+        grouped[type].prompts.push(prompt);
+      });
+      return Object.values(grouped).sort((a, b) => {
+        if (a.type === 'default') return -1;
+        if (b.type === 'default') return 1;
+        return a.type.localeCompare(b.type);
+      });
+    });
+
+    // Function to edit a system prompt
+    const editPrompt = async (promptId) => {
+      const prompt = prompts.value.find(p => p.id === promptId);
+      if (!prompt) {
+        messages.value.push({
+          sender: 'debug',
+          text: `Prompt ${promptId} not found for editing.`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'debug'
+        });
+        return;
+      }
+      const newContent = prompt(`Edit prompt: ${prompt.name}`, prompt.content);
+      if (newContent !== null) {
+        try {
+          const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ content: newContent })
+          });
+          if (response.ok) {
+            const updatedPrompt = await response.json();
+            const index = prompts.value.findIndex(p => p.id === promptId);
+            if (index !== -1) {
+              prompts.value[index] = updatedPrompt;
+            }
+            messages.value.push({
+              sender: 'debug',
+              text: `Updated prompt ${prompt.name} successfully.`,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'debug'
+            });
+          } else {
+            console.error('Failed to update prompt:', response.statusText);
+            messages.value.push({
+              sender: 'debug',
+              text: `Failed to update prompt ${prompt.name}: ${response.statusText}`,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'debug'
+            });
+          }
+        } catch (error) {
+          console.error('Error updating prompt:', error);
+          messages.value.push({
+            sender: 'debug',
+            text: `Error updating prompt ${prompt.name}: ${error.message}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'debug'
+          });
+        }
+      }
+    };
+
+    // Function to revert a system prompt to default
+    const revertPrompt = async (promptId) => {
+      const prompt = prompts.value.find(p => p.id === promptId);
+      if (!prompt) {
+        messages.value.push({
+          sender: 'debug',
+          text: `Prompt ${promptId} not found for reverting.`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'debug'
+        });
+        return;
+      }
+      if (confirm(`Are you sure you want to revert ${prompt.name} to its default content?`)) {
+        try {
+          const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}/revert`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          if (response.ok) {
+            const updatedPrompt = await response.json();
+            const index = prompts.value.findIndex(p => p.id === promptId);
+            if (index !== -1) {
+              prompts.value[index] = updatedPrompt;
+            }
+            messages.value.push({
+              sender: 'debug',
+              text: `Reverted prompt ${prompt.name} to default successfully.`,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'debug'
+            });
+          } else {
+            console.error('Failed to revert prompt:', response.statusText);
+            messages.value.push({
+              sender: 'debug',
+              text: `Failed to revert prompt ${prompt.name}: ${response.statusText}`,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'debug'
+            });
+          }
+        } catch (error) {
+          console.error('Error reverting prompt:', error);
+          messages.value.push({
+            sender: 'debug',
+            text: `Error reverting prompt ${prompt.name}: ${error.message}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'debug'
+          });
+        }
+      }
+    };
+
     // Watch for changes in settings and save them to local storage
     watch(settings, () => {
       saveSettings();
+      if (settings.value.backend) {
+        saveBackendSettings();
+      }
     }, { deep: true });
 
     const filteredMessages = computed(() => {
@@ -1231,13 +1470,19 @@ export default {
       settings,
       backendStarting,
       startBackendServer,
+      prompts,
+      defaults,
+      loadPrompts,
+      editPrompt,
+      revertPrompt,
       chatList,
       currentChatId,
       switchChat,
       getChatPreview,
       editChatName,
       refreshChatList,
-      deleteSpecificChat
+      deleteSpecificChat,
+      groupedPrompts
     };
   }
 };

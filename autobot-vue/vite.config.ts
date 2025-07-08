@@ -18,6 +18,7 @@ export default defineConfig({
     },
   },
   server: {
+    port: 5173,
     headers: {
       'X-Content-Type-Options': 'nosniff'
       // Removed Content-Security-Policy to avoid unneeded headers
