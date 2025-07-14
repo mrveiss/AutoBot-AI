@@ -13,4 +13,28 @@ backend:
   server_host: "0.0.0.0"
   server_port: 8001
 
+# LLM Configuration
+llm_config:
+  default_llm: "ollama_tinyllama"
+  task_llm: "ollama_tinyllama"
+  ollama:
+    host: "http://localhost:11434"
+    models:
+      tinyllama: "tinyllama:latest"
+      phi2: "phi:latest"
+  openai:
+    api_key: ""
+  orchestrator_llm_settings:
+    temperature: 0.7
+  task_llm_settings:
+    temperature: 0.5
+
+# Hardware Acceleration Configuration
+hardware_acceleration:
+  priority:
+    - "openvino_npu"  # Intel NPU - highest priority for efficiency
+    - "openvino"      # Auto-select best OpenVINO device (NPU > GPU > CPU)
+    - "cuda"          # NVIDIA GPU
+    - "cpu"           # CPU fallback
+
 # Other configuration sections can be added as needed

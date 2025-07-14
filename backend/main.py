@@ -494,6 +494,38 @@ async def revert_prompt(prompt_id: str):
         logger.error(f"Error reverting prompt {prompt_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error reverting prompt: {str(e)}")
 
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for connection status monitoring"""
+    try:
+        # Check if we can connect to Ollama
+        ollama_healthy = False
+        try:
+            ollama_check_url = config['ollama_endpoint'].replace('/api/generate', '/api/tags')
+            response = requests.get(ollama_check_url, timeout=5)
+            ollama_healthy = response.status_code == 200
+        except:
+            ollama_healthy = False
+        
+        return {
+            "status": "healthy", 
+            "backend": "connected",
+            "ollama": "connected" if ollama_healthy else "disconnected",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error in health check: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "unhealthy", 
+                "backend": "connected",
+                "ollama": "unknown",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+
 @app.post("/api/restart")
 async def restart():
     try:

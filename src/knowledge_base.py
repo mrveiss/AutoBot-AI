@@ -1,48 +1,77 @@
 # src/knowledge_base.py
 import os
-import sqlite3
-import chromadb
 import logging
-from chromadb.utils import embedding_functions
-from typing import List, Dict, Any, Optional
-import pandas as pd
-from docx import Document as DocxDocument # To avoid conflict with Document class in other libraries
-from pypdf import PdfReader
-import re
 import json
 import yaml
-from dotenv import load_dotenv # Import load_dotenv
-from sentence_transformers import SentenceTransformer
+from typing import List, Dict, Any, Optional, cast
+import asyncio # Import asyncio for async operations
+
+# LlamaIndex imports
+from llama_index.core import VectorStoreIndex, Document
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.storage.storage_context import StorageContext
+from llama_index.vector_stores.redis import RedisVectorStore
+from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
+from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
+from llama_index.core import ServiceContext, Settings
+
+# Redis client for direct interaction (e.g., for chat history, logs)
+import redis.asyncio as redis # Use async Redis client
+from redis.asyncio import Redis # Explicitly import Redis client type
+
+# Imports for file loading
+import pandas as pd
+from docx import Document as DocxDocument
+from pypdf import PdfReader
 
 class KnowledgeBase:
     def __init__(self, config_path="config/config.yaml"):
-        # Ensure absolute path for config_path
         self.config_path = os.path.abspath(config_path)
-        
         self.config = self._load_config(config_path)
-        kb_config = self.config['knowledge_base']
-        
-        self.network_share_path = kb_config.get('network_share_path')
-        # Load network username and password from config or environment variables
-        self.network_username = kb_config.get('network_username', os.getenv('NETWORK_SHARE_USERNAME'))
-        self.network_password = kb_config.get('network_password', os.getenv('NETWORK_SHARE_PASSWORD'))
 
-        self.db_path = self._resolve_path(kb_config['db_path'])
-        # Resolve chroma path immediately after loading from config
-        self.chromadb_path = self._resolve_path(kb_config['chromadb_path'])
-        self.vector_store_type = kb_config['vector_store_type']
-        self.chromadb_path = kb_config['chromadb_path']
-        self.embedding_model_name = kb_config['embedding_model']
-        self.chunk_size = kb_config['chunk_size']
-        self.chunk_overlap = kb_config['chunk_overlap']
+        # Correctly access llm_config
+        self.llm_config_data = self.config.get('llm_config', {})
 
-        self.embedding_function = self._get_embedding_function()
-        
-        self._init_sqlite_db()
-        self._init_vector_store()
+        # Construct kb_config from existing config structure
+        # Assuming knowledge base related settings are under 'memory' or top-level
+        self.network_share_path = self.config.get('network_share_path') # Assuming this might be a top-level key
+        self.network_username = self.config.get('network_username', os.getenv('NETWORK_SHARE_USERNAME'))
+        self.network_password = self.config.get('network_password', os.getenv('NETWORK_SHARE_PASSWORD'))
+
+        # Default values for LlamaIndex specific settings, as they are not explicitly in config.yaml
+        # These should ideally be in a 'knowledge_base' section in config.yaml
+        self.vector_store_type = "redis" # Hardcoding as per current setup
+        self.embedding_model_name = self.llm_config_data.get('ollama', {}).get('models', {}).get('tinyllama', 'tinyllama:latest') # Use a default or specific embedding model
+        self.chunk_size = 512 # Default value
+        self.chunk_overlap = 20 # Default value
+
+        # Redis configuration from 'memory' section
+        redis_memory_config = self.config.get('memory', {}).get('redis', {})
+        self.redis_host = redis_memory_config.get('host', 'localhost')
+        self.redis_port = redis_memory_config.get('port', 6379)
+        self.redis_password = redis_memory_config.get('password', os.getenv('REDIS_PASSWORD'))
+        self.redis_db = redis_memory_config.get('db', 0)
+        self.redis_index_name = redis_memory_config.get('index_name', 'autobot_knowledge_index') # Add index_name to redis config if not present
+
+        # Initialize Redis client for direct use (e.g., for facts/logs if not via LlamaIndex)
+        self.redis_client: Redis = cast(Redis, redis.Redis( # Explicitly cast to Redis from redis.asyncio
+            host=self.redis_host,
+            port=self.redis_port,
+            password=self.redis_password,
+            db=self.redis_db,
+            decode_responses=True # Decode responses to Python strings
+        ))
+        logging.info(f"Redis client initialized for host: {self.redis_host}:{self.redis_port}")
+
+        # LlamaIndex components will be initialized in an async method
+        self.llm = None
+        self.embed_model = None
+        self.vector_store = None
+        self.storage_context = None
+        self.index = None
+        self.query_engine = None
 
     def _load_config(self, config_path):
-        # Use the absolute config path
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
 
@@ -52,239 +81,187 @@ class KnowledgeBase:
             return os.path.join(self.network_share_path, configured_path)
         return configured_path
 
-    def _get_embedding_function(self):
-        # Using SentenceTransformer for embeddings
-        # This will download the model if not already present
-        return embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=self.embedding_model_name
+    async def ainit(self, llm_config: Dict[str, Any]):
+        """
+        Asynchronously initializes LlamaIndex components including LLM, Embedding model, and Vector Store.
+        This method should be called after the KnowledgeBase object is created.
+        """
+        # Configure LLM for LlamaIndex
+        llm_provider = llm_config.get('provider', 'ollama')
+        llm_model = llm_config.get('model', 'llama2') # Default to llama2 for Ollama
+        llm_base_url = llm_config.get('base_url', 'http://localhost:11434')
+
+        if llm_provider == 'ollama':
+            self.llm = LlamaIndexOllamaLLM(model=llm_model, base_url=llm_base_url)
+            self.embed_model = LlamaIndexOllamaEmbedding(model_name=self.embedding_model_name, base_url=llm_base_url)
+        else:
+            # Placeholder for other LLM providers, e.g., OpenAI, Anthropic
+            logging.warning(f"LLM provider '{llm_provider}' not fully implemented for LlamaIndex. Defaulting to Ollama.")
+            self.llm = LlamaIndexOllamaLLM(model=llm_model, base_url=llm_base_url)
+            self.embed_model = LlamaIndexOllamaEmbedding(model_name=self.embedding_model_name, base_url=llm_base_url)
+
+        # Configure LlamaIndex Settings
+        Settings.llm = self.llm
+        Settings.embed_model = self.embed_model
+        Settings.chunk_size = self.chunk_size
+        Settings.chunk_overlap = self.chunk_overlap
+        Settings.node_parser = SentenceSplitter(chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
+
+        # Initialize Redis Vector Store
+        self.vector_store = RedisVectorStore(
+            url=f"redis://{self.redis_host}:{self.redis_port}",
+            password=self.redis_password,
+            db=self.redis_db,
+            index_name=self.redis_index_name,
+            overwrite=False # Set to True if you want to clear the index on each run
         )
+        logging.info(f"LlamaIndex RedisVectorStore initialized with index: {self.redis_index_name}")
 
-    def _init_sqlite_db(self):
-        """
-        Initializes the SQLite database for storing structured facts and document metadata.
-        Creates necessary tables if they do not exist.
-        """
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Table for structured facts
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS facts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content TEXT NOT NULL,
-                metadata TEXT, -- JSON string of metadata
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Table for document metadata
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT NOT NULL,
-                file_type TEXT NOT NULL,
-                path TEXT NOT NULL,
-                num_chunks INTEGER,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-        conn.close()
-        logging.info(f"SQLite DB initialized at {self.db_path}")
-
-    def _init_vector_store(self):
-        """
-        Initializes the vector store for semantic search capabilities.
-        Supports ChromaDB and has a placeholder for FAISS integration.
-        """
-        if self.vector_store_type == "chromadb":
-            os.makedirs(self.chromadb_path, exist_ok=True)
-            self.chroma_client = chromadb.PersistentClient(path=self.chromadb_path)
-            self.collection = self.chroma_client.get_or_create_collection(
-                name="autobot_knowledge",
-                embedding_function=self.embedding_function
-            )
-            logging.info(f"ChromaDB initialized at {self.chromadb_path}")
-        elif self.vector_store_type == "faiss":
-            # FAISS integration would require more setup (e.g., storing index on disk)
-            # For now, this is a placeholder.
-            logging.warning("FAISS integration not fully implemented. Using ChromaDB as default.")
-            # Fallback to ChromaDB if FAISS is selected but not fully implemented
-            os.makedirs(self.chromadb_path, exist_ok=True)
-            self.chroma_client = chromadb.PersistentClient(path=self.chromadb_path)
-            self.collection = self.chroma_client.get_or_create_collection(
-                name="autobot_knowledge",
-                embedding_function=self.embedding_function
-            )
-        else:
-            raise ValueError(f"Unsupported vector store type: {self.vector_store_type}")
-
-    def _load_document(self, file_path: str, file_type: str) -> str:
-        content = ""
-        if file_type == "txt":
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-        elif file_type == "pdf":
-            reader = PdfReader(file_path)
-            for page in reader.pages:
-                content += page.extract_text() + "\n"
-        elif file_type == "csv":
-            df = pd.read_csv(file_path)
-            content = df.to_string() # Convert DataFrame to string representation
-        elif file_type == "docx":
-            doc = DocxDocument(file_path)
-            for para in doc.paragraphs:
-                content += para.text + "\n"
-        else:
-            raise ValueError(f"Unsupported file type for loading: {file_type}")
-        return content
-
-    def _split_text(self, text: str) -> List[str]:
-        # Simple text splitting by paragraphs/lines, then by chunk size
-        # A more advanced splitter (e.g., Langchain's RecursiveCharacterTextSplitter) could be used
-        paragraphs = re.split(r'\n\s*\n', text) # Split by double newlines (paragraphs)
-        chunks = []
-        current_chunk = ""
-        for para in paragraphs:
-            if len(current_chunk) + len(para) + 1 <= self.chunk_size:
-                current_chunk += (para + "\n")
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = para + "\n"
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-        return chunks
-
-    def add_file(self, file_path: str, file_type: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Processes a file, extracts text, chunks it, embeds it, and stores in vector store.
-        Also stores file metadata in SQLite.
-        """
+        # Initialize StorageContext and VectorStoreIndex
+        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+        # We need to load the index from the vector store if it exists, otherwise create a new one
         try:
-            content = self._load_document(file_path, file_type)
-            chunks = self._split_text(content)
-            
-            if not chunks:
-                return {"status": "error", "message": "No content extracted or chunks generated."}
-
-            # Store document metadata in SQLite
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO documents (filename, file_type, path, num_chunks) VALUES (?, ?, ?, ?)",
-                (os.path.basename(file_path), file_type, file_path, len(chunks))
+            self.index = VectorStoreIndex.from_vector_store(
+                self.vector_store,
+                storage_context=self.storage_context,
+                service_context=ServiceContext.from_defaults(llm=self.llm, embed_model=self.embed_model) # Explicitly pass service_context
             )
-            doc_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
+            logging.info("LlamaIndex VectorStoreIndex loaded from existing Redis store.")
+        except Exception as e:
+            logging.warning(f"Could not load existing LlamaIndex from Redis: {e}. Creating a new index.")
+            self.index = VectorStoreIndex.from_documents([], storage_context=self.storage_context)
+        
+        self.query_engine = self.index.as_query_engine(llm=self.llm)
+        logging.info("LlamaIndex VectorStoreIndex and QueryEngine initialized.")
 
-            # Prepare data for ChromaDB
-            documents = []
-            metadatas = []
-            ids = []
-            for i, chunk in enumerate(chunks):
-                documents.append(chunk)
-                chunk_metadata = {
-                    "doc_id": doc_id,
-                    "filename": os.path.basename(file_path),
-                    "file_type": file_type,
-                    "chunk_index": i,
-                    **(metadata if metadata else {}) # Add custom metadata if provided
-                }
-                metadatas.append(chunk_metadata)
-                ids.append(f"doc_{doc_id}_chunk_{i}")
+    async def add_file(self, file_path: str, file_type: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Processes a file, extracts text, chunks it, embeds it, and stores in LlamaIndex (Redis).
+        """
+        if self.index is None:
+            logging.error("KnowledgeBase not initialized. Call ainit() first.")
+            return {"status": "error", "message": "KnowledgeBase not initialized. Call ainit() first."}
+        try:
+            content = ""
+            if file_type == "txt":
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            elif file_type == "pdf":
+                reader = PdfReader(file_path)
+                for page in reader.pages:
+                    content += page.extract_text() + "\n"
+            elif file_type == "csv":
+                df = pd.read_csv(file_path)
+                content = df.to_string()
+            elif file_type == "docx":
+                doc = DocxDocument(file_path)
+                for para in doc.paragraphs:
+                    content += para.text + "\n"
+            else:
+                logging.warning(f"Unsupported file type for direct loading by LlamaIndex: {file_type}. Attempting as generic text.")
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+
+            doc_metadata = {
+                "filename": os.path.basename(file_path),
+                "file_type": file_type,
+                "original_path": file_path,
+                **(metadata if metadata else {})
+            }
+            document = Document(text=content, metadata=doc_metadata)
             
-            self.collection.add(
-                documents=documents,
-                metadatas=metadatas,
-                ids=ids
-            )
-            logging.info(f"Added {len(chunks)} chunks from {file_path} to ChromaDB.")
-            return {"status": "success", "message": f"File '{file_path}' processed and added to KB.", "doc_id": doc_id, "num_chunks": len(chunks)}
+            self.index.insert(document) # Insert operation is synchronous
+            
+            logging.info(f"File '{file_path}' processed and added to LlamaIndex (Redis).")
+            return {"status": "success", "message": f"File '{file_path}' processed and added to KB."}
         except Exception as e:
             logging.error(f"Error adding file {file_path} to KB: {str(e)}")
             return {"status": "error", "message": f"Error adding file to KB: {str(e)}"}
 
-    def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """
-        Searches the vector store for relevant information based on a query.
+        Searches the LlamaIndex for relevant information based on a query.
         """
+        if self.query_engine is None:
+            logging.error("KnowledgeBase not initialized. Call ainit() first.")
+            return [] # Return empty list to match signature
         try:
-            results = self.collection.query(
-                query_texts=[query],
-                n_results=n_results,
-                include=['documents', 'metadatas', 'distances']
-            )
+            response = self.query_engine.query(query) # Query operation is synchronous
             
             retrieved_info = []
-            if results and 'documents' in results and results['documents'] and len(results['documents']) > 0:
-                for i in range(len(results['documents'][0])):
-                    retrieved_info.append({
-                        "content": results['documents'][0][i],
-                        "metadata": results['metadatas'][0][i] if 'metadatas' in results and results['metadatas'] and len(results['metadatas']) > 0 else {},
-                        "distance": results['distances'][0][i] if 'distances' in results and results['distances'] and len(results['distances']) > 0 else 0.0
-                    })
+            for node in response.source_nodes:
+                retrieved_info.append({
+                    "content": node.text,
+                    "metadata": node.metadata,
+                    "score": node.score
+                })
             logging.info(f"Found {len(retrieved_info)} relevant chunks for query: '{query}'")
             return retrieved_info
         except Exception as e:
             logging.error(f"Error searching knowledge base: {str(e)}")
             return []
 
-    def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Stores a structured fact in the SQLite database.
+        Stores a structured fact directly into Redis as a key-value pair or a hash.
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         try:
-            metadata_json = json.dumps(metadata) if metadata else None
-            cursor.execute(
-                "INSERT INTO facts (content, metadata) VALUES (?, ?)",
-                (content, metadata_json)
-            )
-            fact_id = cursor.lastrowid
-            conn.commit()
-            logging.info(f"Fact stored with ID: {fact_id}")
+            import time
+            fact_id = await self.redis_client.incr('fact_id_counter')
+            fact_key = f"fact:{fact_id}"
+            fact_data = {
+                "content": content,
+                "metadata": json.dumps(metadata) if metadata else "{}",
+                "timestamp": str(int(time.time()))
+            }
+            await self.redis_client.hset(fact_key, mapping=fact_data)
+            logging.info(f"Fact stored in Redis with ID: {fact_id}")
             return {"status": "success", "message": "Fact stored successfully.", "fact_id": fact_id}
         except Exception as e:
-            logging.error(f"Error storing fact: {str(e)}")
+            logging.error(f"Error storing fact in Redis: {str(e)}")
             return {"status": "error", "message": f"Error storing fact: {str(e)}"}
-        finally:
-            conn.close()
 
-    def get_fact(self, fact_id: Optional[int] = None, query: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_fact(self, fact_id: Optional[int] = None, query: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Retrieves facts from the SQLite database by ID or by searching content.
+        Retrieves facts from Redis by ID or by searching content (simple string match for now).
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         facts = []
         try:
             if fact_id:
-                cursor.execute("SELECT id, content, metadata, timestamp FROM facts WHERE id = ?", (fact_id,))
+                fact_data: Dict[str, str] = await self.redis_client.hgetall(f"fact:{fact_id}") # type: ignore
+                if fact_data:
+                    facts.append({
+                        "id": fact_id,
+                        "content": fact_data.get("content"),
+                        "metadata": json.loads(fact_data.get("metadata", "{}")),
+                        "timestamp": fact_data.get("timestamp")
+                    })
             elif query:
-                cursor.execute("SELECT id, content, metadata, timestamp FROM facts WHERE content LIKE ?", (f"%{query}%",))
+                all_keys: List[str] = cast(List[str], await self.redis_client.keys("fact:*"))
+                for key in all_keys:
+                    fact_data: Dict[str, str] = await self.redis_client.hgetall(key) # type: ignore
+                    if fact_data and query.lower() in fact_data.get("content", "").lower():
+                        facts.append({
+                            "id": int(key.split(":")[1]),
+                            "content": fact_data.get("content"),
+                            "metadata": json.loads(fact_data.get("metadata", "{}")),
+                            "timestamp": fact_data.get("timestamp")
+                        })
             else:
-                cursor.execute("SELECT id, content, metadata, timestamp FROM facts")
-            
-            rows = cursor.fetchall()
-            for row in rows:
-                fact = {
-                    "id": row[0],
-                    "content": row[1],
-                    "metadata": json.loads(row[2]) if row[2] else {},
-                    "timestamp": row[3]
-                }
-                facts.append(fact)
-            logging.info(f"Retrieved {len(facts)} facts.")
+                all_keys: List[str] = cast(List[str], await self.redis_client.keys("fact:*"))
+                for key in all_keys:
+                    fact_data: Dict[str, str] = await self.redis_client.hgetall(key) # type: ignore
+                    facts.append({
+                        "id": int(key.split(":")[1]),
+                        "content": fact_data.get("content"),
+                        "metadata": json.loads(fact_data.get("metadata", "{}")),
+                        "timestamp": fact_data.get("timestamp")
+                    })
+            logging.info(f"Retrieved {len(facts)} facts from Redis.")
             return facts
         except Exception as e:
-            logging.error(f"Error retrieving facts: {str(e)}")
+            logging.error(f"Error retrieving facts from Redis: {str(e)}")
             return []
-        finally:
-            conn.close()
 
 # Example Usage (for testing)
 if __name__ == "__main__":
@@ -308,44 +285,56 @@ if __name__ == "__main__":
         f.write("This is a dummy PDF content. It talks about machine learning.")
 
     # Create a dummy CSV
+    import pandas as pd
     pd.DataFrame({'col1': [1, 2], 'col2': ['A', 'B']}).to_csv("data/test_files/data.csv", index=False)
 
     # Create a dummy DOCX
+    from docx import Document as DocxDocument
     doc = DocxDocument()
     doc.add_paragraph("This is a sample DOCX document. It contains some important information.")
     doc.save("data/test_files/sample.docx")
 
-    kb = KnowledgeBase()
+    async def main_test():
+        kb = KnowledgeBase()
+        # Initialize LlamaIndex components after KnowledgeBase is created
+        # Pass the actual llm_config_data from the loaded config
+        await kb.ainit(kb.llm_config_data)
 
-    print("\n--- Testing add_file ---")
-    kb.add_file("data/test_files/example.txt", "txt")
-    kb.add_file("data/test_files/dummy.pdf", "pdf") # This will likely fail if not a real PDF
-    kb.add_file("data/test_files/data.csv", "csv")
-    kb.add_file("data/test_files/sample.docx", "docx")
+        print("\n--- Testing add_file ---")
+        add_file_result = await kb.add_file("data/test_files/example.txt", "txt")
+        print(add_file_result)
+        # await kb.add_file("data/test_files/dummy.pdf", "pdf") # This will likely fail if not a real PDF
+        add_file_result = await kb.add_file("data/test_files/data.csv", "csv")
+        print(add_file_result)
+        add_file_result = await kb.add_file("data/test_files/sample.docx", "docx")
+        print(add_file_result)
 
-    print("\n--- Testing store_fact ---")
-    kb.store_fact("The capital of France is Paris.", {"source": "manual_entry"})
-    kb.store_fact("Python is a programming language.", {"category": "programming"})
+        print("\n--- Testing store_fact ---")
+        store_fact_result = await kb.store_fact("The capital of France is Paris.", {"source": "manual_entry"})
+        print(store_fact_result)
+        store_fact_result = await kb.store_fact("Python is a programming language.", {"category": "programming"})
+        print(store_fact_result)
 
-    print("\n--- Testing get_fact ---")
-    print("All facts:")
-    print(kb.get_fact())
-    print("Fact with ID 1:")
-    print(kb.get_fact(fact_id=1))
-    print("Facts containing 'programming':")
-    print(kb.get_fact(query="programming"))
+        print("\n--- Testing get_fact ---")
+        print("All facts:")
+        print(await kb.get_fact())
+        print("Fact with ID 1:")
+        print(await kb.get_fact(fact_id=1))
+        print("Facts containing 'programming':")
+        print(await kb.get_fact(query="programming"))
 
-    print("\n--- Testing search (vector store) ---")
-    search_results = kb.search("What is AI?")
-    for res in search_results:
-        print(f"Content: {res['content']}\nMetadata: {res['metadata']}\nDistance: {res['distance']}\n---")
+        print("\n--- Testing search (vector store) ---")
+        search_results = await kb.search("What is AI?")
+        for res in search_results:
+            print(f"Content: {res['content']}\nMetadata: {res['metadata']}\nScore: {res['score']}\n---")
 
-    # Clean up dummy files
-    # os.remove("data/test_files/example.txt")
-    # os.remove("data/test_files/dummy.pdf")
-    # os.remove("data/test_files/data.csv")
-    # os.remove("data/test_files/sample.docx")
-    # os.rmdir("data/test_files")
-    # os.remove(kb.db_path)
-    # import shutil
-    # shutil.rmtree(kb.chromadb_path)
+        # Clean up dummy files
+        # os.remove("data/test_files/example.txt")
+        # os.remove("data/test_files/dummy.pdf")
+        # os.remove("data/test_files/data.csv")
+        # os.remove("data/test_files/sample.docx")
+        # os.rmdir("data/test_files")
+        # import shutil
+        # shutil.rmtree(kb.chromadb_path) # This path is no longer used for LlamaIndex/Redis
+
+    asyncio.run(main_test())
