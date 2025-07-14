@@ -1,16 +1,47 @@
 ## TODO
 
-- [x] **Phase 1: Environment Setup and Bootstrap:** Inspect `setup_agent.sh` for errors and ensure it completes successfully.
-- [x] **Phase 2: Agent Initialization and Configuration:** Inspect `main.py` for errors and ensure the agent initializes correctly.
-- [x] **Phase 4: GUI Automation Interface (Partial):** Installed necessary dependencies (`pyautogui`, `mouseinfo`, `pillow`, `numpy`) and created `gui_controller.py` with initial `GUIController` class implementation for GUI automation tasks. Further integration with Xvfb and WSL2 compatibility checks are pending.
-- [x] **Phase 11: Final Deployment & Service Mode:** Ensure the agent launches with one command: `run_agent.sh`.
-- [x] **Create a new frontend:** Moved the `materially-free-react-admin-template-1.0.0` GUI framework to `frontend/admin_gui/`.
-- [x] **Create a new frontend design:** Implemented Vue with Vite in `autobot-vue/` with a blue color palette for the dark UI, named AutoBot.
-- [x] **Connect frontend to backend:** Ensure the frontend correctly communicates with the backend API via FastAPI endpoints.
-- [x] **Frontend control over backend:** Added a terminal modal to the frontend to allow execution of shell commands via the `/api/execute_command` endpoint.
-- [x] **LLM Command Execution Capability:** Document that the LLM is equipped with the ability to run commands on the machine as a tool to achieve goals.
-- [x] **Integrate Redis:** Implemented Redis for agent memory (short-term) via `ChatHistoryManager` in `src/chat_history_manager.py`, with UI settings in `SettingsPanel.vue`. Task queuing is supported, but RAG caching, key-value state storage, rate limit tracking, and session management are pending.
-- [ ] **Define SQLite as Long-Term Memory:** Explicitly establish SQLite as the primary long-term memory backend for the agent, leveraging its performance, portability, and ease of integration. Explore optional enhancements like referencing markdown files and storing embeddings within SQLite.
+### New Task: Integrate LangChain and LlamaIndex into AutoBot Workflow
+
+**Overall Goal**: Implement a hybrid architecture where LangChain Agent orchestrates logic and tool selection, leveraging LlamaIndex for document retrieval, and all memory/logs go through Redis cache.
+
+**Phase 1: Planning and Setup**
+*   **Task 1.1: Document the new architecture and plan.**
+    *   **Step 1.1.1**: Update `docs/project.md` to reflect the new architecture, including the roles of LangChain, LlamaIndex, LLMs, Shell Interface, and Redis for memory/logs. (DONE)
+    *   **Step 1.1.2**: Create/Update `docs/tasks.md` with this detailed plan, marking current status as "IN PROGRESS".
+    *   **Step 1.1.3**: Update `docs/decisions.md` to justify the integration of LangChain and LlamaIndex, outlining the benefits and design choices. (TODO)
+*   **Task 1.2: Install necessary dependencies.**
+    *   **Step 1.2.1**: Add `langchain` and `llama-index` (and any necessary sub-packages like `llama-index-llms-ollama`, `llama-index-embeddings-ollama`, `llama-index-vector-stores-redis`) to `requirements.txt`. (DONE)
+    *   **Step 1.2.2**: Execute `pip install -r requirements.txt` to install new dependencies. (DONE)
+
+**Phase 2: LlamaIndex Integration**
+*   **Task 2.1: Modify `src/knowledge_base.py` to use LlamaIndex.**
+    *   **Step 2.1.1**: Refactor `KnowledgeBase` to initialize and use LlamaIndex components (e.g., `VectorStoreIndex`, `ServiceContext`, `OllamaLLM`, `OllamaEmbedding`). (DONE)
+    *   **Step 2.1.2**: Update `add_file`, `search`, and `store_fact` methods to interact with the LlamaIndex framework. (DONE)
+*   **Task 2.2: Update `src/orchestrator.py` to query LlamaIndex.**
+    *   **Step 2.2.1**: Modify `generate_task_plan` to use the LlamaIndex-backed `KnowledgeBase` for retrieving relevant tool manuals or documentation based on the user's goal. (DONE - async await needed)
+
+**Phase 3: LangChain Agent Integration**
+*   **Task 3.1: Implement LangChain Agent module.**
+    *   **Step 3.1.1**: Create a new file `src/langchain_agent_orchestrator.py`. (DONE - basic version)
+    *   **Step 3.1.2**: Define a class (e.g., `LangChainAgentOrchestrator`) that encapsulates LangChain agent logic, including tool definition, prompt engineering for agent reasoning, and execution. (IN PROGRESS)
+*   **Task 3.2: Integrate LangChain Agent into `src/orchestrator.py`.**
+    *   **Step 3.2.1**: Modify `Orchestrator` to instantiate and utilize the `LangChainAgentOrchestrator`. (DONE)
+    *   **Step 3.2.2**: Rework `generate_task_plan` to delegate decision-making, tool selection, and command generation to the LangChain agent. This will involve passing the conversation history and available tools to the LangChain agent. (DONE)
+    *   **Step 3.2.3**: Ensure the LangChain agent can call existing tools (e.g., `SystemIntegration` methods, `KnowledgeBase` methods) as LangChain `Tools`. (DONE)
+*   **Task 3.3: Update LLM interaction for LangChain.**
+    *   **Step 3.3.1**: Ensure `llm_interface.py` can provide LLM instances compatible with LangChain (e.g., `ChatOllama` or `Ollama` from LangChain integrations). (DONE - handled via fallback mechanism)
+
+**Phase 4: Refinement and Testing**
+*   **Task 4.1: Adjust existing workflow to the new setup.**
+    *   **Step 4.1.1**: Review `main.py` to ensure the API endpoints correctly interact with the new `Orchestrator` logic. (TODO)
+    *   **Step 4.1.2**: Verify `worker_node.py`'s `execute_task` remains compatible with the tasks generated by the LangChain agent. (TODO)
+    *   **Step 4.1.3**: Confirm that Redis caching for memory/logs (via `ChatHistoryManager`) is still functional and integrated with the new flow. (TODO)
+*   **Task 4.2: Testing and Validation.**
+    *   **Step 4.2.1**: Develop or update unit/integration tests to verify the new LangChain/LlamaIndex workflow, especially for command execution and knowledge retrieval. (TODO)
+    *   **Step 4.2.2**: Conduct manual testing with various user inputs, including complex queries requiring tool use and knowledge retrieval, to ensure the agent behaves as expected and avoids hallucination. (TODO)
+*   **Task 4.3: Ensure no lingering processes on common development ports.**
+    *   **Step 4.3.1**: Update `run_agent.sh` to include cleanup for ports 5174, 8000, and 8080. (TODO)
+
 - [ ] **Implement VNC Session with noVNC:** Integrate a Kex VNC session with noVNC embedded in the Web UI to enable real-time observation and control of the agent's desktop environment, including GUI task automation and human-in-the-loop takeover capabilities.
 - [ ] **Implement Project State Tracking System:** Create `docs/status.md` to track project progress, core features, next steps, and phase promotion criteria. Ensure the LLM agent is self-aware of this status and add a visual indicator to the Web UI.
 

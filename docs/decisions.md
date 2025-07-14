@@ -121,3 +121,21 @@
     - Log task completions to `docs/task_log.md`.
     - Evaluate phase promotion criteria and propose advancement when met.
 - A visual indicator will be added to the Web UI (e.g., a top bar or sidebar) to display the current phase and key status elements (e.g., `[ Phase X: Feature Name ] ✅ Logs ✓ ❌ Memory ✖ ❌ LLM UI`).
+
+## 2025-07-13 - LangChain and LlamaIndex Integration
+
+**Decision:** Integrate LangChain and LlamaIndex into the AutoBot workflow to create a hybrid architecture for enhanced orchestration and knowledge retrieval, leveraging Redis for all memory and logging.
+
+**Rationale:**
+- **Advanced Orchestration:** LangChain provides a robust framework for building intelligent agents, offering sophisticated tools for reasoning, planning, and tool use. This will allow for more complex and flexible task execution compared to a custom orchestrator.
+- **Enhanced Knowledge Retrieval (RAG):** LlamaIndex specializes in data ingestion, indexing, and retrieval-augmented generation (RAG). Integrating it will significantly improve the agent's ability to access and utilize its knowledge base, reducing hallucination and providing more accurate responses.
+- **Unified Memory and Logging:** Using Redis for all memory (chat history, agent scratchpad) and LlamaIndex's vector/document store ensures a high-performance, centralized, and persistent state. This simplifies data management and improves overall system responsiveness.
+- **Modularity and Extensibility:** Both LangChain and LlamaIndex are highly modular, allowing for easier integration of new tools, LLMs, and data sources in the future.
+- **Industry Best Practices:** Adopting these widely used frameworks aligns AutoBot with current best practices in LLM application development, making the codebase more maintainable and understandable for new contributors.
+
+**Design Choices:**
+- **LangChain Agent as Orchestrator:** The existing `Orchestrator` will be refactored to wrap a LangChain Agent. This agent will be responsible for the high-level decision-making, tool selection, and task decomposition.
+- **LlamaIndex for Knowledge Base:** The `KnowledgeBase` module will be re-implemented using LlamaIndex components. This includes using LlamaIndex's `VectorStoreIndex` and `ServiceContext` for managing embeddings and document storage.
+- **Redis as Backend for LlamaIndex and Memory:** LlamaIndex will be configured to use a `RedisVectorStore` and Redis for its document store. The `ChatHistoryManager` will continue to use Redis for conversational memory, and all logs will be directed to Redis.
+- **Existing Functionalities as LangChain Tools:** Current functionalities like OS command execution (`SystemIntegration`) and LLM interactions (`LLMInterface`) will be exposed as custom LangChain `Tools` for the agent to utilize.
+- **LangChain-Compatible LLMs:** The `LLMInterface` will be updated to provide LLM instances (e.g., `ChatOllama`, `OllamaLLM`) that are directly compatible with LangChain and LlamaIndex.

@@ -1,7 +1,9 @@
 import platform
 import subprocess
 import os
-import json # Import the json module
+import json
+import requests # Import requests for web fetching
+from markdownify import markdownify as md # Import markdownify for HTML to Markdown conversion
 from typing import Dict, Any, List, Optional
 
 class SystemIntegration:
@@ -234,6 +236,34 @@ class SystemIntegration:
         except Exception as e:
             return {"status": "error", "message": f"Error terminating process {pid}: {e}"}
 
+    def web_fetch(self, url: str) -> Dict[str, Any]:
+        """
+        Fetches content from a specified URL and processes it into markdown.
+        """
+        try:
+            # Ensure URL starts with http:// or https://
+            if not url.startswith("http://") and not url.startswith("https://"):
+                url = "https://" + url # Default to HTTPS
+
+            response = requests.get(url, timeout=10)
+            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+            
+            content_type = response.headers.get('Content-Type', '').lower()
+            
+            if 'text/html' in content_type:
+                markdown_content = md(response.text)
+                return {"status": "success", "url": url, "content_type": "text/markdown", "content": markdown_content}
+            elif 'text/plain' in content_type or 'application/json' in content_type:
+                return {"status": "success", "url": url, "content_type": content_type, "content": response.text}
+            else:
+                # For other content types, return a message indicating it's not text
+                return {"status": "error", "message": f"Unsupported content type for direct text extraction: {content_type}", "url": url}
+
+        except requests.exceptions.RequestException as e:
+            return {"status": "error", "message": f"Failed to fetch URL {url}: {e}", "url": url}
+        except Exception as e:
+            return {"status": "error", "message": f"An unexpected error occurred during web fetch: {e}", "url": url}
+
 # Example Usage (for testing)
 if __name__ == "__main__":
     si = SystemIntegration()
@@ -265,4 +295,4 @@ if __name__ == "__main__":
     # import time
     # time.sleep(60)
     # Run this in another terminal, get its PID, then try to terminate it here.
-    # print(si.terminate_process(12345))
+        # print(si.terminate_process(12345))

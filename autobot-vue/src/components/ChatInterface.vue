@@ -1,6 +1,6 @@
 <template>
   <div class="chat-interface">
-    <h2>Chat with AutoBot</h2>
+       <h2>Chat with AutoBot</h2>
     <div class="chat-container">
       <div class="chat-sidebar" :class="{ 'collapsed': sidebarCollapsed }">
         <button class="toggle-sidebar" @click="sidebarCollapsed = !sidebarCollapsed">
@@ -90,7 +90,7 @@ export default {
         show_json: false, // Default to off as per user feedback
         show_utility: false, // Default to off as per user feedback
         show_planning: true,
-        show_debug: true // Default to on for debug messages to troubleshoot
+        show_debug: false // Default to off to reduce noise
       },
       chat: {
         auto_scroll: true,
@@ -98,9 +98,9 @@ export default {
       },
       backend: {
         use_phi2: false,
-        api_endpoint: '',
-        ollama_endpoint: '',
-        ollama_model: '',
+        api_endpoint: 'http://localhost:8001',
+        ollama_endpoint: 'http://localhost:11434',
+        ollama_model: 'tinyllama:latest',
         streaming: false
       },
       ui: {
@@ -116,6 +116,105 @@ export default {
     const prompts = ref([]);
     const defaults = ref({});
     let eventSource = null;
+
+    // Connection status tracking
+    const backendStatus = ref({
+      connected: false,
+      class: 'disconnected',
+      text: 'Disconnected',
+      message: 'Backend server is not responding'
+    });
+    
+    const llmStatus = ref({
+      connected: false,
+      class: 'disconnected', 
+      text: 'Disconnected',
+      message: 'LLM service is not available'
+    });
+
+    // Connection status checking functions
+    const checkBackendConnection = async () => {
+      try {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/health`, {
+          method: 'GET',
+          timeout: 5000
+        });
+        if (response.ok) {
+          backendStatus.value = {
+            connected: true,
+            class: 'connected',
+            text: 'Connected',
+            message: 'Backend server is responding'
+          };
+          return true;
+        } else {
+          throw new Error(`Backend returned ${response.status}`);
+        }
+      } catch (error) {
+        backendStatus.value = {
+          connected: false,
+          class: 'disconnected',
+          text: 'Disconnected',
+          message: `Backend connection failed: ${error.message}`
+        };
+        return false;
+      }
+    };
+
+    const checkLLMConnection = async () => {
+      try {
+        // Check if we can reach the LLM endpoint
+        const llmEndpoint = settings.value.backend.ollama_endpoint || 'http://localhost:11434';
+        const response = await fetch(`${llmEndpoint}/api/tags`, {
+          method: 'GET',
+          timeout: 5000
+        });
+        if (response.ok) {
+          llmStatus.value = {
+            connected: true,
+            class: 'connected',
+            text: 'Connected',
+            message: 'LLM service is available'
+          };
+          return true;
+        } else {
+          throw new Error(`LLM service returned ${response.status}`);
+        }
+      } catch (error) {
+        llmStatus.value = {
+          connected: false,
+          class: 'disconnected', 
+          text: 'Disconnected',
+          message: `LLM connection failed: ${error.message}`
+        };
+        return false;
+      }
+    };
+
+    const checkConnections = async () => {
+      await checkBackendConnection();
+      await checkLLMConnection();
+    };
+
+    const handleToggleAgent = async () => {
+      try {
+        const endpoint = isAgentPaused.value ? '/api/agent/resume' : '/api/agent/pause';
+        const response = await fetch(`${settings.value.backend.api_endpoint}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        if (response.ok) {
+          isAgentPaused.value = !isAgentPaused.value;
+          console.log(`Agent ${isAgentPaused.value ? 'paused' : 'resumed'} successfully.`);
+        } else {
+          console.error('Failed to toggle agent:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error toggling agent:', error);
+      }
+    };
 
     onMounted(async () => {
       // Check if there are persisted messages for this chat session
@@ -134,10 +233,16 @@ export default {
         settings.value = JSON.parse(savedSettings);
       }
       
+      // Check connections first
+      await checkConnections();
+      
       // Fetch backend settings to override with latest configuration
       await fetchBackendSettings();
       // Load system prompts on initialization
       await loadPrompts();
+      
+      // Set up periodic connection checking
+      setInterval(checkConnections, 10000); // Check every 10 seconds
     });
     
     // Function to save settings to local storage and backend
@@ -171,28 +276,11 @@ export default {
         });
         if (!response.ok) {
           console.error('Failed to save backend settings:', response.statusText);
-          messages.value.push({
-            sender: 'debug',
-            text: `Failed to save backend settings: ${response.statusText}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
         } else {
-          messages.value.push({
-            sender: 'debug',
-            text: `Backend settings saved successfully.`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
+          console.log('Backend settings saved successfully.');
         }
       } catch (error) {
         console.error('Error saving backend settings:', error);
-        messages.value.push({
-          sender: 'debug',
-          text: `Error saving backend settings: ${error.message}`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'debug'
-        });
       }
     };
 
@@ -203,29 +291,12 @@ export default {
         if (response.ok) {
           const backendSettings = await response.json();
           settings.value.backend = { ...settings.value.backend, ...backendSettings };
-          messages.value.push({
-            sender: 'debug',
-            text: `Backend settings loaded successfully.`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
+          console.log('Backend settings loaded successfully.');
         } else {
           console.error('Failed to load backend settings:', response.statusText);
-          messages.value.push({
-            sender: 'debug',
-            text: `Failed to load backend settings: ${response.statusText}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
         }
       } catch (error) {
         console.error('Error loading backend settings:', error);
-        messages.value.push({
-          sender: 'debug',
-          text: `Error loading backend settings: ${error.message}`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'debug'
-        });
       }
     };
 
@@ -237,29 +308,12 @@ export default {
           const data = await response.json();
           prompts.value = data.prompts || [];
           defaults.value = data.defaults || {};
-          messages.value.push({
-            sender: 'debug',
-            text: `Loaded ${prompts.value.length} system prompts from backend.`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
+          console.log(`Loaded ${prompts.value.length} system prompts from backend.`);
         } else {
           console.error('Failed to load system prompts:', response.statusText);
-          messages.value.push({
-            sender: 'debug',
-            text: `Failed to load system prompts: ${response.statusText}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
         }
       } catch (error) {
         console.error('Error loading system prompts:', error);
-        messages.value.push({
-          sender: 'debug',
-          text: `Error loading system prompts: ${error.message}`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'debug'
-        });
       }
     };
 
@@ -284,12 +338,7 @@ export default {
     const editPrompt = async (promptId) => {
       const prompt = prompts.value.find(p => p.id === promptId);
       if (!prompt) {
-        messages.value.push({
-          sender: 'debug',
-          text: `Prompt ${promptId} not found for editing.`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'debug'
-        });
+        console.warn(`Prompt ${promptId} not found for editing.`);
         return;
       }
       const newContent = prompt(`Edit prompt: ${prompt.name}`, prompt.content);
@@ -308,29 +357,12 @@ export default {
             if (index !== -1) {
               prompts.value[index] = updatedPrompt;
             }
-            messages.value.push({
-              sender: 'debug',
-              text: `Updated prompt ${prompt.name} successfully.`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
+            console.log(`Updated prompt ${prompt.name} successfully.`);
           } else {
             console.error('Failed to update prompt:', response.statusText);
-            messages.value.push({
-              sender: 'debug',
-              text: `Failed to update prompt ${prompt.name}: ${response.statusText}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
           }
         } catch (error) {
           console.error('Error updating prompt:', error);
-          messages.value.push({
-            sender: 'debug',
-            text: `Error updating prompt ${prompt.name}: ${error.message}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
         }
       }
     };
@@ -339,12 +371,7 @@ export default {
     const revertPrompt = async (promptId) => {
       const prompt = prompts.value.find(p => p.id === promptId);
       if (!prompt) {
-        messages.value.push({
-          sender: 'debug',
-          text: `Prompt ${promptId} not found for reverting.`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'debug'
-        });
+        console.warn(`Prompt ${promptId} not found for reverting.`);
         return;
       }
       if (confirm(`Are you sure you want to revert ${prompt.name} to its default content?`)) {
@@ -361,29 +388,12 @@ export default {
             if (index !== -1) {
               prompts.value[index] = updatedPrompt;
             }
-            messages.value.push({
-              sender: 'debug',
-              text: `Reverted prompt ${prompt.name} to default successfully.`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
+            console.log(`Reverted prompt ${prompt.name} to default successfully.`);
           } else {
             console.error('Failed to revert prompt:', response.statusText);
-            messages.value.push({
-              sender: 'debug',
-              text: `Failed to revert prompt ${prompt.name}: ${response.statusText}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
           }
         } catch (error) {
           console.error('Error reverting prompt:', error);
-          messages.value.push({
-            sender: 'debug',
-            text: `Error reverting prompt ${prompt.name}: ${error.message}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
         }
       }
     };
@@ -405,6 +415,7 @@ export default {
         if (message.type === 'utility' && settings.value.message_display.show_utility) return true;
         if (message.type === 'planning' && settings.value.message_display.show_planning) return true;
         if (message.type === 'debug' && settings.value.message_display.show_debug) return true;
+        if (message.type === 'tool_output') return true; // Always show tool output
         return false;
       });
     });
@@ -441,53 +452,38 @@ export default {
           return `<div class="planning-message"><strong>Planning:</strong> <b>${cleanedPlan}</b></div>`;
         }
         return `<div class="planning-message"><strong>Planning:</strong> <b>${cleanedPlan}</b></div>`;
-      } else if (type === 'json' || type === 'debug') {
-        // Display full JSON content when toggle is on
-        if (settings.value.message_display.show_json || settings.value.message_display.show_debug) {
+      } else if (type === 'json') {
+        // Display full JSON content when show_json toggle is on
+        if (settings.value.message_display.show_json) {
           try {
-            // Attempt to parse and pretty print JSON
             const jsonObj = JSON.parse(text);
             const formattedJson = JSON.stringify(jsonObj, null, 2);
-            return `<div class="debug-message"><strong>Debug/JSON:</strong> <pre>${formattedJson}</pre></div>`;
+            return `<div class="json-message"><strong>JSON Output:</strong> <pre>${formattedJson}</pre></div>`;
           } catch (e) {
-            // If parsing fails, show raw text with some formatting for JSON-like structures
-            const cleanedText = text.replace(/\\n/g, '').replace(/\\"/g, '"').replace(/\{.*?\}/g, match => `<pre>${match}</pre>`);
-            return `<div class="debug-message"><strong>Debug/JSON:</strong> ${cleanedText}</div>`;
+            // If parsing fails, show raw text
+            return `<div class="json-message"><strong>JSON Output (Parse Error):</strong> <pre>${text}</pre></div>`;
           }
         } else {
-          // If toggle is off, show a summarized version
+          return ''; // Hide if toggle is off
+        }
+      } else if (type === 'debug') {
+        // Display full debug content when show_debug toggle is on
+        if (settings.value.message_display.show_debug) {
           try {
             const jsonObj = JSON.parse(text);
-            let humanizedText = '';
-            if (jsonObj.tool_name) {
-              if (jsonObj.tool_name === 'respond_conversationally') {
-                humanizedText += 'I will respond conversationally.<br>';
-              } else {
-                humanizedText += `I will use the tool: ${jsonObj.tool_name}.<br>`;
-              }
-            }
-            if (jsonObj.tool_args && jsonObj.tool_args.response_text) {
-              try {
-                const responseJson = JSON.parse(jsonObj.tool_args.response_text);
-                if (responseJson.sequel) {
-                  humanizedText += `Response: ${responseJson.sequel}`;
-                } else if (responseJson.sequence) {
-                  humanizedText += `Response: ${responseJson.sequence[0][1]}`;
-                } else {
-                  humanizedText += `Response data: ${jsonObj.tool_args.response_text}`;
-                }
-              } catch (e) {
-                humanizedText += `Response data: ${jsonObj.tool_args.response_text}`;
-              }
-            }
-            return `<div class="debug-message"><strong>Debug/JSON:</strong> <pre>${humanizedText}</pre></div>`;
+            const formattedJson = JSON.stringify(jsonObj, null, 2);
+            return `<div class="debug-message"><strong>Debug:</strong> <pre>${formattedJson}</pre></div>`;
           } catch (e) {
-            const cleanedText = text.replace(/\\n/g, '').replace(/\\"/g, '"').replace(/\{.*?\}/g, match => `<pre>${match}</pre>`);
-            return `<div class="debug-message"><strong>Debug/JSON:</strong> ${cleanedText}</div>`;
+            return `<div class="debug-message"><strong>Debug:</strong> ${text}</div>`;
           }
+        } else {
+          return ''; // Hide if toggle is off
         }
       } else if (type === 'utility') {
         return `<div class="utility-message"><strong>Utility:</strong> <span style="color: #6c757d;">${text.replace(/\{.*?\}/g, '').replace(/\[.*?\]/g, '').replace(/"/g, '').trim()}</span></div>`;
+      } else if (type === 'tool_output') {
+        // Format tool output messages
+        return `<div class="tool-output-message"><strong>Tool Output:</strong> <pre>${text}</pre></div>`;
       } else if (type === 'response') {
         // For response type, display the text directly
         return `<div class="response-message"><strong>Response:</strong> ${text}</div>`;
@@ -517,82 +513,27 @@ export default {
         });
 
         try {
-          const requestBody = JSON.stringify({ message: messageText, chatId: chatId });
+          const requestBody = JSON.stringify({ goal: messageText }); // Changed to 'goal'
           if (settings.value.message_display.show_json) {
             messages.value.push({
-              sender: 'debug',
+              sender: 'bot',
               text: `Request to backend: ${requestBody}`,
               timestamp: new Date().toLocaleTimeString(),
               type: 'json'
             });
           }
 
-          // Ensure the correct endpoint based on the selected LLM provider and model
+          // Always use the backend API endpoint for goal requests
           let apiEndpoint = settings.value.backend.api_endpoint;
-          let chatEndpoint = '/api/chat';
-          let requestFormat = 'default';
-          if (settings.value.backend.llm && settings.value.backend.llm.provider_type) {
-            if (settings.value.backend.llm.provider_type === 'local') {
-              const provider = settings.value.backend.llm.local.provider;
-              if (provider && settings.value.backend.llm.local.providers[provider]) {
-                apiEndpoint = settings.value.backend.llm.local.providers[provider].endpoint || apiEndpoint;
-                if (provider === 'lmstudio') {
-                  chatEndpoint = '/v1/chat/completions';
-                  requestFormat = 'openai';
-                }
-              }
-            } else if (settings.value.backend.llm.provider_type === 'cloud') {
-              const provider = settings.value.backend.llm.cloud.provider;
-              if (provider && settings.value.backend.llm.cloud.providers[provider]) {
-                apiEndpoint = settings.value.backend.llm.cloud.providers[provider].endpoint || apiEndpoint;
-                chatEndpoint = '/v1/chat/completions';
-                requestFormat = 'openai';
-              }
-            }
-          }
-          console.log('Using API endpoint for chat request:', apiEndpoint, 'with endpoint:', chatEndpoint);
+          let goalEndpoint = '/api/goal'; // Changed to '/api/goal'
+          console.log('Using API endpoint for goal request:', apiEndpoint, 'with endpoint:', goalEndpoint);
           
-          // Format the request body based on the provider
-          let formattedBody = requestBody;
-          if (requestFormat === 'openai') {
-            const originalData = JSON.parse(requestBody);
-            const model = settings.value.backend.llm.provider_type === 'local' 
-              ? settings.value.backend.llm.local.providers[settings.value.backend.llm.local.provider].selected_model
-              : settings.value.backend.llm.cloud.providers[settings.value.backend.llm.cloud.provider].selected_model;
-            formattedBody = JSON.stringify({
-              model: model || 'default-model',
-              messages: [
-                { role: 'user', content: originalData.message }
-              ],
-              stream: settings.value.backend.streaming || false,
-              tools: [
-                {
-                  type: "function",
-                  function: {
-                    name: "fetch_wikipedia_content",
-                    description: "Search Wikipedia and fetch the introduction of the most relevant article. Use this if the user is asking for something that is likely on Wikipedia.",
-                    parameters: {
-                      type: "object",
-                      properties: {
-                        search_query: {
-                          type: "string",
-                          description: "Search query for finding the Wikipedia article"
-                        }
-                      },
-                      required: ["search_query"]
-                    }
-                  }
-                }
-              ]
-            });
-          }
-          
-          const response = await fetch(`${apiEndpoint}${chatEndpoint}`, {
+          const response = await fetch(`${apiEndpoint}${goalEndpoint}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
-            body: formattedBody
+            body: requestBody // No need for complex formatting here, /api/goal expects simple JSON
           });
           if (response.ok) {
             const contentType = response.headers.get('content-type');
@@ -616,12 +557,14 @@ export default {
               // Handle streaming response using ReadableStream directly from the initial response
               handleStreamingResponseFromResponse(response);
             } else {
-              messages.value.push({
-                sender: 'debug',
-                text: `Non-streaming response detected. Waiting for JSON data.`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'debug'
-              });
+              if (settings.value.message_display.show_utility) {
+                messages.value.push({
+                  sender: 'bot',
+                  text: `Non-streaming response detected. Waiting for JSON data.`,
+                  timestamp: new Date().toLocaleTimeString(),
+                  type: 'utility'
+                });
+              }
               const botResponse = await response.json();
               console.log('Raw bot response:', botResponse);
               let responseText = botResponse.text || JSON.stringify(botResponse);
@@ -638,7 +581,7 @@ export default {
               
               if (settings.value.message_display.show_json) {
                 messages.value.push({
-                  sender: 'debug',
+                  sender: 'bot',
                   text: `Response from backend: ${JSON.stringify(botResponse, null, 2)}`,
                   timestamp: new Date().toLocaleTimeString(),
                   type: 'json'
@@ -646,20 +589,20 @@ export default {
               }
 
               // Extract detailed LLM request and response if available
-              if (botResponse.llm_request) {
+              if (botResponse.llm_request && settings.value.message_display.show_utility) {
                 messages.value.push({
-                  sender: 'debug',
+                  sender: 'bot',
                   text: `LLM Request: ${JSON.stringify(botResponse.llm_request, null, 2)}`,
                   timestamp: new Date().toLocaleTimeString(),
-                  type: 'debug'
+                  type: 'utility'
                 });
               }
-              if (botResponse.llm_response) {
+              if (botResponse.llm_response && settings.value.message_display.show_utility) {
                 messages.value.push({
-                  sender: 'debug',
+                  sender: 'bot',
                   text: `LLM Response: ${JSON.stringify(botResponse.llm_response, null, 2)}`,
                   timestamp: new Date().toLocaleTimeString(),
-                  type: 'debug'
+                  type: 'utility'
                 });
               }
 
@@ -672,12 +615,14 @@ export default {
             }
           } else {
             console.error('Failed to get bot response:', response.statusText);
-            messages.value.push({
-              sender: 'debug',
-              text: `Error from backend: Status ${response.status} - ${response.statusText}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
+            if (settings.value.message_display.show_utility) {
+              messages.value.push({
+                sender: 'bot',
+                text: `Error from backend: Status ${response.status} - ${response.statusText}`,
+                timestamp: new Date().toLocaleTimeString(),
+                type: 'utility'
+              });
+            }
             messages.value.push({
               sender: 'bot',
               text: `Error: Unable to connect to the backend. Please ensure the server is running.`,
@@ -687,12 +632,14 @@ export default {
           }
         } catch (error) {
           console.error('Error sending message:', error);
-          messages.value.push({
-            sender: 'debug',
-            text: `Error sending request to backend: ${error.message}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
+          if (settings.value.message_display.show_utility) {
+            messages.value.push({
+              sender: 'bot',
+              text: `Error sending request to backend: ${error.message}`,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'utility'
+            });
+          }
           messages.value.push({
             sender: 'bot',
             text: `Error: Unable to connect to the backend. Please ensure the server is running.`,
@@ -717,29 +664,27 @@ export default {
       if (eventSource) {
         eventSource.close();
       }
-      // Do not create a new EventSource directly; it's handled by the fetch response
       let fullResponseText = '';
       let fullThoughtText = '';
       let fullJsonText = '';
       let fullUtilityText = '';
       let fullPlanningText = '';
-      let currentToolCall = null; // To accumulate tool call data across chunks
+      let currentToolCall = null;
       
-      console.log('Streaming response started:', response);
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       
       function readStream() {
         reader.read().then(({ done, value }) => {
           if (done) {
-            messages.value.push({
-              sender: 'debug',
-              text: 'Streaming response completed.',
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-            console.log('Streaming completed.');
-            // Mark the last bot message as final for each type
+            if (settings.value.message_display.show_utility) {
+              messages.value.push({
+                sender: 'bot',
+                text: 'Streaming response completed.',
+                timestamp: new Date().toLocaleTimeString(),
+                type: 'utility'
+              });
+            }
             const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
             if (lastBotMessageIndex >= 0) {
               messages.value[lastBotMessageIndex].final = true;
@@ -760,14 +705,12 @@ export default {
             if (lastPlanningMessageIndex >= 0) {
               messages.value[lastPlanningMessageIndex].final = true;
             }
-            // Save messages after streaming completes
             saveMessagesToStorage();
             return;
           }
           
           const chunk = decoder.decode(value, { stream: true });
-          // Only add debug message for raw chunk if it's not already logged
-          if (settings.value.message_display.show_debug && !messages.value.some(msg => msg.type === 'debug' && msg.text.includes('Raw chunk received') && msg.text.includes(chunk))) {
+          if (settings.value.message_display.show_debug) {
             messages.value.push({
               sender: 'debug',
               text: `Raw chunk received: ${chunk}`,
@@ -775,38 +718,33 @@ export default {
               type: 'debug'
             });
           }
-          console.log('Received chunk:', chunk);
           
-          // Parse the chunk to extract JSON data
-          try {
-            // Handle multiple data events in a single chunk
+          try { // Outer try block for chunk parsing
             const dataMatches = chunk.split('\n').filter(line => line.startsWith('data: '));
             if (dataMatches.length > 0) {
               for (const dataLine of dataMatches) {
                 const dataStr = dataLine.replace('data: ', '').trim();
-                if (!dataStr) continue; // Skip empty data lines
+                if (!dataStr) continue;
                 
-                if (settings.value.message_display.show_debug && !messages.value.some(msg => msg.type === 'debug' && msg.text.includes('Attempting to parse JSON') && msg.text.includes(dataStr))) {
-                  messages.value.push({
-                    sender: 'debug',
-                    text: `Attempting to parse JSON: ${dataStr}`,
-                    timestamp: new Date().toLocaleTimeString(),
-                    type: 'debug'
-                  });
-                }
-                console.log('Attempting to parse JSON:', dataStr);
-                
-                try {
+                try { // Inner try block for JSON parsing
                   const data = JSON.parse(dataStr);
-                  console.log('Parsed data:', data);
+
+                  if (settings.value.message_display.show_json) {
+                    messages.value.push({
+                      sender: 'bot',
+                      text: JSON.stringify(data, null, 2),
+                      timestamp: new Date().toLocaleTimeString(),
+                      type: 'json',
+                      final: false
+                    });
+                  }
                   
-                  // Check if this is an OpenAI-compatible response chunk
                   if (data.object === 'chat.completion.chunk' && data.choices && data.choices.length > 0) {
                     const choice = data.choices[0];
                     if (choice.delta) {
                       if (choice.delta.content) {
                         fullResponseText += choice.delta.content;
-                        const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
+                        const lastBotMessageIndex = messages.value.findLastIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
                         if (lastBotMessageIndex >= 0) {
                           messages.value[lastBotMessageIndex].text = fullResponseText;
                         } else {
@@ -818,7 +756,6 @@ export default {
                             final: false
                           });
                         }
-                        // Scroll to the latest message if autoscroll is enabled
                         nextTick(() => {
                           if (chatMessages.value && settings.value.chat.auto_scroll) {
                             chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
@@ -829,7 +766,6 @@ export default {
                           const toolCallDelta = choice.delta.tool_calls[0];
                           if (toolCallDelta.function) {
                               if (toolCallDelta.function.name) {
-                                  // Initialize currentToolCall if it's a new tool call
                                   if (!currentToolCall || currentToolCall.id !== toolCallDelta.id) {
                                       currentToolCall = {
                                           id: toolCallDelta.id,
@@ -848,18 +784,17 @@ export default {
                     }
                     if (choice.finish_reason) {
                       if (choice.finish_reason === 'tool_calls' && data.choices[0].message && data.choices[0].message.tool_calls) {
-                        console.log('Tool call requested:', data.choices[0].message.tool_calls);
-                        messages.value.push({
-                          sender: 'debug',
-                          text: `Tool call requested: ${JSON.stringify(data.choices[0].message.tool_calls, null, 2)}`,
-                          timestamp: new Date().toLocaleTimeString(),
-                          type: 'debug'
-                        });
-                        // Stop streaming when a tool call is requested
+                        if (settings.value.message_display.show_utility) {
+                          messages.value.push({
+                            sender: 'bot',
+                            text: `Tool call requested: ${JSON.stringify(data.choices[0].message.tool_calls, null, 2)}`,
+                            timestamp: new Date().toLocaleTimeString(),
+                            type: 'utility'
+                          });
+                        }
                         reader.cancel();
                         
-                        // Simulate tool execution for demonstration
-                        const toolCall = currentToolCall; // Use the accumulated tool call
+                        const toolCall = currentToolCall;
                         if (toolCall && (toolCall.name === 'fetch_wikipedia_content' || toolCall.name === 'get_wikipedia_content')) {
                           try {
                             const args = JSON.parse(toolCall.arguments || '{}');
@@ -870,7 +805,6 @@ export default {
                               timestamp: new Date().toLocaleTimeString(),
                               type: 'utility'
                             });
-                            // Simulated response (since actual execution would require backend support)
                             messages.value.push({
                               sender: 'bot',
                               text: `Wikipedia content for "${searchQuery}": [Simulated response] This is a placeholder for the actual Wikipedia content that would be fetched.`,
@@ -880,180 +814,193 @@ export default {
                             });
                             saveMessagesToStorage();
                           } catch (error) {
-                            messages.value.push({
-                              sender: 'debug',
-                              text: `Error processing tool call arguments: ${error.message}`,
-                              timestamp: new Date().toLocaleTimeString(),
-                              type: 'debug'
-                            });
+                            if (settings.value.message_display.show_utility) {
+                              messages.value.push({
+                                sender: 'bot',
+                                text: `Error processing tool call arguments: ${error.message}`,
+                                timestamp: new Date().toLocaleTimeString(),
+                                type: 'utility'
+                              });
+                            }
                           }
                         }
-                        // Mark the last bot message as final if it exists
                         const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
                         if (lastBotMessageIndex >= 0) {
                           messages.value[lastBotMessageIndex].final = true;
                         }
                         saveMessagesToStorage();
-                        currentToolCall = null; // Reset for next tool call
-                        return; // Stop further processing of this stream
+                        currentToolCall = null;
+                        return;
                       }
-                      console.log('Streaming done signal received from OpenAI API.');
-                      // Mark the last bot message as final
-                      const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
+                      const lastBotMessageIndex = messages.value.findLastIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
                       if (lastBotMessageIndex >= 0) {
                         messages.value[lastBotMessageIndex].final = true;
                       }
-                      // Save messages after streaming completes
                       saveMessagesToStorage();
-                      reader.cancel(); // Stop reading further
+                      reader.cancel();
                       return;
                     }
                   } else if (data.text) {
-                    // Handle custom format if present
-                    // Determine message type and update the appropriate text accumulator
-                    if (data.type === 'thought') {
-                      fullThoughtText += data.text;
-                      const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
-                      if (lastThoughtMessageIndex >= 0) {
-                        messages.value[lastThoughtMessageIndex].text = fullThoughtText;
-                      } else if (settings.value.message_display.show_thoughts) {
-                        messages.value.push({
-                          sender: 'bot',
-                          text: fullThoughtText,
-                          timestamp: new Date().toLocaleTimeString(),
-                          type: 'thought',
-                          final: false
-                        });
+                      if (data.type === 'thought') {
+                        fullThoughtText += data.text;
+                        const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
+                        if (lastThoughtMessageIndex >= 0) {
+                          messages.value[lastThoughtMessageIndex].text = data.full_text || fullThoughtText;
+                        } else if (settings.value.message_display.show_thoughts) {
+                          messages.value.push({
+                            sender: 'bot',
+                            text: data.full_text || fullThoughtText,
+                            timestamp: new Date().toLocaleTimeString(),
+                            type: 'thought',
+                            final: false
+                          });
+                        }
+                      } else if (data.type === 'json') {
+                        fullJsonText += data.text;
+                        const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
+                        if (lastJsonMessageIndex >= 0) {
+                          messages.value[lastJsonMessageIndex].text = data.full_text || fullJsonText;
+                        } else if (settings.value.message_display.show_json) {
+                          messages.value.push({
+                            sender: 'bot',
+                            text: data.full_text || fullJsonText,
+                            timestamp: new Date().toLocaleTimeString(),
+                            type: 'json',
+                            final: false
+                          });
+                        }
+                      } else if (data.type === 'utility') {
+                        fullUtilityText += data.text;
+                        const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
+                        if (lastUtilityMessageIndex >= 0) {
+                          messages.value[lastUtilityMessageIndex].text = data.full_text || fullUtilityText;
+                        } else if (settings.value.message_display.show_utility) {
+                          messages.value.push({
+                            sender: 'bot',
+                            text: data.full_text || fullUtilityText,
+                            timestamp: new Date().toLocaleTimeString(),
+                            type: 'utility',
+                            final: false
+                          });
+                        }
+                      } else if (data.type === 'planning') {
+                        fullPlanningText += data.text;
+                        const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
+                        if (lastPlanningMessageIndex >= 0) {
+                          messages.value[lastPlanningMessageIndex].text = data.full_text || fullPlanningText;
+                        } else if (settings.value.message_display.show_planning) {
+                          messages.value.push({
+                            sender: 'bot',
+                            text: data.full_text || fullPlanningText,
+                            timestamp: new Date().toLocaleTimeString(),
+                            type: 'planning',
+                            final: false
+                          });
+                        }
+                      } else {
+                        const currentMessageText = data.full_text || (fullResponseText + data.text);
+                        fullResponseText = currentMessageText;
+                        const lastBotMessageIndex = messages.value.findLastIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
+                        if (lastBotMessageIndex >= 0) {
+                          messages.value[lastBotMessageIndex].text = currentMessageText;
+                        } else {
+                          messages.value.push({
+                            sender: 'bot',
+                            text: currentMessageText,
+                            timestamp: new Date().toLocaleTimeString(),
+                            type: 'response',
+                            final: false
+                          });
+                        }
                       }
-                    } else if (data.type === 'json') {
-                      fullJsonText += data.text;
-                      const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
-                      if (lastJsonMessageIndex >= 0) {
-                        messages.value[lastJsonMessageIndex].text = fullJsonText;
-                      } else if (settings.value.message_display.show_json) {
-                        messages.value.push({
-                          sender: 'bot',
-                          text: fullJsonText,
-                          timestamp: new Date().toLocaleTimeString(),
-                          type: 'json',
-                          final: false
-                        });
-                      }
-                    } else if (data.type === 'utility') {
-                      fullUtilityText += data.text;
-                      const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
-                      if (lastUtilityMessageIndex >= 0) {
-                        messages.value[lastUtilityMessageIndex].text = fullUtilityText;
-                      } else if (settings.value.message_display.show_utility) {
-                        messages.value.push({
-                          sender: 'bot',
-                          text: fullUtilityText,
-                          timestamp: new Date().toLocaleTimeString(),
-                          type: 'utility',
-                          final: false
-                        });
-                      }
-                    } else if (data.type === 'planning') {
-                      fullPlanningText += data.text;
-                      const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
-                      if (lastPlanningMessageIndex >= 0) {
-                        messages.value[lastPlanningMessageIndex].text = fullPlanningText;
-                      } else if (settings.value.message_display.show_planning) {
-                        messages.value.push({
-                          sender: 'bot',
-                          text: fullPlanningText,
-                          timestamp: new Date().toLocaleTimeString(),
-                          type: 'planning',
-                          final: false
-                        });
-                      }
-                    } else {
-                      fullResponseText += data.text;
+                      nextTick(() => {
+                        if (chatMessages.value && settings.value.chat.auto_scroll) {
+                          chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+                        }
+                      });
+                    }
+                    if (data.done) {
                       const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
                       if (lastBotMessageIndex >= 0) {
-                        messages.value[lastBotMessageIndex].text = fullResponseText;
-                      } else {
-                        messages.value.push({
-                          sender: 'bot',
-                          text: fullResponseText,
-                          timestamp: new Date().toLocaleTimeString(),
-                          type: 'response',
-                          final: false
-                        });
+                        messages.value[lastBotMessageIndex].text = data.full_text || messages.value[lastBotMessageIndex].text;
+                        messages.value[lastBotMessageIndex].final = true;
                       }
+                      const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
+                      if (lastThoughtMessageIndex >= 0) {
+                        messages.value[lastThoughtMessageIndex].text = data.full_text || messages.value[lastThoughtMessageIndex].text;
+                        messages.value[lastThoughtMessageIndex].final = true;
+                      }
+                      const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
+                      if (lastJsonMessageIndex >= 0) {
+                        messages.value[lastJsonMessageIndex].text = data.full_text || messages.value[lastJsonMessageIndex].text;
+                        messages.value[lastJsonMessageIndex].final = true;
+                      }
+                      const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
+                      if (lastUtilityMessageIndex >= 0) {
+                        messages.value[lastUtilityMessageIndex].text = data.full_text || messages.value[lastUtilityMessageIndex].text;
+                        messages.value[lastUtilityMessageIndex].final = true;
+                      }
+                      const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
+                      if (lastPlanningMessageIndex >= 0) {
+                        messages.value[lastPlanningMessageIndex].text = data.full_text || messages.value[lastPlanningMessageIndex].text;
+                        messages.value[lastPlanningMessageIndex].final = true;
+                      }
+                      saveMessagesToStorage();
+                      reader.cancel();
+                      return;
                     }
-                    // Scroll to the latest message if autoscroll is enabled
-                    nextTick(() => {
-                      if (chatMessages.value && settings.value.chat.auto_scroll) {
-                        chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
-                      }
+                } catch (error) { // Catch for inner try block
+                  console.error('Error parsing JSON data:', error, 'from data:', dataStr);
+                  if (settings.value.message_display.show_debug) {
+                    messages.value.push({
+                      sender: 'debug',
+                      text: `Error parsing JSON data: ${error.message} from data: ${dataStr}`,
+                      timestamp: new Date().toLocaleTimeString(),
+                      type: 'debug'
                     });
                   }
-                  if (data.done) {
-                    console.log('Streaming done signal received.');
-                    // Mark the last bot message as final for each type
-                    const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-                    if (lastBotMessageIndex >= 0) {
-                      messages.value[lastBotMessageIndex].final = true;
-                    }
-                    const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
-                    if (lastThoughtMessageIndex >= 0) {
-                      messages.value[lastThoughtMessageIndex].final = true;
-                    }
-                    const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
-                    if (lastJsonMessageIndex >= 0) {
-                      messages.value[lastJsonMessageIndex].final = true;
-                    }
-                    const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
-                    if (lastUtilityMessageIndex >= 0) {
-                      messages.value[lastUtilityMessageIndex].final = true;
-                    }
-                    const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
-                    if (lastPlanningMessageIndex >= 0) {
-                      messages.value[lastPlanningMessageIndex].final = true;
-                    }
-                    // Save messages after streaming completes
-                    saveMessagesToStorage();
-                    reader.cancel(); // Stop reading further
-                    return;
-                  }
-                } catch (error) {
-                  console.error('Error parsing JSON data:', error, 'from data:', dataStr);
-                  messages.value.push({
-                    sender: 'debug',
-                    text: `Error parsing JSON data: ${error.message} from data: ${dataStr}`,
-                    timestamp: new Date().toLocaleTimeString(),
-                    type: 'debug'
-                  });
                 }
               }
-            } else {
+            } else { // Else for dataMatches.length > 0
+              if (settings.value.message_display.show_debug) {
+                messages.value.push({
+                  sender: 'debug',
+                  text: `No data match found in chunk: ${chunk}`,
+                  timestamp: new Date().toLocaleTimeString(),
+                  type: 'debug'
+                });
+              }
+            }
+          } catch (error) { // Catch for outer try block
+            console.error('Error parsing streaming data:', error, 'from chunk:', chunk);
+            if (settings.value.message_display.show_debug) {
               messages.value.push({
                 sender: 'debug',
-                text: `No data match found in chunk: ${chunk}`,
+                text: `Error parsing streaming data: ${error.message} from chunk: ${chunk}`,
                 timestamp: new Date().toLocaleTimeString(),
                 type: 'debug'
               });
-              console.log('No data match found in chunk:', chunk);
             }
-          } catch (error) {
-            console.error('Error parsing streaming data:', error, 'from chunk:', chunk);
+            messages.value.push({
+              sender: 'bot',
+              text: `Error: Streaming connection failed. Please try again.`,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'response',
+              final: true
+            });
+            saveMessagesToStorage();
+          }
+          readStream(); // Recursive call to continue reading the stream
+        }).catch(error => { // Catch for the promise returned by reader.read().then()
+          console.error('Error reading stream:', error);
+          if (settings.value.message_display.show_debug) {
             messages.value.push({
               sender: 'debug',
-              text: `Error parsing streaming data: ${error.message} from chunk: ${chunk}`,
+              text: `Error reading stream: ${error.message}`,
               timestamp: new Date().toLocaleTimeString(),
               type: 'debug'
             });
           }
-          readStream(); // Continue reading the next chunk
-        }).catch(error => {
-          console.error('Error reading stream:', error);
-          messages.value.push({
-            sender: 'debug',
-            text: `Error reading stream: ${error.message}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
           messages.value.push({
             sender: 'bot',
             text: `Error: Streaming connection failed. Please try again.`,
@@ -1064,7 +1011,7 @@ export default {
           saveMessagesToStorage();
         });
       }
-      readStream();
+      readStream(); // Initial call to start reading the stream
     };
 
     const newChat = async () => {
@@ -1081,16 +1028,7 @@ export default {
           window.location.hash = `chatId=${newChatData.chatId}`;
           currentChatId.value = newChatData.chatId;
           console.log('New Chat created:', newChatData.chatId);
-          messages.value.push({
-            sender: 'bot',
-            text: 'New chat created successfully. How can I assist you?',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
-          // Save the initial message to storage
-          localStorage.setItem(`chat_${newChatData.chatId}_messages`, JSON.stringify(messages.value));
-          // Also save to backend
-          await saveMessagesToStorage();
+          // Don't add an automatic welcome message - let the chat start clean
           // Update chat list
           chatList.value.push({ chatId: newChatData.chatId, name: newChatData.name || '' });
         } else {
@@ -1182,17 +1120,21 @@ export default {
           localStorage.removeItem(`chat_${chatId}_messages`);
           // Remove from chat list
           chatList.value = chatList.value.filter(chat => chat.chatId !== chatId);
-          // Clear messages for the deleted chat
-          messages.value = [];
-          // Update current chat ID to null since no chat is active
-          currentChatId.value = null;
-          window.location.hash = '';
-          messages.value.push({
-            sender: 'bot',
-            text: 'Chat deleted successfully. Click "New Chat" to start a new conversation.',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
+          // If the deleted chat was active, clear messages
+          if (!specificChatId || chatId === currentChatId.value) {
+            messages.value = [];
+            // Update current chat ID to null since no chat is active
+            currentChatId.value = null;
+            window.location.hash = '';
+            messages.value.push({
+              sender: 'bot',
+              text: 'Chat deleted successfully. Click "New Chat" to start a new conversation.',
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'response'
+            });
+          } else {
+            console.log(`Chat ${chatId} deleted successfully.`);
+          }
         } else {
           console.error('Failed to delete chat:', response.statusText);
           messages.value.push({
@@ -1219,36 +1161,14 @@ export default {
         if (response.ok) {
           const data = await response.json();
           messages.value = data;
-          if (settings.value.message_display.show_utility) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Loaded chat messages from backend for chat ${chatId}.`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'utility'
-            });
-          }
+            console.log(`Loaded chat messages from backend for chat ${chatId}.`);
         } else {
           console.error('Failed to load chat messages:', response.statusText);
-          if (settings.value.message_display.show_debug) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Failed to load chat messages from backend: ${response.statusText}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-          }
           // Fallback to local storage if backend fails
           const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
           if (persistedMessages) {
             messages.value = JSON.parse(persistedMessages);
-            if (settings.value.message_display.show_debug) {
-              messages.value.push({
-                sender: 'debug',
-                text: `Loaded chat messages from local storage for chat ${chatId}.`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'debug'
-              });
-            }
+            console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
           } else {
             messages.value = [];
             messages.value.push({
@@ -1261,28 +1181,11 @@ export default {
         }
       } catch (error) {
         console.error('Error loading chat messages:', error);
-        if (settings.value.message_display.show_debug) {
-          messages.value.push({
-            sender: 'debug',
-            text: `Error loading chat messages from backend: ${error.message}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
-        }
         // Fallback to local storage if backend fails
         const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
         if (persistedMessages) {
           messages.value = JSON.parse(persistedMessages);
-          if (settings.value.message_display.show_debug) {
-            if (settings.value.message_display.show_utility) {
-              messages.value.push({
-                sender: 'debug',
-                text: `Loaded chat messages from local storage for chat ${chatId}.`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'utility'
-              });
-            }
-          }
+            console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
         } else {
           messages.value = [];
         }
@@ -1308,34 +1211,11 @@ export default {
         });
         if (!response.ok) {
           console.error('Failed to save chat messages to backend:', response.statusText);
-          if (settings.value.message_display.show_debug) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Failed to save chat messages to backend: ${response.statusText}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-          }
         } else {
-          if (settings.value.message_display.show_debug) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Chat messages saved to backend successfully.`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-          }
+          console.log('Chat messages saved to backend successfully.');
         }
       } catch (error) {
         console.error('Error saving chat messages to backend:', error);
-        if (settings.value.message_display.show_debug) {
-          messages.value.push({
-            sender: 'debug',
-            text: `Error saving chat messages to backend: ${error.message}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
-        }
       }
     };
 
@@ -1351,29 +1231,12 @@ export default {
         });
         if (response.ok) {
           const result = await response.json();
-          messages.value.push({
-            sender: 'debug',
-            text: `Backend server restart initiated: ${result.message}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
+          console.log(`Backend server restart initiated: ${result.message}`);
         } else {
           console.error('Failed to restart backend server:', response.statusText);
-          messages.value.push({
-            sender: 'debug',
-            text: `Failed to restart backend server: ${response.statusText}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
         }
       } catch (error) {
         console.error('Error restarting backend server:', error);
-        messages.value.push({
-          sender: 'debug',
-          text: `Error restarting backend server: ${error.message}`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'debug'
-        });
       } finally {
         backendStarting.value = false;
       }
@@ -1386,37 +1249,14 @@ export default {
         if (response.ok) {
           const data = await response.json();
           chatList.value = data.chats || [];
-          if (settings.value.message_display.show_debug) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Loaded chat list from backend with ${chatList.value.length} chats.`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-          }
+          console.log(`Loaded chat list from backend with ${chatList.value.length} chats.`);
         } else {
           console.error('Failed to load chat list from backend:', response.statusText);
-          if (settings.value.message_display.show_debug) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Failed to load chat list from backend: ${response.statusText}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-          }
           // Fallback to local storage
           loadChatListFromLocalStorage();
         }
       } catch (error) {
         console.error('Error loading chat list from backend:', error);
-        if (settings.value.message_display.show_debug) {
-          messages.value.push({
-            sender: 'debug',
-            text: `Error loading chat list from backend: ${error.message}`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'debug'
-          });
-        }
         // Fallback to local storage
         loadChatListFromLocalStorage();
       }
@@ -1433,14 +1273,7 @@ export default {
         }
       }
       chatList.value = localChats;
-      if (settings.value.message_display.show_debug) {
-        messages.value.push({
-          sender: 'debug',
-          text: `Loaded chat list from local storage with ${chatList.value.length} chats.`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'debug'
-        });
-      }
+      console.log(`Loaded chat list from local storage with ${localChats.length} chats.`);
     };
 
     // Function to switch to a different chat
@@ -1481,14 +1314,7 @@ export default {
           chatList.value[chatIndex].name = newName;
           // Save updated chat list to local storage
           localStorage.setItem('chat_list', JSON.stringify(chatList.value));
-          if (settings.value.message_display.show_debug) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Updated name for chat ${chatId} to "${newName}".`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-          }
+          console.log(`Updated name for chat ${chatId} to "${newName}".`);
         }
       }
     };
@@ -1496,14 +1322,7 @@ export default {
     // Function to refresh chat list
     const refreshChatList = async () => {
       await loadChatList();
-      if (settings.value.message_display.show_debug) {
-        messages.value.push({
-          sender: 'debug',
-          text: `Chat history list refreshed from backend.`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'debug'
-        });
-      }
+      console.log(`Chat history list refreshed from backend.`);
     };
 
     // Function to handle specific chat deletion
@@ -1543,14 +1362,7 @@ export default {
               type: 'response'
             });
           } else {
-            if (settings.value.message_display.show_debug) {
-              messages.value.push({
-                sender: 'debug',
-                text: `Chat ${chatId} deleted successfully.`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'debug'
-              });
-            }
+            console.log(`Chat ${chatId} deleted successfully.`);
           }
         } else {
           console.error('Failed to delete chat:', response.statusText);
@@ -1646,7 +1458,10 @@ export default {
       refreshChatList,
       deleteSpecificChat,
       groupedPrompts,
-      isAgentPaused
+      isAgentPaused,
+      backendStatus,
+      llmStatus,
+      checkConnections
     };
   }
 };
@@ -1817,7 +1632,14 @@ export default {
   font-weight: bold;
 }
 
-.thought-message, .planning-message, .response-message, .debug-message, .utility-message {
+.message.tool-output {
+  background-color: #e2f0cb; /* Light green */
+  border-left: 4px solid #7cb342; /* Darker green */
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(10px, 1.2vw, 12px);
+}
+
+.thought-message, .planning-message, .response-message, .debug-message, .utility-message, .tool-output-message {
   display: flex;
   flex-direction: column;
 }

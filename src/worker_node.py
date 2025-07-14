@@ -110,10 +110,28 @@ class WorkerNode:
         try:
             from openvino.runtime import Core
             core = Core()
+            available_devices = core.available_devices
             capabilities['openvino_available'] = True
-            capabilities['openvino_devices'] = core.available_devices
+            capabilities['openvino_devices'] = available_devices
+            
+            # Detailed device capabilities
+            npu_devices = [d for d in available_devices if 'NPU' in d]
+            gpu_devices = [d for d in available_devices if 'GPU' in d]
+            
+            capabilities['openvino_npu_available'] = len(npu_devices) > 0
+            capabilities['openvino_gpu_available'] = len(gpu_devices) > 0
+            capabilities['openvino_npu_devices'] = npu_devices
+            capabilities['openvino_gpu_devices'] = gpu_devices
+            
+            if npu_devices:
+                print(f"🚀 NPU acceleration available: {npu_devices}")
+            if gpu_devices:
+                print(f"🎮 OpenVINO GPU acceleration available: {gpu_devices}")
+                
         except ImportError:
             pass
+        except Exception as e:
+            print(f"⚠️ OpenVINO detection error: {e}")
 
         try:
             import onnxruntime as rt
@@ -253,11 +271,27 @@ class WorkerNode:
                 pid = task_payload['pid']
                 result = self.system_integration.terminate_process(pid)
                 self.security_layer.audit_log("system_terminate_process", user_role, result.get("status", "unknown"), {"task_id": task_id, "pid": pid})
+            elif task_type == "web_fetch":
+                url = task_payload['url']
+                result = self.system_integration.web_fetch(url)
+                self.security_layer.audit_log("web_fetch", user_role, result.get("status", "unknown"), {"task_id": task_id, "url": url})
             elif task_type == "respond_conversationally":
                 response_text = task_payload.get('response_text', 'No response provided.')
                 await event_manager.publish("llm_response", {"response": response_text})
-                result = {"status": "success", "message": "Responded conversationally."}
+                result = {"status": "success", "message": "Responded conversationally.", "response_text": response_text}
                 self.security_layer.audit_log("respond_conversationally", user_role, "success", {"task_id": task_id, "response_preview": response_text[:50]})
+            elif task_type == "ask_user_for_manual":
+                program_name = task_payload['program_name']
+                question_text = task_payload['question_text']
+                await event_manager.publish("ask_user_for_manual", {"task_id": task_id, "program_name": program_name, "question_text": question_text})
+                result = {"status": "success", "message": f"Asked user for manual for {program_name}."}
+                self.security_layer.audit_log("ask_user_for_manual", user_role, "success", {"task_id": task_id, "program_name": program_name})
+            elif task_type == "ask_user_command_approval":
+                command_to_approve = task_payload['command']
+                await event_manager.publish("ask_user_command_approval", {"task_id": task_id, "command": command_to_approve})
+                # Worker doesn't wait for approval here; Orchestrator will handle the response
+                result = {"status": "pending_approval", "message": f"Requested user approval for command: {command_to_approve}"}
+                self.security_layer.audit_log("ask_user_command_approval", user_role, "pending", {"task_id": task_id, "command": command_to_approve})
             else:
                 result = {"status": "error", "message": f"Unsupported task type: {task_type}"}
         except Exception as e:
