@@ -11,6 +11,7 @@ from llama_index.core import VectorStoreIndex, Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.vector_stores.redis import RedisVectorStore
+from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.core import ServiceContext, Settings
@@ -107,15 +108,27 @@ class KnowledgeBase:
         Settings.chunk_overlap = self.chunk_overlap
         Settings.node_parser = SentenceSplitter(chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
 
-        # Initialize Redis Vector Store
-        self.vector_store = RedisVectorStore(
-            url=f"redis://{self.redis_host}:{self.redis_port}",
-            password=self.redis_password,
-            db=self.redis_db,
-            index_name=self.redis_index_name,
-            overwrite=False # Set to True if you want to clear the index on each run
-        )
-        logging.info(f"LlamaIndex RedisVectorStore initialized with index: {self.redis_index_name}")
+        # Initialize Redis Vector Store with proper IndexSchema
+        try:
+            # Create a schema for the Redis vector store
+            schema = RedisVectorStoreSchema(
+                index_name=self.redis_index_name,
+                prefix="doc",
+                overwrite=False
+            )
+            
+            self.vector_store = RedisVectorStore(
+                schema=schema,
+                redis_url=f"redis://{self.redis_host}:{self.redis_port}",
+                password=self.redis_password,
+                redis_kwargs={"db": self.redis_db}
+            )
+            logging.info(f"LlamaIndex RedisVectorStore initialized with index: {self.redis_index_name}")
+        except ImportError as e:
+            logging.warning(f"Could not import RedisVectorStoreSchema: {e}. Using fallback configuration.")
+            # Fallback: temporarily disable vector store to allow startup
+            self.vector_store = None
+            logging.warning("Redis vector store disabled due to configuration issues.")
 
         # Initialize StorageContext and VectorStoreIndex
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
