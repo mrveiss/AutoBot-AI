@@ -187,13 +187,31 @@ class LLMInterface:
             from openvino.runtime import Core
             core = Core()
             available_devices = core.available_devices
+            logger.info(f"OpenVINO available devices: {available_devices}")
+            
             if "CPU" in available_devices:
                 detected_hardware.append("openvino_cpu")
             if "GPU" in available_devices:
                 detected_hardware.append("openvino_gpu")
-            # Add other OpenVINO devices like NPU, GNA if needed
+            
+            # NPU detection - Intel NPU devices
+            npu_devices = [device for device in available_devices if "NPU" in device]
+            if npu_devices:
+                detected_hardware.append("openvino_npu")
+                logger.info(f"OpenVINO NPU devices detected: {npu_devices}")
+            
+            # GNA detection - Intel Gaussian & Neural Accelerator
+            gna_devices = [device for device in available_devices if "GNA" in device]
+            if gna_devices:
+                detected_hardware.append("openvino_gna")
+                logger.info(f"OpenVINO GNA devices detected: {gna_devices}")
+                
         except ImportError:
+            logger.debug("OpenVINO not installed or configured")
             pass # OpenVINO not installed or configured
+        except Exception as e:
+            logger.warning(f"Error detecting OpenVINO devices: {e}")
+            pass
         
         # Add ONNXRuntime detection (requires onnxruntime to be installed)
         try:
@@ -215,11 +233,19 @@ class LLMInterface:
         
         # Prioritize based on config and detected hardware
         for preferred_backend in self.hardware_priority:
-            if preferred_backend == "openvino" and ("openvino_cpu" in detected_hardware or "openvino_gpu" in detected_hardware):
-                return "openvino"
+            if preferred_backend == "openvino_npu" and "openvino_npu" in detected_hardware:
+                return "openvino_npu"
+            if preferred_backend == "openvino" and any(hw in detected_hardware for hw in ["openvino_npu", "openvino_gpu", "openvino_cpu"]):
+                # Auto-select best OpenVINO device: NPU > GPU > CPU
+                if "openvino_npu" in detected_hardware:
+                    return "openvino_npu"
+                elif "openvino_gpu" in detected_hardware:
+                    return "openvino_gpu"
+                else:
+                    return "openvino_cpu"
             if preferred_backend == "cuda" and "cuda" in detected_hardware:
                 return "cuda"
-            if preferred_backend == "onnxruntime" and ("onnxruntime_cpu" in detected_hardware or "onnxruntime_cuda" in detected_hardware or "onnxruntime_openvino" in detected_hardware):
+            if preferred_backend == "onnxruntime" and (("onnxruntime_cpu" in detected_hardware or "onnxruntime_cuda" in detected_hardware or "onnxruntime_openvino" in detected_hardware)):
                 return "onnxruntime"
             if preferred_backend == "cpu" and "cpu" in detected_hardware:
                 return "cpu"
@@ -291,13 +317,22 @@ class LLMInterface:
             # Ollama uses 'format' for structured output, typically 'json'
             "format": "json" if structured_output else ""
         }
-        # Include device if specified in kwargs
+        # Include device if specified in kwargs or auto-select based on hardware
         if 'device' in kwargs:
             device_value = kwargs.pop('device')
             if device_value.startswith('cuda'):
                 data["options"] = {"num_gpu": device_value.split(':')[-1]}
             else:
                 data["options"] = {"device": device_value}
+        else:
+            # Auto-select best available device
+            selected_backend = self._select_backend()
+            if selected_backend == "openvino_npu":
+                data["options"] = {"device": "NPU"}
+            elif selected_backend == "openvino_gpu":
+                data["options"] = {"device": "GPU"}
+            elif selected_backend == "cuda":
+                data["options"] = {"num_gpu": 1}
         # Merge remaining kwargs
         data.update(kwargs)
         

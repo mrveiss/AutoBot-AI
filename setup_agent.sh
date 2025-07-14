@@ -112,21 +112,111 @@ else
 fi
 
 # --- 3. Activate and install main requirements ---
+echo "--- Python Dependencies Installation ---"
 source "$VENV_DIR/bin/activate"
 if [ ! -f "$REQUIREMENTS_FILE" ]; then
     echo "⚠️ Warning: $REQUIREMENTS_FILE not found. Skipping pip install."
 else
-    echo "📦 Installing requirements into $VENV_DIR..."
-    pip install --upgrade pip setuptools wheel
-    pip install -r "$REQUIREMENTS_FILE" || { echo "❌ Failed to install requirements."; deactivate; exit 1; }
-fi
-# Ensure GUI automation dependencies are installed
-echo "📦 Installing GUI automation dependencies..."
-pip install pyautogui mouseinfo pillow numpy || { echo "⚠️ Failed to install GUI automation dependencies. Continuing without GUI support."; }
+    echo "📦 Installing requirements in groups to resolve dependency conflicts..."
 
-# Ensure Redis Python client is installed for application integration
-echo "📦 Installing Redis Python client..."
+    # Group 1: Core dependencies
+    echo "⬇️ Installing Group 1: Core dependencies..."
+    cat > requirements_group_1.txt << EOF
+fastapi==0.115.9
+uvicorn>=0.30.0
+requests==2.31.0
+pyyaml==6.0.1
+redis>=5.0,<6.0
+pyautogui==0.9.54
+mouseinfo==0.1.3
+pillow==9.4.0
+numpy==1.24.2
+markdownify==0.11.6
+EOF
+    pip install -r requirements_group_1.txt || { echo "❌ Failed to install Group 1 requirements."; deactivate; exit 1; }
+    echo "✅ Group 1 dependencies installed."
+
+    # Group 2: LangChain
+    echo "⬇️ Installing Group 2: LangChain..."
+    cat > requirements_group_2.txt << EOF
+langchain
+EOF
+    pip install -r requirements_group_2.txt || { echo "❌ Failed to install Group 2 requirements."; deactivate; exit 1; }
+    echo "✅ Group 2 dependencies installed."
+
+    # Group 3: LlamaIndex and its sub-packages
+    echo "⬇️ Installing Group 3: LlamaIndex and related packages..."
+    cat > requirements_group_3.txt << EOF
+llama-index
+llama-index-llms-ollama
+llama-index-embeddings-ollama
+llama-index-vector-stores-redis
+EOF
+    pip install -r requirements_group_3.txt || { echo "❌ Failed to install Group 3 requirements."; deactivate; exit 1; }
+    echo "✅ Group 3 dependencies installed."
+
+    # Clean up temporary files
+    rm requirements_group_1.txt requirements_group_2.txt requirements_group_3.txt
+    echo "✅ All Python dependencies installed."
+fi
+
+# Ensure GUI automation dependencies are installed (these are already in group 1, but keeping for redundancy/clarity)
+echo "📦 Installing GUI automation dependencies (pyautogui, mouseinfo, pillow, numpy)..."
+pip install pyautogui mouseinfo pillow numpy || { echo "⚠️ Failed to install GUI automation dependencies. Continuing without GUI support."; }
+echo "✅ GUI automation dependencies installation attempted."
+
+# Ensure Redis Python client is installed for application integration (already in group 1)
+echo "📦 Installing Redis Python client (redis-py)..."
 pip install redis || { echo "⚠️ Failed to install Redis client. Continuing without Redis support."; }
+echo "✅ Redis Python client installation attempted."
+
+# --- Install OpenVINO for NPU acceleration ---
+echo "📦 Installing OpenVINO for NPU and GPU acceleration..."
+pip install openvino openvino-dev[pytorch,tensorflow2] || { 
+    echo "⚠️ Failed to install OpenVINO. Trying with reduced dependencies..."; 
+    pip install openvino || {
+        echo "⚠️ Failed to install OpenVINO completely. Continuing without OpenVINO support.";
+    }
+}
+echo "✅ OpenVINO installation attempted."
+
+# Check for Intel NPU drivers on system
+echo "🔍 Checking for Intel NPU driver support..."
+if lspci | grep -i "neural\|npu\|ai" > /dev/null 2>&1; then
+    echo "✅ Intel NPU hardware detected via lspci"
+    
+    # Check if Intel NPU driver is installed
+    if ls /dev/intel_npu* > /dev/null 2>&1; then
+        echo "✅ Intel NPU driver appears to be installed"
+    else
+        echo "⚠️ Intel NPU hardware detected but driver may not be installed"
+        echo "   Install Intel NPU driver from: https://github.com/intel/intel-npu-acceleration-library"
+    fi
+else
+    echo "ℹ️ No Intel NPU hardware detected via lspci"
+fi
+
+# Test OpenVINO installation
+echo "🧪 Testing OpenVINO installation..."
+python3 -c "
+try:
+    from openvino.runtime import Core
+    core = Core()
+    devices = core.available_devices
+    print(f'✅ OpenVINO installed successfully. Available devices: {devices}')
+    
+    # Check for NPU specifically
+    npu_devices = [d for d in devices if 'NPU' in d]
+    if npu_devices:
+        print(f'🚀 NPU devices available: {npu_devices}')
+    else:
+        print('ℹ️ No NPU devices detected by OpenVINO')
+        
+except ImportError as e:
+    print(f'❌ OpenVINO import failed: {e}')
+except Exception as e:
+    print(f'⚠️ OpenVINO test failed: {e}')
+" || echo "⚠️ OpenVINO test script failed"
 
 # --- 4. Check and install Node.js and npm via nvm ---
 echo "🔍 Checking for nvm (Node Version Manager)..."
@@ -164,19 +254,35 @@ cd $FRONTEND_DIR
 # Store the absolute path of the frontend directory
 FRONTEND_ABS_PATH="$(pwd)"
 
-# Clean existing build and old GUI remnants
+# Clean existing build and old GUI remnants with timeout protection
 echo "🧹 Cleaning previous build and old GUI remnants..."
-rm -rf dist node_modules
-rm -rf ../../old_static/*
-rm -rf ../../frontend/templates/*
+timeout 30s rm -rf dist node_modules 2>/dev/null || {
+    echo "⚠️ Warning: Cleanup timed out or failed. Continuing..."
+}
+timeout 10s rm -rf ../../old_static/* 2>/dev/null || true
+timeout 10s rm -rf ../../frontend/templates/* 2>/dev/null || true
 
-# Install dependencies
+# Kill any lingering npm processes
+echo "🔍 Cleaning up any lingering npm processes..."
+pkill -f "npm" 2>/dev/null || true
+sleep 1
+
+# Install dependencies with timeout
 echo "📦 Installing dependencies..."
-npm install
+timeout 300s npm install || {
+    echo "❌ npm install timed out. Trying with --force flag..."
+    timeout 300s npm install --force || {
+        echo "❌ Failed to install dependencies even with --force. Please check your internet connection and npm registry."
+        exit 1
+    }
+}
 
-# Build frontend
+# Build frontend with timeout
 echo "🏗️ Building frontend..."
-npm run build
+timeout 180s npm run build || {
+    echo "❌ Frontend build timed out or failed. Please check for build errors."
+    exit 1
+}
 
 # Debug: Check current directory and dist contents
 echo "🔍 Debugging: Current working directory is:"

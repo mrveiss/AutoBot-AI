@@ -1,7 +1,19 @@
 <template>
   <div id="app" class="app-container">
     <header class="app-header">
-      <h1>AutoBot</h1>
+      <div class="header-left">
+        <h1>AutoBot</h1>
+        <div class="connection-status">
+          <div class="status-indicator" :class="backendStatus.class" :title="backendStatus.message">
+            <span class="status-icon">🔗</span>
+            <span class="status-text">{{ backendStatus.text }}</span>
+          </div>
+          <div class="status-indicator" :class="llmStatus.class" :title="llmStatus.message">
+            <span class="status-icon">🤖</span>
+            <span class="status-text">{{ llmStatus.text }}</span>
+          </div>
+        </div>
+      </div>
       <nav class="app-nav">
         <button @click="activeTab = 'chat'" :class="{ active: activeTab === 'chat' }">Chat</button>
         <button @click="activeTab = 'settings'" :class="{ active: activeTab === 'settings' }">Settings</button>
@@ -176,6 +188,83 @@ export default {
       gpuUsage: 0
     });
 
+    // Connection status tracking
+    const backendStatus = ref({
+      connected: false,
+      class: 'disconnected',
+      text: 'Disconnected',
+      message: 'Backend server is not responding'
+    });
+    
+    const llmStatus = ref({
+      connected: false,
+      class: 'disconnected', 
+      text: 'Disconnected',
+      message: 'LLM service is not available'
+    });
+
+    // Connection status checking functions
+    const checkBackendConnection = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/health', {
+          method: 'GET',
+          timeout: 5000
+        });
+        if (response.ok) {
+          backendStatus.value = {
+            connected: true,
+            class: 'connected',
+            text: 'Connected',
+            message: 'Backend server is responding'
+          };
+          return true;
+        } else {
+          throw new Error(`Backend returned ${response.status}`);
+        }
+      } catch (error) {
+        backendStatus.value = {
+          connected: false,
+          class: 'disconnected',
+          text: 'Disconnected',
+          message: `Backend connection failed: ${error.message}`
+        };
+        return false;
+      }
+    };
+
+    const checkLLMConnection = async () => {
+      try {
+        const response = await fetch('http://localhost:11434/api/tags', {
+          method: 'GET',
+          timeout: 5000
+        });
+        if (response.ok) {
+          llmStatus.value = {
+            connected: true,
+            class: 'connected',
+            text: 'Connected',
+            message: 'LLM service is available'
+          };
+          return true;
+        } else {
+          throw new Error(`LLM service returned ${response.status}`);
+        }
+      } catch (error) {
+        llmStatus.value = {
+          connected: false,
+          class: 'disconnected', 
+          text: 'Disconnected',
+          message: `LLM connection failed: ${error.message}`
+        };
+        return false;
+      }
+    };
+
+    const checkConnections = async () => {
+      await checkBackendConnection();
+      await checkLLMConnection();
+    };
+
     // Function to update performance data (placeholder for real data)
     const updatePerformanceData = () => {
       // Simulate fetching performance data
@@ -288,12 +377,18 @@ export default {
       return 'Not selected';
     };
     
-    onMounted(() => {
+    onMounted(async () => {
       loadSettings();
       // Set up an interval to check for settings updates
       setInterval(() => {
         loadSettings();
       }, 5000); // Check every 5 seconds
+      
+      // Initial connection check
+      await checkConnections();
+      
+      // Set up periodic connection checking
+      setInterval(checkConnections, 10000); // Check every 10 seconds
     });
     
     const isFooterCollapsed = ref(false);
@@ -318,7 +413,10 @@ export default {
       settings,
       isFooterCollapsed,
       toggleFooter,
-      getCurrentLLM
+      getCurrentLLM,
+      backendStatus,
+      llmStatus,
+      checkConnections
     };
   },
 };
@@ -359,6 +457,64 @@ export default {
 .app-header h1 {
   margin: 0;
   font-size: clamp(18px, 2.5vw, 24px); /* Responsive font size */
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.connection-status {
+  display: flex;
+  gap: 10px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: help;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.status-indicator.connected {
+  background-color: #d4edda;
+  color: #155724;
+  border-color: #c3e6cb;
+}
+
+.status-indicator.disconnected {
+  background-color: #f8d7da;
+  color: #721c24;
+  border-color: #f5c6cb;
+}
+
+.status-indicator.warning {
+  background-color: #fff3cd;
+  color: #856404;
+  border-color: #ffeaa7;
+}
+
+.status-icon {
+  font-size: 12px;
+  min-width: 14px;
+}
+
+.status-text {
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-indicator:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .app-nav {
