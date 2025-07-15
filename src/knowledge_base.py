@@ -131,21 +131,28 @@ class KnowledgeBase:
             logging.warning("Redis vector store disabled due to configuration issues.")
 
         # Initialize StorageContext and VectorStoreIndex
-        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
-        # We need to load the index from the vector store if it exists, otherwise create a new one
-        try:
-            self.index = VectorStoreIndex.from_vector_store(
-                self.vector_store,
-                storage_context=self.storage_context,
-                service_context=ServiceContext.from_defaults(llm=self.llm, embed_model=self.embed_model) # Explicitly pass service_context
-            )
-            logging.info("LlamaIndex VectorStoreIndex loaded from existing Redis store.")
-        except Exception as e:
-            logging.warning(f"Could not load existing LlamaIndex from Redis: {e}. Creating a new index.")
-            self.index = VectorStoreIndex.from_documents([], storage_context=self.storage_context)
-        
-        self.query_engine = self.index.as_query_engine(llm=self.llm)
-        logging.info("LlamaIndex VectorStoreIndex and QueryEngine initialized.")
+        if self.vector_store is not None:
+            self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+            # We need to load the index from the vector store if it exists, otherwise create a new one
+            try:
+                self.index = VectorStoreIndex.from_vector_store(
+                    self.vector_store,
+                    storage_context=self.storage_context,
+                    service_context=ServiceContext.from_defaults(llm=self.llm, embed_model=self.embed_model) # Explicitly pass service_context
+                )
+                logging.info("LlamaIndex VectorStoreIndex loaded from existing Redis store.")
+            except Exception as e:
+                logging.warning(f"Could not load existing LlamaIndex from Redis: {e}. Creating a new index.")
+                self.index = VectorStoreIndex.from_documents([], storage_context=self.storage_context)
+            
+            self.query_engine = self.index.as_query_engine(llm=self.llm)
+            logging.info("LlamaIndex VectorStoreIndex and QueryEngine initialized.")
+        else:
+            # Fallback: create a simple in-memory index without Redis
+            logging.warning("Creating in-memory VectorStoreIndex without Redis due to initialization issues.")
+            self.index = VectorStoreIndex.from_documents([])
+            self.query_engine = self.index.as_query_engine(llm=self.llm)
+            logging.info("In-memory VectorStoreIndex and QueryEngine initialized.")
 
     async def add_file(self, file_path: str, file_type: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

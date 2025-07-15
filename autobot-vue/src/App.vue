@@ -5,12 +5,16 @@
         <h1>AutoBot</h1>
         <div class="connection-status">
           <div class="status-indicator" :class="backendStatus.class" :title="backendStatus.message">
-            <span class="status-icon">🔗</span>
+            <span class="status-icon">🔗Backend</span>
             <span class="status-text">{{ backendStatus.text }}</span>
           </div>
           <div class="status-indicator" :class="llmStatus.class" :title="llmStatus.message">
-            <span class="status-icon">🤖</span>
+            <span class="status-icon">🤖 LLM</span>
             <span class="status-text">{{ llmStatus.text }}</span>
+          </div>
+          <div class="status-indicator" :class="redisStatus.class" :title="redisStatus.message">
+            <span class="status-icon">💾 Redis</span>
+            <span class="status-text">{{ redisStatus.text }}</span>
           </div>
         </div>
       </div>
@@ -203,6 +207,58 @@ export default {
       message: 'LLM service is not available'
     });
 
+    const redisStatus = ref({
+      connected: false,
+      class: 'disconnected',
+      text: 'Disconnected',
+      message: 'Redis service is not available or RediSearch module is missing'
+    });
+
+    const checkRedisConnection = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/health', {
+          method: 'GET',
+          timeout: 5000
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.redis_status === 'connected' && data.redis_search_module_loaded) {
+            redisStatus.value = {
+              connected: true,
+              class: 'connected',
+              text: 'Connected',
+              message: 'Redis service is responding and RediSearch module is loaded'
+            };
+          } else if (data.redis_status === 'connected' && !data.redis_search_module_loaded) {
+            redisStatus.value = {
+              connected: true,
+              class: 'warning',
+              text: 'Connected (No Search)',
+              message: 'Redis service is responding but RediSearch module is NOT loaded'
+            };
+          } else {
+            redisStatus.value = {
+              connected: false,
+              class: 'disconnected',
+              text: 'Disconnected',
+              message: `Redis connection failed: ${data.error || 'Unknown error'}`
+            };
+          }
+          return redisStatus.value.connected;
+        } else {
+          throw new Error(`Backend returned ${response.status}`);
+        }
+      } catch (error) {
+        redisStatus.value = {
+          connected: false,
+          class: 'disconnected',
+          text: 'Disconnected',
+          message: `Redis connection failed: ${error.message}`
+        };
+        return false;
+      }
+    };
+
     // Connection status checking functions
     const checkBackendConnection = async () => {
       try {
@@ -263,6 +319,7 @@ export default {
     const checkConnections = async () => {
       await checkBackendConnection();
       await checkLLMConnection();
+      await checkRedisConnection(); // Add Redis connection check
     };
 
     // Function to update performance data (placeholder for real data)
@@ -416,6 +473,7 @@ export default {
       getCurrentLLM,
       backendStatus,
       llmStatus,
+      redisStatus, // Add redisStatus here
       checkConnections
     };
   },
