@@ -86,30 +86,22 @@ This project is designed to run locally without Docker, leveraging Python virtua
 *   **Control Panel:** Use the web interface to submit goals, execute commands, upload files, and monitor system resources.
 *   **VNC Viewer:** If VNC is enabled in `config.yaml`, you can connect to the VNC server (default port 5900) using a VNC client with the password configured in `config.yaml`. The web interface also provides a live view via noVNC.
 
-## Project Structure
+## Architecture
 
-*   `main.py`: Main FastAPI application, defines API endpoints.
-*   `src/`: Contains core Python modules.
-    *   `orchestrator.py`: Manages task planning and dispatch.
-    *   `llm_interface.py`: Handles communication with various LLM backends.
-    *   `knowledge_base.py`: Manages RAG, document processing, and fact storage.
-    *   `diagnostics.py`: Provides system monitoring and failure analysis.
-    *   `event_manager.py`: Centralized event bus for inter-module communication.
-    *   `worker_node.py`: Executes tasks dispatched by the orchestrator.
-    *   `gui_controller.py`: Provides functions for GUI automation (mouse, keyboard, OCR, window management).
-*   `config/`: Configuration files.
-    *   `config.yaml.template`: Template for `config.yaml`.
-    *   `config.yaml`: Your active configuration (created from template by `setup_agent.sh`).
-*   `frontend/`: Web-based user interface.
-    *   `index.html`: Main HTML file.
-    *   `css/style.css`: CSS styles.
-    *   `js/main.js`: Frontend JavaScript logic.
-    *   `vendor/noVNC/`: noVNC client library (downloaded by `setup_agent.sh`).
-*   `data/`: Persistent data storage (e.g., knowledge base SQLite DB, ChromaDB embeddings).
-*   `requirements.txt`: Python dependencies.
-*   `setup_agent.sh`: Script for initial project setup.
-*   `run_agent.sh`: Script to run the AutoBot agent.
-*   `run_with_openvino.sh`: Example script to activate the OpenVINO environment (if created).
+The AutoBot project is composed of a Vue.js frontend and a Python backend. The backend is a FastAPI application that uses a modular architecture to separate concerns. The core components are:
+
+*   **Frontend (`autobot-vue/`)**: A Vue.js application that provides the user interface for interacting with the agent.
+*   **Backend (`backend/`)**: A FastAPI application that exposes a REST API for the frontend to consume.
+*   **Orchestrator (`src/orchestrator.py`)**: The brain of the agent. It takes a high-level goal from the user and breaks it down into a series of tasks.
+*   **LLM Interface (`src/llm_interface.py`)**: A unified interface for interacting with different LLM backends.
+*   **Knowledge Base (`src/knowledge_base.py`)**: Manages the agent's long-term memory using LlamaIndex and Redis.
+*   **Worker Node (`src/worker_node.py`)**: Executes tasks dispatched by the orchestrator, such as running system commands or performing GUI automation.
+
+For a more detailed overview of the project's architecture, please see the following documents:
+
+*   **[Project Map](docs/project_map.md)**: A comprehensive overview of the project's structure.
+*   **[Process Map](docs/process_map.md)**: A sequence diagram that illustrates the flow of a user request through the system.
+*   **[Suggested Improvements](docs/suggested_improvements.md)**: A list of potential improvements for the project.
 
 ## Contributing
 
