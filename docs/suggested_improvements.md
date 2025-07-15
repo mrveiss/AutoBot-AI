@@ -99,3 +99,46 @@ This document outlines potential improvements for the AutoBot project, based on 
 *   **Configuration Management:** The `load_config` function in `backend/main.py` is complex and has a lot of duplicated code. Refactor this function to make it more concise and easier to maintain.
 *   **Logging:** The logging is good, but it could be more structured. Use a structured logging library (e.g., `structlog`) to log messages in a machine-readable format (e.g., JSON). This will make it easier to search and analyze the logs.
 *   **Code Duplication:** There is some code duplication between `backend/main.py` and `src/orchestrator.py`, particularly in the way they interact with the LLM. Refactor this code into a shared module to avoid duplication.
+
+## 10. Hardcoded Values
+
+**Problem:** There are several hardcoded values throughout the codebase, which makes it difficult to configure the application for different environments.
+
+**Suggestion:**
+
+*   **`backend/main.py`:**
+    *   The `cors_origins` list is hardcoded. This should be moved to the `config.yaml` file.
+    *   The default Ollama endpoint and model are hardcoded. These should also be moved to the `config.yaml` file.
+    *   The chat data directory is hardcoded. This should be moved to the `config.yaml` file.
+    *   The server host and port are hardcoded. These should be moved to the `config.yaml` file.
+    *   The timeout for Ollama requests is hardcoded. This should be moved to the `config.yaml` file.
+*   **`src/orchestrator.py`:**
+    *   The `max_iterations` for the main loop is hardcoded. This should be moved to the `config.yaml` file.
+*   **`src/knowledge_base.py`:**
+    *   The Redis host, port, and database are hardcoded. These should be moved to the `config.yaml` file.
+    *   The `chunk_size` and `chunk_overlap` for the sentence splitter are hardcoded. These should be moved to the `config.yaml` file.
+*   **`autobot-vue/src/components/ChatInterface.vue`:**
+    *   The backend API endpoint is hardcoded. This should be made configurable, for example, by using an environment variable.
+
+## 11. Data Storage
+
+**Problem:** The application stores data in several different places, which can make it difficult to manage and back up the data.
+
+**Suggestion:**
+
+*   **Centralize Data Storage:** Use a single, centralized data store for all the application's data. A good choice would be a relational database (e.g., PostgreSQL, MySQL) or a NoSQL database (e.g., MongoDB).
+*   **Use a Database Abstraction Layer:** Use a database abstraction layer (e.g., SQLAlchemy, Django ORM) to interact with the database. This will make it easier to switch to a different database in the future, if needed.
+*   **Store Chat History in the Database:** Instead of storing the chat history in JSON files in the `data/chats` directory, store it in the database. This will make it easier to query and analyze the chat history.
+*   **Store Configuration in the Database:** Instead of storing the configuration in `config/settings.json`, store it in the database. This will make it easier to manage the configuration and to make changes to it without having to restart the application.
+*   **Store Knowledge Base in the Database:** The knowledge base is already stored in Redis, which is good. However, if you want to centralize all the data in a single database, you could consider storing the knowledge base in the same database as the chat history and configuration.
+
+## 12. Reusable Libraries
+
+**Problem:** There are several core functions that are used across multiple modules. These could be refactored into reusable libraries to improve code organization and reduce duplication.
+
+**Suggestion:**
+
+*   **`config_loader.py`:** Create a new module called `src/utils/config_loader.py` to handle loading and managing the configuration. This module would contain the `load_config` function, which is currently in `backend/main.py`. This would allow the configuration to be loaded and used in other modules without having to duplicate the code.
+*   **`file_utils.py`:** Create a new module called `src/utils/file_utils.py` to handle file-related operations. This module could contain functions for reading, writing, and processing different file types. This would be useful for the `KnowledgeBase` module, as well as any other modules that need to work with files.
+*   **`llm_utils.py`:** Create a new module called `src/utils/llm_utils.py` to handle interactions with the LLM. This module would contain the `communicate_with_ollama` function, which is currently in `backend/main.py`. This would allow other modules to interact with the LLM without having to know the implementation details.
+*   **`redis_utils.py`:** Create a new module called `src/utils/redis_utils.py` to handle interactions with the Redis server. This module would contain functions for connecting to Redis, getting and setting values, and publishing and subscribing to channels. This would be useful for the `ChatHistoryManager`, `KnowledgeBase`, and `Orchestrator` modules.
