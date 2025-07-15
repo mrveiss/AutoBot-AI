@@ -18,6 +18,7 @@ AutoBot is an AI-driven application designed to automate tasks and provide intel
 - **config/**: Contains configuration files for the AutoBot application.
 - **data/**: Stores data files and databases used by AutoBot.
 - **docs/**: Contains documentation for the project.
+- **frontend/**: Contains an older or alternative frontend setup.
 - **prompts/**: Contains prompt templates used for interacting with language models.
 - **pyvenv.cfg**: Configuration file for the Python virtual environment.
 - **requirements.txt**: Lists Python dependencies required for the project.
