@@ -131,3 +131,14 @@ This document outlines potential improvements for the AutoBot project, based on 
 *   **Store Chat History in the Database:** Instead of storing the chat history in JSON files in the `data/chats` directory, store it in the database. This will make it easier to query and analyze the chat history.
 *   **Store Configuration in the Database:** Instead of storing the configuration in `config/settings.json`, store it in the database. This will make it easier to manage the configuration and to make changes to it without having to restart the application.
 *   **Store Knowledge Base in the Database:** The knowledge base is already stored in Redis, which is good. However, if you want to centralize all the data in a single database, you could consider storing the knowledge base in the same database as the chat history and configuration.
+
+## 12. Reusable Libraries
+
+**Problem:** There are several core functions that are used across multiple modules. These could be refactored into reusable libraries to improve code organization and reduce duplication.
+
+**Suggestion:**
+
+*   **`config_loader.py`:** Create a new module called `src/utils/config_loader.py` to handle loading and managing the configuration. This module would contain the `load_config` function, which is currently in `backend/main.py`. This would allow the configuration to be loaded and used in other modules without having to duplicate the code.
+*   **`file_utils.py`:** Create a new module called `src/utils/file_utils.py` to handle file-related operations. This module could contain functions for reading, writing, and processing different file types. This would be useful for the `KnowledgeBase` module, as well as any other modules that need to work with files.
+*   **`llm_utils.py`:** Create a new module called `src/utils/llm_utils.py` to handle interactions with the LLM. This module would contain the `communicate_with_ollama` function, which is currently in `backend/main.py`. This would allow other modules to interact with the LLM without having to know the implementation details.
+*   **`redis_utils.py`:** Create a new module called `src/utils/redis_utils.py` to handle interactions with the Redis server. This module would contain functions for connecting to Redis, getting and setting values, and publishing and subscribing to channels. This would be useful for the `ChatHistoryManager`, `KnowledgeBase`, and `Orchestrator` modules.
