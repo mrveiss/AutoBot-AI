@@ -8,37 +8,37 @@ echo "Starting AutoBot application..."
 cleanup() {
     echo "Received signal. Terminating all processes..."
     
-    # Kill specific processes by pattern
-    pkill -P $$ -f "python.*main.py" 2>/dev/null
-    pkill -P $$ -f "npm run dev" 2>/dev/null
-    
-    # Stop backend by PID if available
+    # Kill processes by PID if they were started in background
     if [ ! -z "$BACKEND_PID" ]; then
-        kill -TERM $BACKEND_PID 2>/dev/null
-        sleep 2
-        kill -9 $BACKEND_PID 2>/dev/null
-        echo "Backend process (PID: $BACKEND_PID) terminated."
+        echo "Terminating backend process (PID: $BACKEND_PID)..."
+        kill -TERM "$BACKEND_PID" 2>/dev/null
+        sleep 1
+        kill -9 "$BACKEND_PID" 2>/dev/null
     fi
     
-    # Stop frontend by PID if available
     if [ ! -z "$FRONTEND_PID" ]; then
-        kill -TERM $FRONTEND_PID 2>/dev/null
-        sleep 2
-        kill -9 $FRONTEND_PID 2>/dev/null
-        echo "Frontend process (PID: $FRONTEND_PID) terminated."
+        echo "Terminating frontend process (PID: $FRONTEND_PID)..."
+        kill -TERM "$FRONTEND_PID" 2>/dev/null
+        sleep 1
+        kill -9 "$FRONTEND_PID" 2>/dev/null
     fi
-    
-    # Clean up any lingering processes on our ports
-    echo "Cleaning up any lingering processes on ports 8001 and 5173..."
-    if lsof -i :8001 -t > /dev/null 2>&1; then
-        lsof -i :8001 -t | xargs kill -9 2>/dev/null
-        echo "Processes on port 8001 terminated."
-    fi
-    if lsof -i :5173 -t > /dev/null 2>&1; then
-        lsof -i :5173 -t | xargs kill -9 2>/dev/null
-        echo "Processes on port 5173 terminated."
-    fi
-    
+
+    # Ensure all processes listening on our ports are killed
+    echo "Ensuring all processes on ports 8001 and 5173 are terminated..."
+    for port in 8001 5173; do
+        PIDS=$(lsof -t -i :$port)
+        if [ -n "$PIDS" ]; then
+            echo "Killing processes on port $port: $PIDS"
+            kill -9 $PIDS 2>/dev/null
+        fi
+    done
+
+    # Kill any remaining child processes of this script
+    echo "Killing any remaining child processes..."
+    pkill -P $$ -f "python3 main.py" 2>/dev/null
+    pkill -P $$ -f "npm run dev" 2>/dev/null
+    pkill -P $$ -f "uvicorn" 2>/dev/null # Ensure uvicorn is killed
+
     echo "All processes terminated."
     exit 0
 }
@@ -64,33 +64,38 @@ cleanup_port() {
 cleanup_port 8001 "backend"
 cleanup_port 5173 "frontend"
 cleanup_port 5174 "frontend (alternate)"
-cleanup_port 8000 "frontend (alternate)"
-cleanup_port 8080 "frontend (alternate)"
 
-# Start Redis server if installed
-echo "Starting Redis server if installed..."
-if command -v redis-server &>/dev/null; then
-    sudo systemctl start redis 2>/dev/null || redis-server --daemonize yes 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo "Redis server started successfully."
+# Start Redis Stack Docker container
+echo "Starting Redis Stack Docker container..."
+if sudo docker ps -a --format '{{.Names}}' | grep -q '^redis-stack$'; then
+    if sudo docker inspect -f '{{.State.Running}}' redis-stack | grep -q 'true'; then
+        echo "✅ 'redis-stack' container is already running."
     else
-        echo "Failed to start Redis server. Continuing without Redis."
+        echo "🔄 'redis-stack' container found but not running. Starting it..."
+        sudo docker start redis-stack || { echo "❌ Failed to start 'redis-stack' container."; exit 1; }
+        echo "✅ 'redis-stack' container started."
     fi
 else
-    echo "Redis server not installed. Skipping Redis startup."
+    echo "❌ 'redis-stack' container not found. Please run setup_agent.sh to deploy it."
+    exit 1
 fi
 
-# Start backend (FastAPI)
+# Start backend (FastAPI) in background
 echo "Starting FastAPI backend on port 8001..."
 python3 main.py &
 BACKEND_PID=$!
 
+# Give backend time to start
+sleep 3
+
 # Check if backend started successfully
-sleep 5 # Increased sleep duration to allow backend to fully initialize
 if ! ps -p $BACKEND_PID > /dev/null; then
   echo "Error: Backend failed to start. Check logs for details."
+  cleanup
   exit 1
 fi
+
+echo "Backend started successfully (PID: $BACKEND_PID)"
 
 # Check for frontend server on port 5173
 echo "Checking for Vite frontend server on port 5173..."
@@ -114,8 +119,8 @@ if ! ps -p $FRONTEND_PID > /dev/null; then
 fi
 
 echo "AutoBot application started."
-echo "Backend available at http://localhost:8001/"
-echo "Frontend available at http://localhost:5173/"
+echo "Backend available at http://localhost:8001/ (PID: $BACKEND_PID)"
+echo "Frontend available at http://localhost:5173/ (PID: $FRONTEND_PID)"
 echo "Press Ctrl+C to stop all processes."
 
 # Wait for Ctrl+C

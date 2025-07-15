@@ -28,7 +28,7 @@ from src.event_manager import event_manager
 
 
 class LangChainAgentOrchestrator:
-    def __init__(self, config: Dict[str, Any], worker_node: Optional[WorkerNode], knowledge_base: KnowledgeBase):
+    def __init__(self, config: Dict[str, Any], worker_node: Optional[WorkerNode], knowledge_base: Optional[KnowledgeBase]):
         self.config = config
         self.worker_node = worker_node
         self.knowledge_base = knowledge_base
@@ -293,6 +293,8 @@ class LangChainAgentOrchestrator:
 
     def _search_knowledge_base(self, query: str) -> str:
         """Search the knowledge base."""
+        if not self.knowledge_base:
+            return "Knowledge base is not available."
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -311,6 +313,8 @@ class LangChainAgentOrchestrator:
 
     def _add_file_to_knowledge_base(self, file_info: str) -> str:
         """Add a file to the knowledge base."""
+        if not self.knowledge_base:
+            return "Knowledge base is not available."
         try:
             parts = file_info.split()
             if len(parts) < 2:
@@ -330,6 +334,8 @@ class LangChainAgentOrchestrator:
 
     def _store_fact(self, fact_content: str) -> str:
         """Store a fact in the knowledge base."""
+        if not self.knowledge_base:
+            return "Knowledge base is not available."
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -342,6 +348,8 @@ class LangChainAgentOrchestrator:
 
     def _get_fact(self, fact_query: str) -> str:
         """Get facts from the knowledge base."""
+        if not self.knowledge_base:
+            return "Knowledge base is not available."
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -449,13 +457,14 @@ class LangChainAgentOrchestrator:
                 context = f"Recent conversation:\n{context}\n\n"
             
             # Add knowledge base context
-            try:
-                kb_results = await self.knowledge_base.search(goal, n_results=3)
-                if kb_results:
-                    kb_context = "\n".join([f"KB: {result['content'][:200]}..." for result in kb_results])
-                    context += f"Relevant knowledge:\n{kb_context}\n\n"
-            except Exception as e:
-                logging.warning(f"Failed to search knowledge base: {e}")
+            if self.knowledge_base: # Guard against None
+                try:
+                    kb_results = await self.knowledge_base.search(goal, n_results=3)
+                    if kb_results:
+                        kb_context = "\n".join([f"KB: {result['content'][:200]}..." for result in kb_results])
+                        context += f"Relevant knowledge:\n{kb_context}\n\n"
+                except Exception as e:
+                    logging.warning(f"Failed to search knowledge base: {e}")
             
             # Execute the goal using LangChain agent
             full_goal = f"{context}Current goal: {goal}"

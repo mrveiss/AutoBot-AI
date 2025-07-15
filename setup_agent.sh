@@ -85,15 +85,54 @@ if ! pyenv versions | grep -q "$PYTHON_VERSION"; then
     pyenv global "$PYTHON_VERSION"
 fi
 
-# Ensure Redis server is installed and started
-echo "🔍 Checking for Redis server installation..."
-if ! command -v redis-server &>/dev/null; then
-    echo "❌ Redis server not installed. Installing Redis server..."
-    sudo apt update && sudo apt install -y redis-server || { echo "❌ Failed to install Redis server."; exit 1; }
+# --- 2. Ensure Docker is installed and running ---
+echo "🔍 Checking for Docker installation and service status..."
+if ! command -v docker &>/dev/null; then
+    echo "❌ Docker command not found. Installing Docker..."
+    sudo apt update
+    sudo apt install -y docker.io || { echo "❌ Failed to install docker.io. Please install Docker manually."; exit 1; }
+    echo "✅ Docker command installed."
 fi
 
-echo "🔄 Starting Redis server if not already running..."
-sudo systemctl start redis 2>/dev/null || redis-server --daemonize yes 2>/dev/null || { echo "⚠️ Failed to start Redis server. Continuing without Redis."; }
+# Check if Docker daemon is running
+if ! sudo docker info >/dev/null 2>&1; then
+    echo "❌ Docker daemon is not running or not accessible."
+    echo "Please ensure your Docker daemon (e.g., Docker Desktop for WSL) is running."
+    echo "You might need to start Docker Desktop on your Windows host, or manually start the Docker service."
+    exit 1
+else
+    echo "✅ Docker daemon is running and accessible."
+fi
+
+# Add current user to docker group to run docker commands without sudo
+if ! id -nG "$USER" | grep -qw "docker"; then
+    echo "Adding user '$USER' to the 'docker' group..."
+    sudo usermod -aG docker "$USER" || { echo "❌ Failed to add user to docker group."; exit 1; }
+    echo "✅ User '$USER' added to 'docker' group. Please log out and log back in for changes to take effect."
+    echo "You may need to run 'newgrp docker' or restart your terminal for changes to apply immediately."
+    # Do not exit here, allow script to continue, but warn user
+fi
+
+# --- 3. Deploy/Start Redis Stack Docker Container ---
+echo "🔍 Checking for existing 'redis-stack' Docker container..."
+if sudo docker ps -a --format '{{.Names}}' | grep -q '^redis-stack$'; then
+    echo "✅ 'redis-stack' container found."
+    if sudo docker inspect -f '{{.State.Running}}' redis-stack | grep -q 'true'; then
+        echo "✅ 'redis-stack' container is already running."
+    else
+        echo "🔄 'redis-stack' container found but not running. Starting it..."
+        sudo docker start redis-stack || { echo "❌ Failed to start 'redis-stack' container."; exit 1; }
+        echo "✅ 'redis-stack' container started."
+    fi
+else
+    echo "📦 'redis-stack' container not found. Deploying a new one..."
+    sudo docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server:latest || { echo "❌ Failed to deploy 'redis-stack' container."; exit 1; }
+    echo "✅ 'redis-stack' container deployed and started."
+fi
+
+# Assume Redis Stack is ready if Docker command succeeded
+echo "Assuming Redis Stack is ready and accessible via localhost:6379."
+echo "Please ensure the 'redis-stack' Docker container is running and healthy."
 
 pyenv global "$PYTHON_VERSION"
 
@@ -322,6 +361,9 @@ echo "✅ Frontend setup complete!"
 echo "Access the app at http://localhost:8000"
 
 # --- 6. Copy default config if needed ---
+# Ensure we are in the root directory before checking/copying config
+cd "$(dirname "$0")"
+
 if [ ! -f "$CONFIG_FILE" ]; then
     if [ -f "$CONFIG_TEMPLATE" ]; then
         echo "📄 Copying $CONFIG_TEMPLATE to $CONFIG_FILE..."
