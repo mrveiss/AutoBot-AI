@@ -56,7 +56,6 @@ class Orchestrator:
             redis_port = self.config['task_transport']['redis']['port']
             self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
             print(f"Orchestrator connected to Redis at {redis_host}:{redis_port}")
-            asyncio.create_task(self._listen_for_command_approvals()) # Start listening for approvals
         else:
             print("Orchestrator configured for local task transport.")
             self.local_worker = WorkerNode(config_path)
@@ -128,15 +127,21 @@ class Orchestrator:
         # Initialize LangChain Agent if configured and available
         if self.use_langchain and LANGCHAIN_AVAILABLE and LangChainAgentOrchestrator is not None:
             try:
-                # Initialize knowledge base first
-                llm_config_for_kb = self.config.get('llm_config', {}) # Corrected: use 'llm_config'
-                await self.knowledge_base.ainit(llm_config_for_kb)
+                # Initialize knowledge base first - check if enabled
+                kb_config = self.config.get('knowledge_base', {})
+                if kb_config.get('provider') != 'disabled':
+                    llm_config_for_kb = self.config.get('llm_config', {})
+                    if self.knowledge_base: # Guard against None
+                        await self.knowledge_base.ainit(llm_config_for_kb)
+                else:
+                    print("Knowledge Base disabled in configuration. Skipping LangChain KB initialization.")
+                    self.knowledge_base = None
                 
                 # Initialize LangChain Agent
                 self.langchain_agent = LangChainAgentOrchestrator(
                     config=self.config,
                     worker_node=self.local_worker if hasattr(self, 'local_worker') else None,
-                    knowledge_base=self.knowledge_base
+                    knowledge_base=self.knowledge_base # Pass None if KB is disabled
                 )
                 
                 if self.langchain_agent.available:
@@ -152,9 +157,15 @@ class Orchestrator:
                 self.langchain_agent = None
                 self.use_langchain = False
         else:
-            # Initialize knowledge base with current LLM config
-            llm_config_for_kb = self.config.get('llm_config', {}) # Corrected: use 'llm_config'
-            await self.knowledge_base.ainit(llm_config_for_kb)
+            # Initialize knowledge base - check if enabled first
+            kb_config = self.config.get('knowledge_base', {})
+            if kb_config.get('provider') != 'disabled':
+                llm_config_for_kb = self.config.get('llm_config', {})
+                if self.knowledge_base: # Guard against None
+                    await self.knowledge_base.ainit(llm_config_for_kb)
+            else:
+                print("Knowledge Base disabled in configuration. Skipping initialization.")
+                self.knowledge_base = None
 
     def _load_config(self, config_path):
         with open(config_path, 'r') as f:
@@ -187,7 +198,10 @@ class Orchestrator:
         await event_manager.publish("log_message", {"level": "INFO", "message": f"Generating plan using Orchestrator LLM: {target_llm_model}"})
         print(f"Generating plan using Orchestrator LLM: {target_llm_model}")
 
-        retrieved_context = await self.knowledge_base.search(goal, n_results=3)
+        retrieved_context = []
+        if self.knowledge_base is not None:
+            retrieved_context = await self.knowledge_base.search(goal, n_results=3)
+        
         context_str = ""
         if retrieved_context:
             context_str = "\n\nRelevant Context from Knowledge Base:\n"
