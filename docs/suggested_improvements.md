@@ -119,3 +119,15 @@ This document outlines potential improvements for the AutoBot project, based on 
     *   The `chunk_size` and `chunk_overlap` for the sentence splitter are hardcoded. These should be moved to the `config.yaml` file.
 *   **`autobot-vue/src/components/ChatInterface.vue`:**
     *   The backend API endpoint is hardcoded. This should be made configurable, for example, by using an environment variable.
+
+## 11. Data Storage
+
+**Problem:** The application stores data in several different places, which can make it difficult to manage and back up the data.
+
+**Suggestion:**
+
+*   **Centralize Data Storage:** Use a single, centralized data store for all the application's data. A good choice would be a relational database (e.g., PostgreSQL, MySQL) or a NoSQL database (e.g., MongoDB).
+*   **Use a Database Abstraction Layer:** Use a database abstraction layer (e.g., SQLAlchemy, Django ORM) to interact with the database. This will make it easier to switch to a different database in the future, if needed.
+*   **Store Chat History in the Database:** Instead of storing the chat history in JSON files in the `data/chats` directory, store it in the database. This will make it easier to query and analyze the chat history.
+*   **Store Configuration in the Database:** Instead of storing the configuration in `config/settings.json`, store it in the database. This will make it easier to manage the configuration and to make changes to it without having to restart the application.
+*   **Store Knowledge Base in the Database:** The knowledge base is already stored in Redis, which is good. However, if you want to centralize all the data in a single database, you could consider storing the knowledge base in the same database as the chat history and configuration.
