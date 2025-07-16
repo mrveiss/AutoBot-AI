@@ -162,17 +162,17 @@ class KnowledgeBase:
 
 ### Tasks
 
-* [x] Build minimal frontend in `web/` using HTML/JS or Flask UI
+* [x] Build frontend in `autobot-vue/` using Vue with Vite
 * [ ] Use NoVNC or WebSocket proxy to stream desktop
-* [ ] Show logs, currently running task, and options to interrupt/resume
+* [x] Show logs, currently running task, and options to interrupt/resume
 * [ ] Allow human-in-the-loop takeover if needed (interrupt/takeover button)
-* [ ] **Embed noVNC in the Web UI:** Integrate an iframe or dynamic viewer in `web/index.html` to display the Kex VNC session, enabling real-time observation and control.
+* [ ] **Embed noVNC in the Web UI:** Integrate an iframe or dynamic viewer in `autobot-vue/index.html` to display the Kex VNC session, enabling real-time observation and control.
 
 ### Prompt
 
 ```bash
-# Run web server
-python3 -m http.server --directory web 8080
+# Run frontend development server
+cd autobot-vue && npm run dev
 ```
 
 ## Phase 9: Redis Integration for Enhanced Performance
@@ -181,7 +181,7 @@ python3 -m http.server --directory web 8080
 
 * [x] Install Redis server and Python client library (`redis-py`).
 * [x] Configure Redis connection parameters in `config/config.yaml`.
-* [ ] Implement Redis for agent memory (short-term interactions, thoughts, commands, execution trees).
+* [x] Implement Redis for agent memory (short-term interactions, thoughts, commands, execution trees) via `ChatHistoryManager` in `src/chat_history_manager.py`.
 * [x] Utilize Redis as a task queue for incoming subtasks, supporting multi-threaded or distributed systems.
 * [ ] Implement RAG (Retrieval-Augmented Generation) caching for document chunks or embeddings.
 * [ ] Use Redis for key-value state storage (e.g., `llm_state:idle`, `last_model:phi-2`, `user_override:true`).
@@ -282,6 +282,285 @@ pytest tests/
 bash run_agent.sh &
 ```
 
+## Phase 18: LangChain and LlamaIndex Integration
+
+### Overview
+This phase introduces a hybrid architecture leveraging LangChain for agent orchestration and LlamaIndex for advanced knowledge retrieval. Redis will be used for all memory and logging to ensure high performance and scalability.
+
+### Core Components (Revised)
+
+```mermaid
+graph TD
+    A[User] --> B(Control Panel Frontend - Manus Style);
+    B --> C{Control Panel Backend (API/WebSocket)};
+    C --> D[LangChain Agent Orchestrator];
+    D --> E{LLM Interface Module (GPU/NPU Aware)};
+    D --> F{OS Interaction Module (Local)};
+    D --> G{LlamaIndex Knowledge Base Module};
+    D --> K{Task Queue / Dispatcher};
+    K --> L[Worker Node 1 (GPU/NPU Capable)];
+    K --> M[Worker Node N (GPU/NPU Capable)];
+    L --> N{OS Interaction Module (Remote)};
+    L --> O{LLM Interface Module (Remote, GPU/NPU Aware)};
+    M --> P{OS Interaction Module (Remote)};
+    M --> Q{LLM Interface Module (Remote, GPU/NPU Aware)};
+    E --> H1[Ollama (GPU/NPU)];
+    E --> H2[LMStudio (GPU/NPU)];
+    E --> H3[Cloud LLM APIs];
+    O --> H1;
+    O --> H2;
+    O --> H3;
+    Q --> H1;
+    Q --> H2;
+    Q --> H3;
+    F --> I[Local OS + Hardware];
+    N --> R[Remote OS 1 + Hardware];
+    P --> S[Remote OS N + Hardware];
+    G --> J[Redis (VectorDB/Memory/Logs)];
+
+    subgraph Main Controller
+        D
+        E
+        F
+        G
+        K
+    end
+
+    subgraph User Interface
+        B
+        C
+    end
+
+    subgraph Worker Nodes
+        L
+        M
+        N
+        O
+        P
+        Q
+    end
+
+    subgraph External Services & Hardware
+        H1
+        H2
+        H3
+        I
+        R
+        S
+        J
+    end
+```
+
+*   **LangChain Agent Orchestrator:** The central controller, now powered by LangChain. It will manage task planning, tool selection, and delegation, leveraging LangChain's robust agent capabilities.
+*   **LlamaIndex Knowledge Base Module:** Replaces the previous knowledge base. It will handle document ingestion, indexing, and retrieval, using Redis as its vector store and memory backend.
+*   **Redis:** Serves as the unified backend for all memory (chat history, agent scratchpad), logs, and LlamaIndex's vector store. This ensures high performance and a centralized, persistent state.
+*   **LLM Interface Module (Local/Remote, GPU/NPU Aware):** Provides unified access to LLMs, now ensuring compatibility with LangChain's LLM integrations (e.g., `ChatOllama`).
+*   **OS Interaction Module (Local/Remote):** Provides cross-platform OS interaction (commands, files, processes), exposed as LangChain tools.
+*   **Control Panel Frontend (Manus Style):** Web-based UI built with Vue and Vite in `autobot-vue/`, focusing on a real-time event stream.
+*   **Control Panel Backend:** Provides API/WebSocket endpoints using FastAPI in `backend/main.py`, relays commands, and streams events.
+*   **Task Queue / Dispatcher:** Mechanism (e.g., Redis, RabbitMQ, gRPC) for sending tasks to workers and receiving results.
+*   **Worker Node (GPU/NPU Capable):** Separate agent instance on local/remote machine. Listens for tasks, executes them using local modules.
+*   **External Services & Hardware:** LLMs, OS instances, and the underlying **CPU/GPU/NPU hardware** on the controller and worker machines.
+
+### Technology Stack (Revised)
+
+*   **Core Logic, Backend, Orchestrator, Workers:** Python 3.x
+*   **Agent Orchestration:** LangChain
+*   **Knowledge Retrieval:** LlamaIndex
+*   **Memory/Vector Store/Logs:** Redis
+*   **Control Panel Backend Framework:** FastAPI.
+*   **Control Panel Frontend:** Vue with Vite.
+*   **Task Queue/Dispatch:** Redis, RabbitMQ, ZeroMQ, or gRPC.
+*   **OS Interaction:** Python standard libraries, `psutil`, `pysmbclient`.
+*   **Hardware Acceleration Libraries:** `torch` (with CUDA/ROCm support), `tensorflow` (with GPU support), `onnxruntime-gpu`, potentially specific bindings or libraries for NPU interaction, libraries used by Ollama/LMstudio for their acceleration.
+*   **Packaging:** PyInstaller, custom install scripts.
+
+### Data Flow Example (LangChain Orchestration with LlamaIndex Retrieval)
+
+1.  User inputs a goal.
+2.  The `Orchestrator` (now a LangChain Agent) receives the goal.
+3.  The LangChain Agent, using its reasoning capabilities, determines if knowledge retrieval is needed.
+4.  If so, it calls the `LlamaIndex Knowledge Base Module` (exposed as a LangChain Tool) to retrieve relevant information from Redis.
+5.  The retrieved knowledge is fed back to the LangChain Agent.
+6.  Based on the goal and retrieved knowledge, the LangChain Agent selects appropriate tools (e.g., `OS Interaction Module` for shell commands, `LLM Interface Module` for further LLM calls).
+7.  The LangChain Agent generates and executes a task plan, potentially dispatching sub-tasks to worker nodes via the Task Queue.
+8.  Results from tool executions are fed back into the LangChain Agent's context.
+9.  Event updates are streamed to the user interface.
+
+### Key Considerations (Revised)
+
+*   **Architectural Shift:** This is a significant change, requiring careful refactoring of the `Orchestrator` and `KnowledgeBase` modules.
+*   **LangChain Tooling:** Existing functionalities (OS commands, LLM calls, knowledge base operations) need to be wrapped as LangChain `Tools`.
+*   **Prompt Engineering:** LangChain Agent's performance heavily relies on effective prompt engineering for reasoning and tool use.
+*   **Redis Integration:** Ensuring all memory, logs, and LlamaIndex's vector store correctly utilize Redis.
+*   **Compatibility:** Maintaining compatibility with existing frontend and worker node components.
+
+## Phase 19: Self-Learning and Knowledge Retention Mechanism (Revised for LlamaIndex/Redis)
+
+### Learning Philosophy
+The agent's learning capability remains continuous and multi-faceted, learning passively from operational experiences and actively through explicit user input. The core idea is to build a persistent and potentially distributed knowledge base that informs the agent's planning, decision-making, and interaction capabilities, making it more effective and personalized over time. This phase now explicitly integrates LlamaIndex for advanced RAG capabilities and Redis for all knowledge storage.
+
+### Sources of Knowledge Acquisition
+The sources of knowledge remain the same, but their ingestion now flows through LlamaIndex:
+
+*   **Task Execution Outcomes:** Recording and analyzing task steps, tools, parameters, and success/failure to learn effective strategies. These can be indexed by LlamaIndex.
+*   **User Interactions and Feedback:** Parsing user messages, instructions, and corrections to extract facts, preferences, and constraints. These will be stored in Redis and indexed by LlamaIndex.
+*   **Introspection and Self-Monitoring:** Logging internal states, decisions, resource usage, and errors to understand operational characteristics. Logs will go to Redis.
+*   **Explicit Knowledge Injection:** Allowing users to add information directly via the control panel, which will be processed by LlamaIndex.
+*   **File Processing:** The agent will be equipped to process various common file types (e.g., PDF, DOCX, TXT, CSV, JSON) encountered during tasks or provided by the user. LlamaIndex will handle the ingestion and indexing of these documents.
+
+### Knowledge Representation and Storage (Revised for LlamaIndex/Redis)
+To accommodate diverse knowledge types and ensure high performance, LlamaIndex will manage the knowledge base, with Redis serving as the primary storage backend for both vector embeddings and raw data.
+
+*   **Redis as Primary Store:** Redis will be used for:
+    *   **Vector Store:** LlamaIndex will use a Redis vector store (e.g., `RedisVectorStore`) for storing and querying embeddings.
+    *   **Document Store:** LlamaIndex's document store will also leverage Redis for storing the raw text chunks and metadata.
+    *   **Chat History/Memory:** The `ChatHistoryManager` will continue to use Redis for conversational memory.
+    *   **Logs:** All operational logs will be directed to Redis.
+*   **LlamaIndex Components:**
+    *   `VectorStoreIndex`: The core LlamaIndex component for managing and querying the vector store.
+    *   `ServiceContext`: Configured with `OllamaLLM` (or other LangChain-compatible LLMs) for synthesis and `OllamaEmbedding` for embedding generation.
+    *   `RedisVectorStore`: The specific LlamaIndex integration for Redis.
+*   **Storage Location Configuration:** While Redis is the primary backend, the Redis connection parameters (host, port, password, DB index) will be configurable via the Control Panel.
+
+The `KnowledgeBase` module will be refactored to initialize and interact with LlamaIndex components, which in turn use Redis.
+
+### Knowledge Base Module Functionality (Revised for LlamaIndex/Redis)
+This module acts as the gatekeeper for the agent's memory, now powered by LlamaIndex and Redis. Its responsibilities are:
+
+*   **Initialization:** Initialize LlamaIndex components, including `ServiceContext`, `OllamaLLM`, `OllamaEmbedding`, and `RedisVectorStore` based on configuration.
+*   **Storage API:** Provides methods to add, update, and delete knowledge entries. These methods will now interact with LlamaIndex's `VectorStoreIndex` to ingest documents into Redis.
+*   **Retrieval API:** Offers various ways to query the knowledge base, primarily through LlamaIndex's query engine:
+    *   `query(query_text)`: Performs RAG using the LlamaIndex query engine, retrieving relevant chunks from Redis and synthesizing a response.
+    *   `find_similar_knowledge(query_text, top_k)`: Directly queries the Redis vector store via LlamaIndex.
+*   **Embedding Generation:** Handled by LlamaIndex's `OllamaEmbedding` (or other configured embedding model).
+*   **Persistence:** Ensured by Redis's persistence mechanisms (AOF/RDB).
+*   **File Handling Integration:** LlamaIndex's document loaders will be used to process various file types, converting them into `Document` objects for ingestion into the Redis-backed index.
+*   **Management Interface:** Exposes functions for the Control Panel Backend to manage the knowledge base (viewing, adding, editing, deleting, resetting, configuring Redis connection).
+
+### Knowledge Utilization (Retrieval and Application)
+Stored knowledge utilization will now primarily leverage LlamaIndex's RAG capabilities:
+
+*   **Planning:** The LangChain Agent will query the LlamaIndex-backed `KnowledgeBase` for context (past experiences, procedures, facts, processed file content) to inform its reasoning and tool selection.
+*   **Execution:** Retrieving credentials, configurations, or parameters from Redis.
+*   **Self-Correction:** Analyzing past errors stored in Redis.
+*   **Interaction:** Personalizing communication based on retrieved context.
+
+### Control Panel Integration (Revised for LlamaIndex/Redis)
+The Control Panel's knowledge management section will be enhanced:
+
+*   **Redis Configuration:** A dedicated setting to input Redis connection parameters (host, port, password, DB index).
+*   **Knowledge Browser:** Viewing entries (potentially simplified due to LlamaIndex's internal structure).
+*   **Manual Entry:** Forms for adding knowledge, which will be ingested by LlamaIndex.
+*   **File Upload/Processing:** An interface to upload files directly for LlamaIndex to process and incorporate into the knowledge base.
+*   **Edit/Delete:** Modifying or removing entries via LlamaIndex.
+*   **Reset Knowledge:** Wiping the Redis knowledge base.
+
+### Evolution and Future Considerations
+Future enhancements could include support for more complex LlamaIndex query modes, advanced knowledge graph representations within Redis, and distributed knowledge synchronization across multiple agent instances or nodes.
+
+## Phase 20: LLM Integration Methods (with Hardware Acceleration) (Revised for LangChain/LlamaIndex)
+
+### Goal: Unified and Accelerated LLM Access
+The primary goal remains to enable seamless use of different LLMs (local and cloud), now specifically tailored for integration with LangChain and LlamaIndex. Hardware acceleration for local LLM inference is a key focus.
+
+### Supported LLM Backends (with Acceleration Notes)
+The agent will support integration with various backends, with specific considerations for hardware acceleration and LangChain/LlamaIndex compatibility:
+
+*   **Ollama:** Integration via LangChain's `ChatOllama` or `Ollama` classes. The `LLM Interface Module` will configure these classes to utilize Ollama's local server, which in turn needs to be installed and configured correctly with GPU drivers (CUDA/ROCm) on the host machine (controller or worker).
+*   **LM Studio:** Integration via LangChain's `ChatOpenAI` (or similar) pointing to LM Studio's local OpenAI-compatible server. LM Studio needs to be configured internally to use the available GPU/NPU.
+*   **Direct Library Integration (e.g., Transformers, PyTorch, ONNX Runtime):** For maximum control, the agent might directly use libraries like Hugging Face Transformers with PyTorch or TensorFlow, or ONNX Runtime. These can be wrapped as custom LangChain LLMs. The `LLM Interface Module` will be directly responsible for:
+    *   Detecting available devices (`torch.cuda.is_available()`, etc.).
+    *   Moving models and data to the selected device (GPU/NPU).
+    *   Configuring precision (e.g., float16, int8 quantization).
+    *   Managing GPU memory allocation.
+*   **Cloud LLM APIs (OpenAI Compatible, Specific Connectors):** Integrated via LangChain's respective classes (e.g., `ChatOpenAI`, `AzureChatOpenAI`). Hardware acceleration is managed by the cloud provider.
+
+### LLM Interface Module Design (Revised for LangChain/LlamaIndex)
+The `LLM Interface Module`, running on the Orchestrator and potentially Worker Nodes, manages all LLM interactions and hardware acceleration, providing instances compatible with LangChain and LlamaIndex:
+
+*   **Hardware Detection:** Upon initialization (or on demand), the module attempts to detect available hardware accelerators. It reports detected hardware capabilities.
+*   **Configuration Management:** Reads LLM configurations from the Control Panel, including backend choice, model, credentials, and **hardware acceleration settings (e.g., enable GPU/NPU, target device ID, number of GPU layers to offload, quantization settings).**
+*   **LangChain/LlamaIndex Compatibility:** The module will return initialized LLM instances (e.g., `ChatOllama`, `OllamaLLM`) that are directly usable by LangChain Agents and LlamaIndex `ServiceContext`.
+*   **Backend Connectors (Acceleration Aware):** Specific connectors handle communication nuances and **pass hardware configuration parameters** to the chosen backend:
+    *   For Ollama/LMStudio: Configures the LangChain/LlamaIndex LLM classes appropriately.
+    *   For Direct Libraries: Implements device placement, precision control, and memory management logic within custom LangChain LLM wrappers.
+*   **Unified API:** Exposes consistent methods to the Core Agent Engine, returning LangChain-compatible LLM objects. Hardware acceleration happens transparently based on configuration.
+*   **Error Handling:** Handles errors related to hardware (e.g., insufficient VRAM, driver issues) and reports them.
+
+### Implementation Strategy (Python - Revised)
+
+*   **LangChain/LlamaIndex LLM Classes:** Utilize `langchain_community.chat_models.ollama.ChatOllama`, `llama_index.llms.ollama.OllamaLLM`, etc.
+*   **Hardware Libraries:** Utilize libraries like `torch`, `tensorflow`, `onnxruntime-gpu` for detection and interaction when implementing custom LLM wrappers.
+*   **Backend-Specific Parameters:** Research and implement the specific parameters needed to enable GPU/NPU usage for Ollama, LM Studio, etc., through their respective LangChain/LlamaIndex integrations.
+*   **Configuration Loading:** Load detailed hardware acceleration settings from the central configuration managed via the Control Panel.
+*   **Conditional Logic:** Implement logic to fall back to CPU execution if acceleration is disabled, unavailable, or fails.
+
+### Configuration via Control Panel (Revised)
+The LLM Configuration section in the Control Panel will be significantly enhanced:
+
+*   **Backend Selection:** Choose LLM backend.
+*   **Endpoint/API Key Management:** Configure connection details in the 'Backend' -> 'LLM' tab.
+*   **Model Selection:** Specify the model in the 'Backend' -> 'LLM' tab.
+*   **Hardware Acceleration Settings (Per Backend/Node where applicable):**
+    *   **Enable Acceleration:** Checkbox to enable/disable GPU or NPU usage for the selected local backend.
+    *   **Device Selection:** Dropdown to select a specific GPU/NPU if multiple are detected (e.g., `cuda:0`, `cuda:1`).
+    *   **GPU Layer Offload:** Slider or input to specify how many model layers to offload to the GPU (common in libraries like `llama.cpp` used by Ollama/LM Studio).
+    *   **Quantization/Precision:** Options to select model precision (e.g., FP16, INT8) if supported by the backend and model.
+    *   **(Advanced):** Potentially fields for VRAM limits or other backend-specific tuning parameters.
+*   **Default Parameters:** Standard generation parameters (temperature, max tokens).
+
+This revised approach allows users fine-grained control over hardware utilization for local LLMs on both the main controller and worker nodes, while abstracting the underlying complexity through the `LLM Interface Module` and ensuring compatibility with LangChain and LlamaIndex.
+
+## Phase 21: Autonomous AI Agent Requirements (Revised for LangChain/LlamaIndex)
+
+### 1. Core Agent Functionality
+
+*   **Autonomy:** The agent, now powered by a LangChain Agent, must operate independently to achieve goals, plan tasks, execute steps, and handle errors.
+*   **Full OS Access:** Requires direct access to host OS resources (commands, files, processes, system info) on both the main controller and worker nodes, exposed as LangChain Tools. Security considerations and configurable permissions are essential.
+*   **Task Execution Engine (LangChain Agent Orchestrator):** A robust LangChain Agent to interpret goals, plan actions, dispatch tasks (locally or to workers), monitor progress, and handle failures.
+*   **Distributed Operation:** Support for optional remote worker nodes to distribute workload (e.g., task execution, LLM inference).
+*   **File Handling:** Ability to process and extract information from popular file types (PDF, DOCX, TXT, CSV, JSON, etc.) using LlamaIndex's document loaders.
+
+### 2. LLM Integration
+
+*   **Multi-LLM Support:** Integration with local (Ollama, LMStudio) and cloud LLMs (OpenAI-compatible, specific APIs) via LangChain-compatible LLM instances.
+*   **Hardware Acceleration (GPU/NPU):** Local LLM backends (Ollama, LMStudio, or direct library integrations) must be configurable to utilize available GPU (NVIDIA CUDA, AMD ROCm) or NPU resources for accelerating model inference, both on the main controller and on worker nodes.
+*   **Abstraction Layer:** A unified LLM interface module to simplify interaction with different backends and handle hardware acceleration configurations, providing LangChain/LlamaIndex compatible LLM objects.
+*   **Configuration:** Control panel must allow selection of LLMs, connection details, model choice, and hardware acceleration settings (e.g., enable GPU, specify GPU layers, select device).
+
+### 3. Self-Learning and Knowledge Retention
+
+*   **Knowledge Base (LlamaIndex/Redis):** Persistent storage for learned knowledge, operational data, and user input, managed by LlamaIndex with Redis as the backend for vector embeddings and raw document storage.
+*   **Network Storage:** The Redis instance for the knowledge base can be configured to reside locally or on a network, with secure credential management.
+*   **Learning Sources:** Learn from task outcomes, user interactions/feedback, introspection, explicit user input, and processed file content (all ingested via LlamaIndex).
+*   **Knowledge Management:** Control panel interface to view, add, edit, delete, and reset knowledge, plus upload files for processing (all interacting with LlamaIndex/Redis).
+
+### 4. Control Panel
+
+*   **Interface:** Web-based, Manus-inspired interface focusing on a real-time event stream (user input, agent thoughts, tool calls, observations).
+*   **Interaction:** Primarily via command input, with contextual panels and a dedicated settings area accessible via command/icon.
+*   **Functionality:**
+    *   Real-time agent status and event stream display.
+    *   LLM configuration (backends, models, API keys, **hardware acceleration settings**).
+    *   Knowledge management (Redis connection config, browse, add, edit, delete, reset, file upload).
+    *   Worker node management (view status, registration, configuration, **hardware capabilities**).
+    *   Task Queue/Dispatcher configuration.
+    *   Core agent settings (permissions, logging).
+*   **Accessibility:** Accessible via `http://localhost:port` on the machine running the orchestrator.
+
+### 5. Cross-Platform Compatibility & Installation
+
+*   **Supported OS:** Orchestrator and Worker Nodes must run natively on both Linux and Windows.
+*   **Core Language:** Python preferred for cross-platform core logic.
+*   **OS Abstraction:** Handle differences in file paths, commands, process management, and **network share access**.
+*   **Hardware Drivers:** Installation and configuration must account for platform-specific GPU/NPU drivers (NVIDIA drivers, AMD drivers, etc.) and libraries (CUDA, ROCm). The agent should detect available hardware and allow configuration.
+*   **Dependency Management:** Manage dependencies for core logic, network access, hardware acceleration libraries (e.g., `torch` with CUDA/ROCm support, `onnxruntime-gpu`), and communication protocols across platforms. This now includes `langchain` and `llama-index` and their respective integrations.
+*   **Installation & Execution:**
+    *   **Single-Command Setup:** Installation of the agent (Orchestrator and/or Worker) should ideally be achievable via a single command (e.g., using a setup script, Docker Compose, or a simple installer).
+    *   **Single-Command Execution:** Running the agent (Orchestrator or Worker) should also be possible via a single command after installation.
+    *   **Packaging:** Provide clear instructions and appropriate packaging (e.g., setup scripts, potentially installers) to facilitate this simplified setup and execution on both Linux and Windows.
+
 ## Phase 15: Distributed Architecture and Hardware Acceleration
 
 ### Overview
@@ -351,8 +630,8 @@ graph TD
     end
 ```
 
-*   **Control Panel Frontend (Manus Style):** Web-based UI focusing on a real-time event stream. Configuration integrated contextually or via specific commands/panels.
-*   **Control Panel Backend:** Provides API/WebSocket endpoints, relays commands, and streams events.
+*   **Control Panel Frontend (Manus Style):** Web-based UI built with Vue and Vite in `autobot-vue/`, focusing on a real-time event stream. Configuration integrated contextually or via specific commands/panels.
+*   **Control Panel Backend:** Provides API/WebSocket endpoints using FastAPI in `backend/main.py`, relays commands, and streams events.
 *   **Orchestrator / Core Agent Engine:** Central controller. Manages tasks, plans, dispatches work locally or to workers, manages worker lifecycle, aggregates results, and generates the UI event stream. **Can leverage local hardware acceleration via its LLM Interface Module and dispatch tasks based on worker hardware capabilities.**
 *   **LLM Interface Module (Local/Remote, GPU/NPU Aware):** Provides unified access to LLMs. **Crucially, this module is responsible for detecting available hardware accelerators (GPU via CUDA/ROCm, potentially NPUs via specific libraries) and configuring local LLM backends (Ollama, LMStudio, or direct library integrations like PyTorch/Transformers/ONNX Runtime) to utilize them based on user settings provided via the Control Panel.** It abstracts the complexities of hardware-specific configurations (e.g., setting device IDs, memory allocation, quantization levels, GPU layer offloading).
 *   **OS Interaction Module (Local/Remote):** Provides cross-platform OS interaction (commands, files, processes). **May assist in detecting hardware information (e.g., querying GPU details via NVIDIA-SMI or ROCm tools) for reporting or configuration purposes.**
@@ -365,8 +644,8 @@ graph TD
 ### Technology Stack
 
 *   **Core Logic, Backend, Orchestrator, Workers:** Python 3.x
-*   **Control Panel Backend Framework:** FastAPI or Flask.
-*   **Control Panel Frontend:** React, Vue, or Svelte.
+*   **Control Panel Backend Framework:** FastAPI.
+*   **Control Panel Frontend:** Vue with Vite.
 *   **Task Queue/Dispatch:** Redis, RabbitMQ, ZeroMQ, or gRPC.
 *   **OS Interaction:** Python standard libraries, `psutil`, `pysmbclient`.
 *   **Knowledge Base:** SQLite, ChromaDB/FAISS.
@@ -567,101 +846,217 @@ The Control Panel's knowledge management section will be enhanced:
 ### Evolution and Future Considerations
 Future enhancements could include support for more file types, advanced knowledge graph representations, distributed knowledge synchronization across multiple agent instances or nodes, and more sophisticated learning algorithms.
 
-## Phase 18: Self-Learning and Knowledge Retention Mechanism
+## Phase 18: LangChain and LlamaIndex Integration
+
+### Overview
+This phase introduces a hybrid architecture leveraging LangChain for agent orchestration and LlamaIndex for advanced knowledge retrieval. Redis will be used for all memory and logging to ensure high performance and scalability.
+
+### Core Components (Revised)
+
+```mermaid
+graph TD
+    A[User] --> B(Control Panel Frontend - Manus Style);
+    B --> C{Control Panel Backend (API/WebSocket)};
+    C --> D[LangChain Agent Orchestrator];
+    D --> E{LLM Interface Module (GPU/NPU Aware)};
+    D --> F{OS Interaction Module (Local)};
+    D --> G{LlamaIndex Knowledge Base Module};
+    D --> K{Task Queue / Dispatcher};
+    K --> L[Worker Node 1 (GPU/NPU Capable)];
+    K --> M[Worker Node N (GPU/NPU Capable)];
+    L --> N{OS Interaction Module (Remote)};
+    L --> O{LLM Interface Module (Remote, GPU/NPU Aware)};
+    M --> P{OS Interaction Module (Remote)};
+    M --> Q{LLM Interface Module (Remote, GPU/NPU Aware)};
+    E --> H1[Ollama (GPU/NPU)];
+    E --> H2[LMStudio (GPU/NPU)];
+    E --> H3[Cloud LLM APIs];
+    O --> H1;
+    O --> H2;
+    O --> H3;
+    Q --> H1;
+    Q --> H2;
+    Q --> H3;
+    F --> I[Local OS + Hardware];
+    N --> R[Remote OS 1 + Hardware];
+    P --> S[Remote OS N + Hardware];
+    G --> J[Redis (VectorDB/Memory/Logs)];
+
+    subgraph Main Controller
+        D
+        E
+        F
+        G
+        K
+    end
+
+    subgraph User Interface
+        B
+        C
+    end
+
+    subgraph Worker Nodes
+        L
+        M
+        N
+        O
+        P
+        Q
+    end
+
+    subgraph External Services & Hardware
+        H1
+        H2
+        H3
+        I
+        R
+        S
+        J
+    end
+```
+
+*   **LangChain Agent Orchestrator:** The central controller, now powered by LangChain. It will manage task planning, tool selection, and delegation, leveraging LangChain's robust agent capabilities.
+*   **LlamaIndex Knowledge Base Module:** Replaces the previous knowledge base. It will handle document ingestion, indexing, and retrieval, using Redis as its vector store and memory backend.
+*   **Redis:** Serves as the unified backend for all memory (chat history, agent scratchpad), logs, and LlamaIndex's vector store. This ensures high performance and a centralized, persistent state.
+*   **LLM Interface Module (Local/Remote, GPU/NPU Aware):** Provides unified access to LLMs, now ensuring compatibility with LangChain's LLM integrations (e.g., `ChatOllama`).
+*   **OS Interaction Module (Local/Remote):** Provides cross-platform OS interaction (commands, files, processes), exposed as LangChain tools.
+*   **Control Panel Frontend (Manus Style):** Web-based UI built with Vue and Vite in `autobot-vue/`, focusing on a real-time event stream.
+*   **Control Panel Backend:** Provides API/WebSocket endpoints using FastAPI in `backend/main.py`, relays commands, and streams events.
+*   **Task Queue / Dispatcher:** Mechanism (e.g., Redis, RabbitMQ, gRPC) for sending tasks to workers and receiving results.
+*   **Worker Node (GPU/NPU Capable):** Separate agent instance on local/remote machine. Listens for tasks, executes them using local modules.
+*   **External Services & Hardware:** LLMs, OS instances, and the underlying **CPU/GPU/NPU hardware** on the controller and worker machines.
+
+### Technology Stack (Revised)
+
+*   **Core Logic, Backend, Orchestrator, Workers:** Python 3.x
+*   **Agent Orchestration:** LangChain
+*   **Knowledge Retrieval:** LlamaIndex
+*   **Memory/Vector Store/Logs:** Redis
+*   **Control Panel Backend Framework:** FastAPI.
+*   **Control Panel Frontend:** Vue with Vite.
+*   **Task Queue/Dispatch:** Redis, RabbitMQ, ZeroMQ, or gRPC.
+*   **OS Interaction:** Python standard libraries, `psutil`, `pysmbclient`.
+*   **Hardware Acceleration Libraries:** `torch` (with CUDA/ROCm support), `tensorflow` (with GPU support), `onnxruntime-gpu`, potentially specific bindings or libraries for NPU interaction, libraries used by Ollama/LMstudio for their acceleration.
+*   **Packaging:** PyInstaller, custom install scripts.
+
+### Data Flow Example (LangChain Orchestration with LlamaIndex Retrieval)
+
+1.  User inputs a goal.
+2.  The `Orchestrator` (now a LangChain Agent) receives the goal.
+3.  The LangChain Agent, using its reasoning capabilities, determines if knowledge retrieval is needed.
+4.  If so, it calls the `LlamaIndex Knowledge Base Module` (exposed as a LangChain Tool) to retrieve relevant information from Redis.
+5.  The retrieved knowledge is fed back to the LangChain Agent.
+6.  Based on the goal and retrieved knowledge, the LangChain Agent selects appropriate tools (e.g., `OS Interaction Module` for shell commands, `LLM Interface Module` for further LLM calls).
+7.  The LangChain Agent generates and executes a task plan, potentially dispatching sub-tasks to worker nodes via the Task Queue.
+8.  Results from tool executions are fed back into the LangChain Agent's context.
+9.  Event updates are streamed to the user interface.
+
+### Key Considerations (Revised)
+
+*   **Architectural Shift:** This is a significant change, requiring careful refactoring of the `Orchestrator` and `KnowledgeBase` modules.
+*   **LangChain Tooling:** Existing functionalities (OS commands, LLM calls, knowledge base operations) need to be wrapped as LangChain `Tools`.
+*   **Prompt Engineering:** LangChain Agent's performance heavily relies on effective prompt engineering for reasoning and tool use.
+*   **Redis Integration:** Ensuring all memory, logs, and LlamaIndex's vector store correctly utilize Redis.
+*   **Compatibility:** Maintaining compatibility with existing frontend and worker node components.
+
+## Phase 19: Self-Learning and Knowledge Retention Mechanism (Revised for LlamaIndex/Redis)
 
 ### Learning Philosophy
-The agent's learning capability remains continuous and multi-faceted, learning passively from operational experiences and actively through explicit user input. The core idea is to build a persistent and potentially distributed knowledge base that informs the agent's planning, decision-making, and interaction capabilities, making it more effective and personalized over time.
+The agent's learning capability remains continuous and multi-faceted, learning passively from operational experiences and actively through explicit user input. The core idea is to build a persistent and potentially distributed knowledge base that informs the agent's planning, decision-making, and interaction capabilities, making it more effective and personalized over time. This phase now explicitly integrates LlamaIndex for advanced RAG capabilities and Redis for all knowledge storage.
 
 ### Sources of Knowledge Acquisition
-The sources of knowledge remain the same:
+The sources of knowledge remain the same, but their ingestion now flows through LlamaIndex:
 
-*   **Task Execution Outcomes:** Recording and analyzing task steps, tools, parameters, and success/failure to learn effective strategies.
-*   **User Interactions and Feedback:** Parsing user messages, instructions, and corrections to extract facts, preferences, and constraints.
-*   **Introspection and Self-Monitoring:** Logging internal states, decisions, resource usage, and errors to understand operational characteristics.
-*   **Explicit Knowledge Injection:** Allowing users to add information directly via the control panel.
-*   **File Processing:** The agent will be equipped to process various common file types (e.g., PDF, DOCX, TXT, CSV, JSON) encountered during tasks or provided by the user, extracting relevant information to add to the knowledge base.
+*   **Task Execution Outcomes:** Recording and analyzing task steps, tools, parameters, and success/failure to learn effective strategies. These can be indexed by LlamaIndex.
+*   **User Interactions and Feedback:** Parsing user messages, instructions, and corrections to extract facts, preferences, and constraints. These will be stored in Redis and indexed by LlamaIndex.
+*   **Introspection and Self-Monitoring:** Logging internal states, decisions, resource usage, and errors to understand operational characteristics. Logs will go to Redis.
+*   **Explicit Knowledge Injection:** Allowing users to add information directly via the control panel, which will be processed by LlamaIndex.
+*   **File Processing:** The agent will be equipped to process various common file types (e.g., PDF, DOCX, TXT, CSV, JSON) encountered during tasks or provided by the user. LlamaIndex will handle the ingestion and indexing of these documents.
 
-### Knowledge Representation and Storage (Revised)
-To accommodate diverse knowledge types and storage preferences, a flexible and configurable storage approach is proposed, managed by the Knowledge Base Module. The location of the knowledge base components can be configured to be either local or on a network share.
+### Knowledge Representation and Storage (Revised for LlamaIndex/Redis)
+To accommodate diverse knowledge types and ensure high performance, LlamaIndex will manage the knowledge base, with Redis serving as the primary storage backend for both vector embeddings and raw data.
 
-*   **Storage Location Configuration:** The Control Panel will allow users to specify the root path for the knowledge base. This path can point to:
-    *   A local directory on the machine running the agent.
-    *   A network location accessible via SMB (e.g., `\\server\share\agent_kb` on Windows, mount point on Linux) or NFS (e.g., `/mnt/nfs/agent_kb` on Linux).
-    *   Appropriate libraries or OS commands will be used to interact with these network paths (e.g., `pysmbclient` or OS-level mounting for SMB, standard file operations on NFS mounts).
-    *   Credentials (username/password) for accessing network shares will be securely managed via the Control Panel settings.
-*   **Structured Data Store:** A relational database (e.g., SQLite file, or potentially connecting to a network database server like PostgreSQL/MySQL if configured) located within the specified knowledge base path. Suitable for storing configuration history, task records, learned procedures, user preferences, and explicit facts.
-*   **Vector Database:** A vector store (e.g., ChromaDB, FAISS, potentially others) with its data files stored within the specified knowledge base path. This allows the vector embeddings and associated metadata to reside on local or network storage as configured.
-*   **Raw Logs/Files:** Operational logs and potentially cached/processed files will also be stored within subdirectories of the main knowledge base path.
+*   **Redis as Primary Store:** Redis will be used for:
+    *   **Vector Store:** LlamaIndex will use a Redis vector store (e.g., `RedisVectorStore`) for storing and querying embeddings.
+    *   **Document Store:** LlamaIndex's document store will also leverage Redis for storing the raw text chunks and metadata.
+    *   **Chat History/Memory:** The `ChatHistoryManager` will continue to use Redis for conversational memory.
+    *   **Logs:** All operational logs will be directed to Redis.
+*   **LlamaIndex Components:**
+    *   `VectorStoreIndex`: The core LlamaIndex component for managing and querying the vector store.
+    *   `ServiceContext`: Configured with `OllamaLLM` (or other LangChain-compatible LLMs) for synthesis and `OllamaEmbedding` for embedding generation.
+    *   `RedisVectorStore`: The specific LlamaIndex integration for Redis.
+*   **Storage Location Configuration:** While Redis is the primary backend, the Redis connection parameters (host, port, password, DB index) will be configurable via the Control Panel.
 
-The Knowledge Base Module will abstract the underlying storage location, providing a unified interface regardless of whether it's local or networked.
+The `KnowledgeBase` module will be refactored to initialize and interact with LlamaIndex components, which in turn use Redis.
 
-### Knowledge Base Module Functionality (Revised)
-This module acts as the gatekeeper for the agent's memory. Its responsibilities are expanded:
+### Knowledge Base Module Functionality (Revised for LlamaIndex/Redis)
+This module acts as the gatekeeper for the agent's memory, now powered by LlamaIndex and Redis. Its responsibilities are:
 
-*   **Storage Path Management:** Handles reading the configured knowledge base path (local or network) and ensuring accessibility (including handling network credentials if necessary).
-*   **Storage API:** Provides methods to add, update, and delete knowledge entries in the appropriate store (structured DB or vector DB) at the configured location.
-*   **Retrieval API:** Offers various ways to query the knowledge base:
-    *   `get_structured_data(query)`: Retrieves records from the structured database.
-    *   `find_similar_knowledge(query_text, top_k)`: Performs semantic search on the vector database.
-    *   `get_agent_metadata(key)`: Retrieves agent state/configuration.
-*   **Embedding Generation:** Coordinates with the LLM Interface Module.
-*   **Persistence:** Ensures data is saved reliably to the configured local or network path.
-*   **File Handling Integration:** Includes methods or integrates with a separate File Processing Module to read, parse, and extract information from various supported file types (PDF, DOCX, etc.), converting relevant content into structured or textual knowledge for storage.
-*   **Management Interface:** Exposes functions for the Control Panel Backend to manage the knowledge base (viewing, adding, editing, deleting, resetting, configuring storage path).
+*   **Initialization:** Initialize LlamaIndex components, including `ServiceContext`, `OllamaLLM`, `OllamaEmbedding`, and `RedisVectorStore` based on configuration.
+*   **Storage API:** Provides methods to add, update, and delete knowledge entries. These methods will now interact with LlamaIndex's `VectorStoreIndex` to ingest documents into Redis.
+*   **Retrieval API:** Offers various ways to query the knowledge base, primarily through LlamaIndex's query engine:
+    *   `query(query_text)`: Performs RAG using the LlamaIndex query engine, retrieving relevant chunks from Redis and synthesizing a response.
+    *   `find_similar_knowledge(query_text, top_k)`: Directly queries the Redis vector store via LlamaIndex.
+*   **Embedding Generation:** Handled by LlamaIndex's `OllamaEmbedding` (or other configured embedding model).
+*   **Persistence:** Ensured by Redis's persistence mechanisms (AOF/RDB).
+*   **File Handling Integration:** LlamaIndex's document loaders will be used to process various file types, converting them into `Document` objects for ingestion into the Redis-backed index.
+*   **Management Interface:** Exposes functions for the Control Panel Backend to manage the knowledge base (viewing, adding, editing, deleting, resetting, configuring Redis connection).
 
 ### Knowledge Utilization (Retrieval and Application)
-Stored knowledge utilization remains similar, leveraging the potentially networked knowledge base:
+Stored knowledge utilization will now primarily leverage LlamaIndex's RAG capabilities:
 
-*   **Planning:** Querying the knowledge base (local/network) for context (past experiences, procedures, facts, processed file content) to inform LLM prompts (RAG).
-*   **Execution:** Retrieving credentials, configurations, or parameters.
-*   **Self-Correction:** Analyzing past errors.
-*   **Interaction:** Personalizing communication.
+*   **Planning:** The LangChain Agent will query the LlamaIndex-backed `KnowledgeBase` for context (past experiences, procedures, facts, processed file content) to inform its reasoning and tool selection.
+*   **Execution:** Retrieving credentials, configurations, or parameters from Redis.
+*   **Self-Correction:** Analyzing past errors stored in Redis.
+*   **Interaction:** Personalizing communication based on retrieved context.
 
-### Control Panel Integration (Revised)
+### Control Panel Integration (Revised for LlamaIndex/Redis)
 The Control Panel's knowledge management section will be enhanced:
 
-*   **Storage Configuration:** A dedicated setting to input the desired knowledge base path (allowing local directories or network paths like `\\server\share` or `/mnt/nfs_share`) and fields for network credentials if required.
-*   **Knowledge Browser:** Viewing entries in structured and vector stores.
-*   **Manual Entry:** Forms for adding knowledge.
-*   **File Upload/Processing:** An interface to upload files directly for the agent to process and incorporate into the knowledge base.
-*   **Edit/Delete:** Modifying or removing entries.
-*   **Reset Knowledge:** Wiping the knowledge base at the configured location.
+*   **Redis Configuration:** A dedicated setting to input Redis connection parameters (host, port, password, DB index).
+*   **Knowledge Browser:** Viewing entries (potentially simplified due to LlamaIndex's internal structure).
+*   **Manual Entry:** Forms for adding knowledge, which will be ingested by LlamaIndex.
+*   **File Upload/Processing:** An interface to upload files directly for LlamaIndex to process and incorporate into the knowledge base.
+*   **Edit/Delete:** Modifying or removing entries via LlamaIndex.
+*   **Reset Knowledge:** Wiping the Redis knowledge base.
 
 ### Evolution and Future Considerations
-Future enhancements could include support for more file types, advanced knowledge graph representations, distributed knowledge synchronization across multiple agent instances or nodes, and more sophisticated learning algorithms.
+Future enhancements could include support for more complex LlamaIndex query modes, advanced knowledge graph representations within Redis, and distributed knowledge synchronization across multiple agent instances or nodes.
 
-## Phase 19: LLM Integration Methods (with Hardware Acceleration)
+## Phase 20: LLM Integration Methods (with Hardware Acceleration) (Revised for LangChain/LlamaIndex)
 
 ### Goal: Unified and Accelerated LLM Access
-The primary goal remains to enable seamless use of different LLMs (local and cloud). A key enhancement is to allow the agent to leverage available hardware accelerators (GPUs, NPUs) for local LLM inference to improve performance and efficiency. The abstraction layer must now also manage hardware acceleration configurations.
+The primary goal remains to enable seamless use of different LLMs (local and cloud), now specifically tailored for integration with LangChain and LlamaIndex. Hardware acceleration for local LLM inference is a key focus.
 
 ### Supported LLM Backends (with Acceleration Notes)
-The agent will support integration with various backends, with specific considerations for hardware acceleration:
+The agent will support integration with various backends, with specific considerations for hardware acceleration and LangChain/LlamaIndex compatibility:
 
-*   **Ollama:** Integration via its REST API. The `LLM Interface Module` will need to pass parameters or use specific endpoints if Ollama's API supports configuring GPU usage (e.g., specifying device, layers). Ollama itself needs to be installed and configured correctly with GPU drivers (CUDA/ROCm) on the host machine (controller or worker).
-*   **LM Studio:** Integration via its local server API (often OpenAI-compatible). Similar to Ollama, the module will pass relevant parameters if the API allows runtime configuration of hardware acceleration. LM Studio needs to be configured internally to use the available GPU/NPU.
-*   **Direct Library Integration (e.g., Transformers, PyTorch, ONNX Runtime):** For maximum control, the agent might directly use libraries like Hugging Face Transformers with PyTorch or TensorFlow, or ONNX Runtime. In this case, the `LLM Interface Module` will be directly responsible for:
+*   **Ollama:** Integration via LangChain's `ChatOllama` or `Ollama` classes. The `LLM Interface Module` will configure these classes to utilize Ollama's local server, which in turn needs to be installed and configured correctly with GPU drivers (CUDA/ROCm) on the host machine (controller or worker).
+*   **LM Studio:** Integration via LangChain's `ChatOpenAI` (or similar) pointing to LM Studio's local OpenAI-compatible server. LM Studio needs to be configured internally to use the available GPU/NPU.
+*   **Direct Library Integration (e.g., Transformers, PyTorch, ONNX Runtime):** For maximum control, the agent might directly use libraries like Hugging Face Transformers with PyTorch or TensorFlow, or ONNX Runtime. These can be wrapped as custom LangChain LLMs. The `LLM Interface Module` will be directly responsible for:
     *   Detecting available devices (`torch.cuda.is_available()`, etc.).
     *   Moving models and data to the selected device (GPU/NPU).
     *   Configuring precision (e.g., float16, int8 quantization).
     *   Managing GPU memory allocation.
-*   **Cloud LLM APIs (OpenAI Compatible, Specific Connectors):** Hardware acceleration is managed by the cloud provider; the agent only needs to handle API keys and endpoints.
+*   **Cloud LLM APIs (OpenAI Compatible, Specific Connectors):** Integrated via LangChain's respective classes (e.g., `ChatOpenAI`, `AzureChatOpenAI`). Hardware acceleration is managed by the cloud provider.
 
-### LLM Interface Module Design (Revised)
-The `LLM Interface Module`, running on the Orchestrator and potentially Worker Nodes, manages all LLM interactions and hardware acceleration:
+### LLM Interface Module Design (Revised for LangChain/LlamaIndex)
+The `LLM Interface Module`, running on the Orchestrator and potentially Worker Nodes, manages all LLM interactions and hardware acceleration, providing instances compatible with LangChain and LlamaIndex:
 
-*   **Hardware Detection:** Upon initialization (or on demand), the module attempts to detect available hardware accelerators using relevant libraries (e.g., PyTorch for CUDA/ROCm, specific SDKs for NPUs). It reports detected hardware capabilities.
+*   **Hardware Detection:** Upon initialization (or on demand), the module attempts to detect available hardware accelerators. It reports detected hardware capabilities.
 *   **Configuration Management:** Reads LLM configurations from the Control Panel, including backend choice, model, credentials, and **hardware acceleration settings (e.g., enable GPU/NPU, target device ID, number of GPU layers to offload, quantization settings).**
+*   **LangChain/LlamaIndex Compatibility:** The module will return initialized LLM instances (e.g., `ChatOllama`, `OllamaLLM`) that are directly usable by LangChain Agents and LlamaIndex `ServiceContext`.
 *   **Backend Connectors (Acceleration Aware):** Specific connectors handle communication nuances and **pass hardware configuration parameters** to the chosen backend:
-    *   For Ollama/LMStudio: Modifies API requests if possible.
-    *   For Direct Libraries: Implements device placement, precision control, and memory management logic.
-*   **Unified API:** Exposes consistent methods (`generate_text`, `chat_completion`, `get_embeddings`) to the Core Agent Engine. Hardware acceleration happens transparently based on configuration.
+    *   For Ollama/LMStudio: Configures the LangChain/LlamaIndex LLM classes appropriately.
+    *   For Direct Libraries: Implements device placement, precision control, and memory management logic within custom LangChain LLM wrappers.
+*   **Unified API:** Exposes consistent methods to the Core Agent Engine, returning LangChain-compatible LLM objects. Hardware acceleration happens transparently based on configuration.
 *   **Error Handling:** Handles errors related to hardware (e.g., insufficient VRAM, driver issues) and reports them.
 
 ### Implementation Strategy (Python - Revised)
 
-*   **Hardware Libraries:** Utilize libraries like `torch`, `tensorflow`, `onnxruntime-gpu`, `numba` (for CUDA Python), or specific NPU SDKs for detection and interaction.
-*   **Backend-Specific Parameters:** Research and implement the specific API parameters or library calls needed to enable GPU/NPU usage for Ollama, LM Studio, Transformers, etc.
+*   **LangChain/LlamaIndex LLM Classes:** Utilize `langchain_community.chat_models.ollama.ChatOllama`, `llama_index.llms.ollama.OllamaLLM`, etc.
+*   **Hardware Libraries:** Utilize libraries like `torch`, `tensorflow`, `onnxruntime-gpu` for detection and interaction when implementing custom LLM wrappers.
+*   **Backend-Specific Parameters:** Research and implement the specific parameters needed to enable GPU/NPU usage for Ollama, LM Studio, etc., through their respective LangChain/LlamaIndex integrations.
 *   **Configuration Loading:** Load detailed hardware acceleration settings from the central configuration managed via the Control Panel.
 *   **Conditional Logic:** Implement logic to fall back to CPU execution if acceleration is disabled, unavailable, or fails.
 
@@ -669,8 +1064,8 @@ The `LLM Interface Module`, running on the Orchestrator and potentially Worker N
 The LLM Configuration section in the Control Panel will be significantly enhanced:
 
 *   **Backend Selection:** Choose LLM backend.
-*   **Endpoint/API Key Management:** Configure connection details.
-*   **Model Selection:** Specify the model.
+*   **Endpoint/API Key Management:** Configure connection details in the 'Backend' -> 'LLM' tab.
+*   **Model Selection:** Specify the model in the 'Backend' -> 'LLM' tab.
 *   **Hardware Acceleration Settings (Per Backend/Node where applicable):**
     *   **Enable Acceleration:** Checkbox to enable/disable GPU or NPU usage for the selected local backend.
     *   **Device Selection:** Dropdown to select a specific GPU/NPU if multiple are detected (e.g., `cuda:0`, `cuda:1`).
@@ -679,31 +1074,31 @@ The LLM Configuration section in the Control Panel will be significantly enhance
     *   **(Advanced):** Potentially fields for VRAM limits or other backend-specific tuning parameters.
 *   **Default Parameters:** Standard generation parameters (temperature, max tokens).
 
-This revised approach allows users fine-grained control over hardware utilization for local LLMs on both the main controller and worker nodes, while abstracting the underlying complexity through the `LLM Interface Module`.
+This revised approach allows users fine-grained control over hardware utilization for local LLMs on both the main controller and worker nodes, while abstracting the underlying complexity through the `LLM Interface Module` and ensuring compatibility with LangChain and LlamaIndex.
 
-## Phase 20: Autonomous AI Agent Requirements
+## Phase 21: Autonomous AI Agent Requirements (Revised for LangChain/LlamaIndex)
 
 ### 1. Core Agent Functionality
 
-*   **Autonomy:** The agent must operate independently to achieve goals, plan tasks, execute steps, and handle errors.
-*   **Full OS Access:** Requires direct access to host OS resources (commands, files, processes, system info) on both the main controller and worker nodes. Security considerations and configurable permissions are essential.
-*   **Task Execution Engine (Orchestrator):** A robust engine to interpret goals, plan actions, dispatch tasks (locally or to workers), monitor progress, and handle failures.
+*   **Autonomy:** The agent, now powered by a LangChain Agent, must operate independently to achieve goals, plan tasks, execute steps, and handle errors.
+*   **Full OS Access:** Requires direct access to host OS resources (commands, files, processes, system info) on both the main controller and worker nodes, exposed as LangChain Tools. Security considerations and configurable permissions are essential.
+*   **Task Execution Engine (LangChain Agent Orchestrator):** A robust LangChain Agent to interpret goals, plan actions, dispatch tasks (locally or to workers), monitor progress, and handle failures.
 *   **Distributed Operation:** Support for optional remote worker nodes to distribute workload (e.g., task execution, LLM inference).
-*   **File Handling:** Ability to process and extract information from popular file types (PDF, DOCX, TXT, CSV, JSON, etc.).
+*   **File Handling:** Ability to process and extract information from popular file types (PDF, DOCX, TXT, CSV, JSON, etc.) using LlamaIndex's document loaders.
 
 ### 2. LLM Integration
 
-*   **Multi-LLM Support:** Integration with local (Ollama, LMStudio) and cloud LLMs (OpenAI-compatible, specific APIs).
-*   **Hardware Acceleration (GPU/NPU):** The agent (specifically local LLM backends like Ollama or integrated libraries) must be configurable to utilize available GPU (NVIDIA CUDA, AMD ROCm) or NPU resources for accelerating model inference, both on the main controller and on worker nodes.
-*   **Abstraction Layer:** A unified LLM interface module to simplify interaction with different backends and handle hardware acceleration configurations.
+*   **Multi-LLM Support:** Integration with local (Ollama, LMStudio) and cloud LLMs (OpenAI-compatible, specific APIs) via LangChain-compatible LLM instances.
+*   **Hardware Acceleration (GPU/NPU):** Local LLM backends (Ollama, LMStudio, or direct library integrations) must be configurable to utilize available GPU (NVIDIA CUDA, AMD ROCm) or NPU resources for accelerating model inference, both on the main controller and on worker nodes.
+*   **Abstraction Layer:** A unified LLM interface module to simplify interaction with different backends and handle hardware acceleration configurations, providing LangChain/LlamaIndex compatible LLM objects.
 *   **Configuration:** Control panel must allow selection of LLMs, connection details, model choice, and hardware acceleration settings (e.g., enable GPU, specify GPU layers, select device).
 
 ### 3. Self-Learning and Knowledge Retention
 
-*   **Knowledge Base:** Persistent storage (structured DB, vector DB) for learned knowledge, operational data, and user input.
-*   **Network Storage:** The knowledge base location must be configurable to reside on local disk or network shares (SMB/NFS), with secure credential management.
-*   **Learning Sources:** Learn from task outcomes, user interactions/feedback, introspection, explicit user input, and processed file content.
-*   **Knowledge Management:** Control panel interface to view, add, edit, delete, and reset knowledge, plus upload files for processing.
+*   **Knowledge Base (LlamaIndex/Redis):** Persistent storage for learned knowledge, operational data, and user input, managed by LlamaIndex with Redis as the backend for vector embeddings and raw document storage.
+*   **Network Storage:** The Redis instance for the knowledge base can be configured to reside locally or on a network, with secure credential management.
+*   **Learning Sources:** Learn from task outcomes, user interactions/feedback, introspection, explicit user input, and processed file content (all ingested via LlamaIndex).
+*   **Knowledge Management:** Control panel interface to view, add, edit, delete, and reset knowledge, plus upload files for processing (all interacting with LlamaIndex/Redis).
 
 ### 4. Control Panel
 
@@ -712,7 +1107,7 @@ This revised approach allows users fine-grained control over hardware utilizatio
 *   **Functionality:**
     *   Real-time agent status and event stream display.
     *   LLM configuration (backends, models, API keys, **hardware acceleration settings**).
-    *   Knowledge management (storage location config, credentials, browse, add, edit, delete, reset, file upload).
+    *   Knowledge management (Redis connection config, browse, add, edit, delete, reset, file upload).
     *   Worker node management (view status, registration, configuration, **hardware capabilities**).
     *   Task Queue/Dispatcher configuration.
     *   Core agent settings (permissions, logging).
@@ -724,13 +1119,11 @@ This revised approach allows users fine-grained control over hardware utilizatio
 *   **Core Language:** Python preferred for cross-platform core logic.
 *   **OS Abstraction:** Handle differences in file paths, commands, process management, and **network share access**.
 *   **Hardware Drivers:** Installation and configuration must account for platform-specific GPU/NPU drivers (NVIDIA drivers, AMD drivers, etc.) and libraries (CUDA, ROCm). The agent should detect available hardware and allow configuration.
-*   **Dependency Management:** Manage dependencies for core logic, network access, hardware acceleration libraries (e.g., `torch` with CUDA/ROCm support, `onnxruntime-gpu`), and communication protocols across platforms.
+*   **Dependency Management:** Manage dependencies for core logic, network access, hardware acceleration libraries (e.g., `torch` with CUDA/ROCm support, `onnxruntime-gpu`), and communication protocols across platforms. This now includes `langchain` and `llama-index` and their respective integrations.
 *   **Installation & Execution:**
     *   **Single-Command Setup:** Installation of the agent (Orchestrator and/or Worker) should ideally be achievable via a single command (e.g., using a setup script, Docker Compose, or a simple installer).
     *   **Single-Command Execution:** Running the agent (Orchestrator or Worker) should also be possible via a single command after installation.
     *   **Packaging:** Provide clear instructions and appropriate packaging (e.g., setup scripts, potentially installers) to facilitate this simplified setup and execution on both Linux and Windows.
-*   **Packaging:** Provide clear instructions and appropriate packaging (e.g., setup scripts, potentially installers) to facilitate this simplified setup and execution on both Linux and Windows.
-*   **Packaging:** Provide clear instructions and appropriate packaging (e.g., setup scripts, potentially installers) to facilitate this simplified setup and execution on both Linux and Windows.
 
 ## Agent Instruction (Cilne Prompt)
 
@@ -779,4 +1172,4 @@ Special Instructions for AutoBot:
 - Support reproducible builds in WSL2 and native Linux
 - Emphasize clear logging and automatic self-healing logic
 
-</final_file_content>
+```
