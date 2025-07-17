@@ -9,11 +9,12 @@ Phase 4 – GUI Automation Interface
 - [x] Directory structure created
 - [x] Logging enabled
 - [x] Agent scaffold (main.py, orchestrator, executor)
+- [x] **Centralized Configuration Management** (ConfigManager with global_config_manager)
 - [x] GUI automation (PyAutoGUI, Xvfb working)
 - [x] Web frontend live and connected to LLM (Basic chat display and Terminal modal implemented, CSS compatibility and ordering issues resolved)
 - [ ] Config editor in web GUI
 - [ ] Short-term memory (Redis or in-memory structure)
-- [ ] Long-term memory (SQLite)
+- [x] Long-term memory (SQLite) - LongTermMemoryManager implemented
 - [ ] All web UI buttons functional
 - [ ] Settings UI syncs with `config.yaml`
 
@@ -34,5 +35,7 @@ To move from **Phase 4 → Phase 5**, the following must be complete:
 - [ ] Memory system logs context history and recent commands
 
 ## 🧾 Project Logs
+- 2025-07-17 – **Centralized Configuration Management System** implemented and all core modules updated
+- 2025-07-12 – SQLite Long-Term Memory Manager (LongTermMemoryManager) implemented
 - 2025-06-17 – Xvfb support added and run_agent.sh stabilized
 - 2025-06-16 – Web UI scaffolding initialized, settings menu WIP

@@ -143,3 +143,34 @@
 - To enable task tracking, agent state persistence, configuration change history, and conversation storage
 - To support future features like markdown documentation integration and embedding storage
 - To fulfill the task requirement for comprehensive long-term memory architecture
+
+### 2025-07-17 - Centralized Configuration Management System Implementation
+
+**What was done:**
+- Created `src/config.py` with unified `ConfigManager` class providing centralized configuration loading
+- Updated all core modules to use `global_config_manager` instead of individual config loading:
+  - `src/orchestrator.py`: Removed `config_path` parameter, uses centralized config
+  - `src/llm_interface.py`: Updated to use `global_config_manager`
+  - `src/knowledge_base.py`: Updated to use centralized config and fixed default model from 'llama2' to 'phi:2.7b'
+  - `src/diagnostics.py`: Updated to use `global_config_manager`
+  - `src/worker_node.py`: Updated to use centralized config
+  - `src/langchain_agent_orchestrator.py`: Updated to use `global_config_manager`
+- Fixed critical import error in `setup_agent.sh` (changed `DiagnosticsModule` to `Diagnostics`)
+- Enhanced setup script with proper dependency management, virtual environment handling, and configuration validation
+- Resolved "model 'llama2' not found" error by updating default LLM model configuration
+
+**How it was done:**
+- Created centralized `ConfigManager` class with methods for loading from `config/config.yaml` and `config/settings.json`
+- Implemented environment variable override support and nested configuration access
+- Used `replace_in_file` to update all module imports and remove redundant config loading code
+- Added comprehensive validation step in setup script to verify all modules import correctly
+- Fixed numpy version conflict (numpy==1.26.4) and added missing dependencies
+- Updated frontend build process and static file serving configuration
+
+**Why it was done:**
+- To eliminate configuration duplication and ensure consistency across all modules
+- To provide single source of truth for all application settings through `config/config.yaml`
+- To resolve startup errors and model loading issues that were blocking system functionality
+- To implement robust error handling and validation for reliable system startup
+- To establish foundation for future configuration management features and dynamic updates
+- To fulfill the architectural requirement for centralized configuration management as specified in CLAUDE.md
