@@ -147,12 +147,6 @@ class SystemIntegration:
             return {"status": "error", "message": "Unsupported OS for service management."}
 
     def execute_system_command(self, command: str) -> Dict[str, Any]:
-        """Executes a general system command."""
-        # This is similar to execute_shell_command in worker_node, but kept here for abstraction
-        # and potential future OS-specific enhancements (e.g., direct API calls instead of shell)
-        return self._run_command([command], shell=True)
-
-    def execute_system_command(self, command: str) -> Dict[str, Any]:
         """Executes a general system command with basic sandboxing."""
         if any(command.strip().lower().startswith(disallowed.lower()) for disallowed in self._disallowed_commands):
             return {"status": "error", "message": f"Execution of command starting with '{command.split()[0]}' is disallowed for security reasons."}
@@ -293,7 +287,7 @@ if __name__ == "__main__":
     print("\n--- Execute System Command ---")
     print(si.execute_system_command("echo Hello from system integration!"))
     print(si.execute_system_command("ls -l /tmp")) # Linux example
-    print(si.execute_system_command("dir C:\\")) # Windows example
+    print(si.execute_system_command("dir C:\\\\")) # Windows example
 
     print("\n--- Get Process Info ---")
     print(si.get_process_info(process_name="python")) # Find Python processes
