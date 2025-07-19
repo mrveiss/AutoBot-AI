@@ -9,10 +9,12 @@ import asyncio
 import subprocess
 import logging
 import logging.config
+import traceback # Import traceback module
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 import redis
 import socket
+from fastapi import Request # Ensure Request is imported at the top
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
@@ -107,8 +109,111 @@ async def _check_redis_modules(redis_host: str, redis_port: int):
 # Removed _ensure_config_exists() function and its call. ConfigManager handles this.
 logger.info("main.py: Configuration ensured.")
 
-app = FastAPI()
-logger.info("main.py: FastAPI app initialized.")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Context manager for application startup and shutdown events.
+    Replaces deprecated @app.on_event("startup") and @app.on_event("shutdown").
+    """
+    print("DEBUG: Entering lifespan startup.")
+    logger.info("Application lifespan startup initiated.")
+
+    logger.debug("Lifespan: Initializing core components...")
+    app.state.orchestrator = Orchestrator()
+    app.state.knowledge_base = KnowledgeBase()
+    app.state.diagnostics = Diagnostics()
+    app.state.voice_interface = VoiceInterface()
+    app.state.security_layer = SecurityLayer()
+    logger.info("main.py: Core components (Orchestrator, KB, Diagnostics, Voice, Security) initialized within lifespan.")
+    logger.debug("Lifespan: Core components initialized.")
+
+    logger.debug("Lifespan: Checking Redis modules...")
+    redis_config = global_config_manager.get_redis_config()
+    await _check_redis_modules(redis_config.get('host', 'localhost'), redis_config.get('port', 6379))
+    logger.debug("Lifespan: Redis modules checked.")
+
+    async def safe_redis_task_wrapper(task_name, coro):
+        """Wrapper for Redis background tasks with error handling"""
+        try:
+            await coro
+        except Exception as e:
+            logger.error(f"Redis background task '{task_name}' failed: {e}", exc_info=True)
+            logger.warning(f"Redis task '{task_name}' will be retried in 30 seconds...")
+            await asyncio.sleep(30)
+            # Could implement retry logic here if needed
+
+    logger.debug("Lifespan: Starting Orchestrator startup...")
+    logger.debug("Lifespan: Starting Orchestrator startup...")
+    try:
+        await app.state.orchestrator.startup()
+        if app.state.orchestrator.task_transport_type == "redis" and app.state.orchestrator.redis_client:
+            logger.debug("Lifespan: Skipping Redis background tasks creation (temporarily disabled for debugging)...")
+            # asyncio.create_task(
+            #     safe_redis_task_wrapper(
+            #         "command_approvals_listener", 
+            #         app.state.orchestrator._listen_for_command_approvals()
+            #     )
+            # )
+            # asyncio.create_task(
+            #     safe_redis_task_wrapper(
+            #         "worker_capabilities_listener", 
+            #         app.state.orchestrator._listen_for_worker_capabilities()
+            #     )
+            # )
+            logger.debug("Lifespan: Redis background tasks creation skipped.")
+    except Exception as e:
+        logger.error(f"Error during orchestrator startup: {e}", exc_info=True)
+        # Depending on severity, you might want to raise the exception or handle it gracefully
+        # For now, we'll log and allow the app to potentially continue in a degraded state
+    logger.debug("Lifespan: Orchestrator startup completed.")
+    
+    logger.debug("Lifespan: Initializing KnowledgeBase...")
+    try:
+        # Initialize KnowledgeBase asynchronously
+        await app.state.knowledge_base.ainit()
+        logger.info("KnowledgeBase ainit() called during startup.")
+    except Exception as e:
+        logger.error(f"Error during KnowledgeBase initialization: {e}", exc_info=True)
+        # Let's not raise the exception to see if the app can still function
+        logger.warning("KnowledgeBase initialization failed, but continuing startup...")
+    logger.debug("Lifespan: KnowledgeBase initialized.")
+
+    logger.debug("Lifespan: Initializing ChatHistoryManager...")
+    redis_config = global_config_manager.get_redis_config()
+    use_redis = redis_config.get('enabled', False)
+    redis_host = redis_config.get('host', 'localhost')
+    redis_port = redis_config.get('port', 6379)
+    logger.info(f"main.py: Redis configuration loaded from centralized config: enabled={use_redis}, host={redis_host}, port={redis_port}")
+
+    app.state.chat_history_manager = ChatHistoryManager(
+        history_file=global_config_manager.get_nested('data.chat_history_file', "data/chat_history.json"),
+        use_redis=use_redis,
+        redis_host=redis_host,
+        redis_port=redis_port
+    )
+    logger.info("main.py: ChatHistoryManager initialized within lifespan.")
+    logger.debug("Lifespan: ChatHistoryManager initialized.")
+
+    logger.debug("Lifespan: Initializing main Redis client...")
+    try:
+        app.state.main_redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+        app.state.main_redis_client.ping() # Test connection
+        logger.info("main.py: Main Redis client initialized and connected within lifespan.")
+    except redis.ConnectionError as e:
+        logger.error(f"main.py: Failed to connect to Redis for main_redis_client: {e}")
+        app.state.main_redis_client = None
+    logger.debug("Lifespan: Main Redis client initialized.")
+
+    yield
+
+    # Shutdown events
+    logger.info("Application lifespan shutdown initiated.")
+    print("Application shutting down.")
+
+app = FastAPI(lifespan=lifespan)
+logger.info("main.py: FastAPI app initialized with lifespan.")
 
 # Enable CORS for frontend on multiple ports using config
 backend_config = global_config_manager.get_backend_config()
@@ -123,37 +228,7 @@ app.add_middleware(
 )
 logger.info("main.py: CORS middleware added.")
 
-# Initialize the Orchestrator and KnowledgeBase
-orchestrator = Orchestrator()
-knowledge_base = KnowledgeBase()
-diagnostics = Diagnostics()
-voice_interface = VoiceInterface()
-security_layer = SecurityLayer()
-logger.info("main.py: Core components (Orchestrator, KB, Diagnostics, Voice, Security) initialized.")
 
-# Initialize ChatHistoryManager with settings from centralized config
-redis_config = global_config_manager.get_redis_config()
-use_redis = redis_config.get('enabled', False)
-redis_host = redis_config.get('host', 'localhost')
-redis_port = redis_config.get('port', 6379)
-logger.info(f"main.py: Redis configuration loaded from centralized config: enabled={use_redis}, host={redis_host}, port={redis_port}")
-
-chat_history_manager = ChatHistoryManager(
-    history_file=global_config_manager.get_nested('data.chat_history_file', "data/chat_history.json"),
-    use_redis=use_redis,
-    redis_host=redis_host,
-    redis_port=redis_port
-)
-logger.info("main.py: ChatHistoryManager initialized.")
-
-# Initialize Redis client for main.py to publish user responses
-try:
-    main_redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-    main_redis_client.ping() # Test connection
-    logger.info("main.py: Main Redis client initialized and connected.")
-except redis.ConnectionError as e:
-    logger.error(f"main.py: Failed to connect to Redis for main_redis_client: {e}")
-    main_redis_client = None
 
 # Create a separate router for API endpoints
 api_router = FastAPI(title="AutoBot API")
@@ -167,6 +242,9 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info(f"main.py: WebSocket connected from client: {websocket.client}")
     logger.info(f"main.py: Requested WebSocket path: {websocket.scope['path']}")
     logger.info(f"main.py: WebSocket connection type: {websocket.scope['type']}")
+
+    # Access chat_history_manager from app.state via scope
+    chat_history_manager = websocket.scope["app"].state.chat_history_manager
 
     async def broadcast_event(event_data: dict):
         try:
@@ -274,21 +352,6 @@ async def add_security_headers(request, call_next):
 
     return response
 
-@app.on_event("startup")
-async def startup_event_orchestrator():
-    """Run startup tasks for the orchestrator."""
-    print("DEBUG: Entering startup_event_orchestrator.")
-    redis_config = global_config_manager.get_redis_config()
-    await _check_redis_modules(redis_config.get('host', 'localhost'), redis_config.get('port', 6379))
-
-    await orchestrator.startup()
-    if orchestrator.task_transport_type == "redis" and orchestrator.redis_client:
-        asyncio.create_task(orchestrator._listen_for_command_approvals())
-        asyncio.create_task(orchestrator._listen_for_worker_capabilities())
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("Application shutting down.")
 
 @api_router.get("/hello")
 async def hello_world():
@@ -302,36 +365,61 @@ async def get_version():
     }
 
 @api_router.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """Health check endpoint for frontend status monitoring."""
+    orchestrator_status = "unknown"
+    diagnostics_status = "unknown"
+    llm_status = "skipped" # Still skipped, as we're not checking it yet
+    
+    logger.debug("Health check: Starting with explicit app.state checks and print statements.")
+    
     try:
-        orchestrator_status = "connected" if orchestrator else "disconnected"
+        orchestrator = getattr(request.app.state, 'orchestrator', None)
+        print(f"DEBUG: Health check - retrieved orchestrator: {orchestrator}")
+        if orchestrator:
+            orchestrator_status = "connected"
+            logger.debug("Health check: Orchestrator instance found in app.state.")
+        else:
+            orchestrator_status = "not_found_in_state"
+            logger.error("Health check: Orchestrator instance NOT found in app.state.")
         
-        ollama_connected = await orchestrator.llm_interface.check_ollama_connection() if orchestrator else False
-        llm_status = "connected" if ollama_connected else "disconnected"
-        
+        diagnostics = getattr(request.app.state, 'diagnostics', None)
+        print(f"DEBUG: Health check - retrieved diagnostics: {diagnostics}")
+        if diagnostics:
+            diagnostics_status = "connected"
+            logger.debug("Health check: Diagnostics instance found in app.state.")
+        else:
+            diagnostics_status = "not_found_in_state"
+            logger.error("Health check: Diagnostics instance NOT found in app.state.")
+
+        logger.info("Health check: Returning status after explicit app.state checks.")
         return {
             "status": "healthy",
             "backend": "connected",
             "orchestrator": orchestrator_status,
+            "diagnostics": diagnostics_status, # Add diagnostics status to response
             "llm": llm_status,
             "timestamp": asyncio.get_event_loop().time()
         }
     except Exception as e:
+        logger.error(f"Health check: An unexpected error occurred during app.state access: {e}", exc_info=True)
         return JSONResponse(
             status_code=503,
             content={
                 "status": "unhealthy", 
                 "backend": "connected",
-                "orchestrator": "error",
-                "llm": "disconnected",
-                "error": str(e)
+                "orchestrator": "error_exception",
+                "diagnostics": "error_exception",
+                "llm": "error_exception",
+                "error": str(e),
+                "detail": traceback.format_exc()
             }
         )
 
 @api_router.get("/chats")
-async def list_chats():
+async def list_chats(request: Request):
     """List all available chat sessions."""
+    chat_history_manager = request.app.state.chat_history_manager
     try:
         sessions = chat_history_manager.list_sessions()
         return {"chats": sessions}
@@ -339,8 +427,9 @@ async def list_chats():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @api_router.get("/chats/{chat_id}")
-async def get_chat(chat_id: str):
+async def get_chat(chat_id: str, request: Request):
     """Get a specific chat session."""
+    chat_history_manager = request.app.state.chat_history_manager
     try:
         history = chat_history_manager.load_session(chat_id)
         if history:
@@ -371,7 +460,7 @@ async def get_backend_settings():
         return JSONResponse(status_code=500, content={"error": f"Failed to retrieve backend settings: {e}"})
 
 @api_router.post("/settings/backend")
-async def update_backend_settings(settings: dict):
+async def update_backend_settings(request: Request, settings: dict): # Reordered arguments
     """Update backend-specific settings using the centralized ConfigManager."""
     try:
         for key, value in settings.items():
@@ -443,7 +532,8 @@ async def chrome_devtools_json():
     return JSONResponse(status_code=200, content={})
 
 @api_router.post("/login")
-async def login(username: str = Form(...), password: str = Form(...)):
+async def login(request: Request, username: str = Form(...), password: str = Form(...)): # Reordered arguments
+    security_layer = request.app.state.security_layer
     user_role = security_layer.authenticate_user(username, password)
     if user_role:
         security_layer.audit_log("login", username, "success", {"ip": "N/A"})
@@ -453,7 +543,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         return JSONResponse(status_code=401, content={"message": "Invalid credentials"})
 
 @api_router.post("/goal")
-async def receive_goal(payload: GoalPayload):
+async def receive_goal(request: Request, payload: GoalPayload): # Reordered arguments
     """
     Receives a goal from the user to be executed by the orchestrator.
     
@@ -466,6 +556,9 @@ async def receive_goal(payload: GoalPayload):
     Raises:
         JSONResponse: Returns a 403 error if permission is denied, or a 500 error if an internal error occurs.
     """
+    orchestrator = request.app.state.orchestrator
+    security_layer = request.app.state.security_layer
+
     goal = payload.goal
     use_phi2 = payload.use_phi2
     user_role = payload.user_role
@@ -553,13 +646,14 @@ async def get_settings_modal_html():
     return JSONResponse(status_code=404, content={"message": "This endpoint is deprecated. Settings are now handled by the new admin GUI."})
 
 @api_router.get("/system_metrics")
-async def get_system_metrics_api():
+async def get_system_metrics_api(request: Request):
     """Fetches real-time system metrics (CPU, RAM, GPU/VRAM)."""
+    diagnostics = request.app.state.diagnostics
     metrics = diagnostics.get_system_metrics()
     return metrics
 
 @api_router.post("/settings")
-async def update_settings(settings: dict):
+async def update_settings(request: Request, settings: dict): # Reordered arguments
     """Updates configuration settings."""
     # This endpoint is for general settings updates, not just backend.
     # It should use ConfigManager's save_settings and reload.
@@ -586,12 +680,13 @@ async def update_settings(settings: dict):
 
         # Update ChatHistoryManager with new Redis settings if changed
         if 'memory' in settings and 'redis' in settings['memory']:
-            global chat_history_manager
+            chat_history_manager = request.app.state.chat_history_manager
             redis_config = global_config_manager.get_redis_config()
             use_redis = redis_config.get('enabled', False)
             redis_host = redis_config.get('host', 'localhost')
             redis_port = redis_config.get('port', 6379)
-            chat_history_manager = ChatHistoryManager(
+            # Re-initialize ChatHistoryManager with new settings
+            request.app.state.chat_history_manager = ChatHistoryManager(
                 history_file=global_config_manager.get_nested('data.chat_history_file', "data/chat_history.json"),
                 use_redis=use_redis,
                 redis_host=redis_host,
@@ -607,8 +702,9 @@ async def update_settings(settings: dict):
         return JSONResponse(status_code=500, content={"message": f"Failed to update settings: {e}"})
 
 @api_router.post("/uploadfile/")
-async def create_upload_file(file: UploadFile = File(...), file_type: str = Form(...), metadata: Optional[str] = Form(None)):
+async def create_upload_file(request: Request, file: UploadFile = File(...), file_type: str = Form(...), metadata: Optional[str] = Form(None)): # Reordered arguments
     """Handles file uploads and adds them to the knowledge base."""
+    knowledge_base = request.app.state.knowledge_base
     upload_dir = "uploads"
     os.makedirs(upload_dir, exist_ok=True)
     if file.filename is None:
@@ -640,7 +736,7 @@ async def create_upload_file(file: UploadFile = File(...), file_type: str = Form
         return JSONResponse(status_code=500, content={"message": f"Failed to upload or process file: {e}"})
 
 @api_router.get("/files")
-async def list_files_api(path: str = Query("", description="Path to list files from")):
+async def list_files_api(request: Request, path: str = Query("", description="Path to list files from")): # Reordered arguments
     """
     Lists files and directories within a specified path.
     
@@ -679,7 +775,7 @@ async def list_files_api(path: str = Query("", description="Path to list files f
         return JSONResponse(status_code=500, content={"message": f"Failed to list files: {str(e)}"})
 
 @api_router.delete("/delete_file")
-async def delete_file_api(path: str = Query(..., description="Path of the file or directory to delete")):
+async def delete_file_api(request: Request, path: str = Query(..., description="Path of the file or directory to delete")): # Reordered arguments
     """
     Deletes a file or an empty directory at the specified path.
     """
@@ -711,7 +807,7 @@ async def delete_file_api(path: str = Query(..., description="Path of the file o
         return JSONResponse(status_code=500, content={"message": f"Failed to delete {path}: {e}"})
 
 @api_router.post("/execute_command")
-async def execute_command(command_data: dict, user_role: str = Form("user")):
+async def execute_command(request: Request, command_data: dict, user_role: str = Form("user")): # Reordered arguments
     """
     Executes a shell command and returns its output.
     
@@ -726,6 +822,7 @@ async def execute_command(command_data: dict, user_role: str = Form("user")):
         JSONResponse: Returns a 400 error if no command is provided, a 403 error if permission is denied,
                       or a 500 error if an internal error occurs.
     """
+    security_layer = request.app.state.security_layer
     command = command_data.get("command")
     if not command:
         security_layer.audit_log("execute_command", user_role, "failure", {"command": command, "reason": "no_command_provided"})
@@ -770,8 +867,9 @@ async def execute_command(command_data: dict, user_role: str = Form("user")):
         return JSONResponse(status_code=500, content={"message": message, "status": "error"})
 
 @api_router.post("/knowledge_base/store_fact")
-async def store_fact_api(content: str = Form(...), metadata: Optional[str] = Form(None)):
+async def store_fact_api(request: Request, content: str = Form(...), metadata: Optional[str] = Form(None)): # Reordered arguments
     """API to store a structured fact in the knowledge base."""
+    knowledge_base = request.app.state.knowledge_base
     parsed_metadata = json.loads(metadata) if metadata else None
     result = await knowledge_base.store_fact(content, parsed_metadata)
     if result["status"] == "success":
@@ -782,17 +880,20 @@ async def store_fact_api(content: str = Form(...), metadata: Optional[str] = For
         return JSONResponse(status_code=500, content=result)
 
 @api_router.get("/chat/history")
-async def get_chat_history_api():
+async def get_chat_history_api(request: Request):
     """
     Retrieves the conversation history from the ChatHistoryManager.
     """
+    chat_history_manager = request.app.state.chat_history_manager
     history = chat_history_manager.get_all_messages()
     total_tokens = sum(len(msg.get('text', '').split()) for msg in history)
     return {"history": history, "tokens": total_tokens}
 
 @api_router.post("/chat/reset")
-async def reset_chat_api(user_role: str = Form("user")):
+async def reset_chat_api(request: Request, user_role: str = Form("user")): # Reordered arguments
     """Clears the entire chat history."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
     if not security_layer.check_permission(user_role, "allow_chat_control"):
         security_layer.audit_log("reset_chat", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to reset chat."})
@@ -802,8 +903,10 @@ async def reset_chat_api(user_role: str = Form("user")):
     return {"message": "Chat history cleared successfully."}
 
 @api_router.post("/chat/new")
-async def new_chat_session_api(user_role: str = Form("user")):
+async def new_chat_session_api(request: Request, user_role: str = Form("user")): # Reordered arguments
     """Starts a new chat session by clearing the current history."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
     if not security_layer.check_permission(user_role, "allow_chat_control"):
         security_layer.audit_log("new_chat", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to start new chat."})
@@ -813,8 +916,10 @@ async def new_chat_session_api(user_role: str = Form("user")):
     return {"message": "New chat session started successfully."}
 
 @api_router.get("/chat/list_sessions")
-async def list_chat_sessions_api(user_role: str = Query("user")):
+async def list_chat_sessions_api(request: Request, user_role: str = Query("user")): # Reordered arguments
     """Lists available chat sessions."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
     if not security_layer.check_permission(user_role, "allow_chat_control"):
         security_layer.audit_log("list_chat_sessions", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to list chat sessions."})
@@ -823,8 +928,10 @@ async def list_chat_sessions_api(user_role: str = Query("user")):
     return {"sessions": sessions}
 
 @api_router.get("/chat/load_session/{session_id}")
-async def load_chat_session_api(session_id: str, user_role: str = Query("user")):
+async def load_chat_session_api(session_id: str, request: Request, user_role: str = Query("user")): # Reordered arguments
     """Loads a specific chat session."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
     if not security_layer.check_permission(user_role, "allow_chat_control"):
         security_layer.audit_log("load_chat_session", user_role, "denied", {"session_id": session_id, "reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to load chat session."})
@@ -837,8 +944,10 @@ async def load_chat_session_api(session_id: str, user_role: str = Query("user"))
         return JSONResponse(status_code=404, content={"message": f"Session '{session_id}' not found."})
 
 @api_router.post("/chat/save_session")
-async def save_chat_session_api(session_id: str = Form("default_session"), user_role: str = Form("user")):
+async def save_chat_session_api(request: Request, session_id: str = Form("default_session"), user_role: str = Form("user")): # Reordered arguments
     """Saves the current chat history as a named session."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
     if not security_layer.check_permission(user_role, "allow_chat_control"):
         security_layer.audit_log("save_chat_session", user_role, "denied", {"session_id": session_id, "reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to save chat session."})
@@ -867,20 +976,24 @@ Relevant Knowledge:
     return {"content": mock_context, "tokens": mock_tokens}
 
 @api_router.get("/knowledge_base/get_fact")
-async def get_fact_api(fact_id: Optional[int] = None, query: Optional[str] = None):
+async def get_fact_api(request: Request, fact_id: Optional[int] = None, query: Optional[str] = None): # Reordered arguments
     """API to retrieve facts from the knowledge base."""
+    knowledge_base = request.app.state.knowledge_base
     facts = knowledge_base.get_fact(fact_id=fact_id, query=query)
     return {"facts": facts}
 
 @api_router.post("/knowledge_base/search")
-async def search_knowledge_base_api(query: str = Form(...), n_results: int = Form(5)):
+async def search_knowledge_base_api(request: Request, query: str = Form(...), n_results: int = Form(5)): # Reordered arguments
     """API to search the vector store in the knowledge base."""
+    knowledge_base = request.app.state.knowledge_base
     results = knowledge_base.search(query, n_results)
     return {"results": results}
 
 
 @api_router.post("/voice/listen")
-async def voice_listen_api(user_role: str = Form("user")):
+async def voice_listen_api(request: Request, user_role: str = Form("user")): # Reordered arguments
+    security_layer = request.app.state.security_layer
+    voice_interface = request.app.state.voice_interface
     if not security_layer.check_permission(user_role, "allow_voice_listen"):
         security_layer.audit_log("voice_listen", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to listen via voice."})
@@ -894,8 +1007,10 @@ async def voice_listen_api(user_role: str = Form("user")):
         return JSONResponse(status_code=500, content={"message": f"Speech recognition failed: {result['message']}"})
 
 @api_router.post("/voice/speak")
-async def voice_speak_api(text: str = Form(...), user_role: str = Form("user")):
+async def voice_speak_api(request: Request, text: str = Form(...), user_role: str = Form("user")): # Reordered arguments
     """Converts text to speech and plays it."""
+    security_layer = request.app.state.security_layer
+    voice_interface = request.app.state.voice_interface
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log("voice_speak", user_role, "denied", {"text_preview": text[:50], "reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to speak via voice."})
@@ -909,12 +1024,14 @@ async def voice_speak_api(text: str = Form(...), user_role: str = Form("user")):
         return JSONResponse(status_code=500, content={"message": f"Text-to-speech failed: {result['message']}"})
 
 @api_router.post("/agent/pause")
-async def pause_agent_api(user_role: str = Form("user")):
+async def pause_agent_api(request: Request, user_role: str = Form("user")): # Reordered arguments
     """
     Pauses the agent's current operation.
     Note: This is currently a placeholder and returns a success status without actual functionality.
     Full implementation will be added with backend integration.
     """
+    security_layer = request.app.state.security_layer
+    orchestrator = request.app.state.orchestrator
     if not security_layer.check_permission(user_role, "allow_agent_control"):
         security_layer.audit_log("agent_pause", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to pause agent."})
@@ -925,12 +1042,14 @@ async def pause_agent_api(user_role: str = Form("user")):
     return {"message": "Agent paused successfully."}
 
 @api_router.post("/agent/resume")
-async def resume_agent_api(user_role: str = Form("user")):
+async def resume_agent_api(request: Request, user_role: str = Form("user")): # Reordered arguments
     """
     Resumes the agent's operation if paused.
     Note: This is currently a placeholder and returns a success status without actual functionality.
     Full implementation will be added with backend integration.
     """
+    security_layer = request.app.state.security_layer
+    orchestrator = request.app.state.orchestrator
     if not security_layer.check_permission(user_role, "allow_agent_control"):
         security_layer.audit_log("agent_resume", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(status_code=403, content={"message": "Permission denied to resume agent."})
@@ -941,10 +1060,13 @@ async def resume_agent_api(user_role: str = Form("user")):
     return {"message": "Agent resumed successfully."}
 
 @api_router.post("/command_approval")
-async def command_approval(payload: CommandApprovalPayload):
+async def command_approval(request: Request, payload: CommandApprovalPayload): # Reordered arguments
     """
     Receives user approval/denial for a command execution.
     """
+    security_layer = request.app.state.security_layer
+    main_redis_client = request.app.state.main_redis_client
+
     task_id = payload.task_id
     approved = payload.approved
     user_role = payload.user_role
@@ -966,8 +1088,3 @@ async def command_approval(payload: CommandApprovalPayload):
     except Exception as e:
         logging.error(f"Error publishing command approval for task {task_id}: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"message": f"Failed to process command approval: {e}"})
-
-if __name__ == "__main__":
-    logger.info("main.py: Attempting to run Uvicorn server.")
-    uvicorn.run(app, host="0.0.0.0", port=8001)
-    logger.info("main.py: Uvicorn server stopped.")
