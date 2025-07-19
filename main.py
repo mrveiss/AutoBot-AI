@@ -130,6 +130,9 @@ async def websocket_endpoint(websocket: WebSocket):
     print(f"Requested WebSocket path: {websocket.scope['path']}")
     print(f"WebSocket connection type: {websocket.scope['type']}")
 
+    # Access chat_history_manager from app.state via scope
+    chat_history_manager = websocket.scope["app"].state.chat_history_manager
+
     async def broadcast_event(event_data: dict):
         try:
             await websocket.send_json(event_data)
