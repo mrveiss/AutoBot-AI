@@ -24,7 +24,10 @@ build/
 *:Zone.Identifier
 *.Identifier
 backend/data/chats/*
+<<<<<<< HEAD
 
 # Data directories (user data, chats, messages)
+=======
+>>>>>>> 6ddf184 (Update .gitignore to exclude data/chats/ and data/messages/)
 data/chats/
 data/messages/
