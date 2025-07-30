@@ -21,7 +21,7 @@ import shutil
 import glob
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.chat_history_manager import ChatHistoryManager
-from src.config import global_config_manager as config
+from src.config import global_config_manager
 
 app = FastAPI()
 
@@ -38,20 +38,21 @@ async def startup_event():
     logger.info("Application startup completed - app.state initialized")
 
 # Configure CORS
+cors_origins = global_config_manager.get_nested('backend.cors_origins', ['http://localhost:5173'])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config['cors_origins'],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Directory to store chat data
-CHAT_DATA_DIR = config['chat_data_dir']
+CHAT_DATA_DIR = global_config_manager.get_nested('backend.chat_data_dir', 'data/chats')
 os.makedirs(CHAT_DATA_DIR, exist_ok=True)
 
 # Ollama configuration
-OLLAMA_ENDPOINT = config['ollama_endpoint']
+OLLAMA_ENDPOINT = global_config_manager.get_nested('backend.ollama_endpoint', 'http://localhost:11434/api/generate')
 
 class ChatMessage(BaseModel):
     message: str
@@ -67,16 +68,16 @@ def communicate_with_ollama(prompt):
     try:
         logger.info(f"Sending request to Ollama with prompt: {prompt}")
         payload = {
-            "model": config['ollama_model'],
+            "model": global_config_manager.get_nested('backend.ollama_model', 'llama2'),
             "prompt": prompt,
-            "stream": config['streaming']
+            "stream": global_config_manager.get_nested('backend.streaming', False)
         }
         logger.info(f"Ollama request payload: {json.dumps(payload, indent=2)}")
         
-        response = requests.post(OLLAMA_ENDPOINT, json=payload, timeout=config['timeout'], stream=config['streaming'])
+        response = requests.post(OLLAMA_ENDPOINT, json=payload, timeout=global_config_manager.get_nested('backend.timeout', 30), stream=global_config_manager.get_nested('backend.streaming', False))
         
         if response.ok:
-            if config['streaming']:
+            if global_config_manager.get_nested('backend.streaming', False):
                 def stream_response():
                     full_text = ""
                     thought_text = ""
@@ -279,10 +280,7 @@ async def save_settings(settings_data: Settings):
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(settings_data.settings, f, indent=2)
         logger.info("Saved settings")
-        # Reload config after settings are saved
-        global config
-        config = load_config()
-        logger.info(f"Updated configuration: {json.dumps(config, indent=2)}")
+        # ConfigManager handles automatic reloading
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error saving settings: {str(e)}")
@@ -315,10 +313,7 @@ async def update_backend_settings(settings_data: Settings):
             with open(SETTINGS_FILE, 'w') as f:
                 json.dump(current_settings, f, indent=2)
             logger.info("Updated backend settings")
-            # Reload config after settings are saved
-            global config
-            config = load_config()
-            logger.info(f"Updated backend configuration: {json.dumps(config, indent=2)}")
+            # ConfigManager handles automatic reloading
             return {"status": "success"}
         else:
             logger.error("No backend settings provided")
@@ -339,6 +334,298 @@ async def get_backend_settings():
     except Exception as e:
         logger.error(f"Error loading backend settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error loading backend settings: {str(e)}")
+
+# Redis Configuration API Endpoints
+@app.get("/api/redis/config")
+async def get_redis_config():
+    """Get current Redis configuration"""
+    try:
+        task_transport_config = global_config_manager.get('task_transport', {})
+        redis_config = task_transport_config.get('redis', {})
+        
+        return {
+            "type": task_transport_config.get('type', 'local'),
+            "host": redis_config.get('host', 'localhost'),
+            "port": redis_config.get('port', 6379),
+            "channels": redis_config.get('channels', {}),
+            "priority": redis_config.get('priority', 10)
+        }
+    except Exception as e:
+        logger.error(f"Error getting Redis config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting Redis config: {str(e)}")
+
+@app.post("/api/redis/config")
+async def update_redis_config(config_data: dict):
+    """Update Redis configuration"""
+    try:
+        # Load current config
+        current_config = global_config_manager.to_dict()
+        
+        # Update task transport configuration
+        if 'task_transport' not in current_config:
+            current_config['task_transport'] = {}
+        
+        # Update transport type
+        if 'type' in config_data:
+            current_config['task_transport']['type'] = config_data['type']
+        
+        # Update Redis-specific settings
+        if 'task_transport' not in current_config:
+            current_config['task_transport'] = {}
+        if 'redis' not in current_config['task_transport']:
+            current_config['task_transport']['redis'] = {}
+            
+        redis_config = current_config['task_transport']['redis']
+        
+        if 'host' in config_data:
+            redis_config['host'] = config_data['host']
+        if 'port' in config_data:
+            redis_config['port'] = int(config_data['port'])
+        if 'channels' in config_data:
+            redis_config['channels'] = config_data['channels']
+        if 'priority' in config_data:
+            redis_config['priority'] = int(config_data['priority'])
+        
+        # Save updated config to file
+        config_file_path = 'config/config.yaml'
+        os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
+        with open(config_file_path, 'w') as f:
+            yaml.dump(current_config, f, default_flow_style=False)
+        
+        # Reload the global config manager
+        global_config_manager.reload()
+        
+        logger.info(f"Updated Redis configuration: {config_data}")
+        return {"status": "success", "message": "Redis configuration updated successfully"}
+    except Exception as e:
+        logger.error(f"Error updating Redis config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating Redis config: {str(e)}")
+
+@app.post("/api/redis/test_connection")
+async def test_redis_connection():
+    """Test Redis connection with current configuration"""
+    try:
+        import redis
+        task_transport_config = global_config_manager.get('task_transport', {})
+        
+        if task_transport_config.get('type') != 'redis':
+            return {
+                "status": "not_configured",
+                "message": "Redis transport is not configured (type is not 'redis')"
+            }
+        
+        redis_config = task_transport_config.get('redis', {})
+        redis_host = redis_config.get('host', 'localhost')
+        redis_port = redis_config.get('port', 6379)
+        
+        redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+        redis_client.ping()
+        
+        # Check if RediSearch module is loaded
+        redis_search_module_loaded = False
+        try:
+            modules = redis_client.module_list()
+            redis_search_module_loaded = any(module[b'name'] == b'search' or module.get('name') == 'search' for module in modules)
+        except:
+            redis_search_module_loaded = False
+        
+        return {
+            "status": "connected",
+            "message": f"Successfully connected to Redis at {redis_host}:{redis_port}",
+            "host": redis_host,
+            "port": redis_port,
+            "redis_search_module_loaded": redis_search_module_loaded
+        }
+    except Exception as e:
+        logger.error(f"Redis connection test failed: {str(e)}")
+        return {
+            "status": "disconnected",
+            "message": f"Failed to connect to Redis: {str(e)}"
+        }
+
+# LLM Configuration API Endpoints
+@app.get("/api/llm/config")
+async def get_llm_config():
+    """Get current LLM configuration"""
+    try:
+        llm_config = global_config_manager.get('llm_config', {})
+        backend_config = global_config_manager.get('backend', {})
+        
+        return {
+            "default_llm": llm_config.get('default_llm', 'ollama_tinyllama'),
+            "task_llm": llm_config.get('task_llm', 'ollama_tinyllama'),
+            "ollama": {
+                "endpoint": backend_config.get('ollama_endpoint', 'http://localhost:11434/api/generate'),
+                "model": backend_config.get('ollama_model', 'llama2'),
+                "host": llm_config.get('ollama', {}).get('host', 'http://localhost:11434'),
+                "models": llm_config.get('ollama', {}).get('models', {})
+            },
+            "openai": llm_config.get('openai', {}),
+            "orchestrator_llm_settings": llm_config.get('orchestrator_llm_settings', {}),
+            "task_llm_settings": llm_config.get('task_llm_settings', {})
+        }
+    except Exception as e:
+        logger.error(f"Error getting LLM config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting LLM config: {str(e)}")
+
+@app.post("/api/llm/config")
+async def update_llm_config(config_data: dict):
+    """Update LLM configuration"""
+    try:
+        # Load current config
+        current_config = global_config_manager.to_dict()
+        
+        # Update LLM configuration
+        if 'llm_config' not in current_config:
+            current_config['llm_config'] = {}
+        if 'backend' not in current_config:
+            current_config['backend'] = {}
+        
+        llm_config = current_config['llm_config']
+        backend_config = current_config['backend']
+        
+        # Update basic LLM settings
+        if 'default_llm' in config_data:
+            llm_config['default_llm'] = config_data['default_llm']
+        if 'task_llm' in config_data:
+            llm_config['task_llm'] = config_data['task_llm']
+        
+        # Update Ollama settings
+        if 'ollama' in config_data:
+            ollama_data = config_data['ollama']
+            if 'ollama' not in llm_config:
+                llm_config['ollama'] = {}
+            
+            if 'endpoint' in ollama_data:
+                backend_config['ollama_endpoint'] = ollama_data['endpoint']
+            if 'model' in ollama_data:
+                backend_config['ollama_model'] = ollama_data['model']
+            if 'host' in ollama_data:
+                llm_config['ollama']['host'] = ollama_data['host']
+            if 'models' in ollama_data:
+                llm_config['ollama']['models'] = ollama_data['models']
+        
+        # Update OpenAI settings
+        if 'openai' in config_data:
+            llm_config['openai'] = config_data['openai']
+        
+        # Update orchestrator and task LLM settings
+        if 'orchestrator_llm_settings' in config_data:
+            llm_config['orchestrator_llm_settings'] = config_data['orchestrator_llm_settings']
+        if 'task_llm_settings' in config_data:
+            llm_config['task_llm_settings'] = config_data['task_llm_settings']
+        
+        # Save updated config to file
+        config_file_path = 'config/config.yaml'
+        os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
+        with open(config_file_path, 'w') as f:
+            yaml.dump(current_config, f, default_flow_style=False)
+        
+        # Reload the global config manager
+        global_config_manager.reload()
+        
+        logger.info(f"Updated LLM configuration: {config_data}")
+        return {"status": "success", "message": "LLM configuration updated successfully"}
+    except Exception as e:
+        logger.error(f"Error updating LLM config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating LLM config: {str(e)}")
+
+@app.post("/api/llm/test_connection")
+async def test_llm_connection():
+    """Test LLM connection with current configuration"""
+    try:
+        ollama_endpoint = global_config_manager.get_nested('backend.ollama_endpoint', 'http://localhost:11434/api/generate')
+        ollama_model = global_config_manager.get_nested('backend.ollama_model', 'llama2')
+        
+        # Test Ollama connection
+        ollama_check_url = ollama_endpoint.replace('/api/generate', '/api/tags')
+        response = requests.get(ollama_check_url, timeout=10)
+        
+        if response.status_code == 200:
+            # Test a simple generation request
+            test_payload = {
+                "model": ollama_model,
+                "prompt": "Test connection - respond with 'OK'",
+                "stream": False
+            }
+            
+            test_response = requests.post(ollama_endpoint, json=test_payload, timeout=30)
+            
+            if test_response.status_code == 200:
+                result = test_response.json()
+                return {
+                    "status": "connected",
+                    "message": f"Successfully connected to Ollama with model '{ollama_model}'",
+                    "endpoint": ollama_endpoint,
+                    "model": ollama_model,
+                    "test_response": result.get('response', 'No response text')[:100] + '...' if result.get('response') else 'No response'
+                }
+            else:
+                return {
+                    "status": "partial",
+                    "message": f"Connected to Ollama but model '{ollama_model}' failed to respond",
+                    "endpoint": ollama_endpoint,
+                    "model": ollama_model,
+                    "error": test_response.text
+                }
+        else:
+            return {
+                "status": "disconnected",
+                "message": f"Failed to connect to Ollama at {ollama_check_url}",
+                "endpoint": ollama_endpoint,
+                "status_code": response.status_code
+            }
+    except Exception as e:
+        logger.error(f"LLM connection test failed: {str(e)}")
+        return {
+            "status": "disconnected",
+            "message": f"Failed to test LLM connection: {str(e)}"
+        }
+
+@app.get("/api/llm/models")
+async def get_available_llm_models():
+    """Get list of available LLM models"""
+    try:
+        ollama_endpoint = global_config_manager.get_nested('backend.ollama_endpoint', 'http://localhost:11434/api/generate')
+        models = []
+        
+        # Get Ollama models
+        try:
+            ollama_tags_url = ollama_endpoint.replace('/api/generate', '/api/tags')
+            response = requests.get(ollama_tags_url, timeout=10)
+            if response.status_code == 200:
+                ollama_data = response.json()
+                if 'models' in ollama_data:
+                    for model in ollama_data['models']:
+                        models.append({
+                            "name": model.get('name', 'Unknown'),
+                            "type": "ollama",
+                            "size": model.get('size', 0),
+                            "modified_at": model.get('modified_at', ''),
+                            "available": True
+                        })
+        except Exception as e:
+            logger.warning(f"Failed to get Ollama models: {str(e)}")
+        
+        # Add configured models from config
+        llm_config = global_config_manager.get('llm_config', {})
+        ollama_config_models = llm_config.get('ollama', {}).get('models', {})
+        for key, model_name in ollama_config_models.items():
+            if not any(m['name'] == model_name for m in models):
+                models.append({
+                    "name": model_name,
+                    "type": "ollama",
+                    "configured": True,
+                    "available": False
+                })
+        
+        return {
+            "models": models,
+            "total_count": len(models)
+        }
+    except Exception as e:
+        logger.error(f"Error getting available models: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting available models: {str(e)}")
 
 @app.get("/api/prompts")
 async def get_prompts():
@@ -451,16 +738,47 @@ async def health_check():
         # Check if we can connect to Ollama
         ollama_healthy = False
         try:
-            ollama_check_url = config['ollama_endpoint'].replace('/api/generate', '/api/tags')
+            ollama_check_url = global_config_manager.get_nested('backend.ollama_endpoint', 'http://localhost:11434/api/generate').replace('/api/generate', '/api/tags')
             response = requests.get(ollama_check_url, timeout=5)
             ollama_healthy = response.status_code == 200
         except:
             ollama_healthy = False
         
+        # Check Redis connection
+        redis_status = "disconnected"
+        redis_search_module_loaded = False
+        try:
+            import redis
+            # Get Redis config from centralized config
+            task_transport_config = global_config_manager.get('task_transport', {})
+            if task_transport_config.get('type') == 'redis':
+                redis_config = task_transport_config.get('redis', {})
+                redis_host = redis_config.get('host', 'localhost')
+                redis_port = redis_config.get('port', 6379)
+                
+                redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+                redis_client.ping()
+                redis_status = "connected"
+                
+                # Check if RediSearch module is loaded
+                try:
+                    modules = redis_client.module_list()
+                    redis_search_module_loaded = any(module[b'name'] == b'search' or module.get('name') == 'search' for module in modules)
+                except:
+                    # If we can't check modules, assume it's not loaded
+                    redis_search_module_loaded = False
+            else:
+                redis_status = "not_configured"
+        except Exception as e:
+            logger.debug(f"Redis connection check failed: {str(e)}")
+            redis_status = "disconnected"
+        
         return {
             "status": "healthy", 
             "backend": "connected",
             "ollama": "connected" if ollama_healthy else "disconnected",
+            "redis_status": redis_status,
+            "redis_search_module_loaded": redis_search_module_loaded,
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
@@ -471,6 +789,8 @@ async def health_check():
                 "status": "unhealthy", 
                 "backend": "connected",
                 "ollama": "unknown",
+                "redis_status": "unknown",
+                "redis_search_module_loaded": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
@@ -491,14 +811,27 @@ def cleanup_message_files():
         cleaned_files = []
         freed_space = 0
         
+        # Expanded file patterns to catch more leftover files
+        file_patterns = [
+            "json_output*", "llm_response*", "planning*", "debug*", 
+            "*.tmp", "*.log", "*.cache", "*.bak", 
+            "*_response", "*_output", "*_debug", "*_planning",
+            "response_*", "output_*", "debug_*", "planning_*",
+            "*.txt", "*.json"  # Be more thorough with potential leftover files
+        ]
+        
         # Look for message directories in data/messages/
         messages_dir = "data/messages"
         if os.path.exists(messages_dir):
+            logger.info(f"Scanning messages directory: {messages_dir}")
             for chat_folder in os.listdir(messages_dir):
                 chat_folder_path = os.path.join(messages_dir, chat_folder)
                 if os.path.isdir(chat_folder_path):
+                    logger.info(f"Processing chat folder: {chat_folder_path}")
+                    folder_cleaned = False
+                    
                     # Look for leftover files in each chat folder
-                    for file_pattern in ["json_output*", "llm_response*", "planning*", "debug*", "*.tmp", "*.log"]:
+                    for file_pattern in file_patterns:
                         for filepath in glob.glob(os.path.join(chat_folder_path, file_pattern)):
                             if os.path.isfile(filepath):
                                 try:
@@ -506,24 +839,33 @@ def cleanup_message_files():
                                     os.remove(filepath)
                                     cleaned_files.append(filepath)
                                     freed_space += file_size
+                                    folder_cleaned = True
                                     logger.info(f"Removed leftover file: {filepath}")
                                 except Exception as e:
                                     logger.error(f"Error removing file {filepath}: {str(e)}")
                     
-                    # Remove empty chat folders
+                    # Remove empty chat folders or folders that only contained leftover files
                     try:
-                        if not os.listdir(chat_folder_path):
+                        remaining_files = os.listdir(chat_folder_path)
+                        if not remaining_files:
                             os.rmdir(chat_folder_path)
                             cleaned_files.append(f"Empty folder: {chat_folder_path}")
                             logger.info(f"Removed empty chat folder: {chat_folder_path}")
+                        elif folder_cleaned:
+                            logger.info(f"Cleaned files from chat folder: {chat_folder_path}, remaining files: {remaining_files}")
                     except Exception as e:
                         logger.error(f"Error removing empty folder {chat_folder_path}: {str(e)}")
         
         # Also clean up any leftover files in the main chat data directory
         if os.path.exists(CHAT_DATA_DIR):
-            for file_pattern in ["json_output*", "llm_response*", "planning*", "debug*", "*.tmp", "*.log"]:
+            logger.info(f"Scanning main chat data directory: {CHAT_DATA_DIR}")
+            for file_pattern in file_patterns:
                 for filepath in glob.glob(os.path.join(CHAT_DATA_DIR, file_pattern)):
                     if os.path.isfile(filepath):
+                        # Skip legitimate chat JSON files
+                        filename = os.path.basename(filepath)
+                        if filename.startswith("chat_") and filename.endswith(".json"):
+                            continue
                         try:
                             file_size = os.path.getsize(filepath)
                             os.remove(filepath)
@@ -532,6 +874,20 @@ def cleanup_message_files():
                             logger.info(f"Removed leftover file: {filepath}")
                         except Exception as e:
                             logger.error(f"Error removing file {filepath}: {str(e)}")
+        
+        # Clean up any leftover files in project root that might be message-related
+        root_patterns = ["json_output*", "llm_response*", "planning*", "debug*", "*.tmp"]
+        for file_pattern in root_patterns:
+            for filepath in glob.glob(file_pattern):
+                if os.path.isfile(filepath):
+                    try:
+                        file_size = os.path.getsize(filepath)
+                        os.remove(filepath)
+                        cleaned_files.append(filepath)
+                        freed_space += file_size
+                        logger.info(f"Removed leftover file from root: {filepath}")
+                    except Exception as e:
+                        logger.error(f"Error removing root file {filepath}: {str(e)}")
         
         return {
             "status": "success",
@@ -956,5 +1312,7 @@ async def get_detailed_knowledge_stats():
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info(f"Starting FastAPI server on {config['server_host']}:{config['server_port']}")
-    uvicorn.run(app, host=config['server_host'], port=config['server_port'])
+    server_host = global_config_manager.get_nested('backend.server_host', '0.0.0.0')
+    server_port = global_config_manager.get_nested('backend.server_port', 8001)
+    logger.info(f"Starting FastAPI server on {server_host}:{server_port}")
+    uvicorn.run(app, host=server_host, port=server_port)
