@@ -17,11 +17,10 @@ logger = logging.getLogger(__name__)
 # Import ChatHistoryManager
 import sys
 import os
+import shutil
+import glob
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.chat_history_manager import ChatHistoryManager
-
-# Initialize chat history manager with Redis support
-chat_history_manager = ChatHistoryManager(use_redis=True, redis_host="localhost", redis_port=6379)
 
 app = FastAPI()
 
@@ -86,6 +85,9 @@ def load_config():
     return config
 
 config = load_config()
+
+# Initialize chat history manager with Redis support
+chat_history_manager = ChatHistoryManager(use_redis=True, redis_host="localhost", redis_port=6379)
 
 # Configure CORS
 app.add_middleware(
@@ -534,6 +536,271 @@ async def restart():
     except Exception as e:
         logger.error(f"Error processing restart request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing restart request: {str(e)}")
+
+def cleanup_message_files():
+    """Clean up all leftover message files including json_output, llm_response, planning and debug messages"""
+    try:
+        cleaned_files = []
+        freed_space = 0
+        
+        # Look for message directories in data/messages/
+        messages_dir = "data/messages"
+        if os.path.exists(messages_dir):
+            for chat_folder in os.listdir(messages_dir):
+                chat_folder_path = os.path.join(messages_dir, chat_folder)
+                if os.path.isdir(chat_folder_path):
+                    # Look for leftover files in each chat folder
+                    for file_pattern in ["json_output*", "llm_response*", "planning*", "debug*", "*.tmp", "*.log"]:
+                        for filepath in glob.glob(os.path.join(chat_folder_path, file_pattern)):
+                            if os.path.isfile(filepath):
+                                try:
+                                    file_size = os.path.getsize(filepath)
+                                    os.remove(filepath)
+                                    cleaned_files.append(filepath)
+                                    freed_space += file_size
+                                    logger.info(f"Removed leftover file: {filepath}")
+                                except Exception as e:
+                                    logger.error(f"Error removing file {filepath}: {str(e)}")
+                    
+                    # Remove empty chat folders
+                    try:
+                        if not os.listdir(chat_folder_path):
+                            os.rmdir(chat_folder_path)
+                            cleaned_files.append(f"Empty folder: {chat_folder_path}")
+                            logger.info(f"Removed empty chat folder: {chat_folder_path}")
+                    except Exception as e:
+                        logger.error(f"Error removing empty folder {chat_folder_path}: {str(e)}")
+        
+        # Also clean up any leftover files in the main chat data directory
+        if os.path.exists(CHAT_DATA_DIR):
+            for file_pattern in ["json_output*", "llm_response*", "planning*", "debug*", "*.tmp", "*.log"]:
+                for filepath in glob.glob(os.path.join(CHAT_DATA_DIR, file_pattern)):
+                    if os.path.isfile(filepath):
+                        try:
+                            file_size = os.path.getsize(filepath)
+                            os.remove(filepath)
+                            cleaned_files.append(filepath)
+                            freed_space += file_size
+                            logger.info(f"Removed leftover file: {filepath}")
+                        except Exception as e:
+                            logger.error(f"Error removing file {filepath}: {str(e)}")
+        
+        return {
+            "status": "success",
+            "message": f"Cleaned up {len(cleaned_files)} leftover files",
+            "cleaned_files": cleaned_files,
+            "freed_space_bytes": freed_space
+        }
+    except Exception as e:
+        logger.error(f"Error during message cleanup: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Error during cleanup: {str(e)}"
+        }
+
+# Chat cleanup endpoints
+@app.post("/api/chats/cleanup_messages")
+async def cleanup_messages():
+    """Clean up all leftover message files including json_output, llm_response, planning and debug messages"""
+    try:
+        result = cleanup_message_files()
+        logger.info(f"Message cleanup completed: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Error during message cleanup: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error during message cleanup: {str(e)}")
+
+@app.post("/api/chats/cleanup_all")
+async def cleanup_all_chat_data():
+    """Clean up all chat data and message files completely"""
+    try:
+        cleaned_files = []
+        freed_space = 0
+        
+        # First run the message file cleanup
+        message_cleanup_result = cleanup_message_files()
+        if message_cleanup_result["status"] == "success":
+            cleaned_files.extend(message_cleanup_result["cleaned_files"])
+            freed_space += message_cleanup_result["freed_space_bytes"]
+        
+        # Remove all chat JSON files
+        if os.path.exists(CHAT_DATA_DIR):
+            for filename in os.listdir(CHAT_DATA_DIR):
+                filepath = os.path.join(CHAT_DATA_DIR, filename)
+                if os.path.isfile(filepath) and filename.startswith("chat_") and filename.endswith(".json"):
+                    try:
+                        file_size = os.path.getsize(filepath)
+                        os.remove(filepath)
+                        cleaned_files.append(filepath)
+                        freed_space += file_size
+                        logger.info(f"Removed chat file: {filepath}")
+                    except Exception as e:
+                        logger.error(f"Error removing chat file {filepath}: {str(e)}")
+        
+        # Remove entire messages directory if it exists
+        messages_dir = "data/messages"
+        if os.path.exists(messages_dir):
+            try:
+                dir_size = sum(os.path.getsize(os.path.join(dirpath, filename))
+                              for dirpath, dirnames, filenames in os.walk(messages_dir)
+                              for filename in filenames)
+                shutil.rmtree(messages_dir)
+                cleaned_files.append(f"Removed entire directory: {messages_dir}")
+                freed_space += dir_size
+                logger.info(f"Removed messages directory: {messages_dir}")
+            except Exception as e:
+                logger.error(f"Error removing messages directory: {str(e)}")
+        
+        result = {
+            "status": "success",
+            "message": f"Complete cleanup finished - removed {len(cleaned_files)} files/folders",
+            "cleaned_files": cleaned_files,
+            "freed_space_bytes": freed_space
+        }
+        
+        logger.info(f"Complete chat cleanup completed: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Error during complete chat cleanup: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error during complete chat cleanup: {str(e)}")
+
+# Knowledge base endpoints (placeholder for future implementation)
+@app.post("/api/knowledge/search")
+async def search_knowledge(request: dict):
+    """Search knowledge base"""
+    try:
+        query = request.get('query', '')
+        limit = request.get('limit', 10)
+        
+        # Placeholder implementation - return empty results for now
+        logger.info(f"Knowledge search request: {query} (limit: {limit})")
+        
+        return {
+            "results": [],
+            "message": "Knowledge base search is not yet implemented",
+            "query": query,
+            "limit": limit
+        }
+    except Exception as e:
+        logger.error(f"Error in knowledge search: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error in knowledge search: {str(e)}")
+
+@app.post("/api/knowledge/add_text")
+async def add_text_to_knowledge(request: dict):
+    """Add text to knowledge base"""
+    try:
+        text = request.get('text', '')
+        title = request.get('title', '')
+        source = request.get('source', 'Manual Entry')
+        
+        # Placeholder implementation
+        logger.info(f"Knowledge add text request: {title} ({len(text)} chars)")
+        
+        return {
+            "message": "Knowledge base text addition is not yet implemented",
+            "text_length": len(text),
+            "title": title,
+            "source": source
+        }
+    except Exception as e:
+        logger.error(f"Error adding text to knowledge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error adding text to knowledge: {str(e)}")
+
+@app.post("/api/knowledge/add_url")
+async def add_url_to_knowledge(request: dict):
+    """Add URL to knowledge base"""
+    try:
+        url = request.get('url', '')
+        method = request.get('method', 'fetch')
+        
+        # Placeholder implementation
+        logger.info(f"Knowledge add URL request: {url} (method: {method})")
+        
+        return {
+            "message": "Knowledge base URL addition is not yet implemented",
+            "url": url,
+            "method": method
+        }
+    except Exception as e:
+        logger.error(f"Error adding URL to knowledge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error adding URL to knowledge: {str(e)}")
+
+@app.post("/api/knowledge/add_file")
+async def add_file_to_knowledge(file):
+    """Add file to knowledge base"""
+    try:
+        # Placeholder implementation
+        logger.info(f"Knowledge add file request: {file}")
+        
+        return {
+            "message": "Knowledge base file addition is not yet implemented"
+        }
+    except Exception as e:
+        logger.error(f"Error adding file to knowledge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error adding file to knowledge: {str(e)}")
+
+@app.get("/api/knowledge/export")
+async def export_knowledge():
+    """Export knowledge base"""
+    try:
+        # Placeholder implementation
+        logger.info("Knowledge export request")
+        
+        # Return empty JSON for now
+        return JSONResponse(
+            content={"message": "Knowledge base export is not yet implemented"},
+            media_type="application/json"
+        )
+    except Exception as e:
+        logger.error(f"Error exporting knowledge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error exporting knowledge: {str(e)}")
+
+@app.post("/api/knowledge/cleanup")
+async def cleanup_knowledge():
+    """Cleanup knowledge base"""
+    try:
+        # Placeholder implementation
+        logger.info("Knowledge cleanup request")
+        
+        return {
+            "message": "Knowledge base cleanup is not yet implemented"
+        }
+    except Exception as e:
+        logger.error(f"Error cleaning up knowledge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error cleaning up knowledge: {str(e)}")
+
+@app.get("/api/knowledge/stats")
+async def get_knowledge_stats():
+    """Get knowledge base statistics"""
+    try:
+        # Placeholder implementation
+        logger.info("Knowledge stats request")
+        
+        return {
+            "total_facts": 0,
+            "total_documents": 0,
+            "total_vectors": 0,
+            "db_size": 0,
+            "message": "Knowledge base is not yet implemented"
+        }
+    except Exception as e:
+        logger.error(f"Error getting knowledge stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting knowledge stats: {str(e)}")
+
+@app.get("/api/knowledge/detailed_stats")
+async def get_detailed_knowledge_stats():
+    """Get detailed knowledge base statistics"""
+    try:
+        # Placeholder implementation
+        logger.info("Detailed knowledge stats request")
+        
+        return {
+            "message": "Detailed knowledge base statistics are not yet implemented",
+            "implementation_status": "pending"
+        }
+    except Exception as e:
+        logger.error(f"Error getting detailed knowledge stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting detailed knowledge stats: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
