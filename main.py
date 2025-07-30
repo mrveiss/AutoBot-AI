@@ -381,7 +381,7 @@ async def health_check(request: Request):
             logger.debug("Health check: Orchestrator instance found in app.state.")
         else:
             orchestrator_status = "not_found_in_state"
-            logger.error("Health check: Orchestrator instance NOT found in app.state.")
+            logger.debug("Health check: Orchestrator instance NOT found in app.state.")
         
         diagnostics = getattr(request.app.state, 'diagnostics', None)
         print(f"DEBUG: Health check - retrieved diagnostics: {diagnostics}")
@@ -390,7 +390,7 @@ async def health_check(request: Request):
             logger.debug("Health check: Diagnostics instance found in app.state.")
         else:
             diagnostics_status = "not_found_in_state"
-            logger.error("Health check: Diagnostics instance NOT found in app.state.")
+            logger.debug("Health check: Diagnostics instance NOT found in app.state.")
 
         logger.info("Health check: Returning status after explicit app.state checks.")
         return {
