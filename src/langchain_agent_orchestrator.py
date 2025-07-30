@@ -25,6 +25,7 @@ except ImportError:
 from src.worker_node import WorkerNode
 from src.knowledge_base import KnowledgeBase
 from src.event_manager import event_manager
+from src.config import config
 
 
 class LangChainAgentOrchestrator:
@@ -43,19 +44,29 @@ class LangChainAgentOrchestrator:
             self.available = False
             return
         
-        # Initialize LLM for LangChain
-        llm_config = config.get('llm_interface', {})
-        llm_model = llm_config.get('orchestrator_llm', 'phi')
+        # Initialize LLM for LangChain using centralized config
+        from src.config import config as global_config
+        llm_config = global_config.get_llm_config()
+        # Temporarily hardcode model to rule out config parsing issues
+        llm_model = 'phi:2.7b' 
         llm_base_url = llm_config.get('ollama', {}).get('base_url', 'http://localhost:11434')
         
+        logging.info(f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}")
+        print(f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}")
+        
         try:
+            print(f"DEBUG: Passing model='{llm_model}' and base_url='{llm_base_url}' to Ollama constructor.")
             self.llm = Ollama(
-                model=llm_model,
+                model=llm_model, # Explicitly set model here
                 base_url=llm_base_url,
                 temperature=0.7
             )
+            logging.info(f"LangChain Agent LLM initialized successfully with model: {llm_model}")
         except Exception as e:
-            logging.warning(f"Failed to initialize Ollama LLM: {e}")
+            logging.error(f"Failed to initialize LangChain Agent: {e}", exc_info=True) # Log full traceback
+            print(f"Failed to initialize LangChain Agent: {e}")
+            import traceback
+            traceback.print_exc() # Print traceback to console
             self.available = False
             return
         
