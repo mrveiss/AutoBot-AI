@@ -89,6 +89,15 @@ config = load_config()
 # Initialize chat history manager with Redis support
 chat_history_manager = ChatHistoryManager(use_redis=True, redis_host="localhost", redis_port=6379)
 
+# Initialize app state for health checks
+@app.on_event("startup")
+async def startup_event():
+    """Initialize application state on startup"""
+    # Initialize empty state objects to prevent health check errors
+    app.state.orchestrator = None  # Will be set if orchestrator is initialized
+    app.state.diagnostics = None   # Will be set if diagnostics is initialized
+    logger.info("Application startup completed - app.state initialized")
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -621,7 +630,7 @@ async def cleanup_all_chat_data():
         message_cleanup_result = cleanup_message_files()
         if message_cleanup_result["status"] == "success":
             cleaned_files.extend(message_cleanup_result["cleaned_files"])
-            freed_space += message_cleanup_result["freed_space_bytes"]
+            freed_space += int(message_cleanup_result.get("freed_space_bytes", 0))
         
         # Remove all chat JSON files
         if os.path.exists(CHAT_DATA_DIR):
@@ -665,18 +674,22 @@ async def cleanup_all_chat_data():
         raise HTTPException(status_code=500, detail=f"Error during complete chat cleanup: {str(e)}")
 
 # Import knowledge base
+KnowledgeBase = None
+knowledge_base = None
+
 try:
     from src.knowledge_base import KnowledgeBase
     knowledge_base = None  # Will be initialized after server starts
     logger.info("KnowledgeBase class imported successfully")
 except ImportError as e:
     logger.error(f"Failed to import KnowledgeBase: {str(e)}")
+    KnowledgeBase = None
     knowledge_base = None
 
 # Initialize knowledge base
 async def init_knowledge_base():
     global knowledge_base
-    if knowledge_base is None:
+    if knowledge_base is None and KnowledgeBase is not None:
         try:
             knowledge_base = KnowledgeBase()
             await knowledge_base.ainit()
@@ -839,6 +852,10 @@ async def add_file_to_knowledge(file: UploadFile = File(...)):
             raise HTTPException(status_code=503, detail="Knowledge base not available")
         
         logger.info(f"Knowledge add file request: {file.filename} ({file.content_type})")
+        
+        # Check if filename exists
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Filename is required")
         
         # Get file extension
         file_ext = os_module.path.splitext(file.filename)[1].lower()
