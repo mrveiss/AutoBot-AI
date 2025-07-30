@@ -246,7 +246,7 @@ export default {
     // Function to save backend-specific settings
     const saveBackendSettings = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/settings/backend`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings/backend`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -266,7 +266,7 @@ export default {
     // Function to fetch backend settings
     const fetchBackendSettings = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/settings/backend`);
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings/backend`);
         if (response.ok) {
           const backendSettings = await response.json();
           settings.value.backend = { ...settings.value.backend, ...backendSettings };
@@ -282,7 +282,7 @@ export default {
     // Function to load system prompts from backend
     const loadPrompts = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/prompts`);
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts`);
         if (response.ok) {
           const data = await response.json();
           prompts.value = data.prompts || [];
@@ -323,7 +323,7 @@ export default {
       const newContent = prompt(`Edit prompt: ${prompt.name}`, prompt.content);
       if (newContent !== null) {
         try {
-          const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/prompts/${promptId}`, {
+          const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -355,7 +355,7 @@ export default {
       }
       if (confirm(`Are you sure you want to revert ${prompt.name} to its default content?`)) {
         try {
-          const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/prompts/${promptId}/revert`, {
+          const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}/revert`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -995,7 +995,7 @@ export default {
 
     const newChat = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/chats/new`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/new`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -1042,7 +1042,7 @@ export default {
           });
           return;
         }
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/chats/${chatId}/reset`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}/reset`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -1088,7 +1088,7 @@ export default {
         return;
       }
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/chats/${chatId}`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json'
@@ -1136,7 +1136,7 @@ export default {
 
     const loadChatMessages = async (chatId) => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/chats/${chatId}`);
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}`);
         if (response.ok) {
           const data = await response.json();
           messages.value = data;
@@ -1181,7 +1181,7 @@ export default {
       localStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(messages.value));
       // Also save to backend
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/chats/${chatId}/save`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}/save`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -1202,7 +1202,7 @@ export default {
     const startBackendServer = async () => {
       backendStarting.value = true;
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/restart`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/restart`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -1224,7 +1224,7 @@ export default {
     // Function to load chat list from backend or local storage
     const loadChatList = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/chats`);
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats`);
         if (response.ok) {
           const data = await response.json();
           chatList.value = data.chats || [];
@@ -1317,7 +1317,7 @@ export default {
         return;
       }
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/chats/${chatId}`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json'
