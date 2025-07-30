@@ -1139,7 +1139,7 @@ export default {
         const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}`);
         if (response.ok) {
           const data = await response.json();
-          messages.value = data;
+          messages.value = data.history;
             console.log(`Loaded chat messages from backend for chat ${chatId}.`);
         } else {
           console.error('Failed to load chat messages:', response.statusText);
@@ -1150,12 +1150,6 @@ export default {
             console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
           } else {
             messages.value = [];
-            messages.value.push({
-              sender: 'bot',
-              text: 'No chat history found. How can I assist you?',
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'response'
-            });
           }
         }
       } catch (error) {
