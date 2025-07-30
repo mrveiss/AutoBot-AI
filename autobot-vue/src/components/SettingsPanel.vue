@@ -558,8 +558,8 @@ export default {
         },
         redis: {
           enabled: false,
-          host: '',
-          port: 0
+          host: 'localhost',
+          port: 6379
         }
       },
       prompts: {

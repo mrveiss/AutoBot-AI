@@ -24,6 +24,7 @@ try:
     from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
     LANGCHAIN_AVAILABLE = True
 except ImportError:
+    LangChainAgentOrchestrator = None
     LANGCHAIN_AVAILABLE = False
     print("WARNING: LangChain Agent not available. Using standard orchestrator only.")
 
@@ -85,6 +86,7 @@ class Orchestrator:
         print(f"Listening for command approvals on Redis channel '{approval_channel_pattern}'...")
         for message in pubsub.listen():
             if message['type'] == 'pmessage':
+                channel = message['channel'].decode('utf-8')
                 data = json.loads(message['data'])
                 task_id = data.get('task_id')
                 approved = data.get('approved')

@@ -325,7 +325,7 @@ export default {
       await checkBackendConnection();
       await checkLLMConnection();
       await checkRedisConnection(); // Add Redis connection check
-;
+    };
 
     // Function to update performance data (placeholder for real data)
     const updatePerformanceData = () => {

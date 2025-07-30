@@ -10,6 +10,7 @@ import subprocess
 import logging
 import logging.config
 import traceback # Import traceback module
+import time # Import time module for timestamp formatting
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 import redis
@@ -121,13 +122,37 @@ async def lifespan(app: FastAPI):
     logger.info("Application lifespan startup initiated.")
 
     logger.debug("Lifespan: Initializing core components...")
-    app.state.orchestrator = Orchestrator()
-    app.state.knowledge_base = KnowledgeBase()
-    app.state.diagnostics = Diagnostics()
-    app.state.voice_interface = VoiceInterface()
-    app.state.security_layer = SecurityLayer()
-    logger.info("main.py: Core components (Orchestrator, KB, Diagnostics, Voice, Security) initialized within lifespan.")
-    logger.debug("Lifespan: Core components initialized.")
+    
+    # Initialize components and ensure they're properly stored in app.state
+    try:
+        app.state.orchestrator = Orchestrator()
+        logger.info("Orchestrator initialized and stored in app.state")
+        
+        app.state.knowledge_base = KnowledgeBase()
+        logger.info("KnowledgeBase initialized and stored in app.state")
+        
+        app.state.diagnostics = Diagnostics()
+        logger.info("Diagnostics initialized and stored in app.state")
+        
+        app.state.voice_interface = VoiceInterface()
+        logger.info("VoiceInterface initialized and stored in app.state")
+        
+        app.state.security_layer = SecurityLayer()
+        logger.info("SecurityLayer initialized and stored in app.state")
+        
+        logger.info("main.py: Core components (Orchestrator, KB, Diagnostics, Voice, Security) initialized within lifespan.")
+        logger.debug("Lifespan: Core components initialized.")
+        
+        # Verify components are accessible
+        logger.info(f"DEBUG: Orchestrator in app.state: {app.state.orchestrator is not None}")
+        logger.info(f"DEBUG: Diagnostics in app.state: {app.state.diagnostics is not None}")
+        logger.info(f"DEBUG: KnowledgeBase in app.state: {app.state.knowledge_base is not None}")
+        logger.info(f"DEBUG: VoiceInterface in app.state: {app.state.voice_interface is not None}")
+        logger.info(f"DEBUG: SecurityLayer in app.state: {app.state.security_layer is not None}")
+        
+    except Exception as e:
+        logger.error(f"Error initializing core components: {e}", exc_info=True)
+        raise
 
     logger.debug("Lifespan: Checking Redis modules...")
     redis_config = global_config_manager.get_redis_config()
@@ -194,6 +219,7 @@ async def lifespan(app: FastAPI):
         redis_port=redis_port
     )
     logger.info("main.py: ChatHistoryManager initialized within lifespan.")
+    logger.info(f"DEBUG: ChatHistoryManager in app.state: {app.state.chat_history_manager is not None}")
     logger.debug("Lifespan: ChatHistoryManager initialized.")
 
     logger.debug("Lifespan: Initializing main Redis client...")
@@ -230,10 +256,27 @@ logger.info("main.py: CORS middleware added.")
 
 
 
-# Create a separate router for API endpoints
-api_router = FastAPI(title="AutoBot API")
-app.mount("/api", api_router)
-logger.info("main.py: API router mounted.")
+# Import modular API routers
+from backend.api.chat import router as chat_router
+from backend.api.system import router as system_router
+from backend.api.settings import router as settings_router
+from backend.api.prompts import router as prompts_router
+from backend.api.knowledge import router as knowledge_router
+
+# Create an API router (not a separate FastAPI instance)
+from fastapi import APIRouter
+api_router = APIRouter()
+
+# Include modular API routers
+api_router.include_router(chat_router, tags=["chat"])
+api_router.include_router(system_router, tags=["system"])
+api_router.include_router(settings_router, tags=["settings"])
+api_router.include_router(prompts_router, tags=["prompts"])
+api_router.include_router(knowledge_router, tags=["knowledge"])
+
+# Include the API router directly in the main app
+app.include_router(api_router, prefix="/api")
+logger.info("main.py: API router included with modular endpoints.")
 
 # WebSocket endpoint for real-time event stream
 @app.websocket("/ws")
@@ -364,309 +407,7 @@ async def get_version():
         "version_time": "2025-06-18 20:00 UTC"
     }
 
-@api_router.get("/health")
-async def health_check(request: Request):
-    """Health check endpoint for frontend status monitoring."""
-    orchestrator_status = "unknown"
-    diagnostics_status = "unknown"
-    llm_status = "unknown"
-    redis_status = "unknown"
-    
-    logger.debug("Health check: Starting with explicit app.state checks and print statements.")
-    
-    try:
-        orchestrator = getattr(request.app.state, 'orchestrator', None)
-        print(f"DEBUG: Health check - retrieved orchestrator: {orchestrator}")
-        if orchestrator:
-            orchestrator_status = "connected"
-            logger.debug("Health check: Orchestrator instance found in app.state.")
-        else:
-            orchestrator_status = "not_found_in_state"
-            logger.debug("Health check: Orchestrator instance NOT found in app.state.")
-        
-        diagnostics = getattr(request.app.state, 'diagnostics', None)
-        print(f"DEBUG: Health check - retrieved diagnostics: {diagnostics}")
-        if diagnostics:
-            diagnostics_status = "connected"
-            logger.debug("Health check: Diagnostics instance found in app.state.")
-        else:
-            diagnostics_status = "not_found_in_state"
-            logger.debug("Health check: Diagnostics instance NOT found in app.state.")
 
-        # Check LLM status
-        try:
-            orchestrator = getattr(request.app.state, 'orchestrator', None)
-            if orchestrator and hasattr(orchestrator, 'llm_interface') and await orchestrator.llm_interface.check_connection():
-                llm_status = "connected"
-            else:
-                llm_status = "disconnected"
-        except Exception:
-            llm_status = "disconnected"
-
-        # Check Redis status
-        try:
-            redis_client = getattr(request.app.state, 'main_redis_client', None)
-            if redis_client and redis_client.ping():
-                redis_status = "connected"
-            else:
-                redis_status = "disconnected"
-        except Exception:
-            redis_status = "disconnected"
-
-        logger.info("Health check: Returning status after explicit app.state checks.")
-        return {
-            "status": "healthy",
-            "backend": "connected",
-            "orchestrator": orchestrator_status,
-            "diagnostics": diagnostics_status,
-            "llm_status": llm_status,
-            "redis_status": redis_status,
-            "timestamp": asyncio.get_event_loop().time()
-        }
-    except Exception as e:
-        logger.error(f"Health check: An unexpected error occurred during app.state access: {e}", exc_info=True)
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unhealthy", 
-                "backend": "connected",
-                "orchestrator": "error_exception",
-                "diagnostics": "error_exception",
-                "llm": "error_exception",
-                "error": str(e),
-                "detail": traceback.format_exc()
-            }
-        )
-
-@api_router.get("/chats")
-async def list_chats(request: Request):
-    """List all available chat sessions."""
-    chat_history_manager = request.app.state.chat_history_manager
-    try:
-        sessions = chat_history_manager.list_sessions()
-        return JSONResponse(status_code=200, content={"chats": sessions})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-@api_router.get("/chats/{chat_id}")
-async def get_chat(chat_id: str, request: Request):
-    """Get a specific chat session."""
-    chat_history_manager = request.app.state.chat_history_manager
-    try:
-        history = chat_history_manager.load_session(chat_id)
-        if history is not None:
-            return JSONResponse(status_code=200, content={"chat_id": chat_id, "history": history})
-        else:
-            return JSONResponse(status_code=404, content={"error": "Chat not found"})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-@api_router.post("/chats/new")
-async def create_new_chat(request: Request):
-    """Create a new chat session ID (POST method)."""
-    chat_history_manager = request.app.state.chat_history_manager
-    try:
-        import uuid
-        chat_id = str(uuid.uuid4())
-        chat_history_manager.save_session(chat_id, messages=[], name=f"Chat {chat_id[:8]}")
-        return JSONResponse(status_code=200, content={"chat_id": chat_id, "status": "success"})
-    except Exception as e:
-        logging.error(f"Error creating new chat: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Error creating new chat: {str(e)}"})
-
-@api_router.delete("/chats/{chat_id}")
-async def delete_chat(chat_id: str, request: Request):
-    """Delete a specific chat session."""
-    chat_history_manager = request.app.state.chat_history_manager
-    try:
-        if chat_history_manager.delete_session(chat_id):
-            return JSONResponse(status_code=200, content={"message": "Chat deleted successfully"})
-        else:
-            return JSONResponse(status_code=404, content={"error": "Chat not found"})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-@api_router.post("/chats/cleanup_messages")
-async def cleanup_messages():
-    """Clean up all leftover message files including json_output, llm_response, planning and debug messages"""
-    try:
-        import glob
-        import shutil
-        
-        cleaned_files = []
-        freed_space = 0
-        
-        # Enhanced file patterns to catch ALL leftover files mentioned in the task
-        file_patterns = [
-            # Specific patterns mentioned in the task
-            "json_output*", "llm_response*", "planning*", "debug*",
-            
-            # Variations and related patterns
-            "*json_output*", "*llm_response*", "*planning*", "*debug*",
-            "json_output", "llm_response", "planning", "debug",
-            
-            # Common temporary and output files
-            "*.tmp", "*.log", "*.cache", "*.bak", "*.out",
-            "*_response*", "*_output*", "*_debug*", "*_planning*",
-            "response_*", "output_*", "debug_*", "planning_*",
-            
-            # Chat-related temporary files
-            "chat_temp*", "temp_*", "*.temp",
-            
-            # Any .txt files that match leftover patterns
-            "*.txt"  # Will be filtered to exclude legitimate chat files
-        ]
-        
-        # Specific patterns found in search results
-        specific_patterns = [
-            "*_json_output.json", "*_planning_debug.json", "*_llm_response.json",
-            "*_planning*.json", "*_debug*.json", "*_output*.json"
-        ]
-        
-        # ONLY scan data/messages/ directory - NEVER touch prompts/ or other system directories
-        messages_dir = "data/messages"
-        if os.path.exists(messages_dir):
-            logging.info(f"Scanning messages directory: {messages_dir}")
-            for chat_folder in os.listdir(messages_dir):
-                chat_folder_path = os.path.join(messages_dir, chat_folder)
-                if os.path.isdir(chat_folder_path):
-                    logging.info(f"Processing chat folder: {chat_folder_path}")
-                    folder_cleaned = False
-                    
-                    # Look for leftover files in each chat folder - ONLY in data/messages/
-                    for file_pattern in file_patterns:
-                        for filepath in glob.glob(os.path.join(chat_folder_path, file_pattern)):
-                            if os.path.isfile(filepath):
-                                filename = os.path.basename(filepath)
-                                
-                                # SAFETY CHECK: Only process files in data/messages/ directory
-                                if not filepath.startswith("data/messages/"):
-                                    continue
-                                
-                                # Special handling for .txt files - only remove if they match leftover patterns
-                                if filename.endswith('.txt'):
-                                    # Only remove .txt files that match leftover patterns
-                                    if any(pattern in filename.lower() for pattern in ['json_output', 'llm_response', 'planning', 'debug', 'temp']):
-                                        pass  # Will be removed
-                                    else:
-                                        continue  # Skip legitimate .txt files
-                                
-                                try:
-                                    file_size = os.path.getsize(filepath)
-                                    os.remove(filepath)
-                                    cleaned_files.append(filepath)
-                                    freed_space += file_size
-                                    folder_cleaned = True
-                                    logging.info(f"Removed leftover file: {filepath}")
-                                except Exception as e:
-                                    logging.error(f"Error removing file {filepath}: {str(e)}")
-                    
-                    # Also check for any files with specific names mentioned in the task
-                    specific_leftover_files = ['json_output', 'llm_response', 'planning', 'debug']
-                    for specific_file in specific_leftover_files:
-                        specific_filepath = os.path.join(chat_folder_path, specific_file)
-                        if os.path.exists(specific_filepath):
-                            try:
-                                if os.path.isfile(specific_filepath):
-                                    file_size = os.path.getsize(specific_filepath)
-                                    os.remove(specific_filepath)
-                                    cleaned_files.append(specific_filepath)
-                                    freed_space += file_size
-                                    folder_cleaned = True
-                                    logging.info(f"Removed specific leftover file: {specific_filepath}")
-                                elif os.path.isdir(specific_filepath):
-                                    # Remove entire leftover directory
-                                    dir_size = sum(os.path.getsize(os.path.join(dirpath, filename))
-                                                  for dirpath, dirnames, filenames in os.walk(specific_filepath)
-                                                  for filename in filenames)
-                                    shutil.rmtree(specific_filepath)
-                                    cleaned_files.append(f"Removed leftover directory: {specific_filepath}")
-                                    freed_space += dir_size
-                                    folder_cleaned = True
-                                    logging.info(f"Removed leftover directory: {specific_filepath}")
-                            except Exception as e:
-                                logging.error(f"Error removing specific leftover file/dir {specific_filepath}: {str(e)}")
-                    
-                    # Scan for specific patterns found in search results
-                    for pattern in specific_patterns:
-                        for filepath in glob.glob(os.path.join(chat_folder_path, pattern)):
-                            if os.path.isfile(filepath):
-                                try:
-                                    file_size = os.path.getsize(filepath)
-                                    os.remove(filepath)
-                                    cleaned_files.append(filepath)
-                                    freed_space += file_size
-                                    folder_cleaned = True
-                                    logging.info(f"Removed specific pattern file: {filepath}")
-                                except Exception as e:
-                                    logging.error(f"Error removing specific pattern file {filepath}: {str(e)}")
-                    
-                    # Remove empty chat folders or folders that only contained leftover files
-                    try:
-                        remaining_files = os.listdir(chat_folder_path)
-                        if not remaining_files:
-                            os.rmdir(chat_folder_path)
-                            cleaned_files.append(f"Empty folder: {chat_folder_path}")
-                            logging.info(f"Removed empty chat folder: {chat_folder_path}")
-                        elif folder_cleaned:
-                            logging.info(f"Cleaned files from chat folder: {chat_folder_path}, remaining files: {remaining_files}")
-                    except Exception as e:
-                        logging.error(f"Error removing empty folder {chat_folder_path}: {str(e)}")
-        
-        # Also clean up any leftover files in the main chat data directory
-        chat_data_dir = "data/chats"
-        if os.path.exists(chat_data_dir):
-            logging.info(f"Scanning main chat data directory: {chat_data_dir}")
-            for file_pattern in file_patterns:
-                for filepath in glob.glob(os.path.join(chat_data_dir, file_pattern)):
-                    if os.path.isfile(filepath):
-                        # Skip legitimate chat JSON files
-                        filename = os.path.basename(filepath)
-                        if filename.startswith("chat_") and filename.endswith(".json"):
-                            continue
-                        try:
-                            file_size = os.path.getsize(filepath)
-                            os.remove(filepath)
-                            cleaned_files.append(filepath)
-                            freed_space += file_size
-                            logging.info(f"Removed leftover file: {filepath}")
-                        except Exception as e:
-                            logging.error(f"Error removing file {filepath}: {str(e)}")
-        
-        # SAFE: Only scan data/messages and data/chats - NEVER scan root or other system directories
-        safe_data_dirs = ["data/messages", "data/chats"]
-        for data_dir in safe_data_dirs:
-            if os.path.exists(data_dir):
-                logging.info(f"Scanning {data_dir} for specific leftover patterns")
-                for root, dirs, files in os.walk(data_dir):
-                    for pattern in specific_patterns:
-                        for filepath in glob.glob(os.path.join(root, pattern)):
-                            if os.path.isfile(filepath):
-                                try:
-                                    file_size = os.path.getsize(filepath)
-                                    os.remove(filepath)
-                                    cleaned_files.append(filepath)
-                                    freed_space += file_size
-                                    logging.info(f"Removed specific pattern file: {filepath}")
-                                except Exception as e:
-                                    logging.error(f"Error removing pattern file {filepath}: {str(e)}")
-        
-        # REMOVED: No longer scanning project root to prevent accidental deletion of system files
-        logging.info("Cleanup completed - only processed data/messages and data/chats directories")
-        
-        message = f"Cleaned up {len(cleaned_files)} leftover files" if cleaned_files else "No leftover files found to clean up"
-        logging.info(f"Cleanup completed: {message}")
-        
-        return {
-            "status": "success",
-            "message": message,
-            "cleaned_files": cleaned_files,
-            "freed_space_bytes": freed_space
-        }
-        
-    except Exception as e:
-        logging.error(f"Error during cleanup: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Error during cleanup: {str(e)}"})
 
 @api_router.get("/settings/backend")
 async def get_backend_settings():
