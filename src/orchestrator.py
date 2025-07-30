@@ -1,466 +1,567 @@
+# src/orchestrator.py
 import asyncio
 import json
-import logging
-import time
+import redis
+from typing import Dict, Any, List, Optional
 import uuid
-from typing import Dict, Any, List, Optional, Callable
-import yaml
-import os
-from datetime import datetime
+import time
+import traceback
+import re
 
-# LLM and knowledge base imports
 from src.llm_interface import LLMInterface
-from src.knowledge_base import KnowledgeBase
-from src.worker_node import WorkerNode
 from src.event_manager import event_manager
-from src.chat_history_manager import ChatHistoryManager
-
-# Import LangChain agent orchestrator
-from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
-
-# Import system integrations
-from src.system_integration import SystemIntegration
+from src.knowledge_base import KnowledgeBase
+from src.worker_node import WorkerNode, GUI_AUTOMATION_SUPPORTED
 from src.diagnostics import Diagnostics
-from src.security_layer import SecurityLayer
+from src.system_info_collector import get_os_info
+from src.tool_discovery import discover_tools
 
-# Memory and transport backends
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
+
+# Import LangChain Agent (optional)
 try:
-    import redis.asyncio as redis
-    REDIS_AVAILABLE = True
+    from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
+    LANGCHAIN_AVAILABLE = True
 except ImportError:
-    REDIS_AVAILABLE = False
-    logging.warning("Redis not available. Using local transport only.")
+    LangChainAgentOrchestrator = None
+    LANGCHAIN_AVAILABLE = False
+    print("WARNING: LangChain Agent not available. Using standard orchestrator only.")
 
-class TaskOrchestrator:
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
-        self.llm_interface = None
-        self.knowledge_base = None
-        self.worker_node = None
-        self.langchain_orchestrator = None
-        self.system_integration = None
-        self.diagnostics = None
-        self.security_layer = None
-        self.chat_history_manager = None
+class Orchestrator:
+    def __init__(self):
+        # Remove config_path and direct config loading
+        self.llm_interface = LLMInterface() # Will update LLMInterface to use global_config_manager
+        self.knowledge_base = KnowledgeBase() # Will update KnowledgeBase to use global_config_manager
+        self.diagnostics = Diagnostics() # Will update Diagnostics to use global_config_manager
         
-        # Task management
-        self.active_tasks = {}
-        self.task_queue = asyncio.Queue()
-        self.worker_pool = []
-        self.task_results = {}
+        llm_config = global_config_manager.get_llm_config()
+        self.orchestrator_llm_model = llm_config.get('orchestrator_llm', 'phi:2.7b')
+        self.task_llm_model = llm_config.get('task_llm', 'ollama')
+        self.ollama_models = llm_config.get('ollama', {}).get('models', {})
+        self.phi2_enabled = False # This will be driven by config if needed
+
+        self.task_transport_type = global_config_manager.get_nested('task_transport.type', 'local')
+        self.redis_client = None
+        self.worker_capabilities: Dict[str, Dict[str, Any]] = {}
+        self.pending_approvals: Dict[str, asyncio.Future] = {}
         
-        # State management
-        self.is_running = False
-        self.transport_type = config.get('transport_type', 'local')
+        self.agent_paused = False
         
-        # Redis connection (if configured)
-        if self.transport_type == 'redis' and REDIS_AVAILABLE:
-            redis_config = config.get('memory', {}).get('redis', {})
-            self.redis_client = redis.Redis(
-                host=redis_config.get('host', 'localhost'),
-                port=redis_config.get('port', 6379),
-                password=redis_config.get('password'),
-                db=redis_config.get('db', 0),
-                decode_responses=True
-            )
-        else:
-            self.redis_client = None
-            
-        # Initialize logging
-        self.logger = logging.getLogger(__name__)
-        
-    async def initialize(self):
-        """Initialize all components of the orchestrator"""
-        try:
-            self.logger.info("Initializing Task Orchestrator...")
-            
-            # Initialize LLM interface
-            self.llm_interface = LLMInterface()
-            await self.llm_interface.check_ollama_connection()
-            
-            # Initialize knowledge base
-            self.knowledge_base = KnowledgeBase()
-            await self.knowledge_base.ainit(self.config.get('llm_config', {}))
-            
-            # Initialize worker node
-            self.worker_node = WorkerNode(self.config)
-            await self.worker_node.initialize()
-            
-            # Initialize LangChain orchestrator
-            self.langchain_orchestrator = LangChainAgentOrchestrator(
-                self.config, self.worker_node, self.knowledge_base
-            )
-            
-            # Initialize system integration
-            self.system_integration = SystemIntegration(self.config)
-            await self.system_integration.initialize()
-            
-            # Initialize diagnostics
-            self.diagnostics = Diagnostics(self.config)
-            await self.diagnostics.initialize()
-            
-            # Initialize security layer
-            self.security_layer = SecurityLayer(self.config)
-            await self.security_layer.initialize()
-            
-            # Initialize chat history manager
-            self.chat_history_manager = ChatHistoryManager(self.config)
-            
-            # Set up event subscriptions
-            await self._setup_event_subscriptions()
-            
-            # Initialize worker pool
-            await self._initialize_worker_pool()
-            
-            self.is_running = True
-            self.logger.info("Task Orchestrator initialized successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to initialize Task Orchestrator: {e}")
-            raise
-    
-    async def _setup_event_subscriptions(self):
-        """Set up event subscriptions for orchestrator"""
-        await event_manager.subscribe("task_completed", self._handle_task_completion)
-        await event_manager.subscribe("task_failed", self._handle_task_failure)
-        await event_manager.subscribe("user_input", self._handle_user_input)
-        await event_manager.subscribe("system_alert", self._handle_system_alert)
-        
-    async def _initialize_worker_pool(self):
-        """Initialize the worker pool"""
-        worker_count = self.config.get('worker_pool_size', 3)
-        for i in range(worker_count):
-            worker_task = asyncio.create_task(self._worker_loop(f"worker-{i}"))
-            self.worker_pool.append(worker_task)
-        self.logger.info(f"Initialized worker pool with {worker_count} workers")
-    
-    async def _worker_loop(self, worker_id: str):
-        """Main worker loop for processing tasks"""
-        self.logger.info(f"Worker {worker_id} started")
-        
-        while self.is_running:
+        self.langchain_agent = None
+        self.use_langchain = global_config_manager.get_nested('orchestrator.use_langchain', False)
+
+        if self.task_transport_type == "redis":
+            redis_transport_config = global_config_manager.get_nested('task_transport.redis', {})
+            redis_host = redis_transport_config.get('host', 'localhost')
+            redis_port = redis_transport_config.get('port', 6379)
             try:
-                # Get task from queue with timeout
-                task = await asyncio.wait_for(self.task_queue.get(), timeout=1.0)
-                
-                self.logger.info(f"Worker {worker_id} processing task {task.get('task_id')}")
-                
-                # Process the task
-                result = await self._process_task(task, worker_id)
-                
-                # Store result
-                task_id = task.get('task_id')
-                if task_id:
-                    self.task_results[task_id] = result
-                
-                # Mark task as done
-                self.task_queue.task_done()
-                
-                # Publish completion event
-                await event_manager.publish("task_completed", {
-                    "task_id": task_id,
-                    "worker_id": worker_id,
-                    "result": result
-                })
-                
-            except asyncio.TimeoutError:
-                # No tasks available, continue
-                continue
-            except Exception as e:
-                self.logger.error(f"Worker {worker_id} error: {e}")
-                await event_manager.publish("task_failed", {
-                    "worker_id": worker_id,
-                    "error": str(e)
-                })
-    
-    async def _process_task(self, task: Dict[str, Any], worker_id: str) -> Dict[str, Any]:
-        """Process a single task"""
-        task_type = task.get('type')
-        task_id = task.get('task_id')
+                self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+                self.redis_client.ping() # Test connection immediately
+                print(f"Orchestrator connected to Redis at {redis_host}:{redis_port}")
+            except redis.ConnectionError as e:
+                print(f"Orchestrator failed to connect to Redis at {redis_host}:{redis_port}: {e}. Falling back to local task transport.")
+                self.redis_client = None
+                self.task_transport_type = "local" # Fallback to local if Redis fails
+                self.local_worker = WorkerNode()
         
-        try:
-            # Log task start
-            await event_manager.publish("log_message", {
-                "level": "INFO",
-                "message": f"Processing task {task_id} of type {task_type}"
-            })
+        if self.task_transport_type == "local":
+            print("Orchestrator configured for local task transport.")
+            self.local_worker = WorkerNode()
+
+    async def _listen_for_worker_capabilities(self):
+        print("Listening for worker capabilities (Redis transport)...")
+        await asyncio.sleep(1)
+
+    async def _listen_for_command_approvals(self):
+        if not self.redis_client:
+            print("Redis client not available for command approval listening")
+            return
             
-            # Route task based on type
-            if task_type == 'chat_completion':
-                result = await self._handle_chat_completion(task)
-            elif task_type == 'system_command':
-                result = await self._handle_system_command(task)
-            elif task_type == 'knowledge_query':
-                result = await self._handle_knowledge_query(task)
-            elif task_type == 'file_operation':
-                result = await self._handle_file_operation(task)
-            elif task_type == 'langchain_goal':
-                result = await self._handle_langchain_goal(task)
-            else:
-                # Delegate to worker node
-                result = await self.worker_node.execute_task(task)
-            
-            return {
-                "status": "success",
-                "task_id": task_id,
-                "worker_id": worker_id,
-                "result": result,
-                "timestamp": time.time()
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Task {task_id} failed: {e}")
-            return {
-                "status": "error",
-                "task_id": task_id,
-                "worker_id": worker_id,
-                "error": str(e),
-                "timestamp": time.time()
-            }
-    
-    async def _handle_chat_completion(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle chat completion tasks"""
-        messages = task.get('messages', [])
-        llm_type = task.get('llm_type', 'orchestrator')
+        pubsub = self.redis_client.pubsub()
+        pubsub.psubscribe("command_approval_*") 
+        print("Listening for command approvals on Redis channel 'command_approval_*'...")
+        for message in pubsub.listen():
+            if message['type'] == 'pmessage':
+                channel = message['channel'].decode('utf-8')
+                data = json.loads(message['data'])
+                task_id = data.get('task_id')
+                approved = data.get('approved')
+                
+                if task_id and task_id in self.pending_approvals:
+                    future = self.pending_approvals.pop(task_id)
+                    if not future.done():
+                        future.set_result({"approved": approved})
+                    print(f"Received approval for task {task_id}: Approved={approved}")
+                else:
+                    print(f"Received unhandled approval message for task {task_id}: {data}")
+
+    async def startup(self):
+        ollama_connected = await self.llm_interface.check_ollama_connection()
+        if ollama_connected:
+            await event_manager.publish("llm_status", {"status": "connected", "model": self.llm_interface.orchestrator_llm_alias})
+            print(f"LLM ({self.llm_interface.orchestrator_llm_alias}) connected successfully.")
+        else:
+            await event_manager.publish("llm_status", {"status": "disconnected", "model": self.llm_interface.orchestrator_llm_alias, "message": "Failed to connect to Ollama or configured models not found."})
+            print(f"LLM ({self.llm_interface.orchestrator_llm_alias}) connection failed.")
+
+        if self.task_transport_type == "redis" and self.redis_client:
+            asyncio.create_task(self._listen_for_worker_capabilities())
+        elif self.task_transport_type == "local" and hasattr(self, 'local_worker'):
+            await self.local_worker.report_capabilities()
+        
+        self.system_info = get_os_info()
+        await event_manager.publish("log_message", {"level": "INFO", "message": f"System information collected: {json.dumps(self.system_info, indent=2)}"})
+        print("System information collected on startup.")
+
+        self.available_tools = discover_tools()
+        await event_manager.publish("log_message", {"level": "INFO", "message": f"Available tools collected: {json.dumps(self.available_tools, indent=2)}"})
+        print("Available tools collected on startup.")
+        
+        if self.use_langchain and LANGCHAIN_AVAILABLE and LangChainAgentOrchestrator is not None:
+            try:
+                kb_config = global_config_manager.get('knowledge_base', {})
+                if kb_config.get('provider') == 'disabled':
+                    print("Knowledge Base disabled in configuration. Skipping LangChain KB initialization.")
+                    self.knowledge_base = None
+                # KnowledgeBase.ainit() is now called in main.py's lifespan startup, no need to call it here.
+                
+                self.langchain_agent = LangChainAgentOrchestrator(
+                    config=global_config_manager.to_dict(), # Pass the full config dict
+                    worker_node=self.local_worker if hasattr(self, 'local_worker') else None,
+                    knowledge_base=self.knowledge_base
+                )
+                
+                if self.langchain_agent.available:
+                    print("LangChain Agent initialized successfully.")
+                    await event_manager.publish("log_message", {"level": "INFO", "message": "LangChain Agent initialized successfully."})
+                else:
+                    print("LangChain Agent initialization failed.")
+                    self.langchain_agent = None
+                    self.use_langchain = False
+            except Exception as e:
+                print(f"Failed to initialize LangChain Agent: {e}")
+                await event_manager.publish("log_message", {"level": "ERROR", "message": f"Failed to initialize LangChain Agent: {e}"})
+                self.langchain_agent = None
+                self.use_langchain = False
+        else:
+            kb_config = global_config_manager.get('knowledge_base', {})
+            if kb_config.get('provider') == 'disabled':
+                print("Knowledge Base disabled in configuration. Skipping initialization.")
+                self.knowledge_base = None
+            # KnowledgeBase.ainit() is now called in main.py's lifespan startup, no need to call it here.
+
+    def set_phi2_enabled(self, enabled: bool):
+        self.phi2_enabled = enabled
+        print(f"Phi-2 enabled status set to: {self.phi2_enabled}")
+        asyncio.create_task(event_manager.publish("settings_update", {"phi2_enabled": enabled}))
+
+    async def pause_agent(self):
+        self.agent_paused = True
+        await event_manager.publish("log_message", {"level": "INFO", "message": "Agent paused"})
+        print("Agent paused")
+
+    async def resume_agent(self):
+        self.agent_paused = False
+        await event_manager.publish("log_message", {"level": "INFO", "message": "Agent resumed"})
+        print("Agent resumed")
+
+    async def generate_task_plan(self, goal: str, messages: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+        if messages is None:
+            messages = [{"role": "user", "content": goal}]
+        target_llm_model = self.orchestrator_llm_model
+        orchestrator_settings = self.llm_interface.orchestrator_llm_settings
+        
+        await event_manager.publish("log_message", {"level": "INFO", "message": f"Generating plan using Orchestrator LLM: {target_llm_model}"})
+        print(f"Generating plan using Orchestrator LLM: {target_llm_model}")
+
+        retrieved_context = []
+        if self.knowledge_base is not None:
+            retrieved_context = await self.knowledge_base.search(goal, n_results=global_config_manager.get_nested('knowledge_base.search_results_limit', 3)) # Use config for n_results
+        
+        context_str = ""
+        if retrieved_context:
+            context_str = "\n\nRelevant Context from Knowledge Base:\n"
+            for i, item in enumerate(retrieved_context):
+                context_str += f"--- Document: {item['metadata'].get('filename', 'N/A')} (Chunk {item['metadata'].get('chunk_index', 'N/A')}) ---\n"
+                context_str += item['content'] + "\n"
+            await event_manager.publish("log_message", {"level": "INFO", "message": f"Retrieved {len(retrieved_context)} context chunks."})
+        else:
+            await event_manager.publish("log_message", {"level": "INFO", "message": "No relevant context found in knowledge base."})
+        
+        system_prompt_parts = [
+            self.llm_interface.orchestrator_system_prompt,
+            "You have access to the following tools. You MUST use these tools to achieve the user's goal. Each item below is a tool you can directly instruct to use. Do NOT list the tool descriptions, only the tool names and their parameters as shown below:",
+        ]
+
+        if self.task_transport_type == "local" and GUI_AUTOMATION_SUPPORTED:
+            system_prompt_parts.append("""- GUI Automation:
+    - 'Type text "TEXT" into active window.'
+    - 'Click element "IMAGE_PATH".'
+    - 'Read text from region (X, Y, WIDTH, HEIGHT).'
+    - 'Bring window to front "APP_TITLE".'""")
+        else:
+            system_prompt_parts.append("- GUI Automation: (Not available in this environment. Will be simulated as shell commands.)")
+
+        system_prompt_parts.append("""- System Integration:
+    - 'Query system information.'
+    - 'List system services.'
+    - 'Manage service "SERVICE_NAME" action "start|stop|restart".'
+    - 'Execute system command "COMMAND".'
+    - 'Get process info for "PROCESS_NAME" or PID "PID".'
+    - 'Terminate process with PID "PID".'
+    - 'Fetch web content from URL "URL".'
+- Knowledge Base:
+    - 'Add file "FILE_PATH" of type "FILE_TYPE" to knowledge base with metadata {JSON_METADATA}.'
+    - 'Search knowledge base for "QUERY" with N results.'
+    - 'Store fact "CONTENT" with metadata {JSON_METADATA}.'
+    - 'Get fact by ID "ID" or query "QUERY".'
+- User Interaction:
+    - 'Ask user for manual for program "PROGRAM_NAME" with question "QUESTION_TEXT".'
+    - 'Ask user for approval to run command "COMMAND_TO_APPROVE".'
+
+Prioritize using the most specific tool for the job. For example, use 'Manage service "SERVICE_NAME" action "start|stop|restart".' for services, 'Query system information.' for system details, and 'Type text "TEXT" into active window.' for GUI typing, rather than 'Execute system command "COMMAND".' if a more specific tool exists.
+
+IMPORTANT: When a tool is executed, its output will be provided to you with the role `tool_output`. You MUST use the actual, factual content from these `tool_output` messages to inform your subsequent actions and responses. Do NOT hallucinate or invent information. If the user asks a question that was answered by a tool, directly use the tool's output in your response.
+
+If the user's request is purely conversational and does not require a tool, respond using the 'respond_conversationally' tool. Do NOT generate unrelated content or puzzles. Focus solely on the user's current goal and the information provided by tools.
+""")
+        system_prompt = "\n".join(system_prompt_parts)
+
+        if context_str:
+            system_prompt += f"\n\nUse the following context to inform your plan:\n{context_str}"
+        
+        system_prompt += f"\n\nOperating System Information:\n{json.dumps(self.system_info, indent=2)}\n"
+        system_prompt += f"\n\nAvailable System Tools:\n{json.dumps(self.available_tools, indent=2)}\n"
+
+        full_messages = [{"role": "system", "content": system_prompt}] + messages
         
         response = await self.llm_interface.chat_completion(
-            messages=messages,
-            llm_type=llm_type,
-            **task.get('params', {})
+            messages=full_messages,
+            llm_type="orchestrator",
+            temperature=orchestrator_settings.get('temperature', 0.7),
+            **{k: v for k, v in orchestrator_settings.items() if k not in ['system_prompt', 'temperature', 'sampling_strategy', 'structured_output']}
         )
         
-        return {"response": response}
-    
-    async def _handle_system_command(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle system command tasks"""
-        command = task.get('command')
-        if not command:
-            raise ValueError("No command specified")
+        print(f"Raw LLM response from chat_completion: {response}")
+        await event_manager.publish("log_message", {"level": "DEBUG", "message": f"Raw LLM response: {response}"})
+
+        llm_raw_content = None
+        if isinstance(response, dict):
+            if 'message' in response and isinstance(response['message'], dict) and 'content' in response['message']:
+                llm_raw_content = response['message']['content']
+            elif 'choices' in response and isinstance(response['choices'], list) and len(response['choices']) > 0 and \
+                 'message' in response['choices'][0] and isinstance(response['choices'][0]['message'], dict) and \
+                 'content' in response['choices'][0]['message']:
+                llm_raw_content = response['choices'][0]['message']['content']
+
+        if llm_raw_content:
+            try:
+                parsed_content = json.loads(llm_raw_content)
+                if isinstance(parsed_content, dict) and "tool_name" in parsed_content and "tool_args" in parsed_content:
+                    return parsed_content
+                else:
+                    print(f"LLM returned unexpected JSON (not a tool call). Treating as conversational: {llm_raw_content}")
+                    return {
+                        "thoughts": ["The LLM returned unexpected JSON. Responding conversationally with the raw JSON."],
+                        "tool_name": "respond_conversationally",
+                        "tool_args": {"response_text": llm_raw_content}
+                    }
+            except json.JSONDecodeError:
+                print(f"LLM response is plain text. Treating as conversational: {llm_raw_content}")
+                return {
+                    "thoughts": ["The user's request does not require a tool. Responding conversationally."],
+                    "tool_name": "respond_conversationally",
+                    "tool_args": {"response_text": llm_raw_content}
+                }
         
-        result = await self.system_integration.execute_command(
-            command,
-            task.get('working_dir'),
-            task.get('timeout', 30)
-        )
+        error_message = "Failed to generate an action from Orchestrator LLM. No content received."
+        await event_manager.publish("error", {"message": error_message})
+        print(error_message)
+        return {"tool_name": "respond_conversationally", "tool_args": {"response_text": error_message}}
+
+    async def execute_goal(self, goal: str, messages: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+        """Execute a goal using an iterative approach with the orchestrator LLM."""
+        if messages is None:
+            messages = [{"role": "user", "content": goal}]
         
-        return result
-    
-    async def _handle_knowledge_query(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle knowledge base queries"""
-        query = task.get('query')
-        if not query:
-            raise ValueError("No query specified")
+        await event_manager.publish("log_message", {"level": "INFO", "message": f"Starting goal execution: {goal}"})
+        print(f"Starting goal execution: {goal}")
         
-        results = await self.knowledge_base.search(
-            query,
-            n_results=task.get('n_results', 5)
-        )
+        if self.use_langchain and self.langchain_agent and hasattr(self.langchain_agent, 'available') and self.langchain_agent.available:
+            try:
+                await event_manager.publish("log_message", {"level": "INFO", "message": "Using LangChain Agent for goal execution"})
+                print("Using LangChain Agent for goal execution")
+                return await self.langchain_agent.execute_goal(goal, messages)
+            except Exception as e:
+                await event_manager.publish("log_message", {"level": "ERROR", "message": f"LangChain Agent failed, falling back to standard orchestrator: {e}"})
+                print(f"LangChain Agent failed, falling back to standard orchestrator: {e}")
         
-        return {"results": results}
-    
-    async def _handle_file_operation(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle file operations"""
-        operation = task.get('operation')
-        file_path = task.get('file_path')
+        if self._is_simple_command(goal):
+            simple_command_result = await self._execute_simple_command(goal)
+            print(f"DEBUG: Simple command handled directly. Returning result: {simple_command_result}")
+            return simple_command_result
         
-        if operation == 'add_to_kb':
-            file_type = task.get('file_type', 'txt')
-            result = await self.knowledge_base.add_file(file_path, file_type)
-        else:
-            raise ValueError(f"Unknown file operation: {operation}")
+        max_iterations = global_config_manager.get_nested('orchestrator.max_iterations', 10) # Get from config
+        iteration = 0
         
-        return result
-    
-    async def _handle_langchain_goal(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle LangChain agent goals"""
-        if not self.langchain_orchestrator or not self.langchain_orchestrator.available:
-            raise ValueError("LangChain orchestrator not available")
+        while iteration < max_iterations:
+            if self.agent_paused:
+                await event_manager.publish("log_message", {"level": "INFO", "message": "Agent is paused, waiting for resume..."})
+                print("Agent is paused, waiting for resume...")
+                await asyncio.sleep(1)
+                continue
+                
+            iteration += 1
+            await event_manager.publish("log_message", {"level": "INFO", "message": f"Iteration {iteration}/{max_iterations}"})
+            print(f"Iteration {iteration}/{max_iterations}")
+            
+            action = await self.generate_task_plan(goal, messages)
+            
+            if not action:
+                await event_manager.publish("error", {"message": "Failed to generate action plan"})
+                print("Failed to generate action plan")
+                return {"status": "error", "message": "Failed to generate action plan."}
+            
+            tool_name = action.get("tool_name")
+            tool_args = action.get("tool_args", {})
+            thoughts = action.get("thoughts", [])
+            
+            if thoughts:
+                thoughts_text = " ".join(thoughts) if isinstance(thoughts, list) else str(thoughts)
+                await event_manager.publish("log_message", {"level": "INFO", "message": f"AI Thoughts: {thoughts_text}"})
+                print(f"AI Thoughts: {thoughts_text}")
+            
+            await event_manager.publish("log_message", {"level": "INFO", "message": f"Executing tool: {tool_name} with args: {tool_args}"})
+            print(f"Executing tool: {tool_name} with args: {tool_args}")
+            
+            if not isinstance(tool_name, str):
+                error_msg = f"Invalid tool_name received from LLM: {tool_name}. Expected string."
+                await event_manager.publish("error", {"message": error_msg})
+                messages.append({"role": "user", "content": f"Tool execution failed: {error_msg}"})
+                continue
+            
+            mapped_task = self._map_tool_to_task(tool_name, tool_args)
+            
+            try:
+                if self.task_transport_type == "local":
+                    result = await self.local_worker.execute_task(mapped_task)
+                else:
+                    result = {"status": "error", "message": "Redis execution not implemented"}
+                
+                tool_output_content = result.get("result", result.get("output", result.get("message", "Tool execution completed.")))
+                messages.append({"role": "tool_output", "content": tool_output_content})
+                
+                if result.get("status") == "success":
+                    if tool_name == "respond_conversationally":
+                        result_content = result.get("response_text", result.get("result", result.get("output", result.get("message", "Task completed successfully"))))
+                    else:
+                        result_content = result.get("result", result.get("output", result.get("message", "Task completed successfully")))
+                    
+                    await event_manager.publish("llm_response", {"response": result_content})
+                    await event_manager.publish("log_message", {"level": "INFO", "message": f"Tool execution successful: {result_content}"})
+                    print(f"Tool execution successful: {result_content}")
+                    
+                    if tool_name == "respond_conversationally":
+                        await event_manager.publish("log_message", {"level": "INFO", "message": "Goal execution completed with conversational response"})
+                        print("Goal execution completed with conversational response")
+                        return {"tool_name": "respond_conversationally", "tool_args": {"response_text": result_content}, "response_text": result_content}
+                        
+                elif result.get("status") == "pending_approval":
+                    approval_result = await self._handle_command_approval(result)
+                    if approval_result.get("approved"):
+                        continue
+                    else:
+                        messages.append({"role": "user", "content": "User declined to approve the command. Please suggest an alternative approach."})
+                        continue
+                        
+                else:
+                    error_msg = result.get("message", "Unknown error occurred")
+                    messages.append({"role": "user", "content": f"Tool execution failed: {error_msg}"})
+                    await event_manager.publish("error", {"message": error_msg})
+                    print(f"Tool execution failed: {error_msg}")
+                    
+            except Exception as e:
+                error_msg = f"Exception during tool execution: {str(e)}"
+                messages.append({"role": "user", "content": error_msg})
+                await event_manager.publish("error", {"message": error_msg})
+                print(error_msg)
+                traceback.print_exc()
         
-        goal = task.get('goal')
-        conversation_history = task.get('conversation_history', [])
+        await event_manager.publish("log_message", {"level": "WARNING", "message": f"Goal execution completed after {max_iterations} iterations"})
+        print(f"Goal execution completed after {max_iterations} iterations")
+        return {"status": "warning", "message": "Goal execution completed, but may not have fully achieved the objective."}
+
+    def _is_simple_command(self, goal: str) -> bool:
+        command_patterns = [
+            r"use\s+(\w+)\s+to\s+get",
+            r"run\s+(\w+)",
+            r"execute\s+(\w+)",
+            r"(\w+)\s+command",
+            r"get.*ip.*address",
+            r"show.*network",
+            r"list.*processes",
+            r"ifconfig",
+            r"ip\s+addr"
+        ]
+        is_simple = any(re.search(pattern, goal.lower()) for pattern in command_patterns)
+        print(f"DEBUG: _is_simple_command('{goal}') -> {is_simple}")
+        return is_simple
+
+    async def _execute_simple_command(self, goal: str) -> Dict[str, Any]:
+        command = None
+        if "ifconfig" in goal.lower():
+            command = "ifconfig"
+        elif "ip addr" in goal.lower() or "ip address" in goal.lower():
+            command = "ip addr show"
+        elif "ps" in goal.lower() and "process" in goal.lower():
+            command = "ps aux"
+        elif "netstat" in goal.lower():
+            command = "netstat -tuln"
         
-        result = await self.langchain_orchestrator.execute_goal(
-            goal,
-            conversation_history
-        )
+        print(f"DEBUG: _execute_simple_command called for goal: '{goal}', determined command: '{command}'")
+
+        if command:
+            await event_manager.publish("log_message", {"level": "INFO", "message": f"Executing simple command: {command}"})
+            
+            task = {
+                "task_id": str(uuid.uuid4()),
+                "type": "system_execute_command",
+                "command": command,
+                "user_role": "user",
+                "timestamp": time.time()
+            }
+            
+            result = await self.local_worker.execute_task(task)
+            
+            await event_manager.publish("log_message", {"level": "INFO", "message": f"Result from worker for simple command '{command}': {json.dumps(result, indent=2)}"})
+            print(f"Result from worker for simple command '{command}': {json.dumps(result, indent=2)}")
+
+            if result.get("status") == "success":
+                return {
+                    "tool_name": "execute_system_command",
+                    "tool_args": {
+                        "command": command,
+                        "output": result.get("output", "Command executed successfully"),
+                        "status": "success"
+                    }
+                }
+            else:
+                error_msg = result.get("message", "Command execution failed")
+                return {
+                    "tool_name": "execute_system_command",
+                    "tool_args": {
+                        "command": command,
+                        "error": error_msg,
+                        "output": result.get("output", ""),
+                        "status": "error"
+                    }
+                }
         
-        return result
-    
-    async def _handle_task_completion(self, event_data: Dict[str, Any]):
-        """Handle task completion events"""
-        task_id = event_data.get('task_id')
-        if task_id in self.active_tasks:
-            del self.active_tasks[task_id]
-        
-        # Update metrics
-        await self.diagnostics.update_task_metrics(event_data)
-    
-    async def _handle_task_failure(self, event_data: Dict[str, Any]):
-        """Handle task failure events"""
-        task_id = event_data.get('task_id')
-        if task_id in self.active_tasks:
-            del self.active_tasks[task_id]
-        
-        # Log failure
-        self.logger.error(f"Task failed: {event_data}")
-        
-        # Update metrics
-        await self.diagnostics.update_failure_metrics(event_data)
-    
-    async def _handle_user_input(self, event_data: Dict[str, Any]):
-        """Handle user input events"""
-        user_input = event_data.get('input')
-        session_id = event_data.get('session_id')
-        
-        # Create task for user input processing
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "user_input",
-            "input": user_input,
-            "session_id": session_id,
+        print(f"DEBUG: _execute_simple_command could not determine a direct command for '{goal}'. Falling back to generate_task_plan.")
+        return await self.generate_task_plan(goal, [{"role": "user", "content": goal}])
+
+    def _map_tool_to_task(self, tool_name: Optional[str], tool_args: dict) -> dict:
+        task_id = str(uuid.uuid4())
+        base_task = {
+            "task_id": task_id,
+            "user_role": "user",
             "timestamp": time.time()
         }
         
-        await self.submit_task(task)
-    
-    async def _handle_system_alert(self, event_data: Dict[str, Any]):
-        """Handle system alerts"""
-        alert_type = event_data.get('type')
-        severity = event_data.get('severity', 'info')
-        
-        self.logger.info(f"System alert [{severity}]: {alert_type}")
-        
-        # Create response task if needed
-        if severity in ['warning', 'error', 'critical']:
-            task = {
-                "task_id": str(uuid.uuid4()),
-                "type": "system_response",
-                "alert_data": event_data,
-                "timestamp": time.time()
-            }
-            await self.submit_task(task)
-    
-    async def submit_task(self, task: Dict[str, Any]) -> str:
-        """Submit a task for processing"""
-        task_id = task.get('task_id') or str(uuid.uuid4())
-        task['task_id'] = task_id
-        
-        # Add to active tasks
-        self.active_tasks[task_id] = task
-        
-        # Add to queue
-        await self.task_queue.put(task)
-        
-        self.logger.info(f"Task {task_id} submitted")
-        return task_id
-    
-    async def get_task_result(self, task_id: str, timeout: float = 30.0) -> Optional[Dict[str, Any]]:
-        """Get the result of a completed task"""
-        start_time = time.time()
-        
-        while time.time() - start_time < timeout:
-            if task_id in self.task_results:
-                return self.task_results.pop(task_id)
-            
-            await asyncio.sleep(0.1)
-        
-        return None
-    
-    async def execute_goal(self, goal: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Execute a high-level goal"""
-        self.logger.info(f"Executing goal: {goal}")
-        
-        # Choose orchestration strategy
-        if self.langchain_orchestrator and self.langchain_orchestrator.available:
-            # Use LangChain agent
-            task = {
-                "task_id": str(uuid.uuid4()),
-                "type": "langchain_goal",
-                "goal": goal,
-                "conversation_history": context.get('conversation_history', []) if context else [],
-                "timestamp": time.time()
-            }
-        else:
-            # Use traditional orchestration
-            task = {
-                "task_id": str(uuid.uuid4()),
-                "type": "traditional_goal",
-                "goal": goal,
-                "context": context or {},
-                "timestamp": time.time()
-            }
-        
-        # Submit and wait for result
-        task_id = await self.submit_task(task)
-        result = await self.get_task_result(task_id, timeout=60.0)
-        
-        if result is None:
+        if not isinstance(tool_name, str):
             return {
-                "status": "timeout",
-                "message": "Goal execution timed out"
+                "type": "respond_conversationally",
+                "response_text": f"Error: Invalid tool name received: {tool_name}. Cannot execute task."
             }
-        
-        return result
-    
-    async def get_status(self) -> Dict[str, Any]:
-        """Get orchestrator status"""
-        return {
-            "is_running": self.is_running,
-            "active_tasks": len(self.active_tasks),
-            "queue_size": self.task_queue.qsize(),
-            "worker_count": len(self.worker_pool),
-            "transport_type": self.transport_type,
-            "components": {
-                "llm_interface": self.llm_interface is not None,
-                "knowledge_base": self.knowledge_base is not None,
-                "worker_node": self.worker_node is not None,
-                "langchain_orchestrator": self.langchain_orchestrator is not None and self.langchain_orchestrator.available,
-                "system_integration": self.system_integration is not None,
-                "diagnostics": self.diagnostics is not None,
-                "security_layer": self.security_layer is not None,
-                "redis_client": self.redis_client is not None
-            }
-        }
-    
-    async def shutdown(self):
-        """Shutdown the orchestrator"""
-        self.logger.info("Shutting down Task Orchestrator...")
-        
-        self.is_running = False
-        
-        # Wait for tasks to complete
-        await self.task_queue.join()
-        
-        # Cancel worker tasks
-        for worker_task in self.worker_pool:
-            worker_task.cancel()
-        
-        # Wait for workers to finish
-        await asyncio.gather(*self.worker_pool, return_exceptions=True)
-        
-        # Close Redis connection
-        if self.redis_client:
-            await self.redis_client.close()
-        
-        # Shutdown components
-        if self.system_integration:
-            await self.system_integration.shutdown()
-        
-        if self.diagnostics:
-            await self.diagnostics.shutdown()
-        
-        if self.security_layer:
-            await self.security_layer.shutdown()
-        
-        self.logger.info("Task Orchestrator shutdown complete")
 
-# Factory function for creating orchestrator
-async def create_orchestrator(config_path: str = "config/config.yaml") -> TaskOrchestrator:
-    """Create and initialize a task orchestrator"""
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    
-    orchestrator = TaskOrchestrator(config)
-    await orchestrator.initialize()
-    
-    return orchestrator
+        if tool_name == "execute_system_command" or tool_name == "system_execute_command":
+            base_task.update({
+                "type": "system_execute_command",
+                "command": tool_args.get("command", tool_args.get("COMMAND", ""))
+            })
+        elif tool_name == "query_system_information" or tool_name == "system_query_info":
+            base_task.update({"type": "system_query_info"})
+        elif tool_name == "list_system_services" or tool_name == "system_list_services":
+            base_task.update({"type": "system_list_services"})
+        elif tool_name == "manage_service" or tool_name == "system_manage_service":
+            base_task.update({
+                "type": "system_manage_service",
+                "service_name": tool_args.get("service_name", tool_args.get("SERVICE_NAME", "")),
+                "action": tool_args.get("action", "")
+            })
+        elif tool_name == "get_process_info" or tool_name == "system_get_process_info":
+            base_task.update({
+                "type": "system_get_process_info",
+                "process_name": tool_args.get("process_name", tool_args.get("PROCESS_NAME")),
+                "pid": tool_args.get("pid", tool_args.get("PID"))
+            })
+        elif tool_name == "terminate_process" or tool_name == "system_terminate_process":
+            base_task.update({
+                "type": "system_terminate_process",
+                "pid": tool_args.get("pid", tool_args.get("PID"))
+            })
+        elif tool_name == "web_fetch":
+            base_task.update({
+                "type": "web_fetch",
+                "url": tool_args.get("url", tool_args.get("URL", ""))
+            })
+        elif tool_name == "respond_conversationally":
+            base_task.update({
+                "type": "respond_conversationally",
+                "response_text": tool_args.get("response_text", "")
+            })
+        elif tool_name == "ask_user_for_manual":
+            base_task.update({
+                "type": "ask_user_for_manual",
+                "program_name": tool_args.get("program_name", tool_args.get("PROGRAM_NAME", "")),
+                "question_text": tool_args.get("question_text", tool_args.get("QUESTION_TEXT", ""))
+            })
+        else:
+            base_task.update({
+                "type": tool_name,
+                **tool_args
+            })
+        
+        return base_task
+
+    async def _handle_command_approval(self, result):
+        command = result.get("command")
+        task_id = result.get("task_id")
+        
+        if not command or not task_id:
+            return {"approved": False, "message": "Invalid approval request"}
+        
+        await event_manager.publish("log_message", {"level": "INFO", "message": f"Requesting approval for command: {command}"})
+        print(f"Requesting approval for command: {command}")
+        
+        if self.task_transport_type == "redis":
+            approval_future = asyncio.Future()
+            self.pending_approvals[task_id] = approval_future
+            
+            approval_request = {
+                "task_id": task_id,
+                "command": command,
+                "timestamp": time.time()
+            }
+            if self.redis_client:
+                self.redis_client.publish("command_approval_request", json.dumps(approval_request))
+            else:
+                await event_manager.publish("error", {"message": "Redis client not initialized for command approval."})
+                return {"approved": False, "message": "Redis client not available for approval."}
+            
+            try:
+                approval_response = await asyncio.wait_for(approval_future, timeout=300)
+                return approval_response
+            except asyncio.TimeoutError:
+                self.pending_approvals.pop(task_id, None)
+                await event_manager.publish("error", {"message": f"Command approval timeout for: {command}"})
+                return {"approved": False, "message": "Approval timeout"}
+        else:
+            await event_manager.publish("log_message", {"level": "WARNING", "message": "Local approval mechanism not implemented, auto-approving"})
+            return {"approved": True, "message": "Auto-approved for local execution"}
+
+    async def generate_next_action(self, goal: str, messages: Optional[List[Dict[str, str]]]):
+        return await self.generate_task_plan(goal, messages)
+
+# Removed example usage block

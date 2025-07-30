@@ -28,6 +28,13 @@ pyenv() {
 }
 
 # === AutoBot Setup Script ===
+# Get the directory where this script is located (project root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "🔍 Detected project root: $SCRIPT_DIR"
+
+# Change to project root directory
+cd "$SCRIPT_DIR"
+
 PYTHON_VERSION="3.10.13"
 VENV_DIR="."
 REQUIREMENTS_FILE="requirements.txt"
@@ -62,10 +69,10 @@ sudo apt update && sudo apt install -y make build-essential libssl-dev zlib1g-de
 curl https://pyenv.run | bash
 
 # Add to shell
-echo -e '\\nexport PYENV_ROOT=\\\"\\$HOME/.pyenv\\\"' >> ~/.bashrc
-echo 'command -v pyenv >/dev/null || export PATH=\\\"\\$PYENV_ROOT/bin:\\$PATH\\\"' >> ~/.bashrc
-echo 'eval \\\"\\$(pyenv init -)\\\"' >> ~/.bashrc
-exec \\\"\\$SHELL\\\"
+echo -e '\nexport PYENV_ROOT=\"\$HOME/.pyenv\"' >> ~/.bashrc
+echo 'command -v pyenv >/dev/null || export PATH=\"\$PYENV_ROOT/bin:\$PATH\"' >> ~/.bashrc
+echo 'eval \"\$(pyenv init -)\"' >> ~/.bashrc
+exec \"\$SHELL\"
 
 # Then install Python
 pyenv install $PYTHON_VERSION
@@ -79,80 +86,104 @@ if ! pyenv versions | grep -q "$PYTHON_VERSION"; then
     echo "❌ Python $PYTHON_VERSION not installed. Installing build dependencies..."
     sudo apt update && sudo apt install -y make build-essential libssl-dev zlib1g-dev \\
   libbz2-dev libreadline-dev libsqlite3-dev curl llvm libncursesw5-dev xz-utils tk-dev \\
-  libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev git redis-server
+  libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev git redis-server pciutils || { echo "❌ Failed to install build dependencies and pciutils."; exit 1; }
     echo "Installing Python $PYTHON_VERSION..."
     sudo pyenv install "$PYTHON_VERSION" || { echo "❌ Failed to install Python $PYTHON_VERSION."; exit 1; }
     pyenv global "$PYTHON_VERSION"
 fi
 
-# --- 2. Ensure Docker is installed and running ---
-echo "🔍 Checking for Docker installation and service status..."
+# --- 2. Install and Configure Docker in WSL2 ---
+echo "🔍 Checking for Docker installation in WSL2..."
 if ! command -v docker &>/dev/null; then
-    echo "❌ Docker command not found. Installing Docker..."
+    echo "❌ Docker not found in WSL2. Installing Docker..."
     sudo apt update
-    sudo apt install -y docker.io || { echo "❌ Failed to install docker.io. Please install Docker manually."; exit 1; }
-    echo "✅ Docker command installed."
-fi
-
-# Check if Docker daemon is running
-if ! sudo docker info >/dev/null 2>&1; then
-    echo "❌ Docker daemon is not running or not accessible."
-    echo "Please ensure your Docker daemon (e.g., Docker Desktop for WSL) is running."
-    echo "You might need to start Docker Desktop on your Windows host, or manually start the Docker service."
-    exit 1
+    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common || { echo "❌ Failed to install Docker prerequisites."; exit 1; }
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg || { echo "❌ Failed to add Docker GPG key."; exit 1; }
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null || { echo "❌ Failed to add Docker APT repository."; exit 1; }
+    sudo apt update
+    sudo apt install -y docker-ce docker-ce-cli containerd.io || { echo "❌ Failed to install Docker Engine."; exit 1; }
+    echo "✅ Docker installed in WSL2."
 else
-    echo "✅ Docker daemon is running and accessible."
+    echo "✅ Docker already installed in WSL2."
 fi
 
-# Add current user to docker group to run docker commands without sudo
+# Add current user to docker group
 if ! id -nG "$USER" | grep -qw "docker"; then
     echo "Adding user '$USER' to the 'docker' group..."
     sudo usermod -aG docker "$USER" || { echo "❌ Failed to add user to docker group."; exit 1; }
     echo "✅ User '$USER' added to 'docker' group. Please log out and log back in for changes to take effect."
     echo "You may need to run 'newgrp docker' or restart your terminal for changes to apply immediately."
-    # Do not exit here, allow script to continue, but warn user
+    exit 1 # Exit to prompt user to re-login for group changes to apply
 fi
 
-# --- 3. Deploy/Start Redis Stack Docker Container ---
-echo "🔍 Checking for existing 'redis-stack' Docker container..."
-if sudo docker ps -a --format '{{.Names}}' | grep -q '^redis-stack$'; then
+# Start Docker daemon (if not running)
+echo "🔄 Starting Docker daemon in WSL2..."
+if ! pgrep dockerd >/dev/null; then
+    # Ensure the Docker socket directory exists and has correct permissions
+    sudo mkdir -p /var/run/docker || { echo "❌ Failed to create /var/run/docker."; exit 1; }
+    sudo chmod 755 /var/run/docker || { echo "❌ Failed to set permissions on /var/run/docker."; exit 1; }
+    
+    # Start dockerd in the background
+    sudo dockerd > /dev/null 2>&1 &
+    DOCKERD_PID=$!
+    echo "✅ Docker daemon started (PID: $DOCKERD_PID)."
+    
+    # Give dockerd some time to initialize
+    echo "Waiting for Docker daemon to be ready..."
+    sleep 5
+    
+    # Verify Docker daemon is responsive
+    if ! docker info >/dev/null 2>&1; then
+        echo "❌ Docker daemon is not responsive after startup. Please check Docker logs."
+        exit 1
+    else
+        echo "✅ Docker daemon is responsive."
+    fi
+else
+    echo "✅ Docker daemon is already running."
+fi
+
+# --- 3. Deploy/Start Redis Stack Docker Container (using local Docker) ---
+echo "🔍 Checking for existing 'redis-stack' Docker container (local to WSL2)..."
+if docker ps -a --format '{{.Names}}' | grep -q '^redis-stack$'; then
     echo "✅ 'redis-stack' container found."
-    if sudo docker inspect -f '{{.State.Running}}' redis-stack | grep -q 'true'; then
+    if docker inspect -f '{{.State.Running}}' redis-stack | grep -q 'true'; then
         echo "✅ 'redis-stack' container is already running."
     else
         echo "🔄 'redis-stack' container found but not running. Starting it..."
-        sudo docker start redis-stack || { echo "❌ Failed to start 'redis-stack' container."; exit 1; }
+        docker start redis-stack || { echo "❌ Failed to start 'redis-stack' container."; exit 1; }
         echo "✅ 'redis-stack' container started."
     fi
 else
     echo "📦 'redis-stack' container not found. Deploying a new one..."
-    sudo docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server:latest || { echo "❌ Failed to deploy 'redis-stack' container."; exit 1; }
+    docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server:latest || { echo "❌ Failed to deploy 'redis-stack' container."; exit 1; }
     echo "✅ 'redis-stack' container deployed and started."
 fi
 
 # Assume Redis Stack is ready if Docker command succeeded
-echo "Assuming Redis Stack is ready and accessible via localhost:6379."
+echo "Assuming Redis Stack is ready and accessible via localhost:6379 from within WSL2."
 echo "Please ensure the 'redis-stack' Docker container is running and healthy."
 
 pyenv global "$PYTHON_VERSION"
 
 # --- 2. Create AutoBot venv ---
-if [ ! -d "$VENV_DIR" ]; then
-    echo "📦 Creating venv: $VENV_DIR..."
-    eval "$(pyenv init -)"
-    export PATH="${HOME}/.pyenv/shims:$PATH"
-    echo "--- PYENV DEBUG INFO ---"
-    pyenv --version
-    pyenv versions
-    echo "--- END PYENV DEBUG INFO ---"
-    "${HOME}/.pyenv/versions/$PYTHON_VERSION/bin/python" -m venv "$VENV_DIR" || { echo "❌ Failed to create venv."; exit 1; }
-else
-    echo "✅ Virtual environment $VENV_DIR already exists."
-fi
+VENV_PATH="venv"
+echo "📦 Ensuring clean venv: $VENV_PATH..."
+rm -rf "$VENV_PATH" # Remove existing venv to ensure a clean install
+
+echo "📦 Creating venv: $VENV_PATH..."
+eval "$(pyenv init -)"
+export PATH="${HOME}/.pyenv/shims:$PATH"
+echo "--- PYENV DEBUG INFO ---"
+pyenv --version
+pyenv versions
+echo "--- END PYENV DEBUG INFO ---"
+"${HOME}/.pyenv/versions/$PYTHON_VERSION/bin/python" -m venv "$VENV_PATH" || { echo "❌ Failed to create venv."; exit 1; }
+echo "✅ Virtual environment $VENV_PATH created."
 
 # --- 3. Activate and install main requirements ---
 echo "--- Python Dependencies Installation ---"
-source "$VENV_DIR/bin/activate"
+source "$VENV_PATH/bin/activate"
 if [ ! -f "$REQUIREMENTS_FILE" ]; then
     echo "⚠️ Warning: $REQUIREMENTS_FILE not found. Skipping pip install."
 else
@@ -169,16 +200,19 @@ redis>=5.0,<6.0
 pyautogui==0.9.54
 mouseinfo==0.1.3
 pillow==9.4.0
-numpy==1.24.2
+numpy==1.26.4
 markdownify==0.11.6
+python-docx
+psutil
 EOF
     pip install -r requirements_group_1.txt || { echo "❌ Failed to install Group 1 requirements."; deactivate; exit 1; }
     echo "✅ Group 1 dependencies installed."
 
-    # Group 2: LangChain
-    echo "⬇️ Installing Group 2: LangChain..."
+    # Group 2: LangChain and LangChain Community
+    echo "⬇️ Installing Group 2: LangChain and LangChain Community..."
     cat > requirements_group_2.txt << EOF
 langchain
+langchain-community
 EOF
     pip install -r requirements_group_2.txt || { echo "❌ Failed to install Group 2 requirements."; deactivate; exit 1; }
     echo "✅ Group 2 dependencies installed."
@@ -190,6 +224,7 @@ llama-index
 llama-index-llms-ollama
 llama-index-embeddings-ollama
 llama-index-vector-stores-redis
+transformers
 EOF
     pip install -r requirements_group_3.txt || { echo "❌ Failed to install Group 3 requirements."; deactivate; exit 1; }
     echo "✅ Group 3 dependencies installed."
@@ -221,7 +256,13 @@ echo "✅ OpenVINO installation attempted."
 
 # Check for Intel NPU drivers on system
 echo "🔍 Checking for Intel NPU driver support..."
-if lspci | grep -i "neural\\|npu\\|ai" > /dev/null 2>&1; then
+# Ensure lspci is available
+if ! command -v lspci &>/dev/null; then
+    echo "⚠️ lspci command not found. Attempting to install pciutils..."
+    sudo apt update && sudo apt install -y pciutils || { echo "❌ Failed to install pciutils. Cannot check for NPU hardware."; }
+fi
+
+if command -v lspci &>/dev/null && lspci | grep -i "neural\|npu\|ai" > /dev/null 2>&1; then
     echo "✅ Intel NPU hardware detected via lspci"
     
     # Check if Intel NPU driver is installed
@@ -330,7 +371,7 @@ echo "🔍 Debugging: Contents of dist are:"
 ls -la dist || echo "Directory dist not found."
 
 # Ensure static directory exists within frontend folder
-cd ../..
+cd ..
 mkdir -p $STATIC_DIR
 
 # Clean static directory before copying new files
@@ -358,11 +399,23 @@ else
 fi
 
 echo "✅ Frontend setup complete!"
-echo "Access the app at http://localhost:8000"
+echo "Access the Vue app at http://localhost:5173 (development)"
+echo "The built files are served from the backend at http://localhost:8001"
 
 # --- 6. Copy default config if needed ---
-# Ensure we are in the root directory before checking/copying config
-cd "$(dirname "$0")"
+# Use the project root directory detected at script start
+echo "🔍 Using project root directory: $SCRIPT_DIR"
+
+# Verify we're in the correct directory by checking for key files
+if [ ! -f "main.py" ] || [ ! -d "src" ] || [ ! -f "run_agent.sh" ]; then
+    echo "❌ Error: Script must be run from the AutoBot project directory"
+    echo "Expected files: main.py, src/, run_agent.sh"
+    echo "Current directory: $(pwd)"
+    echo "Please cd to the AutoBot directory and run the script again"
+    exit 1
+fi
+
+echo "✅ Confirmed running from AutoBot project directory"
 
 if [ ! -f "$CONFIG_FILE" ]; then
     if [ -f "$CONFIG_TEMPLATE" ]; then
@@ -370,11 +423,12 @@ if [ ! -f "$CONFIG_FILE" ]; then
         cp "$CONFIG_TEMPLATE" "$CONFIG_FILE" || { echo "❌ Failed to copy config file."; exit 1; }
     else
         echo "⚠️ Warning: Config template $CONFIG_TEMPLATE not found. Creating a basic config file..."
+        mkdir -p "$CONFIG_DIR"
         cat > "$CONFIG_FILE" << 'EOF'
 # Basic AutoBot Configuration
 server:
   host: "0.0.0.0"
-  port: 8000
+  port: 8001
 
 logging:
   level: "INFO"
@@ -387,7 +441,61 @@ EOF
     fi
 fi
 
-echo "✅ Setup complete. You may now run ./run_agent.sh to launch AutoBot."
+# --- 7. Validate Configuration and Module Imports ---
+echo "🔍 Validating configuration and module imports..."
+
+# Ensure we're back in the root directory and activate virtual environment
+cd "$SCRIPT_DIR"
+echo "🔍 Current working directory: $(pwd)"
+echo "🔍 Looking for virtual environment at: $SCRIPT_DIR/$VENV_PATH"
+
+# Check if virtual environment directory exists
+if [ ! -d "$VENV_PATH" ]; then
+    echo "❌ Virtual environment directory not found at $VENV_PATH"
+    echo "🔍 Contents of current directory:"
+    ls -la
+    exit 1
+fi
+
+# Ensure the activate script is executable
+chmod +x "$VENV_PATH/bin/activate"
+
+# Activate the virtual environment
+if [ -f "$VENV_PATH/bin/activate" ]; then
+    source "$VENV_PATH/bin/activate"
+    echo "✅ Virtual environment activated successfully."
+else
+    echo "❌ Virtual environment activation script not found at $VENV_PATH/bin/activate"
+    echo "🔍 Contents of venv/bin directory:"
+    ls -la "$VENV_PATH/bin/" || echo "Directory does not exist"
+    exit 1
+fi
+
+# Add current directory to PYTHONPATH for module discovery
+export PYTHONPATH=$(pwd)
+
+python3 -c "
+from src.config import global_config_manager
+from src.orchestrator import Orchestrator  
+from src.llm_interface import LLMInterface
+from src.knowledge_base import KnowledgeBase
+from src.worker_node import WorkerNode
+from src.diagnostics import Diagnostics
+print('✅ All modules imported successfully!')
+print(f'✅ Config loaded - LLM model: {global_config_manager.get_nested(\"llm_config.ollama.model\")}')
+print(f'✅ Config loaded - Redis host: {global_config_manager.get_nested(\"memory.redis.host\")}')
+print(f'✅ Config loaded - Server port: {global_config_manager.get_nested(\"backend.server_port\")}')
+print('✅ Configuration validation completed successfully!')
+"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Configuration validation passed!"
+    echo "✅ Setup complete. You may now run ./run_agent.sh to launch AutoBot."
+else
+    echo "❌ Configuration validation failed!"
+    echo "Please check the error messages above and fix any issues."
+    exit 1
+fi
 
 echo "--- DIAGNOSTIC INFORMATION ---"
 echo "Running pyenv versions:"
