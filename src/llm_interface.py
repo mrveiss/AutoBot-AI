@@ -74,9 +74,9 @@ class LLMInterface:
 
         self.hardware_priority = global_config_manager.get_nested('hardware_acceleration.priority', ["cpu"])
 
-        self.orchestrator_system_prompt = self._load_composite_prompt("prompts/default/agent.system.main.md")
-        self.task_system_prompt = self._load_composite_prompt("prompts/reflection/agent.system.main.role.md")
-        self.tool_interpreter_system_prompt = self._load_prompt_from_file("prompts/tool_interpreter_system_prompt.txt")
+        self.orchestrator_system_prompt = self._load_composite_prompt(global_config_manager.get_nested('prompts.orchestrator', "prompts/default/agent.system.main.md"))
+        self.task_system_prompt = self._load_composite_prompt(global_config_manager.get_nested('prompts.task', "prompts/reflection/agent.system.main.role.md"))
+        self.tool_interpreter_system_prompt = self._load_prompt_from_file(global_config_manager.get_nested('prompts.tool_interpreter', "prompts/tool_interpreter_system_prompt.txt"))
 
     def _load_prompt_from_file(self, file_path: str) -> str:
         try:

@@ -20,6 +20,7 @@
       </div>
       <nav class="app-nav">
         <button @click="activeTab = 'chat'" :class="{ active: activeTab === 'chat' }">Chat</button>
+        <button @click="activeTab = 'knowledge'" :class="{ active: activeTab === 'knowledge' }">Knowledge</button>
         <button @click="activeTab = 'settings'" :class="{ active: activeTab === 'settings' }">Settings</button>
         <button @click="activeTab = 'files'" :class="{ active: activeTab === 'files' }">Files</button>
         <button @click="activeTab = 'history'" :class="{ active: activeTab === 'history' }">History</button>
@@ -31,7 +32,10 @@
         <ChatInterface v-if="activeChatId" :key="activeChatId" />
       </div>
     </section>
-      <section v-else-if="activeTab === 'settings'" class="settings-section">
+    <section v-else-if="activeTab === 'knowledge'" class="knowledge-section">
+      <KnowledgeManager />
+    </section>
+    <section v-else-if="activeTab === 'settings'" class="settings-section">
         <SettingsPanel />
       </section>
       <section v-else-if="activeTab === 'files'" class="files-section">
@@ -67,6 +71,7 @@ import ChatInterface from './components/ChatInterface.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import FileBrowser from './components/FileBrowser.vue';
 import HistoryView from './components/HistoryView.vue';
+import KnowledgeManager from './components/KnowledgeManager.vue';
 
 export default {
   name: 'App',
@@ -75,6 +80,7 @@ export default {
     SettingsPanel,
     FileBrowser,
     HistoryView,
+    KnowledgeManager,
   },
   setup() {
     const activeTab = ref('chat');
@@ -606,7 +612,7 @@ export default {
   box-sizing: border-box;
 }
 
-.chat-section {
+.chat-section, .knowledge-section, .settings-section, .files-section, .history-section {
   display: flex;
   height: 100%;
   width: 100%; /* Ensure it fits within parent container */
@@ -615,6 +621,11 @@ export default {
   overflow: hidden;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
+}
+
+.knowledge-section, .settings-section, .files-section, .history-section {
+  overflow-y: auto; /* Allow scrolling for content */
+  padding: 20px;
 }
 
 

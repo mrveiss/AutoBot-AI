@@ -1,7 +1,7 @@
 // ApiClient.js - Unified API client for all backend operations
 class ApiClient {
-  constructor(baseUrl = 'http://localhost:8001') {
-    this.baseUrl = baseUrl;
+  constructor() {
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
     this.timeout = 30000; // 30 seconds default timeout
     this.settings = this.loadSettings();
     
