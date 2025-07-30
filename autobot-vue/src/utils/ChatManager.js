@@ -70,7 +70,9 @@ class ChatManager {
       
       if (response.ok) {
         const data = await response.json();
-        return data.chats || [];
+        const chats = data.chats || [];
+        // Filter out chats with invalid IDs
+        return chats.filter(chat => chat.chatId && chat.chatId !== 'undefined' && chat.chatId !== 'null');
       } else {
         console.error('Failed to get chat list:', response.statusText);
         return this.getFallbackChatList();
@@ -88,7 +90,10 @@ class ChatManager {
       const key = localStorage.key(i);
       if (key && key.startsWith('chat_') && key.endsWith('_messages')) {
         const chatId = key.slice(5, -9); // Remove 'chat_' prefix and '_messages' suffix
-        chats.push({ chatId, name: '' });
+        // Only add chats with valid IDs
+        if (chatId && chatId !== 'undefined' && chatId !== 'null') {
+          chats.push({ chatId, name: '' });
+        }
       }
     }
     return chats;
@@ -171,6 +176,14 @@ class ChatManager {
 
   // Delete a chat
   async deleteChat(chatId) {
+    // Validate chat ID first
+    if (!chatId || chatId === 'undefined' || chatId === 'null' || chatId === null) {
+      console.error('Cannot delete chat: Invalid chat ID:', chatId);
+      throw new Error(`Invalid chat ID for deletion: ${chatId}`);
+    }
+
+    console.log('ChatManager: Attempting to delete chat with ID:', chatId);
+
     try {
       // Try to delete from backend first
       const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}`, {
@@ -194,6 +207,7 @@ class ChatManager {
       this.currentChatId = null;
     }
 
+    console.log('ChatManager: Chat deletion completed for:', chatId);
     return { status: 'success' };
   }
 
