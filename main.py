@@ -422,7 +422,7 @@ async def list_chats(request: Request):
     chat_history_manager = request.app.state.chat_history_manager
     try:
         sessions = chat_history_manager.list_sessions()
-        return {"chats": sessions}
+        return JSONResponse(status_code=200, content={"chats": sessions})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -432,23 +432,37 @@ async def get_chat(chat_id: str, request: Request):
     chat_history_manager = request.app.state.chat_history_manager
     try:
         history = chat_history_manager.load_session(chat_id)
-        if history:
-            return {"chat_id": chat_id, "history": history}
+        if history is not None:
+            return JSONResponse(status_code=200, content={"chat_id": chat_id, "history": history})
         else:
             return JSONResponse(status_code=404, content={"error": "Chat not found"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @api_router.post("/chats/new")
-async def create_new_chat():
+async def create_new_chat(request: Request):
     """Create a new chat session ID (POST method)."""
+    chat_history_manager = request.app.state.chat_history_manager
     try:
         import uuid
         chat_id = str(uuid.uuid4())
-        return {"chat_id": chat_id, "status": "success"}
+        chat_history_manager.save_session(chat_id, messages=[], name=f"Chat {chat_id[:8]}")
+        return JSONResponse(status_code=200, content={"chat_id": chat_id, "status": "success"})
     except Exception as e:
         logging.error(f"Error creating new chat: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Error creating new chat: {str(e)}"})
+
+@api_router.delete("/chats/{chat_id}")
+async def delete_chat(chat_id: str, request: Request):
+    """Delete a specific chat session."""
+    chat_history_manager = request.app.state.chat_history_manager
+    try:
+        if chat_history_manager.delete_session(chat_id):
+            return JSONResponse(status_code=200, content={"message": "Chat deleted successfully"})
+        else:
+            return JSONResponse(status_code=404, content={"error": "Chat not found"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @api_router.post("/chats/cleanup_messages")
 async def cleanup_messages():

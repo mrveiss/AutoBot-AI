@@ -2,7 +2,7 @@ import json
 import os
 import time
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 class ChatHistoryManager:
     def __init__(self, history_file: str = "data/chat_history.json", use_redis: bool = False, redis_host: str = "localhost", redis_port: int = 6379):
@@ -21,17 +21,19 @@ class ChatHistoryManager:
         self.redis_host = redis_host
         self.redis_port = redis_port
         self.redis_client = None
-        
+
         if use_redis:
             try:
                 import redis
-                self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-                # Test connection
-                self.redis_client.ping()
-                logging.info("Redis connection established for active memory storage.")
             except ImportError:
                 logging.error("Redis library not installed. Falling back to file storage. Install with 'pip install redis'")
                 self.use_redis = False
+                return
+
+            try:
+                self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+                self.redis_client.ping()
+                logging.info("Redis connection established for active memory storage.")
             except redis.ConnectionError as e:
                 logging.error(f"Failed to connect to Redis at {redis_host}:{redis_port}: {str(e)}. Falling back to file storage.")
                 self.use_redis = False
@@ -57,10 +59,12 @@ class ChatHistoryManager:
             try:
                 # Attempt to load active session from Redis
                 history_data = self.redis_client.get("autobot:chat_history")
-                if history_data:
+                if isinstance(history_data, str):
                     self.history = json.loads(history_data)
                     logging.info("Loaded chat history from Redis.")
                     return
+                elif history_data is not None:
+                    logging.warning(f"Received non-string data from Redis for chat history: type={type(history_data)}")
             except Exception as e:
                 logging.error(f"Error loading history from Redis: {str(e)}. Falling back to file storage.")
         
@@ -134,30 +138,179 @@ class ChatHistoryManager:
         self._save_history()
         logging.info("Chat history cleared.")
 
-    # Placeholder for session management (will be expanded later)
-    def list_sessions(self) -> List[str]:
-        """Lists available chat sessions."""
-        # For now, only one session (the current history) is supported
-        return ["default_session"]
+    def list_sessions(self) -> List[Dict[str, Any]]:
+        """Lists available chat sessions with their metadata."""
+        try:
+            sessions = []
+            chats_directory = "data/chats"
+            
+            # Ensure chats directory exists
+            if not os.path.exists(chats_directory):
+                os.makedirs(chats_directory, exist_ok=True)
+                return sessions
+            
+            # Look for chat files in the chats directory
+            for filename in os.listdir(chats_directory):
+                if filename.startswith("chat_") and filename.endswith(".json"):
+                    chat_id = filename.replace("chat_", "").replace(".json", "")
+                    chat_path = os.path.join(chats_directory, filename)
+                    
+                    try:
+                        with open(chat_path, 'r') as f:
+                            chat_data = json.load(f)
+                        
+                        # Get chat metadata
+                        chat_name = chat_data.get('name', '')
+                        chat_messages = chat_data.get('messages', [])
+                        created_time = chat_data.get('created_time', '')
+                        last_modified = chat_data.get('last_modified', '')
+                        
+                        sessions.append({
+                            "chatId": chat_id,
+                            "name": chat_name,
+                            "messageCount": len(chat_messages),
+                            "createdTime": created_time,
+                            "lastModified": last_modified
+                        })
+                    except Exception as e:
+                        logging.error(f"Error reading chat file {filename}: {str(e)}")
+                        continue
+            
+            # Sort by last modified time (most recent first)
+            sessions.sort(key=lambda x: x.get('lastModified', ''), reverse=True)
+            return sessions
+            
+        except Exception as e:
+            logging.error(f"Error listing chat sessions: {str(e)}")
+            return []
 
     def load_session(self, session_id: str) -> List[Dict[str, Any]]:
         """Loads a specific chat session."""
-        # For now, only default session is supported
-        if session_id == "default_session":
-            self._load_history()
-            return self.history
-        return []
+        try:
+            chat_file = f"data/chats/chat_{session_id}.json"
+            
+            if not os.path.exists(chat_file):
+                logging.warning(f"Chat session {session_id} not found")
+                return []
+            
+            with open(chat_file, 'r') as f:
+                chat_data = json.load(f)
+            
+            return chat_data.get('messages', [])
+            
+        except Exception as e:
+            logging.error(f"Error loading chat session {session_id}: {str(e)}")
+            return []
 
-    def save_session(self, session_id: str):
+    def save_session(self, session_id: str, messages: Optional[List[Dict[str, Any]]] = None, name: str = ""):
         """
-        Saves the current chat history as a named session.
+        Saves a chat session with messages and metadata.
         
         Args:
             session_id (str): The identifier for the session to save.
+            messages (Optional[List[Dict[str, Any]]]): The messages to save (defaults to current history).
+            name (str): Optional name for the chat session.
         """
-        # For now, saving just overwrites the default history
-        self._save_history()
-        logging.info(f"Current chat saved as '{session_id}'.")
+        try:
+            # Ensure chats directory exists
+            chats_directory = "data/chats"
+            if not os.path.exists(chats_directory):
+                os.makedirs(chats_directory, exist_ok=True)
+            
+            chat_file = f"{chats_directory}/chat_{session_id}.json"
+            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Use provided messages or current history
+            session_messages = self.history if messages is None else messages
+            
+            # Load existing chat data if it exists to preserve metadata
+            chat_data = {}
+            if os.path.exists(chat_file):
+                try:
+                    with open(chat_file, 'r') as f:
+                        chat_data = json.load(f)
+                except Exception as e:
+                    logging.warning(f"Could not load existing chat data for {session_id}: {str(e)}")
+            
+            # Update chat data
+            chat_data.update({
+                "chatId": session_id,
+                "name": name or chat_data.get('name', ''),
+                "messages": session_messages,
+                "last_modified": current_time,
+                "created_time": chat_data.get('created_time', current_time)
+            })
+            
+            # Save to file
+            with open(chat_file, 'w') as f:
+                json.dump(chat_data, f, indent=2)
+            
+            logging.info(f"Chat session '{session_id}' saved successfully")
+            
+        except Exception as e:
+            logging.error(f"Error saving chat session {session_id}: {str(e)}")
+
+    def delete_session(self, session_id: str) -> bool:
+        """
+        Deletes a chat session.
+        
+        Args:
+            session_id (str): The identifier for the session to delete.
+            
+        Returns:
+            bool: True if deletion was successful, False otherwise.
+        """
+        try:
+            chat_file = f"data/chats/chat_{session_id}.json"
+            
+            if not os.path.exists(chat_file):
+                logging.warning(f"Chat session {session_id} not found for deletion")
+                return False
+            
+            os.remove(chat_file)
+            logging.info(f"Chat session '{session_id}' deleted successfully")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error deleting chat session {session_id}: {str(e)}")
+            return False
+
+    def update_session_name(self, session_id: str, name: str) -> bool:
+        """
+        Updates the name of a chat session.
+        
+        Args:
+            session_id (str): The identifier for the session to update.
+            name (str): The new name for the session.
+            
+        Returns:
+            bool: True if update was successful, False otherwise.
+        """
+        try:
+            chat_file = f"data/chats/chat_{session_id}.json"
+            
+            if not os.path.exists(chat_file):
+                logging.warning(f"Chat session {session_id} not found for name update")
+                return False
+            
+            # Load existing chat data
+            with open(chat_file, 'r') as f:
+                chat_data = json.load(f)
+            
+            # Update name and last modified time
+            chat_data['name'] = name
+            chat_data['last_modified'] = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Save updated data
+            with open(chat_file, 'w') as f:
+                json.dump(chat_data, f, indent=2)
+            
+            logging.info(f"Chat session '{session_id}' name updated to '{name}'")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error updating chat session {session_id} name: {str(e)}")
+            return False
 
 # Example Usage (for testing)
 if __name__ == "__main__":
