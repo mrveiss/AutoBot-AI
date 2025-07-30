@@ -24,7 +24,26 @@ The immediate focus is on resolving the following critical issues:
 -   **Backend Startup Failure**: "Failed to initialize LangChain Agent: Required Redis db module search >= 20600 OR searchlight >= 20600 not installed."
 -   **Frontend Connectivity**: `TypeError: Failed to fetch` errors, indicating the frontend cannot connect to the backend. (This is likely a symptom of the backend not fully starting).
 
-Our next step is to re-run the application and analyze the diagnostic output from `main.py` regarding Redis module detection.
+### Current Status: Redis Connection Refused from Python to Docker
+
+Despite the `redis-stack` Docker container running and its logs showing RediSearch is loaded, the Python application (AutoBot backend) is consistently receiving "Connection refused" errors when attempting to connect to Redis, even when using the container's internal IP (`172.17.0.2`). This indicates a network isolation or firewall issue between the WSL2 environment and the Docker Desktop environment on the Windows host.
+
+### Next Steps: Diagnose WSL2/Docker Network Connectivity
+
+*   **Task 1.1: Verify WSL2 Network Configuration.**
+    *   **Step 1.1.1**: Ask the user to check if their WSL2 distribution can ping the Docker bridge network gateway and the Redis container's IP.
+        ```bash
+        ping 172.17.0.1 # Docker bridge gateway
+        ping 172.17.0.2 # Redis container IP
+        ```
+    *   **Step 1.1.2**: If ping fails, instruct the user to investigate their WSL2 network settings or restart their WSL2 distribution.
+*   **Task 1.2: Check Windows Firewall.**
+    *   **Step 1.2.1**: Instruct the user to temporarily disable their Windows Firewall (or add an inbound rule for port 6379) to rule out firewall blocking the connection from WSL2 to Docker Desktop.
+    *   **Step 1.2.2**: After checking, re-enable the firewall if it was disabled.
+*   **Task 1.3: Restart Docker Desktop.**
+    *   **Step 1.3.1**: Suggest restarting Docker Desktop on the Windows host, as this can sometimes resolve transient networking issues.
+*   **Task 1.4: Re-run AutoBot.**
+    *   **Step 1.4.1**: After performing the above checks, ask the user to run `bash run_agent.sh` again and provide the full output.
 
 ---
 

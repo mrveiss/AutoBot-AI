@@ -1,28 +1,34 @@
-# src/diagnostics.py
 import os
 import json
 import time
 import traceback
 import asyncio
-import yaml
 from collections import defaultdict
 from typing import Dict, Any, Optional, List
-import psutil # Import psutil for system monitoring
+import psutil
 
 from src.llm_interface import LLMInterface
 from src.event_manager import event_manager
 
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
+
 class Diagnostics:
-    def __init__(self, config_path="config/config.yaml"):
-        self.config = self._load_config(config_path)
-        self.diagnostics_config = self.config['diagnostics']
-        self.llm_interface = LLMInterface(config_path) # For LLM-based analysis
-        self.reliability_stats_file = self.diagnostics_config['reliability_stats_file']
+    def __init__(self):
+        # Remove config_path and direct config loading
+        self.llm_interface = LLMInterface() # LLMInterface now uses global_config_manager
+        
+        self.reliability_stats_file = global_config_manager.get_nested('data.reliability_stats_file', 'data/reliability_stats.json')
+        self.diagnostics_enabled = global_config_manager.get_nested('diagnostics.enabled', True)
+        self.use_llm_for_analysis = global_config_manager.get_nested('diagnostics.use_llm_for_analysis', True)
+        self.use_web_search_for_analysis = global_config_manager.get_nested('diagnostics.use_web_search_for_analysis', False)
+        self.auto_apply_fixes = global_config_manager.get_nested('diagnostics.auto_apply_fixes', False)
+
         self.reliability_stats = self._load_reliability_stats()
-        self.pending_fix_permission: Dict[str, asyncio.Future] = {} # task_id -> Future for user permission
+        self.pending_fix_permission: Dict[str, asyncio.Future] = {}
         self.gpu_monitoring_enabled = False
         try:
-            import pynvml # type: ignore
+            import pynvml
             pynvml.nvmlInit()
             self.gpu_monitoring_enabled = True
             print("pynvml initialized. GPU monitoring enabled.")
@@ -31,12 +37,7 @@ class Diagnostics:
         except Exception as e:
             print(f"Failed to initialize pynvml: {e}. GPU monitoring disabled.")
 
-    def _load_config(self, config_path):
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
-
     def _load_reliability_stats(self) -> Dict[str, Dict[str, Any]]:
-        """Loads reliability stats from a JSON file, ensuring it's a defaultdict."""
         stats = defaultdict(lambda: {"successes": 0, "failures": 0})
         if os.path.exists(self.reliability_stats_file):
             with open(self.reliability_stats_file, 'r') as f:
@@ -46,14 +47,12 @@ class Diagnostics:
         return stats
 
     def _save_reliability_stats(self):
-        """Saves reliability stats to a JSON file."""
         os.makedirs(os.path.dirname(self.reliability_stats_file), exist_ok=True)
         with open(self.reliability_stats_file, 'w') as f:
             json.dump(self.reliability_stats, f, indent=2)
 
     async def log_failure(self, task_info: Dict[str, Any], error_message: str, tb: Optional[str] = None):
-        """Logs a task failure with details."""
-        if not self.diagnostics_config['enabled']:
+        if not self.diagnostics_enabled:
             return
 
         failure_log = {
@@ -66,23 +65,18 @@ class Diagnostics:
         await event_manager.publish("task_failure_logged", failure_log)
         print(f"Task failure logged: {json.dumps(failure_log, indent=2)}")
 
-        # Update reliability stats
         task_type = task_info.get("type", "unknown_task")
         self.reliability_stats[task_type]["failures"] += 1
         self._save_reliability_stats()
 
     async def log_success(self, task_info: Dict[str, Any]):
-        """Logs a task success for reliability tracking."""
-        if not self.diagnostics_config['enabled']:
+        if not self.diagnostics_enabled:
             return
         task_type = task_info.get("type", "unknown_task")
         self.reliability_stats[task_type]["successes"] += 1
         self._save_reliability_stats()
 
     async def analyze_failure(self, task_info: Dict[str, Any], error_message: str, tb: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Analyzes a failure, suggests causes using LLM/web search, and proposes strategies.
-        """
         analysis_report = {
             "task_id": task_info.get("task_id", "N/A"),
             "task_type": task_info.get("type", "N/A"),
@@ -92,15 +86,14 @@ class Diagnostics:
             "web_search_results": []
         }
 
-        # LLM-based analysis
-        if self.diagnostics_config['use_llm_for_analysis']:
+        if self.use_llm_for_analysis:
             llm_prompt = f"Analyze the following error from a task execution. Suggest possible causes and potential solutions. Error: {error_message}\nTraceback:\n{tb}\nTask Info: {json.dumps(task_info)}"
             messages = [
                 {"role": "system", "content": "You are an AI diagnostics expert. Provide concise analysis and solutions."},
                 {"role": "user", "content": llm_prompt}
             ]
             llm_response = await self.llm_interface.chat_completion(
-                llm_type="orchestrator", # Use orchestrator LLM for analysis
+                llm_type="orchestrator",
                 messages=messages,
                 temperature=0.5,
                 max_tokens=1000
@@ -110,20 +103,12 @@ class Diagnostics:
             else:
                 analysis_report['suggested_causes'].append("LLM analysis failed.")
 
-        # Web search for analysis (using mcp-webresearch tool)
-        if self.diagnostics_config['use_web_search_for_analysis']:
+        if self.use_web_search_for_analysis:
             try:
-                # This would ideally use the mcp-webresearch tool
-                # For now, simulate a web search result
-                # from mcp_servers.mcp_webresearch import search_google # This would be a direct import if it were a local module
-                # search_query = f"{task_info.get('type', '')} {error_message} fix"
-                # web_results = search_google(query=search_query) # Assuming this returns a list of dicts
-                # analysis_report['web_search_results'] = web_results[:3] # Limit results
                 analysis_report['web_search_results'].append({"title": "Simulated Web Search Result", "url": "http://example.com/fix", "snippet": "Found a common fix for this type of error."})
             except Exception as e:
                 analysis_report['web_search_results'].append(f"Web search failed: {e}")
 
-        # Suggest strategies (simple logic for now)
         analysis_report['suggested_strategies'].append("Retry task with exponential backoff.")
         analysis_report['suggested_strategies'].append("Try alternative tool/backend (based on reliability stats).")
         analysis_report['suggested_strategies'].append("Rewrite plan to avoid problematic step.")
@@ -133,10 +118,9 @@ class Diagnostics:
         return analysis_report
 
     async def request_user_permission(self, report: Dict[str, Any]) -> bool:
-        """Sends a report to the frontend and waits for user permission."""
-        if self.diagnostics_config['auto_apply_fixes']:
+        if self.auto_apply_fixes:
             await event_manager.publish("log_message", {"level": "INFO", "message": "Auto-applying fixes is enabled. Skipping user permission."})
-            return True # Auto-apply if configured
+            return True
 
         task_id = report.get("task_id", "N/A")
         permission_future = asyncio.Future()
@@ -150,7 +134,7 @@ class Diagnostics:
         print(f"Requested user permission for task {task_id}. Waiting...")
 
         try:
-            permission_granted = await asyncio.wait_for(permission_future, timeout=600) # Wait for 10 minutes
+            permission_granted = await asyncio.wait_for(permission_future, timeout=600)
             return permission_granted
         except asyncio.TimeoutError:
             await event_manager.publish("log_message", {"level": "WARNING", "message": f"User permission for task {task_id} timed out. Fixes not applied."})
@@ -159,7 +143,6 @@ class Diagnostics:
             del self.pending_fix_permission[task_id]
 
     def set_user_permission(self, task_id: str, granted: bool):
-        """Sets the user's permission for a pending fix."""
         if task_id in self.pending_fix_permission:
             self.pending_fix_permission[task_id].set_result(granted)
             print(f"User permission for task {task_id} set to: {granted}")
@@ -167,26 +150,19 @@ class Diagnostics:
             print(f"No pending permission request for task {task_id}.")
 
     def get_system_metrics(self) -> Dict[str, Any]:
-        """
-        Collects real-time CPU, RAM, and (if available) GPU/VRAM usage.
-        """
         metrics = {}
 
-        # CPU Usage
-        metrics['cpu_percent'] = psutil.cpu_percent(interval=0.1) # Non-blocking call
+        metrics['cpu_percent'] = psutil.cpu_percent(interval=0.1)
 
-        # RAM Usage
         virtual_memory = psutil.virtual_memory()
         metrics['ram_total_gb'] = round(virtual_memory.total / (1024**3), 2)
         metrics['ram_used_gb'] = round(virtual_memory.used / (1024**3), 2)
         metrics['ram_percent'] = virtual_memory.percent
 
-        # GPU/VRAM Usage (NVIDIA only, using pynvml)
         metrics['gpu_info'] = []
         if self.gpu_monitoring_enabled:
             try:
-                # Import pynvml here to ensure it's only accessed if enabled
-                import pynvml # type: ignore
+                import pynvml
                 device_count = pynvml.nvmlDeviceGetCount()
                 for i in range(device_count):
                     handle = pynvml.nvmlDeviceGetHandleByIndex(i)
@@ -197,9 +173,9 @@ class Diagnostics:
                     gpu_metrics = {
                         'id': i,
                         'name': gpu_name,
-                        'vram_total_gb': round(memory_info.total / (1024**3), 2),
-                        'vram_used_gb': round(memory_info.used / (1024**3), 2),
-                        'vram_percent': round((memory_info.used / memory_info.total) * 100, 2),
+                        'vram_total_gb': round(int(memory_info.total) / (1024**3), 2), # Cast to int
+                        'vram_used_gb': round(int(memory_info.used) / (1024**3), 2),   # Cast to int
+                        'vram_percent': round((int(memory_info.used) / int(memory_info.total)) * 100, 2), # Cast to int
                         'gpu_utilization_percent': utilization.gpu,
                         'memory_utilization_percent': utilization.memory
                     }
@@ -213,42 +189,4 @@ class Diagnostics:
         return metrics
 
     def get_reliability_stats(self) -> Dict[str, Any]:
-        """Returns current reliability statistics."""
-        return dict(self.reliability_stats) # Convert defaultdict to dict for clean return
-
-# Example Usage (for testing)
-if __name__ == "__main__":
-    # Ensure config.yaml exists for testing
-    if not os.path.exists("config/config.yaml"):
-        print("config/config.yaml not found. Copying from template for testing.")
-        os.makedirs("config", exist_ok=True)
-        with open("config/config.yaml.template", "r") as f_template:
-            with open("config/config.yaml", "w") as f_config:
-                f_config.write(f_template.read())
-
-    async def test_diagnostics():
-        diagnostics = Diagnostics()
-        
-        # Simulate a task failure
-        task_info = {"task_id": "task_abc", "type": "llm_chat_completion", "model": "ollama_tinyllama"}
-        error_msg = "Connection refused: Ollama server not running."
-        tb_str = "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nrequests.exceptions.ConnectionError: Connection refused"
-        
-        await diagnostics.log_failure(task_info, error_msg, tb_str)
-        report = await diagnostics.analyze_failure(task_info, error_msg, tb_str)
-        
-        # Simulate user granting permission (for testing auto_apply_fixes=false)
-        # In a real scenario, this would come from the frontend via an API call
-        # diagnostics.set_user_permission("task_abc", True) 
-        
-        # Request user permission (will block until permission is set or timeout)
-        permission_granted = await diagnostics.request_user_permission(report)
-        print(f"User granted permission: {permission_granted}")
-
-        # Simulate a task success
-        await diagnostics.log_success({"task_id": "task_xyz", "type": "kb_add_file"})
-
-        print("\nReliability Stats:")
-        print(diagnostics.get_reliability_stats())
-
-    asyncio.run(test_diagnostics())
+        return dict(self.reliability_stats)

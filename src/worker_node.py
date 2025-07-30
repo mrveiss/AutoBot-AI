@@ -1,4 +1,3 @@
-# src/worker_node.py
 import os
 import json
 import time
@@ -7,52 +6,48 @@ import psutil
 import subprocess
 import asyncio
 import redis
-import yaml
-import torch # For CUDA detection
-import sys # Import sys
-from typing import Dict, Any, Optional, List # Import missing types
+import torch
+import sys
+from typing import Dict, Any, Optional, List
 
 from src.llm_interface import LLMInterface
 from src.knowledge_base import KnowledgeBase
 from src.event_manager import event_manager
-from src.system_integration import SystemIntegration # Import SystemIntegration
-from src.security_layer import SecurityLayer # Import SecurityLayer
+from src.system_integration import SystemIntegration
+from src.security_layer import SecurityLayer
+
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
 
 # Conditional import for GUIController based on OS
 if sys.platform.startswith('linux'):
-    # In WSL or other Linux environments where pygetwindow might not work
     from src.gui_controller_dummy import GUIController
     GUI_AUTOMATION_SUPPORTED = False
 else:
-    # For Windows or macOS where pygetwindow is expected to work
     from src.gui_controller import GUIController
     GUI_AUTOMATION_SUPPORTED = True
 
 class WorkerNode:
-    def __init__(self, config_path="config/config.yaml"):
-        self.config = self._load_config(config_path)
-        self.task_transport_config = self.config['task_transport']
-        self.worker_id = f"worker_{os.getpid()}" # Unique ID for this worker instance
+    def __init__(self):
+        self.worker_id = f"worker_{os.getpid()}"
 
+        self.task_transport_type = global_config_manager.get_nested('task_transport.type', 'local')
         self.redis_client = None
-        if self.task_transport_config['type'] == "redis":
-            redis_host = self.task_transport_config['redis']['host']
-            redis_port = self.task_transport_config['redis']['port']
+        if self.task_transport_type == "redis":
+            redis_transport_config = global_config_manager.get_nested('task_transport.redis', {})
+            redis_host = redis_transport_config.get('host', 'localhost')
+            redis_port = redis_transport_config.get('port', 6379)
             self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
             print(f"Worker connected to Redis at {redis_host}:{redis_port}")
         else:
             print("Worker node configured for local task transport. No Redis connection.")
 
         # Initialize modules that worker might need for task execution
-        self.llm_interface = LLMInterface(config_path)
-        self.knowledge_base = KnowledgeBase(config_path)
-        self.gui_controller = GUIController() # Initialize GUIController
-        self.system_integration = SystemIntegration() # Initialize SystemIntegration
-        self.security_layer = SecurityLayer() # Initialize SecurityLayer
-
-    def _load_config(self, config_path):
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
+        self.llm_interface = LLMInterface()
+        self.knowledge_base = KnowledgeBase()
+        self.gui_controller = GUIController()
+        self.system_integration = SystemIntegration()
+        self.security_layer = SecurityLayer()
 
     def detect_capabilities(self) -> Dict[str, Any]:
         """Detects and returns hardware and software capabilities."""
@@ -80,7 +75,7 @@ class WorkerNode:
             "onnxruntime_available": False,
             "llm_backends_supported": [],
             "kb_supported": True,
-            "gui_automation_supported": GUI_AUTOMATION_SUPPORTED # Indicate GUI automation capability based on conditional import
+            "gui_automation_supported": GUI_AUTOMATION_SUPPORTED
         }
 
         if capabilities['gpu']['cuda_available']:
@@ -114,7 +109,6 @@ class WorkerNode:
             capabilities['openvino_available'] = True
             capabilities['openvino_devices'] = available_devices
             
-            # Detailed device capabilities
             npu_devices = [d for d in available_devices if 'NPU' in d]
             gpu_devices = [d for d in available_devices if 'GPU' in d]
             
@@ -143,7 +137,7 @@ class WorkerNode:
         capabilities['llm_backends_supported'].append("ollama")
         if self.llm_interface.openai_api_key:
             capabilities['llm_backends_supported'].append("openai")
-        if self.config['llm_config'].get('transformers', {}).get('model_path'):
+        if global_config_manager.get_nested('llm_config.transformers.model_path'):
             capabilities['llm_backends_supported'].append("transformers")
 
         return capabilities
@@ -161,9 +155,8 @@ class WorkerNode:
     async def execute_task(self, task_payload: Dict[str, Any]) -> Dict[str, Any]:
         task_type = task_payload.get("type")
         task_id = task_payload.get("task_id", "N/A")
-        user_role = task_payload.get("user_role", "guest") # Default to 'guest' if not provided
+        user_role = task_payload.get("user_role", "guest")
 
-        # Initial permission check for any task execution
         if not self.security_layer.check_permission(user_role, f"allow_{task_type}"):
             self.security_layer.audit_log(f"execute_task_{task_type}", user_role, "denied", {"task_id": task_id, "payload": task_payload, "reason": "permission_denied"})
             return {"status": "error", "message": f"Permission denied for role '{user_role}' to execute task type '{task_type}'."}
@@ -188,19 +181,19 @@ class WorkerNode:
                 file_path = task_payload['file_path']
                 file_type = task_payload['file_type']
                 metadata = task_payload.get('metadata')
-                kb_result = self.knowledge_base.add_file(file_path, file_type, metadata)
+                kb_result = await self.knowledge_base.add_file(file_path, file_type, metadata)
                 result = kb_result
                 self.security_layer.audit_log("kb_add_file", user_role, result.get("status", "unknown"), {"task_id": task_id, "file_path": file_path})
             elif task_type == "kb_search":
                 query = task_payload['query']
                 n_results = task_payload.get('n_results', 5)
-                kb_results = self.knowledge_base.search(query, n_results)
+                kb_results = await self.knowledge_base.search(query, n_results)
                 result = {"status": "success", "message": "KB search successful.", "results": kb_results}
                 self.security_layer.audit_log("kb_search", user_role, "success", {"task_id": task_id, "query": query})
             elif task_type == "kb_store_fact":
                 content = task_payload['content']
                 metadata = task_payload.get('metadata')
-                kb_result = self.knowledge_base.store_fact(content, metadata)
+                kb_result = await self.knowledge_base.store_fact(content, metadata)
                 result = kb_result
                 self.security_layer.audit_log("kb_store_fact", user_role, result.get("status", "unknown"), {"task_id": task_id, "content_preview": content[:50]})
             elif task_type == "execute_shell_command":
@@ -219,7 +212,6 @@ class WorkerNode:
                 else:
                     result = {"status": "error", "message": "Command failed.", "error": error, "output": output, "returncode": process.returncode}
                     self.security_layer.audit_log("execute_shell_command", user_role, "failure", {"task_id": task_id, "command": command, "error": error})
-            # New GUI automation tasks
             elif task_type == "gui_click_element":
                 image_path = task_payload['image_path']
                 confidence = task_payload.get('confidence', 0.9)
@@ -246,7 +238,6 @@ class WorkerNode:
                 app_title = task_payload['app_title']
                 result = self.gui_controller.bring_window_to_front(app_title)
                 self.security_layer.audit_log("gui_bring_window_to_front", user_role, result.get("status", "unknown"), {"task_id": task_id, "app_title": app_title})
-            # New System Integration tasks
             elif task_type == "system_query_info":
                 result = self.system_integration.query_system_info()
                 self.security_layer.audit_log("system_query_info", user_role, result.get("status", "unknown"), {"task_id": task_id})
@@ -289,7 +280,6 @@ class WorkerNode:
             elif task_type == "ask_user_command_approval":
                 command_to_approve = task_payload['command']
                 await event_manager.publish("ask_user_command_approval", {"task_id": task_id, "command": command_to_approve})
-                # Worker doesn't wait for approval here; Orchestrator will handle the response
                 result = {"status": "pending_approval", "message": f"Requested user approval for command: {command_to_approve}"}
                 self.security_layer.audit_log("ask_user_command_approval", user_role, "pending", {"task_id": task_id, "command": command_to_approve})
             else:
@@ -334,18 +324,3 @@ class WorkerNode:
         print(f"Worker Node {self.worker_id} starting...")
         await self.report_capabilities()
         await self.listen_for_tasks()
-
-# Example Usage (for testing)
-if __name__ == "__main__":
-    if not os.path.exists("config/config.yaml"):
-        print("config/config.yaml not found. Copying from template for testing.")
-        os.makedirs("config", exist_ok=True)
-        with open("config/config.yaml.template", "r") as f_template:
-            with open("config/config.yaml", "w") as f_config:
-                f_config.write(f_template.read())
-
-    async def main():
-        worker = WorkerNode()
-        await worker.start()
-
-    asyncio.run(main())

@@ -1,40 +1,36 @@
 import os
-import yaml
 import requests
 import torch
 import time
-import logging # Keep logging import
+import logging
 from dotenv import load_dotenv
-import asyncio # Import asyncio
-import json # Import json
-import re # Import re
+import asyncio
+import json
+import re
 
-load_dotenv() # Load environment variables from .env file
+load_dotenv()
 
-# Configure logging for LLM usage
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler("logs/llm_usage.log"),
-        logging.StreamHandler() # Also log to console
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger("llm")
 
-# Placeholder for local LLM
 class LocalLLM:
     async def generate(self, prompt):
         logger.info("Using local TinyLLaMA fallback.")
         await asyncio.sleep(0.1)
-        # Return a dictionary that mimics the structure of a real LLM response
         return {"choices": [{"message": {"content": f"Local TinyLLaMA response to: {prompt}"}}]}
 
 local_llm = LocalLLM()
 
-# Placeholder for Google Generative AI (palm)
-
-# Import necessary transformers and torch components
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 class MockPalm:
@@ -44,7 +40,6 @@ class MockPalm:
     async def get_quota_status(self):
         await asyncio.sleep(0.05)
         import random
-        # Create a mock object with a 'remaining_tokens' attribute
         class MockQuotaStatus:
             def __init__(self, remaining_tokens):
                 self.remaining_tokens = remaining_tokens
@@ -59,36 +54,29 @@ class MockPalm:
         import random
         if random.random() < 0.1:
             raise self.QuotaExceededError("Mock Quota Exceeded")
-        # Return a dictionary that mimics the structure of a real LLM response
         return {"choices": [{"message": {"content": f"Google LLM response to: {kwargs.get('prompt')}"}}]}
 
 palm = MockPalm()
 
 
 class LLMInterface:
-    def __init__(self, config_path="config/config.yaml"):
-        self.config = self._load_config(config_path)
-        self.ollama_host = self.config['llm_config']['ollama']['host']
-        self.openai_api_key = os.getenv("OPENAI_API_KEY", self.config['llm_config']['openai']['api_key'])
+    def __init__(self):
+        # Remove config_path and direct config loading
+        self.ollama_host = global_config_manager.get_nested('llm_config.ollama.host', 'http://localhost:11434')
+        self.openai_api_key = os.getenv("OPENAI_API_KEY", global_config_manager.get_nested('llm_config.openai.api_key', ''))
         
-        # Store the full model names from config
-        self.ollama_models = self.config['llm_config']['ollama']['models']
-        self.orchestrator_llm_alias = self.config['llm_config']['default_llm']
-        self.task_llm_alias = self.config['llm_config']['task_llm']
+        self.ollama_models = global_config_manager.get_nested('llm_config.ollama.models', {})
+        self.orchestrator_llm_alias = global_config_manager.get_nested('llm_config.orchestrator_llm', 'phi:2.7b')
+        self.task_llm_alias = global_config_manager.get_nested('llm_config.task_llm', 'ollama')
         
-        self.orchestrator_llm_settings = self.config['llm_config'].get('orchestrator_llm_settings', {})
-        self.task_llm_settings = self.config['llm_config'].get('task_llm_settings', {})
+        self.orchestrator_llm_settings = global_config_manager.get_nested('llm_config.orchestrator_llm_settings', {})
+        self.task_llm_settings = global_config_manager.get_nested('llm_config.task_llm_settings', {})
 
-        self.hardware_priority = self.config['hardware_acceleration']['priority']
-        # self.ollama_default_model is no longer needed as we check configured orchestrator/task LLMs directly
+        self.hardware_priority = global_config_manager.get_nested('hardware_acceleration.priority', ["cpu"])
 
         self.orchestrator_system_prompt = self._load_composite_prompt("prompts/default/agent.system.main.md")
-        self.task_system_prompt = self._load_composite_prompt("prompts/reflection/agent.system.main.role.md") # Assuming this is the main task prompt
+        self.task_system_prompt = self._load_composite_prompt("prompts/reflection/agent.system.main.role.md")
         self.tool_interpreter_system_prompt = self._load_prompt_from_file("prompts/tool_interpreter_system_prompt.txt")
-
-    def _load_config(self, config_path):
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
 
     def _load_prompt_from_file(self, file_path: str) -> str:
         try:
@@ -102,14 +90,13 @@ class LLMInterface:
             return ""
 
     def _resolve_includes(self, content: str, base_path: str) -> str:
-        """Recursively resolves {{ include "./filename.md" }} directives."""
         def replace_include(match):
             included_file = match.group(1)
             included_path = os.path.join(base_path, included_file)
             if os.path.exists(included_path):
                 with open(included_path, 'r') as f:
                     included_content = f.read()
-                return self._resolve_includes(included_content, os.path.dirname(included_path)) # Recurse for nested includes
+                return self._resolve_includes(included_content, os.path.dirname(included_path))
             else:
                 logger.warning(f"Included file not found: {included_path}")
                 return f"{{{{ INCLUDE_ERROR: {included_file} NOT FOUND }}}}"
@@ -117,7 +104,6 @@ class LLMInterface:
         return re.sub(r"\{\{\s*include\s*\"(.*?)\"\s*\}\}", replace_include, content)
 
     def _load_composite_prompt(self, base_file_path: str) -> str:
-        """Loads a composite prompt, resolving includes."""
         if not os.path.exists(base_file_path):
             logger.error(f"Base composite prompt file not found: {base_file_path}")
             return ""
@@ -129,10 +115,6 @@ class LLMInterface:
         return resolved_content.strip()
 
     async def check_ollama_connection(self) -> bool:
-        
-        """
-        Checks if the Ollama server is reachable and if the configured Ollama models are available.
-        """
         logger.info(f"Attempting to connect to Ollama at {self.ollama_host}...")
         try:
             health_check_url = f"{self.ollama_host}/api/tags"
@@ -140,18 +122,15 @@ class LLMInterface:
             response.raise_for_status()
             
             models_info = response.json()
-            # Get all available models with their full names (e.g., 'tinyllama:latest')
             available_ollama_models = {model['name'] for model in models_info.get('models', [])}
             
             all_configured_ollama_models = set()
             
-            # Add orchestrator LLM if it's an Ollama model
             if self.orchestrator_llm_alias.startswith("ollama_"):
                 base_alias = self.orchestrator_llm_alias.replace("ollama_", "")
                 configured_model_name = self.ollama_models.get(base_alias, base_alias)
                 all_configured_ollama_models.add(configured_model_name)
 
-            # Add task LLM if it's an Ollama model
             if self.task_llm_alias.startswith("ollama_"):
                 base_alias = self.task_llm_alias.replace("ollama_", "")
                 configured_model_name = self.ollama_models.get(base_alias, base_alias)
@@ -182,7 +161,6 @@ class LLMInterface:
         detected_hardware = []
         if torch.cuda.is_available():
             detected_hardware.append("cuda")
-        # Add OpenVINO detection (requires openvino-dev to be installed and configured)
         try:
             from openvino.runtime import Core
             core = Core()
@@ -194,13 +172,11 @@ class LLMInterface:
             if "GPU" in available_devices:
                 detected_hardware.append("openvino_gpu")
             
-            # NPU detection - Intel NPU devices
             npu_devices = [device for device in available_devices if "NPU" in device]
             if npu_devices:
                 detected_hardware.append("openvino_npu")
                 logger.info(f"OpenVINO NPU devices detected: {npu_devices}")
             
-            # GNA detection - Intel Gaussian & Neural Accelerator
             gna_devices = [device for device in available_devices if "GNA" in device]
             if gna_devices:
                 detected_hardware.append("openvino_gna")
@@ -208,12 +184,11 @@ class LLMInterface:
                 
         except ImportError:
             logger.debug("OpenVINO not installed or configured")
-            pass # OpenVINO not installed or configured
+            pass
         except Exception as e:
             logger.warning(f"Error detecting OpenVINO devices: {e}")
             pass
         
-        # Add ONNXRuntime detection (requires onnxruntime to be installed)
         try:
             import onnxruntime as rt
             if 'CUDAExecutionProvider' in rt.get_available_providers():
@@ -223,20 +198,18 @@ class LLMInterface:
             if 'CPUExecutionProvider' in rt.get_available_providers():
                 detected_hardware.append("onnxruntime_cpu")
         except ImportError:
-            pass # ONNXRuntime not installed
+            pass
 
-        detected_hardware.append("cpu") # CPU is always available
+        detected_hardware.append("cpu")
         return detected_hardware
 
     def _select_backend(self):
         detected_hardware = self._detect_hardware()
         
-        # Prioritize based on config and detected hardware
         for preferred_backend in self.hardware_priority:
             if preferred_backend == "openvino_npu" and "openvino_npu" in detected_hardware:
                 return "openvino_npu"
             if preferred_backend == "openvino" and any(hw in detected_hardware for hw in ["openvino_npu", "openvino_gpu", "openvino_cpu"]):
-                # Auto-select best OpenVINO device: NPU > GPU > CPU
                 if "openvino_npu" in detected_hardware:
                     return "openvino_npu"
                 elif "openvino_gpu" in detected_hardware:
@@ -249,7 +222,7 @@ class LLMInterface:
                 return "onnxruntime"
             if preferred_backend == "cpu" and "cpu" in detected_hardware:
                 return "cpu"
-        return "cpu" # Fallback to CPU if no preferred backend is found
+        return "cpu"
 
     async def chat_completion(self, messages: list, llm_type: str = "orchestrator", **kwargs):
         """
@@ -267,40 +240,32 @@ class LLMInterface:
         else:
             raise ValueError(f"Unsupported LLM type: {llm_type}. Must be 'orchestrator' or 'task'.")
 
-        # Resolve the actual model name from the alias
         if model_alias.startswith("ollama_"):
             base_alias = model_alias.replace("ollama_", "")
-            model_name = self.ollama_models.get(base_alias, base_alias) # Get full model name, fallback to alias
+            model_name = self.ollama_models.get(base_alias, base_alias)
         elif model_alias.startswith("openai_"):
             model_name = model_alias.replace("openai_", "")
         elif model_alias.startswith("transformers_"):
             model_name = model_alias.replace("transformers_", "")
         else:
-            model_name = model_alias # Use as is if no prefix
+            model_name = model_alias
 
-        # Apply system prompt if not already present and content is available
         if system_prompt_content and not any(m.get('role') == 'system' for m in messages):
             messages.insert(0, {"role": "system", "content": system_prompt_content})
 
-        # Prepare common LLM parameters
         llm_params = {
             "temperature": settings.get('temperature', 0.7),
-            # "top_p": settings.get('sampling_strategy') == 'top_p' ? settings.get('top_p', 0.9) : None, # Example for sampling
-            # "top_k": settings.get('sampling_strategy') == 'top_k' ? settings.get('top_k', 40) : None, # Example for sampling
-            # "response_format": {"type": "json_object"} if settings.get('structured_output') else None, # For OpenAI
-            **kwargs # Allow kwargs to override config settings
+            **kwargs
         }
 
-        # Explicitly request JSON format for orchestrator LLM if it's an Ollama model
         if llm_type == "orchestrator" and model_alias.startswith("ollama_"):
-            llm_params["structured_output"] = True # This will set format: "json" in _ollama_chat_completion
+            llm_params["structured_output"] = True
 
         if model_alias.startswith("ollama_"):
-            # Pass the already resolved full model_name to _ollama_chat_completion
             return await self._ollama_chat_completion(model_name, messages, **llm_params)
         elif model_alias.startswith("openai_"):
             return await self._openai_chat_completion(model_name, messages, **llm_params)
-        elif model_alias.startswith("transformers_"): # Handle transformers models
+        elif model_alias.startswith("transformers_"):
             return await self._transformers_chat_completion(model_name, messages, **llm_params)
         else:
             raise ValueError(f"Unsupported LLM model type: {model_name}")
@@ -314,10 +279,8 @@ class LLMInterface:
             "messages": messages,
             "stream": False,
             "temperature": temperature,
-            # Ollama uses 'format' for structured output, typically 'json'
             "format": "json" if structured_output else ""
         }
-        # Include device if specified in kwargs or auto-select based on hardware
         if 'device' in kwargs:
             device_value = kwargs.pop('device')
             if device_value.startswith('cuda'):
@@ -325,7 +288,6 @@ class LLMInterface:
             else:
                 data["options"] = {"device": device_value}
         else:
-            # Auto-select best available device
             selected_backend = self._select_backend()
             if selected_backend == "openvino_npu":
                 data["options"] = {"device": "NPU"}
@@ -333,7 +295,6 @@ class LLMInterface:
                 data["options"] = {"device": "GPU"}
             elif selected_backend == "cuda":
                 data["options"] = {"num_gpu": 1}
-        # Merge remaining kwargs
         data.update(kwargs)
         
         print(f"Ollama Request URL: {url}")
@@ -402,31 +363,14 @@ class LLMInterface:
             return None
 
     async def _transformers_chat_completion(self, model_name: str, messages: list, temperature: float = 0.7, structured_output: bool = False, **kwargs):
-        # This is a simplified placeholder.
-        # Actual implementation would involve loading the model via transformers library
-        # and performing inference.
-        # Requires 'transformers' and potentially 'accelerate' libraries.
-        # For Phi-2, it would look something like:
-        # from transformers import AutoModelForCausalLM, AutoTokenizer
-        # tokenizer = AutoTokenizer.from_pretrained(self.config['llm_config']['transformers']['model_path'])
-        # model = AutoModelForCausalLM.from_pretrained(self.config['llm_config']['transformers']['model_path'])
-        # if self.config['llm_config']['transformers']['device'] == "cuda" and torch.cuda.is_available():
-        #     model.to("cuda")
-        # inputs = tokenizer.apply_chat_template(messages, return_tensors="pt")
-        # outputs = model.generate(inputs, temperature=temperature, **kwargs) # Pass temperature
-        # return tokenizer.decode(outputs[0], skip_special_tokens=True)
         print(f"Transformers backend for {model_name} is a placeholder. Not implemented yet. Temp: {temperature}, Structured: {structured_output}")
-        await asyncio.sleep(0.1) # Simulate async operation
+        await asyncio.sleep(0.1)
         return {"choices": [{"message": {"content": "Placeholder response from Transformers."}}]}
 
-async def safe_query(prompt, retries=2, initial_delay=1): # Made async
-    """
-    Safely queries the Google Generative AI, with fallback to local LLM.
-    Handles quota limits and retries with exponential backoff.
-    """
+async def safe_query(prompt, retries=2, initial_delay=1):
     for i in range(retries + 1):
         try:
-            usage_info = await palm.get_quota_status()  # Custom function or mock
+            usage_info = await palm.get_quota_status()
             if usage_info.remaining_tokens < 1000:
                 logger.warning("⚠️ Google LLM quota low, falling back to local model.")
                 return await local_llm.generate(prompt)
@@ -439,7 +383,7 @@ async def safe_query(prompt, retries=2, initial_delay=1): # Made async
             if i < retries:
                 delay = initial_delay * (2 ** i)
                 logger.warning(f"❌ Quota exceeded on Google API. Retrying in {delay} seconds (attempt {i+1}/{retries}).")
-                await asyncio.sleep(delay) # Use await asyncio.sleep
+                await asyncio.sleep(delay)
             else:
                 logger.error("❌ Quota exceeded on Google API after multiple retries. Using local fallback.")
                 return await local_llm.generate(prompt)
@@ -447,68 +391,8 @@ async def safe_query(prompt, retries=2, initial_delay=1): # Made async
             if i < retries:
                 delay = initial_delay * (2 ** i)
                 logger.exception(f"🔧 LLM query failed (attempt {i+1}/{retries}). Retrying in {delay} seconds...")
-                await asyncio.sleep(delay) # Use await asyncio.sleep
+                await asyncio.sleep(delay)
             else:
                 logger.exception("🔧 LLM query failed after multiple retries. Attempting local fallback.")
                 return await local_llm.generate(prompt)
-    return await local_llm.generate(prompt) # Should not be reached, but as a safeguard
-
-# Example Usage (for testing)
-if __name__ == "__main__":
-    # Ensure config.yaml exists for testing
-    if not os.path.exists("config/config.yaml"):
-        print("config/config.yaml not found. Copying from template for testing.")
-        os.makedirs("config", exist_ok=True)
-        with open("config/config.yaml.template", "r") as f_template:
-            with open("config/config.yaml", "w") as f_config:
-                f_config.write(f_template.read())
-
-    async def main_test():
-        llm_interface = LLMInterface()
-        print(f"Detected hardware: {llm_interface._detect_hardware()}")
-        print(f"Selected backend: {llm_interface._select_backend()}")
-
-        # Test Ollama (requires Ollama server running with tinyllama model pulled)
-        print("\nTesting Ollama (tinyllama)...")
-        ollama_response = await llm_interface.chat_completion(
-            llm_type="orchestrator",
-            messages=[{"role": "user", "content": "Hello, what is your name?"}]
-        )
-        if ollama_response and ollama_response.get('choices'):
-            print("Ollama Response:", ollama_response['choices'][0]['message']['content'])
-        else:
-            print("Ollama Test: No response or invalid response structure.")
-
-        # Test OpenAI (requires OPENAI_API_KEY in .env or config.yaml)
-        print("\nTesting OpenAI (gpt-3.5-turbo)...")
-        openai_response = await llm_interface.chat_completion(
-            llm_type="orchestrator",
-            messages=[{"role": "user", "content": "What is the capital of France?"}]
-        )
-        if openai_response and openai_response.get('choices'):
-            print("OpenAI Response:", openai_response['choices'][0]['message']['content'])
-        else:
-            print("OpenAI Test: No response or invalid response structure.")
-
-        # Test Transformers (placeholder)
-        print("\nTesting Transformers (phi2)...")
-        transformers_response = await llm_interface.chat_completion(
-            llm_type="task",
-            messages=[{"role": "user", "content": "Tell me a short story."}]
-        )
-        if transformers_response and transformers_response.get('choices'):
-            print("Transformers Response:", transformers_response['choices'][0]['message']['content'])
-        else:
-            print("Transformers Test: No response or invalid response structure.")
-
-        # Test safe_query function
-        print("\nTesting safe_query function (Google LLM with fallback)...")
-        test_prompt = "Explain the concept of quantum entanglement."
-        safe_query_response = await safe_query(test_prompt)
-        if safe_query_response and safe_query_response.get('choices'):
-            print("Safe Query Response:", safe_query_response['choices'][0]['message']['content'])
-        else:
-            print("Safe Query Test: No response or invalid response structure.")
-
-    if __name__ == "__main__": # Ensure this block is correctly placed
-        asyncio.run(main_test())
+    return await local_llm.generate(prompt)

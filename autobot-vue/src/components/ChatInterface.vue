@@ -134,7 +134,7 @@ export default {
     // Connection status checking functions
     const checkBackendConnection = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/health`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/health`, {
           method: 'GET',
           timeout: 5000
         });
@@ -228,7 +228,7 @@ export default {
     const saveSettings = async () => {
       localStorage.setItem('chat_settings', JSON.stringify(settings.value));
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/backend/api/settings`, {
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -504,7 +504,7 @@ export default {
 
           // Always use the backend API endpoint for goal requests
           let apiEndpoint = settings.value.backend.api_endpoint;
-          let goalEndpoint = '/backend/api/chat';
+          let goalEndpoint = '/api/chat';
           console.log('Using API endpoint for goal request:', apiEndpoint, 'with endpoint:', goalEndpoint);
           
           const response = await fetch(`${apiEndpoint}${goalEndpoint}`, {
