@@ -1,33 +1,178 @@
-# Ignore virtual environment directories
+# === PYTHON VIRTUAL ENVIRONMENT ===
+# Virtual environment directories (created by setup_agent.sh)
 venvs/
-__pycache__/
-lib64/
 bin/
-include/
 lib/
+lib64/
+include/
 share/
+pyvenv.cfg
 
-# Ignore generated files and directories
-logs/
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
 *.pyc
+*.pyo
 
-# Ignore development and configuration files
-config/*.yaml
-*.db
-*.sqlite3
-.env
-.vscode/
+# === NODE.JS AND NPM ===
+# Node.js dependencies
+node_modules/
+autobot-vue/node_modules/
+
+# Package manager lock files (can be regenerated)
+package-lock.json
+autobot-vue/package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# NPM cache
+.npm/
+.yarn/
+
+# === BUILD OUTPUTS ===
+# Frontend build outputs
 dist/
 build/
-*.log
+frontend/static/assets/
+frontend/static/js/
+static/assets/
+static/js/
 
-*:Zone.Identifier
-*.Identifier
-backend/data/chats/*
-<<<<<<< HEAD
+# Vue.js build outputs
+autobot-vue/dist/
 
+# === APPLICATION DATA ===
 # Data directories (user data, chats, messages)
-=======
->>>>>>> 6ddf184 (Update .gitignore to exclude data/chats/ and data/messages/)
 data/chats/
 data/messages/
+data/chromadb/
+data/knowledge_base.db
+data/audit.log
+data/chat_history.json
+data/reliability_stats.json
+
+# Backend data
+backend/data/chats/*
+
+# === CONFIGURATION FILES ===
+# Configuration files with sensitive data
+config/*.yaml
+config/settings.json
+backend/config/settings.json
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# === LOG FILES ===
+logs/
+*.log
+
+# === DATABASE FILES ===
+*.db
+*.sqlite
+*.sqlite3
+
+# === CACHE DIRECTORIES ===
+.cache/
+.pip-cache/
+.vite/
+.turbo/
+.nuxt/
+.next/
+.output/
+
+# === TEMPORARY FILES ===
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# === OS GENERATED FILES ===
+*:Zone.Identifier
+*.Identifier
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === EDITOR FILES ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.backup
+
+# === REDIS FILES ===
+dump.rdb
+*.rdb
+redis.conf
+
+# === MODEL FILES ===
+models/
+ollama/
+*.ggml
+*.bin
+.huggingface/
+
+# === RUNTIME FILES ===
+*.pid
+*.seed
+*.pid.lock
+*.sock
+*.dmp
+core.*
+
+# === SETUP ARTIFACTS ===
+setup.log
+install.log
+
+# === TESTING ARTIFACTS ===
+coverage/
+.nyc_output/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# === CHROME/CHROMADB ===
+chromadb/
+*.chromadb
+
+# === BUILD TOOLS CACHE ===
+.eslintcache
+.prettiercache
+*.tsbuildinfo
+.vue-tsc-cache/
+
+# === PACKAGE DISTRIBUTIONS ===
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+wheels/
+*.whl
+
+# === JUPYTER ===
+.ipynb_checkpoints
+
+# === DOCKER ===
+.dockerignore
+Dockerfile.*
+
+# === MISC ===
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+share/python-wheels/

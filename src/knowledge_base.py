@@ -49,14 +49,14 @@ class KnowledgeBase:
         # Initialize Redis client for direct use (e.g., for facts/logs)
         # This uses the general memory.redis config, not specifically llama_index.vector_store.redis
         general_redis_config = global_config_manager.get_redis_config()
-        self.redis_client: Redis = cast(Redis, redis.Redis(
+        self.redis_client = redis.Redis(
             host=general_redis_config.get('host', 'localhost'),
             port=general_redis_config.get('port', 6379),
             password=general_redis_config.get('password', os.getenv('REDIS_PASSWORD')),
             db=general_redis_config.get('db', 1), # Use db 1 for general memory as per config.yaml
             decode_responses=True
-        ))
-        logging.info(f"Redis client initialized for host: {general_redis_config.get('host', 'localhost')}:{general_redis_config.get('port', 6379)} (DB: {general_redis_config.get('db', 1)})")
+        )
+        logging.info(f"Async Redis client initialized for host: {general_redis_config.get('host', 'localhost')}:{general_redis_config.get('port', 6379)} (DB: {general_redis_config.get('db', 1)})")
 
         self.llm = None
         self.embed_model = None
@@ -248,3 +248,154 @@ class KnowledgeBase:
         except Exception as e:
             logging.error(f"Error retrieving facts from Redis: {str(e)}")
             return []
+
+    async def get_stats(self) -> Dict[str, Any]:
+        """Get basic statistics about the knowledge base."""
+        stats = {
+            "total_documents": 0,
+            "total_chunks": 0,
+            "categories": [],
+            "total_facts": 0
+        }
+        try:
+            # Get stats from LlamaIndex vector store (approximate count)
+            if self.vector_store:
+                # This is a placeholder as LlamaIndex RedisVectorStore doesn't expose direct count
+                all_doc_keys = await self.redis_client.keys(f"{self.redis_index_name}:doc:*")
+                stats["total_documents"] = len(all_doc_keys)
+                stats["total_chunks"] = len(all_doc_keys)  # Simple approximation
+                
+                # Collect categories from metadata if possible
+                categories = set()
+                for key in all_doc_keys[:10]:  # Limit to avoid performance issues
+                    try:
+                        doc_data = await self.redis_client.hgetall(key)
+                        if doc_data and "metadata" in doc_data:
+                            metadata = json.loads(doc_data.get("metadata", "{}"))
+                            if "category" in metadata:
+                                categories.add(metadata["category"])
+                    except Exception:
+                        pass
+                stats["categories"] = list(categories)
+
+            # Get stats from Redis facts
+            fact_count = 0
+            all_fact_keys = await self.redis_client.keys("fact:*")
+            stats["total_facts"] = len(all_fact_keys)
+
+            logging.info(f"Knowledge base stats: {stats}")
+            return stats
+        except Exception as e:
+            logging.error(f"Error getting knowledge base stats: {str(e)}")
+            return stats
+
+    async def get_detailed_stats(self) -> Dict[str, Any]:
+        """Get detailed statistics about the knowledge base."""
+        from datetime import datetime
+        
+        detailed_stats = {
+            "total_size": 0,  # in bytes
+            "avg_chunk_size": 0,  # in characters
+            "last_updated": "N/A",
+            "searches_24h": 0,
+            "top_category": "N/A",
+            "fact_types": {}  # e.g., {"manual_input": 10, "web_link": 5}
+        }
+        try:
+            # Total size and average chunk size calculation for facts
+            all_fact_keys = await self.redis_client.keys("fact:*")
+            total_content_length = 0
+            fact_type_counts = {}
+            latest_timestamp = 0
+
+            for key in all_fact_keys:
+                fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
+                if fact_data:
+                    content = fact_data.get("content", "")
+                    total_content_length += len(content)
+                    
+                    metadata = json.loads(fact_data.get("metadata", "{}"))
+                    source_type = metadata.get("source", "unknown")
+                    fact_type_counts[source_type] = fact_type_counts.get(source_type, 0) + 1
+                    
+                    timestamp = int(fact_data.get("timestamp", "0"))
+                    if timestamp > latest_timestamp:
+                        latest_timestamp = timestamp
+            
+            detailed_stats["total_size"] = total_content_length
+            if len(all_fact_keys) > 0:
+                detailed_stats["avg_chunk_size"] = total_content_length // len(all_fact_keys)
+            
+            if latest_timestamp > 0:
+                detailed_stats["last_updated"] = datetime.fromtimestamp(latest_timestamp).isoformat()
+            
+            detailed_stats["fact_types"] = fact_type_counts
+
+            # Placeholder for search queries and top category (would need separate logging/tracking)
+            detailed_stats["searches_24h"] = 0  # Needs implementation
+            if fact_type_counts:
+                detailed_stats["top_category"] = max(fact_type_counts, key=fact_type_counts.get)
+
+            logging.info(f"Detailed knowledge base stats: {detailed_stats}")
+            return detailed_stats
+        except Exception as e:
+            logging.error(f"Error getting detailed knowledge base stats: {str(e)}")
+            return detailed_stats
+
+    async def export_all_data(self) -> List[Dict[str, Any]]:
+        """Export all stored knowledge base data (facts and potentially vector store metadata)."""
+        exported_data = []
+        try:
+            # Export facts from Redis
+            all_fact_keys = await self.redis_client.keys("fact:*")
+            for key in all_fact_keys:
+                fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
+                if fact_data:
+                    exported_data.append({
+                        "id": int(key.split(":")[1]),
+                        "content": fact_data.get("content"),
+                        "metadata": json.loads(fact_data.get("metadata", "{}")),
+                        "timestamp": fact_data.get("timestamp"),
+                        "type": "fact"
+                    })
+            
+            # Export data from LlamaIndex (more complex, usually involves iterating nodes)
+            if self.index:
+                all_doc_keys = await self.redis_client.keys(f"{self.redis_index_name}:doc:*")
+                for key in all_doc_keys:
+                    # Fetch the actual document/node data if needed, or just metadata
+                    exported_data.append({
+                        "id": key,
+                        "content": "LlamaIndex Document (content not directly exported here)",
+                        "metadata": {"source": "LlamaIndex", "key": key},
+                        "type": "document_reference"
+                    })
+
+            logging.info(f"Exported {len(exported_data)} items from knowledge base.")
+            return exported_data
+        except Exception as e:
+            logging.error(f"Error exporting knowledge base data: {str(e)}")
+            return []
+
+    async def cleanup_old_entries(self, days_to_keep: int) -> Dict[str, Any]:
+        """Remove knowledge base entries (facts) older than a specified number of days."""
+        from datetime import datetime
+        
+        removed_count = 0
+        try:
+            cutoff_timestamp = int(datetime.now().timestamp()) - (days_to_keep * 24 * 3600)
+            all_fact_keys = await self.redis_client.keys("fact:*")
+            
+            for key in all_fact_keys:
+                fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
+                if fact_data:
+                    timestamp = int(fact_data.get("timestamp", "0"))
+                    if timestamp < cutoff_timestamp:
+                        await self.redis_client.delete(key)
+                        removed_count += 1
+            
+            logging.info(f"Cleaned up {removed_count} old knowledge base entries (facts).")
+            return {"status": "success", "removed_count": removed_count}
+        except Exception as e:
+            logging.error(f"Error cleaning up old entries: {str(e)}")
+            return {"status": "error", "message": f"Error cleaning up: {str(e)}", "removed_count": 0}
