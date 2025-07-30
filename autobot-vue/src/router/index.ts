@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -7,7 +6,8 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: HomeView,
+      // Use lazy loading for all components
+      component: () => import('../views/HomeView.vue'),
     },
     {
       path: '/about',
