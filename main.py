@@ -369,7 +369,8 @@ async def health_check(request: Request):
     """Health check endpoint for frontend status monitoring."""
     orchestrator_status = "unknown"
     diagnostics_status = "unknown"
-    llm_status = "skipped" # Still skipped, as we're not checking it yet
+    llm_status = "unknown"
+    redis_status = "unknown"
     
     logger.debug("Health check: Starting with explicit app.state checks and print statements.")
     
@@ -392,13 +393,34 @@ async def health_check(request: Request):
             diagnostics_status = "not_found_in_state"
             logger.debug("Health check: Diagnostics instance NOT found in app.state.")
 
+        # Check LLM status
+        try:
+            orchestrator = getattr(request.app.state, 'orchestrator', None)
+            if orchestrator and hasattr(orchestrator, 'llm_interface') and await orchestrator.llm_interface.check_connection():
+                llm_status = "connected"
+            else:
+                llm_status = "disconnected"
+        except Exception:
+            llm_status = "disconnected"
+
+        # Check Redis status
+        try:
+            redis_client = getattr(request.app.state, 'main_redis_client', None)
+            if redis_client and redis_client.ping():
+                redis_status = "connected"
+            else:
+                redis_status = "disconnected"
+        except Exception:
+            redis_status = "disconnected"
+
         logger.info("Health check: Returning status after explicit app.state checks.")
         return {
             "status": "healthy",
             "backend": "connected",
             "orchestrator": orchestrator_status,
-            "diagnostics": diagnostics_status, # Add diagnostics status to response
-            "llm": llm_status,
+            "diagnostics": diagnostics_status,
+            "llm_status": llm_status,
+            "redis_status": redis_status,
             "timestamp": asyncio.get_event_loop().time()
         }
     except Exception as e:
