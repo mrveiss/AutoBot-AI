@@ -7,7 +7,7 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
-@router.get("/api/prompts")
+@router.get("/prompts")
 async def get_prompts():
     try:
         # Adjust path to look for prompts directory at project root
@@ -52,7 +52,7 @@ async def get_prompts():
         logger.error(f"Error getting prompts: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting prompts: {str(e)}")
 
-@router.post("/api/prompts/{prompt_id}")
+@router.post("/prompts/{prompt_id}")
 async def save_prompt(prompt_id: str, request: dict):
     try:
         content = request.get("content", "")
@@ -79,7 +79,7 @@ async def save_prompt(prompt_id: str, request: dict):
         logger.error(f"Error saving prompt {prompt_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error saving prompt: {str(e)}")
 
-@router.post("/api/prompts/{prompt_id}/revert")
+@router.post("/prompts/{prompt_id}/revert")
 async def revert_prompt(prompt_id: str):
     try:
         prompts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "prompts"))
