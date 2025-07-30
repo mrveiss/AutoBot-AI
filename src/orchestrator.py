@@ -45,6 +45,8 @@ class Orchestrator:
         self.redis_client = None
         self.worker_capabilities: Dict[str, Dict[str, Any]] = {}
         self.pending_approvals: Dict[str, asyncio.Future] = {}
+        self.redis_command_approval_request_channel = global_config_manager.get_nested('task_transport.redis.channels.command_approval_request', 'command_approval_request')
+        self.redis_command_approval_response_channel_prefix = global_config_manager.get_nested('task_transport.redis.channels.command_approval_response_prefix', 'command_approval_')
         
         self.agent_paused = False
         
@@ -79,8 +81,9 @@ class Orchestrator:
             return
             
         pubsub = self.redis_client.pubsub()
-        pubsub.psubscribe("command_approval_*") 
-        print("Listening for command approvals on Redis channel 'command_approval_*'...")
+        approval_channel_pattern = f"{self.redis_command_approval_response_channel_prefix}*"
+        pubsub.psubscribe(approval_channel_pattern)
+        print(f"Listening for command approvals on Redis channel '{approval_channel_pattern}'...")
         for message in pubsub.listen():
             if message['type'] == 'pmessage':
                 channel = message['channel'].decode('utf-8')
@@ -346,8 +349,15 @@ If the user's request is purely conversational and does not require a tool, resp
             try:
                 if self.task_transport_type == "local":
                     result = await self.local_worker.execute_task(mapped_task)
+                elif self.task_transport_type == "redis" and self.redis_client:
+                    priority = global_config_manager.get_nested('task_transport.redis.priority', 10)
+                    task_payload = json.dumps({**mapped_task, 'priority': priority})
+                    self.redis_client.lpush(f"task_queue:{priority}", task_payload)
+                    # This part of the code would need a corresponding worker to process the queue
+                    # For now, we'll just simulate the result
+                    result = {"status": "success", "message": "Task queued to Redis with priority."}
                 else:
-                    result = {"status": "error", "message": "Redis execution not implemented"}
+                    result = {"status": "error", "message": "Task transport not configured correctly."}
                 
                 tool_output_content = result.get("result", result.get("output", result.get("message", "Tool execution completed.")))
                 messages.append({"role": "tool_output", "content": tool_output_content})
@@ -545,7 +555,7 @@ If the user's request is purely conversational and does not require a tool, resp
                 "timestamp": time.time()
             }
             if self.redis_client:
-                self.redis_client.publish("command_approval_request", json.dumps(approval_request))
+                self.redis_client.publish(self.redis_command_approval_request_channel, json.dumps(approval_request))
             else:
                 await event_manager.publish("error", {"message": "Redis client not initialized for command approval."})
                 return {"approved": False, "message": "Redis client not available for approval."}

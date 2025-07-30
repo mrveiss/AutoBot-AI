@@ -1,20 +1,21 @@
 {
   "backend": {
-    "api_endpoint": "http://localhost:8001",
-    "server_host": "0.0.0.0",
-    "server_port": 8001,
     "cors_origins": [
       "http://localhost:5173",
       "http://localhost:8080",
       "http://127.0.0.1:5173",
       "http://127.0.0.1:8080"
     ],
+    "ollama_endpoint": "http://localhost:11434/api/generate",
+    "ollama_model": "phi:2.7b",
+    "chat_data_dir": "data/chats",
+    "server_host": "0.0.0.0",
+    "server_port": 8001,
+    "api_endpoint": "http://localhost:8001",
     "timeout": 60,
     "streaming": true,
     "max_retries": 3,
     "use_phi2": true,
-    "ollama_endpoint": "http://localhost:11434/api/generate",
-    "ollama_model": "phi:2.7b",
     "settings": {
       "backend": {
         "use_phi2": true,
@@ -65,18 +66,130 @@
                   "http://127.0.0.1:8080"
                 ],
                 "timeout": 60,
-                "max_retries": 3
+                "max_retries": 3,
+                "settings": {
+                  "backend": {
+                    "use_phi2": true,
+                    "api_endpoint": "http://localhost:8001",
+                    "ollama_endpoint": "http://localhost:11434/api/generate",
+                    "ollama_model": "phi:2.7b",
+                    "streaming": true,
+                    "server_host": "0.0.0.0",
+                    "server_port": 8001,
+                    "cors_origins": [
+                      "http://localhost:5173",
+                      "http://localhost:8080",
+                      "http://127.0.0.1:5173",
+                      "http://127.0.0.1:8080"
+                    ],
+                    "timeout": 60,
+                    "max_retries": 3,
+                    "settings": {
+                      "backend": {
+                        "use_phi2": true,
+                        "api_endpoint": "http://localhost:8001",
+                        "ollama_endpoint": "http://localhost:11434/api/generate",
+                        "ollama_model": "phi:2.7b",
+                        "streaming": true,
+                        "server_host": "0.0.0.0",
+                        "server_port": 8001,
+                        "cors_origins": [
+                          "http://localhost:5173",
+                          "http://localhost:8080",
+                          "http://127.0.0.1:5173",
+                          "http://127.0.0.1:8080"
+                        ],
+                        "timeout": 60,
+                        "max_retries": 3,
+                        "settings": {
+                          "backend": {
+                            "use_phi2": true,
+                            "api_endpoint": "http://localhost:8001",
+                            "ollama_endpoint": "http://localhost:11434/api/generate",
+                            "ollama_model": "phi:2.7b",
+                            "streaming": true,
+                            "server_host": "0.0.0.0",
+                            "server_port": 8001,
+                            "cors_origins": [
+                              "http://localhost:5173",
+                              "http://localhost:8080",
+                              "http://127.0.0.1:5173",
+                              "http://127.0.0.1:8080"
+                            ],
+                            "timeout": 60,
+                            "max_retries": 3,
+                            "settings": {
+                              "backend": {
+                                "use_phi2": true,
+                                "api_endpoint": "http://localhost:8001",
+                                "ollama_endpoint": "http://localhost:11434/api/generate",
+                                "ollama_model": "phi:2.7b",
+                                "streaming": true,
+                                "server_host": "0.0.0.0",
+                                "server_port": 8001,
+                                "cors_origins": [
+                                  "http://localhost:5173",
+                                  "http://localhost:8080",
+                                  "http://127.0.0.1:5173",
+                                  "http://127.0.0.1:8080"
+                                ],
+                                "timeout": 60,
+                                "max_retries": 3,
+                                "settings": {
+                                  "backend": {
+                                    "use_phi2": true,
+                                    "api_endpoint": "http://localhost:8001",
+                                    "ollama_endpoint": "http://localhost:11434/api/generate",
+                                    "ollama_model": "phi:2.7b",
+                                    "streaming": true,
+                                    "server_host": "0.0.0.0",
+                                    "server_port": 8001,
+                                    "cors_origins": [
+                                      "http://localhost:5173",
+                                      "http://localhost:8080",
+                                      "http://127.0.0.1:5173",
+                                      "http://127.0.0.1:8080"
+                                    ],
+                                    "timeout": 60,
+                                    "max_retries": 3
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
-        }
+        },
+        "chat_data_dir": "data/chats"
       }
     }
   },
   "llm_config": {
     "default_llm": "ollama",
     "task_llm": "ollama",
-    "orchestrator_llm": "phi:2.7b",
+    "ollama": {
+      "host": "http://localhost:11434",
+      "models": {
+        "tinyllama": "tinyllama:latest",
+        "phi2": "phi:2.7b",
+        "nomic-embed-text": "nomic-embed-text",
+        "phi:2.7b": "phi:2.7b"
+      },
+      "port": 11434,
+      "model": "phi:2.7b",
+      "base_url": "http://localhost:11434"
+    },
+    "openai": {
+      "api_key": "",
+      "base_url": "",
+      "model": "gpt-3.5-turbo"
+    },
     "orchestrator_llm_settings": {
       "temperature": 0.7,
       "structured_output": true
@@ -85,22 +198,7 @@
       "temperature": 0.7,
       "structured_output": false
     },
-    "ollama": {
-      "host": "http://localhost:11434",
-      "port": 11434,
-      "model": "phi:2.7b",
-      "base_url": "http://localhost:11434",
-      "models": {
-        "phi2": "phi:2.7b",
-        "nomic-embed-text": "nomic-embed-text",
-        "phi:2.7b": "phi:2.7b"
-      }
-    },
-    "openai": {
-      "api_key": "",
-      "base_url": "",
-      "model": "gpt-3.5-turbo"
-    },
+    "orchestrator_llm": "phi:2.7b",
     "huggingface": {
       "api_key": "",
       "model": "microsoft/DialoGPT-medium"
@@ -127,18 +225,23 @@
       "cpu"
     ]
   },
-  "orchestrator": {
-    "use_langchain": true,
-    "simple_command_threshold": 10,
-    "max_command_length": 500
-  },
   "task_transport": {
     "type": "redis",
     "redis": {
       "host": "localhost",
       "port": 6379,
+      "channels": {
+        "command_approval_request": "autobot_command_approval_request",
+        "command_approval_response_prefix": "autobot_command_approval_response_",
+        "worker_capabilities": "autobot_worker_capabilities"
+      },
       "db": 0
     }
+  },
+  "orchestrator": {
+    "use_langchain": true,
+    "simple_command_threshold": 10,
+    "max_command_length": 500
   },
   "memory": {
     "redis": {
@@ -270,11 +373,107 @@
                 "http://127.0.0.1:8080"
               ],
               "timeout": 60,
-              "max_retries": 3
+              "max_retries": 3,
+              "settings": {
+                "backend": {
+                  "use_phi2": true,
+                  "api_endpoint": "http://localhost:8001",
+                  "ollama_endpoint": "http://localhost:11434/api/generate",
+                  "ollama_model": "phi:2.7b",
+                  "streaming": true,
+                  "server_host": "0.0.0.0",
+                  "server_port": 8001,
+                  "cors_origins": [
+                    "http://localhost:5173",
+                    "http://localhost:8080",
+                    "http://127.0.0.1:5173",
+                    "http://127.0.0.1:8080"
+                  ],
+                  "timeout": 60,
+                  "max_retries": 3,
+                  "settings": {
+                    "backend": {
+                      "use_phi2": true,
+                      "api_endpoint": "http://localhost:8001",
+                      "ollama_endpoint": "http://localhost:11434/api/generate",
+                      "ollama_model": "phi:2.7b",
+                      "streaming": true,
+                      "server_host": "0.0.0.0",
+                      "server_port": 8001,
+                      "cors_origins": [
+                        "http://localhost:5173",
+                        "http://localhost:8080",
+                        "http://127.0.0.1:5173",
+                        "http://127.0.0.1:8080"
+                      ],
+                      "timeout": 60,
+                      "max_retries": 3,
+                      "settings": {
+                        "backend": {
+                          "use_phi2": true,
+                          "api_endpoint": "http://localhost:8001",
+                          "ollama_endpoint": "http://localhost:11434/api/generate",
+                          "ollama_model": "phi:2.7b",
+                          "streaming": true,
+                          "server_host": "0.0.0.0",
+                          "server_port": 8001,
+                          "cors_origins": [
+                            "http://localhost:5173",
+                            "http://localhost:8080",
+                            "http://127.0.0.1:5173",
+                            "http://127.0.0.1:8080"
+                          ],
+                          "timeout": 60,
+                          "max_retries": 3,
+                          "settings": {
+                            "backend": {
+                              "use_phi2": true,
+                              "api_endpoint": "http://localhost:8001",
+                              "ollama_endpoint": "http://localhost:11434/api/generate",
+                              "ollama_model": "phi:2.7b",
+                              "streaming": true,
+                              "server_host": "0.0.0.0",
+                              "server_port": 8001,
+                              "cors_origins": [
+                                "http://localhost:5173",
+                                "http://localhost:8080",
+                                "http://127.0.0.1:5173",
+                                "http://127.0.0.1:8080"
+                              ],
+                              "timeout": 60,
+                              "max_retries": 3,
+                              "settings": {
+                                "backend": {
+                                  "use_phi2": true,
+                                  "api_endpoint": "http://localhost:8001",
+                                  "ollama_endpoint": "http://localhost:11434/api/generate",
+                                  "ollama_model": "phi:2.7b",
+                                  "streaming": true,
+                                  "server_host": "0.0.0.0",
+                                  "server_port": 8001,
+                                  "cors_origins": [
+                                    "http://localhost:5173",
+                                    "http://localhost:8080",
+                                    "http://127.0.0.1:5173",
+                                    "http://127.0.0.1:8080"
+                                  ],
+                                  "timeout": 60,
+                                  "max_retries": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
-      }
+      },
+      "chat_data_dir": "data/chats"
     },
     "ui": {
       "theme": "light",
