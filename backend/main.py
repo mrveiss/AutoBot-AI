@@ -21,70 +21,9 @@ import shutil
 import glob
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.chat_history_manager import ChatHistoryManager
+from src.config import global_config_manager as config
 
 app = FastAPI()
-
-# Load configuration from YAML file or environment variables
-CONFIG_FILE = "config/config.yaml"
-def load_config():
-    config = {
-        "cors_origins": [
-            "http://localhost",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:8080",
-            "http://127.0.0.1:8080",
-            "*",  # Temporarily allow all origins for debugging
-        ],
-        "ollama_endpoint": os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate"),
-        "ollama_model": os.getenv("OLLAMA_MODEL", "llama2"),
-        "chat_data_dir": os.getenv("CHAT_DATA_DIR", "data/chats"),
-        "server_host": os.getenv("SERVER_HOST", "0.0.0.0"),
-        "server_port": int(os.getenv("SERVER_PORT", 8001)),
-        "streaming": os.getenv("STREAMING", "false").lower() == "true",
-        "timeout": int(os.getenv("TIMEOUT", 60))
-    }
-    
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                file_config = yaml.safe_load(f)
-                if file_config:
-                    config.update(file_config.get('backend', {}))
-        except Exception as e:
-            logger.error(f"Error loading config from {CONFIG_FILE}: {str(e)}")
-    
-    # Load settings from the frontend saved settings if available - this takes priority
-    settings_file = "config/settings.json"
-    if os.path.exists(settings_file):
-        try:
-            with open(settings_file, 'r') as f:
-                settings = json.load(f)
-                backend_settings = settings.get('backend', {})
-                if backend_settings.get('ollama_endpoint'):
-                    config['ollama_endpoint'] = backend_settings.get('ollama_endpoint')
-                    logger.info(f"Overriding ollama_endpoint from frontend settings: {config['ollama_endpoint']}")
-                if backend_settings.get('ollama_model'):
-                    config['ollama_model'] = backend_settings.get('ollama_model')
-                    logger.info(f"Overriding ollama_model from frontend settings: {config['ollama_model']}")
-                if 'streaming' in backend_settings:
-                    config['streaming'] = backend_settings.get('streaming')
-                    logger.info(f"Overriding streaming from frontend settings: {config['streaming']}")
-                if 'timeout' in backend_settings:
-                    config['timeout'] = backend_settings.get('timeout')
-                    logger.info(f"Overriding timeout from frontend settings: {config['timeout']}")
-                if 'cors_origins' in backend_settings and backend_settings['cors_origins']:
-                    config['cors_origins'] = backend_settings.get('cors_origins')
-                    logger.info(f"Overriding cors_origins from frontend settings: {config['cors_origins']}")
-                # Log memory settings if available to confirm they are loaded
-                if 'memory' in settings:
-                    logger.info(f"Memory settings loaded from frontend settings: {settings['memory']}")
-        except Exception as e:
-            logger.error(f"Error loading backend settings from {settings_file}: {str(e)}")
-    
-    return config
-
-config = load_config()
 
 # Initialize chat history manager with Redis support
 chat_history_manager = ChatHistoryManager(use_redis=True, redis_host="localhost", redis_port=6379)
