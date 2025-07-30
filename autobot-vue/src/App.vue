@@ -221,39 +221,30 @@ export default {
     });
 
     const checkRedisConnection = async () => {
+      if (!backendStatus.value.connected) {
+        redisStatus.value = {
+          connected: false,
+          class: 'disconnected',
+          text: 'Disconnected',
+          message: 'Redis status unknown because backend is disconnected'
+        };
+        return false;
+      }
       try {
-        const response = await fetch('http://localhost:8001/api/health', {
-          method: 'GET',
-          timeout: 5000
-        });
+        const response = await fetch('http://localhost:8001/api/health');
         if (response.ok) {
           const data = await response.json();
-          if (data.redis_status === 'connected' && data.redis_search_module_loaded) {
+          if (data.redis_status === 'connected') {
             redisStatus.value = {
               connected: true,
               class: 'connected',
               text: 'Connected',
-              message: 'Redis service is responding and RediSearch module is loaded'
+              message: 'Redis service is available through the backend'
             };
-          } else if (data.redis_status === 'connected' && !data.redis_search_module_loaded) {
-            redisStatus.value = {
-              connected: true,
-              class: 'warning',
-              text: 'Connected (No Search)',
-              message: 'Redis service is responding but RediSearch module is NOT loaded'
-            };
-          } else {
-            redisStatus.value = {
-              connected: false,
-              class: 'disconnected',
-              text: 'Disconnected',
-              message: `Redis connection failed: ${data.error || 'Unknown error'}`
-            };
+            return true;
           }
-          return redisStatus.value.connected;
-        } else {
-          throw new Error(`Backend returned ${response.status}`);
         }
+        throw new Error('Redis not connected through backend');
       } catch (error) {
         redisStatus.value = {
           connected: false,
@@ -295,26 +286,34 @@ export default {
     };
 
     const checkLLMConnection = async () => {
+      if (!backendStatus.value.connected) {
+        llmStatus.value = {
+          connected: false,
+          class: 'disconnected',
+          text: 'Disconnected',
+          message: 'LLM status unknown because backend is disconnected'
+        };
+        return false;
+      }
       try {
-        const response = await fetch('http://localhost:11434/api/tags', {
-          method: 'GET',
-          timeout: 5000
-        });
+        const response = await fetch('http://localhost:8001/api/health');
         if (response.ok) {
-          llmStatus.value = {
-            connected: true,
-            class: 'connected',
-            text: 'Connected',
-            message: 'LLM service is available'
-          };
-          return true;
-        } else {
-          throw new Error(`LLM service returned ${response.status}`);
+          const data = await response.json();
+          if (data.llm_status === 'connected') {
+            llmStatus.value = {
+              connected: true,
+              class: 'connected',
+              text: 'Connected',
+              message: 'LLM service is available through the backend'
+            };
+            return true;
+          }
         }
+        throw new Error('LLM not connected through backend');
       } catch (error) {
         llmStatus.value = {
           connected: false,
-          class: 'disconnected', 
+          class: 'disconnected',
           text: 'Disconnected',
           message: `LLM connection failed: ${error.message}`
         };
@@ -326,7 +325,7 @@ export default {
       await checkBackendConnection();
       await checkLLMConnection();
       await checkRedisConnection(); // Add Redis connection check
-    };
+;
 
     // Function to update performance data (placeholder for real data)
     const updatePerformanceData = () => {
