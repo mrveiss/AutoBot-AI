@@ -15,6 +15,31 @@ from functools import lru_cache
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Simple TTL Cache implementation for performance optimization
+class TTLCache:
+    def __init__(self, ttl_seconds=300):  # 5 minute default TTL
+        self.cache = {}
+        self.ttl = ttl_seconds
+    
+    def get(self, key):
+        if key in self.cache:
+            value, timestamp = self.cache[key]
+            if datetime.now() - timestamp < timedelta(seconds=self.ttl):
+                return value
+            else:
+                del self.cache[key]
+        return None
+    
+    def set(self, key, value):
+        self.cache[key] = (value, datetime.now())
+    
+    def clear(self):
+        self.cache.clear()
+
+# Global cache instances
+settings_cache = TTLCache(ttl_seconds=300)  # 5 minutes
+prompts_cache = TTLCache(ttl_seconds=600)   # 10 minutes
+
 # Import ChatHistoryManager
 import sys
 import os
@@ -281,6 +306,8 @@ async def save_settings(settings_data: Settings):
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(settings_data.settings, f, indent=2)
         logger.info("Saved settings")
+        # Clear settings cache since we updated the config
+        settings_cache.clear()
         # ConfigManager handles automatic reloading
         return {"status": "success"}
     except Exception as e:
@@ -290,11 +317,21 @@ async def save_settings(settings_data: Settings):
 @app.get("/api/settings")
 async def get_settings():
     try:
+        # Check cache first
+        cached_result = settings_cache.get("settings")
+        if cached_result is not None:
+            return cached_result
+        
+        result = {}
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, 'r') as f:
-                return json.load(f)
-        logger.info("No settings file found, returning empty dict")
-        return {}
+                result = json.load(f)
+        else:
+            logger.info("No settings file found, returning empty dict")
+        
+        # Cache the result
+        settings_cache.set("settings", result)
+        return result
     except Exception as e:
         logger.error(f"Error loading settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error loading settings: {str(e)}")
