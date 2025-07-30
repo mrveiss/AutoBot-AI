@@ -66,8 +66,8 @@ class LLMInterface:
         self.openai_api_key = os.getenv("OPENAI_API_KEY", global_config_manager.get_nested('llm_config.openai.api_key', ''))
         
         self.ollama_models = global_config_manager.get_nested('llm_config.ollama.models', {})
-        self.orchestrator_llm_alias = global_config_manager.get_nested('llm_config.orchestrator_llm', 'phi:2.7b')
-        self.task_llm_alias = global_config_manager.get_nested('llm_config.task_llm', 'ollama')
+        self.orchestrator_llm_alias = global_config_manager.get_nested('llm_config.default_llm', 'ollama_tinyllama')
+        self.task_llm_alias = global_config_manager.get_nested('llm_config.task_llm', 'ollama_tinyllama')
         
         self.orchestrator_llm_settings = global_config_manager.get_nested('llm_config.orchestrator_llm_settings', {})
         self.task_llm_settings = global_config_manager.get_nested('llm_config.task_llm_settings', {})

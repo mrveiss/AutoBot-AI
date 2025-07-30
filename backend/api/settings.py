@@ -16,7 +16,7 @@ SETTINGS_FILE = "config/settings.json"
 class Settings(BaseModel):
     settings: dict
 
-@router.post("/api/settings")
+@router.post("/settings")
 async def save_settings(settings_data: Settings):
     try:
         os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
@@ -29,7 +29,7 @@ async def save_settings(settings_data: Settings):
         logger.error(f"Error saving settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error saving settings: {str(e)}")
 
-@router.get("/api/settings")
+@router.get("/settings")
 async def get_settings():
     try:
         result = {}
@@ -44,7 +44,7 @@ async def get_settings():
         logger.error(f"Error loading settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error loading settings: {str(e)}")
 
-@router.post("/api/settings/backend")
+@router.post("/settings/backend")
 async def update_backend_settings(settings_data: Settings):
     try:
         # Load current settings
@@ -68,7 +68,7 @@ async def update_backend_settings(settings_data: Settings):
         logger.error(f"Error updating backend settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error updating backend settings: {str(e)}")
 
-@router.get("/api/settings/backend")
+@router.get("/settings/backend")
 async def get_backend_settings():
     try:
         if os.path.exists(SETTINGS_FILE):

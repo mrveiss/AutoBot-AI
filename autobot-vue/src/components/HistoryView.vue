@@ -41,7 +41,8 @@ export default {
             try {
               const messagesResponse = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chat.chatId}`);
               if (messagesResponse.ok) {
-                const messages = await messagesResponse.json();
+                const data = await messagesResponse.json();
+                const messages = data.history || [];
                 // Look for the first user message to use as a preview or subject
                 const userMessage = messages.find(msg => msg.sender === 'user');
                 // If there's a user message, use it as the subject/preview
