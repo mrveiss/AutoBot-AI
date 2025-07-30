@@ -30,7 +30,20 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks(id) {
+          // Split Vue and related dependencies into their own chunk
+          if (id.includes('vue') || id.includes('vue-router')) {
+            return 'vue';
+          }
+          // Split utilities into their own chunk
+          if (id.includes('/src/utils/')) {
+            return 'utils';
+          }
+          // Split node_modules into vendor chunk
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
         // Add cache-busting hash to asset filenames
         assetFileNames: 'assets/[name]-[hash][extname]',
         chunkFileNames: 'js/[name]-[hash].js',
