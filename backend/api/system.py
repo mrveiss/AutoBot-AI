@@ -127,6 +127,38 @@ async def get_models():
         logger.error(f"Error getting models: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Error getting models: {str(e)}"})
 
+@router.get("/status")
+async def get_system_status():
+    """Get current system status including LLM configuration"""
+    try:
+        # Get current LLM configuration
+        default_llm = global_config_manager.get_nested('llm_config.default_llm', 'ollama_tinyllama')
+        task_llm = global_config_manager.get_nested('llm_config.task_llm', 'ollama_tinyllama')
+        
+        # Get model mappings
+        ollama_models = global_config_manager.get_nested('llm_config.ollama.models', {})
+        
+        # Resolve actual model names
+        current_llm_display = default_llm
+        if default_llm.startswith("ollama_"):
+            base_alias = default_llm.replace("ollama_", "")
+            actual_model = ollama_models.get(base_alias, base_alias)
+            current_llm_display = f"Ollama: {actual_model}"
+        elif default_llm.startswith("openai_"):
+            current_llm_display = f"OpenAI: {default_llm.replace('openai_', '')}"
+        
+        return {
+            "status": "success",
+            "current_llm": current_llm_display,
+            "default_llm": default_llm,
+            "task_llm": task_llm,
+            "ollama_models": ollama_models,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting system status: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Error getting system status: {str(e)}"})
+
 @router.get("/files")
 async def list_files():
     """List files in the project directory"""

@@ -130,7 +130,7 @@ class ApiClient {
   }
 
   async createNewChat() {
-    const response = await this.post('/api/chats/new');
+    const response = await this.post('/api/chat/new');
     return response.json();
   }
 
@@ -154,19 +154,19 @@ class ApiClient {
     return response.json();
   }
 
-  async resetChat(chatId) {
-    const response = await this.post(`/api/chats/${chatId}/reset`);
+  async resetChat() {
+    const response = await this.post('/api/chat/reset');
     return response.json();
   }
 
   // Settings API methods
   async getSettings() {
-    const response = await this.get('/api/settings');
+    const response = await this.get('/api/settings/');
     return response.json();
   }
 
   async saveSettings(settings) {
-    const response = await this.post('/api/settings', { settings });
+    const response = await this.post('/api/settings/', { settings });
     const result = await response.json();
     
     // Update local settings
@@ -181,7 +181,7 @@ class ApiClient {
   }
 
   async saveBackendSettings(backendSettings) {
-    const response = await this.post('/api/settings/backend', { settings: { backend: backendSettings } });
+    const response = await this.post('/api/settings/backend', { settings: backendSettings });
     return response.json();
   }
 
@@ -230,7 +230,7 @@ class ApiClient {
 
   // Prompts API methods
   async getPrompts() {
-    const response = await this.get('/api/prompts');
+    const response = await this.get('/api/prompts/');
     return response.json();
   }
 
@@ -246,12 +246,12 @@ class ApiClient {
 
   // Health and status methods
   async checkHealth() {
-    const response = await this.get('/api/health');
+    const response = await this.get('/api/system/health');
     return response.json();
   }
 
   async restartBackend() {
-    const response = await this.post('/api/restart');
+    const response = await this.post('/api/system/restart');
     return response.json();
   }
 
