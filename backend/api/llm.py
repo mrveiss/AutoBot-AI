@@ -11,20 +11,27 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
-@router.get("/api/llm/config")
+@router.get("/config")
 async def get_llm_config():
     """Get current LLM configuration"""
     try:
         llm_config = global_config_manager.get('llm_config', {})
         backend_config = global_config_manager.get('backend', {})
 
+        # Get default values from config with fallbacks
+        default_llm_fallback = global_config_manager.get_nested('defaults.llm.default_llm', 'ollama_tinyllama')
+        task_llm_fallback = global_config_manager.get_nested('defaults.llm.task_llm', 'ollama_tinyllama')
+        ollama_endpoint_fallback = global_config_manager.get_nested('defaults.llm.ollama.endpoint', 'http://localhost:11434/api/generate')
+        ollama_model_fallback = global_config_manager.get_nested('defaults.llm.ollama.model', 'tinyllama:latest')
+        ollama_host_fallback = global_config_manager.get_nested('defaults.llm.ollama.host', 'http://localhost:11434')
+
         return {
-            "default_llm": llm_config.get('default_llm', 'ollama_tinyllama'),
-            "task_llm": llm_config.get('task_llm', 'ollama_tinyllama'),
+            "default_llm": llm_config.get('default_llm', default_llm_fallback),
+            "task_llm": llm_config.get('task_llm', task_llm_fallback),
             "ollama": {
-                "endpoint": backend_config.get('ollama_endpoint', 'http://localhost:11434/api/generate'),
-                "model": backend_config.get('ollama_model', 'llama2'),
-                "host": llm_config.get('ollama', {}).get('host', 'http://localhost:11434'),
+                "endpoint": backend_config.get('ollama_endpoint', ollama_endpoint_fallback),
+                "model": backend_config.get('ollama_model', ollama_model_fallback),
+                "host": llm_config.get('ollama', {}).get('host', ollama_host_fallback),
                 "models": llm_config.get('ollama', {}).get('models', {})
             },
             "openai": llm_config.get('openai', {}),
@@ -35,7 +42,7 @@ async def get_llm_config():
         logger.error(f"Error getting LLM config: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting LLM config: {str(e)}")
 
-@router.post("/api/llm/config")
+@router.post("/config")
 async def update_llm_config(config_data: dict):
     """Update LLM configuration"""
     try:
@@ -97,12 +104,16 @@ async def update_llm_config(config_data: dict):
         logger.error(f"Error updating LLM config: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error updating LLM config: {str(e)}")
 
-@router.post("/api/llm/test_connection")
+@router.post("/test_connection")
 async def test_llm_connection():
     """Test LLM connection with current configuration"""
     try:
-        ollama_endpoint = global_config_manager.get_nested('backend.ollama_endpoint', 'http://localhost:11434/api/generate')
-        ollama_model = global_config_manager.get_nested('backend.ollama_model', 'llama2')
+        # Get default values from config
+        ollama_endpoint_fallback = global_config_manager.get_nested('defaults.llm.ollama.endpoint', 'http://localhost:11434/api/generate')
+        ollama_model_fallback = global_config_manager.get_nested('defaults.llm.ollama.model', 'tinyllama:latest')
+        
+        ollama_endpoint = global_config_manager.get_nested('backend.ollama_endpoint', ollama_endpoint_fallback)
+        ollama_model = global_config_manager.get_nested('backend.ollama_model', ollama_model_fallback)
 
         # Test Ollama connection
         ollama_check_url = ollama_endpoint.replace('/api/generate', '/api/tags')
@@ -149,11 +160,13 @@ async def test_llm_connection():
             "message": f"Failed to test LLM connection: {str(e)}"
         }
 
-@router.get("/api/llm/models")
+@router.get("/models")
 async def get_available_llm_models():
     """Get list of available LLM models"""
     try:
-        ollama_endpoint = global_config_manager.get_nested('backend.ollama_endpoint', 'http://localhost:11434/api/generate')
+        # Get default values from config
+        ollama_endpoint_fallback = global_config_manager.get_nested('defaults.llm.ollama.endpoint', 'http://localhost:11434/api/generate')
+        ollama_endpoint = global_config_manager.get_nested('backend.ollama_endpoint', ollama_endpoint_fallback)
         models = []
 
         # Get Ollama models

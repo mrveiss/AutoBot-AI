@@ -395,6 +395,7 @@
 
 <script>
 import { ref, onMounted, watch, computed } from 'vue';
+import apiClient from '../utils/ApiClient.js';
 
 export default {
   name: 'SettingsPanel',
@@ -465,9 +466,9 @@ export default {
         message_retention_days: 30
       },
       backend: {
-        api_endpoint: '',
-        server_host: '',
-        server_port: 0,
+        api_endpoint: 'http://localhost:8001',
+        server_host: '0.0.0.0',
+        server_port: 8001,
         chat_data_dir: '',
         chat_history_file: '',
         knowledge_base_db: '',
@@ -570,53 +571,14 @@ export default {
       }
     });
 
-    // Function to load settings from backend
+    // Function to load settings from backend config.yaml
     const loadSettingsFromBackend = async () => {
       try {
-        // Use a fallback endpoint if not set in settings yet
-        let apiEndpoint = 'http://localhost:8001';
-        if (settings.value.backend && settings.value.backend.api_endpoint) {
-          apiEndpoint = settings.value.backend.api_endpoint;
-        }
-        const response = await fetch(`${apiEndpoint}/api/settings`);
-        if (response.ok) {
-          try {
-            const backendSettings = await response.json();
-            settings.value = deepMerge(defaultSettings(), backendSettings);
-            // Save to local storage as well
-            localStorage.setItem('chat_settings', JSON.stringify(settings.value));
-          } catch (jsonError) {
-            console.error('Error parsing JSON from backend response:', jsonError);
-            // Load from local storage if JSON parsing fails
-            const savedSettings = localStorage.getItem('chat_settings');
-            if (savedSettings) {
-              try {
-                const parsedSettings = JSON.parse(savedSettings);
-                settings.value = deepMerge(defaultSettings(), parsedSettings);
-              } catch (e) {
-                console.error('Error parsing saved settings:', e);
-                settings.value = defaultSettings();
-              }
-            } else {
-              settings.value = defaultSettings();
-            }
-          }
-        } else {
-          console.error('Failed to load settings from backend:', response.status, response.statusText);
-          // Load from local storage if backend fails
-          const savedSettings = localStorage.getItem('chat_settings');
-          if (savedSettings) {
-            try {
-              const parsedSettings = JSON.parse(savedSettings);
-              settings.value = deepMerge(defaultSettings(), parsedSettings);
-            } catch (e) {
-              console.error('Error parsing saved settings:', e);
-              settings.value = defaultSettings();
-            }
-          } else {
-            settings.value = defaultSettings();
-          }
-        }
+        const configSettings = await apiClient.get('/api/settings/config');
+        console.log('Loaded settings from config.yaml:', configSettings);
+        settings.value = deepMerge(defaultSettings(), configSettings);
+        // Save to local storage as well
+        localStorage.setItem('chat_settings', JSON.stringify(settings.value));
       } catch (error) {
         console.error('Error loading settings from backend:', error);
         // Load from local storage if backend fails
@@ -639,22 +601,9 @@ export default {
 
     // Function to save settings to local storage and backend
     const saveSettings = async () => {
-      // Ensure memory settings are included in the saved data
-      localStorage.setItem('chat_settings', JSON.stringify(settings.value));
       try {
-        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
-        const response = await fetch(`${apiEndpoint}/api/settings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ settings: settings.value })
-        });
-        if (!response.ok) {
-          console.error('Failed to save settings to backend:', response.status, response.statusText);
-        } else {
-          console.log('Settings, including memory configurations, saved successfully to backend.');
-        }
+        await apiClient.saveSettings(settings.value);
+        console.log('Settings, including memory configurations, saved successfully to backend.');
       } catch (error) {
         console.error('Error saving settings to backend:', error);
       }
@@ -668,19 +617,9 @@ export default {
     // Function to load prompts from backend
     const loadPrompts = async () => {
       try {
-        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
-        const response = await fetch(`${apiEndpoint}/api/prompts`);
-        if (response.ok) {
-          try {
-            const promptsData = await response.json();
-            settings.value.prompts.list = promptsData.prompts || [];
-            settings.value.prompts.defaults = promptsData.defaults || {};
-          } catch (jsonError) {
-            console.error('Error parsing JSON for prompts:', jsonError);
-          }
-        } else {
-          console.error('Failed to load prompts from backend:', response.status, response.statusText);
-        }
+        const promptsData = await apiClient.getPrompts();
+        settings.value.prompts.list = promptsData.prompts || [];
+        settings.value.prompts.defaults = promptsData.defaults || {};
       } catch (error) {
         console.error('Error loading prompts from backend:', error);
       }
@@ -697,27 +636,14 @@ export default {
       if (!settings.value.prompts.selectedPrompt) return;
       try {
         const promptId = settings.value.prompts.selectedPrompt.id;
-        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
-        const response = await fetch(`${apiEndpoint}/api/prompts/${promptId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ content: settings.value.prompts.editedContent })
-        });
-        if (response.ok) {
-          // Update the prompt in the list
-          const updatedPrompt = await response.json();
-          const index = settings.value.prompts.list.findIndex(p => p.id === promptId);
-          if (index !== -1) {
-            settings.value.prompts.list[index] = updatedPrompt;
-          }
-          // Clear selection
-          settings.value.prompts.selectedPrompt = null;
-          settings.value.prompts.editedContent = '';
-        } else {
-          console.error('Failed to save prompt to backend:', response.status, response.statusText);
+        const updatedPrompt = await apiClient.savePrompt(promptId, settings.value.prompts.editedContent);
+        const index = settings.value.prompts.list.findIndex(p => p.id === promptId);
+        if (index !== -1) {
+          settings.value.prompts.list[index] = updatedPrompt;
         }
+        // Clear selection
+        settings.value.prompts.selectedPrompt = null;
+        settings.value.prompts.editedContent = '';
       } catch (error) {
         console.error('Error saving prompt to backend:', error);
       }
@@ -726,69 +652,30 @@ export default {
     // Function to load models from the selected provider
     const loadModels = async () => {
       try {
-        let endpoint = '';
+        const data = await apiClient.get('/api/llm/models');
+        console.log('Model data received:', data);
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
-          endpoint = settings.value.backend.llm.local.providers[provider].endpoint;
-          // For Ollama, we need to adjust the endpoint to get the list of models
-          if (provider === 'ollama' && endpoint.includes('/api/generate')) {
-            endpoint = endpoint.replace('/api/generate', '/api/tags');
-          }
-          // Ensure LM Studio endpoint is correct for model listing
-          if (provider === 'lmstudio' && !endpoint.endsWith('/v1/models')) {
-            if (endpoint.endsWith('/')) {
-              endpoint = endpoint + 'v1/models';
-            } else {
-              endpoint = endpoint + '/v1/models';
+          if (provider === 'ollama' && data.models) {
+            settings.value.backend.llm.local.providers.ollama.models = data.models.map(model => model.name);
+            if (!settings.value.backend.llm.local.providers.ollama.selected_model && data.models.length > 0) {
+              settings.value.backend.llm.local.providers.ollama.selected_model = data.models[0].name;
             }
-          }
-        } else {
-          // For cloud providers, models are predefined or fetched differently
-          return;
-        }
-        
-        if (!endpoint) {
-          console.error('No endpoint defined for model loading');
-          return;
-        }
-        
-        console.log('Attempting to load models from endpoint:', endpoint);
-        const response = await fetch(endpoint, {
-          // Adding a timeout to prevent hanging on unreachable endpoints
-          signal: AbortSignal.timeout(10000) // 10 seconds timeout
-        });
-        if (response.ok) {
-          try {
-            const data = await response.json();
-            console.log('Model data received:', data);
-            if (settings.value.backend.llm.provider_type === 'local') {
-              const provider = settings.value.backend.llm.local.provider;
-              if (provider === 'ollama' && data.models) {
-                settings.value.backend.llm.local.providers.ollama.models = data.models.map(model => model.name);
-                if (!settings.value.backend.llm.local.providers.ollama.selected_model && data.models.length > 0) {
-                  settings.value.backend.llm.local.providers.ollama.selected_model = data.models[0].name;
-                }
-              } else if (provider === 'lmstudio' && data.data) {
-                settings.value.backend.llm.local.providers.lmstudio.models = data.data.map(model => model.id);
-                if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.data.length > 0) {
-                  settings.value.backend.llm.local.providers.lmstudio.selected_model = data.data[0].id;
-                }
-              } else if (provider === 'lmstudio') {
-                // Handle case where endpoint might return different structure
-                console.log('LM Studio response:', data);
-                if (Array.isArray(data)) {
-                  settings.value.backend.llm.local.providers.lmstudio.models = data.map(model => model.id || model.name);
-                  if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.length > 0) {
-                    settings.value.backend.llm.local.providers.lmstudio.selected_model = data[0].id || data[0].name;
-                  }
-                }
+          } else if (provider === 'lmstudio' && data.data) {
+            settings.value.backend.llm.local.providers.lmstudio.models = data.data.map(model => model.id);
+            if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.data.length > 0) {
+              settings.value.backend.llm.local.providers.lmstudio.selected_model = data.data[0].id;
+            }
+          } else if (provider === 'lmstudio') {
+            // Handle case where endpoint might return different structure
+            console.log('LM Studio response:', data);
+            if (Array.isArray(data)) {
+              settings.value.backend.llm.local.providers.lmstudio.models = data.map(model => model.id || model.name);
+              if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.length > 0) {
+                settings.value.backend.llm.local.providers.lmstudio.selected_model = data[0].id || data[0].name;
               }
             }
-          } catch (jsonError) {
-            console.error('Error parsing JSON for models:', jsonError);
           }
-        } else {
-          console.error('Failed to load models:', response.status, response.statusText);
         }
       } catch (error) {
         console.error('Error loading models:', error);
@@ -807,27 +694,15 @@ export default {
     // Function to revert a prompt to default
     const revertPromptToDefault = async (promptId) => {
       try {
-        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
-        const response = await fetch(`${apiEndpoint}/api/prompts/${promptId}/revert`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        if (response.ok) {
-          // Update the prompt in the list
-          const updatedPrompt = await response.json();
-          const index = settings.value.prompts.list.findIndex(p => p.id === promptId);
-          if (index !== -1) {
-            settings.value.prompts.list[index] = updatedPrompt;
-          }
-          // If this prompt was selected, update the editor
-          if (settings.value.prompts.selectedPrompt && settings.value.prompts.selectedPrompt.id === promptId) {
-            settings.value.prompts.selectedPrompt = updatedPrompt;
-            settings.value.prompts.editedContent = updatedPrompt.content || '';
-          }
-        } else {
-          console.error('Failed to revert prompt to default:', response.status, response.statusText);
+        const updatedPrompt = await apiClient.revertPrompt(promptId);
+        const index = settings.value.prompts.list.findIndex(p => p.id === promptId);
+        if (index !== -1) {
+          settings.value.prompts.list[index] = updatedPrompt;
+        }
+        // If this prompt was selected, update the editor
+        if (settings.value.prompts.selectedPrompt && settings.value.prompts.selectedPrompt.id === promptId) {
+          settings.value.prompts.selectedPrompt = updatedPrompt;
+          settings.value.prompts.editedContent = updatedPrompt.content || '';
         }
       } catch (error) {
         console.error('Error reverting prompt to default:', error);
@@ -853,7 +728,6 @@ export default {
 
     const notifyBackendOfProviderChange = async () => {
       try {
-        const apiEndpoint = settings.value.backend && settings.value.backend.api_endpoint ? settings.value.backend.api_endpoint : defaultSettings().backend.api_endpoint;
         const providerData = {
           provider_type: settings.value.backend.llm.provider_type,
           local_provider: settings.value.backend.llm.provider_type === 'local' ? settings.value.backend.llm.local.provider : '',
@@ -862,18 +736,8 @@ export default {
           cloud_model: settings.value.backend.llm.provider_type === 'cloud' ? settings.value.backend.llm.cloud.providers[settings.value.backend.llm.cloud.provider].selected_model : ''
         };
         console.log('Notifying backend of provider change:', providerData);
-        const response = await fetch(`${apiEndpoint}/api/llm/provider`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(providerData)
-        });
-        if (response.ok) {
-          console.log('Backend notified of provider change successfully');
-        } else {
-          console.error('Failed to notify backend of provider change:', response.status, response.statusText);
-        }
+        await apiClient.post('/api/llm/provider', providerData);
+        console.log('Backend notified of provider change successfully');
       } catch (error) {
         console.error('Error notifying backend of provider change:', error);
       }
@@ -882,6 +746,8 @@ export default {
     return {
       settings,
       saveSettings,
+      loadModels,
+      loadPrompts,
       tabs,
       activeTab,
       activeBackendSubTab,
