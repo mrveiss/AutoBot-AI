@@ -1,10 +1,10 @@
 {
   "message_display": {
     "show_thoughts": true,
-    "show_json": true,
-    "show_utility": true,
+    "show_json": false,
+    "show_utility": false,
     "show_planning": true,
-    "show_debug": true
+    "show_debug": false
   },
   "chat": {
     "auto_scroll": true,
@@ -1629,9 +1629,9 @@
       "collection_name": ""
     },
     "redis": {
-      "enabled": false,
-      "host": "",
-      "port": 0
+      "enabled": true,
+      "host": "localhost",
+      "port": 6379
     }
   },
   "prompts": {
@@ -2288,14 +2288,8 @@
         "content": "```json\n{\n    \"tool_name\": {{tool_name}},\n    \"tool_result\": {{tool_result}}\n}\n```\n"
       }
     ],
-    "selectedPrompt": {
-      "id": "default_browser_agent.system",
-      "name": "browser_agent.system",
-      "type": "default",
-      "path": "default/browser_agent.system.md",
-      "content": "# Operation instruction\nKeep your tasks solution as simple and straight forward as possible\nFollow instructions as closely as possible\nWhen told go to website, open the website. If no other instructions: stop there\nDo not interact with the website unless told to\nAlways accept all cookies if prompted on the website, NEVER go to browser cookie settings\nIf asked specific questions about a website, be as precise and close to the actual page content as possible\nIf you are waiting for instructions: you should end the task and mark as done\n\n## Task Completion\nWhen you have completed the assigned task OR are waiting for further instructions:\n1. Use the \"Complete task\" action to mark the task as complete\n2. Provide the required parameters: title, response, and page_summary\n3. Do NOT continue taking actions after calling \"Complete task\"\n\n## Important Notes\n- Always call \"Complete task\" when your objective is achieved\n- In page_summary respond with one paragraph of main content plus an overview of page elements\n- Response field is used to answer to user's task or ask additional questions\n- If you navigate to a website and no further actions are requested, call \"Complete task\" immediately\n- If you complete any requested interaction (clicking, typing, etc.), call \"Complete task\"\n- Never leave a task running indefinitely - always conclude with \"Complete task\""
-    },
-    "editedContent": "# Operation instruction\nKeep your tasks solution as simple and straight forward as possible\nFollow instructions as closely as possible\nWhen told go to website, open the website. If no other instructions: stop there\nDo not interact with the website unless told to\nAlways accept all cookies if prompted on the website, NEVER go to browser cookie settings\nIf asked specific questions about a website, be as precise and close to the actual page content as possible\nIf you are waiting for instructions: you should end the task and mark as done\n\n## Task Completion\nWhen you have completed the assigned task OR are waiting for further instructions:\n1. Use the \"Complete task\" action to mark the task as complete\n2. Provide the required parameters: title, response, and page_summary\n3. Do NOT continue taking actions after calling \"Complete task\"\n\n## Important Notes\n- Always call \"Complete task\" when your objective is achieved\n- In page_summary respond with one paragraph of main content plus an overview of page elements\n- Response field is used to answer to user's task or ask additional questions\n- If you navigate to a website and no further actions are requested, call \"Complete task\" immediately\n- If you complete any requested interaction (clicking, typing, etc.), call \"Complete task\"\n- Never leave a task running indefinitely - always conclude with \"Complete task\"",
+    "selectedPrompt": null,
+    "editedContent": "",
     "defaults": {
       "default_behaviour.updated": "Behaviour has been updated.",
       "default_agent.system.tool.response": "### response:\nfinal answer to user\nends task processing use only when done or no task active\nput result in text arg\nusage:\n~~~json\n{\n    \"thoughts\": [\n        \"...\",\n    ],\n    \"headline\": \"Providing final answer to user\",\n    \"tool_name\": \"response\",\n    \"tool_args\": {\n        \"text\": \"Answer to the user\",\n    }\n}\n~~~\n",

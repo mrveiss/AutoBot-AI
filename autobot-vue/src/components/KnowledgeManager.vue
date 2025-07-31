@@ -175,6 +175,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
+import apiClient from '../utils/ApiClient.js';
 
 export default {
   name: 'KnowledgeManager',
@@ -248,24 +249,8 @@ export default {
       lastSearchQuery.value = searchQuery.value;
       
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/knowledge/search`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ 
-            query: searchQuery.value,
-            limit: 10
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          searchResults.value = data.results || [];
-        } else {
-          console.error('Search failed:', response.statusText);
-          searchResults.value = [];
-        }
+        const data = await apiClient.searchKnowledge(searchQuery.value);
+        searchResults.value = data.results || [];
       } catch (error) {
         console.error('Search error:', error);
         searchResults.value = [];
@@ -317,52 +302,30 @@ export default {
             return;
           }
           
-          const formData = new FormData();
-          formData.append('file', selectedFile.value);
-          
-          const response = await fetch(`${settings.value.backend.api_endpoint}/api/knowledge/add_file`, {
-            method: 'POST',
-            body: formData
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            addMessage.value = result.message || 'File added successfully!';
-            addMessageType.value = 'success';
-            selectedFile.value = null;
-          } else {
-            const error = await response.json();
-            addMessage.value = error.detail || 'Failed to add file.';
-            addMessageType.value = 'error';
-          }
+          const result = await apiClient.addFileToKnowledge(selectedFile.value);
+          addMessage.value = result.message || 'File added successfully!';
+          addMessageType.value = 'success';
+          selectedFile.value = null;
           return;
         }
 
-        const response = await fetch(`${settings.value.backend.api_endpoint}${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestData)
-        });
+        let result;
+        if (addContentType.value === 'text') {
+          result = await apiClient.addTextToKnowledge(textContent.value, textTitle.value, textSource.value);
+        } else if (addContentType.value === 'url') {
+          result = await apiClient.addUrlToKnowledge(urlContent.value, urlMethod.value);
+        }
+        
+        addMessage.value = result.message || 'Content added successfully!';
+        addMessageType.value = 'success';
 
-        if (response.ok) {
-          const result = await response.json();
-          addMessage.value = result.message || 'Content added successfully!';
-          addMessageType.value = 'success';
-          
-          // Clear form
-          if (addContentType.value === 'text') {
-            textContent.value = '';
-            textTitle.value = '';
-            textSource.value = '';
-          } else if (addContentType.value === 'url') {
-            urlContent.value = '';
-          }
-        } else {
-          const error = await response.json();
-          addMessage.value = error.detail || 'Failed to add content.';
-          addMessageType.value = 'error';
+        // Clear form
+        if (addContentType.value === 'text') {
+          textContent.value = '';
+          textTitle.value = '';
+          textSource.value = '';
+        } else if (addContentType.value === 'url') {
+          urlContent.value = '';
         }
       } catch (error) {
         console.error('Add content error:', error);
@@ -379,26 +342,9 @@ export default {
       manageMessage.value = '';
       
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/knowledge/export`);
-        
-        if (response.ok) {
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `knowledge_base_export_${new Date().toISOString().split('T')[0]}.json`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-          
-          manageMessage.value = 'Knowledge base exported successfully!';
-          manageMessageType.value = 'success';
-        } else {
-          const error = await response.json();
-          manageMessage.value = error.detail || 'Failed to export knowledge base.';
-          manageMessageType.value = 'error';
-        }
+        await apiClient.downloadFile('/api/knowledge/export', `knowledge_base_export_${new Date().toISOString().split('T')[0]}.json`);
+        manageMessage.value = 'Knowledge base exported successfully!';
+        manageMessageType.value = 'success';
       } catch (error) {
         console.error('Export error:', error);
         manageMessage.value = 'Error exporting knowledge base.';
@@ -417,19 +363,9 @@ export default {
       manageMessage.value = '';
       
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/knowledge/cleanup`, {
-          method: 'POST'
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          manageMessage.value = result.message || 'Cleanup completed successfully!';
-          manageMessageType.value = 'success';
-        } else {
-          const error = await response.json();
-          manageMessage.value = error.detail || 'Failed to cleanup knowledge base.';
-          manageMessageType.value = 'error';
-        }
+        const result = await apiClient.cleanupKnowledge();
+        manageMessage.value = result.message || 'Cleanup completed successfully!';
+        manageMessageType.value = 'success';
       } catch (error) {
         console.error('Cleanup error:', error);
         manageMessage.value = 'Error cleaning up knowledge base.';
@@ -446,24 +382,13 @@ export default {
       
       try {
         // Load basic stats
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/knowledge/stats`);
+        stats.value = await apiClient.getKnowledgeStats();
         
-        if (response.ok) {
-          stats.value = await response.json();
-          
-          // Load detailed stats
-          const detailedResponse = await fetch(`${settings.value.backend.api_endpoint}/api/knowledge/detailed_stats`);
-          if (detailedResponse.ok) {
-            detailedStats.value = await detailedResponse.json();
-          }
-          
-          statsMessage.value = 'Statistics loaded successfully!';
-          statsMessageType.value = 'success';
-        } else {
-          const error = await response.json();
-          statsMessage.value = error.detail || 'Failed to load statistics.';
-          statsMessageType.value = 'error';
-        }
+        // Load detailed stats
+        detailedStats.value = await apiClient.getDetailedKnowledgeStats();
+        
+        statsMessage.value = 'Statistics loaded successfully!';
+        statsMessageType.value = 'success';
       } catch (error) {
         console.error('Stats loading error:', error);
         statsMessage.value = 'Error loading statistics.';

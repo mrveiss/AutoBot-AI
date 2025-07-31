@@ -67,6 +67,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
+import apiClient from './utils/ApiClient.js';
 import ChatInterface from './components/ChatInterface.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import FileBrowser from './components/FileBrowser.vue';
@@ -139,24 +140,13 @@ export default {
           
           try {
             // Send a request to restart backend and frontend processes
-            const response = await fetch('/api/restart', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ action: 'restart_all' })
-            });
-            if (response.ok) {
-              console.log('Restart request sent successfully.');
-              alert('All processes are restarting. Please wait for the application to reload.');
-              // Optionally reload the page after a short delay
-              setTimeout(() => {
-                window.location.reload();
-              }, 2000);
-            } else {
-              console.error('Failed to send restart request:', response.statusText);
-              alert('Failed to restart processes. Please restart manually.');
-            }
+            await apiClient.restartBackend();
+            console.log('Restart request sent successfully.');
+            alert('All processes are restarting. Please wait for the application to reload.');
+            // Optionally reload the page after a short delay
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
           } catch (error) {
             console.error('Error sending restart request:', error);
             alert('Error occurred while restarting. Please restart manually.');
@@ -231,20 +221,27 @@ export default {
         return false;
       }
       try {
-        const response = await fetch('http://localhost:8001/api/health');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.redis_status === 'connected') {
-            redisStatus.value = {
-              connected: true,
-              class: 'connected',
-              text: 'Connected',
-              message: 'Redis service is available through the backend'
-            };
-            return true;
-          }
+        const data = await apiClient.checkHealth();
+        if (data.redis_status === 'connected') {
+          redisStatus.value = {
+            connected: true,
+            class: 'connected',
+            text: 'Connected',
+            message: data.redis_search_module_loaded ? 
+              'Redis with RediSearch available' : 
+              'Redis connected but RediSearch not loaded'
+          };
+          return true;
+        } else if (data.redis_status === 'not_configured') {
+          redisStatus.value = {
+            connected: false,
+            class: 'warning',
+            text: 'Not Configured',
+            message: 'Redis is not configured in the backend'
+          };
+          return false;
         }
-        throw new Error('Redis not connected through backend');
+        throw new Error('Redis status check failed');
       } catch (error) {
         redisStatus.value = {
           connected: false,
@@ -259,21 +256,14 @@ export default {
     // Connection status checking functions
     const checkBackendConnection = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/health', {
-          method: 'GET',
-          timeout: 5000
-        });
-        if (response.ok) {
-          backendStatus.value = {
-            connected: true,
-            class: 'connected',
-            text: 'Connected',
-            message: 'Backend server is responding'
-          };
-          return true;
-        } else {
-          throw new Error(`Backend returned ${response.status}`);
-        }
+        await apiClient.checkHealth();
+        backendStatus.value = {
+          connected: true,
+          class: 'connected',
+          text: 'Connected',
+          message: 'Backend server is responding'
+        };
+        return true;
       } catch (error) {
         backendStatus.value = {
           connected: false,
@@ -296,20 +286,24 @@ export default {
         return false;
       }
       try {
-        const response = await fetch('http://localhost:8001/api/health');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.llm_status === 'connected') {
-            llmStatus.value = {
-              connected: true,
-              class: 'connected',
-              text: 'Connected',
-              message: 'LLM service is available through the backend'
-            };
-            return true;
-          }
+        const data = await apiClient.checkHealth();
+        if (data.ollama === 'connected') {
+          llmStatus.value = {
+            connected: true,
+            class: 'connected',
+            text: 'Connected',
+            message: 'Ollama LLM service is available'
+          };
+          return true;
+        } else {
+          llmStatus.value = {
+            connected: false,
+            class: 'disconnected',
+            text: 'Disconnected',
+            message: 'Ollama service not available'
+          };
+          return false;
         }
-        throw new Error('LLM not connected through backend');
       } catch (error) {
         llmStatus.value = {
           connected: false,
@@ -324,7 +318,8 @@ export default {
     const checkConnections = async () => {
       await checkBackendConnection();
       await checkLLMConnection();
-      await checkRedisConnection(); // Add Redis connection check
+      await checkRedisConnection();
+      await fetchCurrentLLM(); // Fetch current LLM info
     };
 
     // Function to update performance data (placeholder for real data)
@@ -423,20 +418,30 @@ export default {
       }
     };
     
+    const currentLLM = ref('Loading...');
+    
     const getCurrentLLM = () => {
+      return currentLLM.value;
+    };
+    
+    const fetchCurrentLLM = async () => {
+      if (!backendStatus.value.connected) {
+        currentLLM.value = 'Backend Disconnected';
+        return;
+      }
+      
       try {
-        if (settings.value && settings.value.backend && settings.value.backend.llm) {
-          const llm = settings.value.backend.llm;
-          if (llm.provider_type === 'local') {
-            return `${llm.local.provider.charAt(0).toUpperCase() + llm.local.provider.slice(1)} - ${llm.local.providers[llm.local.provider].selected_model || 'Not selected'}`;
-          } else {
-            return `${llm.cloud.provider.charAt(0).toUpperCase() + llm.cloud.provider.slice(1)} - ${llm.cloud.providers[llm.cloud.provider].selected_model || 'Not selected'}`;
-          }
+        const response = await apiClient.get('/api/status');
+        const data = await response.json();
+        if (data.current_llm) {
+          currentLLM.value = data.current_llm;
+        } else {
+          currentLLM.value = 'Not configured';
         }
       } catch (error) {
-        console.error('Error accessing LLM settings:', error);
+        console.error('Error fetching current LLM:', error);
+        currentLLM.value = 'Connection Error';
       }
-      return 'Not selected';
     };
     
     onMounted(async () => {
@@ -476,9 +481,11 @@ export default {
       isFooterCollapsed,
       toggleFooter,
       getCurrentLLM,
+      currentLLM,
+      fetchCurrentLLM,
       backendStatus,
       llmStatus,
-      redisStatus, // Add redisStatus here
+      redisStatus,
       checkConnections
     };
   },
