@@ -15,6 +15,7 @@ from src.worker_node import WorkerNode, GUI_AUTOMATION_SUPPORTED
 from src.diagnostics import Diagnostics
 from src.system_info_collector import get_os_info
 from src.tool_discovery import discover_tools
+from src.tools import ToolRegistry
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
@@ -70,6 +71,9 @@ class Orchestrator:
         if self.task_transport_type == "local":
             print("Orchestrator configured for local task transport.")
             self.local_worker = WorkerNode()
+        
+        # Initialize unified tool registry to eliminate code duplication
+        self.tool_registry = None
 
     async def _listen_for_worker_capabilities(self):
         print("Listening for worker capabilities (Redis transport)...")
@@ -120,6 +124,10 @@ class Orchestrator:
         self.available_tools = discover_tools()
         await event_manager.publish("log_message", {"level": "INFO", "message": f"Available tools collected: {json.dumps(self.available_tools, indent=2)}"})
         print("Available tools collected on startup.")
+        
+        # Initialize unified tool registry to eliminate code duplication
+        worker_node = self.local_worker if hasattr(self, 'local_worker') else None
+        self.tool_registry = ToolRegistry(worker_node=worker_node, knowledge_base=self.knowledge_base)
         
         if self.use_langchain and LANGCHAIN_AVAILABLE and LangChainAgentOrchestrator is not None:
             try:
@@ -344,20 +352,12 @@ If the user's request is purely conversational and does not require a tool, resp
                 messages.append({"role": "user", "content": f"Tool execution failed: {error_msg}"})
                 continue
             
-            mapped_task = self._map_tool_to_task(tool_name, tool_args)
-            
+            # Use unified tool registry to eliminate code duplication
             try:
-                if self.task_transport_type == "local":
-                    result = await self.local_worker.execute_task(mapped_task)
-                elif self.task_transport_type == "redis" and self.redis_client:
-                    priority = global_config_manager.get_nested('task_transport.redis.priority', 10)
-                    task_payload = json.dumps({**mapped_task, 'priority': priority})
-                    self.redis_client.lpush(f"task_queue:{priority}", task_payload)
-                    # This part of the code would need a corresponding worker to process the queue
-                    # For now, we'll just simulate the result
-                    result = {"status": "success", "message": "Task queued to Redis with priority."}
+                if self.tool_registry:
+                    result = await self.tool_registry.execute_tool(tool_name, tool_args)
                 else:
-                    result = {"status": "error", "message": "Task transport not configured correctly."}
+                    result = {"status": "error", "message": "Tool registry not initialized"}
                 
                 tool_output_content = result.get("result", result.get("output", result.get("message", "Tool execution completed.")))
                 messages.append({"role": "tool_output", "content": tool_output_content})
@@ -470,70 +470,6 @@ If the user's request is purely conversational and does not require a tool, resp
         
         print(f"DEBUG: _execute_simple_command could not determine a direct command for '{goal}'. Falling back to generate_task_plan.")
         return await self.generate_task_plan(goal, [{"role": "user", "content": goal}])
-
-    def _map_tool_to_task(self, tool_name: Optional[str], tool_args: dict) -> dict:
-        task_id = str(uuid.uuid4())
-        base_task = {
-            "task_id": task_id,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        
-        if not isinstance(tool_name, str):
-            return {
-                "type": "respond_conversationally",
-                "response_text": f"Error: Invalid tool name received: {tool_name}. Cannot execute task."
-            }
-
-        if tool_name == "execute_system_command" or tool_name == "system_execute_command":
-            base_task.update({
-                "type": "system_execute_command",
-                "command": tool_args.get("command", tool_args.get("COMMAND", ""))
-            })
-        elif tool_name == "query_system_information" or tool_name == "system_query_info":
-            base_task.update({"type": "system_query_info"})
-        elif tool_name == "list_system_services" or tool_name == "system_list_services":
-            base_task.update({"type": "system_list_services"})
-        elif tool_name == "manage_service" or tool_name == "system_manage_service":
-            base_task.update({
-                "type": "system_manage_service",
-                "service_name": tool_args.get("service_name", tool_args.get("SERVICE_NAME", "")),
-                "action": tool_args.get("action", "")
-            })
-        elif tool_name == "get_process_info" or tool_name == "system_get_process_info":
-            base_task.update({
-                "type": "system_get_process_info",
-                "process_name": tool_args.get("process_name", tool_args.get("PROCESS_NAME")),
-                "pid": tool_args.get("pid", tool_args.get("PID"))
-            })
-        elif tool_name == "terminate_process" or tool_name == "system_terminate_process":
-            base_task.update({
-                "type": "system_terminate_process",
-                "pid": tool_args.get("pid", tool_args.get("PID"))
-            })
-        elif tool_name == "web_fetch":
-            base_task.update({
-                "type": "web_fetch",
-                "url": tool_args.get("url", tool_args.get("URL", ""))
-            })
-        elif tool_name == "respond_conversationally":
-            base_task.update({
-                "type": "respond_conversationally",
-                "response_text": tool_args.get("response_text", "")
-            })
-        elif tool_name == "ask_user_for_manual":
-            base_task.update({
-                "type": "ask_user_for_manual",
-                "program_name": tool_args.get("program_name", tool_args.get("PROGRAM_NAME", "")),
-                "question_text": tool_args.get("question_text", tool_args.get("QUESTION_TEXT", ""))
-            })
-        else:
-            base_task.update({
-                "type": tool_name,
-                **tool_args
-            })
-        
-        return base_task
 
     async def _handle_command_approval(self, result):
         command = result.get("command")

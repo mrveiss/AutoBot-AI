@@ -26,6 +26,7 @@ from src.worker_node import WorkerNode
 from src.knowledge_base import KnowledgeBase
 from src.event_manager import event_manager
 from src.config import config
+from src.tools import ToolRegistry
 
 
 class LangChainAgentOrchestrator:
@@ -69,6 +70,9 @@ class LangChainAgentOrchestrator:
             traceback.print_exc() # Print traceback to console
             self.available = False
             return
+        
+        # Initialize unified tool registry to eliminate code duplication
+        self.tool_registry = ToolRegistry(worker_node=worker_node, knowledge_base=knowledge_base)
         
         # Initialize tools
         self.tools = self._create_tools()
@@ -192,58 +196,43 @@ class LangChainAgentOrchestrator:
         
         return tools
 
-    def _execute_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Helper method to execute tasks via worker node."""
-        if not self.worker_node:
-            return {"status": "error", "message": "Worker node not available"}
-        
+    # All tool methods now use the unified ToolRegistry to eliminate code duplication
+    
+    def _execute_system_command(self, command: str) -> str:
+        """Execute a system command using unified tool registry."""
         try:
-            # Run async task in sync context
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.worker_node.execute_task(task))
+            result = loop.run_until_complete(self.tool_registry.execute_system_command(command))
             loop.close()
-            return result
+            return result.get("result", "Command executed")
         except Exception as e:
-            logging.error(f"Error executing task: {e}")
-            return {"status": "error", "message": str(e)}
-
-    def _execute_system_command(self, command: str) -> str:
-        """Execute a system command."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "system_execute_command",
-            "command": command,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Command execution failed"))
+            return f"Error: {e}"
 
     def _query_system_information(self, input_text: str = "") -> str:
-        """Query system information."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "system_query_info",
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Failed to get system information"))
+        """Query system information using unified tool registry."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.query_system_information())
+            loop.close()
+            return result.get("result", "System info retrieved")
+        except Exception as e:
+            return f"Error: {e}"
 
     def _list_system_services(self, input_text: str = "") -> str:
-        """List system services."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "system_list_services",
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Failed to list services"))
+        """List system services using unified tool registry."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.list_system_services())
+            loop.close()
+            return result.get("result", "Services listed")
+        except Exception as e:
+            return f"Error: {e}"
 
     def _manage_service(self, service_action: str) -> str:
-        """Manage a system service."""
+        """Manage a system service using unified tool registry."""
         try:
             parts = service_action.split()
             if len(parts) < 2:
@@ -252,80 +241,63 @@ class LangChainAgentOrchestrator:
             service_name = parts[0]
             action = parts[1]
             
-            task = {
-                "task_id": str(uuid.uuid4()),
-                "type": "system_manage_service",
-                "service_name": service_name,
-                "action": action,
-                "user_role": "user",
-                "timestamp": time.time()
-            }
-            result = self._execute_task(task)
-            return result.get("output", result.get("message", "Failed to manage service"))
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.manage_service(service_name, action))
+            loop.close()
+            return result.get("result", "Service managed")
         except Exception as e:
-            return f"Error managing service: {e}"
+            return f"Error: {e}"
 
     def _get_process_info(self, process_input: str) -> str:
-        """Get process information."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "system_get_process_info",
-            "process_name": process_input if not process_input.isdigit() else None,
-            "pid": process_input if process_input.isdigit() else None,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Failed to get process info"))
+        """Get process information using unified tool registry."""
+        try:
+            process_name = process_input if not process_input.isdigit() else None
+            pid = process_input if process_input.isdigit() else None
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.get_process_info(process_name, pid))
+            loop.close()
+            return result.get("result", "Process info retrieved")
+        except Exception as e:
+            return f"Error: {e}"
 
     def _terminate_process(self, pid: str) -> str:
-        """Terminate a process by PID."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "system_terminate_process",
-            "pid": pid,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Failed to terminate process"))
-
-    def _web_fetch(self, url: str) -> str:
-        """Fetch content from a web URL."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "web_fetch",
-            "url": url,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Failed to fetch web content"))
-
-    def _search_knowledge_base(self, query: str) -> str:
-        """Search the knowledge base."""
-        if not self.knowledge_base:
-            return "Knowledge base is not available."
+        """Terminate a process using unified tool registry."""
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            results = loop.run_until_complete(self.knowledge_base.search(query, n_results=5))
+            result = loop.run_until_complete(self.tool_registry.terminate_process(pid))
             loop.close()
-            
-            if results:
-                formatted_results = []
-                for result in results:
-                    formatted_results.append(f"Content: {result['content'][:200]}...")
-                return "\n".join(formatted_results)
-            else:
-                return "No relevant information found in knowledge base"
+            return result.get("result", "Process terminated")
         except Exception as e:
-            return f"Error searching knowledge base: {e}"
+            return f"Error: {e}"
+
+    def _web_fetch(self, url: str) -> str:
+        """Fetch web content using unified tool registry."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.web_fetch(url))
+            loop.close()
+            return result.get("result", "Web content fetched")
+        except Exception as e:
+            return f"Error: {e}"
+
+    def _search_knowledge_base(self, query: str) -> str:
+        """Search knowledge base using unified tool registry."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.search_knowledge_base(query, n_results=5))
+            loop.close()
+            return result.get("result", "Knowledge base searched")
+        except Exception as e:
+            return f"Error: {e}"
 
     def _add_file_to_knowledge_base(self, file_info: str) -> str:
-        """Add a file to the knowledge base."""
-        if not self.knowledge_base:
-            return "Knowledge base is not available."
+        """Add file to knowledge base using unified tool registry."""
         try:
             parts = file_info.split()
             if len(parts) < 2:
@@ -336,90 +308,74 @@ class LangChainAgentOrchestrator:
             
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.knowledge_base.add_file(file_path, file_type))
+            result = loop.run_until_complete(self.tool_registry.add_file_to_knowledge_base(file_path, file_type))
             loop.close()
-            
-            return result.get("message", "File added to knowledge base")
+            return result.get("result", "File added to knowledge base")
         except Exception as e:
-            return f"Error adding file to knowledge base: {e}"
+            return f"Error: {e}"
 
     def _store_fact(self, fact_content: str) -> str:
-        """Store a fact in the knowledge base."""
-        if not self.knowledge_base:
-            return "Knowledge base is not available."
+        """Store fact using unified tool registry."""
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.knowledge_base.store_fact(fact_content))
+            result = loop.run_until_complete(self.tool_registry.store_fact(fact_content))
             loop.close()
-            
-            return result.get("message", "Fact stored successfully")
+            return result.get("result", "Fact stored")
         except Exception as e:
-            return f"Error storing fact: {e}"
+            return f"Error: {e}"
 
     def _get_fact(self, fact_query: str) -> str:
-        """Get facts from the knowledge base."""
-        if not self.knowledge_base:
-            return "Knowledge base is not available."
+        """Get facts using unified tool registry."""
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
             if fact_query.isdigit():
-                results = loop.run_until_complete(self.knowledge_base.get_fact(fact_id=int(fact_query)))
+                result = loop.run_until_complete(self.tool_registry.get_fact(fact_id=int(fact_query)))
             else:
-                results = loop.run_until_complete(self.knowledge_base.get_fact(query=fact_query))
+                result = loop.run_until_complete(self.tool_registry.get_fact(query=fact_query))
             
             loop.close()
-            
-            if results:
-                formatted_results = []
-                for result in results:
-                    formatted_results.append(f"Fact {result['id']}: {result['content']}")
-                return "\n".join(formatted_results)
-            else:
-                return "No facts found"
+            return result.get("result", "Facts retrieved")
         except Exception as e:
-            return f"Error getting facts: {e}"
+            return f"Error: {e}"
 
     def _type_text(self, text: str) -> str:
-        """Type text into the active window."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "gui_type_text",
-            "text": text,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Failed to type text"))
+        """Type text using unified tool registry."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.type_text(text))
+            loop.close()
+            return result.get("result", "Text typed")
+        except Exception as e:
+            return f"Error: {e}"
 
     def _click_element(self, image_path: str) -> str:
-        """Click on a GUI element by image."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "gui_click_element",
-            "image_path": image_path,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Failed to click element"))
+        """Click element using unified tool registry."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.click_element(image_path))
+            loop.close()
+            return result.get("result", "Element clicked")
+        except Exception as e:
+            return f"Error: {e}"
 
     def _bring_window_to_front(self, window_title: str) -> str:
-        """Bring a window to the front."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "gui_bring_window_to_front",
-            "window_title": window_title,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", "Failed to bring window to front"))
+        """Bring window to front using unified tool registry."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.bring_window_to_front(window_title))
+            loop.close()
+            return result.get("result", "Window brought to front")
+        except Exception as e:
+            return f"Error: {e}"
 
     def _ask_user_for_manual(self, program_question: str) -> str:
-        """Ask user for manual information."""
+        """Ask user for manual using unified tool registry."""
         try:
             parts = program_question.split(' ', 1)
             if len(parts) < 2:
@@ -428,30 +384,24 @@ class LangChainAgentOrchestrator:
             program_name = parts[0]
             question_text = parts[1]
             
-            task = {
-                "task_id": str(uuid.uuid4()),
-                "type": "ask_user_for_manual",
-                "program_name": program_name,
-                "question_text": question_text,
-                "user_role": "user",
-                "timestamp": time.time()
-            }
-            result = self._execute_task(task)
-            return result.get("output", result.get("message", "Failed to ask user for manual"))
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.ask_user_for_manual(program_name, question_text))
+            loop.close()
+            return result.get("result", "User manual request sent")
         except Exception as e:
-            return f"Error asking user for manual: {e}"
+            return f"Error: {e}"
 
     def _respond_conversationally(self, response_text: str) -> str:
-        """Respond conversationally to the user."""
-        task = {
-            "task_id": str(uuid.uuid4()),
-            "type": "respond_conversationally",
-            "response_text": response_text,
-            "user_role": "user",
-            "timestamp": time.time()
-        }
-        result = self._execute_task(task)
-        return result.get("output", result.get("message", response_text))
+        """Respond conversationally using unified tool registry."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.tool_registry.respond_conversationally(response_text))
+            loop.close()
+            return result.get("result", response_text)
+        except Exception as e:
+            return f"Error: {e}"
 
     async def execute_goal(self, goal: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """Execute a goal using the LangChain agent."""
