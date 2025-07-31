@@ -2,8 +2,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 import logging
 from datetime import datetime
-import requests
 
+from backend.utils.connection_utils import ConnectionTester, ModelManager
+from backend.services.config_service import ConfigService
 from src.config import global_config_manager
 
 router = APIRouter()
@@ -15,60 +16,8 @@ logger = logging.getLogger(__name__)
 async def health_check():
     """Health check endpoint for connection status monitoring"""
     try:
-        # Check if we can connect to Ollama
-        ollama_healthy = False
-        try:
-            ollama_check_url = global_config_manager.get_nested('backend.ollama_endpoint', 'http://localhost:11434/api/generate').replace('/api/generate', '/api/tags')
-            response = requests.get(ollama_check_url, timeout=5)
-            ollama_healthy = response.status_code == 200
-        except:
-            ollama_healthy = False
-
-        # Check Redis connection
-        redis_status = "disconnected"
-        redis_search_module_loaded = False
-        try:
-            import redis
-            # Get Redis config from centralized config
-            task_transport_config = global_config_manager.get('task_transport', {})
-            if task_transport_config.get('type') == 'redis':
-                redis_config = task_transport_config.get('redis', {})
-                redis_host = redis_config.get('host', 'localhost')
-                redis_port = redis_config.get('port', 6379)
-
-                redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-                redis_client.ping()
-                redis_status = "connected"
-
-                # Check if RediSearch module is loaded
-                try:
-                    modules = redis_client.module_list()
-                    if modules and isinstance(modules, list):
-                        redis_search_module_loaded = any(
-                            (isinstance(module, dict) and module.get('name') == 'search') or
-                            (isinstance(module, dict) and module.get(b'name') == b'search') or
-                            (hasattr(module, '__getitem__') and (module.get('name') == 'search' or module.get(b'name') == b'search'))
-                            for module in modules
-                        )
-                    else:
-                        redis_search_module_loaded = False
-                except:
-                    # If we can't check modules, assume it's not loaded
-                    redis_search_module_loaded = False
-            else:
-                redis_status = "not_configured"
-        except Exception as e:
-            logger.debug(f"Redis connection check failed: {str(e)}")
-            redis_status = "disconnected"
-
-        return {
-            "status": "healthy",
-            "backend": "connected",
-            "ollama": "connected" if ollama_healthy else "disconnected",
-            "redis_status": redis_status,
-            "redis_search_module_loaded": redis_search_module_loaded,
-            "timestamp": datetime.now().isoformat()
-        }
+        status = await ConnectionTester.get_comprehensive_health_status()
+        return status
     except Exception as e:
         logger.error(f"Error in health check: {str(e)}")
         return JSONResponse(
@@ -97,31 +46,19 @@ async def restart():
 async def get_models():
     """Get available LLM models"""
     try:
-        ollama_config = global_config_manager.get_nested('llm_config.ollama', {})
-        models = ollama_config.get('models', {})
+        result = await ModelManager.get_available_models()
+        if result["status"] == "error":
+            return JSONResponse(status_code=500, content={"error": result["error"]})
         
-        # Try to get models from Ollama API
-        try:
-            ollama_host = ollama_config.get('host', 'http://localhost:11434')
-            ollama_url = f"{ollama_host}/api/tags"
-            response = requests.get(ollama_url, timeout=5)
-            if response.status_code == 200:
-                ollama_models = response.json().get('models', [])
-                # Extract model names
-                available_models = [model['name'] for model in ollama_models]
-                return {
-                    "status": "success",
-                    "models": available_models,
-                    "configured_models": models
-                }
-        except Exception as e:
-            logger.warning(f"Could not fetch models from Ollama: {str(e)}")
-            
-        # Fallback to configured models
+        # Format for backward compatibility
+        available_models = [model['name'] for model in result['models'] if model.get('available', False)]
+        configured_models = {model['name']: model['name'] for model in result['models'] if model.get('configured', False)}
+        
         return {
-            "status": "success", 
-            "models": list(models.values()),
-            "configured_models": models
+            "status": "success",
+            "models": available_models,
+            "configured_models": configured_models,
+            "detailed_models": result['models']
         }
     except Exception as e:
         logger.error(f"Error getting models: {str(e)}")
@@ -131,18 +68,14 @@ async def get_models():
 async def get_system_status():
     """Get current system status including LLM configuration"""
     try:
-        # Get current LLM configuration
-        default_llm = global_config_manager.get_nested('llm_config.default_llm', 'ollama_tinyllama')
-        task_llm = global_config_manager.get_nested('llm_config.task_llm', 'ollama_tinyllama')
+        llm_config = ConfigService.get_llm_config()
         
-        # Get model mappings
-        ollama_models = global_config_manager.get_nested('llm_config.ollama.models', {})
-        
-        # Resolve actual model names
+        # Resolve actual model names for display
+        default_llm = llm_config["default_llm"]
         current_llm_display = default_llm
         if default_llm.startswith("ollama_"):
             base_alias = default_llm.replace("ollama_", "")
-            actual_model = ollama_models.get(base_alias, base_alias)
+            actual_model = llm_config["ollama"]["models"].get(base_alias, base_alias)
             current_llm_display = f"Ollama: {actual_model}"
         elif default_llm.startswith("openai_"):
             current_llm_display = f"OpenAI: {default_llm.replace('openai_', '')}"
@@ -150,9 +83,9 @@ async def get_system_status():
         return {
             "status": "success",
             "current_llm": current_llm_display,
-            "default_llm": default_llm,
-            "task_llm": task_llm,
-            "ollama_models": ollama_models,
+            "default_llm": llm_config["default_llm"],
+            "task_llm": llm_config["task_llm"],
+            "ollama_models": llm_config["ollama"]["models"],
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:

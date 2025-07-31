@@ -262,6 +262,7 @@ from backend.api.system import router as system_router
 from backend.api.settings import router as settings_router
 from backend.api.prompts import router as prompts_router
 from backend.api.knowledge import router as knowledge_router
+from backend.api.llm import router as llm_router
 
 # Create an API router (not a separate FastAPI instance)
 from fastapi import APIRouter
@@ -273,6 +274,7 @@ api_router.include_router(system_router, tags=["system"])
 api_router.include_router(settings_router, tags=["settings"])
 api_router.include_router(prompts_router, tags=["prompts"])
 api_router.include_router(knowledge_router, tags=["knowledge"])
+api_router.include_router(llm_router, tags=["llm"])
 
 # Include the API router directly in the main app
 app.include_router(api_router, prefix="/api")
