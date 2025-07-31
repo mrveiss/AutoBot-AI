@@ -130,18 +130,37 @@ async def reset_chat(chat_id: str, request: Request):
         logger.error(f"Error resetting chat {chat_id}: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Error resetting chat: {str(e)}"})
 
-@router.post("/chat")
-async def send_chat_message(chat_message: ChatMessage, request: Request):
-    """Send a message to the bot and get a response."""
+@router.post("/chats/{chat_id}/message")
+async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Request):
+    """Send a message to a specific chat and get a response."""
     try:
-        # Get the orchestrator from app state
+        # Get the orchestrator and chat_history_manager from app state
         orchestrator = getattr(request.app.state, 'orchestrator', None)
+        chat_history_manager = getattr(request.app.state, 'chat_history_manager', None)
+        
         if orchestrator is None:
             logging.error("orchestrator not found in app.state")
             return JSONResponse(status_code=500, content={"error": "Orchestrator not initialized"})
         
+        if chat_history_manager is None:
+            logging.error("chat_history_manager not found in app.state")
+            return JSONResponse(status_code=500, content={"error": "Chat history manager not initialized"})
+        
         message = chat_message.message
-        logging.info(f"Received chat message: {message}")
+        logging.info(f"Received chat message for chat {chat_id}: {message}")
+        
+        # Add user message to chat history
+        user_message = {
+            "sender": "user",
+            "text": message,
+            "messageType": "user",
+            "rawData": None,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # Load existing chat history
+        existing_history = chat_history_manager.load_session(chat_id) or []
+        existing_history.append(user_message)
         
         # Execute the goal using the orchestrator
         orchestrator_result = await orchestrator.execute_goal(message, [{"role": "user", "content": message}])
@@ -181,10 +200,28 @@ async def send_chat_message(chat_message: ChatMessage, request: Request):
         else:
             response_message = str(result_dict)
         
-        return JSONResponse(status_code=200, content={"response": response_message, "status": "success"})
+        # Add bot response to chat history
+        bot_message = {
+            "sender": "bot",
+            "text": response_message,
+            "messageType": "response",
+            "rawData": result_dict,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        existing_history.append(bot_message)
+        
+        # Save updated chat history
+        chat_history_manager.save_session(chat_id, messages=existing_history)
+        
+        return JSONResponse(status_code=200, content={
+            "response": response_message, 
+            "status": "success",
+            "chat_id": chat_id,
+            "message_count": len(existing_history)
+        })
         
     except Exception as e:
-        logging.error(f"Error processing chat message: {str(e)}")
+        logging.error(f"Error processing chat message for {chat_id}: {str(e)}")
         logging.error(f"Traceback: {traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"error": f"Error processing message: {str(e)}"})
 

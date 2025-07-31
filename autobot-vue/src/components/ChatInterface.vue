@@ -75,6 +75,7 @@
 
 <script>
 import { ref, onMounted, nextTick, computed, watch } from 'vue';
+import apiClient from '@/utils/ApiClient.js';
 
 export default {
   name: 'ChatInterface',
@@ -134,21 +135,14 @@ export default {
     // Connection status checking functions
     const checkBackendConnection = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/health`, {
-          method: 'GET',
-          timeout: 5000
-        });
-        if (response.ok) {
-          backendStatus.value = {
-            connected: true,
-            class: 'connected',
-            text: 'Connected',
-            message: 'Backend server is responding'
-          };
-          return true;
-        } else {
-          throw new Error(`Backend returned ${response.status}`);
-        }
+        await apiClient.checkHealth();
+        backendStatus.value = {
+          connected: true,
+          class: 'connected',
+          text: 'Connected',
+          message: 'Backend server is responding'
+        };
+        return true;
       } catch (error) {
         backendStatus.value = {
           connected: false,
@@ -162,27 +156,20 @@ export default {
 
     const checkLLMConnection = async () => {
       try {
-        // Check if we can reach the LLM endpoint
-        const llmEndpoint = settings.value.backend.ollama_endpoint || 'http://localhost:11434';
-        const response = await fetch(`${llmEndpoint}/api/tags`, {
-          method: 'GET',
-          timeout: 5000
-        });
-        if (response.ok) {
-          llmStatus.value = {
-            connected: true,
-            class: 'connected',
-            text: 'Connected',
-            message: 'LLM service is available'
-          };
-          return true;
-        } else {
-          throw new Error(`LLM service returned ${response.status}`);
-        }
+        // This is a bit of a hack, but we can use the apiClient to check the LLM connection
+        // by calling an endpoint that we know will fail if the LLM is not available.
+        await apiClient.get('/api/llm/models');
+        llmStatus.value = {
+          connected: true,
+          class: 'connected',
+          text: 'Connected',
+          message: 'LLM service is available'
+        };
+        return true;
       } catch (error) {
         llmStatus.value = {
           connected: false,
-          class: 'disconnected', 
+          class: 'disconnected',
           text: 'Disconnected',
           message: `LLM connection failed: ${error.message}`
         };
@@ -226,18 +213,8 @@ export default {
     
     // Function to save settings to local storage and backend
     const saveSettings = async () => {
-      localStorage.setItem('chat_settings', JSON.stringify(settings.value));
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ settings: settings.value })
-        });
-        if (!response.ok) {
-          console.error('Failed to save settings to backend:', response.statusText);
-        }
+        await apiClient.saveSettings(settings.value);
       } catch (error) {
         console.error('Error saving settings to backend:', error);
       }
@@ -246,18 +223,8 @@ export default {
     // Function to save backend-specific settings
     const saveBackendSettings = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings/backend`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ settings: { backend: settings.value.backend } })
-        });
-        if (!response.ok) {
-          console.error('Failed to save backend settings:', response.statusText);
-        } else {
-          console.log('Backend settings saved successfully.');
-        }
+        await apiClient.saveBackendSettings(settings.value.backend);
+        console.log('Backend settings saved successfully.');
       } catch (error) {
         console.error('Error saving backend settings:', error);
       }
@@ -266,14 +233,9 @@ export default {
     // Function to fetch backend settings
     const fetchBackendSettings = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings/backend`);
-        if (response.ok) {
-          const backendSettings = await response.json();
-          settings.value.backend = { ...settings.value.backend, ...backendSettings };
-          console.log('Backend settings loaded successfully.');
-        } else {
-          console.error('Failed to load backend settings:', response.statusText);
-        }
+        const backendSettings = await apiClient.getBackendSettings();
+        settings.value.backend = { ...settings.value.backend, ...backendSettings };
+        console.log('Backend settings loaded successfully.');
       } catch (error) {
         console.error('Error loading backend settings:', error);
       }
@@ -282,15 +244,10 @@ export default {
     // Function to load system prompts from backend
     const loadPrompts = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts`);
-        if (response.ok) {
-          const data = await response.json();
-          prompts.value = data.prompts || [];
-          defaults.value = data.defaults || {};
-          console.log(`Loaded ${prompts.value.length} system prompts from backend.`);
-        } else {
-          console.error('Failed to load system prompts:', response.statusText);
-        }
+        const data = await apiClient.getPrompts();
+        prompts.value = data.prompts || [];
+        defaults.value = data.defaults || {};
+        console.log(`Loaded ${prompts.value.length} system prompts from backend.`);
       } catch (error) {
         console.error('Error loading system prompts:', error);
       }
@@ -320,26 +277,15 @@ export default {
         console.warn(`Prompt ${promptId} not found for editing.`);
         return;
       }
-      const newContent = prompt(`Edit prompt: ${prompt.name}`, prompt.content);
+      const newContent = window.prompt(`Edit prompt: ${prompt.name}`, prompt.content);
       if (newContent !== null) {
         try {
-          const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ content: newContent })
-          });
-          if (response.ok) {
-            const updatedPrompt = await response.json();
-            const index = prompts.value.findIndex(p => p.id === promptId);
-            if (index !== -1) {
-              prompts.value[index] = updatedPrompt;
-            }
-            console.log(`Updated prompt ${prompt.name} successfully.`);
-          } else {
-            console.error('Failed to update prompt:', response.statusText);
+          const updatedPrompt = await apiClient.savePrompt(promptId, newContent);
+          const index = prompts.value.findIndex(p => p.id === promptId);
+          if (index !== -1) {
+            prompts.value[index] = updatedPrompt;
           }
+          console.log(`Updated prompt ${prompt.name} successfully.`);
         } catch (error) {
           console.error('Error updating prompt:', error);
         }
@@ -353,24 +299,14 @@ export default {
         console.warn(`Prompt ${promptId} not found for reverting.`);
         return;
       }
-      if (confirm(`Are you sure you want to revert ${prompt.name} to its default content?`)) {
+      if (window.confirm(`Are you sure you want to revert ${prompt.name} to its default content?`)) {
         try {
-          const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}/revert`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-          if (response.ok) {
-            const updatedPrompt = await response.json();
-            const index = prompts.value.findIndex(p => p.id === promptId);
-            if (index !== -1) {
-              prompts.value[index] = updatedPrompt;
-            }
-            console.log(`Reverted prompt ${prompt.name} to default successfully.`);
-          } else {
-            console.error('Failed to revert prompt:', response.statusText);
+          const updatedPrompt = await apiClient.revertPrompt(promptId);
+          const index = prompts.value.findIndex(p => p.id === promptId);
+          if (index !== -1) {
+            prompts.value[index] = updatedPrompt;
           }
+          console.log(`Reverted prompt ${prompt.name} to default successfully.`);
         } catch (error) {
           console.error('Error reverting prompt:', error);
         }
@@ -502,111 +438,53 @@ export default {
             });
           }
 
-          // Always use the backend API endpoint for goal requests
-          let apiEndpoint = settings.value.backend.api_endpoint;
-          let goalEndpoint = '/api/chat';
-          console.log('Using API endpoint for goal request:', apiEndpoint, 'with endpoint:', goalEndpoint);
-          
-          const response = await fetch(`${apiEndpoint}${goalEndpoint}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: requestBody
-          });
-          if (response.ok) {
-            const contentType = response.headers.get('content-type');
-            if (settings.value.message_display.show_utility) {
-              messages.value.push({
-                sender: 'debug',
-                text: `Response content type: ${contentType}`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'utility'
-              });
-            }
-            if (contentType && contentType.includes('text/event-stream')) {
-              if (settings.value.message_display.show_utility) {
-                messages.value.push({
-                  sender: 'debug',
-                  text: `Detected streaming response. Initiating streaming handler.`,
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'utility'
-                });
-              }
-              // Handle streaming response using ReadableStream directly from the initial response
-              handleStreamingResponseFromResponse(response);
-            } else {
-              if (settings.value.message_display.show_utility) {
-                messages.value.push({
-                  sender: 'bot',
-                  text: `Non-streaming response detected. Waiting for JSON data.`,
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'utility'
-                });
-              }
-              const botResponse = await response.json();
-              console.log('Raw bot response:', botResponse);
-              let responseText = botResponse.text || JSON.stringify(botResponse);
-              let responseType = botResponse.type || 'response';
-              
-              // Handle OpenAI-compatible response format for non-streaming
-              if (botResponse.object === 'chat.completion' && botResponse.choices && botResponse.choices.length > 0) {
-                const choice = botResponse.choices[0];
-                if (choice.message && choice.message.content) {
-                  responseText = choice.message.content;
-                  responseType = 'response';
-                }
-              }
-              
-              if (settings.value.message_display.show_json) {
-                messages.value.push({
-                  sender: 'bot',
-                  text: `Response from backend: ${JSON.stringify(botResponse, null, 2)}`,
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'json'
-                });
-              }
-
-              // Extract detailed LLM request and response if available
-              if (botResponse.llm_request && settings.value.message_display.show_utility) {
-                messages.value.push({
-                  sender: 'bot',
-                  text: `LLM Request: ${JSON.stringify(botResponse.llm_request, null, 2)}`,
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'utility'
-                });
-              }
-              if (botResponse.llm_response && settings.value.message_display.show_utility) {
-                messages.value.push({
-                  sender: 'bot',
-                  text: `LLM Response: ${JSON.stringify(botResponse.llm_response, null, 2)}`,
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'utility'
-                });
-              }
-
-              messages.value.push({
-                sender: 'bot',
-                text: responseText,
-                timestamp: new Date().toLocaleTimeString(),
-                type: responseType
-              });
-            }
+          // Always use the backend API endpoint for chat messages with specific chat ID
+          const result = await apiClient.sendChatMessage(messageText, { chatId });
+          if (result.type === 'streaming') {
+            handleStreamingResponseFromResponse(result.response);
           } else {
-            console.error('Failed to get bot response:', response.statusText);
-            if (settings.value.message_display.show_utility) {
+            const botResponse = result.data;
+            let responseText = botResponse.response || botResponse.text || JSON.stringify(botResponse);
+            let responseType = 'response';
+
+            // Handle new chat message response format
+            if (botResponse.response) {
+              responseText = botResponse.response;
+              responseType = 'response';
+            }
+
+            if (settings.value.message_display.show_json) {
               messages.value.push({
                 sender: 'bot',
-                text: `Error from backend: Status ${response.status} - ${response.statusText}`,
+                text: `Response from backend: ${JSON.stringify(botResponse, null, 2)}`,
+                timestamp: new Date().toLocaleTimeString(),
+                type: 'json'
+              });
+            }
+
+            // Extract detailed LLM request and response if available
+            if (botResponse.llm_request && settings.value.message_display.show_utility) {
+              messages.value.push({
+                sender: 'bot',
+                text: `LLM Request: ${JSON.stringify(botResponse.llm_request, null, 2)}`,
                 timestamp: new Date().toLocaleTimeString(),
                 type: 'utility'
               });
             }
+            if (botResponse.llm_response && settings.value.message_display.show_utility) {
+              messages.value.push({
+                sender: 'bot',
+                text: `LLM Response: ${JSON.stringify(botResponse.llm_response, null, 2)}`,
+                timestamp: new Date().toLocaleTimeString(),
+                type: 'utility'
+              });
+            }
+
             messages.value.push({
               sender: 'bot',
-              text: `Error: Unable to connect to the backend. Please ensure the server is running.`,
+              text: responseText,
               timestamp: new Date().toLocaleTimeString(),
-              type: 'response'
+              type: responseType
             });
           }
         } catch (error) {
@@ -995,35 +873,19 @@ export default {
 
     const newChat = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/new`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        if (response.ok) {
-          const newChatData = await response.json();
-          messages.value = [];
-          window.location.hash = `chatId=${newChatData.chatId}`;
-          currentChatId.value = newChatData.chatId;
-          console.log('New Chat created:', newChatData.chatId);
-          // Don't add an automatic welcome message - let the chat start clean
-          // Update chat list
-          chatList.value.push({ chatId: newChatData.chatId, name: newChatData.name || '' });
-        } else {
-          console.error('Failed to create new chat:', response.statusText);
-          messages.value.push({
-            sender: 'bot',
-            text: 'Failed to create new chat. Please check backend.',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
-        }
+        const newChatData = await apiClient.createNewChat();
+        messages.value = [];
+        const newChatId = newChatData.chat_id;
+        window.location.hash = `chatId=${newChatId}`;
+        currentChatId.value = newChatId;
+        console.log('New Chat created:', newChatId);
+        // Update chat list
+        chatList.value.push({ chatId: newChatId, name: '' });
       } catch (error) {
-        console.error('Error creating new chat:', error);
+        console.error('Failed to create new chat:', error);
         messages.value.push({
           sender: 'bot',
-          text: 'Error creating new chat. Please check backend.',
+          text: 'Failed to create new chat. Please check backend.',
           timestamp: new Date().toLocaleTimeString(),
           type: 'response'
         });
@@ -1032,39 +894,14 @@ export default {
 
     const resetChat = async () => {
       try {
-        const chatId = window.location.hash.split('chatId=')[1];
-        if (!chatId) {
-          messages.value.push({
-            sender: 'bot',
-            text: 'No active chat to reset.',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
-          return;
-        }
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}/reset`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+        await apiClient.resetChat();
+        messages.value = [];
+        messages.value.push({
+          sender: 'bot',
+          text: 'Chat reset successfully.',
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'response'
         });
-        if (response.ok) {
-      messages.value = [];
-      messages.value.push({
-        sender: 'bot',
-        text: 'Chat reset successfully.',
-        timestamp: new Date().toLocaleTimeString(),
-        type: 'response'
-      });
-        } else {
-          console.error('Failed to reset chat:', response.statusText);
-          messages.value.push({
-            sender: 'bot',
-            text: 'Failed to reset chat. Please check backend.',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
-        }
       } catch (error) {
         console.error('Error resetting chat:', error);
         messages.value.push({
@@ -1076,8 +913,8 @@ export default {
       }
     };
 
-    const deleteChat = async () => {
-      const chatId = window.location.hash.split('chatId=')[1];
+    const deleteChat = async (specificChatId = null) => {
+      const chatId = specificChatId || window.location.hash.split('chatId=')[1];
       if (!chatId) {
         messages.value.push({
           sender: 'bot',
@@ -1088,40 +925,25 @@ export default {
         return;
       }
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        if (response.ok) {
-          // Remove from local storage
-          localStorage.removeItem(`chat_${chatId}_messages`);
-          // Remove from chat list
-          chatList.value = chatList.value.filter(chat => chat.chatId !== chatId);
-          // If the deleted chat was active, clear messages
-          if (!specificChatId || chatId === currentChatId.value) {
-            messages.value = [];
-            // Update current chat ID to null since no chat is active
-            currentChatId.value = null;
-            window.location.hash = '';
-            messages.value.push({
-              sender: 'bot',
-              text: 'Chat deleted successfully. Click "New Chat" to start a new conversation.',
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'response'
-            });
-          } else {
-            console.log(`Chat ${chatId} deleted successfully.`);
-          }
-        } else {
-          console.error('Failed to delete chat:', response.statusText);
+        await apiClient.deleteChat(chatId);
+        // Remove from local storage
+        localStorage.removeItem(`chat_${chatId}_messages`);
+        // Remove from chat list
+        chatList.value = chatList.value.filter(chat => chat.chatId !== chatId);
+        // If the deleted chat was active, clear messages
+        if (!specificChatId || chatId === currentChatId.value) {
+          messages.value = [];
+          // Update current chat ID to null since no chat is active
+          currentChatId.value = null;
+          window.location.hash = '';
           messages.value.push({
             sender: 'bot',
-            text: 'Failed to delete chat. Please check backend.',
+            text: 'Chat deleted successfully. Click "New Chat" to start a new conversation.',
             timestamp: new Date().toLocaleTimeString(),
             type: 'response'
           });
+        } else {
+          console.log(`Chat ${chatId} deleted successfully.`);
         }
       } catch (error) {
         console.error('Error deleting chat:', error);
@@ -1136,29 +958,16 @@ export default {
 
     const loadChatMessages = async (chatId) => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}`);
-        if (response.ok) {
-          const data = await response.json();
-          messages.value = data.history;
-            console.log(`Loaded chat messages from backend for chat ${chatId}.`);
-        } else {
-          console.error('Failed to load chat messages:', response.statusText);
-          // Fallback to local storage if backend fails
-          const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
-          if (persistedMessages) {
-            messages.value = JSON.parse(persistedMessages);
-            console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
-          } else {
-            messages.value = [];
-          }
-        }
+        const data = await apiClient.getChatMessages(chatId);
+        messages.value = data.history;
+        console.log(`Loaded chat messages from backend for chat ${chatId}.`);
       } catch (error) {
         console.error('Error loading chat messages:', error);
         // Fallback to local storage if backend fails
         const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
         if (persistedMessages) {
           messages.value = JSON.parse(persistedMessages);
-            console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
+          console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
         } else {
           messages.value = [];
         }
@@ -1175,18 +984,8 @@ export default {
       localStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(messages.value));
       // Also save to backend
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}/save`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ messages: messages.value })
-        });
-        if (!response.ok) {
-          console.error('Failed to save chat messages to backend:', response.statusText);
-        } else {
-          console.log('Chat messages saved to backend successfully.');
-        }
+        await apiClient.saveChatMessages(chatId, messages.value);
+        console.log('Chat messages saved to backend successfully.');
       } catch (error) {
         console.error('Error saving chat messages to backend:', error);
       }
@@ -1196,18 +995,8 @@ export default {
     const startBackendServer = async () => {
       backendStarting.value = true;
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/restart`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        if (response.ok) {
-          const result = await response.json();
-          console.log(`Backend server restart initiated: ${result.message}`);
-        } else {
-          console.error('Failed to restart backend server:', response.statusText);
-        }
+        const result = await apiClient.restartBackend();
+        console.log(`Backend server restart initiated: ${result.message}`);
       } catch (error) {
         console.error('Error restarting backend server:', error);
       } finally {
@@ -1218,19 +1007,10 @@ export default {
     // Function to load chat list from backend or local storage
     const loadChatList = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats`);
-        if (response.ok) {
-          const data = await response.json();
-          chatList.value = data.chats || [];
-          console.log(`Loaded chat list from backend with ${chatList.value.length} chats.`);
-        } else {
-          console.error('Failed to load chat list from backend:', response.statusText);
-          // Fallback to local storage
-          loadChatListFromLocalStorage();
-        }
+        // For now, just load from local storage since backend doesn't support multi-chat
+        loadChatListFromLocalStorage();
       } catch (error) {
-        console.error('Error loading chat list from backend:', error);
-        // Fallback to local storage
+        console.error('Error loading chat list:', error);
         loadChatListFromLocalStorage();
       }
     };
@@ -1311,40 +1091,25 @@ export default {
         return;
       }
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chatId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        if (response.ok) {
-          // Remove from local storage
-          localStorage.removeItem(`chat_${chatId}_messages`);
-          // Remove from chat list
-          chatList.value = chatList.value.filter(chat => chat.chatId !== chatId);
-          // If the deleted chat was active, clear messages
-          if (!specificChatId || chatId === currentChatId.value) {
-            messages.value = [];
-            // Update current chat ID to null since no chat is active
-            currentChatId.value = null;
-            window.location.hash = '';
-            messages.value.push({
-              sender: 'bot',
-              text: 'Chat deleted successfully. Click "New Chat" to start a new conversation.',
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'response'
-            });
-          } else {
-            console.log(`Chat ${chatId} deleted successfully.`);
-          }
-        } else {
-          console.error('Failed to delete chat:', response.statusText);
+        await apiClient.deleteChat(chatId);
+        // Remove from local storage
+        localStorage.removeItem(`chat_${chatId}_messages`);
+        // Remove from chat list
+        chatList.value = chatList.value.filter(chat => chat.chatId !== chatId);
+        // If the deleted chat was active, clear messages
+        if (!specificChatId || chatId === currentChatId.value) {
+          messages.value = [];
+          // Update current chat ID to null since no chat is active
+          currentChatId.value = null;
+          window.location.hash = '';
           messages.value.push({
             sender: 'bot',
-            text: 'Failed to delete chat. Please check backend.',
+            text: 'Chat deleted successfully. Click "New Chat" to start a new conversation.',
             timestamp: new Date().toLocaleTimeString(),
             type: 'response'
           });
+        } else {
+          console.log(`Chat ${chatId} deleted successfully.`);
         }
       } catch (error) {
         console.error('Error deleting chat:', error);
