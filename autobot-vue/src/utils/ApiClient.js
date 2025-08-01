@@ -130,7 +130,7 @@ class ApiClient {
   }
 
   async createNewChat() {
-    const response = await this.post('/api/chat/new');
+    const response = await this.post('/api/chats/new');
     return response.json();
   }
 
@@ -155,7 +155,7 @@ class ApiClient {
   }
 
   async resetChat() {
-    const response = await this.post('/api/chat/reset');
+    const response = await this.post('/api/reset');
     return response.json();
   }
 
@@ -187,44 +187,44 @@ class ApiClient {
 
   // Knowledge Base API methods
   async searchKnowledge(query, limit = 10) {
-    const response = await this.post('/api/knowledge/search', { query, limit });
+    const response = await this.post('/api/knowledge_base/search', { query, limit });
     return response.json();
   }
 
   async addTextToKnowledge(text, title = '', source = 'Manual Entry') {
-    const response = await this.post('/api/knowledge/add_text', { text, title, source });
+    const response = await this.post('/api/knowledge_base/add_text', { text, title, source });
     return response.json();
   }
 
   async addUrlToKnowledge(url, method = 'fetch') {
-    const response = await this.post('/api/knowledge/add_url', { url, method });
+    const response = await this.post('/api/knowledge_base/add_url', { url, method });
     return response.json();
   }
 
   async addFileToKnowledge(file) {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await this.post('/api/knowledge/add_file', formData);
+    const response = await this.post('/api/knowledge_base/add_file', formData);
     return response.json();
   }
 
   async exportKnowledge() {
-    const response = await this.get('/api/knowledge/export');
+    const response = await this.get('/api/knowledge_base/export');
     return response.blob();
   }
 
   async cleanupKnowledge() {
-    const response = await this.post('/api/knowledge/cleanup');
+    const response = await this.post('/api/knowledge_base/cleanup');
     return response.json();
   }
 
   async getKnowledgeStats() {
-    const response = await this.get('/api/knowledge/stats');
+    const response = await this.get('/api/knowledge_base/stats');
     return response.json();
   }
 
   async getDetailedKnowledgeStats() {
-    const response = await this.get('/api/knowledge/detailed_stats');
+    const response = await this.get('/api/knowledge_base/detailed_stats');
     return response.json();
   }
 
@@ -288,7 +288,10 @@ class ApiClient {
   }
 
   async deleteFile(path) {
-    const response = await this.delete('/api/files/delete', { path });
+    const response = await this.delete('/api/files/delete', {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
     return response.json();
   }
 

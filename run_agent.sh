@@ -81,7 +81,7 @@ cleanup_port() {
 # Clean up ports before starting
 cleanup_port 8001 "backend"
 cleanup_port 5173 "frontend"
-cleanup_port 5174 "frontend (alternate)"
+
 
 # Ensure user is in docker group and docker command is accessible
 if ! id -nG "$USER" | grep -qw "docker"; then

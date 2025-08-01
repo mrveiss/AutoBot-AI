@@ -10,15 +10,10 @@
     "chat": {
       "auto_scroll": true,
       "max_messages": 100,
-      "default_welcome_message": "Hello! How can I assist you today?",
       "message_retention_days": 30
     },
     "backend": {
-      "use_phi2": false,
       "api_endpoint": "http://localhost:8001",
-      "ollama_endpoint": "http://localhost:11434",
-      "ollama_model": "tinyllama:latest",
-      "streaming": false,
       "server_host": "0.0.0.0",
       "server_port": 8001,
       "chat_data_dir": "",
@@ -29,6 +24,7 @@
       "cors_origins": [],
       "timeout": 60,
       "max_retries": 3,
+      "streaming": true,
       "llm": {
         "provider_type": "local",
         "local": {
@@ -70,7 +66,7 @@
       "font_size": "medium",
       "language": "en",
       "animations": true,
-      "developer_mode": false
+      "developer_mode": true
     },
     "security": {
       "enable_encryption": false,
@@ -78,8 +74,8 @@
     },
     "logging": {
       "log_level": "info",
-      "log_to_file": false,
-      "log_file_path": ""
+      "log_to_file": true,
+      "log_file_path": "logs/"
     },
     "knowledge_base": {
       "enabled": true,
@@ -105,11 +101,11 @@
       },
       "chromadb": {
         "enabled": true,
-        "path": "",
-        "collection_name": ""
+        "path": "data/chromadb/chroma.sqlite3",
+        "collection_name": "autobot_memory"
       },
       "redis": {
-        "enabled": false,
+        "enabled": true,
         "host": "localhost",
         "port": 6379
       }
