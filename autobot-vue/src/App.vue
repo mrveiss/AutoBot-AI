@@ -431,7 +431,7 @@ export default {
       }
       
       try {
-        const response = await apiClient.get('/api/status');
+        const response = await apiClient.get('/api/system/status');
         const data = await response.json();
         if (data.current_llm) {
           currentLLM.value = data.current_llm;
