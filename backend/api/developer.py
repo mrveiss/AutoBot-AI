@@ -72,7 +72,7 @@ class APIRegistry:
 # Global registry instance
 api_registry = APIRegistry()
 
-@router.get("/developer/endpoints")
+@router.get("/endpoints")
 async def get_api_endpoints():
     """Get all registered API endpoints (developer mode)"""
     developer_mode = global_config_manager.get_nested('developer.enabled', False)
@@ -82,7 +82,7 @@ async def get_api_endpoints():
     
     return api_registry.get_all_endpoints()
 
-@router.get("/developer/config")
+@router.get("/config")
 async def get_developer_config():
     """Get developer mode configuration"""
     developer_config = global_config_manager.get_nested('developer', {})
@@ -93,7 +93,7 @@ async def get_developer_config():
         "debug_logging": developer_config.get('debug_logging', False)
     }
 
-@router.post("/developer/config")
+@router.post("/config")
 async def update_developer_config(config: dict):
     """Update developer mode configuration"""
     # Update the configuration
@@ -107,7 +107,7 @@ async def update_developer_config(config: dict):
     logger.info(f"Developer configuration updated: {config}")
     return {"status": "success", "config": current_config}
 
-@router.get("/developer/system-info")
+@router.get("/system-info")
 async def get_system_info():
     """Get system information for debugging"""
     developer_mode = global_config_manager.get_nested('developer.enabled', False)

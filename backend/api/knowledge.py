@@ -52,22 +52,6 @@ async def get_fact_api(fact_id: Optional[int] = None, query: Optional[str] = Non
         raise HTTPException(status_code=500, detail=f"Failed to get fact: {str(e)}")
 
 @router.post("/search")
-async def search_knowledge_base_api(query: str = Form(...), n_results: int = Form(5)):
-    """API to search the vector store in the knowledge base."""
-    try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-        
-        if knowledge_base is None:
-            return {"results": [], "message": "Knowledge base not available"}
-        
-        results = knowledge_base.search(query, n_results)
-        return {"results": results}
-    except Exception as e:
-        logger.error(f"Error searching knowledge base: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to search knowledge base: {str(e)}")
-
-@router.post("/knowledge/search")
 async def search_knowledge(request: dict):
     """Search knowledge base"""
     try:
@@ -101,7 +85,7 @@ async def search_knowledge(request: dict):
             status_code=500, detail=f"Error in knowledge search: {str(e)}")
 
 
-@router.post("/knowledge/add_text")
+@router.post("/add_text")
 async def add_text_to_knowledge(request: dict):
     """Add text to knowledge base"""
     try:
@@ -146,7 +130,7 @@ async def add_text_to_knowledge(request: dict):
             status_code=500, detail=f"Error adding text to knowledge: {str(e)}")
 
 
-@router.post("/knowledge/add_url")
+@router.post("/add_url")
 async def add_url_to_knowledge(request: dict):
     """Add URL to knowledge base"""
     try:
@@ -213,7 +197,7 @@ async def add_url_to_knowledge(request: dict):
             status_code=500, detail=f"Error adding URL to knowledge: {str(e)}")
 
 
-@router.post("/knowledge/add_file")
+@router.post("/add_file")
 async def add_file_to_knowledge(file: UploadFile = File(...)):
     """Add file to knowledge base"""
     try:
@@ -285,7 +269,7 @@ async def add_file_to_knowledge(file: UploadFile = File(...)):
             status_code=500, detail=f"Error adding file to knowledge: {str(e)}")
 
 
-@router.get("/knowledge/export")
+@router.get("/export")
 async def export_knowledge():
     """Export knowledge base"""
     try:
@@ -321,7 +305,7 @@ async def export_knowledge():
             status_code=500, detail=f"Error exporting knowledge: {str(e)}")
 
 
-@router.post("/knowledge/cleanup")
+@router.post("/cleanup")
 async def cleanup_knowledge():
     """Cleanup knowledge base"""
     try:
@@ -350,7 +334,7 @@ async def cleanup_knowledge():
             status_code=500, detail=f"Error cleaning up knowledge: {str(e)}")
 
 
-@router.get("/knowledge/stats")
+@router.get("/stats")
 async def get_knowledge_stats():
     """Get knowledge base statistics"""
     try:
@@ -377,7 +361,7 @@ async def get_knowledge_stats():
             status_code=500, detail=f"Error getting knowledge stats: {str(e)}")
 
 
-@router.get("/knowledge/detailed_stats")
+@router.get("/detailed_stats")
 async def get_detailed_knowledge_stats():
     """Get detailed knowledge base statistics"""
     try:

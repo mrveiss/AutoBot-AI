@@ -10,7 +10,7 @@
           <h3>Chat History</h3>
           <div class="conversation-list">
             <div v-for="chat in chatList" :key="chat.chatId" class="conversation-item" :class="{ 'active': currentChatId === chat.chatId }" @click="switchChat(chat.chatId)">
-              <span>{{ chat.name || getChatPreview(chat.chatId) || `Chat ${chat.chatId.slice(0, 8)}...` }}</span>
+              <span>{{ chat.name || getChatPreview(chat.chatId) || `Chat ${chat.chatId ? chat.chatId.slice(0, 8) : 'Unknown'}...` }}</span>
               <div class="conversation-actions">
                 <button class="action-icon" @click.stop="editChatName(chat.chatId)" title="Edit Name">✎</button>
                 <button class="action-icon delete" @click.stop="deleteSpecificChat(chat.chatId)" title="Delete">🗑️</button>
@@ -860,7 +860,7 @@ export default {
       try {
         const newChatData = await apiClient.createNewChat();
         messages.value = [];
-        const newChatId = newChatData.chat_id;
+        const newChatId = newChatData.chatId; // Backend returns chatId, not chat_id
         window.location.hash = `chatId=${newChatId}`;
         currentChatId.value = newChatId;
         console.log('New Chat created:', newChatId);
