@@ -95,11 +95,7 @@
           <div class="setting-item">
             <label>Current LLM in Use</label>
             <span style="font-weight: bold;">
-              {{ settings.backend.llm.provider_type === 'local' ? 
-                settings.backend.llm.local.provider.charAt(0).toUpperCase() + settings.backend.llm.local.provider.slice(1) + ' - ' + 
-                (settings.backend.llm.local.providers[settings.backend.llm.local.provider].selected_model || 'Not selected') : 
-                settings.backend.llm.cloud.provider.charAt(0).toUpperCase() + settings.backend.llm.cloud.provider.slice(1) + ' - ' + 
-                (settings.backend.llm.cloud.providers[settings.backend.llm.cloud.provider].selected_model || 'Not selected') }}
+              {{ getCurrentLLMDisplay() }}
             </span>
           </div>
           <div class="setting-item">
@@ -643,19 +639,22 @@ export default {
       await loadPrompts();
     };
 
-    // Function to save settings to local storage and backend
+    // Function to save settings to config.yaml via backend
     const saveSettings = async () => {
       try {
-        await apiClient.saveSettings(settings.value);
-        console.log('Settings, including memory configurations, saved successfully to backend.');
+        await apiClient.post('/api/settings/config', settings.value);
+        console.log('Settings saved successfully to config.yaml and reloaded.');
       } catch (error) {
         console.error('Error saving settings to backend:', error);
       }
     };
 
-    // Watch for changes in settings and save them to local storage
+    // Watch for changes in settings and save them to local storage only
+    // Don't auto-save to backend - only save to localStorage for persistence
     watch(settings, () => {
-      localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+      if (isSettingsLoaded.value) {
+        localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+      }
     }, { deep: true });
 
     // Function to load prompts from backend
@@ -755,18 +754,15 @@ export default {
 
     const onProviderTypeChange = async () => {
       await loadModels();
-      await saveSettings();
       await notifyBackendOfProviderChange();
     };
 
     const onLocalProviderChange = async () => {
       await loadModels();
-      await saveSettings();
       await notifyBackendOfProviderChange();
     };
 
     const onCloudProviderChange = async () => {
-      await saveSettings();
       await notifyBackendOfProviderChange();
     };
 
@@ -784,6 +780,32 @@ export default {
         console.log('Backend notified of provider change successfully');
       } catch (error) {
         console.error('Error notifying backend of provider change:', error);
+      }
+    };
+
+    const getCurrentLLMDisplay = () => {
+      if (!settings.value.backend?.llm) return 'Not configured';
+      
+      const providerType = settings.value.backend.llm.provider_type || 'local';
+      
+      if (providerType === 'local') {
+        const provider = settings.value.backend.llm.local?.provider || 'ollama';
+        const selectedModel = settings.value.backend.llm.local?.providers?.[provider]?.selected_model;
+        
+        if (selectedModel) {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}`;
+        } else {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+        }
+      } else {
+        const provider = settings.value.backend.llm.cloud?.provider || 'openai';
+        const selectedModel = settings.value.backend.llm.cloud?.providers?.[provider]?.selected_model;
+        
+        if (selectedModel) {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}`;
+        } else {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+        }
       }
     };
 
@@ -841,6 +863,7 @@ export default {
       onLocalProviderChange,
       onCloudProviderChange,
       notifyBackendOfProviderChange,
+      getCurrentLLMDisplay,
       developerInfo,
       updateDeveloperConfig,
       loadDeveloperInfo,

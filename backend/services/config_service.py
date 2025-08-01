@@ -5,14 +5,10 @@ Eliminates duplication across settings.py, llm.py, and redis.py
 import logging
 import yaml
 import os
-import json
 from typing import Dict, Any, Optional
 from src.config import global_config_manager
 
 logger = logging.getLogger(__name__)
-
-# Path for settings file
-SETTINGS_FILE = "config/settings.json"
 
 
 class ConfigService:
@@ -22,39 +18,134 @@ class ConfigService:
     def get_full_config() -> Dict[str, Any]:
         """Get complete application configuration"""
         try:
+            # Get the current LLM to determine which model is actually being used
+            current_llm = global_config_manager.get_nested('llm_config.default_llm', 'ollama_tinyllama')
+            
+            # Build comprehensive config structure matching frontend expectations
             config_data = {
+                'message_display': {
+                    'show_thoughts': global_config_manager.get_nested('message_display.show_thoughts', True),
+                    'show_json': global_config_manager.get_nested('message_display.show_json', False),
+                    'show_utility': global_config_manager.get_nested('message_display.show_utility', False),
+                    'show_planning': global_config_manager.get_nested('message_display.show_planning', True),
+                    'show_debug': global_config_manager.get_nested('message_display.show_debug', False)
+                },
+                'chat': {
+                    'auto_scroll': global_config_manager.get_nested('chat.auto_scroll', True),
+                    'max_messages': global_config_manager.get_nested('chat.max_messages', 100),
+                    'message_retention_days': global_config_manager.get_nested('chat.message_retention_days', 30)
+                },
                 'backend': {
+                    'api_endpoint': global_config_manager.get_nested('backend.api_endpoint', 'http://localhost:8001'),
                     'server_host': global_config_manager.get_nested('backend.server_host', '0.0.0.0'),
                     'server_port': global_config_manager.get_nested('backend.server_port', 8001),
                     'chat_data_dir': global_config_manager.get_nested('backend.chat_data_dir', 'data/chats'),
+                    'chat_history_file': global_config_manager.get_nested('backend.chat_history_file', 'data/chat_history.json'),
+                    'knowledge_base_db': global_config_manager.get_nested('backend.knowledge_base_db', 'data/knowledge_base.db'),
+                    'reliability_stats_file': global_config_manager.get_nested('backend.reliability_stats_file', 'data/reliability_stats.json'),
+                    'audit_log_file': global_config_manager.get_nested('backend.audit_log_file', 'data/audit.log'),
                     'cors_origins': global_config_manager.get_nested('backend.cors_origins', []),
+                    'timeout': global_config_manager.get_nested('backend.timeout', 60),
+                    'max_retries': global_config_manager.get_nested('backend.max_retries', 3),
+                    'streaming': global_config_manager.get_nested('backend.streaming', False),
                     'llm': {
-                        'provider_type': 'local',  # Always local for this config
+                        'provider_type': 'local',  # Default to local
                         'local': {
-                            'provider': 'ollama',  # Primary provider from config
+                            'provider': 'ollama',  # Default to ollama
                             'providers': {
                                 'ollama': {
                                     'endpoint': global_config_manager.get_nested('llm_config.ollama.host', 'http://localhost:11434') + '/api/generate',
                                     'host': global_config_manager.get_nested('llm_config.ollama.host', 'http://localhost:11434'),
                                     'models': [],  # Will be loaded dynamically
-                                    'configured_models': global_config_manager.get_nested('llm_config.ollama.models', {}),
-                                    'selected_model': global_config_manager.get_nested('llm_config.default_llm', 'ollama_tinyllama')
+                                    'selected_model': current_llm
+                                },
+                                'lmstudio': {
+                                    'endpoint': 'http://localhost:1234/v1',
+                                    'models': [],
+                                    'selected_model': ''
+                                }
+                            }
+                        },
+                        'cloud': {
+                            'provider': 'openai',
+                            'providers': {
+                                'openai': {
+                                    'api_key': global_config_manager.get_nested('llm_config.openai.api_key', ''),
+                                    'endpoint': global_config_manager.get_nested('llm_config.openai.endpoint', 'https://api.openai.com/v1'),
+                                    'models': global_config_manager.get_nested('llm_config.openai.models', ['gpt-3.5-turbo', 'gpt-4']),
+                                    'selected_model': ''
+                                },
+                                'anthropic': {
+                                    'api_key': global_config_manager.get_nested('llm_config.anthropic.api_key', ''),
+                                    'endpoint': global_config_manager.get_nested('llm_config.anthropic.endpoint', 'https://api.anthropic.com/v1'),
+                                    'models': global_config_manager.get_nested('llm_config.anthropic.models', ['claude-3-sonnet-20240229', 'claude-3-haiku-20240307']),
+                                    'selected_model': ''
                                 }
                             }
                         }
                     }
                 },
-                'llm_config': global_config_manager.get('llm_config', {}),
-                'task_transport': global_config_manager.get('task_transport', {}),
+                'ui': {
+                    'theme': global_config_manager.get_nested('ui.theme', 'light'),
+                    'font_size': global_config_manager.get_nested('ui.font_size', 'medium'),
+                    'language': global_config_manager.get_nested('ui.language', 'en'),
+                    'animations': global_config_manager.get_nested('ui.animations', True),
+                    'developer_mode': global_config_manager.get_nested('ui.developer_mode', False)
+                },
+                'security': {
+                    'enable_encryption': global_config_manager.get_nested('security.enable_encryption', False),
+                    'session_timeout_minutes': global_config_manager.get_nested('security.session_timeout_minutes', 30)
+                },
+                'logging': {
+                    'log_level': global_config_manager.get_nested('logging.log_level', 'info'),
+                    'log_to_file': global_config_manager.get_nested('logging.log_to_file', True),
+                    'log_file_path': global_config_manager.get_nested('logging.log_file_path', 'logs/autobot.log')
+                },
+                'knowledge_base': {
+                    'enabled': global_config_manager.get_nested('knowledge_base.enabled', True),
+                    'update_frequency_days': global_config_manager.get_nested('knowledge_base.update_frequency_days', 7)
+                },
+                'voice_interface': {
+                    'enabled': global_config_manager.get_nested('voice_interface.enabled', False),
+                    'voice': global_config_manager.get_nested('voice_interface.voice', 'default'),
+                    'speech_rate': global_config_manager.get_nested('voice_interface.speech_rate', 1.0)
+                },
                 'memory': {
+                    'long_term': {
+                        'enabled': global_config_manager.get_nested('memory.long_term.enabled', True),
+                        'retention_days': global_config_manager.get_nested('memory.long_term.retention_days', 30)
+                    },
+                    'short_term': {
+                        'enabled': global_config_manager.get_nested('memory.short_term.enabled', True),
+                        'duration_minutes': global_config_manager.get_nested('memory.short_term.duration_minutes', 30)
+                    },
+                    'vector_storage': {
+                        'enabled': global_config_manager.get_nested('memory.vector_storage.enabled', True),
+                        'update_frequency_days': global_config_manager.get_nested('memory.vector_storage.update_frequency_days', 7)
+                    },
+                    'chromadb': {
+                        'enabled': global_config_manager.get_nested('memory.chromadb.enabled', True),
+                        'path': global_config_manager.get_nested('memory.chromadb.path', 'data/chromadb'),
+                        'collection_name': global_config_manager.get_nested('memory.chromadb.collection_name', 'autobot_memory')
+                    },
                     'redis': {
                         'enabled': global_config_manager.get_nested('memory.redis.enabled', False),
                         'host': global_config_manager.get_nested('memory.redis.host', 'localhost'),
                         'port': global_config_manager.get_nested('memory.redis.port', 6379)
                     }
                 },
-                'data': global_config_manager.get_nested('data', {}),
-                'hardware_acceleration': global_config_manager.get_nested('hardware_acceleration', {})
+                'developer': {
+                    'enabled': global_config_manager.get_nested('developer.enabled', False),
+                    'enhanced_errors': global_config_manager.get_nested('developer.enhanced_errors', True),
+                    'endpoint_suggestions': global_config_manager.get_nested('developer.endpoint_suggestions', True),
+                    'debug_logging': global_config_manager.get_nested('developer.debug_logging', False)
+                },
+                'prompts': {
+                    'list': [],
+                    'selectedPrompt': None,
+                    'editedContent': '',
+                    'defaults': {}
+                }
             }
             return config_data
         except Exception as e:
@@ -211,54 +302,50 @@ class ConfigService:
             logger.error(f"Error updating Redis config: {str(e)}")
             raise
 
-    @staticmethod
-    def get_settings() -> Dict[str, Any]:
-        """Get settings from settings.json file"""
-        try:
-            if os.path.exists(SETTINGS_FILE):
-                with open(SETTINGS_FILE, 'r') as f:
-                    return json.load(f)
-            logger.info("No settings file found, returning empty dict")
-            return {}
-        except Exception as e:
-            logger.error(f"Error loading settings: {str(e)}")
-            raise
 
     @staticmethod
-    def save_settings(settings_data: Dict[str, Any]) -> Dict[str, str]:
-        """Save settings to settings.json file"""
+    def save_full_config(config_data: Dict[str, Any]) -> Dict[str, str]:
+        """Save complete application configuration to config.yaml and reload"""
         try:
-            os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
-            with open(SETTINGS_FILE, 'w') as f:
-                json.dump(settings_data, f, indent=2)
-            logger.info("Saved settings")
-            return {"status": "success"}
+            # Save configuration to config.yaml
+            ConfigService._save_config_to_file(config_data)
+            
+            # Reload the global config manager to pick up changes
+            global_config_manager.reload()
+            
+            logger.info("Full configuration saved and reloaded successfully")
+            return {"status": "success", "message": "Configuration saved and reloaded successfully"}
         except Exception as e:
-            logger.error(f"Error saving settings: {str(e)}")
+            logger.error(f"Error saving full config: {str(e)}")
             raise
 
     @staticmethod
     def get_backend_settings() -> Dict[str, Any]:
-        """Get backend-specific settings"""
+        """Get backend-specific settings from config.yaml"""
         try:
-            settings = ConfigService.get_settings()
-            return settings.get('backend', {})
+            return global_config_manager.get('backend', {})
         except Exception as e:
             logger.error(f"Error loading backend settings: {str(e)}")
             raise
 
     @staticmethod
     def update_backend_settings(backend_settings: Dict[str, Any]) -> Dict[str, str]:
-        """Update backend-specific settings"""
+        """Update backend-specific settings in config.yaml"""
         try:
-            # Load current settings
-            current_settings = ConfigService.get_settings()
+            # Load current config
+            current_config = global_config_manager.to_dict()
             
             # Update backend settings
-            current_settings['backend'] = backend_settings
+            current_config['backend'] = backend_settings
             
-            # Save updated settings
-            return ConfigService.save_settings(current_settings)
+            # Save updated config to file
+            ConfigService._save_config_to_file(current_config)
+            
+            # Reload the global config manager
+            global_config_manager.reload()
+            
+            logger.info("Updated backend settings in config.yaml")
+            return {"status": "success", "message": "Backend settings updated successfully"}
         except Exception as e:
             logger.error(f"Error updating backend settings: {str(e)}")
             raise
@@ -266,7 +353,8 @@ class ConfigService:
     @staticmethod
     def _save_config_to_file(config: Dict[str, Any]) -> None:
         """Save configuration to config.yaml file"""
-        config_file_path = 'config/config.yaml'
-        os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
+        # Use the same dynamic path resolution as the config manager
+        config_file_path = global_config_manager.base_config_file
+        config_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_file_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
