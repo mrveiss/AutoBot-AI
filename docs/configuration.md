@@ -1,588 +1,459 @@
 # AutoBot Configuration Documentation
 
 ## Overview
-AutoBot uses a centralized configuration system managed by the `ConfigManager` class. Configuration is loaded from YAML files and can be overridden by environment variables.
+AutoBot uses a centralized configuration system managed by the `ConfigManager` class in `src/config.py`. The configuration system provides a flexible, layered approach to managing application settings.
 
-## Configuration Files Location
-- **Primary Config**: `config/config.yaml` (runtime configuration)
-- **Template**: `config/config.yaml.template` (default template)
-- **Settings**: `config/settings.json` (runtime settings storage)
+## Configuration Architecture
+
+### Configuration Loading Hierarchy
+1. **Base Configuration**: `config/config.yaml` (main configuration file)
+2. **Runtime Settings**: `config/settings.json` (runtime overrides and user preferences)
+3. **Environment Variables**: `AUTOBOT_*` prefixed environment variables (highest priority)
+
+### Configuration Files Location
+- **Main Config**: `config/config.yaml` (copy from `config/config.yaml.template`)
+- **Template**: `config/config.yaml.template` (default configuration template)
+- **Runtime Settings**: `config/settings.json` (automatically created for runtime changes)
 
 ---
 
-## Configuration File Structure
+## Complete Configuration Reference
 
-### Complete Configuration Example
+### Backend Server Configuration
+
 ```yaml
-# AutoBot Main Configuration File
-version: "1.0"
-project_name: "AutoBot"
-
-# Backend Server Configuration
 backend:
-  host: "0.0.0.0"
-  port: 8001
+  # Server Network Settings
+  server_host: "0.0.0.0"                    # Server bind address
+  server_port: 8001                         # Server port
+  api_endpoint: "http://localhost:8001"     # API base URL
+  
+  # CORS (Cross-Origin Resource Sharing) Settings
   cors_origins:
-    - "http://localhost:8080"
-    - "http://localhost:5173"
+    - "http://localhost:5173"               # Vue.js development server
+    - "http://127.0.0.1:5173"
+    - "http://localhost:8080"               # Alternative frontend ports
+    - "http://127.0.0.1:8080"
     - "http://localhost:3000"
-  static_files:
-    directory: "frontend/static"
-    html: true
+    - "http://127.0.0.1:3000"
+  
+  # Data Storage Paths
+  chat_data_dir: "data/chats"               # Chat sessions directory
+  chat_history_file: "data/chat_history.json"  # Legacy chat history
+  messages_dir: "data/messages"             # Message files directory
+  knowledge_base_db: "data/knowledge_base.db"  # Knowledge base SQLite
+  reliability_stats_file: "data/reliability_stats.json"  # Performance stats
+  audit_log_file: "data/audit.log"         # Security audit log
+  
+  # Request Handling Settings
+  timeout: 60                               # Request timeout (seconds)
+  max_retries: 3                           # Maximum retry attempts
+  streaming: false                         # Enable response streaming
+```
 
-# LLM Configuration
-llm:
-  provider: "ollama"          # Options: ollama, openai, huggingface
-  model: "phi:2.7b"          # Default model to use
-  temperature: 0.7           # Response creativity (0.0-2.0)
-  max_tokens: 2048          # Maximum response length
-  timeout: 30               # Request timeout in seconds
+### LLM (Language Model) Configuration
+
+```yaml
+llm_config:
+  # Model Selection
+  default_llm: "ollama_tinyllama"          # Default LLM identifier
+  task_llm: "ollama_tinyllama"             # Task-specific LLM
   
-  # Provider-specific settings
+  # Ollama Configuration
   ollama:
-    base_url: "http://localhost:11434"
-    models:
-      - "phi:2.7b"
-      - "llama2"
-      - "mistral"
+    host: "http://localhost:11434"         # Ollama server URL
+    port: 11434                            # Ollama server port
+    endpoint: "http://localhost:11434/api/generate"  # Generation endpoint
+    base_url: "http://localhost:11434"     # Base URL for API calls
+    models:                                # Available model mappings
+      tinyllama: "tinyllama:latest"
+      phi2: "phi:latest"
+      llama2: "llama2:latest"
   
+  # OpenAI Configuration
   openai:
-    api_key: "${OPENAI_API_KEY}"  # Environment variable
-    base_url: "https://api.openai.com/v1"
+    api_key: ""                            # OpenAI API key (use env variable)
+    endpoint: "https://api.openai.com/v1"  # OpenAI API endpoint
     models:
       - "gpt-3.5-turbo"
       - "gpt-4"
   
-  huggingface:
-    api_token: "${HUGGINGFACE_TOKEN}"
-    base_url: "https://api-inference.huggingface.co/models"
+  # Anthropic Configuration
+  anthropic:
+    api_key: ""                            # Anthropic API key (use env variable)
+    endpoint: "https://api.anthropic.com/v1"  # Anthropic API endpoint
     models:
-      - "microsoft/DialoGPT-medium"
+      - "claude-3-sonnet-20240229"
+      - "claude-3-haiku-20240307"
+  
+  # LLM Behavior Settings
+  orchestrator_llm_settings:
+    temperature: 0.7                       # Creativity for planning tasks
+  task_llm_settings:
+    temperature: 0.5                       # Consistency for execution tasks
+```
 
-# Memory & Storage Configuration
+### Memory and Storage Configuration
+
+```yaml
 memory:
-  redis:
-    enabled: true
-    host: "localhost"
-    port: 6379
-    password: "${REDIS_PASSWORD}"  # Optional environment variable
-    db: 1                          # Database number for general memory
-    connection_pool:
-      max_connections: 50
-      retry_on_timeout: true
-  
-  sqlite:
-    enabled: true
-    database_path: "data/memory.db"
-    
+  # Long-term Memory
   long_term:
-    enabled: true
-    max_entries: 10000
-    cleanup_interval: 3600  # seconds
-
-# Task Management Configuration
-tasks:
-  transport: "redis"        # Options: redis, local, memory
-  max_concurrent: 5         # Maximum concurrent tasks
-  timeout: 300             # Task timeout in seconds
-  retry_attempts: 3        # Number of retry attempts
-  priority_levels:
-    - "low"
-    - "normal" 
-    - "high"
-    - "urgent"
+    enabled: true                          # Enable persistent memory
+    retention_days: 30                     # Days to retain memory
+    db_path: "data/agent_memory.db"        # SQLite database path
   
-  approval:
-    required_for:
-      - "system_commands"
-      - "file_operations" 
-      - "network_requests"
-    timeout: 60            # Approval timeout in seconds
-
-# LlamaIndex Knowledge Base Configuration
-llama_index:
-  vector_store:
-    type: "redis"          # Options: redis, chroma, memory
-    
-    redis:
-      host: "localhost"
-      port: 6379
-      password: "${REDIS_PASSWORD}"
-      db: 0                # Separate DB for vector storage
-      index_name: "autobot_index"
+  # Short-term Memory
+  short_term:
+    enabled: true                          # Enable session memory
+    duration_minutes: 30                   # Memory duration
   
-  embedding:
-    model: "nomic-embed-text"  # Ollama embedding model
-    dimensions: 768            # Embedding vector dimensions
+  # Vector Storage for Embeddings
+  vector_storage:
+    enabled: true                          # Enable vector operations
+    update_frequency_days: 7               # Update frequency
   
-  chunk_size: 512             # Document chunk size
-  chunk_overlap: 20           # Overlap between chunks
-  
-  retrieval:
-    similarity_top_k: 5       # Number of similar chunks to retrieve
-    similarity_threshold: 0.7  # Minimum similarity score
-
-# Security Configuration
-security:
-  authentication:
-    enabled: false           # Enable/disable authentication
-    session_timeout: 3600    # Session timeout in seconds
-    max_login_attempts: 5    # Maximum failed login attempts
-    lockout_duration: 300    # Account lockout duration in seconds
-  
-  permissions:
-    default_role: "user"     # Default user role
-    roles:
-      user:
-        - "allow_goal_submission"
-        - "allow_chat_control"
-        - "allow_voice_listen"
-        - "allow_voice_speak"
-      admin:
-        - "allow_goal_submission"
-        - "allow_chat_control"
-        - "allow_shell_execute"
-        - "allow_command_approval"
-        - "allow_agent_control"
-        - "allow_voice_listen"
-        - "allow_voice_speak"
-  
-  audit:
-    enabled: true
-    log_file: "data/audit.log"
-    max_file_size: 10485760   # 10MB in bytes
-    backup_count: 5           # Number of backup files to keep
-
-# Logging Configuration
-logging:
-  level: "INFO"              # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  
-  files:
-    backend: "logs/autobot_backend.log"
-    llm_usage: "logs/llm_usage.log"
-    error: "logs/error.log"
-  
-  max_file_size: 10485760    # 10MB
-  backup_count: 5
-  
-  console:
-    enabled: true
-    level: "INFO"
-
-# Data Storage Paths
-data:
-  base_directory: "data"
-  chat_history_file: "data/chat_history.json"
-  knowledge_base_db: "data/knowledge_base.db"
-  reliability_stats: "data/reliability_stats.json"
-  upload_directory: "uploads"
-  
-  chats:
-    directory: "data/chats"
-    max_sessions: 100
-    auto_cleanup: true
-    cleanup_days: 30
-  
+  # ChromaDB Configuration
   chromadb:
-    directory: "data/chromadb"
-    collection_name: "autobot_knowledge"
+    enabled: true                          # Enable ChromaDB
+    path: "data/chromadb"                  # ChromaDB storage path
+    collection_name: "autobot_memory"      # Collection name
+  
+  # Redis Configuration
+  redis:
+    enabled: false                         # Enable Redis (optional)
+    host: "localhost"                      # Redis server host
+    port: 6379                            # Redis server port
+```
 
-# Voice Interface Configuration  
-voice:
-  enabled: false             # Enable/disable voice features
-  continuous_listening: false
-  
-  speech_to_text:
-    provider: "whisper"      # Options: whisper, google, azure
-    model: "base"           # Whisper model size
-    language: "en"          # Language code
-  
-  text_to_speech:
-    provider: "pyttsx3"     # Options: pyttsx3, azure, google
-    voice_rate: 150         # Speaking rate
-    voice_volume: 0.8       # Volume level (0.0-1.0)
+### Security Configuration
 
-# GUI Automation Configuration
-gui:
-  enabled: true
-  screenshot_interval: 1.0   # Seconds between screenshots
-  action_delay: 0.5         # Delay between GUI actions
-  
-  ocr:
-    provider: "tesseract"    # OCR engine
-    confidence_threshold: 60 # Minimum OCR confidence
-  
-  window_management:
-    focus_timeout: 5         # Timeout for window focus operations
-    search_timeout: 10       # Timeout for element search
+```yaml
+security:
+  enable_encryption: false                 # Enable data encryption
+  session_timeout_minutes: 30             # User session timeout
+  audit_log_file: "data/audit.log"       # Audit log file path
+```
 
-# Diagnostics & Monitoring
-diagnostics:
-  enabled: true
-  collection_interval: 60   # Metrics collection interval in seconds
-  
-  system_metrics:
-    cpu: true
-    memory: true
-    disk: true
-    network: true
-  
-  gpu_monitoring:
-    enabled: true
-    nvidia_smi: true        # Use nvidia-smi for GPU stats
-  
-  health_checks:
-    interval: 30            # Health check interval in seconds
-    endpoints:
-      - "http://localhost:11434/api/tags"  # Ollama health
-      - "redis://localhost:6379"          # Redis health
+### Logging Configuration
 
-# Network Configuration
-network:
-  share:
-    enabled: false
-    path: "${NETWORK_SHARE_PATH}"
-    username: "${NETWORK_SHARE_USERNAME}" 
-    password: "${NETWORK_SHARE_PASSWORD}"
-  
-  proxy:
-    enabled: false
-    http: "${HTTP_PROXY}"
-    https: "${HTTPS_PROXY}"
-    no_proxy: "localhost,127.0.0.1"
+```yaml
+logging:
+  log_level: "info"                       # Log level (debug, info, warning, error)
+  log_to_file: true                       # Enable file logging
+  log_file_path: "logs/autobot.log"       # Log file path
+```
 
-# Development & Debug Settings
-development:
-  debug_mode: false
-  hot_reload: false
-  verbose_logging: false
-  
-  profiling:
-    enabled: false
-    output_directory: "logs/profiling"
-  
-  testing:
-    mock_llm: false
-    mock_redis: false
-    test_data_directory: "tests/data"
+### User Interface Configuration
 
-# Feature Flags
-features:
-  langchain_agent: true      # Enable LangChain integration
-  worker_nodes: true         # Enable distributed worker nodes
-  voice_interface: false     # Enable voice commands
-  gui_automation: true       # Enable GUI control
-  file_browser: true         # Enable file management
-  knowledge_base: true       # Enable knowledge base features
-  chat_history: true         # Enable chat persistence
-  system_commands: true      # Enable system command execution
+```yaml
+ui:
+  theme: "light"                          # UI theme (light, dark)
+  font_size: "medium"                     # Font size (small, medium, large)
+  language: "en"                          # Interface language
+  animations: true                        # Enable UI animations
+  developer_mode: false                   # Show developer features
+```
+
+### Developer Mode Configuration
+
+```yaml
+developer:
+  enabled: false                          # Enable developer mode
+  enhanced_errors: true                   # Show detailed error messages
+  endpoint_suggestions: true              # Suggest similar endpoints on 404
+  debug_logging: false                    # Enable debug logging
+```
+
+### Chat Configuration
+
+```yaml
+chat:
+  auto_scroll: true                       # Auto-scroll to latest messages
+  max_messages: 100                       # Maximum messages per session
+  message_retention_days: 30              # Days to retain chat history
+  default_welcome_message: "Hello! How can I assist you today?"  # Welcome message
+```
+
+### Message Display Configuration
+
+```yaml
+message_display:
+  show_thoughts: true                     # Show AI reasoning process
+  show_json: false                        # Show raw JSON responses
+  show_utility: false                     # Show utility function calls
+  show_planning: true                     # Show planning steps
+  show_debug: false                       # Show debug information
+```
+
+### Knowledge Base Configuration
+
+```yaml
+knowledge_base:
+  enabled: true                           # Enable knowledge base features
+  update_frequency_days: 7                # Update frequency
+  db_path: "data/knowledge_base.db"       # SQLite database path
+```
+
+### Voice Interface Configuration
+
+```yaml
+voice_interface:
+  enabled: false                          # Enable voice features
+  voice: "default"                        # TTS voice selection
+  speech_rate: 1.0                        # Speech rate multiplier
+```
+
+### Hardware Acceleration Configuration
+
+```yaml
+hardware_acceleration:
+  priority:                               # Acceleration priority order
+    - "openvino_npu"                      # Intel NPU (highest priority)
+    - "openvino"                          # OpenVINO auto-select
+    - "cuda"                              # NVIDIA GPU
+    - "cpu"                               # CPU fallback
+```
+
+### Test Configuration
+
+```yaml
+test:
+  chat_history_file: "data/test_chat_history.json"  # Test chat history file
 ```
 
 ---
 
-## Configuration Sections Explained
+## ConfigManager Class
 
-### 1. Backend Server (`backend`)
-Controls the FastAPI web server settings.
+The `ConfigManager` class in `src/config.py` provides the core configuration functionality:
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `host` | string | "0.0.0.0" | Server bind address |
-| `port` | integer | 8001 | Server port number |
-| `cors_origins` | array | ["http://localhost:8080"] | Allowed CORS origins |
-| `static_files.directory` | string | "frontend/static" | Static files directory |
+### Key Features
 
-**Example:**
-```yaml
-backend:
-  host: "127.0.0.1"  # Localhost only
-  port: 9000         # Custom port
-  cors_origins:
-    - "http://localhost:3000"
-    - "https://myapp.com"
+1. **Layered Configuration**: Merges base config, user settings, and environment variables
+2. **Deep Merging**: Nested dictionaries are merged recursively
+3. **Environment Override**: Supports `AUTOBOT_*` environment variables
+4. **Runtime Updates**: Changes can be saved to `settings.json`
+5. **Validation**: Built-in configuration validation
+
+### Main Methods
+
+```python
+from src.config import config
+
+# Get configuration values
+config.get('backend')                     # Get top-level section
+config.get_nested('backend.server_port') # Get nested value with dot notation
+config.get_llm_config()                  # Get LLM config with defaults
+config.get_redis_config()                # Get Redis config with defaults
+config.get_backend_config()              # Get backend config with defaults
+
+# Set configuration values
+config.set('ui.theme', 'dark')           # Set top-level value
+config.set_nested('llm_config.ollama.host', 'http://new-host:11434')
+
+# Save and reload
+config.save_settings()                   # Save to settings.json
+config.reload()                          # Reload from files
+config.validate_config()                 # Validate configuration
 ```
-
-### 2. LLM Configuration (`llm`)
-Controls AI language model settings.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `provider` | string | "ollama" | LLM provider (ollama/openai/huggingface) |
-| `model` | string | "phi:2.7b" | Default model name |
-| `temperature` | float | 0.7 | Response creativity (0.0-2.0) |
-| `max_tokens` | integer | 2048 | Maximum response length |
-| `timeout` | integer | 30 | Request timeout in seconds |
-
-**Provider-Specific Settings:**
-
-**Ollama:**
-```yaml
-llm:
-  ollama:
-    base_url: "http://localhost:11434"
-    models: ["phi:2.7b", "llama2", "mistral"]
-```
-
-**OpenAI:**
-```yaml
-llm:
-  openai:
-    api_key: "${OPENAI_API_KEY}"
-    models: ["gpt-3.5-turbo", "gpt-4"]
-```
-
-### 3. Memory & Storage (`memory`)
-Controls data persistence and caching.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `redis.enabled` | boolean | true | Enable Redis for memory |
-| `redis.host` | string | "localhost" | Redis server address |
-| `redis.port` | integer | 6379 | Redis server port |
-| `redis.db` | integer | 1 | Redis database number |
-| `sqlite.enabled` | boolean | true | Enable SQLite storage |
-
-**Redis Configuration:**
-```yaml
-memory:
-  redis:
-    enabled: true
-    host: "redis.example.com"
-    port: 6380
-    password: "secure_password"
-    db: 2
-    connection_pool:
-      max_connections: 100
-```
-
-### 4. Task Management (`tasks`)
-Controls task execution and scheduling.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `transport` | string | "redis" | Task transport method |
-| `max_concurrent` | integer | 5 | Maximum concurrent tasks |
-| `timeout` | integer | 300 | Task timeout in seconds |
-| `retry_attempts` | integer | 3 | Number of retry attempts |
-
-### 5. Knowledge Base (`llama_index`)
-Controls LlamaIndex vector storage and retrieval.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `vector_store.type` | string | "redis" | Vector store backend |
-| `embedding.model` | string | "nomic-embed-text" | Embedding model |
-| `chunk_size` | integer | 512 | Document chunk size |
-| `retrieval.similarity_top_k` | integer | 5 | Number of results to retrieve |
-
-### 6. Security (`security`)
-Controls authentication and authorization.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `authentication.enabled` | boolean | false | Enable user authentication |
-| `permissions.default_role` | string | "user" | Default user role |
-| `audit.enabled` | boolean | true | Enable audit logging |
-
-### 7. Logging (`logging`)
-Controls application logging behavior.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `level` | string | "INFO" | Log level |
-| `max_file_size` | integer | 10485760 | Max log file size (bytes) |
-| `backup_count` | integer | 5 | Number of backup files |
 
 ---
 
 ## Environment Variables
 
-AutoBot supports environment variable substitution in configuration files using `${VARIABLE_NAME}` syntax.
+AutoBot supports environment variable overrides using the `AUTOBOT_` prefix:
 
 ### Common Environment Variables
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `OPENAI_API_KEY` | OpenAI API authentication | `sk-...` |
-| `HUGGINGFACE_TOKEN` | HuggingFace API token | `hf_...` |
-| `REDIS_PASSWORD` | Redis server password | `secure123` |
-| `NETWORK_SHARE_PATH` | Network share mount path | `/mnt/share` |
-| `NETWORK_SHARE_USERNAME` | Network share username | `user` |
-| `NETWORK_SHARE_PASSWORD` | Network share password | `password` |
-| `HTTP_PROXY` | HTTP proxy server | `http://proxy:8080` |
-| `HTTPS_PROXY` | HTTPS proxy server | `https://proxy:8080` |
+| Variable | Config Path | Purpose | Example |
+|----------|-------------|---------|---------|
+| `AUTOBOT_BACKEND_PORT` | `backend.server_port` | Backend server port | `8002` |
+| `AUTOBOT_BACKEND_HOST` | `backend.server_host` | Backend bind address | `127.0.0.1` |
+| `AUTOBOT_OLLAMA_HOST` | `llm_config.ollama.host` | Ollama server URL | `http://ollama:11434` |
+| `AUTOBOT_OLLAMA_PORT` | `llm_config.ollama.port` | Ollama server port | `11434` |
+| `AUTOBOT_OLLAMA_MODEL` | `llm_config.ollama.model` | Default Ollama model | `llama2:latest` |
+| `AUTOBOT_ORCHESTRATOR_LLM` | `llm_config.orchestrator_llm` | Orchestrator LLM | `gpt-4` |
+| `AUTOBOT_REDIS_HOST` | `memory.redis.host` | Redis server host | `redis.example.com` |
+| `AUTOBOT_REDIS_PORT` | `memory.redis.port` | Redis server port | `6380` |
+| `AUTOBOT_REDIS_ENABLED` | `memory.redis.enabled` | Enable/disable Redis | `true` |
+| `AUTOBOT_USE_LANGCHAIN` | `orchestrator.use_langchain` | Enable LangChain | `true` |
 
 ### Setting Environment Variables
 
 **Linux/macOS:**
 ```bash
-export OPENAI_API_KEY="sk-your-api-key-here"
-export REDIS_PASSWORD="your-redis-password"
+export AUTOBOT_BACKEND_PORT=8002
+export AUTOBOT_OLLAMA_HOST=http://localhost:11434
+export AUTOBOT_REDIS_ENABLED=true
 ```
 
 **Windows:**
 ```cmd
-set OPENAI_API_KEY=sk-your-api-key-here
-set REDIS_PASSWORD=your-redis-password
+set AUTOBOT_BACKEND_PORT=8002
+set AUTOBOT_OLLAMA_HOST=http://localhost:11434
+set AUTOBOT_REDIS_ENABLED=true
 ```
 
 **Docker Environment:**
 ```bash
-docker run -e OPENAI_API_KEY="sk-..." -e REDIS_PASSWORD="..." autobot
+docker run -e AUTOBOT_BACKEND_PORT=8002 \
+           -e AUTOBOT_OLLAMA_HOST=http://ollama:11434 \
+           autobot
 ```
 
 ---
 
-## Configuration Methods
+## Configuration Management via API
 
-### 1. Configuration File Editing
+Settings can be managed through the REST API:
 
-Edit `config/config.yaml` directly:
+### Get Current Settings
 ```bash
-nano config/config.yaml
+curl http://localhost:8001/api/settings/
 ```
 
-### 2. API-Based Configuration
-
-Update settings via REST API:
+### Update Settings
 ```bash
-# Get current settings
-curl http://localhost:8001/api/settings
-
-# Update settings
-curl -X POST http://localhost:8001/api/settings \
+curl -X POST http://localhost:8001/api/settings/ \
   -H "Content-Type: application/json" \
-  -d '{"llm": {"temperature": 0.8}}'
+  -d '{
+    "ui": {"theme": "dark"},
+    "chat": {"max_messages": 200}
+  }'
 ```
 
-### 3. Runtime Configuration
-
-Settings can be modified at runtime and will be saved to `config/settings.json`.
-
-### 4. Environment Override
-
-Set environment variables to override config values:
+### Get Backend Settings
 ```bash
-export AUTOBOT_LLM_TEMPERATURE=0.9
-export AUTOBOT_BACKEND_PORT=9000
+curl http://localhost:8001/api/settings/backend
+```
+
+### Update Backend Settings
+```bash
+curl -X POST http://localhost:8001/api/settings/backend \
+  -H "Content-Type: application/json" \
+  -d '{
+    "settings": {
+      "server_port": 8002,
+      "cors_origins": ["http://localhost:3000"]
+    }
+  }'
+```
+
+---
+
+## Configuration Examples
+
+### Minimal Configuration
+```yaml
+# Minimal config for local development
+backend:
+  server_port: 8001
+
+llm_config:
+  default_llm: "ollama_tinyllama"
+  ollama:
+    host: "http://localhost:11434"
+
+memory:
+  chromadb:
+    enabled: true
+```
+
+### Production Configuration
+```yaml
+# Production configuration
+backend:
+  server_host: "0.0.0.0"
+  server_port: 8001
+  cors_origins:
+    - "https://autobot.company.com"
+
+llm_config:
+  default_llm: "openai_gpt4"
+  openai:
+    api_key: ""  # Set via OPENAI_API_KEY env var
+
+memory:
+  redis:
+    enabled: true
+    host: "redis.internal"
+    port: 6379
+  chromadb:
+    enabled: true
+
+security:
+  enable_encryption: true
+  audit_log_file: "/var/log/autobot/audit.log"
+
+logging:
+  log_level: "warning"
+  log_file_path: "/var/log/autobot/autobot.log"
+```
+
+### Development Configuration
+```yaml
+# Development configuration with debugging
+backend:
+  server_port: 8001
+
+llm_config:
+  default_llm: "ollama_phi2"
+  task_llm_settings:
+    temperature: 0.1  # More consistent for testing
+
+ui:
+  developer_mode: true
+
+developer:
+  enabled: true
+  enhanced_errors: true
+  debug_logging: true
+
+logging:
+  log_level: "debug"
+
+message_display:
+  show_thoughts: true
+  show_json: true
+  show_debug: true
 ```
 
 ---
 
 ## Configuration Validation
 
-AutoBot validates configuration on startup and provides detailed error messages for invalid settings.
+The ConfigManager includes built-in validation:
 
-### Common Validation Rules
+```python
+from src.config import validate_config
 
-1. **Port numbers**: Must be between 1-65535
-2. **File paths**: Must be accessible and writable
-3. **URLs**: Must be valid HTTP/HTTPS URLs
-4. **Boolean values**: Must be `true` or `false`
-5. **Numeric ranges**: Temperature (0.0-2.0), timeouts (> 0)
-
-### Validation Examples
-
-**Invalid Configuration:**
-```yaml
-backend:
-  port: 99999  # ERROR: Port out of range
-llm:
-  temperature: 3.0  # ERROR: Temperature too high
+# Validate current configuration
+status = validate_config()
+print(status)
 ```
 
-**Valid Configuration:**
-```yaml
-backend:
-  port: 8080   # OK: Valid port range
-llm:
-  temperature: 0.8  # OK: Valid temperature range
+**Example validation output:**
+```json
+{
+  "config_loaded": true,
+  "llm_config": {
+    "default_llm": "ollama_tinyllama",
+    "orchestrator_llm": "phi:2.7b"
+  },
+  "redis_config": {
+    "enabled": false,
+    "host": "localhost",
+    "port": 6379
+  },
+  "backend_config": {
+    "server_host": "0.0.0.0",
+    "server_port": 8001,
+    "api_endpoint": "http://localhost:8001"
+  },
+  "issues": []
+}
 ```
-
----
-
-## Configuration Templates
-
-### Minimal Configuration
-```yaml
-version: "1.0"
-backend:
-  port: 8001
-llm:
-  provider: "ollama"
-  model: "phi:2.7b"
-memory:
-  redis:
-    enabled: true
-```
-
-### Production Configuration
-```yaml
-version: "1.0"
-backend:
-  host: "0.0.0.0"
-  port: 8001
-llm:
-  provider: "openai"
-  model: "gpt-3.5-turbo"
-  api_key: "${OPENAI_API_KEY}"
-memory:
-  redis:
-    enabled: true
-    host: "redis-cluster.internal"
-    password: "${REDIS_PASSWORD}"
-security:
-  authentication:
-    enabled: true
-  audit:
-    enabled: true
-logging:
-  level: "WARNING"
-```
-
-### Development Configuration
-```yaml
-version: "1.0"
-backend:
-  port: 8001
-llm:
-  provider: "ollama"
-  model: "phi:2.7b"
-development:
-  debug_mode: true
-  verbose_logging: true
-logging:
-  level: "DEBUG"
-```
-
----
-
-## Configuration Best Practices
-
-### 1. Security
-- Store sensitive values in environment variables
-- Never commit API keys or passwords to version control
-- Use strong passwords for Redis and database connections
-- Enable authentication in production environments
-
-### 2. Performance
-- Adjust `max_concurrent` tasks based on system resources
-- Configure appropriate timeouts for your network environment
-- Use Redis connection pooling for high-load scenarios
-- Set reasonable chunk sizes for knowledge base operations
-
-### 3. Reliability
-- Enable audit logging for troubleshooting
-- Configure appropriate retry attempts and timeouts
-- Use backup and cleanup settings for log files
-- Monitor disk space usage with data retention policies
-
-### 4. Monitoring
-- Enable diagnostics and health checks
-- Set appropriate collection intervals
-- Configure log levels based on environment
-- Use proper CORS origins for security
 
 ---
 
@@ -590,59 +461,107 @@ logging:
 
 ### Common Issues
 
-1. **Port Already in Use**
+1. **Configuration File Not Found**
+   ```bash
+   # Copy template to create config file
+   cp config/config.yaml.template config/config.yaml
+   ```
+
+2. **Invalid YAML Syntax**
+   ```bash
+   # Validate YAML syntax
+   python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"
+   ```
+
+3. **Port Already in Use**
    ```yaml
    backend:
-     port: 8002  # Change to available port
+     server_port: 8002  # Use different port
    ```
 
-2. **Redis Connection Failed**
+4. **Ollama Connection Failed**
    ```yaml
-   memory:
-     redis:
-       host: "localhost"  # Verify Redis server address
-       port: 6379         # Verify Redis port
+   llm_config:
+     ollama:
+       host: "http://localhost:11434"  # Verify Ollama is running
    ```
 
-3. **LLM Connection Timeout**
-   ```yaml
-   llm:
-     timeout: 60  # Increase timeout for slow connections
-   ```
-
-4. **File Permission Errors**
+5. **Permission Errors**
    ```bash
-   chmod 755 data/          # Ensure data directory is writable
-   chmod 644 config/*.yaml  # Ensure config files are readable
+   # Ensure directories are writable
+   mkdir -p data logs config
+   chmod 755 data logs config
    ```
 
-### Configuration Validation Command
+### Configuration Debugging
+
+Enable debug logging to troubleshoot configuration issues:
+
+```yaml
+logging:
+  log_level: "debug"
+
+developer:
+  enabled: true
+  debug_logging: true
+```
+
+### Validation Command
 ```bash
 # Validate configuration without starting the application
-python -m src.config --validate
+python -c "from src.config import validate_config; print(validate_config())"
 ```
 
 ---
 
 ## Configuration Migration
 
-When upgrading AutoBot versions, configuration files may need migration:
+When upgrading AutoBot versions:
 
 1. **Backup current configuration:**
    ```bash
    cp config/config.yaml config/config.yaml.backup
+   cp config/settings.json config/settings.json.backup
    ```
 
-2. **Check for new configuration options:**
+2. **Compare with new template:**
    ```bash
    diff config/config.yaml.template config/config.yaml
    ```
 
-3. **Update configuration file** with new required fields
+3. **Update configuration** with new required fields
 
-4. **Validate updated configuration:**
+4. **Test configuration:**
    ```bash
-   python -m src.config --validate
+   python -c "from src.config import config; print('Config loaded successfully')"
    ```
 
-This comprehensive configuration documentation covers all aspects of AutoBot's configuration system, from basic setup to advanced production deployments.
+---
+
+## Best Practices
+
+### Security
+- Store API keys in environment variables, not config files
+- Never commit sensitive data to version control
+- Use secure file permissions for config files
+- Enable audit logging in production
+
+### Performance
+- Use Redis for high-performance deployments
+- Configure appropriate timeouts for your network
+- Set reasonable retention periods for data cleanup
+- Monitor disk space usage with proper log rotation
+
+### Reliability
+- Enable audit logging for troubleshooting
+- Configure appropriate retry settings
+- Use backup strategies for configuration files
+- Test configuration changes in development first
+
+### Development
+- Use developer mode for debugging
+- Enable detailed error messages during development
+- Use separate config files for different environments
+- Document custom configuration changes
+
+This configuration documentation reflects the current AutoBot implementation and provides comprehensive guidance for all configuration scenarios.
