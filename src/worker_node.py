@@ -34,9 +34,11 @@ class WorkerNode:
         self.task_transport_type = global_config_manager.get_nested('task_transport.type', 'local')
         self.redis_client = None
         if self.task_transport_type == "redis":
-            redis_transport_config = global_config_manager.get_nested('task_transport.redis', {})
-            redis_host = redis_transport_config.get('host', 'localhost')
-            redis_port = redis_transport_config.get('port', 6379)
+            # Use memory.redis configuration for consistency
+            memory_config = global_config_manager.get('memory', {})
+            redis_config = memory_config.get('redis', {})
+            redis_host = redis_config.get('host', 'localhost')
+            redis_port = redis_config.get('port', 6379)
             self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
             print(f"Worker connected to Redis at {redis_host}:{redis_port}")
         else:

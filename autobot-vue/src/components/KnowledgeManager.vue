@@ -46,6 +46,234 @@
       </div>
     </div>
 
+    <!-- Knowledge Entries Tab -->
+    <div v-if="activeTab === 'entries'" class="tab-content">
+      <div class="entries-header">
+        <h3>Knowledge Entries</h3>
+        <button @click="showCreateModal = true" class="create-btn">
+          <span class="icon">+</span> Add New Entry
+        </button>
+      </div>
+      
+      <div class="entries-content">
+        <div class="search-bar">
+          <input 
+            type="text" 
+            v-model="entriesSearchQuery" 
+            placeholder="Search entries by content, source, or tags..." 
+            class="search-input"
+          />
+          <button @click="filterEntries" class="search-btn">Search</button>
+          <button @click="refreshEntries" class="refresh-btn">Refresh</button>
+        </div>
+        
+        <div class="entries-stats" v-if="knowledgeEntries.length > 0">
+          <span>{{ filteredKnowledgeEntries.length }} of {{ knowledgeEntries.length }} entries</span>
+        </div>
+        
+        <div class="entries-list" v-if="knowledgeEntries.length > 0">
+          <div v-for="entry in filteredKnowledgeEntries" :key="entry.id" class="entry-item">
+            <div class="entry-header">
+              <div class="entry-title">
+                <h4>{{ getEntryTitle(entry) }}</h4>
+                <div class="entry-tags" v-if="entry.metadata && entry.metadata.tags">
+                  <span v-for="tag in entry.metadata.tags" :key="tag" class="tag">{{ tag }}</span>
+                </div>
+              </div>
+              <div class="entry-actions">
+                <button @click="viewEntry(entry)" class="view-btn" title="View Details">
+                  <span class="icon">👁</span>
+                </button>
+                <button @click="editEntry(entry)" class="edit-btn" title="Edit">
+                  <span class="icon">✏️</span>
+                </button>
+                <button @click="duplicateEntry(entry)" class="duplicate-btn" title="Duplicate">
+                  <span class="icon">📋</span>
+                </button>
+                <button @click="deleteEntry(entry.id)" class="delete-btn" title="Delete">
+                  <span class="icon">🗑️</span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="entry-preview">
+              <p>{{ getEntryPreview(entry) }}</p>
+            </div>
+            
+            <div class="entry-meta">
+              <span class="entry-source" v-if="entry.metadata && entry.metadata.source">
+                <span class="icon">📄</span> {{ entry.metadata.source }}
+              </span>
+              <span class="entry-date" v-if="entry.metadata && entry.metadata.created_at">
+                <span class="icon">📅</span> {{ formatDate(entry.metadata.created_at) }}
+              </span>
+              <span class="entry-collection" v-if="entry.collection">
+                <span class="icon">📁</span> {{ entry.collection }}
+              </span>
+              <span class="entry-links" v-if="entry.metadata && entry.metadata.links && entry.metadata.links.length > 0">
+                <span class="icon">🔗</span> {{ entry.metadata.links.length }} links
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div v-else class="no-entries">
+          <div class="empty-state">
+            <span class="icon large">📚</span>
+            <h4>No knowledge entries found</h4>
+            <p>Start by adding your first knowledge entry or uploading documents.</p>
+            <button @click="showCreateModal = true" class="create-btn primary">
+              Add Your First Entry
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Entry Modal (Create/Edit/View) -->
+    <div v-if="showCreateModal || showEditModal || showViewModal" class="modal-overlay" @click="closeModals">
+      <div class="modal" @click.stop>
+        <div class="modal-header">
+          <h3 v-if="showCreateModal">Create New Entry</h3>
+          <h3 v-else-if="showEditModal">Edit Entry</h3>
+          <h3 v-else>View Entry</h3>
+          <button @click="closeModals" class="close-btn">&times;</button>
+        </div>
+        
+        <div class="modal-body">
+          <form @submit.prevent="saveEntry" v-if="showCreateModal || showEditModal">
+            <div class="form-group">
+              <label for="entry-content">Content *</label>
+              <textarea 
+                id="entry-content"
+                v-model="currentEntry.content" 
+                rows="8" 
+                placeholder="Enter the knowledge content..."
+                required
+              ></textarea>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="entry-source">Source</label>
+                <input 
+                  type="text" 
+                  id="entry-source"
+                  v-model="currentEntry.source" 
+                  placeholder="Document name, URL, or source reference"
+                />
+              </div>
+              
+              <div class="form-group">
+                <label for="entry-collection">Collection</label>
+                <input 
+                  type="text" 
+                  id="entry-collection"
+                  v-model="currentEntry.collection" 
+                  placeholder="Collection name"
+                />
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="entry-tags">Tags</label>
+              <input 
+                type="text" 
+                id="entry-tags"
+                v-model="tagsInput" 
+                placeholder="Enter tags separated by commas"
+                @input="updateTags"
+              />
+              <div class="tags-preview" v-if="currentEntry.tags && currentEntry.tags.length > 0">
+                <span v-for="tag in currentEntry.tags" :key="tag" class="tag">
+                  {{ tag }}
+                  <button type="button" @click="removeTag(tag)" class="tag-remove">&times;</button>
+                </span>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label>Links</label>
+              <div class="links-section">
+                <div class="link-input-group">
+                  <input 
+                    type="url" 
+                    v-model="newLink.url"
+                    placeholder="https://example.com"
+                  />
+                  <input 
+                    type="text" 
+                    v-model="newLink.title"
+                    placeholder="Link title (optional)"
+                  />
+                  <button type="button" @click="addLink" class="add-link-btn">
+                    <span class="icon">🔗</span> Add
+                  </button>
+                </div>
+                
+                <div class="links-list" v-if="currentEntry.links && currentEntry.links.length > 0">
+                  <div v-for="(link, index) in currentEntry.links" :key="index" class="link-item">
+                    <a :href="link.url" target="_blank" class="link-url">
+                      {{ link.title || link.url }}
+                    </a>
+                    <button type="button" @click="removeLink(index)" class="remove-btn">&times;</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="modal-actions">
+              <button type="button" @click="closeModals" class="cancel-btn">Cancel</button>
+              <button type="submit" class="save-btn">
+                {{ showCreateModal ? 'Create Entry' : 'Save Changes' }}
+              </button>
+            </div>
+          </form>
+          
+          <!-- View Mode -->
+          <div v-else class="entry-view">
+            <div class="view-section">
+              <h4>Content</h4>
+              <div class="content-display">{{ currentEntry.content }}</div>
+            </div>
+            
+            <div class="view-meta">
+              <div class="meta-item" v-if="currentEntry.source">
+                <strong>Source:</strong> {{ currentEntry.source }}
+              </div>
+              <div class="meta-item" v-if="currentEntry.collection">
+                <strong>Collection:</strong> {{ currentEntry.collection }}
+              </div>
+              <div class="meta-item" v-if="currentEntry.tags && currentEntry.tags.length > 0">
+                <strong>Tags:</strong>
+                <div class="tags-display">
+                  <span v-for="tag in currentEntry.tags" :key="tag" class="tag">{{ tag }}</span>
+                </div>
+              </div>
+              <div class="meta-item" v-if="currentEntry.created_at">
+                <strong>Created:</strong> {{ formatDate(currentEntry.created_at) }}
+              </div>
+            </div>
+            
+            <div class="view-section" v-if="currentEntry.links && currentEntry.links.length > 0">
+              <h4>Links</h4>
+              <div class="links-display">
+                <div v-for="link in currentEntry.links" :key="link.url" class="link-display">
+                  <span class="icon">🔗</span>
+                  <a :href="link.url" target="_blank">{{ link.title || link.url }}</a>
+                </div>
+              </div>
+            </div>
+            
+            <div class="modal-actions">
+              <button @click="editEntry(currentEntry)" class="edit-btn">Edit Entry</button>
+              <button @click="closeModals" class="close-btn">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Add Content Tab -->
     <div v-if="activeTab === 'add'" class="tab-content">
       <h3>Add Content to Knowledge Base</h3>
@@ -184,6 +412,7 @@ export default {
     const activeTab = ref('search');
     const tabs = [
       { id: 'search', label: 'Search' },
+      { id: 'entries', label: 'Knowledge Entries' },
       { id: 'add', label: 'Add Content' },
       { id: 'manage', label: 'Manage' },
       { id: 'stats', label: 'Statistics' }
@@ -195,6 +424,24 @@ export default {
     const searching = ref(false);
     const searchPerformed = ref(false);
     const lastSearchQuery = ref('');
+
+    // Knowledge Entries functionality
+    const knowledgeEntries = ref([]);
+    const filteredKnowledgeEntries = ref([]);
+    const entriesSearchQuery = ref('');
+    const loading = ref(false);
+    const showCreateModal = ref(false);
+    const showEditModal = ref(false);
+    const showViewModal = ref(false);
+    const currentEntry = ref({
+      content: '',
+      source: '',
+      collection: 'default',
+      tags: [],
+      links: []
+    });
+    const tagsInput = ref('');
+    const newLink = ref({ url: '', title: '' });
 
     // Add content functionality
     const addContentType = ref('text');
@@ -306,6 +553,9 @@ export default {
           addMessage.value = result.message || 'File added successfully!';
           addMessageType.value = 'success';
           selectedFile.value = null;
+          
+          // Refresh knowledge entries list to show the new entry
+          await loadKnowledgeEntries();
           return;
         }
 
@@ -318,6 +568,9 @@ export default {
         
         addMessage.value = result.message || 'Content added successfully!';
         addMessageType.value = 'success';
+
+        // Refresh knowledge entries list to show the new entry
+        await loadKnowledgeEntries();
 
         // Clear form
         if (addContentType.value === 'text') {
@@ -336,13 +589,216 @@ export default {
       }
     };
 
+    // Knowledge Entries functionality
+    const loadKnowledgeEntries = async () => {
+      try {
+        loading.value = true;
+        const response = await apiClient.get('/api/knowledge_base/entries');
+        const data = await response.json();
+        knowledgeEntries.value = data.entries || [];
+        filteredKnowledgeEntries.value = knowledgeEntries.value;
+      } catch (error) {
+        console.error('Error loading knowledge entries:', error);
+        knowledgeEntries.value = [];
+        filteredKnowledgeEntries.value = [];
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    const filterEntries = () => {
+      if (!entriesSearchQuery.value.trim()) {
+        filteredKnowledgeEntries.value = knowledgeEntries.value;
+        return;
+      }
+      
+      const query = entriesSearchQuery.value.toLowerCase();
+      filteredKnowledgeEntries.value = knowledgeEntries.value.filter(entry => {
+        const content = (entry.content || '').toLowerCase();
+        const source = (entry.metadata?.source || '').toLowerCase();
+        const tags = (entry.metadata?.tags || []).join(' ').toLowerCase();
+        const collection = (entry.collection || '').toLowerCase();
+        
+        return content.includes(query) || source.includes(query) || 
+               tags.includes(query) || collection.includes(query);
+      });
+    };
+
+    const refreshEntries = () => {
+      loadKnowledgeEntries();
+    };
+
+    const getEntryTitle = (entry) => {
+      return entry.metadata?.title || entry.metadata?.source || 'Untitled Entry';
+    };
+
+    const getEntryPreview = (entry) => {
+      const content = entry.content || '';
+      return content.length > 150 ? content.substring(0, 150) + '...' : content;
+    };
+
+    const formatDate = (dateString) => {
+      if (!dateString) return 'Unknown';
+      try {
+        return new Date(dateString).toLocaleDateString();
+      } catch {
+        return 'Unknown';
+      }
+    };
+
+    const viewEntry = (entry) => {
+      currentEntry.value = {
+        ...entry,
+        source: entry.metadata?.source || '',
+        collection: entry.collection || 'default',
+        tags: entry.metadata?.tags || [],
+        links: entry.metadata?.links || [],
+        created_at: entry.metadata?.created_at
+      };
+      showViewModal.value = true;
+    };
+
+    const editEntry = (entry) => {
+      currentEntry.value = {
+        ...entry,
+        source: entry.metadata?.source || '',
+        collection: entry.collection || 'default',
+        tags: entry.metadata?.tags || [],
+        links: entry.metadata?.links || []
+      };
+      tagsInput.value = currentEntry.value.tags.join(', ');
+      showViewModal.value = false;
+      showEditModal.value = true;
+    };
+
+    const duplicateEntry = (entry) => {
+      currentEntry.value = {
+        content: entry.content,
+        source: (entry.metadata?.source || '') + ' (Copy)',
+        collection: entry.collection || 'default',
+        tags: [...(entry.metadata?.tags || [])],
+        links: [...(entry.metadata?.links || [])]
+      };
+      tagsInput.value = currentEntry.value.tags.join(', ');
+      showCreateModal.value = true;
+    };
+
+    const deleteEntry = async (entryId) => {
+      if (!confirm('Are you sure you want to delete this entry? This action cannot be undone.')) {
+        return;
+      }
+      
+      try {
+        await apiClient.delete(`/api/knowledge_base/entries/${entryId}`);
+        await loadKnowledgeEntries();
+        showSuccess('Entry deleted successfully');
+      } catch (error) {
+        console.error('Error deleting entry:', error);
+        showError('Failed to delete entry: ' + error.message);
+      }
+    };
+
+    const saveEntry = async () => {
+      try {
+        loading.value = true;
+        
+        const entryData = {
+          content: currentEntry.value.content,
+          collection: currentEntry.value.collection,
+          metadata: {
+            source: currentEntry.value.source,
+            tags: currentEntry.value.tags,
+            links: currentEntry.value.links
+          }
+        };
+
+        if (showEditModal.value) {
+          await apiClient.put(`/api/knowledge_base/entries/${currentEntry.value.id}`, entryData);
+        } else {
+          await apiClient.post('/api/knowledge_base/entries', entryData);
+        }
+        
+        await loadKnowledgeEntries();
+        closeModals();
+        showSuccess(showEditModal.value ? 'Entry updated successfully' : 'Entry created successfully');
+      } catch (error) {
+        console.error('Error saving entry:', error);
+        showError('Failed to save entry: ' + error.message);
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    const closeModals = () => {
+      showCreateModal.value = false;
+      showEditModal.value = false;
+      showViewModal.value = false;
+      currentEntry.value = {
+        content: '',
+        source: '',
+        collection: 'default', 
+        tags: [],
+        links: []
+      };
+      tagsInput.value = '';
+      newLink.value = { url: '', title: '' };
+    };
+
+    const updateTags = () => {
+      const tags = tagsInput.value
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+      currentEntry.value.tags = [...new Set(tags)]; // Remove duplicates
+    };
+
+    const removeTag = (tagToRemove) => {
+      currentEntry.value.tags = currentEntry.value.tags.filter(tag => tag !== tagToRemove);
+      tagsInput.value = currentEntry.value.tags.join(', ');
+    };
+
+    const addLink = () => {
+      if (!newLink.value.url.trim()) return;
+      
+      const link = {
+        url: newLink.value.url.trim(),
+        title: newLink.value.title.trim() || newLink.value.url.trim()
+      };
+      
+      if (!currentEntry.value.links) {
+        currentEntry.value.links = [];
+      }
+      
+      // Check for duplicates
+      const exists = currentEntry.value.links.some(l => l.url === link.url);
+      if (!exists) {
+        currentEntry.value.links.push(link);
+      }
+      
+      newLink.value = { url: '', title: '' };
+    };
+
+    const removeLink = (index) => {
+      currentEntry.value.links.splice(index, 1);
+    };
+
+    const showSuccess = (message) => {
+      // You can implement a toast notification system here
+      console.log('Success:', message);
+    };
+
+    const showError = (message) => {
+      // You can implement a toast notification system here  
+      console.error('Error:', message);
+    };
+
     // Manage functionality
     const exportKnowledgeBase = async () => {
       exporting.value = true;
       manageMessage.value = '';
       
       try {
-        await apiClient.downloadFile('/api/knowledge/export', `knowledge_base_export_${new Date().toISOString().split('T')[0]}.json`);
+        await apiClient.downloadFile('/api/knowledge/export/download', `knowledge_base_export_${new Date().toISOString().split('T')[0]}.json`);
         manageMessage.value = 'Knowledge base exported successfully!';
         manageMessageType.value = 'success';
       } catch (error) {
@@ -411,6 +867,7 @@ export default {
     onMounted(() => {
       loadSettings();
       loadStats();
+      loadKnowledgeEntries();
     });
 
     return {
@@ -425,6 +882,36 @@ export default {
       searchPerformed,
       lastSearchQuery,
       performSearch,
+      
+      // Knowledge Entries
+      knowledgeEntries,
+      filteredKnowledgeEntries,
+      entriesSearchQuery,
+      loading,
+      showCreateModal,
+      showEditModal,
+      showViewModal,
+      currentEntry,
+      tagsInput,
+      newLink,
+      loadKnowledgeEntries,
+      filterEntries,
+      refreshEntries,
+      getEntryTitle,
+      getEntryPreview,
+      formatDate,
+      viewEntry,
+      editEntry,
+      duplicateEntry,
+      deleteEntry,
+      saveEntry,
+      closeModals,
+      updateTags,
+      removeTag,
+      addLink,
+      removeLink,
+      showSuccess,
+      showError,
       
       // Add content
       addContentType,
@@ -805,6 +1292,542 @@ export default {
   border: 1px solid #f5c6cb;
 }
 
+/* Knowledge Entries Styles */
+.entries-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.entries-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.create-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.create-btn:hover {
+  background: #218838;
+}
+
+.create-btn.primary {
+  background: #007bff;
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+.create-btn.primary:hover {
+  background: #0056b3;
+}
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.search-btn, .refresh-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.search-btn {
+  background: #007bff;
+  color: white;
+}
+
+.search-btn:hover {
+  background: #0056b3;
+}
+
+.refresh-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.refresh-btn:hover {
+  background: #545b62;
+}
+
+.entries-stats {
+  margin-bottom: 15px;
+  color: #666;
+  font-size: 14px;
+}
+
+.entries-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.entry-item {
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: box-shadow 0.2s;
+}
+
+.entry-item:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.entry-title {
+  flex: 1;
+}
+
+.entry-title h4 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.entry-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag {
+  background: #e9ecef;
+  color: #495057;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tag-remove:hover {
+  color: #333;
+}
+
+.entry-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.view-btn, .edit-btn, .delete-btn, .duplicate-btn {
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+}
+
+.view-btn {
+  background: #17a2b8;
+  color: white;
+}
+
+.view-btn:hover {
+  background: #138496;
+}
+
+.edit-btn {
+  background: #28a745;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #218838;
+}
+
+.duplicate-btn {
+  background: #ffc107;
+  color: #212529;
+}
+
+.duplicate-btn:hover {
+  background: #e0a800;
+}
+
+.delete-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.delete-btn:hover {
+  background: #c82333;
+}
+
+.entry-preview {
+  margin-bottom: 15px;
+}
+
+.entry-preview p {
+  margin: 0;
+  color: #666;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  font-size: 12px;
+  color: #666;
+  border-top: 1px solid #f8f9fa;
+  padding-top: 12px;
+}
+
+.entry-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon {
+  font-size: 14px;
+}
+
+.icon.large {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+}
+
+.empty-state h4 {
+  margin: 16px 0 8px;
+  color: #333;
+}
+
+.empty-state p {
+  margin-bottom: 24px;
+  color: #666;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.tags-preview {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.links-section {
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+}
+
+.add-link-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #333;
+}
+
+.add-link-btn:hover {
+  background: #e9ecef;
+}
+
+.links-list {
+  margin-top: 12px;
+}
+
+.link-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.link-url {
+  flex: 1;
+  color: #333;
+  text-decoration: none;
+}
+
+.link-url:hover {
+  text-decoration: underline;
+  color: #007bff;
+}
+
+.remove-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.remove-btn:hover {
+  background: #c82333;
+}
+
+.link-input-group {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.cancel-btn, .save-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.cancel-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: #545b62;
+}
+
+.save-btn {
+  background: #007bff;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #0056b3;
+}
+
+/* Entry View Styles */
+.entry-view {
+  max-width: none;
+}
+
+.view-section {
+  margin-bottom: 20px;
+}
+
+.view-section h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.content-display {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: #333;
+}
+
+.view-meta {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.meta-item {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.meta-item:last-child {
+  margin-bottom: 0;
+}
+
+.meta-item strong {
+  color: #333;
+  margin-right: 8px;
+}
+
+.tags-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.links-display {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.link-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .knowledge-manager {
@@ -833,7 +1856,25 @@ export default {
   }
   
   .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .link-input-group {
+    grid-template-columns: 1fr;
+  }
+  
+  .entry-actions {
+    flex-wrap: wrap;
+  }
+  
+  .entry-meta {
     flex-direction: column;
+    gap: 8px;
+  }
+  
+  .modal {
+    width: 95%;
+    margin: 20px;
   }
 }
 </style>

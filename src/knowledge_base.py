@@ -39,24 +39,25 @@ class KnowledgeBase:
         self.chunk_overlap = global_config_manager.get_nested('llama_index.chunk_overlap', 20)
 
         # Redis configuration for LlamaIndex vector store
-        redis_vector_store_config = global_config_manager.get_nested('llama_index.vector_store.redis', {})
-        self.redis_host = redis_vector_store_config.get('host', 'localhost')
-        self.redis_port = redis_vector_store_config.get('port', 6379)
-        self.redis_password = redis_vector_store_config.get('password', os.getenv('REDIS_PASSWORD'))
-        self.redis_db = redis_vector_store_config.get('db', 0)
-        self.redis_index_name = redis_vector_store_config.get('index_name', 'autobot_knowledge_index')
+        # Use memory.redis configuration for consistency
+        memory_config = global_config_manager.get('memory', {})
+        redis_config = memory_config.get('redis', {})
+        self.redis_host = redis_config.get('host', 'localhost')
+        self.redis_port = redis_config.get('port', 6379)
+        self.redis_password = redis_config.get('password', os.getenv('REDIS_PASSWORD'))
+        self.redis_db = redis_config.get('db', 0)
+        self.redis_index_name = redis_config.get('index_name', 'autobot_knowledge_index')
 
         # Initialize Redis client for direct use (e.g., for facts/logs)
-        # This uses the general memory.redis config, not specifically llama_index.vector_store.redis
-        general_redis_config = global_config_manager.get_redis_config()
+        # This uses the memory.redis configuration for consistency
         self.redis_client = redis.Redis(
-            host=general_redis_config.get('host', 'localhost'),
-            port=general_redis_config.get('port', 6379),
-            password=general_redis_config.get('password', os.getenv('REDIS_PASSWORD')),
-            db=general_redis_config.get('db', 1), # Use db 1 for general memory as per config.yaml
+            host=redis_config.get('host', 'localhost'),
+            port=redis_config.get('port', 6379),
+            password=redis_config.get('password', os.getenv('REDIS_PASSWORD')),
+            db=redis_config.get('db', 1), # Use db 1 for general memory as per config.yaml
             decode_responses=True
         )
-        logging.info(f"Async Redis client initialized for host: {general_redis_config.get('host', 'localhost')}:{general_redis_config.get('port', 6379)} (DB: {general_redis_config.get('db', 1)})")
+        logging.info(f"Async Redis client initialized for host: {redis_config.get('host', 'localhost')}:{redis_config.get('port', 6379)} (DB: {redis_config.get('db', 1)})")
 
         self.llm = None
         self.embed_model = None
@@ -376,6 +377,74 @@ class KnowledgeBase:
         except Exception as e:
             logging.error(f"Error exporting knowledge base data: {str(e)}")
             return []
+
+    async def get_all_facts(self, collection: str = "default") -> List[Dict[str, Any]]:
+        """Get all facts, optionally filtered by collection"""
+        facts = []
+        try:
+            all_keys: List[str] = cast(List[str], await self.redis_client.keys("fact:*"))
+            for key in all_keys:
+                fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
+                if fact_data:
+                    metadata = json.loads(fact_data.get("metadata", "{}"))
+                    fact_collection = metadata.get("collection", "default")
+                    
+                    if collection == "all" or fact_collection == collection:
+                        facts.append({
+                            "id": int(key.split(":")[1]),
+                            "content": fact_data.get("content"),
+                            "metadata": metadata,
+                            "timestamp": fact_data.get("timestamp"),
+                            "collection": fact_collection
+                        })
+            
+            # Sort by timestamp descending
+            facts.sort(key=lambda x: int(x.get("timestamp", "0")), reverse=True)
+            logging.info(f"Retrieved {len(facts)} facts from Redis.")
+            return facts
+        except Exception as e:
+            logging.error(f"Error retrieving all facts from Redis: {str(e)}")
+            return []
+
+    async def update_fact(self, fact_id: int, content: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """Update an existing fact"""
+        try:
+            fact_key = f"fact:{fact_id}"
+            existing_data = await self.redis_client.hgetall(fact_key)
+            
+            if not existing_data:
+                return False
+            
+            # Update with new data
+            import time
+            updated_data = {
+                "content": content,
+                "metadata": json.dumps(metadata) if metadata else "{}",
+                "timestamp": existing_data.get("timestamp", str(int(time.time())))  # Keep original timestamp
+            }
+            
+            await self.redis_client.hset(fact_key, mapping=updated_data)
+            logging.info(f"Fact {fact_id} updated successfully.")
+            return True
+        except Exception as e:
+            logging.error(f"Error updating fact {fact_id}: {str(e)}")
+            return False
+
+    async def delete_fact(self, fact_id: int) -> bool:
+        """Delete a fact by ID"""
+        try:
+            fact_key = f"fact:{fact_id}"
+            result = await self.redis_client.delete(fact_key)
+            
+            if result:
+                logging.info(f"Fact {fact_id} deleted successfully.")
+                return True
+            else:
+                logging.warning(f"Fact {fact_id} not found for deletion.")
+                return False
+        except Exception as e:
+            logging.error(f"Error deleting fact {fact_id}: {str(e)}")
+            return False
 
     async def cleanup_old_entries(self, days_to_keep: int) -> Dict[str, Any]:
         """Remove knowledge base entries (facts) older than a specified number of days."""

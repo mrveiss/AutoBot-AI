@@ -20,12 +20,32 @@ class ConnectionTester:
     async def test_ollama_connection() -> Dict[str, Any]:
         """Test Ollama LLM connection with current configuration"""
         try:
-            # Get default values from config
-            ollama_endpoint_fallback = global_config_manager.get_nested('defaults.llm.ollama.endpoint', 'http://localhost:11434/api/generate')
-            ollama_model_fallback = global_config_manager.get_nested('defaults.llm.ollama.model', 'tinyllama:latest')
+            # Get Ollama configuration from the correct paths
+            # First try the new structure, then fall back to legacy structure
+            ollama_endpoint = None
+            ollama_model = None
             
-            ollama_endpoint = global_config_manager.get_nested('backend.ollama_endpoint', ollama_endpoint_fallback)
-            ollama_model = global_config_manager.get_nested('backend.ollama_model', ollama_model_fallback)
+            # Try new structure first
+            llm_config = global_config_manager.get('backend', {}).get('llm', {})
+            if llm_config.get('provider_type') == 'local' and llm_config.get('local', {}).get('provider') == 'ollama':
+                ollama_providers = llm_config.get('local', {}).get('providers', {})
+                ollama_config = ollama_providers.get('ollama', {})
+                if ollama_config.get('endpoint'):
+                    ollama_endpoint = ollama_config['endpoint']
+                if ollama_config.get('selected_model'):
+                    ollama_model = ollama_config['selected_model']
+            
+            # Fall back to legacy structure if new structure doesn't have the values
+            if not ollama_endpoint:
+                ollama_endpoint = global_config_manager.get_nested('backend.ollama_endpoint', 'http://localhost:11434/api/generate')
+            if not ollama_model:
+                ollama_model = global_config_manager.get_nested('backend.ollama_model', 'phi:2.7b')
+            
+            # Default fallbacks
+            if not ollama_endpoint:
+                ollama_endpoint = 'http://localhost:11434/api/generate'
+            if not ollama_model:
+                ollama_model = 'phi:2.7b'
 
             # Test Ollama connection
             ollama_check_url = ollama_endpoint.replace('/api/generate', '/api/tags')
@@ -76,17 +96,35 @@ class ConnectionTester:
     def test_redis_connection() -> Dict[str, Any]:
         """Test Redis connection with current configuration"""
         try:
+            # First check task_transport config (backwards compatibility)
             task_transport_config = global_config_manager.get('task_transport', {})
+            redis_config = None
+            redis_host = None
+            redis_port = None
+            
+            if task_transport_config.get('type') == 'redis':
+                redis_config = task_transport_config.get('redis', {})
+                redis_host = redis_config.get('host', 'localhost')
+                redis_port = redis_config.get('port', 6379)
+            else:
+                # Check memory.redis config (current structure)
+                memory_config = global_config_manager.get('memory', {})
+                redis_config = memory_config.get('redis', {})
+                
+                if redis_config.get('enabled', False):
+                    redis_host = redis_config.get('host', 'localhost')
+                    redis_port = redis_config.get('port', 6379)
+                else:
+                    return {
+                        "status": "not_configured",
+                        "message": "Redis is not enabled in memory configuration"
+                    }
 
-            if task_transport_config.get('type') != 'redis':
+            if not redis_host or not redis_port:
                 return {
                     "status": "not_configured",
-                    "message": "Redis transport is not configured (type is not 'redis')"
+                    "message": "Redis configuration is incomplete (missing host or port)"
                 }
-
-            redis_config = task_transport_config.get('redis', {})
-            redis_host = redis_config.get('host', 'localhost')
-            redis_port = redis_config.get('port', 6379)
 
             redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
             redis_client.ping()
