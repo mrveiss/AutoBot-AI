@@ -22,6 +22,7 @@ class ConfigService:
             current_llm = global_config_manager.get_nested('llm_config.default_llm', 'ollama_tinyllama')
             
             # Build comprehensive config structure matching frontend expectations
+            # Note: Prompts section is excluded as it's managed separately
             config_data = {
                 'message_display': {
                     'show_thoughts': global_config_manager.get_nested('message_display.show_thoughts', True),
