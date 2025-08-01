@@ -91,6 +91,7 @@ export default {
     const chatList = ref([]);
     const currentChatId = ref(null);
     const isAgentPaused = ref(false);
+    const isSettingsLoaded = ref(false);
     const prompts = ref([]);
     const defaults = ref({});
     let eventSource = null;
@@ -298,11 +299,11 @@ export default {
       }
     };
 
-    // Watch for changes in settings and save them to local storage
+    // Watch for changes in settings and save them to local storage only
+    // Don't auto-save to backend - only save to localStorage for persistence
     watch(settings, () => {
-      saveSettings();
-      if (settings.value.backend) {
-        saveBackendSettings();
+      if (isSettingsLoaded.value) {
+        settingsService.saveSettingsToLocalStorage(settings.value);
       }
     }, { deep: true });
 

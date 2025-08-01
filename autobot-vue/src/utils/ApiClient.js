@@ -22,20 +22,6 @@ class ApiClient {
     }
   }
 
-  // Save settings to localStorage
-  saveSettings(settings) {
-    try {
-      localStorage.setItem('chat_settings', JSON.stringify(settings));
-      this.settings = settings;
-      
-      // Update baseUrl if it changed
-      if (settings?.backend?.api_endpoint) {
-        this.baseUrl = settings.backend.api_endpoint;
-      }
-    } catch (error) {
-      console.error('Error saving settings:', error);
-    }
-  }
 
   // Generic request method with error handling and timeout
   async request(endpoint, options = {}) {
@@ -166,13 +152,28 @@ class ApiClient {
   }
 
   async saveSettings(settings) {
-    const response = await this.post('/api/settings/', { settings });
+    const response = await this.post('/api/settings/', settings);
     const result = await response.json();
     
     // Update local settings
-    this.saveSettings(settings);
+    this.saveSettingsLocally(settings);
     
     return result;
+  }
+
+  // Save settings to localStorage only (renamed to avoid recursion)
+  saveSettingsLocally(settings) {
+    try {
+      localStorage.setItem('chat_settings', JSON.stringify(settings));
+      this.settings = settings;
+      
+      // Update baseUrl if it changed
+      if (settings?.backend?.api_endpoint) {
+        this.baseUrl = settings.backend.api_endpoint;
+      }
+    } catch (error) {
+      console.error('Error saving settings locally:', error);
+    }
   }
 
   async getBackendSettings() {
@@ -413,7 +414,7 @@ class ApiClient {
       this.settings.backend = { api_endpoint: url };
     }
     
-    this.saveSettings(this.settings);
+    this.saveSettingsLocally(this.settings);
   }
 
   // Get current base URL

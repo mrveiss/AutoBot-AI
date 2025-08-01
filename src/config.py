@@ -21,7 +21,9 @@ class ConfigManager:
     """Centralized configuration manager"""
     
     def __init__(self, config_dir: str = "config"):
-        self.config_dir = Path(config_dir)
+        # Find project root dynamically (directory containing this file is src/, parent is project root)
+        self.project_root = Path(__file__).parent.parent
+        self.config_dir = self.project_root / config_dir
         self.base_config_file = self.config_dir / "config.yaml"
         self.settings_file = self.config_dir / "settings.json"
         self._config: Dict[str, Any] = {}
@@ -221,7 +223,8 @@ class ConfigManager:
         defaults = {
             'server_host': os.getenv('AUTOBOT_BACKEND_HOST', '0.0.0.0'),
             'server_port': int(os.getenv('AUTOBOT_BACKEND_PORT', '8001')),
-            'api_endpoint': os.getenv('AUTOBOT_BACKEND_API_ENDPOINT', 'http://localhost:8001')
+            'api_endpoint': os.getenv('AUTOBOT_BACKEND_API_ENDPOINT', 'http://localhost:8001'),
+            'cors_origins': ['http://localhost:5173', 'http://127.0.0.1:5173']  # Vue frontend only
         }
         
         return self._deep_merge(defaults, backend_config)
