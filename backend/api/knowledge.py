@@ -383,3 +383,148 @@ async def get_detailed_knowledge_stats():
         logger.error(f"Error getting detailed knowledge stats: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Error getting detailed knowledge stats: {str(e)}")
+
+@router.get("/entries")
+async def get_all_entries(collection: Optional[str] = None):
+    """Get all knowledge entries, optionally filtered by collection"""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+        
+        if knowledge_base is None:
+            return {"success": True, "entries": []}
+        
+        if collection:
+            entries = await knowledge_base.get_all_facts(collection)
+        else:
+            entries = await knowledge_base.get_all_facts("all")
+        
+        return {
+            "success": True,
+            "entries": entries
+        }
+    except Exception as e:
+        logger.error(f"Error getting entries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/entries")
+async def create_knowledge_entry(entry: dict):
+    """Create a new knowledge entry"""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+        
+        if knowledge_base is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+        
+        content = entry.get('content', '')
+        metadata = entry.get('metadata', {})
+        collection = entry.get('collection', 'default')
+        
+        if not content:
+            raise HTTPException(status_code=400, detail="Content is required")
+        
+        # Add timestamp and collection to metadata
+        metadata['created_at'] = datetime.now().isoformat()
+        metadata['collection'] = collection
+        
+        # Store the fact
+        result = await knowledge_base.store_fact(content, metadata)
+        
+        return {
+            "success": True,
+            "entry_id": result.get("fact_id"),
+            "message": "Knowledge entry created successfully"
+        }
+    except Exception as e:
+        logger.error(f"Error creating knowledge entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/entries/{entry_id}")
+async def update_knowledge_entry(entry_id: str, entry: dict):
+    """Update an existing knowledge entry"""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+        
+        if knowledge_base is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+        
+        content = entry.get('content', '')
+        metadata = entry.get('metadata', {})
+        collection = entry.get('collection', 'default')
+        
+        if not content:
+            raise HTTPException(status_code=400, detail="Content is required")
+        
+        # Add updated timestamp and collection to metadata
+        metadata['updated_at'] = datetime.now().isoformat()
+        metadata['collection'] = collection
+        
+        # Update the entry
+        success = await knowledge_base.update_fact(int(entry_id), content, metadata)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        
+        return {
+            "success": True,
+            "message": "Knowledge entry updated successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating knowledge entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/entries/{entry_id}")
+async def delete_knowledge_entry(entry_id: str):
+    """Delete a knowledge entry"""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+        
+        if knowledge_base is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+        
+        # Delete the entry
+        success = await knowledge_base.delete_fact(int(entry_id))
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        
+        return {
+            "success": True,
+            "message": "Knowledge entry deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting knowledge entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/entries/{entry_id}")
+async def get_knowledge_entry(entry_id: str):
+    """Get a specific knowledge entry"""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+        
+        if knowledge_base is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+        
+        # Get facts with the specific ID
+        facts = await knowledge_base.get_fact(fact_id=int(entry_id))
+        
+        if not facts or len(facts) == 0:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        
+        return {
+            "success": True,
+            "entry": facts[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving knowledge entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

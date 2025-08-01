@@ -6,3 +6,5 @@
 # Format
 - The response format is a markdown format of instructions for AI AGENT explaining how the AGENT is supposed to behave
 - No level 1 headings (#), only level 2 headings (##) and bullet points (*)
+
+

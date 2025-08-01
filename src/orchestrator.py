@@ -47,8 +47,9 @@ class Orchestrator:
         self.redis_client = None
         self.worker_capabilities: Dict[str, Dict[str, Any]] = {}
         self.pending_approvals: Dict[str, asyncio.Future] = {}
-        self.redis_command_approval_request_channel = global_config_manager.get_nested('task_transport.redis.channels.command_approval_request', 'command_approval_request')
-        self.redis_command_approval_response_channel_prefix = global_config_manager.get_nested('task_transport.redis.channels.command_approval_response_prefix', 'command_approval_')
+        # Use default channel names since we're using memory.redis config
+        self.redis_command_approval_request_channel = 'command_approval_request'
+        self.redis_command_approval_response_channel_prefix = 'command_approval_'
         
         self.agent_paused = False
         
@@ -56,9 +57,11 @@ class Orchestrator:
         self.use_langchain = global_config_manager.get_nested('orchestrator.use_langchain', False)
 
         if self.task_transport_type == "redis":
-            redis_transport_config = global_config_manager.get_nested('task_transport.redis', {})
-            redis_host = redis_transport_config.get('host', 'localhost')
-            redis_port = redis_transport_config.get('port', 6379)
+            # Use memory.redis configuration for consistency
+            memory_config = global_config_manager.get('memory', {})
+            redis_config = memory_config.get('redis', {})
+            redis_host = redis_config.get('host', 'localhost')
+            redis_port = redis_config.get('port', 6379)
             try:
                 self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
                 self.redis_client.ping() # Test connection immediately
