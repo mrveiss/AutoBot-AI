@@ -57,3 +57,19 @@ async def get_available_llm_models():
     except Exception as e:
         logger.error(f"Error getting available models: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting available models: {str(e)}")
+
+@router.get("/current")
+async def get_current_llm():
+    """Get current LLM model and configuration"""
+    try:
+        config = ConfigService.get_llm_config()
+        current_model = config.get('model', 'llama3.2')
+        
+        return {
+            "model": current_model,
+            "provider": config.get('provider', 'ollama'),
+            "config": config
+        }
+    except Exception as e:
+        logger.error(f"Error getting current LLM: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting current LLM: {str(e)}")

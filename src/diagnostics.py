@@ -18,7 +18,7 @@ class Diagnostics:
         # Remove config_path and direct config loading
         self.llm_interface = LLMInterface() # LLMInterface now uses global_config_manager
         
-        self.reliability_stats_file = global_config_manager.get_nested('data.reliability_stats_file', 'data/reliability_stats.json')
+        self.reliability_stats_file = global_config_manager.get_nested('data.reliability_stats_file', os.getenv('AUTOBOT_RELIABILITY_STATS_FILE', 'data/reliability_stats.json'))
         self.diagnostics_enabled = global_config_manager.get_nested('diagnostics.enabled', True)
         self.use_llm_for_analysis = global_config_manager.get_nested('diagnostics.use_llm_for_analysis', True)
         self.use_web_search_for_analysis = global_config_manager.get_nested('diagnostics.use_web_search_for_analysis', False)

@@ -19,6 +19,9 @@ import hashlib
 import pickle
 import base64
 
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
+
 @dataclass
 class MemoryEntry:
     """Structured memory entry for consistent data handling"""
@@ -36,13 +39,18 @@ class LongTermMemoryManager:
     Integrates with existing knowledge base and extends to cover all agent memory needs.
     """
     
-    def __init__(self, config_path="config/config.yaml"):
-        self.config_path = os.path.abspath(config_path)
-        self.config = self._load_config()
+    def __init__(self, config_path: Optional[str] = None):
+        # Use centralized configuration manager
+        self.config = global_config_manager.to_dict()
         
-        # Memory database path
+        # Memory database path from centralized config
         memory_config = self.config.get('memory', {})
-        self.db_path = self._resolve_path(memory_config.get('long_term_db_path', 'data/agent_memory.db'))
+        data_config = self.config.get('data', {})
+        default_db_path = os.getenv('AUTOBOT_LONG_TERM_DB_PATH', 'data/agent_memory.db')
+        self.db_path = self._resolve_path(
+            memory_config.get('long_term_db_path') or 
+            data_config.get('long_term_db_path', default_db_path)
+        )
         
         # Memory retention settings
         self.retention_days = memory_config.get('retention_days', 90)
@@ -52,15 +60,6 @@ class LongTermMemoryManager:
         self._init_memory_db()
         
         logging.info(f"Long-term memory manager initialized at {self.db_path}")
-    
-    def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from YAML file"""
-        try:
-            with open(self.config_path, 'r') as f:
-                return yaml.safe_load(f)
-        except FileNotFoundError:
-            logging.warning(f"Config file not found: {self.config_path}. Using defaults.")
-            return {}
     
     def _resolve_path(self, path: str) -> str:
         """Resolve relative paths to absolute paths"""
