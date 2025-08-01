@@ -130,6 +130,32 @@ async def reset_chat(chat_id: str, request: Request):
         logger.error(f"Error resetting chat {chat_id}: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Error resetting chat: {str(e)}"})
 
+@router.post("/chat")
+async def send_chat_message_legacy(chat_message: dict, request: Request):
+    """Send a message to a chat (legacy endpoint for frontend compatibility)."""
+    try:
+        # Extract chat_id and message from the request
+        chat_id = chat_message.get('chatId')
+        message = chat_message.get('message')
+        
+        if not chat_id:
+            return JSONResponse(status_code=400, content={"error": "chatId is required"})
+        
+        if not message:
+            return JSONResponse(status_code=400, content={"error": "message is required"})
+        
+        # Convert to ChatMessage object
+        chat_msg = ChatMessage(message=message)
+        
+        # Call the existing endpoint logic
+        return await send_chat_message(chat_id, chat_msg, request)
+        
+    except Exception as e:
+        logging.error(f"Error in legacy chat endpoint: {str(e)}")
+        return JSONResponse(status_code=500, content={
+            "error": f"Error processing message: {str(e)}"
+        })
+
 @router.post("/chats/{chat_id}/message")
 async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Request):
     """Send a message to a specific chat and get a response."""
