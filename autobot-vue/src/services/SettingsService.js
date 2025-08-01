@@ -75,6 +75,17 @@ export class SettingsService {
   }
 
   /**
+   * Save settings to localStorage only (for deep watchers)
+   */
+  saveSettingsToLocalStorage(settings) {
+    try {
+      localStorage.setItem('chat_settings', JSON.stringify(settings));
+    } catch (error) {
+      console.error('Error saving settings to localStorage:', error);
+    }
+  }
+
+  /**
    * Save backend-specific settings
    */
   async saveBackendSettings() {

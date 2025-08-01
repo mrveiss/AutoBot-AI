@@ -260,16 +260,21 @@ def add_middleware(app: FastAPI) -> None:
     """Add middleware to the FastAPI application."""
     # Enable CORS for frontend on multiple ports using config
     backend_config = global_config_manager.get_backend_config()
-    cors_origins = backend_config.get('cors_origins', ["http://localhost:8080", "http://localhost:5173"])
+    cors_origins = backend_config.get('cors_origins', [])
+    
+    # Use fallback if cors_origins is empty (since get() returns [] when key exists but is empty)
+    if not cors_origins:
+        cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
-    logger.info("CORS middleware added")
+    logger.info(f"CORS middleware added with origins: {cors_origins}")
 
     @app.middleware("http")
     async def add_security_headers(request, call_next):
@@ -323,6 +328,11 @@ def add_api_routes(app: FastAPI) -> None:
             "version_no": "1.0.0",
             "version_time": "2025-06-18 20:00 UTC"
         }
+
+    # Manual OPTIONS handler for debugging CORS issues
+    @api_router.options("/{path:path}")
+    async def handle_options(path: str):
+        return {"message": "OPTIONS request handled"}
 
     # Register utility endpoints
     api_registry.register_router("utility", api_router, "/api")
