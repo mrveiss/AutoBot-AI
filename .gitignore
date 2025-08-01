@@ -1,5 +1,6 @@
 # === PYTHON VIRTUAL ENVIRONMENT ===
 # Virtual environment directories (created by setup_agent.sh)
+AutoBot/
 venvs/
 bin/
 lib/
@@ -20,9 +21,8 @@ __pycache__/
 node_modules/
 autobot-vue/node_modules/
 
-# Package manager lock files (can be regenerated)
-package-lock.json
-autobot-vue/package-lock.json
+# Package manager lock files 
+# Note: package-lock.json should be committed to ensure consistent dependency versions
 yarn.lock
 pnpm-lock.yaml
 
@@ -39,8 +39,9 @@ frontend/static/js/
 static/assets/
 static/js/
 
-# Vue.js build outputs
+# Vue.js build outputs and cache
 autobot-vue/dist/
+autobot-vue/.vite/
 
 # === APPLICATION DATA ===
 # Data directories (user data, chats, messages)
