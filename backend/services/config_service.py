@@ -140,12 +140,6 @@ class ConfigService:
                     'enhanced_errors': global_config_manager.get_nested('developer.enhanced_errors', True),
                     'endpoint_suggestions': global_config_manager.get_nested('developer.endpoint_suggestions', True),
                     'debug_logging': global_config_manager.get_nested('developer.debug_logging', False)
-                },
-                'prompts': {
-                    'list': [],
-                    'selectedPrompt': None,
-                    'editedContent': '',
-                    'defaults': {}
                 }
             }
             return config_data
@@ -308,13 +302,21 @@ class ConfigService:
     def save_full_config(config_data: Dict[str, Any]) -> Dict[str, str]:
         """Save complete application configuration to config.yaml and reload"""
         try:
-            # Save configuration to config.yaml
-            ConfigService._save_config_to_file(config_data)
+            # Create a copy of the config data to avoid modifying the original
+            filtered_config = config_data.copy()
+            
+            # Remove prompts section - prompts are managed separately in prompts/ directory
+            if 'prompts' in filtered_config:
+                logger.info("Removing prompts section from config - prompts are managed in prompts/ directory")
+                del filtered_config['prompts']
+            
+            # Save filtered configuration to config.yaml
+            ConfigService._save_config_to_file(filtered_config)
             
             # Reload the global config manager to pick up changes
             global_config_manager.reload()
             
-            logger.info("Full configuration saved and reloaded successfully")
+            logger.info("Full configuration saved and reloaded successfully (prompts excluded)")
             return {"status": "success", "message": "Configuration saved and reloaded successfully"}
         except Exception as e:
             logger.error(f"Error saving full config: {str(e)}")

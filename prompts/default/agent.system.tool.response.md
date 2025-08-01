@@ -14,4 +14,3 @@ usage:
         "text": "Answer to the user",
     }
 }
-~~~
