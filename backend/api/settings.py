@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 @router.get("/")
 async def get_settings():
-    """Get application settings"""
+    """Get application settings - now uses full config from config.yaml"""
     try:
-        return ConfigService.get_settings()
+        return ConfigService.get_full_config()
     except Exception as e:
         logger.error(f"Error getting settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting settings: {str(e)}")
@@ -20,7 +20,12 @@ async def get_settings():
 async def save_settings(settings_data: dict):
     """Save application settings"""
     try:
-        result = ConfigService.save_settings(settings_data)
+        # Only save if there's actual data to save
+        if not settings_data:
+            logger.warning("Received empty settings data, skipping save")
+            return {"status": "skipped", "message": "No data to save"}
+        
+        result = ConfigService.save_full_config(settings_data)
         return result
     except Exception as e:
         logger.error(f"Error saving settings: {str(e)}")
@@ -53,3 +58,14 @@ async def get_full_config():
     except Exception as e:
         logger.error(f"Error getting full config: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting full config: {str(e)}")
+
+@router.post("/config")
+async def save_full_config(config_data: dict):
+    """Save complete application configuration to config.yaml"""
+    try:
+        # Save the complete configuration to config.yaml and reload
+        result = ConfigService.save_full_config(config_data)
+        return result
+    except Exception as e:
+        logger.error(f"Error saving full config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error saving full config: {str(e)}")
