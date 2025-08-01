@@ -360,7 +360,42 @@
         </div>
       </div>
 
-      
+      <!-- Developer Settings -->
+      <div v-if="activeTab === 'developer' && isSettingsLoaded" class="settings-section">
+        <h3>Developer Mode</h3>
+        <div class="setting-item">
+          <label>Enable Developer Mode</label>
+          <input type="checkbox" v-model="settings.developer.enabled" @change="updateDeveloperConfig" />
+        </div>
+        <div v-if="settings.developer.enabled">
+          <div class="setting-item">
+            <label>Enhanced Error Messages</label>
+            <input type="checkbox" v-model="settings.developer.enhanced_errors" @change="updateDeveloperConfig" />
+          </div>
+          <div class="setting-item">
+            <label>API Endpoint Suggestions</label>
+            <input type="checkbox" v-model="settings.developer.endpoint_suggestions" @change="updateDeveloperConfig" />
+          </div>
+          <div class="setting-item">
+            <label>Debug Logging</label>
+            <input type="checkbox" v-model="settings.developer.debug_logging" @change="updateDeveloperConfig" />
+          </div>
+          <div class="developer-info" v-if="developerInfo">
+            <h4>System Information</h4>
+            <div class="info-item">
+              <strong>Available API Endpoints:</strong> {{ developerInfo.total_endpoints || 0 }}
+            </div>
+            <div class="info-item">
+              <strong>Active Routers:</strong> {{ (developerInfo.available_routers || []).join(', ') }}
+            </div>
+            <div class="settings-actions">
+              <button @click="loadDeveloperInfo">Refresh System Info</button>
+              <button @click="showApiEndpoints">View API Endpoints</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- System Prompts Settings -->
       <div v-if="activeTab === 'prompts' && isSettingsLoaded" class="settings-section">
         <h3>System Prompts</h3>
@@ -396,6 +431,7 @@
 <script>
 import { ref, onMounted, watch, computed } from 'vue';
 import apiClient from '../utils/ApiClient.js';
+import { settingsService } from '../services/SettingsService.js';
 
 export default {
   name: 'SettingsPanel',
@@ -409,7 +445,8 @@ export default {
       { id: 'logging', label: 'Logging' },
       { id: 'knowledgeBase', label: 'Knowledge Base' },
       { id: 'voiceInterface', label: 'Voice Interface' },
-      { id: 'prompts', label: 'System Prompts' }
+      { id: 'prompts', label: 'System Prompts' },
+      { id: 'developer', label: 'Developer' }
     ];
     const activeTab = ref('backend');
     const activeBackendSubTab = ref('memory');
@@ -417,6 +454,7 @@ export default {
     // Settings structure will be populated from backend or local storage
     const settings = ref({});
     const isSettingsLoaded = ref(false);
+    const developerInfo = ref(null);
 
     // Computed property for CORS origins as a string for input field
     const corsOriginsString = computed({
@@ -568,6 +606,12 @@ export default {
         selectedPrompt: null,
         editedContent: '',
         defaults: {}
+      },
+      developer: {
+        enabled: false,
+        enhanced_errors: true,
+        endpoint_suggestions: true,
+        debug_logging: false
       }
     });
 
@@ -743,6 +787,43 @@ export default {
       }
     };
 
+    // Developer mode functions
+    const updateDeveloperConfig = async () => {
+      try {
+        await settingsService.updateDeveloperConfig(settings.value.developer);
+        console.log('Developer configuration updated');
+        if (settings.value.developer.enabled) {
+          await loadDeveloperInfo();
+        }
+      } catch (error) {
+        console.error('Error updating developer config:', error);
+      }
+    };
+
+    const loadDeveloperInfo = async () => {
+      try {
+        const systemInfo = await settingsService.getSystemInfo();
+        const endpoints = await settingsService.getApiEndpoints();
+        developerInfo.value = {
+          ...systemInfo,
+          total_endpoints: endpoints.total_endpoints,
+          available_routers: endpoints.routers
+        };
+      } catch (error) {
+        console.error('Error loading developer info:', error);
+      }
+    };
+
+    const showApiEndpoints = async () => {
+      try {
+        const endpoints = await settingsService.getApiEndpoints();
+        console.log('Available API Endpoints:', endpoints);
+        alert(`Found ${endpoints.total_endpoints} API endpoints across ${endpoints.routers?.length || 0} routers. Check console for details.`);
+      } catch (error) {
+        console.error('Error showing API endpoints:', error);
+      }
+    };
+
     return {
       settings,
       saveSettings,
@@ -759,7 +840,11 @@ export default {
       onProviderTypeChange,
       onLocalProviderChange,
       onCloudProviderChange,
-      notifyBackendOfProviderChange
+      notifyBackendOfProviderChange,
+      developerInfo,
+      updateDeveloperConfig,
+      loadDeveloperInfo,
+      showApiEndpoints
     };
   }
 };
@@ -1047,5 +1132,28 @@ export default {
 
 .settings-actions button:hover {
   background-color: #0056b3;
+}
+
+.developer-info {
+  margin-top: clamp(15px, 2vw, 20px);
+  padding: clamp(10px, 1.5vw, 15px);
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+.developer-info h4 {
+  margin: 0 0 clamp(10px, 1.5vw, 15px) 0;
+  font-size: clamp(14px, 1.6vw, 16px);
+  color: #495057;
+}
+
+.info-item {
+  margin-bottom: clamp(8px, 1.2vw, 10px);
+  font-size: clamp(12px, 1.4vw, 13px);
+}
+
+.info-item strong {
+  color: #343a40;
 }
 </style>

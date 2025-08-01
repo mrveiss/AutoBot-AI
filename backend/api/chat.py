@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Form, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import os
@@ -382,3 +382,83 @@ async def cleanup_messages():
     except Exception as e:
         logging.error(f"Error during cleanup: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Error during cleanup: {str(e)}"})
+
+@router.get("/history")
+async def get_chat_history_api(request: Request):
+    """Retrieves the conversation history from the ChatHistoryManager."""
+    chat_history_manager = request.app.state.chat_history_manager
+    history = chat_history_manager.get_all_messages()
+    total_tokens = sum(len(msg.get('text', '').split()) for msg in history)
+    return {"history": history, "tokens": total_tokens}
+
+@router.post("/reset")
+async def reset_chat_api(request: Request, user_role: str = Form("user")):
+    """Clears the entire chat history."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
+    if not security_layer.check_permission(user_role, "allow_chat_control"):
+        security_layer.audit_log("reset_chat", user_role, "denied", {"reason": "permission_denied"})
+        return JSONResponse(status_code=403, content={"message": "Permission denied to reset chat."})
+    
+    chat_history_manager.clear_history()
+    # Import event_manager here to avoid circular imports
+    from src.event_manager import event_manager
+    await event_manager.publish("chat_reset", {"message": "Chat history cleared."})
+    return {"message": "Chat history cleared successfully."}
+
+@router.post("/new")
+async def new_chat_session_api(request: Request, user_role: str = Form("user")):
+    """Starts a new chat session by clearing the current history."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
+    if not security_layer.check_permission(user_role, "allow_chat_control"):
+        security_layer.audit_log("new_chat", user_role, "denied", {"reason": "permission_denied"})
+        return JSONResponse(status_code=403, content={"message": "Permission denied to start new chat."})
+    
+    chat_history_manager.clear_history()
+    from src.event_manager import event_manager
+    await event_manager.publish("new_chat_session", {"message": "New chat session started."})
+    return {"message": "New chat session started successfully."}
+
+@router.get("/list_sessions")
+async def list_chat_sessions_api(request: Request, user_role: str = Query("user")):
+    """Lists available chat sessions."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
+    if not security_layer.check_permission(user_role, "allow_chat_control"):
+        security_layer.audit_log("list_chat_sessions", user_role, "denied", {"reason": "permission_denied"})
+        return JSONResponse(status_code=403, content={"message": "Permission denied to list chat sessions."})
+    
+    sessions = chat_history_manager.list_sessions()
+    return {"sessions": sessions}
+
+@router.get("/load_session/{session_id}")
+async def load_chat_session_api(session_id: str, request: Request, user_role: str = Query("user")):
+    """Loads a specific chat session."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
+    if not security_layer.check_permission(user_role, "allow_chat_control"):
+        security_layer.audit_log("load_chat_session", user_role, "denied", {"session_id": session_id, "reason": "permission_denied"})
+        return JSONResponse(status_code=403, content={"message": "Permission denied to load chat session."})
+    
+    history = chat_history_manager.load_session(session_id)
+    if history:
+        from src.event_manager import event_manager
+        await event_manager.publish("chat_session_loaded", {"session_id": session_id, "message": "Chat session loaded."})
+        return {"message": f"Session '{session_id}' loaded successfully.", "history": history}
+    else:
+        return JSONResponse(status_code=404, content={"message": f"Session '{session_id}' not found."})
+
+@router.post("/save_session")
+async def save_chat_session_api(request: Request, session_id: str = Form("default_session"), user_role: str = Form("user")):
+    """Saves the current chat history as a named session."""
+    security_layer = request.app.state.security_layer
+    chat_history_manager = request.app.state.chat_history_manager
+    if not security_layer.check_permission(user_role, "allow_chat_control"):
+        security_layer.audit_log("save_chat_session", user_role, "denied", {"session_id": session_id, "reason": "permission_denied"})
+        return JSONResponse(status_code=403, content={"message": "Permission denied to save chat session."})
+    
+    chat_history_manager.save_session(session_id)
+    from src.event_manager import event_manager
+    await event_manager.publish("chat_session_saved", {"session": session_id, "message": "Chat session saved."})
+    return {"message": f"Current chat session saved as '{session_id}'."}

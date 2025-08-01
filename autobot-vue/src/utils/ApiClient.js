@@ -266,6 +266,51 @@ class ApiClient {
     return response.json();
   }
 
+  // File Management API methods
+  async listFiles(path = '') {
+    const response = await this.get(`/api/files/list?path=${encodeURIComponent(path)}`);
+    return response.json();
+  }
+
+  async uploadFile(file, path = '', overwrite = false) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', path);
+    formData.append('overwrite', overwrite.toString());
+    
+    const response = await this.post('/api/files/upload', formData);
+    return response.json();
+  }
+
+  async viewFile(path) {
+    const response = await this.get(`/api/files/view/${encodeURIComponent(path)}`);
+    return response.json();
+  }
+
+  async deleteFile(path) {
+    const response = await this.delete('/api/files/delete', { path });
+    return response.json();
+  }
+
+  async downloadFile(path) {
+    const response = await this.get(`/api/files/download/${encodeURIComponent(path)}`);
+    return response.blob();
+  }
+
+  async createDirectory(path = '', name) {
+    const formData = new FormData();
+    formData.append('path', path);
+    formData.append('name', name);
+    
+    const response = await this.post('/api/files/create_directory', formData);
+    return response.json();
+  }
+
+  async getFileStats() {
+    const response = await this.get('/api/files/stats');
+    return response.json();
+  }
+
   // Utility methods
   async uploadFile(endpoint, file, additionalData = {}) {
     const formData = new FormData();
