@@ -421,6 +421,10 @@ export default {
     const currentLLM = ref('Loading...');
     
     const getCurrentLLM = () => {
+      // If LLM is disconnected, show that instead of model name
+      if (!llmStatus.value.connected) {
+        return 'Disconnected';
+      }
       return currentLLM.value;
     };
     

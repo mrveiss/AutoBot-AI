@@ -9,6 +9,7 @@ AutoBot is a sophisticated autonomous agent that combines modern AI capabilities
 - **Intelligent Task Planning**: Breaks down complex goals into executable steps
 - **Context-Aware Responses**: RAG-powered knowledge base with ChromaDB vector storage
 - **Configurable AI Behavior**: Temperature settings, model selection, and custom prompts
+- **🧠 Prompt Intelligence Sync**: Transforms agent into expert system with operational intelligence from prompt library
 
 ### 🎯 System Interaction
 - **GUI Automation**: Mouse/keyboard control, OCR text recognition, window management
@@ -433,6 +434,149 @@ developer:
 logging:
   log_level: "debug"
 ```
+
+---
+
+## 🧠 Prompt Intelligence Synchronization System
+
+AutoBot features an advanced **Prompt-to-Knowledge Base Synchronization System** that transforms your agent from a basic tool executor into an expert system with operational intelligence.
+
+### 🎯 What It Does
+
+The system automatically imports your carefully crafted prompt library into the knowledge base, making decades of operational intelligence instantly searchable and accessible during agent operations.
+
+### 🚀 Agent Transformation
+
+#### **Before Intelligence Sync:**
+- Generic tool usage with basic descriptions
+- Trial-and-error JSON formatting  
+- Limited error recovery strategies
+- One-size-fits-all behavioral patterns
+
+#### **After Intelligence Sync:**
+- **Contextual Tool Mastery**: Access to proven JSON patterns like `behaviour_adjustment`
+- **Proactive Error Prevention**: Specific recovery strategies for each error type
+- **Domain Expertise Switching**: Automatic adaptation for different task contexts  
+- **Behavioral Intelligence**: Situation-appropriate communication and problem-solving
+
+### 📊 Strategic Import Categories
+
+The system intelligently selects high-value operational knowledge:
+
+#### **✅ IMPORTED (High Intelligence Value):**
+- **Tool Usage Patterns** (`agent.system.tool.*.md`): Exact JSON formats and best practices
+- **Error Recovery Intelligence** (`fw.error*.md`, `fw.code*.md`): Recovery strategies and debugging
+- **Behavioral Intelligence** (`behaviour*.md`, `solving.md`): Decision-making patterns
+- **Framework Response Patterns** (`fw.*.md`): Standardized response templates
+- **Domain Expertise** (`developer/`, `hacker/`, `researcher/`): Specialized knowledge
+- **Memory Management Patterns** (`memory*.md`): Learning and adaptation strategies
+
+#### **❌ EXCLUDED (System Architecture):**
+- **Core Identity** (`agent.system.main.role.md`): Agent's fundamental identity
+- **System Orchestration**: Core system prompts that define architecture
+- **Template Files**: Framework templates and context files
+
+### 🔧 API Endpoints
+
+The system provides comprehensive API endpoints for management:
+
+#### **Synchronization Operations:**
+- **`POST /api/prompt_sync/sync`** - Trigger incremental synchronization
+- **`POST /api/prompt_sync/sync`** (with `force_update: true`) - Full synchronization
+- **`GET /api/prompt_sync/status`** - Get sync statistics and operational status
+- **`DELETE /api/prompt_sync/prompt/{key}`** - Remove specific prompts from knowledge base
+- **`GET /api/prompt_sync/categories`** - View import configuration and patterns
+
+#### **Background Processing:**
+- Large sync operations run as background tasks
+- Real-time status updates and progress tracking
+- Robust error handling with detailed reporting
+
+### 💾 Storage Architecture
+
+#### **Hybrid Storage Strategy:**
+- **Prompts stored as Redis facts** using existing KnowledgeBase infrastructure
+- **Rich metadata structure**: source, prompt_key, category, collection, tags, content_hash
+- **Change detection** using content hashing to avoid unnecessary updates
+- **Collection-based organization** for easy filtering and statistics
+
+#### **Integration Points:**
+1. **Fact Storage**: Leverages existing Redis fact storage with structured metadata
+2. **Update Mechanism**: Uses `update_fact()` for modifying existing prompts
+3. **Deletion Support**: Uses `delete_fact()` for cleanup operations  
+4. **Search Integration**: Uses `get_all_facts()` for finding and filtering prompts
+
+### 🔄 How It Works
+
+#### **System Process:**
+1. **System scans** prompt library using existing PromptManager
+2. **Smart filtering** applies import/exclude patterns to select valuable prompts
+3. **Metadata extraction** generates tags, categories, and descriptions automatically
+4. **Knowledge storage** stores prompts as searchable facts with rich metadata
+5. **Agent enhancement** makes operational intelligence accessible during task planning
+
+#### **Change Detection:**
+- Content hashing prevents unnecessary updates
+- Only modified prompts are processed during incremental syncs
+- Efficient processing of large prompt libraries
+
+### 📈 Expected Results
+
+Your agent will gain access to:
+
+- **60+ operational intelligence patterns** from your extensive prompt library
+- **Context-aware tool usage** with optimal parameter selection
+- **Proactive error prevention** using documented recovery strategies  
+- **Domain expertise switching** based on task requirements
+- **Behavioral adaptation** for situation-appropriate responses
+
+### 🛠️ Implementation Files
+
+#### **Core Components:**
+- **`src/prompt_knowledge_sync.py`** - Main synchronization engine
+- **`backend/api/prompt_sync.py`** - REST API endpoints  
+- **`backend/app_factory.py`** - System integration and registration
+
+#### **Key Features:**
+- **Automatic initialization** when knowledge base is enabled
+- **Dependency injection** for knowledge base instance
+- **Background task support** for large operations
+- **Comprehensive error handling** and logging
+
+### 🎯 Usage Instructions
+
+#### **Initial Setup:**
+1. Ensure Redis is running and configured
+2. Start AutoBot with `./run_agent.sh`
+3. Access the web interface at `http://localhost:5173`
+4. Navigate to Knowledge Manager
+
+#### **Trigger Sync:**
+1. **Via Web Interface**: Use Knowledge Manager sync button
+2. **Via API**: `POST /api/prompt_sync/sync`
+3. **Programmatically**: Import and use `sync_prompts_to_knowledge()` function
+
+#### **Monitor Progress:**
+- Check sync status via `GET /api/prompt_sync/status`
+- View detailed statistics and category breakdowns
+- Monitor background task progress in real-time
+
+### 🔍 Technical Details
+
+#### **Pattern Matching:**
+- Uses regex patterns to identify importable prompts
+- Excludes system-critical prompts that define core architecture
+- Categorizes prompts by operational intelligence value
+
+#### **Metadata Generation:**
+- Automatic tag generation based on content analysis
+- Prompt type classification (tool_guidance, behavioral_pattern, etc.)
+- Change tracking with content hashing
+
+#### **Performance Optimization:**
+- Incremental updates using content hashing
+- Background processing for large libraries
+- Efficient Redis storage with structured metadata
 
 ---
 
