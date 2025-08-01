@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Form
 from fastapi.responses import JSONResponse
 import logging
 from datetime import datetime
@@ -92,29 +92,34 @@ async def get_system_status():
         logger.error(f"Error getting system status: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Error getting system status: {str(e)}"})
 
-@router.get("/files")
-async def list_files():
-    """List files in the project directory"""
-    try:
-        import os
-        base_dir = os.getcwd()
-        files_list = []
-        
-        for item_name in os.listdir(base_dir):
-            if item_name.startswith('.'):  # Skip hidden files
-                continue
-            item_path = os.path.join(base_dir, item_name)
-            is_dir = os.path.isdir(item_path)
-            files_list.append({
-                "name": item_name,
-                "path": item_name,
-                "is_dir": is_dir,
-                "size": os.path.getsize(item_path) if not is_dir else None,
-                "last_modified": os.path.getmtime(item_path)
-            })
-        
-        files_list.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
-        return {"files": files_list}
-    except Exception as e:
-        logger.error(f"Error listing files: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Error listing files: {str(e)}"})
+
+@router.post("/login")
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    """User authentication endpoint"""
+    security_layer = request.app.state.security_layer
+    user_role = security_layer.authenticate_user(username, password)
+    if user_role:
+        security_layer.audit_log("login", username, "success", {"ip": "N/A"})
+        return {"message": "Login successful", "role": user_role}
+    else:
+        security_layer.audit_log("login", username, "failure", {"reason": "invalid_credentials"})
+        return JSONResponse(status_code=401, content={"message": "Invalid credentials"})
+
+@router.get("/ctx_window")
+async def get_context_window():
+    """
+    Retrieves the content of the LLM's context window.
+    For now, this is a placeholder. In a real implementation, this would fetch
+    the actual context provided to the LLM in the last interaction.
+    """
+    mock_context = """
+System Prompt: You are an AI assistant.
+Conversation History:
+User: Hello, how are you?
+Agent: I am an AI assistant, functioning as expected. How can I help you today?
+Relevant Knowledge:
+- AutoBot is an autonomous agent.
+- It uses Ollama for local LLM interactions.
+"""
+    mock_tokens = len(mock_context.split())
+    return {"content": mock_context, "tokens": mock_tokens}

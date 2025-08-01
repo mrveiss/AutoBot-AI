@@ -12,6 +12,7 @@ load_dotenv()
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
+from src.prompt_manager import prompt_manager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,9 +75,30 @@ class LLMInterface:
 
         self.hardware_priority = global_config_manager.get_nested('hardware_acceleration.priority', ["cpu"])
 
-        self.orchestrator_system_prompt = self._load_composite_prompt(global_config_manager.get_nested('prompts.orchestrator', "prompts/default/agent.system.main.md"))
-        self.task_system_prompt = self._load_composite_prompt(global_config_manager.get_nested('prompts.task', "prompts/reflection/agent.system.main.role.md"))
-        self.tool_interpreter_system_prompt = self._load_prompt_from_file(global_config_manager.get_nested('prompts.tool_interpreter', "prompts/tool_interpreter_system_prompt.txt"))
+        # Use centralized prompt manager instead of direct file loading
+        try:
+            orchestrator_prompt_key = global_config_manager.get_nested('prompts.orchestrator_key', 'default.agent.system.main')
+            self.orchestrator_system_prompt = prompt_manager.get(orchestrator_prompt_key)
+        except KeyError:
+            # Fallback to legacy loading for backward compatibility
+            logger.warning(f"Orchestrator prompt not found in prompt manager, using legacy file loading")
+            self.orchestrator_system_prompt = self._load_composite_prompt(global_config_manager.get_nested('prompts.orchestrator', "prompts/default/agent.system.main.md"))
+        
+        try:
+            task_prompt_key = global_config_manager.get_nested('prompts.task_key', 'reflection.agent.system.main.role')
+            self.task_system_prompt = prompt_manager.get(task_prompt_key)
+        except KeyError:
+            # Fallback to legacy loading for backward compatibility
+            logger.warning(f"Task prompt not found in prompt manager, using legacy file loading")
+            self.task_system_prompt = self._load_composite_prompt(global_config_manager.get_nested('prompts.task', "prompts/reflection/agent.system.main.role.md"))
+        
+        try:
+            tool_interpreter_prompt_key = global_config_manager.get_nested('prompts.tool_interpreter_key', 'tool_interpreter_system_prompt')
+            self.tool_interpreter_system_prompt = prompt_manager.get(tool_interpreter_prompt_key)
+        except KeyError:
+            # Fallback to legacy loading for backward compatibility
+            logger.warning(f"Tool interpreter prompt not found in prompt manager, using legacy file loading")
+            self.tool_interpreter_system_prompt = self._load_prompt_from_file(global_config_manager.get_nested('prompts.tool_interpreter', "prompts/tool_interpreter_system_prompt.txt"))
 
     def _load_prompt_from_file(self, file_path: str) -> str:
         try:

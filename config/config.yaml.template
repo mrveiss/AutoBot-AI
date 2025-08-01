@@ -112,6 +112,13 @@ ui:
   animations: true
   developer_mode: false
 
+# Developer Mode Configuration
+developer:
+  enabled: false
+  enhanced_errors: true
+  endpoint_suggestions: true
+  debug_logging: false
+
 # Chat Configuration
 chat:
   auto_scroll: true

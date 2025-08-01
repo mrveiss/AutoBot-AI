@@ -189,13 +189,13 @@ class ConfigManager:
         # Ensure we have sensible defaults
         defaults = {
             'default_llm': 'ollama',
-            'orchestrator_llm': 'phi:2.7b',
-            'task_llm': 'ollama',
+            'orchestrator_llm': os.getenv('AUTOBOT_ORCHESTRATOR_LLM', 'phi:2.7b'),
+            'task_llm': os.getenv('AUTOBOT_TASK_LLM', 'ollama'),
             'ollama': {
-                'host': 'http://localhost:11434',
-                'port': 11434,
-                'model': 'phi:2.7b',
-                'base_url': 'http://localhost:11434'
+                'host': os.getenv('AUTOBOT_OLLAMA_HOST', 'http://localhost:11434'),
+                'port': int(os.getenv('AUTOBOT_OLLAMA_PORT', '11434')),
+                'model': os.getenv('AUTOBOT_OLLAMA_MODEL', 'phi:2.7b'),
+                'base_url': os.getenv('AUTOBOT_OLLAMA_BASE_URL', 'http://localhost:11434')
             }
         }
         
@@ -206,10 +206,10 @@ class ConfigManager:
         redis_config = self.get_nested('memory.redis', {})
         
         defaults = {
-            'enabled': True,
-            'host': 'localhost',
-            'port': 6379,
-            'db': 1
+            'enabled': os.getenv('AUTOBOT_REDIS_ENABLED', 'true').lower() == 'true',
+            'host': os.getenv('AUTOBOT_REDIS_HOST', 'localhost'),
+            'port': int(os.getenv('AUTOBOT_REDIS_PORT', '6379')),
+            'db': int(os.getenv('AUTOBOT_REDIS_DB', '1'))
         }
         
         return self._deep_merge(defaults, redis_config)
@@ -219,9 +219,9 @@ class ConfigManager:
         backend_config = self.get('backend', {})
         
         defaults = {
-            'server_host': '0.0.0.0',
-            'server_port': 8001,
-            'api_endpoint': 'http://localhost:8001'
+            'server_host': os.getenv('AUTOBOT_BACKEND_HOST', '0.0.0.0'),
+            'server_port': int(os.getenv('AUTOBOT_BACKEND_PORT', '8001')),
+            'api_endpoint': os.getenv('AUTOBOT_BACKEND_API_ENDPOINT', 'http://localhost:8001')
         }
         
         return self._deep_merge(defaults, backend_config)

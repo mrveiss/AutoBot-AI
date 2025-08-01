@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, File, UploadFile
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 import logging
 from datetime import datetime
 import tempfile
@@ -13,6 +15,14 @@ logger = logging.getLogger(__name__)
 
 knowledge_base: KnowledgeBase | None = None
 
+class GetFactRequest(BaseModel):
+    fact_id: Optional[int] = None
+    query: Optional[str] = None
+
+class SearchRequest(BaseModel):
+    query: str
+    n_results: int = 5
+
 
 async def init_knowledge_base():
     global knowledge_base
@@ -25,6 +35,37 @@ async def init_knowledge_base():
             logger.error(f"Failed to initialize knowledge base: {str(e)}")
             knowledge_base = None
 
+@router.post("/get_fact")
+async def get_fact_api(fact_id: Optional[int] = None, query: Optional[str] = None):
+    """API to retrieve facts from the knowledge base."""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+        
+        if knowledge_base is None:
+            return {"facts": [], "message": "Knowledge base not available"}
+        
+        facts = knowledge_base.get_fact(fact_id=fact_id, query=query)
+        return {"facts": facts}
+    except Exception as e:
+        logger.error(f"Error getting fact: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get fact: {str(e)}")
+
+@router.post("/search")
+async def search_knowledge_base_api(query: str = Form(...), n_results: int = Form(5)):
+    """API to search the vector store in the knowledge base."""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+        
+        if knowledge_base is None:
+            return {"results": [], "message": "Knowledge base not available"}
+        
+        results = knowledge_base.search(query, n_results)
+        return {"results": results}
+    except Exception as e:
+        logger.error(f"Error searching knowledge base: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to search knowledge base: {str(e)}")
 
 @router.post("/knowledge/search")
 async def search_knowledge(request: dict):

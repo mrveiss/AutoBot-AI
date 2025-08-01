@@ -76,6 +76,8 @@
 <script>
 import { ref, onMounted, nextTick, computed, watch } from 'vue';
 import apiClient from '@/utils/ApiClient.js';
+import chatHistoryService from '@/services/ChatHistoryService.js';
+import settingsService from '@/services/SettingsService.js';
 
 export default {
   name: 'ChatInterface',
@@ -83,31 +85,7 @@ export default {
     const messages = ref([]);
     const inputMessage = ref('');
     const chatMessages = ref(null);
-    // Settings structure to match a comprehensive config file
-    const settings = ref({
-      message_display: {
-        show_thoughts: true,
-        show_json: false, // Default to off as per user feedback
-        show_utility: false, // Default to off as per user feedback
-        show_planning: true,
-        show_debug: false // Default to off to reduce noise
-      },
-      chat: {
-        auto_scroll: true,
-        max_messages: 100
-      },
-      backend: {
-        use_phi2: false,
-        api_endpoint: 'http://localhost:8001',
-        ollama_endpoint: 'http://localhost:11434',
-        ollama_model: 'tinyllama:latest',
-        streaming: false
-      },
-      ui: {
-        theme: 'light', // Options: 'light', 'dark'
-        font_size: 'medium' // Options: 'small', 'medium', 'large'
-      }
-    });
+    const settings = ref(settingsService.getSettings());
     const sidebarCollapsed = ref(false);
     const backendStarting = ref(false);
     const chatList = ref([]);
@@ -183,32 +161,39 @@ export default {
     };
 
     onMounted(async () => {
-      // Check if there are persisted messages for this chat session
-      const chatId = window.location.hash.split('chatId=')[1] || 'default';
-      const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
-      if (persistedMessages) {
-        messages.value = JSON.parse(persistedMessages);
-      } else {
-        // No default welcome message
-        messages.value = [];
-      }
+      // Load chat list and messages using centralized service
+      await chatHistoryService.loadChatList();
+      chatList.value = chatHistoryService.chatList;
       
-      // Load settings from local storage if available
-      const savedSettings = localStorage.getItem('chat_settings');
-      if (savedSettings) {
-        settings.value = JSON.parse(savedSettings);
-      }
+      // Load settings using centralized service
+      settings.value = settingsService.getSettings();
       
       // Check connections first
       await checkConnections();
       
       // Fetch backend settings to override with latest configuration
-      await fetchBackendSettings();
+      await settingsService.fetchBackendSettings();
+      settings.value = settingsService.getSettings(); // Refresh settings after backend fetch
+      
       // Load system prompts on initialization
       await loadPrompts();
       
-      // Set up periodic connection checking
-      setInterval(checkConnections, 10000); // Check every 10 seconds
+      // Handle chat ID from URL
+      let chatId = window.location.hash.split('chatId=')[1];
+      if (chatId) {
+        currentChatId.value = chatId;
+        messages.value = await chatHistoryService.loadChatMessages(chatId);
+      } else if (chatList.value.length > 0) {
+        // Select first available chat if no chat ID in URL
+        chatId = chatList.value[0].chatId;
+        window.location.hash = `chatId=${chatId}`;
+        currentChatId.value = chatId;
+        messages.value = await chatHistoryService.loadChatMessages(chatId);
+      }
+      
+      // Set up periodic connection checking using configurable interval
+      const checkInterval = settingsService.getNestedProperty(settingsService.settings, 'defaults.connection_check_interval') || 10000;
+      setInterval(checkConnections, checkInterval);
     });
     
     // Function to save settings to local storage and backend
