@@ -4,22 +4,21 @@ import datetime
 import json
 from typing import Dict, Any, List, Optional
 
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
+
 class SecurityLayer:
-    def __init__(self, config_path="config/config.yaml"):
-        self.config = self._load_config(config_path)
-        self.security_config = self.config.get('security_config', {})
+    def __init__(self):
+        # Use centralized config manager instead of direct file loading
+        self.security_config = global_config_manager.get('security_config', {})
         self.enable_auth = self.security_config.get('enable_auth', False)
-        self.audit_log_file = self.security_config.get('audit_log_file', 'data/audit.log')
+        self.audit_log_file = self.security_config.get('audit_log_file', os.getenv('AUTOBOT_AUDIT_LOG_FILE', 'data/audit.log'))
         self.roles = self.security_config.get('roles', {})
         self.allowed_users = self.security_config.get('allowed_users', {}) # For simple demo auth
 
         os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
         print(f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}")
         print(f"Audit log file: {self.audit_log_file}")
-
-    def _load_config(self, config_path):
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
 
     def check_permission(self, user_role: str, action_type: str, resource: Optional[str] = None) -> bool:
         """

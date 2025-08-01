@@ -4,8 +4,11 @@ import time
 import logging
 from typing import List, Dict, Any, Optional
 
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
+
 class ChatHistoryManager:
-    def __init__(self, history_file: str = "data/chat_history.json", use_redis: bool = False, redis_host: str = "localhost", redis_port: int = 6379):
+    def __init__(self, history_file: Optional[str] = None, use_redis: Optional[bool] = None, redis_host: Optional[str] = None, redis_port: Optional[int] = None):
         """
         Initializes the ChatHistoryManager.
         
@@ -15,14 +18,20 @@ class ChatHistoryManager:
             redis_host (str): Hostname for Redis server.
             redis_port (int): Port for Redis server.
         """
-        self.history_file = history_file
+        # Load configuration from centralized config manager
+        data_config = global_config_manager.get('data', {})
+        redis_config = global_config_manager.get_redis_config()
+        
+        # Set values using configuration with environment variable overrides
+        self.history_file = history_file or data_config.get('chat_history_file', os.getenv('AUTOBOT_CHAT_HISTORY_FILE', 'data/chat_history.json'))
+        self.use_redis = use_redis if use_redis is not None else redis_config.get('enabled', False)
+        self.redis_host = redis_host or redis_config.get('host', 'localhost')
+        self.redis_port = redis_port or redis_config.get('port', 6379)
+        
         self.history: List[Dict[str, Any]] = []
-        self.use_redis = use_redis
-        self.redis_host = redis_host
-        self.redis_port = redis_port
         self.redis_client = None
 
-        if use_redis:
+        if self.use_redis:
             try:
                 import redis
             except ImportError:
@@ -31,11 +40,11 @@ class ChatHistoryManager:
                 return
 
             try:
-                self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+                self.redis_client = redis.Redis(host=self.redis_host, port=self.redis_port, decode_responses=True)
                 self.redis_client.ping()
                 logging.info("Redis connection established for active memory storage.")
             except redis.ConnectionError as e:
-                logging.error(f"Failed to connect to Redis at {redis_host}:{redis_port}: {str(e)}. Falling back to file storage.")
+                logging.error(f"Failed to connect to Redis at {self.redis_host}:{self.redis_port}: {str(e)}. Falling back to file storage.")
                 self.use_redis = False
         
         self._ensure_data_directory_exists()
@@ -46,6 +55,11 @@ class ChatHistoryManager:
         data_dir = os.path.dirname(self.history_file)
         if data_dir and not os.path.exists(data_dir):
             os.makedirs(data_dir, exist_ok=True)
+
+    def _get_chats_directory(self) -> str:
+        """Get the chats directory path from configuration."""
+        data_config = global_config_manager.get('data', {})
+        return data_config.get('chats_directory', os.getenv('AUTOBOT_CHATS_DIRECTORY', 'data/chats'))
 
     def _load_history(self):
         """
@@ -142,7 +156,7 @@ class ChatHistoryManager:
         """Lists available chat sessions with their metadata."""
         try:
             sessions = []
-            chats_directory = "data/chats"
+            chats_directory = self._get_chats_directory()
             
             # Ensure chats directory exists
             if not os.path.exists(chats_directory):
@@ -187,7 +201,8 @@ class ChatHistoryManager:
     def load_session(self, session_id: str) -> List[Dict[str, Any]]:
         """Loads a specific chat session."""
         try:
-            chat_file = f"data/chats/chat_{session_id}.json"
+            chats_directory = self._get_chats_directory()
+            chat_file = f"{chats_directory}/chat_{session_id}.json"
             
             if not os.path.exists(chat_file):
                 logging.warning(f"Chat session {session_id} not found")
@@ -213,7 +228,7 @@ class ChatHistoryManager:
         """
         try:
             # Ensure chats directory exists
-            chats_directory = "data/chats"
+            chats_directory = self._get_chats_directory()
             if not os.path.exists(chats_directory):
                 os.makedirs(chats_directory, exist_ok=True)
             
@@ -253,7 +268,7 @@ class ChatHistoryManager:
     def delete_session(self, session_id: str) -> bool:
         """
         Deletes a chat session.
-        
+
         Args:
             session_id (str): The identifier for the session to delete.
             
@@ -261,7 +276,8 @@ class ChatHistoryManager:
             bool: True if deletion was successful, False otherwise.
         """
         try:
-            chat_file = f"data/chats/chat_{session_id}.json"
+            chats_directory = self._get_chats_directory()
+            chat_file = f"{chats_directory}/chat_{session_id}.json"
             
             if not os.path.exists(chat_file):
                 logging.warning(f"Chat session {session_id} not found for deletion")
@@ -287,7 +303,8 @@ class ChatHistoryManager:
             bool: True if update was successful, False otherwise.
         """
         try:
-            chat_file = f"data/chats/chat_{session_id}.json"
+            chats_directory = self._get_chats_directory()
+            chat_file = f"{chats_directory}/chat_{session_id}.json"
             
             if not os.path.exists(chat_file):
                 logging.warning(f"Chat session {session_id} not found for name update")

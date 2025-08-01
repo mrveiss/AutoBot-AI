@@ -16,6 +16,7 @@ from src.diagnostics import Diagnostics
 from src.system_info_collector import get_os_info
 from src.tool_discovery import discover_tools
 from src.tools import ToolRegistry
+from src.prompt_manager import prompt_manager
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
@@ -200,50 +201,41 @@ class Orchestrator:
         else:
             await event_manager.publish("log_message", {"level": "INFO", "message": "No relevant context found in knowledge base."})
         
-        system_prompt_parts = [
-            self.llm_interface.orchestrator_system_prompt,
-            "You have access to the following tools. You MUST use these tools to achieve the user's goal. Each item below is a tool you can directly instruct to use. Do NOT list the tool descriptions, only the tool names and their parameters as shown below:",
-        ]
-
-        if self.task_transport_type == "local" and GUI_AUTOMATION_SUPPORTED:
-            system_prompt_parts.append("""- GUI Automation:
-    - 'Type text "TEXT" into active window.'
-    - 'Click element "IMAGE_PATH".'
-    - 'Read text from region (X, Y, WIDTH, HEIGHT).'
-    - 'Bring window to front "APP_TITLE".'""")
-        else:
-            system_prompt_parts.append("- GUI Automation: (Not available in this environment. Will be simulated as shell commands.)")
-
-        system_prompt_parts.append("""- System Integration:
-    - 'Query system information.'
-    - 'List system services.'
-    - 'Manage service "SERVICE_NAME" action "start|stop|restart".'
-    - 'Execute system command "COMMAND".'
-    - 'Get process info for "PROCESS_NAME" or PID "PID".'
-    - 'Terminate process with PID "PID".'
-    - 'Fetch web content from URL "URL".'
-- Knowledge Base:
-    - 'Add file "FILE_PATH" of type "FILE_TYPE" to knowledge base with metadata {JSON_METADATA}.'
-    - 'Search knowledge base for "QUERY" with N results.'
-    - 'Store fact "CONTENT" with metadata {JSON_METADATA}.'
-    - 'Get fact by ID "ID" or query "QUERY".'
-- User Interaction:
-    - 'Ask user for manual for program "PROGRAM_NAME" with question "QUESTION_TEXT".'
-    - 'Ask user for approval to run command "COMMAND_TO_APPROVE".'
-
-Prioritize using the most specific tool for the job. For example, use 'Manage service "SERVICE_NAME" action "start|stop|restart".' for services, 'Query system information.' for system details, and 'Type text "TEXT" into active window.' for GUI typing, rather than 'Execute system command "COMMAND".' if a more specific tool exists.
-
-IMPORTANT: When a tool is executed, its output will be provided to you with the role `tool_output`. You MUST use the actual, factual content from these `tool_output` messages to inform your subsequent actions and responses. Do NOT hallucinate or invent information. If the user asks a question that was answered by a tool, directly use the tool's output in your response.
-
-If the user's request is purely conversational and does not require a tool, respond using the 'respond_conversationally' tool. Do NOT generate unrelated content or puzzles. Focus solely on the user's current goal and the information provided by tools.
-""")
-        system_prompt = "\n".join(system_prompt_parts)
-
-        if context_str:
-            system_prompt += f"\n\nUse the following context to inform your plan:\n{context_str}"
+        # Use the centralized prompt manager to get the orchestrator system prompt
+        gui_automation_supported = self.task_transport_type == "local" and GUI_AUTOMATION_SUPPORTED
         
-        system_prompt += f"\n\nOperating System Information:\n{json.dumps(self.system_info, indent=2)}\n"
-        system_prompt += f"\n\nAvailable System Tools:\n{json.dumps(self.available_tools, indent=2)}\n"
+        try:
+            system_prompt = prompt_manager.get(
+                'orchestrator.system_prompt',
+                gui_automation_supported=gui_automation_supported,
+                context_str=context_str,
+                system_info=self.system_info,
+                available_tools=self.available_tools
+            )
+        except KeyError:
+            # Fallback to legacy prompt if new one doesn't exist
+            print("Warning: orchestrator.system_prompt not found, using legacy system prompt")
+            try:
+                system_prompt = prompt_manager.get('orchestrator.legacy_system_prompt')
+                
+                # Add the dynamic parts that weren't in the legacy prompt
+                if context_str:
+                    system_prompt += f"\n\nUse the following context to inform your plan:\n{context_str}"
+                
+                system_prompt += f"\n\nOperating System Information:\n{json.dumps(self.system_info, indent=2)}\n"
+                system_prompt += f"\n\nAvailable System Tools:\n{json.dumps(self.available_tools, indent=2)}\n"
+            except KeyError:
+                # Final fallback - use the old hardcoded version
+                print("Warning: No prompt found in prompt manager, using hardcoded fallback")
+                system_prompt_parts = [
+                    self.llm_interface.orchestrator_system_prompt,
+                    "You have access to the following tools. You MUST use these tools to achieve the user's goal.",
+                ]
+                system_prompt = "\n".join(system_prompt_parts)
+                if context_str:
+                    system_prompt += f"\n\nUse the following context to inform your plan:\n{context_str}"
+                system_prompt += f"\n\nOperating System Information:\n{json.dumps(self.system_info, indent=2)}\n"
+                system_prompt += f"\n\nAvailable System Tools:\n{json.dumps(self.available_tools, indent=2)}\n"
 
         full_messages = [{"role": "system", "content": system_prompt}] + messages
         
