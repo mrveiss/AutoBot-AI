@@ -47,9 +47,10 @@ export default {
     const refreshFiles = async () => {
       try {
         console.log('Refreshing file list');
-        const response = await fetch('/api/files');
+        const response = await fetch('/api/files/list');
         if (response.ok) {
-          files.value = await response.json();
+          const data = await response.json();
+          files.value = data.files || [];
         } else {
           console.error('Failed to fetch files:', response.statusText);
           alert('Failed to refresh file list. Backend integration pending.');
@@ -91,10 +92,14 @@ export default {
     const viewFile = async (file) => {
       try {
         console.log('Viewing file:', file.name);
-        const response = await fetch(`/api/files/view?path=${encodeURIComponent(file.path)}`);
+        const response = await fetch(`/api/files/view/${encodeURIComponent(file.path)}`);
         if (response.ok) {
-          const content = await response.text();
-          alert(`Content of ${file.name}:\n${content.substring(0, 200)}...`);
+          const data = await response.json();
+          if (data.content) {
+            alert(`Content of ${file.name}:\n${data.content.substring(0, 500)}...`);
+          } else {
+            alert(`File ${file.name} is not a text file or cannot be displayed.`);
+          }
         } else {
           alert(`Failed to view ${file.name}. Backend integration pending.`);
         }
@@ -107,8 +112,12 @@ export default {
     const deleteFile = async (file) => {
       try {
         console.log('Deleting file:', file.name);
-        const response = await fetch(`/api/files/delete?path=${encodeURIComponent(file.path)}`, {
-          method: 'DELETE'
+        const response = await fetch('/api/files/delete', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ path: file.path })
         });
         if (response.ok) {
           alert(`Deleted ${file.name}.`);
