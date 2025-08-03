@@ -16,8 +16,9 @@ from src.event_manager import event_manager
 from src.system_integration import SystemIntegration
 from src.security_layer import SecurityLayer
 
-# Import the centralized ConfigManager
+# Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
+from src.utils.redis_client import get_redis_client
 
 # Conditional import for GUIController based on OS
 if sys.platform.startswith('linux'):
@@ -34,13 +35,12 @@ class WorkerNode:
         self.task_transport_type = global_config_manager.get_nested('task_transport.type', 'local')
         self.redis_client = None
         if self.task_transport_type == "redis":
-            # Use memory.redis configuration for consistency
-            memory_config = global_config_manager.get('memory', {})
-            redis_config = memory_config.get('redis', {})
-            redis_host = redis_config.get('host', 'localhost')
-            redis_port = redis_config.get('port', 6379)
-            self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-            print(f"Worker connected to Redis at {redis_host}:{redis_port}")
+            # Use centralized Redis client utility
+            self.redis_client = get_redis_client(async_client=False)
+            if self.redis_client:
+                print(f"Worker connected to Redis via centralized utility")
+            else:
+                print("Worker failed to get Redis client from centralized utility")
         else:
             print("Worker node configured for local task transport. No Redis connection.")
 
