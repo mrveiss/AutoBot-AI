@@ -13,15 +13,14 @@ from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.core import ServiceContext, Settings
 
-import redis.asyncio as redis
-from redis.asyncio import Redis
-
 import pandas as pd
 from docx import Document as DocxDocument
 from pypdf import PdfReader
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
+# Import centralized Redis client utility
+from src.utils.redis_client import get_redis_client
 
 class KnowledgeBase:
     def __init__(self):
@@ -49,15 +48,12 @@ class KnowledgeBase:
         self.redis_index_name = redis_config.get('index_name', 'autobot_knowledge_index')
 
         # Initialize Redis client for direct use (e.g., for facts/logs)
-        # This uses the memory.redis configuration for consistency
-        self.redis_client = redis.Redis(
-            host=redis_config.get('host', 'localhost'),
-            port=redis_config.get('port', 6379),
-            password=redis_config.get('password', os.getenv('REDIS_PASSWORD')),
-            db=redis_config.get('db', 1), # Use db 1 for general memory as per config.yaml
-            decode_responses=True
-        )
-        logging.info(f"Async Redis client initialized for host: {redis_config.get('host', 'localhost')}:{redis_config.get('port', 6379)} (DB: {redis_config.get('db', 1)})")
+        # Use centralized Redis client utility
+        self.redis_client = get_redis_client(async_client=True)
+        if self.redis_client:
+            logging.info(f"Redis client initialized via centralized utility")
+        else:
+            logging.warning("Redis client not available - Redis may be disabled in configuration")
 
         self.llm = None
         self.embed_model = None
@@ -195,6 +191,8 @@ class KnowledgeBase:
             return []
 
     async def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        if not self.redis_client:
+            return {"status": "error", "message": "Redis client not available - Redis may be disabled"}
         try:
             import time
             fact_id = await self.redis_client.incr('fact_id_counter')
@@ -212,6 +210,8 @@ class KnowledgeBase:
             return {"status": "error", "message": f"Error storing fact: {str(e)}"}
 
     async def get_fact(self, fact_id: Optional[int] = None, query: Optional[str] = None) -> List[Dict[str, Any]]:
+        if not self.redis_client:
+            return []
         facts = []
         try:
             if fact_id:
@@ -258,6 +258,8 @@ class KnowledgeBase:
             "categories": [],
             "total_facts": 0
         }
+        if not self.redis_client:
+            return stats
         try:
             # Get stats from LlamaIndex vector store (approximate count)
             if self.vector_store:
@@ -280,7 +282,6 @@ class KnowledgeBase:
                 stats["categories"] = list(categories)
 
             # Get stats from Redis facts
-            fact_count = 0
             all_fact_keys = await self.redis_client.keys("fact:*")
             stats["total_facts"] = len(all_fact_keys)
 
@@ -302,6 +303,8 @@ class KnowledgeBase:
             "top_category": "N/A",
             "fact_types": {}  # e.g., {"manual_input": 10, "web_link": 5}
         }
+        if not self.redis_client:
+            return detailed_stats
         try:
             # Total size and average chunk size calculation for facts
             all_fact_keys = await self.redis_client.keys("fact:*")
@@ -345,6 +348,8 @@ class KnowledgeBase:
 
     async def export_all_data(self) -> List[Dict[str, Any]]:
         """Export all stored knowledge base data (facts and potentially vector store metadata)."""
+        if not self.redis_client:
+            return []
         exported_data = []
         try:
             # Export facts from Redis
@@ -380,6 +385,8 @@ class KnowledgeBase:
 
     async def get_all_facts(self, collection: str = "default") -> List[Dict[str, Any]]:
         """Get all facts, optionally filtered by collection"""
+        if not self.redis_client:
+            return []
         facts = []
         try:
             all_keys: List[str] = cast(List[str], await self.redis_client.keys("fact:*"))
