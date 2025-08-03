@@ -4,8 +4,9 @@ import time
 import logging
 from typing import List, Dict, Any, Optional
 
-# Import the centralized ConfigManager
+# Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
+from src.utils.redis_client import get_redis_client
 
 class ChatHistoryManager:
     def __init__(self, history_file: Optional[str] = None, use_redis: Optional[bool] = None, redis_host: Optional[str] = None, redis_port: Optional[int] = None):
@@ -32,19 +33,12 @@ class ChatHistoryManager:
         self.redis_client = None
 
         if self.use_redis:
-            try:
-                import redis
-            except ImportError:
-                logging.error("Redis library not installed. Falling back to file storage. Install with 'pip install redis'")
-                self.use_redis = False
-                return
-
-            try:
-                self.redis_client = redis.Redis(host=self.redis_host, port=self.redis_port, decode_responses=True)
-                self.redis_client.ping()
-                logging.info("Redis connection established for active memory storage.")
-            except redis.ConnectionError as e:
-                logging.error(f"Failed to connect to Redis at {self.redis_host}:{self.redis_port}: {str(e)}. Falling back to file storage.")
+            # Use centralized Redis client utility
+            self.redis_client = get_redis_client(async_client=False)
+            if self.redis_client:
+                logging.info("Redis connection established via centralized utility for active memory storage.")
+            else:
+                logging.error("Failed to get Redis client from centralized utility. Falling back to file storage.")
                 self.use_redis = False
         
         self._ensure_data_directory_exists()
