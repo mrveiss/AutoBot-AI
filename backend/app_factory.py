@@ -151,22 +151,35 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
     try:
         await app.state.orchestrator.startup()
         if app.state.orchestrator.task_transport_type == "redis" and app.state.orchestrator.redis_client:
-            logger.debug("Skipping Redis background tasks creation (temporarily disabled for debugging)...")
-            # Future: Re-enable Redis background tasks when needed
-            # asyncio.create_task(
-            #     safe_redis_task_wrapper(
-            #         "command_approvals_listener", 
-            #         app.state.orchestrator._listen_for_command_approvals()
-            #     )
-            # )
-            # asyncio.create_task(
-            #     safe_redis_task_wrapper(
-            #         "worker_capabilities_listener", 
-            #         app.state.orchestrator._listen_for_worker_capabilities()
-            #     )
-            # )
+            logger.info("Enabling Redis background tasks for autonomous operation...")
+            
+            # Create background tasks with enhanced error handling
+            command_approval_task = asyncio.create_task(
+                safe_redis_task_wrapper(
+                    "command_approvals_listener", 
+                    app.state.orchestrator._listen_for_command_approvals()
+                )
+            )
+            
+            worker_capabilities_task = asyncio.create_task(
+                safe_redis_task_wrapper(
+                    "worker_capabilities_listener", 
+                    app.state.orchestrator._listen_for_worker_capabilities()
+                )
+            )
+            
+            # Store task references for monitoring and cleanup
+            app.state.background_tasks = [command_approval_task, worker_capabilities_task]
+            
+            logger.info("Redis background tasks successfully enabled and monitoring initiated")
+        else:
+            logger.info("Redis background tasks skipped - using local task transport or Redis unavailable")
+            app.state.background_tasks = []
+            
     except Exception as e:
         logger.error(f"Error during orchestrator startup: {e}", exc_info=True)
+        # Ensure background_tasks is initialized even on failure
+        app.state.background_tasks = []
         # Log and allow the app to potentially continue in a degraded state
     
     logger.debug("Orchestrator startup completed")

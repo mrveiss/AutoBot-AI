@@ -65,7 +65,7 @@ async def get_models():
         return JSONResponse(status_code=500, content={"error": f"Error getting models: {str(e)}"})
 
 @router.get("/status")
-async def get_system_status():
+async def get_system_status(request: Request):
     """Get current system status including LLM configuration"""
     try:
         llm_config = ConfigService.get_llm_config()
@@ -80,12 +80,25 @@ async def get_system_status():
         elif default_llm.startswith("openai_"):
             current_llm_display = f"OpenAI: {default_llm.replace('openai_', '')}"
         
+        # Check for background tasks status
+        background_tasks_status = "disabled"
+        background_tasks_count = 0
+        
+        if hasattr(request.app.state, 'background_tasks'):
+            background_tasks_count = len(request.app.state.background_tasks)
+            if background_tasks_count > 0:
+                background_tasks_status = "active"
+        
         return {
             "status": "success",
             "current_llm": current_llm_display,
             "default_llm": llm_config["default_llm"],
             "task_llm": llm_config["task_llm"],
             "ollama_models": llm_config["ollama"]["models"],
+            "background_tasks": {
+                "status": background_tasks_status,
+                "count": background_tasks_count
+            },
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
