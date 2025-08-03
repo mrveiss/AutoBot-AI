@@ -26,14 +26,19 @@ class SecurityLayer:
         
         Args:
             user_role (str): The role of the user performing the action.
-            action_type (str): The type of action being performed (e.g., 'allow_file_read', 'allow_shell_execute').
-            resource (str, optional): The specific resource being accessed (e.g., 'config.yaml', 'ls -l').
+            action_type (str): The type of action being performed (e.g., 'files.view', 'files.delete', 'allow_shell_execute').
+            resource (str, optional): The specific resource being accessed (e.g., 'file_operation:delete').
             
         Returns:
             bool: True if permission is granted, False otherwise.
         """
         if not self.enable_auth:
             return True # If authentication is disabled, all actions are allowed
+
+        # GOD MODE: Unrestricted access for god/superuser roles
+        if user_role.lower() in ['god', 'superuser', 'root']:
+            print(f"GOD MODE: Unrestricted access granted for role '{user_role}' to perform action '{action_type}' on resource '{resource}'.")
+            return True
 
         role_permissions = self.roles.get(user_role, {}).get('permissions', [])
 
@@ -43,12 +48,73 @@ class SecurityLayer:
         if action_type in role_permissions:
             return True
         
+        # Check for wildcard permissions (e.g., 'files.*' matches 'files.view', 'files.delete', etc.)
+        for permission in role_permissions:
+            if permission.endswith('.*'):
+                permission_prefix = permission[:-1]  # Remove the '*'
+                if action_type.startswith(permission_prefix):
+                    return True
+        
+        # Check default role permissions for common roles
+        default_permissions = self._get_default_role_permissions(user_role)
+        if action_type in default_permissions:
+            return True
+        
         # More granular checks could be added here based on resource
-        # e.g., if action_type is 'allow_file_read' and resource is 'sensitive.txt'
-        # then check for 'allow_file_read_sensitive_data'
+        # e.g., if action_type is 'files.view' and resource contains 'sensitive'
+        # then check for 'files.view_sensitive' permission
 
         print(f"Permission DENIED for role '{user_role}' to perform action '{action_type}' on resource '{resource}'.")
         return False
+
+    def _get_default_role_permissions(self, user_role: str) -> List[str]:
+        """
+        Get default permissions for common user roles when not explicitly configured.
+        
+        Args:
+            user_role: The user role to get default permissions for
+            
+        Returns:
+            List of default permissions for the role
+        """
+        default_role_permissions = {
+            'god': [
+                'allow_all'  # GOD MODE: Unrestricted access
+            ],
+            'superuser': [
+                'allow_all'  # GOD MODE: Unrestricted access
+            ],
+            'root': [
+                'allow_all'  # GOD MODE: Unrestricted access
+            ],
+            'admin': [
+                'allow_all'  # Admin has all permissions
+            ],
+            'user': [
+                'files.view',
+                'files.download',
+                'allow_goal_submission',
+                'allow_kb_read'
+            ],
+            'readonly': [
+                'files.view',
+                'files.download'
+            ],
+            'editor': [
+                'files.view',
+                'files.download', 
+                'files.upload',
+                'files.create',
+                'allow_goal_submission',
+                'allow_kb_read',
+                'allow_kb_write'
+            ],
+            'guest': [
+                'files.view'  # Very limited access
+            ]
+        }
+        
+        return default_role_permissions.get(user_role, [])
 
     def audit_log(self, action: str, user: str, outcome: str, details: Dict[str, Any]):
         """

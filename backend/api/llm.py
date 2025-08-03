@@ -3,6 +3,8 @@ import logging
 
 from backend.utils.connection_utils import ConnectionTester, ModelManager
 from backend.services.config_service import ConfigService
+# Import caching utilities
+from backend.utils.cache_manager import cache_response
 
 router = APIRouter()
 
@@ -41,6 +43,7 @@ async def test_llm_connection():
         }
 
 @router.get("/models")
+@cache_response(cache_key="llm_models", ttl=180)  # Cache for 3 minutes
 async def get_available_llm_models():
     """Get list of available LLM models"""
     try:
