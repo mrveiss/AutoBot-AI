@@ -93,10 +93,23 @@
         <div v-if="activeBackendSubTab === 'llm'" class="sub-tab-content">
           <h3>LLM Settings</h3>
           <div class="setting-item">
-            <label>Current LLM in Use</label>
-            <span style="font-weight: bold;">
-              {{ getCurrentLLMDisplay() }}
-            </span>
+            <label>Current LLM Status</label>
+            <div class="llm-status-display">
+              <div class="status-line">
+                <span class="status-label">Connection:</span>
+                <span :class="['status-value', healthStatus.llm.connected ? 'connected' : 'disconnected']">
+                  {{ healthStatus.llm.connected ? 'Connected' : 'Disconnected' }}
+                </span>
+              </div>
+              <div class="status-line" v-if="healthStatus.llm.connected && healthStatus.llm.current_model">
+                <span class="status-label">Active Model:</span>
+                <span class="status-value">{{ healthStatus.llm.current_model }}</span>
+              </div>
+              <div class="status-line">
+                <span class="status-label">Configured:</span>
+                <span class="status-value">{{ getCurrentLLMConfig() }}</span>
+              </div>
+            </div>
           </div>
           <div class="setting-item">
             <label>Provider Type</label>
@@ -425,9 +438,10 @@
 </template>
 
 <script>
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, onMounted, watch, computed, onUnmounted } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 import { settingsService } from '../services/SettingsService.js';
+import { healthService } from '../services/HealthService.js';
 
 export default {
   name: 'SettingsPanel',
@@ -692,37 +706,68 @@ export default {
       }
     };
 
-    // Function to load models from the selected provider
+    // Function to dynamically load models from the selected provider
     const loadModels = async () => {
       try {
+        console.log('Loading models from backend...');
         const data = await apiClient.get('/api/llm/models');
         console.log('Model data received:', data);
+        
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
-          if (provider === 'ollama' && data.models) {
-            settings.value.backend.llm.local.providers.ollama.models = data.models.map(model => model.name);
-            if (!settings.value.backend.llm.local.providers.ollama.selected_model && data.models.length > 0) {
-              settings.value.backend.llm.local.providers.ollama.selected_model = data.models[0].name;
-            }
-          } else if (provider === 'lmstudio' && data.data) {
-            settings.value.backend.llm.local.providers.lmstudio.models = data.data.map(model => model.id);
-            if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.data.length > 0) {
-              settings.value.backend.llm.local.providers.lmstudio.selected_model = data.data[0].id;
-            }
-          } else if (provider === 'lmstudio') {
-            // Handle case where endpoint might return different structure
-            console.log('LM Studio response:', data);
-            if (Array.isArray(data)) {
-              settings.value.backend.llm.local.providers.lmstudio.models = data.map(model => model.id || model.name);
-              if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.length > 0) {
-                settings.value.backend.llm.local.providers.lmstudio.selected_model = data[0].id || data[0].name;
+          
+          if (provider === 'ollama') {
+            // Handle the new API response format with model objects
+            if (data.models && Array.isArray(data.models)) {
+              const availableModels = data.models
+                .filter(model => model.available && (model.type === 'ollama' || !model.type))
+                .map(model => model.name);
+              
+              settings.value.backend.llm.local.providers.ollama.models = availableModels;
+              console.log(`Loaded ${availableModels.length} Ollama models:`, availableModels);
+              
+              // Auto-select first model if none selected
+              if (!settings.value.backend.llm.local.providers.ollama.selected_model && availableModels.length > 0) {
+                settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0];
+                console.log('Auto-selected model:', availableModels[0]);
               }
+              
+              // Validate current selection is still available
+              const currentModel = settings.value.backend.llm.local.providers.ollama.selected_model;
+              if (currentModel && !availableModels.includes(currentModel)) {
+                console.log(`Current model ${currentModel} no longer available, switching to ${availableModels[0]}`);
+                settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0] || '';
+              }
+            } else {
+              console.warn('No Ollama models found in response');
+              settings.value.backend.llm.local.providers.ollama.models = [];
+            }
+            
+          } else if (provider === 'lmstudio') {
+            // Handle LM Studio models - try different response formats
+            let lmStudioModels = [];
+            if (data.models && Array.isArray(data.models)) {
+              lmStudioModels = data.models
+                .filter(model => model.available && model.type === 'lmstudio')
+                .map(model => model.name || model.id);
+            } else if (data.data && Array.isArray(data.data)) {
+              lmStudioModels = data.data.map(model => model.id || model.name);
+            } else if (Array.isArray(data)) {
+              lmStudioModels = data.map(model => model.id || model.name);
+            }
+            
+            settings.value.backend.llm.local.providers.lmstudio.models = lmStudioModels;
+            console.log(`Loaded ${lmStudioModels.length} LM Studio models:`, lmStudioModels);
+            
+            if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && lmStudioModels.length > 0) {
+              settings.value.backend.llm.local.providers.lmstudio.selected_model = lmStudioModels[0];
             }
           }
         }
+        console.log('Models loaded successfully');
+        
       } catch (error) {
         console.error('Error loading models:', error);
-        // Don't let fetch errors break the UI
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
           if (provider === 'ollama') {
