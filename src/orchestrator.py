@@ -75,8 +75,74 @@ class Orchestrator:
         self.tool_registry = None
 
     async def _listen_for_worker_capabilities(self):
-        print("Listening for worker capabilities (Redis transport)...")
-        await asyncio.sleep(1)
+        """
+        Listen for worker capability reports via Redis pub/sub.
+        Workers publish their capabilities on startup and capability changes.
+        """
+        if not self.redis_client:
+            print("Redis client not available for worker capabilities listening")
+            return
+            
+        pubsub = self.redis_client.pubsub()
+        worker_capabilities_channel = 'worker_capabilities'
+        pubsub.subscribe(worker_capabilities_channel)
+        print(f"Listening for worker capabilities on Redis channel '{worker_capabilities_channel}'...")
+        
+        try:
+            while True:
+                # Use get_message with timeout instead of listen() for async compatibility
+                message = pubsub.get_message(timeout=1.0)
+                if message is None:
+                    await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
+                    continue
+                    
+                if message['type'] == 'message':
+                    try:
+                        data = json.loads(message['data'])
+                        worker_id = data.get('worker_id')
+                        capabilities = data.get('capabilities', {})
+                        timestamp = data.get('timestamp', time.time())
+                        
+                        if worker_id and capabilities:
+                            # Update worker capabilities dictionary
+                            self.worker_capabilities[worker_id] = {
+                                'capabilities': capabilities,
+                                'timestamp': timestamp,
+                                'last_seen': time.time()
+                            }
+                            print(f"Updated capabilities for worker {worker_id}: {capabilities}")
+                            await event_manager.publish("log_message", {
+                                "level": "INFO", 
+                                "message": f"Worker {worker_id} capabilities updated: {list(capabilities.keys())}"
+                            })
+                        else:
+                            print(f"Invalid worker capabilities message: missing worker_id or capabilities - {data}")
+                            
+                    except json.JSONDecodeError as e:
+                        print(f"Failed to parse worker capabilities message: {e}")
+                        await event_manager.publish("log_message", {
+                            "level": "ERROR", 
+                            "message": f"Failed to parse worker capabilities message: {e}"
+                        })
+                    except Exception as e:
+                        print(f"Error processing worker capabilities message: {e}")
+                        await event_manager.publish("log_message", {
+                            "level": "ERROR", 
+                            "message": f"Error processing worker capabilities message: {e}"
+                        })
+                        
+        except Exception as e:
+            print(f"Error in worker capabilities listener: {e}")
+            await event_manager.publish("log_message", {
+                "level": "ERROR", 
+                "message": f"Worker capabilities listener error: {e}"
+            })
+        finally:
+            try:
+                pubsub.unsubscribe(worker_capabilities_channel)
+                pubsub.close()
+            except Exception as e:
+                print(f"Error closing worker capabilities pubsub: {e}")
 
     async def _listen_for_command_approvals(self):
         if not self.redis_client:
@@ -87,20 +153,40 @@ class Orchestrator:
         approval_channel_pattern = f"{self.redis_command_approval_response_channel_prefix}*"
         pubsub.psubscribe(approval_channel_pattern)
         print(f"Listening for command approvals on Redis channel '{approval_channel_pattern}'...")
-        for message in pubsub.listen():
-            if message['type'] == 'pmessage':
-                channel = message['channel'].decode('utf-8')
-                data = json.loads(message['data'])
-                task_id = data.get('task_id')
-                approved = data.get('approved')
-                
-                if task_id and task_id in self.pending_approvals:
-                    future = self.pending_approvals.pop(task_id)
-                    if not future.done():
-                        future.set_result({"approved": approved})
-                    print(f"Received approval for task {task_id}: Approved={approved}")
-                else:
-                    print(f"Received unhandled approval message for task {task_id}: {data}")
+        
+        try:
+            while True:
+                # Use get_message with timeout instead of listen() for async compatibility
+                message = pubsub.get_message(timeout=1.0)
+                if message is None:
+                    await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
+                    continue
+                    
+                if message['type'] == 'pmessage':
+                    try:
+                        channel = message['channel'].decode('utf-8')
+                        data = json.loads(message['data'])
+                        task_id = data.get('task_id')
+                        approved = data.get('approved')
+                        
+                        if task_id and task_id in self.pending_approvals:
+                            future = self.pending_approvals.pop(task_id)
+                            if not future.done():
+                                future.set_result({"approved": approved})
+                            print(f"Received approval for task {task_id}: Approved={approved}")
+                        else:
+                            print(f"Received unhandled approval message for task {task_id}: {data}")
+                    except Exception as e:
+                        print(f"Error processing command approval message: {e}")
+                        
+        except Exception as e:
+            print(f"Error in command approval listener: {e}")
+        finally:
+            try:
+                pubsub.punsubscribe(approval_channel_pattern)
+                pubsub.close()
+            except Exception as e:
+                print(f"Error closing command approval pubsub: {e}")
 
     async def startup(self):
         ollama_connected = await self.llm_interface.check_ollama_connection()
