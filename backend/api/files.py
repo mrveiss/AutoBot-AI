@@ -79,18 +79,64 @@ def get_security_layer(request: Request) -> SecurityLayer:
     """Get security layer from app state"""
     return request.app.state.security_layer
 
-def check_file_permissions(request: Request, operation: str):
-    """Check if user has permission for file operations"""
+def check_file_permissions(request: Request, operation: str) -> bool:
+    """
+    Check if user has permission for file operations using SecurityLayer RBAC.
+    
+    Args:
+        request: FastAPI request object containing user context
+        operation: File operation type (view, upload, delete, download)
+        
+    Returns:
+        bool: True if permission granted, False otherwise
+    """
     try:
         security_layer = get_security_layer(request)
-        # For now, allow all operations - in production, implement proper auth
-        # This is where you'd check specific permissions like:
-        # - allow_file_view
-        # - allow_file_upload  
-        # - allow_file_delete
-        return True
+        
+        # Get user role from request headers (temporary auth mechanism)
+        # In production, replace with proper JWT/session authentication
+        user_role = request.headers.get('X-User-Role', 'guest')
+        
+        # Map file operations to specific permissions
+        permission_map = {
+            'view': 'files.view',
+            'upload': 'files.upload', 
+            'delete': 'files.delete',
+            'download': 'files.download',
+            'create': 'files.create'
+        }
+        
+        required_permission = permission_map.get(operation)
+        if not required_permission:
+            logger.error(f"Unknown file operation: {operation}")
+            return False
+        
+        # Check permission using SecurityLayer
+        has_permission = security_layer.check_permission(
+            user_role=user_role,
+            action_type=required_permission,
+            resource=f"file_operation:{operation}"
+        )
+        
+        if not has_permission:
+            # Log unauthorized access attempt
+            security_layer.audit_log(
+                action=f"file_access_denied",
+                user=user_role,
+                outcome="denied", 
+                details={
+                    "operation": operation,
+                    "permission_required": required_permission,
+                    "user_agent": request.headers.get("User-Agent"),
+                    "ip": request.client.host if request.client else "unknown"
+                }
+            )
+            
+        return has_permission
+        
     except Exception as e:
-        logger.error(f"Error checking permissions: {e}")
+        logger.error(f"Error checking file permissions for operation '{operation}': {e}")
+        # Fail secure - deny access on error
         return False
 
 def validate_and_resolve_path(path: str) -> Path:

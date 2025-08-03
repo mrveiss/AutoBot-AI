@@ -287,13 +287,48 @@ class Orchestrator:
         return {"tool_name": "respond_conversationally", "tool_args": {"response_text": error_message}}
 
     async def execute_goal(self, goal: str, messages: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
-        """Execute a goal using an iterative approach with the orchestrator LLM."""
+        """
+        Execute a goal using an iterative approach with the orchestrator LLM.
+        
+        This method coordinates the entire goal execution process, from initial setup
+        through iterative planning and execution until completion or timeout.
+        
+        Args:
+            goal: The user's goal or task to accomplish
+            messages: Optional conversation history for context
+            
+        Returns:
+            Dict containing execution results, status, and any response content
+        """
         if messages is None:
             messages = [{"role": "user", "content": goal}]
         
+        await self._log_goal_start(goal)
+        
+        # Try LangChain agent first if available
+        langchain_result = await self._try_langchain_execution(goal, messages)
+        if langchain_result:
+            return langchain_result
+        
+        # Handle simple commands directly
+        if self._is_simple_command(goal):
+            return await self._execute_simple_command(goal)
+        
+        # Execute complex goal using iterative approach
+        return await self._execute_complex_goal(goal, messages)
+
+    async def _log_goal_start(self, goal: str) -> None:
+        """Log the start of goal execution."""
         await event_manager.publish("log_message", {"level": "INFO", "message": f"Starting goal execution: {goal}"})
         print(f"Starting goal execution: {goal}")
+
+    async def _try_langchain_execution(self, goal: str, messages: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
+        """
+        Try to execute goal using LangChain agent if available.
         
+        Returns:
+            Dict with execution results if LangChain handles it, None otherwise
+        """
         if self.use_langchain and self.langchain_agent and hasattr(self.langchain_agent, 'available') and self.langchain_agent.available:
             try:
                 await event_manager.publish("log_message", {"level": "INFO", "message": "Using LangChain Agent for goal execution"})
@@ -302,13 +337,16 @@ class Orchestrator:
             except Exception as e:
                 await event_manager.publish("log_message", {"level": "ERROR", "message": f"LangChain Agent failed, falling back to standard orchestrator: {e}"})
                 print(f"LangChain Agent failed, falling back to standard orchestrator: {e}")
+        return None
+
+    async def _execute_complex_goal(self, goal: str, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Execute complex goal using iterative orchestrator approach.
         
-        if self._is_simple_command(goal):
-            simple_command_result = await self._execute_simple_command(goal)
-            print(f"DEBUG: Simple command handled directly. Returning result: {simple_command_result}")
-            return simple_command_result
-        
-        max_iterations = global_config_manager.get_nested('orchestrator.max_iterations', 10) # Get from config
+        This method handles the main execution loop for complex goals that require
+        multiple planning and execution iterations.
+        """
+        max_iterations = global_config_manager.get_nested('orchestrator.max_iterations', 10)
         iteration = 0
         
         while iteration < max_iterations:
@@ -322,6 +360,7 @@ class Orchestrator:
             await event_manager.publish("log_message", {"level": "INFO", "message": f"Iteration {iteration}/{max_iterations}"})
             print(f"Iteration {iteration}/{max_iterations}")
             
+            # Generate action plan for this iteration
             action = await self.generate_task_plan(goal, messages)
             
             if not action:
@@ -329,73 +368,107 @@ class Orchestrator:
                 print("Failed to generate action plan")
                 return {"status": "error", "message": "Failed to generate action plan."}
             
-            tool_name = action.get("tool_name")
-            tool_args = action.get("tool_args", {})
-            thoughts = action.get("thoughts", [])
+            # Execute the planned action
+            execution_result = await self._execute_planned_action(action, messages)
             
-            if thoughts:
-                thoughts_text = " ".join(thoughts) if isinstance(thoughts, list) else str(thoughts)
-                await event_manager.publish("log_message", {"level": "INFO", "message": f"AI Thoughts: {thoughts_text}"})
-                print(f"AI Thoughts: {thoughts_text}")
-            
-            await event_manager.publish("log_message", {"level": "INFO", "message": f"Executing tool: {tool_name} with args: {tool_args}"})
-            print(f"Executing tool: {tool_name} with args: {tool_args}")
-            
-            if not isinstance(tool_name, str):
-                error_msg = f"Invalid tool_name received from LLM: {tool_name}. Expected string."
-                await event_manager.publish("error", {"message": error_msg})
-                messages.append({"role": "user", "content": f"Tool execution failed: {error_msg}"})
-                continue
-            
-            # Use unified tool registry to eliminate code duplication
-            try:
-                if self.tool_registry:
-                    result = await self.tool_registry.execute_tool(tool_name, tool_args)
-                else:
-                    result = {"status": "error", "message": "Tool registry not initialized"}
+            # Check if goal is completed
+            if execution_result.get("completed"):
+                return execution_result
                 
-                tool_output_content = result.get("result", result.get("output", result.get("message", "Tool execution completed.")))
-                messages.append({"role": "tool_output", "content": tool_output_content})
-                
-                if result.get("status") == "success":
-                    if tool_name == "respond_conversationally":
-                        result_content = result.get("response_text", result.get("result", result.get("output", result.get("message", "Task completed successfully"))))
-                    else:
-                        result_content = result.get("result", result.get("output", result.get("message", "Task completed successfully")))
-                    
-                    await event_manager.publish("llm_response", {"response": result_content})
-                    await event_manager.publish("log_message", {"level": "INFO", "message": f"Tool execution successful: {result_content}"})
-                    print(f"Tool execution successful: {result_content}")
-                    
-                    if tool_name == "respond_conversationally":
-                        await event_manager.publish("log_message", {"level": "INFO", "message": "Goal execution completed with conversational response"})
-                        print("Goal execution completed with conversational response")
-                        return {"tool_name": "respond_conversationally", "tool_args": {"response_text": result_content}, "response_text": result_content}
-                        
-                elif result.get("status") == "pending_approval":
-                    approval_result = await self._handle_command_approval(result)
-                    if approval_result.get("approved"):
-                        continue
-                    else:
-                        messages.append({"role": "user", "content": "User declined to approve the command. Please suggest an alternative approach."})
-                        continue
-                        
-                else:
-                    error_msg = result.get("message", "Unknown error occurred")
-                    messages.append({"role": "user", "content": f"Tool execution failed: {error_msg}"})
-                    await event_manager.publish("error", {"message": error_msg})
-                    print(f"Tool execution failed: {error_msg}")
-                    
-            except Exception as e:
-                error_msg = f"Exception during tool execution: {str(e)}"
-                messages.append({"role": "user", "content": error_msg})
-                await event_manager.publish("error", {"message": error_msg})
-                print(error_msg)
-                traceback.print_exc()
-        
+        # Goal execution completed after max iterations
         await event_manager.publish("log_message", {"level": "WARNING", "message": f"Goal execution completed after {max_iterations} iterations"})
         print(f"Goal execution completed after {max_iterations} iterations")
         return {"status": "warning", "message": "Goal execution completed, but may not have fully achieved the objective."}
+
+    async def _execute_planned_action(self, action: Dict[str, Any], messages: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Execute a single planned action from the orchestrator.
+        
+        Returns:
+            Dict with execution results and completion status
+        """
+        tool_name = action.get("tool_name")
+        tool_args = action.get("tool_args", {})
+        thoughts = action.get("thoughts", [])
+        
+        # Log AI thoughts if present
+        if thoughts:
+            thoughts_text = " ".join(thoughts) if isinstance(thoughts, list) else str(thoughts)
+            await event_manager.publish("log_message", {"level": "INFO", "message": f"AI Thoughts: {thoughts_text}"})
+            print(f"AI Thoughts: {thoughts_text}")
+        
+        await event_manager.publish("log_message", {"level": "INFO", "message": f"Executing tool: {tool_name} with args: {tool_args}"})
+        print(f"Executing tool: {tool_name} with args: {tool_args}")
+        
+        # Validate tool name
+        if not isinstance(tool_name, str):
+            error_msg = f"Invalid tool_name received from LLM: {tool_name}. Expected string."
+            await event_manager.publish("error", {"message": error_msg})
+            messages.append({"role": "user", "content": f"Tool execution failed: {error_msg}"})
+            return {"completed": False}
+        
+        # Execute tool using unified tool registry
+        try:
+            if self.tool_registry:
+                result = await self.tool_registry.execute_tool(tool_name, tool_args)
+            else:
+                result = {"status": "error", "message": "Tool registry not initialized"}
+            
+            tool_output_content = result.get("result", result.get("output", result.get("message", "Tool execution completed.")))
+            messages.append({"role": "tool_output", "content": tool_output_content})
+            
+            return await self._process_tool_result(result, tool_name, messages)
+            
+        except Exception as e:
+            error_msg = f"Exception during tool execution: {str(e)}"
+            messages.append({"role": "user", "content": error_msg})
+            await event_manager.publish("error", {"message": error_msg})
+            print(error_msg)
+            traceback.print_exc()
+            return {"completed": False}
+
+    async def _process_tool_result(self, result: Dict[str, Any], tool_name: str, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Process the result of tool execution and determine next steps.
+        
+        Returns:
+            Dict with completion status and any response content
+        """
+        if result.get("status") == "success":
+            if tool_name == "respond_conversationally":
+                result_content = result.get("response_text", result.get("result", result.get("output", result.get("message", "Task completed successfully"))))
+            else:
+                result_content = result.get("result", result.get("output", result.get("message", "Task completed successfully")))
+            
+            await event_manager.publish("llm_response", {"response": result_content})
+            await event_manager.publish("log_message", {"level": "INFO", "message": f"Tool execution successful: {result_content}"})
+            print(f"Tool execution successful: {result_content}")
+            
+            if tool_name == "respond_conversationally":
+                await event_manager.publish("log_message", {"level": "INFO", "message": "Goal execution completed with conversational response"})
+                print("Goal execution completed with conversational response")
+                return {
+                    "completed": True,
+                    "tool_name": "respond_conversationally", 
+                    "tool_args": {"response_text": result_content}, 
+                    "response_text": result_content
+                }
+                
+        elif result.get("status") == "pending_approval":
+            approval_result = await self._handle_command_approval(result)
+            if approval_result.get("approved"):
+                return {"completed": False}  # Continue with next iteration
+            else:
+                messages.append({"role": "user", "content": "User declined to approve the command. Please suggest an alternative approach."})
+                return {"completed": False}
+                
+        else:
+            error_msg = result.get("message", "Unknown error occurred")
+            messages.append({"role": "user", "content": f"Tool execution failed: {error_msg}"})
+            await event_manager.publish("error", {"message": error_msg})
+            print(f"Tool execution failed: {error_msg}")
+            
+        return {"completed": False}
 
     def _is_simple_command(self, goal: str) -> bool:
         command_patterns = [
