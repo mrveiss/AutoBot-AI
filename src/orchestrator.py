@@ -18,8 +18,9 @@ from src.tool_discovery import discover_tools
 from src.tools import ToolRegistry
 from src.prompt_manager import prompt_manager
 
-# Import the centralized ConfigManager
+# Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
+from src.utils.redis_client import get_redis_client
 
 # Import LangChain Agent (optional)
 try:
@@ -57,18 +58,12 @@ class Orchestrator:
         self.use_langchain = global_config_manager.get_nested('orchestrator.use_langchain', False)
 
         if self.task_transport_type == "redis":
-            # Use memory.redis configuration for consistency
-            memory_config = global_config_manager.get('memory', {})
-            redis_config = memory_config.get('redis', {})
-            redis_host = redis_config.get('host', 'localhost')
-            redis_port = redis_config.get('port', 6379)
-            try:
-                self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-                self.redis_client.ping() # Test connection immediately
-                print(f"Orchestrator connected to Redis at {redis_host}:{redis_port}")
-            except redis.ConnectionError as e:
-                print(f"Orchestrator failed to connect to Redis at {redis_host}:{redis_port}: {e}. Falling back to local task transport.")
-                self.redis_client = None
+            # Use centralized Redis client utility
+            self.redis_client = get_redis_client(async_client=False)
+            if self.redis_client:
+                print(f"Orchestrator connected to Redis via centralized utility")
+            else:
+                print(f"Orchestrator failed to get Redis client from centralized utility. Falling back to local task transport.")
                 self.task_transport_type = "local" # Fallback to local if Redis fails
                 self.local_worker = WorkerNode()
         
