@@ -40,9 +40,26 @@ Implement a robust, containerized AutoBot system where LangChain Agent orchestra
 - **Step 1.1.3.3**: Verify all other API endpoints can access components
 - **Step 1.1.3.4**: Confirm components maintain state across requests
 
-### **Task 1.2: Enable LLM Health Monitoring**
-**Priority**: HIGH - Required for operational visibility
-**Dependencies**: Task 1.1 completion
+### **Task 1.3: GUI Automation Enhancement**
+**Priority**: HIGH - Core automation capabilities
+**Dependencies**: System stabilization
+**Estimated Duration**: 6-8 hours
+
+#### **Subtask 1.3.1: OCR and Text Recognition**
+- **Step 1.3.1.1**: Improve OCR accuracy across different applications
+- **Step 1.3.1.2**: Implement better text element detection
+- **Step 1.3.1.3**: Add visual feedback for OCR operations
+- **Step 1.3.1.4**: Test OCR with various UI frameworks
+
+#### **Subtask 1.3.2: Window Management and Automation**  
+- **Step 1.3.2.1**: Better window focus handling and management
+- **Step 1.3.2.2**: Mouse and keyboard automation refinements
+- **Step 1.3.2.3**: Screenshot and visual element detection
+- **Step 1.3.2.4**: Integrate with Xvfb virtual display support
+
+### **Task 1.4: Enable LLM Health Monitoring**
+**Priority**: MEDIUM - Operational visibility (Note: LLM currently operational)
+**Dependencies**: System optimization
 **Estimated Duration**: 15-30 minutes
 
 #### **Subtask 1.2.1: Implement LLM Connection Testing**
