@@ -225,26 +225,39 @@ class KnowledgeBase:
                     })
             elif query:
                 all_keys: List[str] = cast(List[str], await self.redis_client.keys("fact:*"))
-                for key in all_keys:
-                    fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
-                    if fact_data and query.lower() in fact_data.get("content", "").lower():
-                        facts.append({
-                            "id": int(key.split(":")[1]),
-                            "content": fact_data.get("content"),
-                            "metadata": json.loads(fact_data.get("metadata", "{}")),
-                            "timestamp": fact_data.get("timestamp")
-                        })
+                if all_keys:
+                    # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
+                    pipe = self.redis_client.pipeline()
+                    for key in all_keys:
+                        pipe.hgetall(key)
+                    results = await pipe.execute()
+                    
+                    for key, fact_data in zip(all_keys, results):
+                        if fact_data and query.lower() in fact_data.get("content", "").lower():
+                            facts.append({
+                                "id": int(key.split(":")[1]),
+                                "content": fact_data.get("content"),
+                                "metadata": json.loads(fact_data.get("metadata", "{}")),
+                                "timestamp": fact_data.get("timestamp")
+                            })
             else:
                 all_keys: List[str] = cast(List[str], await self.redis_client.keys("fact:*"))
-                for key in all_keys:
-                    fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
-                    facts.append({
-                        "id": int(key.split(":")[1]),
-                        "content": fact_data.get("content"),
-                        "metadata": json.loads(fact_data.get("metadata", "{}")),
-                        "timestamp": fact_data.get("timestamp")
-                    })
-            logging.info(f"Retrieved {len(facts)} facts from Redis.")
+                if all_keys:
+                    # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
+                    pipe = self.redis_client.pipeline()
+                    for key in all_keys:
+                        pipe.hgetall(key)
+                    results = await pipe.execute()
+                    
+                    for key, fact_data in zip(all_keys, results):
+                        if fact_data:
+                            facts.append({
+                                "id": int(key.split(":")[1]),
+                                "content": fact_data.get("content"),
+                                "metadata": json.loads(fact_data.get("metadata", "{}")),
+                                "timestamp": fact_data.get("timestamp")
+                            })
+            logging.info(f"Retrieved {len(facts)} facts from Redis using optimized pipeline.")
             return facts
         except Exception as e:
             logging.error(f"Error retrieving facts from Redis: {str(e)}")
@@ -390,24 +403,30 @@ class KnowledgeBase:
         facts = []
         try:
             all_keys: List[str] = cast(List[str], await self.redis_client.keys("fact:*"))
-            for key in all_keys:
-                fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
-                if fact_data:
-                    metadata = json.loads(fact_data.get("metadata", "{}"))
-                    fact_collection = metadata.get("collection", "default")
-                    
-                    if collection == "all" or fact_collection == collection:
-                        facts.append({
-                            "id": int(key.split(":")[1]),
-                            "content": fact_data.get("content"),
-                            "metadata": metadata,
-                            "timestamp": fact_data.get("timestamp"),
-                            "collection": fact_collection
-                        })
+            if all_keys:
+                # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
+                pipe = self.redis_client.pipeline()
+                for key in all_keys:
+                    pipe.hgetall(key)
+                results = await pipe.execute()
+                
+                for key, fact_data in zip(all_keys, results):
+                    if fact_data:
+                        metadata = json.loads(fact_data.get("metadata", "{}"))
+                        fact_collection = metadata.get("collection", "default")
+                        
+                        if collection == "all" or fact_collection == collection:
+                            facts.append({
+                                "id": int(key.split(":")[1]),
+                                "content": fact_data.get("content"),
+                                "metadata": metadata,
+                                "timestamp": fact_data.get("timestamp"),
+                                "collection": fact_collection
+                            })
             
             # Sort by timestamp descending
             facts.sort(key=lambda x: int(x.get("timestamp", "0")), reverse=True)
-            logging.info(f"Retrieved {len(facts)} facts from Redis.")
+            logging.info(f"Retrieved {len(facts)} facts from Redis using optimized pipeline.")
             return facts
         except Exception as e:
             logging.error(f"Error retrieving all facts from Redis: {str(e)}")
