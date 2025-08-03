@@ -528,3 +528,125 @@ async def get_knowledge_entry(entry_id: str):
     except Exception as e:
         logger.error(f"Error retrieving knowledge entry: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/crawl_url")
+async def crawl_url(request: dict):
+    """Crawl a URL and update knowledge base entry with extracted content"""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+        
+        if knowledge_base is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+        
+        entry_id = request.get('entry_id')
+        url = request.get('url')
+        replace_content = request.get('replace_content', True)
+        
+        if not entry_id or not url:
+            raise HTTPException(status_code=400, detail="entry_id and url are required")
+        
+        # Get existing entry
+        facts = await knowledge_base.get_fact(fact_id=int(entry_id))
+        
+        if not facts or len(facts) == 0:
+            raise HTTPException(status_code=404, detail=f"Entry with id {entry_id} not found")
+        
+        entry = facts[0]
+        
+        # Import requests for web crawling
+        try:
+            import requests
+            from urllib.parse import urlparse
+            import time
+        except ImportError:
+            raise HTTPException(status_code=500, detail="Required libraries not available for web crawling")
+        
+        # Crawl the URL
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            # Extract text content from HTML
+            if 'text/html' in response.headers.get('content-type', ''):
+                try:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    
+                    # Remove script and style elements
+                    for script in soup(["script", "style"]):
+                        script.decompose()
+                    
+                    # Get text content
+                    text_content = soup.get_text()
+                    
+                    # Clean up text
+                    lines = (line.strip() for line in text_content.splitlines())
+                    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                    crawled_content = '\n'.join(chunk for chunk in chunks if chunk)
+                    
+                except ImportError:
+                    # Fallback to raw text if BeautifulSoup not available
+                    crawled_content = response.text
+                    
+                # Limit content size (max 10000 characters)
+                if len(crawled_content) > 10000:
+                    crawled_content = crawled_content[:10000] + "... [Content truncated]"
+                    
+            else:
+                # For non-HTML content, use the raw text
+                crawled_content = response.text[:10000]
+                if len(response.text) > 10000:
+                    crawled_content += "... [Content truncated]"
+            
+            # Update the entry
+            original_content = entry.get('content', '')
+            original_metadata = entry.get('metadata', {})
+            
+            if replace_content:
+                new_content = crawled_content
+                new_metadata = {
+                    **original_metadata,
+                    'source': f'Crawled from {url}',
+                    'url': url,
+                    'crawled_at': time.time(),
+                    'original_content': original_content,
+                    'type': 'crawled_content'
+                }
+            else:
+                # Append to existing content
+                new_content = f"{original_content}\n\n--- Crawled Content from {url} ---\n{crawled_content}"
+                new_metadata = {
+                    **original_metadata,
+                    'url': url,
+                    'crawled_at': time.time(),
+                    'type': 'crawled_content'
+                }
+            
+            # Update the entry in knowledge base
+            collection = entry.get('collection', 'default')
+            success = await knowledge_base.update_fact(int(entry_id), new_content, new_metadata)
+            
+            if not success:
+                raise HTTPException(status_code=500, detail="Failed to update entry in knowledge base")
+            
+            return {
+                "success": True,
+                "message": f"Successfully crawled content from {url}",
+                "content_length": len(crawled_content),
+                "url": url,
+                "entry_id": entry_id
+            }
+            
+        except requests.exceptions.RequestException as e:
+            raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {str(e)}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error crawling URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

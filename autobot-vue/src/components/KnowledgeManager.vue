@@ -87,6 +87,9 @@
                 <button @click="editEntry(entry)" class="edit-btn" title="Edit">
                   <span class="icon">✏️</span>
                 </button>
+                <button v-if="isUrlEntry(entry)" @click="crawlUrl(entry)" class="crawl-btn" title="Crawl URL Content">
+                  <span class="icon">🕷️</span>
+                </button>
                 <button @click="duplicateEntry(entry)" class="duplicate-btn" title="Duplicate">
                   <span class="icon">📋</span>
                 </button>
@@ -143,14 +146,13 @@
         <div class="modal-body">
           <form @submit.prevent="saveEntry" v-if="showCreateModal || showEditModal">
             <div class="form-group">
-              <label for="entry-content">Content *</label>
-              <textarea 
-                id="entry-content"
-                v-model="currentEntry.content" 
-                rows="8" 
-                placeholder="Enter the knowledge content..."
-                required
-              ></textarea>
+              <label for="entry-title">Title/Subject</label>
+              <input 
+                type="text" 
+                id="entry-title"
+                v-model="currentEntry.title" 
+                placeholder="Enter a descriptive title for this entry"
+              />
             </div>
             
             <div class="form-row">
@@ -162,6 +164,9 @@
                   v-model="currentEntry.source" 
                   placeholder="Document name, URL, or source reference"
                 />
+                <small v-if="isUrlSource(currentEntry.source)" class="url-hint">
+                  🕷️ URL detected - you can leave content empty to auto-crawl
+                </small>
               </div>
               
               <div class="form-group">
@@ -173,6 +178,20 @@
                   placeholder="Collection name"
                 />
               </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="entry-content">Content</label>
+              <textarea 
+                id="entry-content"
+                v-model="currentEntry.content" 
+                rows="8" 
+                :placeholder="isUrlSource(currentEntry.source) ? 'Leave empty to auto-crawl from URL, or enter content manually' : 'Enter the knowledge content...'"
+                :required="!isUrlSource(currentEntry.source)"
+              ></textarea>
+              <small v-if="isUrlSource(currentEntry.source) && !currentEntry.content" class="auto-crawl-hint">
+                ✨ Content will be automatically crawled from the URL when you save
+              </small>
             </div>
             
             <div class="form-group">
@@ -224,6 +243,16 @@
             
             <div class="modal-actions">
               <button type="button" @click="closeModals" class="cancel-btn">Cancel</button>
+              <button 
+                v-if="showEditModal && isUrlSource(currentEntry.source)"
+                type="button" 
+                @click="crawlCurrentEntry" 
+                class="crawl-btn-modal"
+                :disabled="crawlingInModal"
+              >
+                <span v-if="crawlingInModal">🔄 Crawling...</span>
+                <span v-else>🕷️ Re-crawl URL</span>
+              </button>
               <button type="submit" class="save-btn">
                 {{ showCreateModal ? 'Create Entry' : 'Save Changes' }}
               </button>
@@ -274,68 +303,6 @@
       </div>
     </div>
 
-    <!-- Add Content Tab -->
-    <div v-if="activeTab === 'add'" class="tab-content">
-      <h3>Add Content to Knowledge Base</h3>
-      
-      <div class="add-form">
-        <div class="form-group">
-          <label>Content Type:</label>
-          <select v-model="addContentType">
-            <option value="text">Text</option>
-            <option value="url">URL/Link</option>
-            <option value="file">File Upload</option>
-          </select>
-        </div>
-
-        <!-- Text Input -->
-        <div v-if="addContentType === 'text'" class="form-group">
-          <label>Text Content:</label>
-          <textarea 
-            v-model="textContent" 
-            placeholder="Enter your text content here..."
-            rows="8"
-          ></textarea>
-          <div class="form-row">
-            <input v-model="textTitle" type="text" placeholder="Title (optional)" />
-            <input v-model="textSource" type="text" placeholder="Source (optional)" />
-          </div>
-        </div>
-
-        <!-- URL Input -->
-        <div v-if="addContentType === 'url'" class="form-group">
-          <label>URL:</label>
-          <input v-model="urlContent" type="url" placeholder="https://example.com" />
-          <div class="url-options">
-            <label>
-              <input type="radio" v-model="urlMethod" value="fetch" />
-              Fetch and store content
-            </label>
-            <label>
-              <input type="radio" v-model="urlMethod" value="reference" />
-              Store as reference only
-            </label>
-          </div>
-        </div>
-
-        <!-- File Upload -->
-        <div v-if="addContentType === 'file'" class="form-group">
-          <label>File:</label>
-          <input type="file" @change="handleFileUpload" accept=".txt,.md,.pdf,.docx" />
-          <div v-if="selectedFile" class="file-info">
-            Selected: {{ selectedFile.name }} ({{ formatFileSize(selectedFile.size) }})
-          </div>
-        </div>
-
-        <button @click="addContent" :disabled="adding" class="add-button">
-          {{ adding ? 'Adding...' : 'Add to Knowledge Base' }}
-        </button>
-      </div>
-
-      <div v-if="addMessage" :class="['message', addMessageType]">
-        {{ addMessage }}
-      </div>
-    </div>
 
     <!-- Manage Tab -->
     <div v-if="activeTab === 'manage'" class="tab-content">
@@ -413,7 +380,6 @@ export default {
     const tabs = [
       { id: 'search', label: 'Search' },
       { id: 'entries', label: 'Knowledge Entries' },
-      { id: 'add', label: 'Add Content' },
       { id: 'manage', label: 'Manage' },
       { id: 'stats', label: 'Statistics' }
     ];
@@ -434,6 +400,7 @@ export default {
     const showEditModal = ref(false);
     const showViewModal = ref(false);
     const currentEntry = ref({
+      title: '',
       content: '',
       source: '',
       collection: 'default',
@@ -629,7 +596,7 @@ export default {
     };
 
     const getEntryTitle = (entry) => {
-      return entry.metadata?.title || entry.metadata?.source || 'Untitled Entry';
+      return entry.title || entry.metadata?.title || entry.metadata?.source || 'Untitled Entry';
     };
 
     const getEntryPreview = (entry) => {
@@ -646,9 +613,94 @@ export default {
       }
     };
 
+    const isUrlEntry = (entry) => {
+      // Check if source contains a URL
+      if (entry.metadata?.source) {
+        try {
+          new URL(entry.metadata.source);
+          return entry.metadata.source.startsWith('http://') || entry.metadata.source.startsWith('https://');
+        } catch {}
+      }
+      
+      // Check if content contains URLs
+      if (entry.content) {
+        const urlRegex = /https?:\/\/[^\s]+/;
+        return urlRegex.test(entry.content);
+      }
+      
+      // Legacy checks
+      return entry.metadata?.type === 'url_reference' || 
+             entry.content?.startsWith('URL Reference:') ||
+             entry.metadata?.url;
+    };
+
+    const crawlUrl = async (entry) => {
+      if (!confirm('Crawl and extract content from this URL? This will replace the current content.')) {
+        return;
+      }
+      
+      try {
+        let url = null;
+        
+        // Try to get URL from source first
+        if (entry.metadata?.source) {
+          try {
+            new URL(entry.metadata.source);
+            if (entry.metadata.source.startsWith('http://') || entry.metadata.source.startsWith('https://')) {
+              url = entry.metadata.source;
+            }
+          } catch {}
+        }
+        
+        // If no URL in source, extract from content
+        if (!url) {
+          url = extractUrlFromContent(entry.content);
+        }
+        
+        // Legacy URL check
+        if (!url && entry.metadata?.url) {
+          url = entry.metadata.url;
+        }
+        
+        if (!url) {
+          showError('No URL found to crawl');
+          return;
+        }
+        
+        // Call backend to crawl URL and extract content
+        const response = await fetch('/api/knowledge/crawl_url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entry_id: entry.id,
+            url: url
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Failed to crawl URL');
+        }
+        
+        const result = await response.json();
+        showSuccess(`URL content crawled successfully! Extracted ${result.content_length} characters.`);
+        await loadKnowledgeEntries(); // Refresh the list
+      } catch (error) {
+        console.error('Error crawling URL:', error);
+        showError('Failed to crawl URL: ' + error.message);
+      }
+    };
+
+    const extractUrlFromContent = (content) => {
+      const urlRegex = /https?:\/\/[^\s]+/;
+      const match = content?.match(urlRegex);
+      return match ? match[0] : null;
+    };
+
     const viewEntry = (entry) => {
       currentEntry.value = {
         ...entry,
+        title: entry.title || entry.metadata?.title || '',
         source: entry.metadata?.source || '',
         collection: entry.collection || 'default',
         tags: entry.metadata?.tags || [],
@@ -698,29 +750,117 @@ export default {
       }
     };
 
+    // URL detection helper for form
+    const isUrlSource = (source) => {
+      if (!source) return false;
+      try {
+        new URL(source);
+        return source.startsWith('http://') || source.startsWith('https://');
+      } catch {
+        return false;
+      }
+    };
+
+    // Crawl URL in modal
+    const crawlingInModal = ref(false);
+    const crawlCurrentEntry = async () => {
+      if (!confirm('This will replace the current content with crawled content from the URL. Continue?')) {
+        return;
+      }
+
+      crawlingInModal.value = true;
+      try {
+        const response = await fetch('/api/knowledge/crawl_url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entry_id: currentEntry.value.id,
+            url: currentEntry.value.source
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Failed to crawl URL');
+        }
+
+        const result = await response.json();
+        currentEntry.value.content = result.content || result.extracted_content || '';
+        showSuccess(`Content crawled successfully! Extracted ${result.content_length || currentEntry.value.content.length} characters.`);
+      } catch (error) {
+        console.error('Error crawling URL in modal:', error);
+        showError('Failed to crawl URL: ' + error.message);
+      } finally {
+        crawlingInModal.value = false;
+      }
+    };
+
     const saveEntry = async () => {
       try {
         loading.value = true;
         
         const entryData = {
+          type: currentEntry.value.title || currentEntry.value.source || 'Manual Entry',
           content: currentEntry.value.content,
-          collection: currentEntry.value.collection,
+          source: currentEntry.value.source,
+          title: currentEntry.value.title,
           metadata: {
             source: currentEntry.value.source,
             tags: currentEntry.value.tags,
-            links: currentEntry.value.links
+            links: currentEntry.value.links,
+            title: currentEntry.value.title
           }
         };
 
+        let response;
         if (showEditModal.value) {
-          await apiClient.put(`/api/knowledge_base/entries/${currentEntry.value.id}`, entryData);
+          response = await fetch(`/api/knowledge_base/update_fact/${currentEntry.value.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entryData)
+          });
         } else {
-          await apiClient.post('/api/knowledge_base/entries', entryData);
+          response = await fetch('/api/knowledge_base/add_fact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entryData)
+          });
+        }
+
+        if (!response.ok) {
+          throw new Error(`Failed to ${showEditModal.value ? 'update' : 'create'} entry`);
+        }
+
+        // If it's a new URL entry with no content, auto-crawl it
+        if (!showEditModal.value && isUrlSource(currentEntry.value.source) && !currentEntry.value.content) {
+          const result = await response.json();
+          if (result.id) {
+            try {
+              const crawlResponse = await fetch('/api/knowledge/crawl_url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  entry_id: result.id,
+                  url: currentEntry.value.source
+                })
+              });
+              
+              if (crawlResponse.ok) {
+                const crawlResult = await crawlResponse.json();
+                showSuccess(`Entry created and URL content crawled! Extracted ${crawlResult.content_length} characters.`);
+              } else {
+                showSuccess('Entry created successfully, but URL crawling failed.');
+              }
+            } catch (crawlError) {
+              showSuccess('Entry created successfully, but URL crawling failed.');
+            }
+          }
+        } else {
+          showSuccess(showEditModal.value ? 'Entry updated successfully' : 'Entry created successfully');
         }
         
         await loadKnowledgeEntries();
         closeModals();
-        showSuccess(showEditModal.value ? 'Entry updated successfully' : 'Entry created successfully');
       } catch (error) {
         console.error('Error saving entry:', error);
         showError('Failed to save entry: ' + error.message);
@@ -912,6 +1052,12 @@ export default {
       removeLink,
       showSuccess,
       showError,
+      isUrlEntry,
+      crawlUrl,
+      extractUrlFromContent,
+      isUrlSource,
+      crawlCurrentEntry,
+      crawlingInModal,
       
       // Add content
       addContentType,
