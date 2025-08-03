@@ -814,13 +814,13 @@ export default {
 
         let response;
         if (showEditModal.value) {
-          response = await fetch(`/api/knowledge_base/update_fact/${currentEntry.value.id}`, {
+          response = await fetch(`/api/knowledge_base/entries/${currentEntry.value.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entryData)
           });
         } else {
-          response = await fetch('/api/knowledge_base/add_fact', {
+          response = await fetch('/api/knowledge_base/entries', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entryData)
