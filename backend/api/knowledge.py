@@ -417,9 +417,18 @@ async def create_knowledge_entry(entry: dict):
         if knowledge_base is None:
             raise HTTPException(status_code=503, detail="Knowledge base not available")
         
-        content = entry.get('content', '')
+        # Support both old and new formats
+        content = entry.get('content', entry.get('text', ''))
         metadata = entry.get('metadata', {})
         collection = entry.get('collection', 'default')
+        
+        # Add additional fields from entry to metadata
+        if 'title' in entry:
+            metadata['title'] = entry['title']
+        if 'category' in entry:
+            metadata['category'] = entry['category']
+        if 'tags' in entry:
+            metadata['tags'] = entry['tags']
         
         if not content:
             raise HTTPException(status_code=400, detail="Content is required")
@@ -431,9 +440,13 @@ async def create_knowledge_entry(entry: dict):
         # Store the fact
         result = await knowledge_base.store_fact(content, metadata)
         
+        # Get the fact_id - try both possible keys
+        fact_id = result.get("fact_id") or result.get("id")
+        
         return {
             "success": True,
-            "entry_id": result.get("fact_id"),
+            "id": fact_id,  # Return 'id' for consistency with frontend expectations
+            "entry_id": fact_id,  # Keep for backward compatibility
             "message": "Knowledge entry created successfully"
         }
     except Exception as e:
