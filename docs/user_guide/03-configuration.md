@@ -1,209 +1,294 @@
-# Configuration Guide
+# User Configuration Guide
 
-## Configuration Overview
+Simple, user-friendly configuration options for AutoBot. For detailed technical configuration, see [Complete Configuration Reference](../configuration.md).
 
-AutoBot uses a centralized configuration system based on YAML files and a web-based control panel. All settings are stored in `config/config.yaml`.
+## Quick Configuration
 
-## Configuration Structure
+### Accessing Settings
 
+AutoBot provides multiple ways to configure settings:
+
+1. **Web Interface**: Click the gear icon (⚙️) in the web interface
+2. **Chat Commands**: Type `/settings` in the chat
+3. **Configuration File**: Edit `config/config.yaml` directly
+
+### Essential Settings
+
+#### Choose Your AI Provider
+
+**Option 1: Ollama (Local, Free)**
 ```yaml
-# Main configuration sections
-llm:           # LLM backend settings
-memory:        # Redis and memory configuration
-agent:         # Core agent behavior
-network:       # Network and security settings
-logging:       # Log levels and destinations
-hardware:      # GPU/NPU acceleration settings
-```
-
-## LLM Configuration
-
-### Ollama (Local Inference)
-```yaml
-llm:
-  provider: "ollama"
-  model: "phi3:mini"
+llm_config:
+  default_llm: "ollama_tinyllama"
   ollama:
-    base_url: "http://localhost:11434"
-    temperature: 0.7
-    max_tokens: 2048
+    host: "http://localhost:11434"
 ```
 
-### OpenAI API
+**Option 2: OpenAI (Cloud, Paid)**
 ```yaml
-llm:
-  provider: "openai"
-  model: "gpt-4"
+llm_config:
+  default_llm: "openai_gpt35"
   openai:
-    api_key: "your-api-key-here"
-    temperature: 0.7
-    max_tokens: 2048
+    api_key: ""  # Set via environment variable OPENAI_API_KEY
 ```
 
-### Hardware Acceleration
+**Option 3: Anthropic Claude (Cloud, Paid)**
 ```yaml
-hardware:
-  gpu:
-    enabled: true
-    device: "cuda:0"  # or "rocm:0", "cpu"
-    layers_offload: 32
-    precision: "fp16"  # or "fp32", "int8"
+llm_config:
+  default_llm: "anthropic_claude"
+  anthropic:
+    api_key: ""  # Set via environment variable ANTHROPIC_API_KEY
 ```
 
-## Memory and Storage
+#### Basic System Settings
 
-### Redis Configuration
 ```yaml
+# Change ports if needed
+backend:
+  server_port: 8001
+
+# Frontend port (if running development server)
+frontend:
+  port: 5173
+
+# Enable/disable features
 memory:
   redis:
-    enabled: true
-    host: "localhost"
-    port: 6379
-    password: null
-    db: 0
-    index_name: "autobot_knowledge_index"
+    enabled: true    # Set false if Redis not available
+  chromadb:
+    enabled: true    # Vector database for knowledge search
 ```
 
-### Knowledge Base Storage
+## Configuration Through Web Interface
+
+### LLM Settings
+
+1. **Access Settings**: Click ⚙️ icon → "LLM Configuration"
+2. **Choose Provider**: Select Ollama, OpenAI, or Anthropic
+3. **Select Model**: Pick from available models
+4. **Adjust Temperature**:
+   - Low (0.1-0.3): More focused, deterministic responses
+   - Medium (0.4-0.7): Balanced creativity and consistency
+   - High (0.8-1.0): More creative, varied responses
+
+### System Behavior
+
+1. **Access Settings**: Click ⚙️ icon → "Agent Behavior"
+2. **Autonomy Level**:
+   - **Supervised**: Asks permission for system commands (recommended)
+   - **Autonomous**: Executes approved commands automatically
+   - **Restricted**: Chat only, no system access
+3. **Command Permissions**: Enable/disable file system, network, and command execution
+
+### Performance Settings
+
+1. **Access Settings**: Click ⚙️ icon → "Performance"
+2. **Hardware Acceleration**: Enable GPU if available
+3. **Memory Limits**: Set RAM usage limits
+4. **Model Options**: Choose faster vs higher quality models
+
+## Common Configuration Scenarios
+
+### Home User Setup (Recommended)
+
 ```yaml
-knowledge_base:
-  storage_path: "./data/knowledge_base.db"
-  vector_store: "redis"  # or "chromadb", "faiss"
-  embedding_model: "nomic-embed-text"
-```
+llm_config:
+  default_llm: "ollama_tinyllama"  # Fast, local, free
 
-## Network Settings
-
-### Web Interface
-```yaml
-network:
-  web_interface:
-    host: "0.0.0.0"
-    port: 8001
-    enable_cors: true
-
-  api:
-    host: "0.0.0.0"
-    port: 8001
-```
-
-### Worker Nodes
-```yaml
-workers:
-  enabled: false
-  discovery:
-    method: "manual"  # or "automatic"
-    port: 8002
-  security:
-    require_auth: true
-    secret_key: "your-secret-here"
-```
-
-## Agent Behavior
-
-### Core Settings
-```yaml
 agent:
-  autonomy_level: "supervised"  # or "autonomous", "restricted"
-  max_task_depth: 10
-  timeout_seconds: 300
+  autonomy_level: "supervised"     # Safe, asks permission
 
-  permissions:
-    file_system: true
-    network_access: true
-    system_commands: true
-    package_install: false
+memory:
+  redis:
+    enabled: true                  # Enhanced features
+  chromadb:
+    enabled: true                  # Knowledge search
+
+hardware:
+  gpu:
+    enabled: false                 # Use CPU (stable)
 ```
 
-### Safety Features
-```yaml
-safety:
-  command_filter:
-    enabled: true
-    blacklist: ["rm -rf", "format", "delete"]
+### Developer Setup
 
-  resource_limits:
-    max_memory_mb: 4096
-    max_cpu_percent: 80
+```yaml
+llm_config:
+  default_llm: "ollama_llama2"     # Better code understanding
+
+agent:
+  autonomy_level: "autonomous"     # Faster workflow
+  max_task_depth: 15               # Complex tasks
+
+debugging:
+  enabled: true                    # Development tools
+  log_level: "debug"               # Detailed logs
+
+hardware:
+  gpu:
+    enabled: true                  # Faster inference
 ```
 
-## Logging Configuration
+### Enterprise Setup
 
 ```yaml
-logging:
-  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+llm_config:
+  default_llm: "openai_gpt4"       # Highest quality
 
-  files:
-    agent_log: "logs/agent.log"
-    llm_usage: "logs/llm_usage.log"
-    error_log: "logs/errors.log"
-
-  rotation:
-    max_size_mb: 100
-    backup_count: 5
-```
-
-## Environment-Specific Settings
-
-### Development
-```yaml
-environment: "development"
-debug: true
-auto_reload: true
-```
-
-### Production
-```yaml
-environment: "production"
-debug: false
 security:
-  strict_mode: true
-  require_https: true
+  strict_mode: true                # Enhanced security
+  command_filter:
+    enabled: true                  # Filter dangerous commands
+
+logging:
+  audit_enabled: true              # Compliance logging
+  retention_days: 90               # Keep logs longer
+
+network:
+  require_auth: true               # Authentication required
 ```
-
-## Configuration via Web Interface
-
-Most settings can be modified through the web control panel:
-
-1. **Access Settings**: Type `/settings open` or click the settings icon
-2. **Navigate Sections**: Use tabs for different configuration areas
-3. **Apply Changes**: Settings are saved automatically
-4. **Restart**: Some changes require agent restart
 
 ## Environment Variables
 
-Sensitive settings can be overridden with environment variables:
+For sensitive information, use environment variables instead of config files:
 
 ```bash
-export AUTOBOT_OPENAI_API_KEY="your-key"
-export AUTOBOT_REDIS_PASSWORD="your-password"
-export AUTOBOT_SECRET_KEY="your-secret"
+# AI Provider API Keys
+export OPENAI_API_KEY="your-openai-key"  # pragma: allowlist secret
+export ANTHROPIC_API_KEY="your-anthropic-key"  # pragma: allowlist secret
+
+# Server Configuration
+export AUTOBOT_BACKEND_PORT=8001
+export AUTOBOT_FRONTEND_PORT=5173
+
+# Redis Configuration
+export AUTOBOT_REDIS_HOST="localhost"
+export AUTOBOT_REDIS_PORT=6379
+export AUTOBOT_REDIS_PASSWORD="your-password"  # pragma: allowlist secret
+
+# Security
+export AUTOBOT_SECRET_KEY="your-secure-secret"  # pragma: allowlist secret
 ```
+
+Add these to your shell profile (`.bashrc`, `.zshrc`) to persist across sessions.
 
 ## Configuration Validation
 
-AutoBot validates configuration on startup:
+### Check Configuration
 
 ```bash
-# Check configuration
-python -c "from src.config import config; config.validate()"
+# Validate configuration file
+python -c "from src.config import config; print('✓ Configuration valid')"
+
+# Test specific components
+python -c "from src.diagnostics import check_llm; check_llm()"
+python -c "from src.diagnostics import check_redis; check_redis()"
+```
+
+### Configuration Status
+
+Use the web interface or chat commands:
+
+```
+/status config
+```
+
+```
+/settings validate
 ```
 
 ## Backup and Restore
 
-### Backup Configuration
+### Backup Current Configuration
+
 ```bash
+# Create timestamped backup
+cp config/config.yaml config/config.backup.$(date +%Y%m%d_%H%M%S).yaml
+
+# Quick backup
 cp config/config.yaml config/config.backup.yaml
 ```
 
-### Reset to Defaults
+### Restore Configuration
+
 ```bash
+# Restore from backup
+cp config/config.backup.yaml config/config.yaml
+
+# Reset to defaults
 cp config/config.yaml.template config/config.yaml
 ```
 
-## Advanced Topics
+### Export Settings
 
-- **Multiple Profiles**: Switch between configuration profiles
-- **Dynamic Updates**: Modify settings without restart
-- **Distributed Configuration**: Sync settings across worker nodes
-- **Security Hardening**: Encryption and access controls
+Through web interface:
+1. Settings → "Export Configuration"
+2. Save the downloaded file as backup
+3. Import on other AutoBot instances
+
+## Troubleshooting Configuration
+
+### Common Issues
+
+**Issue: Changes not taking effect**
+- Restart AutoBot: `./run_agent.sh`
+- Check configuration syntax: `python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"`
+
+**Issue: LLM connection failed**
+- Verify API keys in environment variables
+- For Ollama: ensure service is running (`ollama serve`)
+- Check network connectivity
+
+**Issue: Port conflicts**
+- Change ports in configuration:
+```yaml
+backend:
+  server_port: 8002  # Change from default 8001
+```
+
+**Issue: Performance problems**
+- Disable GPU if causing issues:
+```yaml
+hardware:
+  gpu:
+    enabled: false
+```
+- Use lighter models (tinyllama instead of llama2)
+
+### Configuration Help
+
+1. **Built-in Validation**: AutoBot validates configuration on startup
+2. **Web Interface**: Visual feedback for configuration errors
+3. **Log Files**: Check `logs/autobot.log` for configuration issues
+4. **Chat Support**: Ask AutoBot about configuration: "Help me configure my settings"
+
+## Advanced Configuration
+
+For advanced users who need detailed technical configuration:
+
+- **[Complete Configuration Reference](../configuration.md)**: All YAML sections and options
+- **[API Configuration](../backend_api.md)**: REST API settings and security
+- **[Developer Configuration](../project.md)**: Development and deployment options
+
+## Configuration Best Practices
+
+### Security
+1. **Never commit API keys** to version control
+2. **Use environment variables** for sensitive data
+3. **Set secure file permissions**: `chmod 600 config/config.yaml`
+4. **Regular backups** of working configurations
+
+### Performance
+1. **Start simple**: Use default settings first
+2. **Monitor resources**: Watch CPU/RAM usage
+3. **GPU acceleration**: Enable only if stable
+4. **Model selection**: Balance speed vs quality
+
+### Maintenance
+1. **Version control**: Track configuration changes
+2. **Documentation**: Comment complex settings
+3. **Testing**: Validate after changes
+4. **Monitoring**: Watch logs for issues
+
+---
+
+**Need more advanced configuration options?** See the [Complete Configuration Reference](../configuration.md) for technical details.
