@@ -163,7 +163,7 @@ curl -X POST http://localhost:8001/api/knowledge/search \
 curl "http://localhost:8001/api/files/list"
 ```
 
-**📚 For complete API documentation, see [Backend API Documentation](docs/backend_api.md)**
+**📚 For complete API documentation, see [API Reference](docs/developer/03-api-reference.md)**
 
 ---
 
@@ -193,7 +193,7 @@ export AUTOBOT_OLLAMA_HOST=http://localhost:11434
 export AUTOBOT_REDIS_ENABLED=true
 ```
 
-**⚙️ For complete configuration reference, see [Configuration Guide](docs/configuration.md)**
+**⚙️ For complete configuration reference, see [Configuration Reference](docs/developer/04-configuration.md)**
 
 ---
 
@@ -319,8 +319,6 @@ AutoBot features an advanced **Prompt-to-Knowledge Base Synchronization System**
 ### 🎯 **Core Documentation**
 - **[Development Roadmap](docs/project.md)**: Complete development phases and project evolution
 - **[Phase Validation Report](docs/phase_validation.md)**: Comprehensive validation of all development phases
-- **[Configuration Guide](docs/configuration.md)**: Complete configuration reference with all YAML sections
-- **[API Documentation](docs/backend_api.md)**: REST API endpoints with request/response examples
 
 ### 📋 **Project Management**
 - **[Task Management](docs/tasks.md)**: Development roadmap and active tasks
@@ -334,9 +332,13 @@ AutoBot features an advanced **Prompt-to-Knowledge Base Synchronization System**
 - **[Configuration Guide](docs/user_guide/03-configuration.md)**: User-friendly configuration options
 - **[Troubleshooting Guide](docs/user_guide/04-troubleshooting.md)**: Common issues and solutions
 
-### 🔧 **Technical References**
+### �‍💻 **Developer Documentation**
 - **[System Architecture](docs/developer/01-architecture.md)**: Comprehensive technical architecture overview
 - **[Process Flow Documentation](docs/developer/02-process-flow.md)**: Detailed system interactions and data flows
+- **[API Reference](docs/developer/03-api-reference.md)**: Complete REST API documentation with examples
+- **[Configuration Reference](docs/developer/04-configuration.md)**: Detailed configuration management and options
+
+### 🔧 **Technical References**
 - **[External APIs](docs/external_apps/ollama_api.md)**: Ollama API integration details
 
 ### 🚀 **Development Progress**
