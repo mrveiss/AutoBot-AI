@@ -609,12 +609,43 @@ python -m pytest  # Backend tests
 
 ---
 
-## 📄 Documentation
+## 📄 Documentation Hub
 
+### 🎯 **Core Documentation**
+- **[Project Architecture](docs/project.md)**: Complete system design and development phases
+- **[Phase Validation Report](docs/phase_validation.md)**: ✅ Comprehensive validation of all 21 development phases
 - **[Configuration Guide](docs/configuration.md)**: Complete configuration reference
 - **[API Documentation](docs/backend_api.md)**: REST API endpoints and examples
-- **[Project Architecture](docs/project.md)**: Detailed system design
-- **[Task Management](docs/tasks.md)**: Development roadmap and tasks
+
+### 📋 **Project Management**
+- **[Task Management](docs/tasks.md)**: Development roadmap and active tasks
+- **[Task Log](docs/task_log.md)**: Execution history and completed work
+- **[Project Status](docs/status.md)**: Current development status
+- **[Decision Log](docs/decisions.md)**: Architecture and design decisions
+
+### 📚 **User Guides**
+- **[Installation Guide](docs/user_guide/01-installation.md)**: Step-by-step setup instructions
+- **[Quick Start Guide](docs/user_guide/02-quickstart.md)**: Get up and running quickly
+- **[Configuration Guide](docs/user_guide/03-configuration.md)**: Detailed configuration options
+- **[Troubleshooting Guide](docs/user_guide/04-troubleshooting.md)**: Common issues and solutions
+
+### 🔧 **Technical References**
+- **[External APIs](docs/external_apps/ollama_api.md)**: Ollama API integration details
+- **[Process Map](docs/process_map.md)**: System process flow documentation
+- **[Project Map](docs/project_map.md)**: Codebase structure and navigation
+
+### 📊 **Analysis & Reports**
+- **[Analysis Reports](docs/reports/README.md)**: Comprehensive system analysis
+- **[Architecture Review](docs/reports/architecture-review.md)**: System architecture assessment
+- **[Security Assessment](docs/reports/security-assessment.md)**: Security analysis and recommendations
+- **[Performance Analysis](docs/reports/performance-analysis.md)**: Performance metrics and optimization
+- **[Technical Debt](docs/reports/technical-debt-assessment.md)**: Code quality and maintenance
+- **[Quick Wins](docs/reports/quick-wins.md)**: Easy improvements and optimizations
+
+### 🚀 **Development Progress**
+- **[Phase 2 Validation](docs/phase2_validation_progress.md)**: Core functionality validation results
+- **[Suggested Improvements](docs/suggested_improvements.md)**: Enhancement recommendations
+- **[TODO Items](docs/todo.md)**: Pending development tasks
 
 ---
 
