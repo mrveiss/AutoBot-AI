@@ -321,8 +321,8 @@ AutoBot features an advanced **Prompt-to-Knowledge Base Synchronization System**
 - **[Phase Validation Report](docs/phase_validation.md)**: Comprehensive validation of all development phases
 
 ### 📋 **Project Management**
-- **[Task Management](docs/tasks.md)**: Development roadmap and active tasks
-- **[Task Log](docs/task_log.md)**: Execution history and completed work
+- **[Active Tasks](docs/tasks.md)**: Current development roadmap and future phases
+- **[Project History](docs/project-history.md)**: Execution history and completed work
 - **[Project Status](docs/status.md)**: Current development status
 - **[Decision Log](docs/decisions.md)**: Architecture and design decisions
 
@@ -344,7 +344,6 @@ AutoBot features an advanced **Prompt-to-Knowledge Base Synchronization System**
 ### 🚀 **Development Progress**
 - **[Phase 2 Validation](docs/phase2_validation_progress.md)**: Core functionality validation results
 - **[Suggested Improvements](docs/suggested_improvements.md)**: Enhancement recommendations
-- **[TODO Items](docs/todo.md)**: Pending development tasks
 
 ---
 
