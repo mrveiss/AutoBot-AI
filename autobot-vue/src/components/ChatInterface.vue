@@ -103,10 +103,10 @@ export default {
       text: 'Disconnected',
       message: 'Backend server is not responding'
     });
-    
+
     const llmStatus = ref({
       connected: false,
-      class: 'disconnected', 
+      class: 'disconnected',
       text: 'Disconnected',
       message: 'LLM service is not available'
     });
@@ -165,20 +165,20 @@ export default {
       // Load chat list and messages using centralized service
       await chatHistoryService.loadChatList();
       chatList.value = chatHistoryService.chatList;
-      
+
       // Load settings using centralized service
       settings.value = settingsService.getSettings();
-      
+
       // Check connections first
       await checkConnections();
-      
+
       // Fetch backend settings to override with latest configuration
       await settingsService.fetchBackendSettings();
       settings.value = settingsService.getSettings(); // Refresh settings after backend fetch
-      
+
       // Load system prompts on initialization
       await loadPrompts();
-      
+
       // Handle chat ID from URL
       let chatId = window.location.hash.split('chatId=')[1];
       if (chatId) {
@@ -191,12 +191,12 @@ export default {
         currentChatId.value = chatId;
         messages.value = await chatHistoryService.loadChatMessages(chatId);
       }
-      
+
       // Set up periodic connection checking using configurable interval
       const checkInterval = settingsService.getNestedProperty(settingsService.settings, 'defaults.connection_check_interval') || 10000;
       setInterval(checkConnections, checkInterval);
     });
-    
+
     // Function to save settings to local storage and backend
     const saveSettings = async () => {
       try {
@@ -397,14 +397,14 @@ export default {
         const messageText = inputMessage.value;
         // Clear input immediately to prevent multiple sends
         inputMessage.value = '';
-        
+
         // Check if there is no active chat, create a new one if needed
         let chatId = window.location.hash.split('chatId=')[1];
         if (!chatId || !currentChatId.value) {
           await newChat();
           chatId = window.location.hash.split('chatId=')[1];
         }
-        
+
         // Add user message
         messages.value.push({
           sender: 'user',
@@ -513,10 +513,10 @@ export default {
       let fullUtilityText = '';
       let fullPlanningText = '';
       let currentToolCall = null;
-      
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
-      
+
       function readStream() {
         reader.read().then(({ done, value }) => {
           if (done) {
@@ -551,7 +551,7 @@ export default {
             saveMessagesToStorage();
             return;
           }
-          
+
           const chunk = decoder.decode(value, { stream: true });
           if (settings.value.message_display.show_debug) {
             messages.value.push({
@@ -561,14 +561,14 @@ export default {
               type: 'debug'
             });
           }
-          
+
           try { // Outer try block for chunk parsing
             const dataMatches = chunk.split('\n').filter(line => line.startsWith('data: '));
             if (dataMatches.length > 0) {
               for (const dataLine of dataMatches) {
                 const dataStr = dataLine.replace('data: ', '').trim();
                 if (!dataStr) continue;
-                
+
                 try { // Inner try block for JSON parsing
                   const data = JSON.parse(dataStr);
 
@@ -581,7 +581,7 @@ export default {
                       final: false
                     });
                   }
-                  
+
                   if (data.object === 'chat.completion.chunk' && data.choices && data.choices.length > 0) {
                     const choice = data.choices[0];
                     if (choice.delta) {
@@ -636,7 +636,7 @@ export default {
                           });
                         }
                         reader.cancel();
-                        
+
                         const toolCall = currentToolCall;
                         if (toolCall && (toolCall.name === 'fetch_wikipedia_content' || toolCall.name === 'get_wikipedia_content')) {
                           try {
@@ -1112,7 +1112,7 @@ export default {
     onMounted(async () => {
       // Load chat list for sidebar
       await loadChatList();
-      
+
       // Load custom chat list names if available
       const savedChatList = localStorage.getItem('chat_list');
       if (savedChatList) {
@@ -1129,7 +1129,7 @@ export default {
           console.error('Error loading custom chat list names:', e);
         }
       }
-      
+
       let chatId = window.location.hash.split('chatId=')[1];
       if (!chatId && chatList.value.length > 0) {
         // If no chat ID in URL but we have chats, select the first one
@@ -1140,13 +1140,13 @@ export default {
         await newChat();
         chatId = window.location.hash.split('chatId=')[1];
       }
-      
+
       if (chatId) {
         currentChatId.value = chatId;
         // Always load from backend first to ensure sync
         await loadChatMessages(chatId);
       }
-      
+
       // Load settings from local storage if available
       const savedSettings = localStorage.getItem('chat_settings');
       if (savedSettings) {
@@ -1444,7 +1444,7 @@ export default {
     flex-direction: row; /* Keep input and button on the same line */
     align-items: flex-end;
   }
-  
+
   .chat-input textarea {
     min-height: 40px; /* Smaller height on mobile */
   }

@@ -2,9 +2,12 @@ import platform
 import subprocess
 import os
 import json
-import requests # Import requests for web fetching
-from markdownify import markdownify as md # Import markdownify for HTML to Markdown conversion
+import requests  # Import requests for web fetching
+from markdownify import (
+    markdownify as md,
+)  # Import markdownify for HTML to Markdown conversion
 from typing import Dict, Any, List, Optional
+
 
 class SystemIntegration:
     def __init__(self):
@@ -15,19 +18,34 @@ class SystemIntegration:
         """Helper to run shell commands and capture output."""
         try:
             result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=True,
-                shell=shell
+                command, capture_output=True, text=True, check=True, shell=shell
             )
-            return {"status": "success", "output": result.stdout.strip(), "error": result.stderr.strip()}
+            return {
+                "status": "success",
+                "output": result.stdout.strip(),
+                "error": result.stderr.strip(),
+            }
         except subprocess.CalledProcessError as e:
-            return {"status": "error", "message": f"Command failed with exit code {e.returncode}", "output": e.stdout.strip(), "error": e.stderr.strip()}
+            return {
+                "status": "error",
+                "message": f"Command failed with exit code {e.returncode}",
+                "output": e.stdout.strip(),
+                "error": e.stderr.strip(),
+            }
         except FileNotFoundError:
-            return {"status": "error", "message": f"Command not found: {command[0]}", "output": "", "error": ""}
+            return {
+                "status": "error",
+                "message": f"Command not found: {command[0]}",
+                "output": "",
+                "error": "",
+            }
         except Exception as e:
-            return {"status": "error", "message": f"An unexpected error occurred: {e}", "output": "", "error": str(e)}
+            return {
+                "status": "error",
+                "message": f"An unexpected error occurred: {e}",
+                "output": "",
+                "error": str(e),
+            }
 
     def query_system_info(self) -> Dict[str, Any]:
         """Queries basic system information."""
@@ -37,7 +55,7 @@ class SystemIntegration:
             "architecture": platform.machine(),
             "hostname": platform.node(),
             "cpu_count": os.cpu_count(),
-            "python_version": platform.python_version()
+            "python_version": platform.python_version(),
         }
 
         if self.os_type == "Windows":
@@ -49,7 +67,7 @@ class SystemIntegration:
                     # Parse CSV output for OS Name and Version
                     lines = cmd_result["output"].splitlines()
                     if lines:
-                        parts = lines[0].split(',')
+                        parts = lines[0].split(",")
                         # Assuming specific indices for OS Name and Version
                         # This is fragile and depends on systeminfo output format
                         # A more robust solution would parse the full CSV or use WMI
@@ -57,7 +75,7 @@ class SystemIntegration:
                             info["windows_os_name"] = parts[0].strip('"')
                             info["windows_os_version"] = parts[1].strip('"')
                 except Exception:
-                    pass # Ignore parsing errors
+                    pass  # Ignore parsing errors
 
         elif self.os_type == "Linux":
             # Example: Get distribution info
@@ -69,7 +87,7 @@ class SystemIntegration:
                         info["linux_distro"] = line.split(":", 1)[1].strip()
                     elif "Release:" in line:
                         info["linux_release"] = line.split(":", 1)[1].strip()
-            
+
             # Example: Kernel version
             info["kernel_version"] = platform.release()
 
@@ -78,22 +96,32 @@ class SystemIntegration:
     def list_services(self) -> Dict[str, Any]:
         """Lists active services."""
         if self.os_type == "Windows":
-            cmd = ["powershell", "Get-Service | Select-Object Name, Status | ConvertTo-Csv -NoTypeInformation"]
+            cmd = [
+                "powershell",
+                "Get-Service | Select-Object Name, Status | ConvertTo-Csv -NoTypeInformation",
+            ]
             result = self._run_command(cmd)
             if result["status"] == "success":
                 # Parse CSV output
-                lines = result["output"].strip().split('\n')
+                lines = result["output"].strip().split("\n")
                 services = []
                 if len(lines) > 1:
-                    headers = [h.strip('"') for h in lines[0].split(',')]
+                    headers = [h.strip('"') for h in lines[0].split(",")]
                     for line in lines[1:]:
-                        parts = [p.strip('"') for p in line.split(',')]
+                        parts = [p.strip('"') for p in line.split(",")]
                         if len(parts) == len(headers):
                             services.append(dict(zip(headers, parts)))
                 return {"status": "success", "services": services}
             return result
         elif self.os_type == "Linux":
-            cmd = ["systemctl", "list-units", "--type=service", "--all", "--no-pager", "--output=json"]
+            cmd = [
+                "systemctl",
+                "list-units",
+                "--type=service",
+                "--all",
+                "--no-pager",
+                "--output=json",
+            ]
             result = self._run_command(cmd)
             if result["status"] == "success":
                 try:
@@ -101,25 +129,40 @@ class SystemIntegration:
                     # Extract relevant info: Name, Description, ActiveState
                     parsed_services = []
                     for service in services_data:
-                        parsed_services.append({
-                            "Name": service.get("unit", "").replace(".service", ""),
-                            "Description": service.get("description", ""),
-                            "Status": service.get("activestate", "")
-                        })
+                        parsed_services.append(
+                            {
+                                "Name": service.get("unit", "").replace(".service", ""),
+                                "Description": service.get("description", ""),
+                                "Status": service.get("activestate", ""),
+                            }
+                        )
                     return {"status": "success", "services": parsed_services}
                 except json.JSONDecodeError:
-                    return {"status": "error", "message": "Failed to parse systemctl JSON output.", "output": result["output"]}
+                    return {
+                        "status": "error",
+                        "message": "Failed to parse systemctl JSON output.",
+                        "output": result["output"],
+                    }
             return result
         else:
-            return {"status": "error", "message": "Unsupported OS for listing services."}
+            return {
+                "status": "error",
+                "message": "Unsupported OS for listing services.",
+            }
 
     def manage_service(self, service_name: str, action: str) -> Dict[str, Any]:
         """Starts, stops, or restarts a system service."""
         if action not in ["start", "stop", "restart"]:
-            return {"status": "error", "message": "Invalid service action. Must be 'start', 'stop', or 'restart'."}
+            return {
+                "status": "error",
+                "message": "Invalid service action. Must be 'start', 'stop', or 'restart'.",
+            }
 
         if self.os_type == "Windows":
-            cmd = ["powershell", f"Set-Service -Name '{service_name}' -Status '{action}'"]
+            cmd = [
+                "powershell",
+                f"Set-Service -Name '{service_name}' -Status '{action}'",
+            ]
             # Note: Set-Service -Status doesn't directly start/stop, it sets desired state.
             # For immediate action, use Start-Service, Stop-Service, Restart-Service
             if action == "start":
@@ -128,19 +171,28 @@ class SystemIntegration:
                 cmd = ["powershell", f"Stop-Service -Name '{service_name}'"]
             elif action == "restart":
                 cmd = ["powershell", f"Restart-Service -Name '{service_name}'"]
-            
+
             result = self._run_command(cmd)
             if result["status"] == "success":
-                return {"status": "success", "message": f"Service '{service_name}' {action}ed successfully."}
+                return {
+                    "status": "success",
+                    "message": f"Service '{service_name}' {action}ed successfully.",
+                }
             return result
         elif self.os_type == "Linux":
             cmd = ["sudo", "systemctl", action, service_name]
             result = self._run_command(cmd)
             if result["status"] == "success":
-                return {"status": "success", "message": f"Service '{service_name}' {action}ed successfully."}
+                return {
+                    "status": "success",
+                    "message": f"Service '{service_name}' {action}ed successfully.",
+                }
             return result
         else:
-            return {"status": "error", "message": "Unsupported OS for service management."}
+            return {
+                "status": "error",
+                "message": "Unsupported OS for service management.",
+            }
 
     def execute_system_command(self, command: str) -> Dict[str, Any]:
         """Executes a general system command."""
@@ -149,14 +201,16 @@ class SystemIntegration:
         return self._run_command([command], shell=True)
 
     # --- Windows-specific (pywin32/COM - placeholders) ---
-    def _windows_interact_com_app(self, app_name: str, action: str, **kwargs) -> Dict[str, Any]:
+    def _windows_interact_com_app(
+        self, app_name: str, action: str, **kwargs
+    ) -> Dict[str, Any]:
         """
         Placeholder for interacting with COM-based applications like Word/Excel using pywin32.
         This would require pywin32 to be installed and specific COM object knowledge.
         """
         if self.os_type != "Windows":
             return {"status": "error", "message": "This function is Windows-specific."}
-        
+
         # Example:
         # import win32com.client
         # try:
@@ -171,17 +225,22 @@ class SystemIntegration:
         #     # ... more actions
         # except Exception as e:
         #     return {"status": "error", "message": f"COM interaction failed: {e}"}
-        return {"status": "error", "message": f"Windows COM interaction for '{app_name}' is a placeholder. Not implemented without pywin32 and specific use case."}
+        return {
+            "status": "error",
+            "message": f"Windows COM interaction for '{app_name}' is a placeholder. Not implemented without pywin32 and specific use case.",
+        }
 
     # --- Linux-specific (DBus - placeholders) ---
-    def _linux_dbus_action(self, service: str, path: str, interface: str, method: str, *args) -> Dict[str, Any]:
+    def _linux_dbus_action(
+        self, service: str, path: str, interface: str, method: str, *args
+    ) -> Dict[str, Any]:
         """
         Placeholder for interacting with DBus services on Linux.
         Requires `dbus-python` or `pydbus` library.
         """
         if self.os_type != "Linux":
             return {"status": "error", "message": "This function is Linux-specific."}
-        
+
         # Example using dbus-send CLI tool (simpler, no extra Python lib needed)
         # cmd = ["dbus-send", "--print-reply", "--dest", service, path, interface + "." + method] + list(args)
         # result = self._run_command(cmd)
@@ -197,44 +256,66 @@ class SystemIntegration:
         #     return {"status": "success", "response": str(response)}
         # except Exception as e:
         #     return {"status": "error", "message": f"DBus interaction failed: {e}"}
-        return {"status": "error", "message": f"Linux DBus interaction for '{service}' is a placeholder. Not implemented without specific use case."}
+        return {
+            "status": "error",
+            "message": f"Linux DBus interaction for '{service}' is a placeholder. Not implemented without specific use case.",
+        }
 
-    def get_process_info(self, process_name: Optional[str] = None, pid: Optional[int] = None) -> Dict[str, Any]:
+    def get_process_info(
+        self, process_name: Optional[str] = None, pid: Optional[int] = None
+    ) -> Dict[str, Any]:
         """
         Retrieves information about running processes.
         If no arguments, lists all processes.
         """
-        import psutil # psutil is already in requirements.txt
+        import psutil  # psutil is already in requirements.txt
 
         processes_info = []
-        for proc in psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent']):
+        for proc in psutil.process_iter(
+            ["pid", "name", "username", "cpu_percent", "memory_percent"]
+        ):
             try:
                 pinfo = proc.info
-                if (process_name and process_name.lower() in pinfo['name'].lower()) or \
-                   (pid and pinfo['pid'] == pid) or \
-                   (not process_name and not pid):
+                if (
+                    (process_name and process_name.lower() in pinfo["name"].lower())
+                    or (pid and pinfo["pid"] == pid)
+                    or (not process_name and not pid)
+                ):
                     processes_info.append(pinfo)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
-        
+
         if not processes_info and (process_name or pid):
-            return {"status": "error", "message": f"No process found matching name '{process_name}' or PID '{pid}'."}
-        
+            return {
+                "status": "error",
+                "message": f"No process found matching name '{process_name}' or PID '{pid}'.",
+            }
+
         return {"status": "success", "processes": processes_info}
 
     def terminate_process(self, pid: int) -> Dict[str, Any]:
         """Terminates a process by PID."""
         import psutil
+
         try:
             process = psutil.Process(pid)
             process.terminate()
-            return {"status": "success", "message": f"Process with PID {pid} terminated."}
+            return {
+                "status": "success",
+                "message": f"Process with PID {pid} terminated.",
+            }
         except psutil.NoSuchProcess:
             return {"status": "error", "message": f"No process found with PID {pid}."}
         except psutil.AccessDenied:
-            return {"status": "error", "message": f"Access denied to terminate process with PID {pid}. Requires elevated privileges."}
+            return {
+                "status": "error",
+                "message": f"Access denied to terminate process with PID {pid}. Requires elevated privileges.",
+            }
         except Exception as e:
-            return {"status": "error", "message": f"Error terminating process {pid}: {e}"}
+            return {
+                "status": "error",
+                "message": f"Error terminating process {pid}: {e}",
+            }
 
     def web_fetch(self, url: str) -> Dict[str, Any]:
         """
@@ -243,26 +324,49 @@ class SystemIntegration:
         try:
             # Ensure URL starts with http:// or https://
             if not url.startswith("http://") and not url.startswith("https://"):
-                url = "https://" + url # Default to HTTPS
+                url = "https://" + url  # Default to HTTPS
 
             response = requests.get(url, timeout=10)
-            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
-            
-            content_type = response.headers.get('Content-Type', '').lower()
-            
-            if 'text/html' in content_type:
+            response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+
+            content_type = response.headers.get("Content-Type", "").lower()
+
+            if "text/html" in content_type:
                 markdown_content = md(response.text)
-                return {"status": "success", "url": url, "content_type": "text/markdown", "content": markdown_content}
-            elif 'text/plain' in content_type or 'application/json' in content_type:
-                return {"status": "success", "url": url, "content_type": content_type, "content": response.text}
+                return {
+                    "status": "success",
+                    "url": url,
+                    "content_type": "text/markdown",
+                    "content": markdown_content,
+                }
+            elif "text/plain" in content_type or "application/json" in content_type:
+                return {
+                    "status": "success",
+                    "url": url,
+                    "content_type": content_type,
+                    "content": response.text,
+                }
             else:
                 # For other content types, return a message indicating it's not text
-                return {"status": "error", "message": f"Unsupported content type for direct text extraction: {content_type}", "url": url}
+                return {
+                    "status": "error",
+                    "message": f"Unsupported content type for direct text extraction: {content_type}",
+                    "url": url,
+                }
 
         except requests.exceptions.RequestException as e:
-            return {"status": "error", "message": f"Failed to fetch URL {url}: {e}", "url": url}
+            return {
+                "status": "error",
+                "message": f"Failed to fetch URL {url}: {e}",
+                "url": url,
+            }
         except Exception as e:
-            return {"status": "error", "message": f"An unexpected error occurred during web fetch: {e}", "url": url}
+            return {
+                "status": "error",
+                "message": f"An unexpected error occurred during web fetch: {e}",
+                "url": url,
+            }
+
 
 # Example Usage (for testing)
 if __name__ == "__main__":
@@ -282,11 +386,11 @@ if __name__ == "__main__":
 
     print("\n--- Execute System Command ---")
     print(si.execute_system_command("echo Hello from system integration!"))
-    print(si.execute_system_command("ls -l /tmp")) # Linux example
-    print(si.execute_system_command("dir C:\\")) # Windows example
+    print(si.execute_system_command("ls -l /tmp"))  # Linux example
+    print(si.execute_system_command("dir C:\\"))  # Windows example
 
     print("\n--- Get Process Info ---")
-    print(si.get_process_info(process_name="python")) # Find Python processes
+    print(si.get_process_info(process_name="python"))  # Find Python processes
     # print(si.get_process_info(pid=1234)) # Find a specific PID
 
     print("\n--- Terminate Process (DANGEROUS - use with caution!) ---")
@@ -295,4 +399,4 @@ if __name__ == "__main__":
     # import time
     # time.sleep(60)
     # Run this in another terminal, get its PID, then try to terminate it here.
-        # print(si.terminate_process(12345))
+    # print(si.terminate_process(12345))

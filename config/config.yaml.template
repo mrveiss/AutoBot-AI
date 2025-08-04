@@ -7,7 +7,7 @@ backend:
   audit_log_file: "data/audit.log"
   chat_data_dir: "data/chats"
   chat_history_file: "data/chat_history.json"
-  
+
   # CORS Settings
   cors_origins:
     - "http://localhost:5173"
@@ -16,10 +16,10 @@ backend:
     - "http://127.0.0.1:8080"
     - "http://localhost:3000"
     - "http://127.0.0.1:3000"
-  
+
   # Data Storage
   knowledge_base_db: "data/knowledge_base.db"
-  
+
   # LLM Configuration
   llm:
     cloud:
@@ -49,12 +49,13 @@ backend:
         ollama:
           endpoint: "http://localhost:11434/api/generate"
           models:
-            - "tinyllama:latest"
+            - "phi:2.7b"
             - "phi:latest"
+            - "tinyllama:latest"
             - "llama2:latest"
-          selected_model: "tinyllama:latest"
+          selected_model: "phi:2.7b"
     provider_type: "local"
-  
+
   # Connection Settings
   max_retries: 3
   ollama_endpoint: "http://localhost:11434"
