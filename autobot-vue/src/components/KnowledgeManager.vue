@@ -46,6 +46,39 @@
       </div>
     </div>
 
+    <!-- Templates Tab -->
+    <div v-if="activeTab === 'templates'" class="tab-content">
+      <div class="templates-header">
+        <h3>Knowledge Entry Templates</h3>
+        <button @click="showCreateTemplateModal = true" class="create-btn">
+          <span class="icon">📝</span> Create Template
+        </button>
+      </div>
+
+      <div class="templates-grid">
+        <div v-for="template in knowledgeTemplates" :key="template.id" class="template-card" @click="useTemplate(template)">
+          <div class="template-icon">{{ template.icon }}</div>
+          <h4>{{ template.name }}</h4>
+          <p>{{ template.description }}</p>
+          <div class="template-fields">
+            <span v-for="field in template.fields.slice(0, 3)" :key="field" class="field-tag">{{ typeof field === 'string' ? field : field.name }}</span>
+            <span v-if="template.fields.length > 3" class="more-fields">+{{ template.fields.length - 3 }} more</span>
+          </div>
+          <div class="template-actions" @click.stop>
+            <button @click="editTemplate(template)" class="edit-template-btn" title="Edit Template">✏️</button>
+            <button @click="deleteTemplate(template.id)" class="delete-template-btn" title="Delete Template">🗑️</button>
+          </div>
+        </div>
+
+        <!-- Add custom template card -->
+        <div class="template-card add-template" @click="showCreateTemplateModal = true">
+          <div class="template-icon">➕</div>
+          <h4>Create Custom Template</h4>
+          <p>Design your own knowledge entry template</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Knowledge Entries Tab -->
     <div v-if="activeTab === 'entries'" class="tab-content">
       <div class="entries-header">
@@ -380,6 +413,7 @@ export default {
     const tabs = [
       { id: 'search', label: 'Search' },
       { id: 'entries', label: 'Knowledge Entries' },
+      { id: 'templates', label: 'Templates' },
       { id: 'manage', label: 'Manage' },
       { id: 'stats', label: 'Statistics' }
     ];
@@ -409,6 +443,60 @@ export default {
     });
     const tagsInput = ref('');
     const newLink = ref({ url: '', title: '' });
+
+    // Templates functionality
+    const knowledgeTemplates = ref([
+      {
+        id: 1,
+        name: 'Research Article',
+        icon: '📊',
+        category: 'research',
+        description: 'Template for documenting research findings and analysis',
+        fields: ['title', 'author', 'summary', 'key_findings', 'methodology', 'conclusions'],
+        contentTemplate: `# {{title}}\n\n**Author:** {{author}}\n**Date:** {{date}}\n\n## Summary\n{{summary}}\n\n## Key Findings\n{{key_findings}}\n\n## Methodology\n{{methodology}}\n\n## Conclusions\n{{conclusions}}\n\n## References\n{{references}}`
+      },
+      {
+        id: 2,
+        name: 'Meeting Notes',
+        icon: '📋',
+        category: 'business',
+        description: 'Template for capturing meeting discussions and action items',
+        fields: ['meeting_title', 'date', 'attendees', 'agenda', 'discussion', 'action_items', 'next_meeting'],
+        contentTemplate: `# {{meeting_title}}\n\n**Date:** {{date}}\n**Attendees:** {{attendees}}\n\n## Agenda\n{{agenda}}\n\n## Discussion Points\n{{discussion}}\n\n## Action Items\n{{action_items}}\n\n## Next Meeting\n{{next_meeting}}`
+      },
+      {
+        id: 3,
+        name: 'Bug Report',
+        icon: '🐛',
+        category: 'development',
+        description: 'Template for documenting software bugs and issues',
+        fields: ['bug_title', 'severity', 'steps_to_reproduce', 'expected_behavior', 'actual_behavior', 'environment', 'screenshots'],
+        contentTemplate: `# Bug: {{bug_title}}\n\n**Severity:** {{severity}}\n**Environment:** {{environment}}\n\n## Steps to Reproduce\n{{steps_to_reproduce}}\n\n## Expected Behavior\n{{expected_behavior}}\n\n## Actual Behavior\n{{actual_behavior}}\n\n## Screenshots/Evidence\n{{screenshots}}`
+      },
+      {
+        id: 4,
+        name: 'Learning Notes',
+        icon: '🎓',
+        category: 'personal',
+        description: 'Template for documenting learning and study materials',
+        fields: ['topic', 'source', 'key_concepts', 'examples', 'questions', 'related_topics'],
+        contentTemplate: `# Learning: {{topic}}\n\n**Source:** {{source}}\n**Date:** {{date}}\n\n## Key Concepts\n{{key_concepts}}\n\n## Examples\n{{examples}}\n\n## Questions for Further Study\n{{questions}}\n\n## Related Topics\n{{related_topics}}`
+      }
+    ]);
+
+    const showCreateTemplateModal = ref(false);
+    const showEditTemplateModal = ref(false);
+    const currentTemplate = ref({
+      name: '',
+      icon: '📝',
+      category: 'general',
+      description: '',
+      fields: [
+        { name: 'title', type: 'text', placeholder: 'Enter title' },
+        { name: 'content', type: 'textarea', placeholder: 'Enter main content' }
+      ],
+      contentTemplate: '# {{title}}\n\n{{content}}'
+    });
 
     // Add content functionality
     const addContentType = ref('text');
@@ -932,6 +1020,40 @@ export default {
       console.error('Error:', message);
     };
 
+    // Template functionality
+    const useTemplate = (template) => {
+      currentEntry.value = {
+        title: '',
+        content: template.contentTemplate,
+        source: '',
+        collection: template.category || 'default',
+        tags: [template.name.toLowerCase().replace(/\s+/g, '_')],
+        links: []
+      };
+      tagsInput.value = currentEntry.value.tags.join(', ');
+      showCreateModal.value = true;
+    };
+
+    const editTemplate = (template) => {
+      currentTemplate.value = {
+        ...template,
+        fields: template.fields.map(field =>
+          typeof field === 'string'
+            ? { name: field, type: 'text', placeholder: `Enter ${field}` }
+            : { ...field }
+        )
+      };
+      showEditTemplateModal.value = true;
+    };
+
+    const deleteTemplate = (templateId) => {
+      if (!confirm('Are you sure you want to delete this template? This action cannot be undone.')) {
+        return;
+      }
+      knowledgeTemplates.value = knowledgeTemplates.value.filter(t => t.id !== templateId);
+      showSuccess('Template deleted successfully');
+    };
+
     // Manage functionality
     const exportKnowledgeBase = async () => {
       exporting.value = true;
@@ -1090,7 +1212,16 @@ export default {
       loadStats,
 
       // Utilities
-      formatFileSize
+      formatFileSize,
+
+      // Templates
+      knowledgeTemplates,
+      showCreateTemplateModal,
+      showEditTemplateModal,
+      currentTemplate,
+      useTemplate,
+      editTemplate,
+      deleteTemplate
     };
   }
 };
