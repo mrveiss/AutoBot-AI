@@ -30,7 +30,7 @@ class HealthService {
   async checkHealth() {
     try {
       const data = await apiClient.checkHealth();
-      
+
       // Backend status
       this.healthData.backend = {
         connected: true,
@@ -64,8 +64,8 @@ class HealthService {
         this.healthData.redis = {
           connected: true,
           status: 'connected',
-          message: data.redis_search_module_loaded ? 
-            'Redis with RediSearch available' : 
+          message: data.redis_search_module_loaded ?
+            'Redis with RediSearch available' :
             'Redis connected but RediSearch not loaded',
           search_module: data.redis_search_module_loaded
         };
@@ -88,7 +88,7 @@ class HealthService {
         status: 'disconnected',
         message: `Backend connection failed: ${error.message}`
       };
-      
+
       this.healthData.llm = {
         connected: false,
         status: 'disconnected',
@@ -96,7 +96,7 @@ class HealthService {
         current_model: null,
         provider: null
       };
-      
+
       this.healthData.redis = {
         connected: false,
         status: 'disconnected',
@@ -126,10 +126,10 @@ class HealthService {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
     }
-    
+
     // Initial check
     this.checkHealth().catch(console.error);
-    
+
     // Periodic checks
     this.checkInterval = setInterval(() => {
       this.checkHealth().catch(console.error);

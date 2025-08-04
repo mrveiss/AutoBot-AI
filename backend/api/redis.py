@@ -8,6 +8,7 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
+
 @router.get("/config")
 async def get_redis_config():
     """Get current Redis configuration"""
@@ -15,7 +16,10 @@ async def get_redis_config():
         return ConfigService.get_redis_config()
     except Exception as e:
         logger.error(f"Error getting Redis config: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error getting Redis config: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting Redis config: {str(e)}"
+        )
+
 
 @router.post("/config")
 async def update_redis_config(config_data: dict):
@@ -25,7 +29,10 @@ async def update_redis_config(config_data: dict):
         return result
     except Exception as e:
         logger.error(f"Error updating Redis config: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error updating Redis config: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error updating Redis config: {str(e)}"
+        )
+
 
 @router.post("/test_connection")
 async def test_redis_connection():
@@ -37,5 +44,5 @@ async def test_redis_connection():
         logger.error(f"Redis connection test failed: {str(e)}")
         return {
             "status": "disconnected",
-            "message": f"Failed to connect to Redis: {str(e)}"
+            "message": f"Failed to connect to Redis: {str(e)}",
         }

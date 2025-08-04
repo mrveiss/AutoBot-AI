@@ -14,11 +14,8 @@ import logging.config
 # Configure logging at the very beginning
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("logs/autobot_backend.log"),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("logs/autobot_backend.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -29,34 +26,30 @@ from src.config import config as global_config_manager
 # Create the FastAPI application at module level for ASGI server
 app = create_app()
 
+
 def main():
     """Main function to start the AutoBot backend server."""
     logger.info("Starting AutoBot backend server...")
-    
+
     # Use the module-level app
     global app
-    
+
     # Get server configuration from centralized config
     backend_config = global_config_manager.get_backend_config()
-    host = backend_config.get('server_host', '0.0.0.0')
-    port = backend_config.get('server_port', 8001)
-    
+    host = backend_config.get("server_host", "0.0.0.0")
+    port = backend_config.get("server_port", 8001)
+
     # Get additional server settings
-    reload = backend_config.get('reload', False)
-    log_level = backend_config.get('log_level', 'info')
-    
+    reload = backend_config.get("reload", False)
+    log_level = backend_config.get("log_level", "info")
+
     logger.info(f"Starting server on {host}:{port}")
     logger.info(f"Reload enabled: {reload}")
     logger.info(f"Log level: {log_level}")
-    
+
     # Start the server
-    uvicorn.run(
-        app,
-        host=host,
-        port=port,
-        reload=reload,
-        log_level=log_level
-    )
+    uvicorn.run(app, host=host, port=port, reload=reload, log_level=log_level)
+
 
 if __name__ == "__main__":
     main()

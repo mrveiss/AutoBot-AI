@@ -67,7 +67,7 @@ class ChatManager {
   async getChatList() {
     try {
       const response = await fetch(`${this.apiEndpoint}/api/chats`);
-      
+
       if (response.ok) {
         const data = await response.json();
         const chats = data.chats || [];
@@ -104,7 +104,7 @@ class ChatManager {
     try {
       // Try backend first
       const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}`);
-      
+
       if (response.ok) {
         const messages = await response.json();
         console.log(`Loaded ${messages.length} messages from backend for chat ${chatId}`);
@@ -201,7 +201,7 @@ class ChatManager {
 
     // Always clean up localStorage
     this.deleteFromLocalStorage(chatId);
-    
+
     // If this was the current chat, clear it
     if (this.currentChatId === chatId) {
       this.currentChatId = null;
@@ -234,7 +234,7 @@ class ChatManager {
 
       if (response.ok) {
         console.log(`Chat ${chatId} reset successfully`);
-        
+
         // Also reset in localStorage
         const initialMessage = [{
           sender: 'bot',
@@ -243,7 +243,7 @@ class ChatManager {
           type: 'response'
         }];
         this.saveMessagesToLocalStorage(chatId, initialMessage);
-        
+
         return { status: 'success' };
       } else {
         throw new Error(`Failed to reset chat: ${response.statusText}`);
@@ -272,7 +272,7 @@ class ChatManager {
 
       if (response.ok) {
         const contentType = response.headers.get('content-type');
-        
+
         if (contentType && contentType.includes('text/event-stream')) {
           // Handle streaming response
           return {
@@ -308,7 +308,7 @@ class ChatManager {
       if (userMessage && userMessage.text) {
         return userMessage.text.substring(0, 50) + (userMessage.text.length > 50 ? '...' : '');
       }
-      
+
       // If no user message, use the first message
       const firstMessage = messages[0];
       if (firstMessage && firstMessage.text) {
@@ -326,7 +326,7 @@ class ChatManager {
         method: 'GET',
         timeout: 5000
       });
-      
+
       return {
         connected: response.ok,
         status: response.status,
@@ -376,11 +376,11 @@ class ChatManager {
   // Utility method to format timestamps
   formatTimestamp(timestamp) {
     if (!timestamp) return new Date().toLocaleTimeString();
-    
+
     if (typeof timestamp === 'string') {
       // If it's already formatted, return as is
       if (timestamp.includes(':')) return timestamp;
-      
+
       // If it's an ISO string, format it
       try {
         return new Date(timestamp).toLocaleTimeString();
@@ -388,11 +388,11 @@ class ChatManager {
         return timestamp;
       }
     }
-    
+
     if (timestamp instanceof Date) {
       return timestamp.toLocaleTimeString();
     }
-    
+
     return new Date().toLocaleTimeString();
   }
 

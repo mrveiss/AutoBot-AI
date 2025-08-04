@@ -21,7 +21,7 @@ __pycache__/
 node_modules/
 autobot-vue/node_modules/
 
-# Package manager lock files 
+# Package manager lock files
 # Note: package-lock.json should be committed to ensure consistent dependency versions
 yarn.lock
 pnpm-lock.yaml

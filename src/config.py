@@ -17,9 +17,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
 class ConfigManager:
     """Centralized configuration manager"""
-    
+
     def __init__(self, config_dir: str = "config"):
         # Find project root dynamically (directory containing this file is src/, parent is project root)
         self.project_root = Path(__file__).parent.parent
@@ -28,102 +29,114 @@ class ConfigManager:
         self.settings_file = self.config_dir / "settings.json"
         self._config: Dict[str, Any] = {}
         self._load_configuration()
-    
+
     def _load_configuration(self) -> None:
         """Load and merge all configuration sources"""
         try:
             # Load base configuration from YAML
             base_config = self._load_yaml_config()
-            
+
             # Load user settings from JSON (if exists)
             user_settings = self._load_json_settings()
-            
+
             # Merge configurations (user settings override base config)
             self._config = self._deep_merge(base_config, user_settings)
-            
+
             # Apply environment variable overrides
             self._apply_env_overrides()
-            
+
             logger.info("Configuration loaded successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to load configuration: {e}")
             raise
-    
+
     def _load_yaml_config(self) -> Dict[str, Any]:
         """Load base configuration from YAML file"""
         if not self.base_config_file.exists():
-            raise FileNotFoundError(f"Base configuration file not found: {self.base_config_file}")
-        
+            raise FileNotFoundError(
+                f"Base configuration file not found: {self.base_config_file}"
+            )
+
         try:
-            with open(self.base_config_file, 'r', encoding='utf-8') as f:
+            with open(self.base_config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
             logger.info(f"Base configuration loaded from {self.base_config_file}")
             return config
         except Exception as e:
             logger.error(f"Failed to load YAML configuration: {e}")
             raise
-    
+
     def _load_json_settings(self) -> Dict[str, Any]:
         """Load user settings from JSON file"""
         if not self.settings_file.exists():
-            logger.info(f"Settings file not found: {self.settings_file}, using base configuration only")
+            logger.info(
+                f"Settings file not found: {self.settings_file}, using base configuration only"
+            )
             return {}
-        
+
         try:
-            with open(self.settings_file, 'r', encoding='utf-8') as f:
+            with open(self.settings_file, "r", encoding="utf-8") as f:
                 settings = json.load(f)
             logger.info(f"User settings loaded from {self.settings_file}")
             return settings
         except Exception as e:
-            logger.warning(f"Failed to load JSON settings: {e}, using base configuration only")
+            logger.warning(
+                f"Failed to load JSON settings: {e}, using base configuration only"
+            )
             return {}
-    
-    def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _deep_merge(
+        self, base: Dict[str, Any], override: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Deep merge two dictionaries, with override taking precedence"""
         result = base.copy()
-        
+
         for key, value in override.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+            ):
                 result[key] = self._deep_merge(result[key], value)
             else:
                 result[key] = value
-        
+
         return result
-    
+
     def _apply_env_overrides(self) -> None:
         """Apply environment variable overrides using AUTOBOT_ prefix"""
         env_overrides = {}
-        
+
         # Common environment variable mappings
         env_mappings = {
-            'AUTOBOT_OLLAMA_HOST': ['llm_config', 'ollama', 'host'],
-            'AUTOBOT_OLLAMA_PORT': ['llm_config', 'ollama', 'port'],
-            'AUTOBOT_OLLAMA_MODEL': ['llm_config', 'ollama', 'model'],
-            'AUTOBOT_ORCHESTRATOR_LLM': ['llm_config', 'orchestrator_llm'],
-            'AUTOBOT_REDIS_HOST': ['memory', 'redis', 'host'],
-            'AUTOBOT_REDIS_PORT': ['memory', 'redis', 'port'],
-            'AUTOBOT_BACKEND_PORT': ['backend', 'server_port'],
-            'AUTOBOT_USE_LANGCHAIN': ['orchestrator', 'use_langchain'],
+            "AUTOBOT_OLLAMA_HOST": ["llm_config", "ollama", "host"],
+            "AUTOBOT_OLLAMA_PORT": ["llm_config", "ollama", "port"],
+            "AUTOBOT_OLLAMA_MODEL": ["llm_config", "ollama", "model"],
+            "AUTOBOT_ORCHESTRATOR_LLM": ["llm_config", "orchestrator_llm"],
+            "AUTOBOT_REDIS_HOST": ["memory", "redis", "host"],
+            "AUTOBOT_REDIS_PORT": ["memory", "redis", "port"],
+            "AUTOBOT_BACKEND_PORT": ["backend", "server_port"],
+            "AUTOBOT_USE_LANGCHAIN": ["orchestrator", "use_langchain"],
         }
-        
+
         for env_var, config_path in env_mappings.items():
             env_value = os.getenv(env_var)
             if env_value is not None:
                 # Convert string values to appropriate types
-                if env_value.lower() in ('true', 'false'):
-                    env_value = env_value.lower() == 'true'
+                if env_value.lower() in ("true", "false"):
+                    env_value = env_value.lower() == "true"
                 elif env_value.isdigit():
                     env_value = int(env_value)
-                
+
                 # Set the value in the config
                 self._set_nested_value(env_overrides, config_path, env_value)
                 logger.info(f"Applied environment override: {env_var} = {env_value}")
-        
+
         # Merge environment overrides
         if env_overrides:
             self._config = self._deep_merge(self._config, env_overrides)
-    
+
     def _set_nested_value(self, config: Dict[str, Any], path: list, value: Any) -> None:
         """Set a nested value in a dictionary using a path list"""
         current = config
@@ -132,124 +145,132 @@ class ConfigManager:
                 current[key] = {}
             current = current[key]
         current[path[-1]] = value
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key"""
         return self._config.get(key, default)
-    
+
     def get_nested(self, path: str, default: Any = None) -> Any:
         """Get a nested configuration value using dot notation (e.g., 'llm_config.ollama.model')"""
-        keys = path.split('.')
+        keys = path.split(".")
         current = self._config
-        
+
         try:
             for key in keys:
                 current = current[key]
             return current
         except (KeyError, TypeError):
             return default
-    
+
     def set(self, key: str, value: Any) -> None:
         """Set a configuration value"""
         self._config[key] = value
-    
+
     def set_nested(self, path: str, value: Any) -> None:
         """Set a nested configuration value using dot notation"""
-        keys = path.split('.')
+        keys = path.split(".")
         current = self._config
-        
+
         for key in keys[:-1]:
             if key not in current:
                 current[key] = {}
             current = current[key]
-        
+
         current[keys[-1]] = value
-    
+
     def save_settings(self) -> None:
         """Save current configuration to settings.json"""
         try:
             self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.settings_file, 'w', encoding='utf-8') as f:
+            with open(self.settings_file, "w", encoding="utf-8") as f:
                 json.dump(self._config, f, indent=2, ensure_ascii=False)
             logger.info(f"Settings saved to {self.settings_file}")
         except Exception as e:
             logger.error(f"Failed to save settings: {e}")
             raise
-    
+
     def reload(self) -> None:
         """Reload configuration from files"""
         self._load_configuration()
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Return the complete configuration as a dictionary"""
         return self._config.copy()
-    
+
     def get_llm_config(self) -> Dict[str, Any]:
         """Get LLM configuration with fallback defaults"""
-        llm_config = self.get('llm_config', {})
-        
+        llm_config = self.get("llm_config", {})
+
         # Ensure we have sensible defaults
         defaults = {
-            'default_llm': 'ollama',
-            'orchestrator_llm': os.getenv('AUTOBOT_ORCHESTRATOR_LLM', 'phi:2.7b'),
-            'task_llm': os.getenv('AUTOBOT_TASK_LLM', 'ollama'),
-            'ollama': {
-                'host': os.getenv('AUTOBOT_OLLAMA_HOST', 'http://localhost:11434'),
-                'port': int(os.getenv('AUTOBOT_OLLAMA_PORT', '11434')),
-                'model': os.getenv('AUTOBOT_OLLAMA_MODEL', 'phi:2.7b'),
-                'base_url': os.getenv('AUTOBOT_OLLAMA_BASE_URL', 'http://localhost:11434')
-            }
+            "default_llm": "ollama",
+            "orchestrator_llm": os.getenv("AUTOBOT_ORCHESTRATOR_LLM", "phi:2.7b"),
+            "task_llm": os.getenv("AUTOBOT_TASK_LLM", "ollama"),
+            "ollama": {
+                "host": os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434"),
+                "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
+                "model": os.getenv("AUTOBOT_OLLAMA_MODEL", "phi:2.7b"),
+                "base_url": os.getenv(
+                    "AUTOBOT_OLLAMA_BASE_URL", "http://localhost:11434"
+                ),
+            },
         }
-        
+
         return self._deep_merge(defaults, llm_config)
-    
+
     def get_redis_config(self) -> Dict[str, Any]:
         """Get Redis configuration with fallback defaults"""
-        redis_config = self.get_nested('memory.redis', {})
-        
+        redis_config = self.get_nested("memory.redis", {})
+
         defaults = {
-            'enabled': os.getenv('AUTOBOT_REDIS_ENABLED', 'true').lower() == 'true',
-            'host': os.getenv('AUTOBOT_REDIS_HOST', 'localhost'),
-            'port': int(os.getenv('AUTOBOT_REDIS_PORT', '6379')),
-            'db': int(os.getenv('AUTOBOT_REDIS_DB', '1'))
+            "enabled": os.getenv("AUTOBOT_REDIS_ENABLED", "true").lower() == "true",
+            "host": os.getenv("AUTOBOT_REDIS_HOST", "localhost"),
+            "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+            "db": int(os.getenv("AUTOBOT_REDIS_DB", "1")),
         }
-        
+
         return self._deep_merge(defaults, redis_config)
-    
+
     def get_backend_config(self) -> Dict[str, Any]:
         """Get backend configuration with fallback defaults"""
-        backend_config = self.get('backend', {})
-        
+        backend_config = self.get("backend", {})
+
         defaults = {
-            'server_host': os.getenv('AUTOBOT_BACKEND_HOST', '0.0.0.0'),
-            'server_port': int(os.getenv('AUTOBOT_BACKEND_PORT', '8001')),
-            'api_endpoint': os.getenv('AUTOBOT_BACKEND_API_ENDPOINT', 'http://localhost:8001'),
-            'cors_origins': ['http://localhost:5173', 'http://127.0.0.1:5173']  # Vue frontend only
+            "server_host": os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0"),
+            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
+            "api_endpoint": os.getenv(
+                "AUTOBOT_BACKEND_API_ENDPOINT", "http://localhost:8001"
+            ),
+            "cors_origins": [
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+            ],  # Vue frontend only
         }
-        
+
         return self._deep_merge(defaults, backend_config)
-    
+
     def validate_config(self) -> Dict[str, Any]:
         """Validate configuration and return status of dependencies"""
         status = {
-            'config_loaded': True,
-            'llm_config': self.get_llm_config(),
-            'redis_config': self.get_redis_config(),
-            'backend_config': self.get_backend_config(),
-            'issues': []
+            "config_loaded": True,
+            "llm_config": self.get_llm_config(),
+            "redis_config": self.get_redis_config(),
+            "backend_config": self.get_backend_config(),
+            "issues": [],
         }
-        
+
         # Validate LLM configuration
-        llm_config = status['llm_config']
-        if not llm_config.get('orchestrator_llm'):
-            status['issues'].append("No orchestrator_llm specified")
-        
+        llm_config = status["llm_config"]
+        if not llm_config.get("orchestrator_llm"):
+            status["issues"].append("No orchestrator_llm specified")
+
         # Validate Redis configuration
-        redis_config = status['redis_config']
-        if redis_config.get('enabled', True) and not redis_config.get('host'):
-            status['issues'].append("Redis enabled but no host specified")
-        
+        redis_config = status["redis_config"]
+        if redis_config.get("enabled", True) and not redis_config.get("host"):
+            status["issues"].append("Redis enabled but no host specified")
+
         return status
+
 
 # Global configuration instance
 config = ConfigManager()
@@ -257,26 +278,32 @@ config = ConfigManager()
 # Alias for backward compatibility and consistent naming
 global_config_manager = config
 
+
 # Convenience functions for backward compatibility
 def get_config() -> Dict[str, Any]:
     """Get the complete configuration dictionary"""
     return config.to_dict()
 
+
 def get_llm_config() -> Dict[str, Any]:
     """Get LLM configuration"""
     return config.get_llm_config()
+
 
 def get_redis_config() -> Dict[str, Any]:
     """Get Redis configuration"""
     return config.get_redis_config()
 
+
 def get_backend_config() -> Dict[str, Any]:
     """Get backend configuration"""
     return config.get_backend_config()
 
+
 def reload_config() -> None:
     """Reload configuration from files"""
     config.reload()
+
 
 def validate_config() -> Dict[str, Any]:
     """Validate configuration and return status"""

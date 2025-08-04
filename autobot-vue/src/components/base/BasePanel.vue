@@ -8,11 +8,11 @@
         <slot name="actions"></slot>
       </div>
     </div>
-    
+
     <div class="panel-content" :class="contentClasses">
       <slot></slot>
     </div>
-    
+
     <div class="panel-footer" v-if="$slots.footer">
       <slot name="footer"></slot>
     </div>
@@ -150,15 +150,15 @@ const toggleCollapse = () => {
   .panel-header {
     @apply p-3;
   }
-  
+
   .panel-content {
     @apply p-3;
   }
-  
+
   .panel-footer {
     @apply p-3;
   }
-  
+
   .panel-title {
     @apply text-base;
   }

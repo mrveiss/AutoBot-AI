@@ -88,10 +88,10 @@ AutoBot is a sophisticated autonomous agent that combines modern AI capabilities
   ```bash
   # Ubuntu/Debian
   sudo apt update && sudo apt install tesseract-ocr
-  
+
   # macOS
   brew install tesseract
-  
+
   # Windows
   # Download from: https://github.com/UB-Mannheim/tesseract/wiki
   ```
@@ -449,14 +449,14 @@ The system automatically imports your carefully crafted prompt library into the 
 
 #### **Before Intelligence Sync:**
 - Generic tool usage with basic descriptions
-- Trial-and-error JSON formatting  
+- Trial-and-error JSON formatting
 - Limited error recovery strategies
 - One-size-fits-all behavioral patterns
 
 #### **After Intelligence Sync:**
 - **Contextual Tool Mastery**: Access to proven JSON patterns like `behaviour_adjustment`
 - **Proactive Error Prevention**: Specific recovery strategies for each error type
-- **Domain Expertise Switching**: Automatic adaptation for different task contexts  
+- **Domain Expertise Switching**: Automatic adaptation for different task contexts
 - **Behavioral Intelligence**: Situation-appropriate communication and problem-solving
 
 ### 📊 Strategic Import Categories
@@ -503,7 +503,7 @@ The system provides comprehensive API endpoints for management:
 #### **Integration Points:**
 1. **Fact Storage**: Leverages existing Redis fact storage with structured metadata
 2. **Update Mechanism**: Uses `update_fact()` for modifying existing prompts
-3. **Deletion Support**: Uses `delete_fact()` for cleanup operations  
+3. **Deletion Support**: Uses `delete_fact()` for cleanup operations
 4. **Search Integration**: Uses `get_all_facts()` for finding and filtering prompts
 
 ### 🔄 How It Works
@@ -526,7 +526,7 @@ Your agent will gain access to:
 
 - **60+ operational intelligence patterns** from your extensive prompt library
 - **Context-aware tool usage** with optimal parameter selection
-- **Proactive error prevention** using documented recovery strategies  
+- **Proactive error prevention** using documented recovery strategies
 - **Domain expertise switching** based on task requirements
 - **Behavioral adaptation** for situation-appropriate responses
 
@@ -534,7 +534,7 @@ Your agent will gain access to:
 
 #### **Core Components:**
 - **`src/prompt_knowledge_sync.py`** - Main synchronization engine
-- **`backend/api/prompt_sync.py`** - REST API endpoints  
+- **`backend/api/prompt_sync.py`** - REST API endpoints
 - **`backend/app_factory.py`** - System integration and registration
 
 #### **Key Features:**

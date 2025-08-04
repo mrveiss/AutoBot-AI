@@ -23,6 +23,7 @@ from dataclasses import dataclass
 @dataclass
 class CommandPattern:
     """Represents a whitelisted command pattern with validation rules."""
+
     command: str
     allowed_args: List[str]
     arg_patterns: Dict[str, str]  # arg_name -> regex pattern
@@ -33,212 +34,194 @@ class CommandPattern:
 
 class CommandValidator:
     """Validates and sanitizes commands before execution to prevent injection attacks."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._init_whitelist()
-        
+
     def _init_whitelist(self) -> None:
         """Initialize the whitelist of allowed commands and their patterns."""
         self.whitelist: Dict[str, CommandPattern] = {
             # System information commands
-            'ps': CommandPattern(
-                command='ps',
-                allowed_args=['aux', 'ef', '-ef', '-aux', 'axf'],
-                arg_patterns={
-                    'aux': r'^aux$',
-                    'ef': r'^-?ef$',
-                    'axf': r'^axf$'
-                },
+            "ps": CommandPattern(
+                command="ps",
+                allowed_args=["aux", "ef", "-ef", "-aux", "axf"],
+                arg_patterns={"aux": r"^aux$", "ef": r"^-?ef$", "axf": r"^axf$"},
                 max_args=1,
-                description='Process status listing'
+                description="Process status listing",
             ),
-            'ls': CommandPattern(
-                command='ls',
-                allowed_args=['-l', '-la', '-al', '-a', '--all', '-h', '--human-readable'],
+            "ls": CommandPattern(
+                command="ls",
+                allowed_args=[
+                    "-l",
+                    "-la",
+                    "-al",
+                    "-a",
+                    "--all",
+                    "-h",
+                    "--human-readable",
+                ],
                 arg_patterns={
-                    '-l': r'^-l$',
-                    '-la': r'^-la$',
-                    '-al': r'^-al$',
-                    '-a': r'^-a$',
-                    '--all': r'^--all$',
-                    '-h': r'^-h$',
-                    '--human-readable': r'^--human-readable$'
+                    "-l": r"^-l$",
+                    "-la": r"^-la$",
+                    "-al": r"^-al$",
+                    "-a": r"^-a$",
+                    "--all": r"^--all$",
+                    "-h": r"^-h$",
+                    "--human-readable": r"^--human-readable$",
                 },
                 max_args=3,
-                description='Directory listing'
+                description="Directory listing",
             ),
-            'pwd': CommandPattern(
-                command='pwd',
+            "pwd": CommandPattern(
+                command="pwd",
                 allowed_args=[],
                 arg_patterns={},
                 max_args=0,
-                description='Print working directory'
+                description="Print working directory",
             ),
-            'whoami': CommandPattern(
-                command='whoami',
+            "whoami": CommandPattern(
+                command="whoami",
                 allowed_args=[],
                 arg_patterns={},
                 max_args=0,
-                description='Current user identification'
+                description="Current user identification",
             ),
-            'id': CommandPattern(
-                command='id',
-                allowed_args=['-u', '-g', '-G'],
-                arg_patterns={
-                    '-u': r'^-u$',
-                    '-g': r'^-g$',
-                    '-G': r'^-G$'
-                },
+            "id": CommandPattern(
+                command="id",
+                allowed_args=["-u", "-g", "-G"],
+                arg_patterns={"-u": r"^-u$", "-g": r"^-g$", "-G": r"^-G$"},
                 max_args=1,
-                description='User and group ID information'
+                description="User and group ID information",
             ),
-            'uname': CommandPattern(
-                command='uname',
-                allowed_args=['-a', '-r', '-s'],
-                arg_patterns={
-                    '-a': r'^-a$',
-                    '-r': r'^-r$',
-                    '-s': r'^-s$'
-                },
+            "uname": CommandPattern(
+                command="uname",
+                allowed_args=["-a", "-r", "-s"],
+                arg_patterns={"-a": r"^-a$", "-r": r"^-r$", "-s": r"^-s$"},
                 max_args=1,
-                description='System information'
+                description="System information",
             ),
-            'uptime': CommandPattern(
-                command='uptime',
+            "uptime": CommandPattern(
+                command="uptime",
                 allowed_args=[],
                 arg_patterns={},
                 max_args=0,
-                description='System uptime and load'
+                description="System uptime and load",
             ),
-            'date': CommandPattern(
-                command='date',
+            "date": CommandPattern(
+                command="date",
                 allowed_args=[],
                 arg_patterns={},
                 max_args=0,
-                description='Current date and time'
+                description="Current date and time",
             ),
-            'df': CommandPattern(
-                command='df',
-                allowed_args=['-h', '--human-readable'],
-                arg_patterns={
-                    '-h': r'^-h$',
-                    '--human-readable': r'^--human-readable$'
-                },
+            "df": CommandPattern(
+                command="df",
+                allowed_args=["-h", "--human-readable"],
+                arg_patterns={"-h": r"^-h$", "--human-readable": r"^--human-readable$"},
                 max_args=1,
-                description='Disk space usage'
+                description="Disk space usage",
             ),
-            'free': CommandPattern(
-                command='free',
-                allowed_args=['-h', '-m'],
-                arg_patterns={
-                    '-h': r'^-h$',
-                    '-m': r'^-m$'
-                },
+            "free": CommandPattern(
+                command="free",
+                allowed_args=["-h", "-m"],
+                arg_patterns={"-h": r"^-h$", "-m": r"^-m$"},
                 max_args=1,
-                description='Memory usage information'
+                description="Memory usage information",
             ),
             # Network information commands
-            'ifconfig': CommandPattern(
-                command='ifconfig',
+            "ifconfig": CommandPattern(
+                command="ifconfig",
                 allowed_args=[],
                 arg_patterns={},
                 max_args=0,
-                description='Network interface configuration'
+                description="Network interface configuration",
             ),
-            'ip': CommandPattern(
-                command='ip',
-                allowed_args=['addr', 'show', 'route'],
+            "ip": CommandPattern(
+                command="ip",
+                allowed_args=["addr", "show", "route"],
                 arg_patterns={
-                    'addr': r'^addr$',
-                    'show': r'^show$',
-                    'route': r'^route$'
+                    "addr": r"^addr$",
+                    "show": r"^show$",
+                    "route": r"^route$",
                 },
                 max_args=2,
-                description='Network configuration tool'
+                description="Network configuration tool",
             ),
-            'netstat': CommandPattern(
-                command='netstat',
-                allowed_args=['-tuln', '-rn'],
-                arg_patterns={
-                    '-tuln': r'^-tuln$',
-                    '-rn': r'^-rn$'
-                },
+            "netstat": CommandPattern(
+                command="netstat",
+                allowed_args=["-tuln", "-rn"],
+                arg_patterns={"-tuln": r"^-tuln$", "-rn": r"^-rn$"},
                 max_args=1,
-                description='Network connections and routing'
+                description="Network connections and routing",
             ),
-            'ss': CommandPattern(
-                command='ss',
-                allowed_args=['-tuln', '-rn'],
-                arg_patterns={
-                    '-tuln': r'^-tuln$',
-                    '-rn': r'^-rn$'
-                },
+            "ss": CommandPattern(
+                command="ss",
+                allowed_args=["-tuln", "-rn"],
+                arg_patterns={"-tuln": r"^-tuln$", "-rn": r"^-rn$"},
                 max_args=1,
-                description='Socket statistics'
+                description="Socket statistics",
             ),
             # Safe file operations (read-only)
-            'cat': CommandPattern(
-                command='cat',
+            "cat": CommandPattern(
+                command="cat",
                 allowed_args=[],
                 arg_patterns={},
                 max_args=1,  # Allow one filename
-                description='Display file contents',
-                shell_required=True  # Need shell for path resolution
+                description="Display file contents",
+                shell_required=True,  # Need shell for path resolution
             ),
-            'head': CommandPattern(
-                command='head',
-                allowed_args=['-n'],
-                arg_patterns={
-                    '-n': r'^-n$'
-                },
+            "head": CommandPattern(
+                command="head",
+                allowed_args=["-n"],
+                arg_patterns={"-n": r"^-n$"},
                 max_args=3,  # -n NUMBER filename
-                description='Display first lines of file',
-                shell_required=True
+                description="Display first lines of file",
+                shell_required=True,
             ),
-            'tail': CommandPattern(
-                command='tail', 
-                allowed_args=['-n'],
-                arg_patterns={
-                    '-n': r'^-n$'
-                },
+            "tail": CommandPattern(
+                command="tail",
+                allowed_args=["-n"],
+                arg_patterns={"-n": r"^-n$"},
                 max_args=3,  # -n NUMBER filename
-                description='Display last lines of file',
-                shell_required=True
-            )
+                description="Display last lines of file",
+                shell_required=True,
+            ),
         }
-        
+
         # Dangerous command patterns to explicitly block
         self.dangerous_patterns = [
-            r'rm\s+-rf',     # rm -rf (dangerous deletion)
-            r'rm\s.*/',      # rm with paths
-            r';\s*rm',       # Command chaining with rm
-            r'&&\s*rm',      # Command chaining with rm
-            r'\|\s*rm',      # Piping to rm
-            r'>\s*/dev/',    # Redirecting to device files
-            r'curl.*\|\s*sh', # Download and execute
-            r'wget.*\|\s*sh', # Download and execute
-            r'eval\s*\(',    # eval() execution
-            r'exec\s*\(',    # exec() execution
-            r'system\s*\(',  # system() calls
-            r'`.*`',         # Backtick command substitution
-            r'\$\(',         # Command substitution
-            r'>\s*/etc/',    # Writing to system directories
-            r'>\s*/usr/',    # Writing to system directories
-            r'>\s*/var/',    # Writing to system directories
-            r'chmod.*777',   # Dangerous permissions
-            r'chown.*root',  # Ownership changes
-            r'sudo\s+',      # Privilege escalation
-            r'su\s+',        # User switching
+            r"rm\s+-rf",  # rm -rf (dangerous deletion)
+            r"rm\s.*/",  # rm with paths
+            r";\s*rm",  # Command chaining with rm
+            r"&&\s*rm",  # Command chaining with rm
+            r"\|\s*rm",  # Piping to rm
+            r">\s*/dev/",  # Redirecting to device files
+            r"curl.*\|\s*sh",  # Download and execute
+            r"wget.*\|\s*sh",  # Download and execute
+            r"eval\s*\(",  # eval() execution
+            r"exec\s*\(",  # exec() execution
+            r"system\s*\(",  # system() calls
+            r"`.*`",  # Backtick command substitution
+            r"\$\(",  # Command substitution
+            r">\s*/etc/",  # Writing to system directories
+            r">\s*/usr/",  # Writing to system directories
+            r">\s*/var/",  # Writing to system directories
+            r"chmod.*777",  # Dangerous permissions
+            r"chown.*root",  # Ownership changes
+            r"sudo\s+",  # Privilege escalation
+            r"su\s+",  # User switching
         ]
 
-    def validate_command(self, command_string: str) -> Dict[str, Union[bool, str, List[str]]]:
+    def validate_command(
+        self, command_string: str
+    ) -> Dict[str, Union[bool, str, List[str]]]:
         """
         Validate a command string against security policies.
-        
+
         Args:
             command_string: The command string to validate
-            
+
         Returns:
             Dict with validation results:
             - valid: bool - Whether command is safe to execute
@@ -249,95 +232,101 @@ class CommandValidator:
         try:
             # Step 1: Check for dangerous patterns
             dangerous_check = self._check_dangerous_patterns(command_string)
-            if not dangerous_check['safe']:
+            if not dangerous_check["safe"]:
                 return {
-                    'valid': False,
-                    'reason': f"Dangerous pattern detected: {dangerous_check['pattern']}",
-                    'parsed_command': [],
-                    'use_shell': False
+                    "valid": False,
+                    "reason": f"Dangerous pattern detected: {dangerous_check['pattern']}",
+                    "parsed_command": [],
+                    "use_shell": False,
                 }
-            
+
             # Step 2: Parse command safely
             try:
                 command_parts = shlex.split(command_string.strip())
             except ValueError as e:
                 return {
-                    'valid': False,
-                    'reason': f"Command parsing failed: {str(e)}",
-                    'parsed_command': [],
-                    'use_shell': False
+                    "valid": False,
+                    "reason": f"Command parsing failed: {str(e)}",
+                    "parsed_command": [],
+                    "use_shell": False,
                 }
-            
+
             if not command_parts:
                 return {
-                    'valid': False,
-                    'reason': "Empty command",
-                    'parsed_command': [],
-                    'use_shell': False
+                    "valid": False,
+                    "reason": "Empty command",
+                    "parsed_command": [],
+                    "use_shell": False,
                 }
-            
+
             base_command = command_parts[0]
-            
+
             # Step 3: Check if command is whitelisted
             if base_command not in self.whitelist:
                 return {
-                    'valid': False,
-                    'reason': f"Command '{base_command}' not in whitelist",
-                    'parsed_command': [],
-                    'use_shell': False
+                    "valid": False,
+                    "reason": f"Command '{base_command}' not in whitelist",
+                    "parsed_command": [],
+                    "use_shell": False,
                 }
-            
+
             pattern = self.whitelist[base_command]
-            
+
             # Step 4: Validate arguments
             args = command_parts[1:] if len(command_parts) > 1 else []
-            
+
             if len(args) > pattern.max_args:
                 return {
-                    'valid': False,
-                    'reason': f"Too many arguments for '{base_command}' (max: {pattern.max_args}, got: {len(args)})",
-                    'parsed_command': [],
-                    'use_shell': False
+                    "valid": False,
+                    "reason": f"Too many arguments for '{base_command}' (max: {pattern.max_args}, got: {len(args)})",
+                    "parsed_command": [],
+                    "use_shell": False,
                 }
-            
+
             # Validate each argument
             arg_validation = self._validate_arguments(args, pattern)
-            if not arg_validation['valid']:
+            if not arg_validation["valid"]:
                 return {
-                    'valid': False,
-                    'reason': arg_validation['reason'],
-                    'parsed_command': [],
-                    'use_shell': False
+                    "valid": False,
+                    "reason": arg_validation["reason"],
+                    "parsed_command": [],
+                    "use_shell": False,
                 }
-            
+
             # Step 5: Success - command is safe
-            self.logger.info(f"Command validated successfully: {base_command} with {len(args)} args")
-            
+            self.logger.info(
+                f"Command validated successfully: {base_command} with {len(args)} args"
+            )
+
             return {
-                'valid': True,
-                'reason': f"Command '{base_command}' validated successfully",
-                'parsed_command': command_parts,
-                'use_shell': pattern.shell_required
+                "valid": True,
+                "reason": f"Command '{base_command}' validated successfully",
+                "parsed_command": command_parts,
+                "use_shell": pattern.shell_required,
             }
-            
+
         except Exception as e:
             self.logger.error(f"Command validation error: {str(e)}")
             return {
-                'valid': False,
-                'reason': f"Validation error: {str(e)}",
-                'parsed_command': [],
-                'use_shell': False
+                "valid": False,
+                "reason": f"Validation error: {str(e)}",
+                "parsed_command": [],
+                "use_shell": False,
             }
 
     def _check_dangerous_patterns(self, command: str) -> Dict[str, Union[bool, str]]:
         """Check if command contains dangerous patterns."""
         for pattern in self.dangerous_patterns:
             if re.search(pattern, command, re.IGNORECASE):
-                self.logger.warning(f"Dangerous pattern detected: {pattern} in command: {command}")
-                return {'safe': False, 'pattern': pattern}
-        return {'safe': True, 'pattern': ''}
+                self.logger.warning(
+                    f"Dangerous pattern detected: {pattern} in command: {command}"
+                )
+                return {"safe": False, "pattern": pattern}
+        return {"safe": True, "pattern": ""}
 
-    def _validate_arguments(self, args: List[str], pattern: CommandPattern) -> Dict[str, Union[bool, str]]:
+    def _validate_arguments(
+        self, args: List[str], pattern: CommandPattern
+    ) -> Dict[str, Union[bool, str]]:
         """Validate command arguments against allowed patterns."""
         for arg in args:
             # Check if argument is in allowed list
@@ -348,32 +337,32 @@ class CommandValidator:
                     if re.match(regex_pattern, arg):
                         valid_pattern = True
                         break
-                
+
                 if not valid_pattern:
                     return {
-                        'valid': False,
-                        'reason': f"Argument '{arg}' not allowed for command '{pattern.command}'"
+                        "valid": False,
+                        "reason": f"Argument '{arg}' not allowed for command '{pattern.command}'",
                     }
-            
+
             # Check for injection attempts in arguments
-            injection_patterns = [';', '&&', '||', '|', '`', '$', '>', '<', '&']
+            injection_patterns = [";", "&&", "||", "|", "`", "$", ">", "<", "&"]
             for injection_char in injection_patterns:
                 if injection_char in arg:
                     return {
-                        'valid': False,
-                        'reason': f"Potential injection character '{injection_char}' in argument '{arg}'"
+                        "valid": False,
+                        "reason": f"Potential injection character '{injection_char}' in argument '{arg}'",
                     }
-        
-        return {'valid': True, 'reason': 'Arguments validated successfully'}
+
+        return {"valid": True, "reason": "Arguments validated successfully"}
 
     def get_whitelist_info(self) -> Dict[str, Dict[str, Union[str, List[str], int]]]:
         """Get information about whitelisted commands for debugging/admin purposes."""
         return {
             cmd: {
-                'description': pattern.description,
-                'allowed_args': pattern.allowed_args,
-                'max_args': pattern.max_args,
-                'shell_required': pattern.shell_required
+                "description": pattern.description,
+                "allowed_args": pattern.allowed_args,
+                "max_args": pattern.max_args,
+                "shell_required": pattern.shell_required,
             }
             for cmd, pattern in self.whitelist.items()
         }
@@ -381,10 +370,10 @@ class CommandValidator:
     def add_to_whitelist(self, command_pattern: CommandPattern) -> bool:
         """
         Add a new command to the whitelist (for runtime configuration).
-        
+
         Args:
             command_pattern: CommandPattern to add
-            
+
         Returns:
             bool: True if added successfully
         """

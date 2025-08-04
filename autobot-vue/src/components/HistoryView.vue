@@ -76,7 +76,7 @@ export default {
         loadHistoryFromLocalStorage();
       }
     };
-    
+
     // Function to build chat history from local storage
     const loadHistoryFromLocalStorage = () => {
       const localChats = [];
@@ -153,13 +153,13 @@ export default {
         api_endpoint: 'http://localhost:8001'
       }
     });
-    
+
     // Load settings from local storage if available
     const savedSettings = localStorage.getItem('chat_settings');
     if (savedSettings) {
       settings.value = JSON.parse(savedSettings);
     }
-    
+
     // Initial load of history after settings are initialized
     refreshHistory();
 
