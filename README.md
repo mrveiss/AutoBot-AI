@@ -335,9 +335,9 @@ AutoBot features an advanced **Prompt-to-Knowledge Base Synchronization System**
 - **[Troubleshooting Guide](docs/user_guide/04-troubleshooting.md)**: Common issues and solutions
 
 ### 🔧 **Technical References**
+- **[System Architecture](docs/developer/01-architecture.md)**: Comprehensive technical architecture overview
+- **[Process Flow Documentation](docs/developer/02-process-flow.md)**: Detailed system interactions and data flows
 - **[External APIs](docs/external_apps/ollama_api.md)**: Ollama API integration details
-- **[Process Map](docs/process_map.md)**: System process flow documentation
-- **[Project Map](docs/project_map.md)**: Codebase structure and navigation
 
 ### 🚀 **Development Progress**
 - **[Phase 2 Validation](docs/phase2_validation_progress.md)**: Core functionality validation results
