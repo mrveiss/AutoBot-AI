@@ -19,6 +19,7 @@ from typing import List
 
 # Import centralized configuration
 from src.config import config as global_config_manager
+from src.utils.redis_client import get_redis_client
 
 # Import core components
 from src.orchestrator import Orchestrator
@@ -56,7 +57,10 @@ async def _check_redis_modules(redis_host: str, redis_port: int) -> bool:
                 logger.error(f"Failed to resolve host.docker.internal: {e}")
                 resolved_host = redis_host
 
-        r = redis.Redis(host=resolved_host, port=redis_port, decode_responses=True)
+        r = get_redis_client()
+        if r is None:
+            logger.error("Could not get Redis client from centralized utility")
+            return False
         
         try:
             # Test basic connection first
@@ -227,7 +231,10 @@ async def _initialize_redis_client(app: FastAPI) -> None:
     redis_port = redis_config.get('port', 6379)
     
     try:
-        app.state.main_redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+        app.state.main_redis_client = get_redis_client()
+        if app.state.main_redis_client is None:
+            logger.error("Could not get Redis client from centralized utility")
+            return
         app.state.main_redis_client.ping()  # Test connection
         logger.info("Main Redis client initialized and connected")
     except redis.ConnectionError as e:
