@@ -43,7 +43,8 @@ async def test_llm_connection():
         }
 
 @router.get("/models")
-@cache_response(cache_key="llm_models", ttl=180)  # Cache for 3 minutes
+# TODO: Re-enable caching after fixing compatibility with FastAPI 0.115.9
+# @cache_response(cache_key="llm_models", ttl=180)  # Cache for 3 minutes
 async def get_available_llm_models():
     """Get list of available LLM models"""
     try:
