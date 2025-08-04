@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from src.config import global_config_manager
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,12 @@ class ConnectionTester:
                     "message": "Redis configuration is incomplete (missing host or port)"
                 }
 
-            redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+            redis_client = get_redis_client()
+            if redis_client is None:
+                return {
+                    "status": "not_configured", 
+                    "message": "Redis client could not be initialized"
+                }
             redis_client.ping()
 
             # Check if RediSearch module is loaded

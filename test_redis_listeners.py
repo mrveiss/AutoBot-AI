@@ -9,6 +9,7 @@ import json
 import time
 import sys
 from src.config import config as global_config_manager
+from src.utils.redis_client import get_redis_client
 
 def test_worker_capabilities():
     """Test worker capabilities publishing"""
@@ -20,8 +21,11 @@ def test_worker_capabilities():
     redis_port = redis_config.get('port', 6379)
     
     try:
-        # Connect to Redis
-        client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+        # Connect to Redis using centralized utility
+        client = get_redis_client()
+        if client is None:
+            print(f"❌ Could not get Redis client from centralized utility")
+            return False
         client.ping()
         print(f"✅ Connected to Redis at {redis_host}:{redis_port}")
         
@@ -63,8 +67,11 @@ def test_command_approval():
     redis_port = redis_config.get('port', 6379)
     
     try:
-        # Connect to Redis
-        client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+        # Connect to Redis using centralized utility
+        client = get_redis_client()
+        if client is None:
+            print(f"❌ Could not get Redis client from centralized utility")
+            return False
         client.ping()
         
         # Publish mock command approval
@@ -101,7 +108,10 @@ def test_redis_connection():
     redis_port = redis_config.get('port', 6379)
     
     try:
-        client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+        client = get_redis_client()
+        if client is None:
+            print(f"❌ Could not get Redis client from centralized utility")
+            return False
         client.ping()
         print(f"✅ Redis connection successful at {redis_host}:{redis_port}")
         
