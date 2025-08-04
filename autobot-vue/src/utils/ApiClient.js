@@ -4,7 +4,7 @@ class ApiClient {
     this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
     this.timeout = 30000; // 30 seconds default timeout
     this.settings = this.loadSettings();
-    
+
     // Update baseUrl from settings if available
     if (this.settings?.backend?.api_endpoint) {
       this.baseUrl = this.settings.backend.api_endpoint;
@@ -67,7 +67,7 @@ class ApiClient {
   // POST request
   async post(endpoint, data = null, options = {}) {
     const config = { method: 'POST', ...options };
-    
+
     if (data) {
       if (data instanceof FormData) {
         // Don't set Content-Type for FormData, let browser handle it
@@ -77,7 +77,7 @@ class ApiClient {
         config.body = JSON.stringify(data);
       }
     }
-    
+
     return this.request(endpoint, config);
   }
 
@@ -98,7 +98,7 @@ class ApiClient {
   // Chat API methods
   async sendChatMessage(message, options = {}) {
     const response = await this.post('/api/chat', { message, ...options });
-    
+
     // Check if it's a streaming response
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('text/event-stream')) {
@@ -154,10 +154,10 @@ class ApiClient {
   async saveSettings(settings) {
     const response = await this.post('/api/settings/', settings);
     const result = await response.json();
-    
+
     // Update local settings
     this.saveSettingsLocally(settings);
-    
+
     return result;
   }
 
@@ -166,7 +166,7 @@ class ApiClient {
     try {
       localStorage.setItem('chat_settings', JSON.stringify(settings));
       this.settings = settings;
-      
+
       // Update baseUrl if it changed
       if (settings?.backend?.api_endpoint) {
         this.baseUrl = settings.backend.api_endpoint;
@@ -278,7 +278,7 @@ class ApiClient {
     formData.append('file', file);
     formData.append('path', path);
     formData.append('overwrite', overwrite.toString());
-    
+
     const response = await this.post('/api/files/upload', formData);
     return response.json();
   }
@@ -305,7 +305,7 @@ class ApiClient {
     const formData = new FormData();
     formData.append('path', path);
     formData.append('name', name);
-    
+
     const response = await this.post('/api/files/create_directory', formData);
     return response.json();
   }
@@ -319,7 +319,7 @@ class ApiClient {
   async uploadFile(endpoint, file, additionalData = {}) {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     // Add any additional data to the form
     Object.keys(additionalData).forEach(key => {
       formData.append(key, additionalData[key]);
@@ -332,7 +332,7 @@ class ApiClient {
   async downloadFile(endpoint, filename = null) {
     const response = await this.get(endpoint);
     const blob = await response.blob();
-    
+
     if (filename) {
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -344,7 +344,7 @@ class ApiClient {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     }
-    
+
     return blob;
   }
 
@@ -354,7 +354,7 @@ class ApiClient {
       const start = Date.now();
       await this.checkHealth();
       const latency = Date.now() - start;
-      
+
       return {
         connected: true,
         latency: latency,
@@ -372,7 +372,7 @@ class ApiClient {
   // Batch operations
   async batchRequest(requests) {
     const results = [];
-    
+
     for (const request of requests) {
       try {
         const result = await this.request(request.endpoint, request.options);
@@ -389,7 +389,7 @@ class ApiClient {
         });
       }
     }
-    
+
     return results;
   }
 
@@ -406,14 +406,14 @@ class ApiClient {
   // Update base URL
   setBaseUrl(url) {
     this.baseUrl = url;
-    
+
     // Also update in settings
     if (this.settings.backend) {
       this.settings.backend.api_endpoint = url;
     } else {
       this.settings.backend = { api_endpoint: url };
     }
-    
+
     this.saveSettingsLocally(this.settings);
   }
 
@@ -425,9 +425,9 @@ class ApiClient {
   // Error handling helper
   handleApiError(error, context = '') {
     console.error(`API Error${context ? ` in ${context}` : ''}:`, error);
-    
+
     let userMessage = 'An unexpected error occurred.';
-    
+
     if (error.message.includes('timeout')) {
       userMessage = 'Request timed out. Please check your connection and try again.';
     } else if (error.message.includes('HTTP 404')) {
@@ -439,7 +439,7 @@ class ApiClient {
     } else if (error.message.includes('Failed to fetch')) {
       userMessage = 'Cannot connect to the server. Please check if the backend is running.';
     }
-    
+
     return {
       error: error.message,
       userMessage: userMessage,
@@ -465,13 +465,13 @@ class ApiClient {
       '/api/settings',
       '/api/prompts'
     ];
-    
+
     const status = {
       baseUrl: this.baseUrl,
       timestamp: new Date().toISOString(),
       endpoints: {}
     };
-    
+
     for (const endpoint of endpoints) {
       try {
         const start = Date.now();
@@ -487,7 +487,7 @@ class ApiClient {
         };
       }
     }
-    
+
     return status;
   }
 }

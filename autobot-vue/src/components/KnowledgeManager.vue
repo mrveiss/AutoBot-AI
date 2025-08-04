@@ -1,10 +1,10 @@
 <template>
   <div class="knowledge-manager">
     <h2>Knowledge Base Manager</h2>
-    
+
     <div class="tabs">
-      <button 
-        v-for="tab in tabs" 
+      <button
+        v-for="tab in tabs"
         :key="tab.id"
         :class="['tab-button', { active: activeTab === tab.id }]"
         @click="activeTab = tab.id"
@@ -17,9 +17,9 @@
     <div v-if="activeTab === 'search'" class="tab-content">
       <h3>Search Knowledge Base</h3>
       <div class="search-form">
-        <input 
-          v-model="searchQuery" 
-          type="text" 
+        <input
+          v-model="searchQuery"
+          type="text"
           placeholder="Enter search query..."
           @keyup.enter="performSearch"
         />
@@ -27,7 +27,7 @@
           {{ searching ? 'Searching...' : 'Search' }}
         </button>
       </div>
-      
+
       <div v-if="searchResults.length > 0" class="search-results">
         <h4>Search Results ({{ searchResults.length }})</h4>
         <div v-for="(result, index) in searchResults" :key="index" class="search-result">
@@ -40,7 +40,7 @@
           </div>
         </div>
       </div>
-      
+
       <div v-else-if="searchPerformed && !searching" class="no-results">
         No results found for "{{ lastSearchQuery }}"
       </div>
@@ -54,23 +54,23 @@
           <span class="icon">+</span> Add New Entry
         </button>
       </div>
-      
+
       <div class="entries-content">
         <div class="search-bar">
-          <input 
-            type="text" 
-            v-model="entriesSearchQuery" 
-            placeholder="Search entries by content, source, or tags..." 
+          <input
+            type="text"
+            v-model="entriesSearchQuery"
+            placeholder="Search entries by content, source, or tags..."
             class="search-input"
           />
           <button @click="filterEntries" class="search-btn">Search</button>
           <button @click="refreshEntries" class="refresh-btn">Refresh</button>
         </div>
-        
+
         <div class="entries-stats" v-if="knowledgeEntries.length > 0">
           <span>{{ filteredKnowledgeEntries.length }} of {{ knowledgeEntries.length }} entries</span>
         </div>
-        
+
         <div class="entries-list" v-if="knowledgeEntries.length > 0">
           <div v-for="entry in filteredKnowledgeEntries" :key="entry.id" class="entry-item">
             <div class="entry-header">
@@ -98,11 +98,11 @@
                 </button>
               </div>
             </div>
-            
+
             <div class="entry-preview">
               <p>{{ getEntryPreview(entry) }}</p>
             </div>
-            
+
             <div class="entry-meta">
               <span class="entry-source" v-if="entry.metadata && entry.metadata.source">
                 <span class="icon">📄</span> {{ entry.metadata.source }}
@@ -119,7 +119,7 @@
             </div>
           </div>
         </div>
-        
+
         <div v-else class="no-entries">
           <div class="empty-state">
             <span class="icon large">📚</span>
@@ -142,50 +142,50 @@
           <h3 v-else>View Entry</h3>
           <button @click="closeModals" class="close-btn">&times;</button>
         </div>
-        
+
         <div class="modal-body">
           <form @submit.prevent="saveEntry" v-if="showCreateModal || showEditModal">
             <div class="form-group">
               <label for="entry-title">Title/Subject</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 id="entry-title"
-                v-model="currentEntry.title" 
+                v-model="currentEntry.title"
                 placeholder="Enter a descriptive title for this entry"
               />
             </div>
-            
+
             <div class="form-row">
               <div class="form-group">
                 <label for="entry-source">Source</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   id="entry-source"
-                  v-model="currentEntry.source" 
+                  v-model="currentEntry.source"
                   placeholder="Document name, URL, or source reference"
                 />
                 <small v-if="isUrlSource(currentEntry.source)" class="url-hint">
                   🕷️ URL detected - you can leave content empty to auto-crawl
                 </small>
               </div>
-              
+
               <div class="form-group">
                 <label for="entry-collection">Collection</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   id="entry-collection"
-                  v-model="currentEntry.collection" 
+                  v-model="currentEntry.collection"
                   placeholder="Collection name"
                 />
               </div>
             </div>
-            
+
             <div class="form-group">
               <label for="entry-content">Content</label>
-              <textarea 
+              <textarea
                 id="entry-content"
-                v-model="currentEntry.content" 
-                rows="8" 
+                v-model="currentEntry.content"
+                rows="8"
                 :placeholder="isUrlSource(currentEntry.source) ? 'Leave empty to auto-crawl from URL, or enter content manually' : 'Enter the knowledge content...'"
                 :required="!isUrlSource(currentEntry.source)"
               ></textarea>
@@ -193,13 +193,13 @@
                 ✨ Content will be automatically crawled from the URL when you save
               </small>
             </div>
-            
+
             <div class="form-group">
               <label for="entry-tags">Tags</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 id="entry-tags"
-                v-model="tagsInput" 
+                v-model="tagsInput"
                 placeholder="Enter tags separated by commas"
                 @input="updateTags"
               />
@@ -210,18 +210,18 @@
                 </span>
               </div>
             </div>
-            
+
             <div class="form-group">
               <label>Links</label>
               <div class="links-section">
                 <div class="link-input-group">
-                  <input 
-                    type="url" 
+                  <input
+                    type="url"
                     v-model="newLink.url"
                     placeholder="https://example.com"
                   />
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     v-model="newLink.title"
                     placeholder="Link title (optional)"
                   />
@@ -229,7 +229,7 @@
                     <span class="icon">🔗</span> Add
                   </button>
                 </div>
-                
+
                 <div class="links-list" v-if="currentEntry.links && currentEntry.links.length > 0">
                   <div v-for="(link, index) in currentEntry.links" :key="index" class="link-item">
                     <a :href="link.url" target="_blank" class="link-url">
@@ -240,13 +240,13 @@
                 </div>
               </div>
             </div>
-            
+
             <div class="modal-actions">
               <button type="button" @click="closeModals" class="cancel-btn">Cancel</button>
-              <button 
+              <button
                 v-if="showEditModal && isUrlSource(currentEntry.source)"
-                type="button" 
-                @click="crawlCurrentEntry" 
+                type="button"
+                @click="crawlCurrentEntry"
                 class="crawl-btn-modal"
                 :disabled="crawlingInModal"
               >
@@ -258,14 +258,14 @@
               </button>
             </div>
           </form>
-          
+
           <!-- View Mode -->
           <div v-else class="entry-view">
             <div class="view-section">
               <h4>Content</h4>
               <div class="content-display">{{ currentEntry.content }}</div>
             </div>
-            
+
             <div class="view-meta">
               <div class="meta-item" v-if="currentEntry.source">
                 <strong>Source:</strong> {{ currentEntry.source }}
@@ -283,7 +283,7 @@
                 <strong>Created:</strong> {{ formatDate(currentEntry.created_at) }}
               </div>
             </div>
-            
+
             <div class="view-section" v-if="currentEntry.links && currentEntry.links.length > 0">
               <h4>Links</h4>
               <div class="links-display">
@@ -293,7 +293,7 @@
                 </div>
               </div>
             </div>
-            
+
             <div class="modal-actions">
               <button @click="editEntry(currentEntry)" class="edit-btn">Edit Entry</button>
               <button @click="closeModals" class="close-btn">Close</button>
@@ -307,7 +307,7 @@
     <!-- Manage Tab -->
     <div v-if="activeTab === 'manage'" class="tab-content">
       <h3>Manage Knowledge Base</h3>
-      
+
       <div class="manage-actions">
         <button @click="exportKnowledgeBase" :disabled="exporting">
           {{ exporting ? 'Exporting...' : 'Export Knowledge Base' }}
@@ -325,7 +325,7 @@
     <!-- Statistics Tab -->
     <div v-if="activeTab === 'stats'" class="tab-content">
       <h3>Knowledge Base Statistics</h3>
-      
+
       <button @click="loadStats" :disabled="loadingStats" class="refresh-button">
         {{ loadingStats ? 'Loading...' : 'Refresh Statistics' }}
       </button>
@@ -336,19 +336,19 @@
           <div class="stat-value">{{ stats.total_facts || 0 }}</div>
           <div class="stat-description">Stored knowledge entries</div>
         </div>
-        
+
         <div class="stat-card">
           <h4>Total Documents</h4>
           <div class="stat-value">{{ stats.total_documents || 0 }}</div>
           <div class="stat-description">Document entries</div>
         </div>
-        
+
         <div class="stat-card">
           <h4>Total Vectors</h4>
           <div class="stat-value">{{ stats.total_vectors || 0 }}</div>
           <div class="stat-description">Vector embeddings</div>
         </div>
-        
+
         <div class="stat-card">
           <h4>Database Size</h4>
           <div class="stat-value">{{ formatFileSize(stats.db_size || 0) }}</div>
@@ -457,11 +457,11 @@ export default {
     // Search functionality
     const performSearch = async () => {
       if (!searchQuery.value.trim()) return;
-      
+
       searching.value = true;
       searchPerformed.value = true;
       lastSearchQuery.value = searchQuery.value;
-      
+
       try {
         const data = await apiClient.searchKnowledge(searchQuery.value);
         searchResults.value = data.results || [];
@@ -481,7 +481,7 @@ export default {
     const addContent = async () => {
       adding.value = true;
       addMessage.value = '';
-      
+
       try {
         let requestData = {};
         let endpoint = '';
@@ -515,12 +515,12 @@ export default {
             addMessageType.value = 'error';
             return;
           }
-          
+
           const result = await apiClient.addFileToKnowledge(selectedFile.value);
           addMessage.value = result.message || 'File added successfully!';
           addMessageType.value = 'success';
           selectedFile.value = null;
-          
+
           // Refresh knowledge entries list to show the new entry
           await loadKnowledgeEntries();
           return;
@@ -532,7 +532,7 @@ export default {
         } else if (addContentType.value === 'url') {
           result = await apiClient.addUrlToKnowledge(urlContent.value, urlMethod.value);
         }
-        
+
         addMessage.value = result.message || 'Content added successfully!';
         addMessageType.value = 'success';
 
@@ -578,15 +578,15 @@ export default {
         filteredKnowledgeEntries.value = knowledgeEntries.value;
         return;
       }
-      
+
       const query = entriesSearchQuery.value.toLowerCase();
       filteredKnowledgeEntries.value = knowledgeEntries.value.filter(entry => {
         const content = (entry.content || '').toLowerCase();
         const source = (entry.metadata?.source || '').toLowerCase();
         const tags = (entry.metadata?.tags || []).join(' ').toLowerCase();
         const collection = (entry.collection || '').toLowerCase();
-        
-        return content.includes(query) || source.includes(query) || 
+
+        return content.includes(query) || source.includes(query) ||
                tags.includes(query) || collection.includes(query);
       });
     };
@@ -621,15 +621,15 @@ export default {
           return entry.metadata.source.startsWith('http://') || entry.metadata.source.startsWith('https://');
         } catch {}
       }
-      
+
       // Check if content contains URLs
       if (entry.content) {
         const urlRegex = /https?:\/\/[^\s]+/;
         return urlRegex.test(entry.content);
       }
-      
+
       // Legacy checks
-      return entry.metadata?.type === 'url_reference' || 
+      return entry.metadata?.type === 'url_reference' ||
              entry.content?.startsWith('URL Reference:') ||
              entry.metadata?.url;
     };
@@ -638,10 +638,10 @@ export default {
       if (!confirm('Crawl and extract content from this URL? This will replace the current content.')) {
         return;
       }
-      
+
       try {
         let url = null;
-        
+
         // Try to get URL from source first
         if (entry.metadata?.source) {
           try {
@@ -651,22 +651,22 @@ export default {
             }
           } catch {}
         }
-        
+
         // If no URL in source, extract from content
         if (!url) {
           url = extractUrlFromContent(entry.content);
         }
-        
+
         // Legacy URL check
         if (!url && entry.metadata?.url) {
           url = entry.metadata.url;
         }
-        
+
         if (!url) {
           showError('No URL found to crawl');
           return;
         }
-        
+
         // Call backend to crawl URL and extract content
         const response = await fetch('/api/knowledge/crawl_url', {
           method: 'POST',
@@ -676,12 +676,12 @@ export default {
             url: url
           })
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.detail || 'Failed to crawl URL');
         }
-        
+
         const result = await response.json();
         showSuccess(`URL content crawled successfully! Extracted ${result.content_length} characters.`);
         await loadKnowledgeEntries(); // Refresh the list
@@ -739,7 +739,7 @@ export default {
       if (!confirm('Are you sure you want to delete this entry? This action cannot be undone.')) {
         return;
       }
-      
+
       try {
         await apiClient.delete(`/api/knowledge_base/entries/${entryId}`);
         await loadKnowledgeEntries();
@@ -798,7 +798,7 @@ export default {
     const saveEntry = async () => {
       try {
         loading.value = true;
-        
+
         const entryData = {
           type: currentEntry.value.title || currentEntry.value.source || 'Manual Entry',
           content: currentEntry.value.content,
@@ -844,7 +844,7 @@ export default {
                   url: currentEntry.value.source
                 })
               });
-              
+
               if (crawlResponse.ok) {
                 const crawlResult = await crawlResponse.json();
                 showSuccess(`Entry created and URL content crawled! Extracted ${crawlResult.content_length} characters.`);
@@ -858,7 +858,7 @@ export default {
         } else {
           showSuccess(showEditModal.value ? 'Entry updated successfully' : 'Entry created successfully');
         }
-        
+
         await loadKnowledgeEntries();
         closeModals();
       } catch (error) {
@@ -876,7 +876,7 @@ export default {
       currentEntry.value = {
         content: '',
         source: '',
-        collection: 'default', 
+        collection: 'default',
         tags: [],
         links: []
       };
@@ -899,22 +899,22 @@ export default {
 
     const addLink = () => {
       if (!newLink.value.url.trim()) return;
-      
+
       const link = {
         url: newLink.value.url.trim(),
         title: newLink.value.title.trim() || newLink.value.url.trim()
       };
-      
+
       if (!currentEntry.value.links) {
         currentEntry.value.links = [];
       }
-      
+
       // Check for duplicates
       const exists = currentEntry.value.links.some(l => l.url === link.url);
       if (!exists) {
         currentEntry.value.links.push(link);
       }
-      
+
       newLink.value = { url: '', title: '' };
     };
 
@@ -928,7 +928,7 @@ export default {
     };
 
     const showError = (message) => {
-      // You can implement a toast notification system here  
+      // You can implement a toast notification system here
       console.error('Error:', message);
     };
 
@@ -936,7 +936,7 @@ export default {
     const exportKnowledgeBase = async () => {
       exporting.value = true;
       manageMessage.value = '';
-      
+
       try {
         await apiClient.downloadFile('/api/knowledge/export/download', `knowledge_base_export_${new Date().toISOString().split('T')[0]}.json`);
         manageMessage.value = 'Knowledge base exported successfully!';
@@ -954,10 +954,10 @@ export default {
       if (!confirm('Are you sure you want to cleanup old entries? This action cannot be undone.')) {
         return;
       }
-      
+
       cleaning.value = true;
       manageMessage.value = '';
-      
+
       try {
         const result = await apiClient.cleanupKnowledge();
         manageMessage.value = result.message || 'Cleanup completed successfully!';
@@ -975,14 +975,14 @@ export default {
     const loadStats = async () => {
       loadingStats.value = true;
       statsMessage.value = '';
-      
+
       try {
         // Load basic stats
         stats.value = await apiClient.getKnowledgeStats();
-        
+
         // Load detailed stats
         detailedStats.value = await apiClient.getDetailedKnowledgeStats();
-        
+
         statsMessage.value = 'Statistics loaded successfully!';
         statsMessageType.value = 'success';
       } catch (error) {
@@ -1014,7 +1014,7 @@ export default {
       // Tab management
       activeTab,
       tabs,
-      
+
       // Search
       searchQuery,
       searchResults,
@@ -1022,7 +1022,7 @@ export default {
       searchPerformed,
       lastSearchQuery,
       performSearch,
-      
+
       // Knowledge Entries
       knowledgeEntries,
       filteredKnowledgeEntries,
@@ -1058,7 +1058,7 @@ export default {
       isUrlSource,
       crawlCurrentEntry,
       crawlingInModal,
-      
+
       // Add content
       addContentType,
       textContent,
@@ -1072,7 +1072,7 @@ export default {
       addMessageType,
       handleFileUpload,
       addContent,
-      
+
       // Manage
       exporting,
       cleaning,
@@ -1080,7 +1080,7 @@ export default {
       manageMessageType,
       exportKnowledgeBase,
       cleanupKnowledgeBase,
-      
+
       // Statistics
       stats,
       detailedStats,
@@ -1088,7 +1088,7 @@ export default {
       statsMessage,
       statsMessageType,
       loadStats,
-      
+
       // Utilities
       formatFileSize
     };
@@ -1979,45 +1979,45 @@ export default {
   .knowledge-manager {
     padding: 15px;
   }
-  
+
   .tabs {
     flex-wrap: wrap;
   }
-  
+
   .tab-button {
     flex: 1;
     min-width: 120px;
   }
-  
+
   .search-form {
     flex-direction: column;
   }
-  
+
   .manage-actions {
     flex-direction: column;
   }
-  
+
   .stats-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .link-input-group {
     grid-template-columns: 1fr;
   }
-  
+
   .entry-actions {
     flex-wrap: wrap;
   }
-  
+
   .entry-meta {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .modal {
     width: 95%;
     margin: 20px;

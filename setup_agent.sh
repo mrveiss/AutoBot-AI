@@ -122,16 +122,16 @@ if ! pgrep dockerd >/dev/null; then
     # Ensure the Docker socket directory exists and has correct permissions
     sudo mkdir -p /var/run/docker || { echo "❌ Failed to create /var/run/docker."; exit 1; }
     sudo chmod 755 /var/run/docker || { echo "❌ Failed to set permissions on /var/run/docker."; exit 1; }
-    
+
     # Start dockerd in the background
     sudo dockerd > /dev/null 2>&1 &
     DOCKERD_PID=$!
     echo "✅ Docker daemon started (PID: $DOCKERD_PID)."
-    
+
     # Give dockerd some time to initialize
     echo "Waiting for Docker daemon to be ready..."
     sleep 5
-    
+
     # Verify Docker daemon is responsive
     if ! docker info >/dev/null 2>&1; then
         echo "❌ Docker daemon is not responsive after startup. Please check Docker logs."
@@ -246,8 +246,8 @@ echo "✅ Redis Python client installation attempted."
 
 # --- Install OpenVINO for NPU acceleration ---
 echo "📦 Installing OpenVINO for NPU and GPU acceleration..."
-pip install openvino openvino-dev[pytorch,tensorflow2] || { 
-    echo "⚠️ Failed to install OpenVINO. Trying with reduced dependencies..."; 
+pip install openvino openvino-dev[pytorch,tensorflow2] || {
+    echo "⚠️ Failed to install OpenVINO. Trying with reduced dependencies...";
     pip install openvino || {
         echo "⚠️ Failed to install OpenVINO completely. Continuing without OpenVINO support.";
     }
@@ -264,7 +264,7 @@ fi
 
 if command -v lspci &>/dev/null && lspci | grep -i "neural\|npu\|ai" > /dev/null 2>&1; then
     echo "✅ Intel NPU hardware detected via lspci"
-    
+
     # Check if Intel NPU driver is installed
     if ls /dev/intel_npu* > /dev/null 2>&1; then
         echo "✅ Intel NPU driver appears to be installed"
@@ -284,14 +284,14 @@ try:
     core = Core()
     devices = core.available_devices
     print(f'✅ OpenVINO installed successfully. Available devices: {devices}')
-    
+
     # Check for NPU specifically
     npu_devices = [d for d in devices if 'NPU' in d]
     if npu_devices:
         print(f'🚀 NPU devices available: {npu_devices}')
     else:
         print('ℹ️ No NPU devices detected by OpenVINO')
-        
+
 except ImportError as e:
     print(f'❌ OpenVINO import failed: {e}')
 except Exception as e:
@@ -476,7 +476,7 @@ export PYTHONPATH=$(pwd)
 
 python3 -c "
 from src.config import global_config_manager
-from src.orchestrator import Orchestrator  
+from src.orchestrator import Orchestrator
 from src.llm_interface import LLMInterface
 from src.knowledge_base import KnowledgeBase
 from src.worker_node import WorkerNode

@@ -27,7 +27,7 @@ backend:
   server_host: "0.0.0.0"                    # Server bind address
   server_port: 8001                         # Server port
   api_endpoint: "http://localhost:8001"     # API base URL
-  
+
   # CORS (Cross-Origin Resource Sharing) Settings
   cors_origins:
     - "http://localhost:5173"               # Vue.js development server
@@ -36,7 +36,7 @@ backend:
     - "http://127.0.0.1:8080"
     - "http://localhost:3000"
     - "http://127.0.0.1:3000"
-  
+
   # Data Storage Paths
   chat_data_dir: "data/chats"               # Chat sessions directory
   chat_history_file: "data/chat_history.json"  # Legacy chat history
@@ -44,7 +44,7 @@ backend:
   knowledge_base_db: "data/knowledge_base.db"  # Knowledge base SQLite
   reliability_stats_file: "data/reliability_stats.json"  # Performance stats
   audit_log_file: "data/audit.log"         # Security audit log
-  
+
   # Request Handling Settings
   timeout: 60                               # Request timeout (seconds)
   max_retries: 3                           # Maximum retry attempts
@@ -58,7 +58,7 @@ llm_config:
   # Model Selection
   default_llm: "ollama_tinyllama"          # Default LLM identifier
   task_llm: "ollama_tinyllama"             # Task-specific LLM
-  
+
   # Ollama Configuration
   ollama:
     host: "http://localhost:11434"         # Ollama server URL
@@ -69,7 +69,7 @@ llm_config:
       tinyllama: "tinyllama:latest"
       phi2: "phi:latest"
       llama2: "llama2:latest"
-  
+
   # OpenAI Configuration
   openai:
     api_key: ""                            # OpenAI API key (use env variable)
@@ -77,7 +77,7 @@ llm_config:
     models:
       - "gpt-3.5-turbo"
       - "gpt-4"
-  
+
   # Anthropic Configuration
   anthropic:
     api_key: ""                            # Anthropic API key (use env variable)
@@ -85,7 +85,7 @@ llm_config:
     models:
       - "claude-3-sonnet-20240229"
       - "claude-3-haiku-20240307"
-  
+
   # LLM Behavior Settings
   orchestrator_llm_settings:
     temperature: 0.7                       # Creativity for planning tasks
@@ -102,23 +102,23 @@ memory:
     enabled: true                          # Enable persistent memory
     retention_days: 30                     # Days to retain memory
     db_path: "data/agent_memory.db"        # SQLite database path
-  
+
   # Short-term Memory
   short_term:
     enabled: true                          # Enable session memory
     duration_minutes: 30                   # Memory duration
-  
+
   # Vector Storage for Embeddings
   vector_storage:
     enabled: true                          # Enable vector operations
     update_frequency_days: 7               # Update frequency
-  
+
   # ChromaDB Configuration
   chromadb:
     enabled: true                          # Enable ChromaDB
     path: "data/chromadb"                  # ChromaDB storage path
     collection_name: "autobot_memory"      # Collection name
-  
+
   # Redis Configuration
   redis:
     enabled: false                         # Enable Redis (optional)

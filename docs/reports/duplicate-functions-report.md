@@ -54,7 +54,7 @@ def get_redis_client(async_client: bool = False) -> Optional[Union[redis.Redis, 
 **Successfully updated the following files:**
 
 1. ✅ **`src/chat_history_manager.py`** - Refactored to use centralized utility
-2. ✅ **`src/orchestrator.py`** - Refactored to use centralized utility  
+2. ✅ **`src/orchestrator.py`** - Refactored to use centralized utility
 3. ✅ **`src/worker_node.py`** - Refactored to use centralized utility
 
 **Files still using direct Redis instantiation (lower priority):**

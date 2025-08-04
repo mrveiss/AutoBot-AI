@@ -29,9 +29,10 @@ async def health_check():
                 "redis_status": "unknown",
                 "redis_search_module_loaded": False,
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
+                "timestamp": datetime.now().isoformat(),
+            },
         )
+
 
 @router.post("/restart")
 async def restart():
@@ -40,7 +41,10 @@ async def restart():
         return {"status": "success", "message": "Restart initiated."}
     except Exception as e:
         logger.error(f"Error processing restart request: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing restart request: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing restart request: {str(e)}"
+        )
+
 
 @router.get("/models")
 async def get_models():
@@ -49,27 +53,36 @@ async def get_models():
         result = await ModelManager.get_available_models()
         if result["status"] == "error":
             return JSONResponse(status_code=500, content={"error": result["error"]})
-        
+
         # Format for backward compatibility
-        available_models = [model['name'] for model in result['models'] if model.get('available', False)]
-        configured_models = {model['name']: model['name'] for model in result['models'] if model.get('configured', False)}
-        
+        available_models = [
+            model["name"] for model in result["models"] if model.get("available", False)
+        ]
+        configured_models = {
+            model["name"]: model["name"]
+            for model in result["models"]
+            if model.get("configured", False)
+        }
+
         return {
             "status": "success",
             "models": available_models,
             "configured_models": configured_models,
-            "detailed_models": result['models']
+            "detailed_models": result["models"],
         }
     except Exception as e:
         logger.error(f"Error getting models: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Error getting models: {str(e)}"})
+        return JSONResponse(
+            status_code=500, content={"error": f"Error getting models: {str(e)}"}
+        )
+
 
 @router.get("/status")
 async def get_system_status(request: Request):
     """Get current system status including LLM configuration"""
     try:
         llm_config = ConfigService.get_llm_config()
-        
+
         # Resolve actual model names for display
         default_llm = llm_config["default_llm"]
         current_llm_display = default_llm
@@ -79,16 +92,16 @@ async def get_system_status(request: Request):
             current_llm_display = f"Ollama: {actual_model}"
         elif default_llm.startswith("openai_"):
             current_llm_display = f"OpenAI: {default_llm.replace('openai_', '')}"
-        
+
         # Check for background tasks status
         background_tasks_status = "disabled"
         background_tasks_count = 0
-        
-        if hasattr(request.app.state, 'background_tasks'):
+
+        if hasattr(request.app.state, "background_tasks"):
             background_tasks_count = len(request.app.state.background_tasks)
             if background_tasks_count > 0:
                 background_tasks_status = "active"
-        
+
         return {
             "status": "success",
             "current_llm": current_llm_display,
@@ -97,13 +110,15 @@ async def get_system_status(request: Request):
             "ollama_models": llm_config["ollama"]["models"],
             "background_tasks": {
                 "status": background_tasks_status,
-                "count": background_tasks_count
+                "count": background_tasks_count,
             },
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Error getting system status: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Error getting system status: {str(e)}"})
+        return JSONResponse(
+            status_code=500, content={"error": f"Error getting system status: {str(e)}"}
+        )
 
 
 @router.post("/login")
@@ -115,8 +130,11 @@ async def login(request: Request, username: str = Form(...), password: str = For
         security_layer.audit_log("login", username, "success", {"ip": "N/A"})
         return {"message": "Login successful", "role": user_role}
     else:
-        security_layer.audit_log("login", username, "failure", {"reason": "invalid_credentials"})
+        security_layer.audit_log(
+            "login", username, "failure", {"reason": "invalid_credentials"}
+        )
         return JSONResponse(status_code=401, content={"message": "Invalid credentials"})
+
 
 @router.get("/ctx_window")
 async def get_context_window():

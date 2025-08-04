@@ -45,11 +45,11 @@ try:
     core = Core()
     devices = core.available_devices
     print(f'✅ OpenVINO available devices: {devices}')
-    
+
     npu_devices = [d for d in devices if 'NPU' in d]
     if npu_devices:
         print(f'🚀 NPU devices ready: {npu_devices}')
-        
+
         # Test NPU capability
         try:
             # Simple capability test
@@ -61,12 +61,12 @@ try:
     else:
         print('ℹ️ No NPU devices detected')
         print('   Check Intel NPU driver installation')
-        
+
     # Check for other accelerators
     gpu_devices = [d for d in devices if 'GPU' in d]
     if gpu_devices:
         print(f'🎮 GPU devices available: {gpu_devices}')
-        
+
 except ImportError as e:
     print(f'❌ OpenVINO import failed: {e}')
     sys.exit(1)

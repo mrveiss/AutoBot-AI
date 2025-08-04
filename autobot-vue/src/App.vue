@@ -137,7 +137,7 @@ export default {
           localStorage.removeItem(`chat_${activeChat.id}_messages`);
           console.log('Current chat reset:', activeChat.name);
           alert(`Chat "${activeChat.name}" reset. Restarting all processes...`);
-          
+
           try {
             // Send a request to restart backend and frontend processes
             await apiClient.restartBackend();
@@ -195,10 +195,10 @@ export default {
       text: 'Disconnected',
       message: 'Backend server is not responding'
     });
-    
+
     const llmStatus = ref({
       connected: false,
-      class: 'disconnected', 
+      class: 'disconnected',
       text: 'Disconnected',
       message: 'LLM service is not available'
     });
@@ -227,8 +227,8 @@ export default {
             connected: true,
             class: 'connected',
             text: 'Connected',
-            message: data.redis_search_module_loaded ? 
-              'Redis with RediSearch available' : 
+            message: data.redis_search_module_loaded ?
+              'Redis with RediSearch available' :
               'Redis connected but RediSearch not loaded'
           };
           return true;
@@ -337,7 +337,7 @@ export default {
       if (canvas) {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
+
         // Draw grid lines
         ctx.strokeStyle = '#e9ecef';
         ctx.lineWidth = 1;
@@ -347,19 +347,19 @@ export default {
           ctx.lineTo(50 + (i * 3), 80);
           ctx.stroke();
         }
-        
+
         // CPU Load - Blue
         ctx.fillStyle = '#007bff';
         ctx.fillRect(50, 25, performanceData.value.cpuLoad * 3, 15);
-        
+
         // Memory Usage - Green
         ctx.fillStyle = '#28a745';
         ctx.fillRect(50, 45, performanceData.value.memoryUsage * 3, 15);
-        
+
         // GPU Usage - Red
         ctx.fillStyle = '#dc3545';
         ctx.fillRect(50, 65, performanceData.value.gpuUsage * 3, 15);
-        
+
         // Labels
         ctx.fillStyle = '#000';
         ctx.font = '12px Arial';
@@ -367,7 +367,7 @@ export default {
         ctx.fillText('CPU', 40, 35);
         ctx.fillText('Memory', 40, 55);
         ctx.fillText('GPU', 40, 75);
-        
+
         // Percentage labels on bars
         ctx.textAlign = 'left';
         ctx.fillStyle = '#fff';
@@ -403,7 +403,7 @@ export default {
 
     // Load settings from local storage or use a default structure
     const settings = ref({});
-    
+
     const loadSettings = () => {
       const savedSettings = localStorage.getItem('chat_settings');
       if (savedSettings) {
@@ -417,9 +417,9 @@ export default {
         settings.value = { backend: { llm: { provider_type: 'local', local: { provider: 'ollama', providers: { ollama: { selected_model: 'Not selected' } } }, cloud: { provider: 'openai', providers: { openai: { selected_model: 'Not selected' } } } } } };
       }
     };
-    
+
     const currentLLM = ref('Loading...');
-    
+
     const getCurrentLLM = () => {
       // If LLM is disconnected, show that instead of model name
       if (!llmStatus.value.connected) {
@@ -427,13 +427,13 @@ export default {
       }
       return currentLLM.value;
     };
-    
+
     const fetchCurrentLLM = async () => {
       if (!backendStatus.value.connected) {
         currentLLM.value = 'Backend Disconnected';
         return;
       }
-      
+
       try {
         const response = await apiClient.get('/api/system/status');
         const data = await response.json();
@@ -447,27 +447,27 @@ export default {
         currentLLM.value = 'Connection Error';
       }
     };
-    
+
     onMounted(async () => {
       loadSettings();
       // Set up an interval to check for settings updates
       setInterval(() => {
         loadSettings();
       }, 5000); // Check every 5 seconds
-      
+
       // Initial connection check
       await checkConnections();
-      
+
       // Set up periodic connection checking
       setInterval(checkConnections, 10000); // Check every 10 seconds
     });
-    
+
     const isFooterCollapsed = ref(false);
-    
+
     const toggleFooter = () => {
       isFooterCollapsed.value = !isFooterCollapsed.value;
     };
-    
+
     return {
       activeTab,
       isAgentPaused,
@@ -740,7 +740,7 @@ button:disabled, .control-button:disabled, .action-buttons button:disabled {
     flex-wrap: wrap;
     justify-content: space-around;
   }
-  
+
   .action-buttons button {
     margin-bottom: 5px; /* Add spacing for wrapped buttons */
   }

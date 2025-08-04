@@ -1,6 +1,6 @@
 /**
  * Shared Chat History Service
- * 
+ *
  * Centralizes all chat history management logic to eliminate duplication
  * between ChatInterface.vue and HistoryView.vue components.
  */
@@ -26,7 +26,7 @@ export class ChatHistoryService {
       // Fallback to localStorage
       this.loadChatListFromLocalStorage();
     }
-    
+
     // Load custom chat names if available
     await this.loadCustomChatNames();
     return this.chatList;
@@ -137,10 +137,10 @@ export class ChatHistoryService {
     try {
       const newChatData = await apiClient.createNewChat();
       const newChatId = newChatData.chat_id;
-      
+
       // Add to chat list
       this.chatList.push({ chatId: newChatId, name: '' });
-      
+
       console.log('New chat created:', newChatId);
       return newChatId;
     } catch (error) {
@@ -159,13 +159,13 @@ export class ChatHistoryService {
 
     try {
       await apiClient.deleteChat(chatId);
-      
+
       // Remove from localStorage
       localStorage.removeItem(`chat_${chatId}_messages`);
-      
+
       // Remove from chat list
       this.chatList = this.chatList.filter(chat => chat.chatId !== chatId);
-      
+
       console.log(`Chat ${chatId} deleted successfully`);
       return true;
     } catch (error) {
@@ -181,7 +181,7 @@ export class ChatHistoryService {
     const chatIndex = this.chatList.findIndex(chat => chat.chatId === chatId);
     if (chatIndex !== -1) {
       this.chatList[chatIndex].name = newName;
-      
+
       // Save updated chat list to localStorage
       localStorage.setItem('chat_list', JSON.stringify(this.chatList));
       console.log(`Updated name for chat ${chatId} to "${newName}"`);
@@ -195,16 +195,16 @@ export class ChatHistoryService {
    */
   async getHistoryEntries() {
     await this.loadChatList();
-    
+
     const historyEntries = await Promise.all(
       this.chatList.map(async (chat) => {
         try {
           const messages = await this.loadChatMessages(chat.chatId);
           const userMessage = messages.find(msg => msg.sender === 'user');
-          const preview = userMessage 
+          const preview = userMessage
             ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '')
             : 'No subject';
-          
+
           return {
             id: chat.chatId,
             date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',

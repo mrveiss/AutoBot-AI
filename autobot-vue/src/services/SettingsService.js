@@ -1,6 +1,6 @@
 /**
  * Centralized Settings Service
- * 
+ *
  * Eliminates duplication between ChatInterface.vue and SettingsPanel.vue
  * by providing a single source of truth for all application settings.
  */
@@ -35,7 +35,7 @@ export class SettingsService {
         font_size: 'medium'
       }
     };
-    
+
     this.settings = { ...this.defaultSettings };
     this.loadSettings();
   }
@@ -64,7 +64,7 @@ export class SettingsService {
     try {
       // Save to localStorage
       localStorage.setItem('chat_settings', JSON.stringify(this.settings));
-      
+
       // Save to backend
       await apiClient.saveSettings(this.settings);
       console.log('Settings saved successfully');
@@ -141,7 +141,7 @@ export class SettingsService {
    */
   mergeDeep(target, source) {
     const result = { ...target };
-    
+
     for (const key in source) {
       if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
         result[key] = this.mergeDeep(target[key] || {}, source[key]);
@@ -149,7 +149,7 @@ export class SettingsService {
         result[key] = source[key];
       }
     }
-    
+
     return result;
   }
 
@@ -159,14 +159,14 @@ export class SettingsService {
   setNestedProperty(obj, path, value) {
     const keys = path.split('.');
     let current = obj;
-    
+
     for (let i = 0; i < keys.length - 1; i++) {
       if (!(keys[i] in current)) {
         current[keys[i]] = {};
       }
       current = current[keys[i]];
     }
-    
+
     current[keys[keys.length - 1]] = value;
   }
 
