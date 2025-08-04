@@ -19,6 +19,7 @@ from src.security_layer import SecurityLayer
 # Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
 from src.utils.redis_client import get_redis_client
+from src.utils.command_validator import command_validator
 
 # Conditional import for GUIController based on OS
 if sys.platform.startswith('linux'):
@@ -200,20 +201,79 @@ class WorkerNode:
                 self.security_layer.audit_log("kb_store_fact", user_role, result.get("status", "unknown"), {"task_id": task_id, "content_preview": content[:50]})
             elif task_type == "execute_shell_command":
                 command = task_payload['command']
-                process = await asyncio.create_subprocess_shell(
-                    command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                stdout, stderr = await process.communicate()
-                output = stdout.decode().strip()
-                error = stderr.decode().strip()
-                if process.returncode == 0:
-                    result = {"status": "success", "message": "Command executed.", "output": output}
-                    self.security_layer.audit_log("execute_shell_command", user_role, "success", {"task_id": task_id, "command": command})
+                
+                # CRITICAL SECURITY: Validate command before execution
+                validation_result = command_validator.validate_command(command)
+                
+                if not validation_result['valid']:
+                    # Command validation failed - SECURITY BLOCK
+                    result = {
+                        "status": "error", 
+                        "message": f"Command blocked for security: {validation_result['reason']}"
+                    }
+                    self.security_layer.audit_log("execute_shell_command", user_role, "blocked", {
+                        "task_id": task_id, 
+                        "command": command, 
+                        "reason": validation_result['reason'],
+                        "security_event": "shell_injection_attempt_blocked"
+                    })
+                    print(f"🚨 SECURITY: Blocked potentially dangerous command: {command}")
                 else:
-                    result = {"status": "error", "message": "Command failed.", "error": error, "output": output, "returncode": process.returncode}
-                    self.security_layer.audit_log("execute_shell_command", user_role, "failure", {"task_id": task_id, "command": command, "error": error})
+                    # Command validated - proceed with secure execution
+                    try:
+                        parsed_command = validation_result['parsed_command']
+                        use_shell = validation_result['use_shell']
+                        
+                        if use_shell:
+                            # Use shell=True for commands that require it (safe because validated)
+                            process = await asyncio.create_subprocess_shell(
+                                command,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE
+                            )
+                        else:
+                            # Use shell=False for maximum security (preferred method)
+                            process = await asyncio.create_subprocess_exec(
+                                *parsed_command,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE
+                            )
+                        
+                        stdout, stderr = await process.communicate()
+                        output = stdout.decode().strip()
+                        error = stderr.decode().strip()
+                        
+                        if process.returncode == 0:
+                            result = {"status": "success", "message": "Command executed securely.", "output": output}
+                            self.security_layer.audit_log("execute_shell_command", user_role, "success", {
+                                "task_id": task_id, 
+                                "command": command,
+                                "validation_passed": True,
+                                "shell_used": use_shell
+                            })
+                        else:
+                            result = {
+                                "status": "error", 
+                                "message": "Command failed.", 
+                                "error": error, 
+                                "output": output, 
+                                "returncode": process.returncode
+                            }
+                            self.security_layer.audit_log("execute_shell_command", user_role, "failure", {
+                                "task_id": task_id, 
+                                "command": command, 
+                                "error": error,
+                                "validation_passed": True,
+                                "shell_used": use_shell
+                            })
+                    except Exception as e:
+                        result = {"status": "error", "message": f"Command execution error: {str(e)}"}
+                        self.security_layer.audit_log("execute_shell_command", user_role, "error", {
+                            "task_id": task_id, 
+                            "command": command, 
+                            "error": str(e),
+                            "validation_passed": True
+                        })
             elif task_type == "gui_click_element":
                 image_path = task_payload['image_path']
                 confidence = task_payload.get('confidence', 0.9)
