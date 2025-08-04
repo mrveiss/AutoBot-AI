@@ -2,8 +2,8 @@
   <div class="settings-panel">
     <h2>Settings</h2>
     <div class="settings-tabs">
-      <button 
-        v-for="tab in tabs" 
+      <button
+        v-for="tab in tabs"
         :key="tab.id"
         :class="{ active: activeTab === tab.id }"
         @click="activeTab = tab.id"
@@ -32,19 +32,19 @@
       <!-- Backend Settings -->
       <div v-if="activeTab === 'backend' && isSettingsLoaded" class="settings-section">
         <div class="sub-tabs">
-          <button 
+          <button
             :class="{ active: activeBackendSubTab === 'general' }"
             @click="activeBackendSubTab = 'general'"
           >
             General
           </button>
-          <button 
+          <button
             :class="{ active: activeBackendSubTab === 'llm' }"
             @click="activeBackendSubTab = 'llm'"
           >
             LLM
           </button>
-          <button 
+          <button
             :class="{ active: activeBackendSubTab === 'memory' }"
             @click="activeBackendSubTab = 'memory'"
           >
@@ -712,26 +712,26 @@ export default {
         console.log('Loading models from backend...');
         const data = await apiClient.get('/api/llm/models');
         console.log('Model data received:', data);
-        
+
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
-          
+
           if (provider === 'ollama') {
             // Handle the new API response format with model objects
             if (data.models && Array.isArray(data.models)) {
               const availableModels = data.models
                 .filter(model => model.available && (model.type === 'ollama' || !model.type))
                 .map(model => model.name);
-              
+
               settings.value.backend.llm.local.providers.ollama.models = availableModels;
               console.log(`Loaded ${availableModels.length} Ollama models:`, availableModels);
-              
+
               // Auto-select first model if none selected
               if (!settings.value.backend.llm.local.providers.ollama.selected_model && availableModels.length > 0) {
                 settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0];
                 console.log('Auto-selected model:', availableModels[0]);
               }
-              
+
               // Validate current selection is still available
               const currentModel = settings.value.backend.llm.local.providers.ollama.selected_model;
               if (currentModel && !availableModels.includes(currentModel)) {
@@ -742,7 +742,7 @@ export default {
               console.warn('No Ollama models found in response');
               settings.value.backend.llm.local.providers.ollama.models = [];
             }
-            
+
           } else if (provider === 'lmstudio') {
             // Handle LM Studio models - try different response formats
             let lmStudioModels = [];
@@ -755,17 +755,17 @@ export default {
             } else if (Array.isArray(data)) {
               lmStudioModels = data.map(model => model.id || model.name);
             }
-            
+
             settings.value.backend.llm.local.providers.lmstudio.models = lmStudioModels;
             console.log(`Loaded ${lmStudioModels.length} LM Studio models:`, lmStudioModels);
-            
+
             if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && lmStudioModels.length > 0) {
               settings.value.backend.llm.local.providers.lmstudio.selected_model = lmStudioModels[0];
             }
           }
         }
         console.log('Models loaded successfully');
-        
+
       } catch (error) {
         console.error('Error loading models:', error);
         if (settings.value.backend.llm.provider_type === 'local') {
@@ -830,13 +830,13 @@ export default {
 
     const getCurrentLLMDisplay = () => {
       if (!settings.value.backend?.llm) return 'Not configured';
-      
+
       const providerType = settings.value.backend.llm.provider_type || 'local';
-      
+
       if (providerType === 'local') {
         const provider = settings.value.backend.llm.local?.provider || 'ollama';
         const selectedModel = settings.value.backend.llm.local?.providers?.[provider]?.selected_model;
-        
+
         if (selectedModel) {
           return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}`;
         } else {
@@ -845,7 +845,7 @@ export default {
       } else {
         const provider = settings.value.backend.llm.cloud?.provider || 'openai';
         const selectedModel = settings.value.backend.llm.cloud?.providers?.[provider]?.selected_model;
-        
+
         if (selectedModel) {
           return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}`;
         } else {

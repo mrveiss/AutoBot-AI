@@ -7,7 +7,7 @@ echo "Starting AutoBot application..."
 # Enhanced cleanup function with better signal handling
 cleanup() {
     echo "Received signal. Terminating all processes..."
-    
+
     # Kill processes by PID if they were started in background
     if [ ! -z "$BACKEND_PID" ]; then
         echo "Terminating backend process (PID: $BACKEND_PID)..."
@@ -15,7 +15,7 @@ cleanup() {
         sleep 1
         kill -9 "$BACKEND_PID" 2>/dev/null
     fi
-    
+
     if [ ! -z "$FRONTEND_PID" ]; then
         echo "Terminating frontend process (PID: $FRONTEND_PID)..."
         kill -TERM "$FRONTEND_PID" 2>/dev/null
@@ -55,7 +55,7 @@ trap cleanup SIGINT SIGTERM SIGQUIT
 cleanup_port() {
     local port=$1
     local service_name=$2
-    
+
     echo "Stopping any existing $service_name processes on port $port..."
     # Use sudo with lsof for more comprehensive process identification
     if sudo lsof -i :$port -t > /dev/null 2>&1; then
@@ -138,7 +138,7 @@ for i in $(seq 1 $TIMEOUT); do
         echo "Backend is listening on port 8001."
         break
     fi
-    
+
     if [ $i -eq $TIMEOUT ]; then
         echo "Error: Backend did not start listening on port 8001 within $TIMEOUT seconds."
         cleanup

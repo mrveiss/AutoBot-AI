@@ -12,7 +12,7 @@ Authentication is currently disabled by default. The system includes a security 
 ## Agent Management
 
 ### POST `/api/goal`
-**Description**: Submit a goal for the AI agent to execute  
+**Description**: Submit a goal for the AI agent to execute
 **Request Body**:
 ```json
 {
@@ -30,7 +30,7 @@ Authentication is currently disabled by default. The system includes a security 
 **Status Codes**: `200` Success, `403` Permission denied, `500` Execution error
 
 ### POST `/api/command_approval`
-**Description**: Approve or deny command execution requests  
+**Description**: Approve or deny command execution requests
 **Request Body**:
 ```json
 {
@@ -49,19 +49,19 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/pause`
-**Description**: Pause agent operations  
-**Form Data**: `user_role`: "user" (default)  
+**Description**: Pause agent operations
+**Form Data**: `user_role`: "user" (default)
 **Response**: `{"message": "Agent paused successfully"}`
 
 ### POST `/api/resume`
-**Description**: Resume agent operations  
-**Form Data**: `user_role`: "user" (default)  
+**Description**: Resume agent operations
+**Form Data**: `user_role`: "user" (default)
 **Response**: `{"message": "Agent resumed successfully"}`
 
 ### POST `/api/execute_command`
-**Description**: Execute shell command  
-**Request Body**: `{"command": "ls -la"}`  
-**Form Data**: `user_role`: "user" (default)  
+**Description**: Execute shell command
+**Request Body**: `{"command": "ls -la"}`
+**Form Data**: `user_role`: "user" (default)
 **Response**:
 ```json
 {
@@ -79,7 +79,7 @@ Authentication is currently disabled by default. The system includes a security 
 ### RESTful Chat Endpoints
 
 #### POST `/api/chats/new`
-**Description**: Create a new chat session  
+**Description**: Create a new chat session
 **Response**:
 ```json
 {
@@ -89,7 +89,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 #### GET `/api/chats`
-**Description**: List all available chat sessions  
+**Description**: List all available chat sessions
 **Response**:
 ```json
 {
@@ -98,8 +98,8 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 #### GET `/api/chats/{chat_id}`
-**Description**: Get specific chat session history  
-**Parameters**: `chat_id` (path) - Chat session identifier  
+**Description**: Get specific chat session history
+**Parameters**: `chat_id` (path) - Chat session identifier
 **Response**:
 ```json
 {
@@ -117,8 +117,8 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 #### POST `/api/chats/{chat_id}/message`
-**Description**: Send a message to a specific chat and get a response  
-**Parameters**: `chat_id` (path) - Chat session identifier  
+**Description**: Send a message to a specific chat and get a response
+**Parameters**: `chat_id` (path) - Chat session identifier
 **Request Body**:
 ```json
 {
@@ -136,11 +136,11 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 #### DELETE `/api/chats/{chat_id}`
-**Description**: Delete a specific chat session  
+**Description**: Delete a specific chat session
 **Response**: `{"message": "Chat deleted successfully"}`
 
 #### POST `/api/chats/{chat_id}/save`
-**Description**: Save chat data for a specific session  
+**Description**: Save chat data for a specific session
 **Request Body**:
 ```json
 {
@@ -150,11 +150,11 @@ Authentication is currently disabled by default. The system includes a security 
 **Response**: `{"status": "success"}`
 
 #### POST `/api/chats/{chat_id}/reset`
-**Description**: Reset a specific chat session  
+**Description**: Reset a specific chat session
 **Response**: `{"status": "success"}`
 
 #### POST `/api/chats/cleanup_messages`
-**Description**: Clean up leftover message files and temporary data  
+**Description**: Clean up leftover message files and temporary data
 **Response**:
 ```json
 {
@@ -168,7 +168,7 @@ Authentication is currently disabled by default. The system includes a security 
 ### Legacy Chat Endpoints (Compatibility)
 
 #### POST `/api/chat`
-**Description**: Send a message (legacy endpoint for frontend compatibility)  
+**Description**: Send a message (legacy endpoint for frontend compatibility)
 **Request Body**:
 ```json
 {
@@ -178,7 +178,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 #### GET `/api/chat/history`
-**Description**: Get complete conversation history  
+**Description**: Get complete conversation history
 **Response**:
 ```json
 {
@@ -188,24 +188,24 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 #### POST `/api/chat/reset`
-**Description**: Clear entire chat history  
-**Form Data**: `user_role`: "user" (default)  
+**Description**: Clear entire chat history
+**Form Data**: `user_role`: "user" (default)
 **Response**: `{"message": "Chat history cleared successfully"}`
 
 #### POST `/api/chat/new`
-**Description**: Start new chat session (clears current)  
-**Form Data**: `user_role`: "user" (default)  
+**Description**: Start new chat session (clears current)
+**Form Data**: `user_role`: "user" (default)
 **Response**: `{"message": "New chat session started successfully"}`
 
 #### GET `/api/chat/list_sessions`
-**Description**: List available chat sessions  
-**Query Parameters**: `user_role`: "user" (default)  
+**Description**: List available chat sessions
+**Query Parameters**: `user_role`: "user" (default)
 **Response**: `{"sessions": ["session1", "session2"]}`
 
 #### GET `/api/chat/load_session/{session_id}`
-**Description**: Load specific chat session  
-**Parameters**: `session_id` (path) - Session identifier  
-**Query Parameters**: `user_role`: "user" (default)  
+**Description**: Load specific chat session
+**Parameters**: `session_id` (path) - Session identifier
+**Query Parameters**: `user_role`: "user" (default)
 **Response**:
 ```json
 {
@@ -215,8 +215,8 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 #### POST `/api/chat/save_session`
-**Description**: Save current chat as named session  
-**Form Data**: `session_id`, `user_role`: "user" (default)  
+**Description**: Save current chat as named session
+**Form Data**: `session_id`, `user_role`: "user" (default)
 **Response**: `{"message": "Current chat session saved as 'session_name'"}`
 
 ---
@@ -224,8 +224,8 @@ Authentication is currently disabled by default. The system includes a security 
 ## File Management
 
 ### GET `/api/files/list`
-**Description**: List files and directories in sandbox  
-**Query Parameters**: `path`: Directory path to list (default: "")  
+**Description**: List files and directories in sandbox
+**Query Parameters**: `path`: Directory path to list (default: "")
 **Response**:
 ```json
 {
@@ -250,7 +250,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/files/upload`
-**Description**: Upload file to sandbox  
+**Description**: Upload file to sandbox
 **Form Data**:
 - `file`: File upload
 - `path`: Target directory path (default: "")
@@ -266,13 +266,13 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/files/download/{path:path}`
-**Description**: Download a file from sandbox  
-**Parameters**: `path` - File path within sandbox  
+**Description**: Download a file from sandbox
+**Parameters**: `path` - File path within sandbox
 **Response**: File download (FileResponse)
 
 ### GET `/api/files/view/{path:path}`
-**Description**: View file content or get file info  
-**Parameters**: `path` - File path within sandbox  
+**Description**: View file content or get file info
+**Parameters**: `path` - File path within sandbox
 **Response**:
 ```json
 {
@@ -283,7 +283,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### DELETE `/api/files/delete`
-**Description**: Delete file or directory  
+**Description**: Delete file or directory
 **Request Body**:
 ```json
 {
@@ -293,8 +293,8 @@ Authentication is currently disabled by default. The system includes a security 
 **Response**: `{"message": "File deleted successfully"}`
 
 ### POST `/api/files/create_directory`
-**Description**: Create new directory  
-**Form Data**: `path` (parent directory), `name` (directory name)  
+**Description**: Create new directory
+**Form Data**: `path` (parent directory), `name` (directory name)
 **Response**:
 ```json
 {
@@ -304,7 +304,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/files/stats`
-**Description**: Get file system statistics  
+**Description**: Get file system statistics
 **Response**:
 ```json
 {
@@ -323,7 +323,7 @@ Authentication is currently disabled by default. The system includes a security 
 ## Knowledge Base Management
 
 ### POST `/api/knowledge/search`
-**Description**: Search knowledge base  
+**Description**: Search knowledge base
 **Request Body**:
 ```json
 {
@@ -348,7 +348,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/knowledge/add_text`
-**Description**: Add text content to knowledge base  
+**Description**: Add text content to knowledge base
 **Request Body**:
 ```json
 {
@@ -370,7 +370,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/knowledge/add_url`
-**Description**: Add URL reference to knowledge base  
+**Description**: Add URL reference to knowledge base
 **Request Body**:
 ```json
 {
@@ -390,8 +390,8 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/knowledge/add_file`
-**Description**: Add file to knowledge base  
-**Form Data**: `file` - File upload  
+**Description**: Add file to knowledge base
+**Form Data**: `file` - File upload
 **Response**:
 ```json
 {
@@ -404,7 +404,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/knowledge/export`
-**Description**: Export all knowledge base data  
+**Description**: Export all knowledge base data
 **Response**:
 ```json
 {
@@ -416,7 +416,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/knowledge/cleanup`
-**Description**: Clean up old knowledge base entries  
+**Description**: Clean up old knowledge base entries
 **Response**:
 ```json
 {
@@ -428,7 +428,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/knowledge/stats`
-**Description**: Get knowledge base statistics  
+**Description**: Get knowledge base statistics
 **Response**:
 ```json
 {
@@ -440,19 +440,19 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/knowledge/detailed_stats`
-**Description**: Get detailed knowledge base statistics  
+**Description**: Get detailed knowledge base statistics
 **Response**: Detailed statistics object
 
 ### POST `/api/knowledge/get_fact`
-**Description**: Retrieve facts from knowledge base  
-**Form Data**: `fact_id` (optional), `query` (optional)  
+**Description**: Retrieve facts from knowledge base
+**Form Data**: `fact_id` (optional), `query` (optional)
 **Response**: `{"facts": [/* facts array */]}`
 
 ### Legacy Knowledge Base Endpoints
 
 #### POST `/api/knowledge_base/store_fact`
-**Description**: Store structured fact (legacy)  
-**Form Data**: `content` (required), `metadata` (optional JSON)  
+**Description**: Store structured fact (legacy)
+**Form Data**: `content` (required), `metadata` (optional JSON)
 **Response**:
 ```json
 {
@@ -463,13 +463,13 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 #### GET `/api/knowledge_base/get_fact`
-**Description**: Retrieve facts (legacy)  
-**Query Parameters**: `fact_id` (optional), `query` (optional)  
+**Description**: Retrieve facts (legacy)
+**Query Parameters**: `fact_id` (optional), `query` (optional)
 **Response**: `{"facts": [/* facts array */]}`
 
 #### POST `/api/knowledge_base/search`
-**Description**: Search vector store (legacy)  
-**Form Data**: `query` (required), `n_results` (default: 5)  
+**Description**: Search vector store (legacy)
+**Form Data**: `query` (required), `n_results` (default: 5)
 **Response**: `{"results": [/* results array */]}`
 
 ---
@@ -477,16 +477,16 @@ Authentication is currently disabled by default. The system includes a security 
 ## LLM Management
 
 ### GET `/api/llm/config`
-**Description**: Get current LLM configuration  
+**Description**: Get current LLM configuration
 **Response**: Current LLM configuration object
 
 ### POST `/api/llm/config`
-**Description**: Update LLM configuration  
-**Request Body**: JSON object with configuration updates  
+**Description**: Update LLM configuration
+**Request Body**: JSON object with configuration updates
 **Response**: Updated configuration result
 
 ### POST `/api/llm/test_connection`
-**Description**: Test LLM connection with current configuration  
+**Description**: Test LLM connection with current configuration
 **Response**:
 ```json
 {
@@ -496,7 +496,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/llm/models`
-**Description**: Get list of available LLM models  
+**Description**: Get list of available LLM models
 **Response**:
 ```json
 {
@@ -506,7 +506,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/llm/current`
-**Description**: Get current LLM model and configuration  
+**Description**: Get current LLM model and configuration
 **Response**:
 ```json
 {
@@ -521,16 +521,16 @@ Authentication is currently disabled by default. The system includes a security 
 ## Redis Management
 
 ### GET `/api/redis/config`
-**Description**: Get current Redis configuration  
+**Description**: Get current Redis configuration
 **Response**: Redis configuration object
 
 ### POST `/api/redis/config`
-**Description**: Update Redis configuration  
-**Request Body**: JSON object with Redis configuration updates  
+**Description**: Update Redis configuration
+**Request Body**: JSON object with Redis configuration updates
 **Response**: Updated configuration result
 
 ### POST `/api/redis/test_connection`
-**Description**: Test Redis connection  
+**Description**: Test Redis connection
 **Response**:
 ```json
 {
@@ -544,25 +544,25 @@ Authentication is currently disabled by default. The system includes a security 
 ## Settings Management
 
 ### GET `/api/settings/`
-**Description**: Get complete application settings  
+**Description**: Get complete application settings
 **Response**: Complete settings object
 
 ### POST `/api/settings/`
-**Description**: Save application settings  
-**Request Body**: JSON object with settings updates  
+**Description**: Save application settings
+**Request Body**: JSON object with settings updates
 **Response**: Save result
 
 ### GET `/api/settings/backend`
-**Description**: Get backend-specific settings  
+**Description**: Get backend-specific settings
 **Response**: Backend settings object
 
 ### POST `/api/settings/backend`
-**Description**: Save backend-specific settings  
-**Request Body**: JSON object with backend settings  
+**Description**: Save backend-specific settings
+**Request Body**: JSON object with backend settings
 **Response**: Save result
 
 ### GET `/api/settings/config`
-**Description**: Get complete application configuration  
+**Description**: Get complete application configuration
 **Response**: Full configuration object
 
 ---
@@ -570,7 +570,7 @@ Authentication is currently disabled by default. The system includes a security 
 ## Prompt Management
 
 ### GET `/api/prompts/`
-**Description**: Get all available system prompts  
+**Description**: Get all available system prompts
 **Response**:
 ```json
 {
@@ -588,8 +588,8 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/prompts/{prompt_id}`
-**Description**: Save a specific prompt  
-**Parameters**: `prompt_id` (path) - Prompt identifier  
+**Description**: Save a specific prompt
+**Parameters**: `prompt_id` (path) - Prompt identifier
 **Request Body**:
 ```json
 {
@@ -599,8 +599,8 @@ Authentication is currently disabled by default. The system includes a security 
 **Response**: Updated prompt object
 
 ### POST `/api/prompts/{prompt_id}/revert`
-**Description**: Revert prompt to default version  
-**Parameters**: `prompt_id` (path) - Prompt identifier  
+**Description**: Revert prompt to default version
+**Parameters**: `prompt_id` (path) - Prompt identifier
 **Response**: Reverted prompt object
 
 ---
@@ -608,7 +608,7 @@ Authentication is currently disabled by default. The system includes a security 
 ## Developer Tools
 
 ### GET `/api/developer/endpoints`
-**Description**: Get all registered API endpoints (requires developer mode)  
+**Description**: Get all registered API endpoints (requires developer mode)
 **Response**:
 ```json
 {
@@ -628,7 +628,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/developer/config`
-**Description**: Get developer mode configuration  
+**Description**: Get developer mode configuration
 **Response**:
 ```json
 {
@@ -640,12 +640,12 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/developer/config`
-**Description**: Update developer mode configuration  
-**Request Body**: JSON object with developer configuration  
+**Description**: Update developer mode configuration
+**Request Body**: JSON object with developer configuration
 **Response**: Updated configuration
 
 ### GET `/api/developer/system-info`
-**Description**: Get system information for debugging (requires developer mode)  
+**Description**: Get system information for debugging (requires developer mode)
 **Response**:
 ```json
 {
@@ -662,7 +662,7 @@ Authentication is currently disabled by default. The system includes a security 
 ## System Health & Information
 
 ### GET `/api/health`
-**Description**: Health check endpoint  
+**Description**: Health check endpoint
 **Response**:
 ```json
 {
@@ -677,11 +677,11 @@ Authentication is currently disabled by default. The system includes a security 
 **Status Codes**: `200` Healthy, `500` Unhealthy
 
 ### GET `/api/hello`
-**Description**: Simple test endpoint  
+**Description**: Simple test endpoint
 **Response**: `{"message": "Hello from AutoBot backend!"}`
 
 ### GET `/api/version`
-**Description**: Get backend version information  
+**Description**: Get backend version information
 **Response**:
 ```json
 {
@@ -691,7 +691,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/system_metrics`
-**Description**: Get real-time system metrics  
+**Description**: Get real-time system metrics
 **Response**:
 ```json
 {
@@ -703,11 +703,11 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/restart`
-**Description**: Restart system components  
+**Description**: Restart system components
 **Response**: `{"status": "success", "message": "Restart initiated"}`
 
 ### GET `/api/models`
-**Description**: Get available LLM models (system-level)  
+**Description**: Get available LLM models (system-level)
 **Response**:
 ```json
 {
@@ -719,7 +719,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/status`
-**Description**: Get current system status  
+**Description**: Get current system status
 **Response**:
 ```json
 {
@@ -733,8 +733,8 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/login`
-**Description**: User authentication endpoint  
-**Form Data**: `username`, `password`  
+**Description**: User authentication endpoint
+**Form Data**: `username`, `password`
 **Response**:
 ```json
 {
@@ -745,7 +745,7 @@ Authentication is currently disabled by default. The system includes a security 
 **Status Codes**: `200` Success, `401` Invalid credentials
 
 ### GET `/ctx_window_get`
-**Description**: Get LLM context window content (development)  
+**Description**: Get LLM context window content (development)
 **Response**:
 ```json
 {
@@ -759,8 +759,8 @@ Authentication is currently disabled by default. The system includes a security 
 ## Voice Interface
 
 ### POST `/api/voice/listen`
-**Description**: Convert speech to text  
-**Form Data**: `user_role`: "user" (default)  
+**Description**: Convert speech to text
+**Form Data**: `user_role`: "user" (default)
 **Response**:
 ```json
 {
@@ -770,8 +770,8 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### POST `/api/voice/speak`
-**Description**: Convert text to speech  
-**Form Data**: `text` (required), `user_role`: "user" (default)  
+**Description**: Convert text to speech
+**Form Data**: `text` (required), `user_role`: "user" (default)
 **Response**: `{"message": "Text spoken successfully"}`
 
 ---
@@ -779,7 +779,7 @@ Authentication is currently disabled by default. The system includes a security 
 ## Legacy Endpoints
 
 ### POST `/api/uploadfile/`
-**Description**: Upload file to knowledge base (legacy endpoint)  
+**Description**: Upload file to knowledge base (legacy endpoint)
 **Form Data**:
 - `file`: File upload
 - `file_type`: "txt|pdf|csv|docx"
@@ -794,8 +794,8 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### DELETE `/api/delete_file`
-**Description**: Delete file (legacy endpoint)  
-**Query Parameters**: `path` - File path to delete  
+**Description**: Delete file (legacy endpoint)
+**Query Parameters**: `path` - File path to delete
 **Response**: `{"message": "File deleted successfully"}`
 
 ---
@@ -803,7 +803,7 @@ Authentication is currently disabled by default. The system includes a security 
 ## WebSocket Endpoints
 
 ### WebSocket `/ws`
-**Description**: Real-time event stream for frontend updates  
+**Description**: Real-time event stream for frontend updates
 **Events**:
 - `goal_received`, `plan_ready`, `goal_completed`
 - `command_execution_start`, `command_execution_end`

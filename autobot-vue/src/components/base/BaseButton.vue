@@ -67,7 +67,7 @@ const handleClick = (event: MouseEvent) => {
 
 <style scoped>
 .base-button {
-  @apply inline-flex items-center justify-center font-medium transition-all duration-200 
+  @apply inline-flex items-center justify-center font-medium transition-all duration-200
          focus:outline-none focus:ring-2 focus:ring-offset-2 active:scale-[0.98]
          border border-transparent cursor-pointer select-none;
 }
@@ -95,7 +95,7 @@ const handleClick = (event: MouseEvent) => {
 
 /* Color variants */
 .btn-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 
+  @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500
          dark:bg-blue-500 dark:hover:bg-blue-600;
 }
 
@@ -168,7 +168,7 @@ const handleClick = (event: MouseEvent) => {
 
 /* Loading spinner */
 .button-spinner {
-  @apply inline-block w-4 h-4 mr-2 border-2 border-current border-t-transparent 
+  @apply inline-block w-4 h-4 mr-2 border-2 border-current border-t-transparent
          rounded-full animate-spin;
 }
 
@@ -208,7 +208,7 @@ const handleClick = (event: MouseEvent) => {
   .btn-lg {
     @apply px-4 py-2 text-base;
   }
-  
+
   .btn-xl {
     @apply px-6 py-3 text-base;
   }

@@ -1,6 +1,6 @@
 /**
  * Vue Composable for API Client Access
- * 
+ *
  * This composable provides a clean way to access the centralized API client
  * in Vue 3 Composition API, with TypeScript support and error handling.
  */
@@ -10,37 +10,37 @@ import type { ApiClientType } from '../plugins/api'
 
 /**
  * Composable to access the centralized API client
- * 
+ *
  * @returns {ApiClientType} The configured API client instance
  * @throws {Error} If API client is not available (plugin not installed)
  */
 export function useApi(): ApiClientType {
   const apiClient = inject<ApiClientType>('apiClient')
-  
+
   if (!apiClient) {
     throw new Error(
       'API client not found. Make sure the API plugin is installed in your Vue app:\n' +
       'app.use(ApiPlugin, { baseURL: "your-api-url" })'
     )
   }
-  
+
   return apiClient
 }
 
 /**
  * Composable for API calls with built-in error handling and loading states
- * 
+ *
  * @returns Object with API client and utility functions
  */
 export function useApiWithState() {
   const api = useApi()
-  
+
   return {
     api,
-    
+
     /**
      * Wrapper for API calls with standardized error handling
-     * 
+     *
      * @param apiCall - Function that returns a Promise (API call)
      * @param options - Configuration options
      * @returns Promise with standardized error handling
@@ -53,29 +53,29 @@ export function useApiWithState() {
         errorMessage?: string
       } = {}
     ): Promise<T | null> {
-      const { 
-        showErrorToast = true, 
-        fallbackValue = null, 
-        errorMessage = 'An error occurred while fetching data' 
+      const {
+        showErrorToast = true,
+        fallbackValue = null,
+        errorMessage = 'An error occurred while fetching data'
       } = options
-      
+
       try {
         return await apiCall()
       } catch (error) {
         console.error('API call failed:', error)
-        
+
         if (showErrorToast) {
           // You can integrate with your toast/notification system here
           console.error(errorMessage, error)
         }
-        
+
         return fallbackValue as T
       }
     },
-    
+
     /**
      * Helper to check API connection status
-     * 
+     *
      * @returns Promise<boolean> - true if API is reachable
      */
     async checkConnection(): Promise<boolean> {
@@ -86,10 +86,10 @@ export function useApiWithState() {
         return false
       }
     },
-    
+
     /**
      * Helper to get API health status
-     * 
+     *
      * @returns Promise with health information
      */
     async getHealthStatus() {
@@ -103,12 +103,12 @@ export function useApiWithState() {
 
 /**
  * Composable for chat-related API calls
- * 
+ *
  * @returns Object with chat-specific API methods
  */
 export function useChatApi() {
   const { api, withErrorHandling } = useApiWithState()
-  
+
   return {
     /**
      * Send a chat message
@@ -119,33 +119,33 @@ export function useChatApi() {
         { errorMessage: 'Failed to send message' }
       )
     },
-    
+
     /**
      * Get chat list
      */
     async getChatList() {
       return withErrorHandling(
         () => api.getChatList(),
-        { 
+        {
           errorMessage: 'Failed to load chat list',
           fallbackValue: { chats: [] }
         }
       )
     },
-    
+
     /**
      * Get chat messages
      */
     async getChatMessages(chatId: string) {
       return withErrorHandling(
         () => api.getChatMessages(chatId),
-        { 
+        {
           errorMessage: 'Failed to load chat messages',
           fallbackValue: { history: [] }
         }
       )
     },
-    
+
     /**
      * Create new chat
      */
@@ -155,7 +155,7 @@ export function useChatApi() {
         { errorMessage: 'Failed to create new chat' }
       )
     },
-    
+
     /**
      * Delete chat
      */
@@ -165,7 +165,7 @@ export function useChatApi() {
         { errorMessage: 'Failed to delete chat' }
       )
     },
-    
+
     /**
      * Reset chat
      */
@@ -175,7 +175,7 @@ export function useChatApi() {
         { errorMessage: 'Failed to reset chat' }
       )
     },
-    
+
     /**
      * Save chat messages
      */
@@ -190,12 +190,12 @@ export function useChatApi() {
 
 /**
  * Composable for settings-related API calls
- * 
+ *
  * @returns Object with settings-specific API methods
  */
 export function useSettingsApi() {
   const { api, withErrorHandling } = useApiWithState()
-  
+
   return {
     /**
      * Get current settings
@@ -203,13 +203,13 @@ export function useSettingsApi() {
     async getSettings() {
       return withErrorHandling(
         () => api.getSettings(),
-        { 
+        {
           errorMessage: 'Failed to load settings',
           fallbackValue: {}
         }
       )
     },
-    
+
     /**
      * Update settings
      */
@@ -219,20 +219,20 @@ export function useSettingsApi() {
         { errorMessage: 'Failed to update settings' }
       )
     },
-    
+
     /**
      * Get backend settings
      */
     async getBackendSettings() {
       return withErrorHandling(
         () => api.getBackendSettings(),
-        { 
+        {
           errorMessage: 'Failed to load backend settings',
           fallbackValue: {}
         }
       )
     },
-    
+
     /**
      * Update backend settings
      */
@@ -250,7 +250,7 @@ export function useSettingsApi() {
  */
 export function useKnowledgeApi() {
   const { api, withErrorHandling } = useApiWithState()
-  
+
   return {
     /**
      * Search knowledge base
@@ -258,13 +258,13 @@ export function useKnowledgeApi() {
     async search(query: string, limit = 10) {
       return withErrorHandling(
         () => api.searchKnowledge(query, limit),
-        { 
+        {
           errorMessage: 'Failed to search knowledge base',
           fallbackValue: { results: [] }
         }
       )
     },
-    
+
     /**
      * Add text to knowledge base
      */
@@ -274,7 +274,7 @@ export function useKnowledgeApi() {
         { errorMessage: 'Failed to add text to knowledge base' }
       )
     },
-    
+
     /**
      * Add URL to knowledge base
      */
@@ -284,7 +284,7 @@ export function useKnowledgeApi() {
         { errorMessage: 'Failed to add URL to knowledge base' }
       )
     },
-    
+
     /**
      * Add file to knowledge base
      */
@@ -302,7 +302,7 @@ export function useKnowledgeApi() {
  */
 export function useConnectionStatus() {
   const { api, withErrorHandling } = useApiWithState()
-  
+
   return {
     /**
      * Test API connection
@@ -310,27 +310,27 @@ export function useConnectionStatus() {
     async testConnection() {
       return withErrorHandling(
         () => api.testConnection(),
-        { 
+        {
           errorMessage: 'Connection test failed',
           fallbackValue: { connected: false, error: 'Connection test failed' }
         }
       )
     },
-    
+
     /**
      * Get current base URL
      */
     getBaseUrl() {
       return api.getBaseUrl()
     },
-    
+
     /**
      * Update base URL
      */
     setBaseUrl(url: string) {
       api.setBaseUrl(url)
     },
-    
+
     /**
      * Update timeout
      */
@@ -345,7 +345,7 @@ export function useConnectionStatus() {
  */
 export function useFileApi() {
   const { api, withErrorHandling } = useApiWithState()
-  
+
   return {
     /**
      * List files in directory
@@ -353,9 +353,9 @@ export function useFileApi() {
     async listFiles(path = '') {
       return withErrorHandling(
         () => api.listFiles(path),
-        { 
+        {
           errorMessage: 'Failed to list files',
-          fallbackValue: { 
+          fallbackValue: {
             current_path: path,
             files: [],
             total_files: 0,
@@ -365,7 +365,7 @@ export function useFileApi() {
         }
       )
     },
-    
+
     /**
      * Upload file
      */
@@ -375,7 +375,7 @@ export function useFileApi() {
         { errorMessage: 'Failed to upload file' }
       )
     },
-    
+
     /**
      * View file content
      */
@@ -385,7 +385,7 @@ export function useFileApi() {
         { errorMessage: 'Failed to view file' }
       )
     },
-    
+
     /**
      * Delete file
      */
@@ -395,7 +395,7 @@ export function useFileApi() {
         { errorMessage: 'Failed to delete file' }
       )
     },
-    
+
     /**
      * Download file
      */
@@ -405,7 +405,7 @@ export function useFileApi() {
         { errorMessage: 'Failed to download file' }
       )
     },
-    
+
     /**
      * Create directory
      */
@@ -415,14 +415,14 @@ export function useFileApi() {
         { errorMessage: 'Failed to create directory' }
       )
     },
-    
+
     /**
      * Get file system statistics
      */
     async getFileStats() {
       return withErrorHandling(
         () => api.getFileStats(),
-        { 
+        {
           errorMessage: 'Failed to get file statistics',
           fallbackValue: {
             sandbox_root: '',

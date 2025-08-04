@@ -9,7 +9,7 @@ AutoBot uses a centralized configuration system based on YAML files and a web-ba
 ```yaml
 # Main configuration sections
 llm:           # LLM backend settings
-memory:        # Redis and memory configuration  
+memory:        # Redis and memory configuration
 agent:         # Core agent behavior
 network:       # Network and security settings
 logging:       # Log levels and destinations
@@ -81,9 +81,9 @@ network:
     host: "0.0.0.0"
     port: 8001
     enable_cors: true
-    
+
   api:
-    host: "0.0.0.0" 
+    host: "0.0.0.0"
     port: 8001
 ```
 
@@ -107,7 +107,7 @@ agent:
   autonomy_level: "supervised"  # or "autonomous", "restricted"
   max_task_depth: 10
   timeout_seconds: 300
-  
+
   permissions:
     file_system: true
     network_access: true
@@ -121,7 +121,7 @@ safety:
   command_filter:
     enabled: true
     blacklist: ["rm -rf", "format", "delete"]
-  
+
   resource_limits:
     max_memory_mb: 4096
     max_cpu_percent: 80
@@ -132,12 +132,12 @@ safety:
 ```yaml
 logging:
   level: "INFO"  # DEBUG, INFO, WARNING, ERROR
-  
+
   files:
     agent_log: "logs/agent.log"
-    llm_usage: "logs/llm_usage.log" 
+    llm_usage: "logs/llm_usage.log"
     error_log: "logs/errors.log"
-    
+
   rotation:
     max_size_mb: 100
     backup_count: 5
