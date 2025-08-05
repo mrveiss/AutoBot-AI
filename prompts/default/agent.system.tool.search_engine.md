@@ -15,4 +15,4 @@ returns list urls titles descriptions
 }
 ~~~
 
-{{ include ''./agent.system.tool.document_query.md'' }}
+{% include 'default/agent.system.tool.document_query.md' %}
