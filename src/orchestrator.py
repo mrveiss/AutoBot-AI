@@ -1,7 +1,6 @@
 # src/orchestrator.py
 import asyncio
 import json
-import redis
 from typing import Dict, Any, List, Optional
 import uuid
 import time
@@ -30,21 +29,19 @@ try:
 except ImportError:
     LangChainAgentOrchestrator = None
     LANGCHAIN_AVAILABLE = False
-    print("WARNING: LangChain Agent not available. Using standard orchestrator only.")
+    msg = "WARNING: LangChain Agent not available. Using standard orchestrator only."
+    print(msg)
 
 
 class Orchestrator:
     def __init__(self):
         # Remove config_path and direct config loading
-        self.llm_interface = (
-            LLMInterface()
-        )  # Will update LLMInterface to use global_config_manager
-        self.knowledge_base = (
-            KnowledgeBase()
-        )  # Will update KnowledgeBase to use global_config_manager
-        self.diagnostics = (
-            Diagnostics()
-        )  # Will update Diagnostics to use global_config_manager
+        # Will update LLMInterface to use global_config_manager
+        self.llm_interface = LLMInterface()
+        # Will update KnowledgeBase to use global_config_manager
+        self.knowledge_base = KnowledgeBase()
+        # Will update Diagnostics to use global_config_manager
+        self.diagnostics = Diagnostics()
 
         llm_config = global_config_manager.get_llm_config()
         self.orchestrator_llm_model = llm_config.get("orchestrator_llm", "phi:2.7b")
@@ -73,11 +70,13 @@ class Orchestrator:
             # Use centralized Redis client utility
             self.redis_client = get_redis_client(async_client=False)
             if self.redis_client:
-                print(f"Orchestrator connected to Redis via centralized utility")
+                print("Orchestrator connected to Redis via centralized utility")
             else:
-                print(
-                    f"Orchestrator failed to get Redis client from centralized utility. Falling back to local task transport."
+                msg = (
+                    "Orchestrator failed to get Redis client from centralized "
+                    "utility. Falling back to local task transport."
                 )
+                print(msg)
                 self.task_transport_type = "local"  # Fallback to local if Redis fails
                 self.local_worker = WorkerNode()
 
@@ -100,9 +99,9 @@ class Orchestrator:
         pubsub = self.redis_client.pubsub()
         worker_capabilities_channel = "worker_capabilities"
         pubsub.subscribe(worker_capabilities_channel)
-        print(
-            f"Listening for worker capabilities on Redis channel '{worker_capabilities_channel}'..."
-        )
+        msg = "Listening for worker capabilities on Redis channel "
+        msg += f"'{worker_capabilities_channel}'..."
+        print(msg)
 
         try:
             while True:
@@ -127,19 +126,25 @@ class Orchestrator:
                                 "last_seen": time.time(),
                             }
                             print(
-                                f"Updated capabilities for worker {worker_id}: {capabilities}"
+                                f"Updated capabilities for worker {worker_id}: "
+                                f"{capabilities}"
                             )
                             await event_manager.publish(
                                 "log_message",
                                 {
                                     "level": "INFO",
-                                    "message": f"Worker {worker_id} capabilities updated: {list(capabilities.keys())}",
+                                    "message": (
+                                        f"Worker {worker_id} capabilities updated: "
+                                        f"{list(capabilities.keys())}"
+                                    ),
                                 },
                             )
                         else:
-                            print(
-                                f"Invalid worker capabilities message: missing worker_id or capabilities - {data}"
+                            msg = (
+                                "Invalid worker capabilities message: missing "
+                                f"worker_id or capabilities - {data}"
                             )
+                            print(msg)
 
                     except json.JSONDecodeError as e:
                         print(f"Failed to parse worker capabilities message: {e}")
@@ -186,9 +191,9 @@ class Orchestrator:
             f"{self.redis_command_approval_response_channel_prefix}*"
         )
         pubsub.psubscribe(approval_channel_pattern)
-        print(
-            f"Listening for command approvals on Redis channel '{approval_channel_pattern}'..."
-        )
+        msg = "Listening for command approvals on Redis channel "
+        msg += f"'{approval_channel_pattern}'..."
+        print(msg)
 
         try:
             while True:
@@ -200,7 +205,7 @@ class Orchestrator:
 
                 if message["type"] == "pmessage":
                     try:
-                        channel = message["channel"].decode("utf-8")
+                        message["channel"].decode("utf-8")
                         data = json.loads(message["data"])
                         task_id = data.get("task_id")
                         approved = data.get("approved")
@@ -210,7 +215,8 @@ class Orchestrator:
                             if not future.done():
                                 future.set_result({"approved": approved})
                             print(
-                                f"Received approval for task {task_id}: Approved={approved}"
+                                f"Received approval for task {task_id}: "
+                                f"Approved={approved}"
                             )
                         else:
                             print(
@@ -294,7 +300,8 @@ class Orchestrator:
                 kb_config = global_config_manager.get("knowledge_base", {})
                 if kb_config.get("provider") == "disabled":
                     print(
-                        "Knowledge Base disabled in configuration. Skipping LangChain KB initialization."
+                        "Knowledge Base disabled in configuration. "
+                        "Skipping LangChain KB initialization."
                     )
                     self.knowledge_base = None
                 # KnowledgeBase.ainit() is now called in main.py's lifespan startup, no need to call it here.
@@ -326,7 +333,9 @@ class Orchestrator:
                     "log_message",
                     {
                         "level": "ERROR",
-                        "message": f"Failed to initialize LangChain Agent: {e}",
+                        "message": (
+                            f"Failed to initialize LangChain Agent: {e}"
+                        ),
                     },
                 )
                 self.langchain_agent = None
@@ -373,7 +382,9 @@ class Orchestrator:
             "log_message",
             {
                 "level": "INFO",
-                "message": f"Generating plan using Orchestrator LLM: {target_llm_model}",
+                "message": (
+                    f"Generating plan using Orchestrator LLM: {target_llm_model}"
+                ),
             },
         )
         print(f"Generating plan using Orchestrator LLM: {target_llm_model}")
@@ -391,7 +402,9 @@ class Orchestrator:
         if retrieved_context:
             context_str = "\n\nRelevant Context from Knowledge Base:\n"
             for i, item in enumerate(retrieved_context):
-                context_str += f"--- Document: {item['metadata'].get('filename', 'N/A')} (Chunk {item['metadata'].get('chunk_index', 'N/A')}) ---\n"
+                filename = item["metadata"].get("filename", "N/A")
+                chunk_idx = item["metadata"].get("chunk_index", "N/A")
+                context_str += f"--- Document: {filename} (Chunk {chunk_idx}) ---\n"
                 context_str += item["content"] + "\n"
             await event_manager.publish(
                 "log_message",
@@ -425,7 +438,8 @@ class Orchestrator:
         except KeyError:
             # Fallback to legacy prompt if new one doesn't exist
             print(
-                "Warning: orchestrator.system_prompt not found, using legacy system prompt"
+                "Warning: orchestrator.system_prompt not found, "
+                "using legacy system prompt"
             )
             try:
                 system_prompt = prompt_manager.get("orchestrator.legacy_system_prompt")
@@ -505,7 +519,8 @@ class Orchestrator:
                     return parsed_content
                 else:
                     print(
-                        f"LLM returned unexpected JSON (not a tool call). Treating as conversational: {llm_raw_content}"
+                        "LLM returned unexpected JSON (not a tool call). "
+                        f"Treating as conversational: {llm_raw_content}"
                     )
                     return {
                         "thoughts": [
@@ -607,11 +622,15 @@ class Orchestrator:
                     "log_message",
                     {
                         "level": "ERROR",
-                        "message": f"LangChain Agent failed, falling back to standard orchestrator: {e}",
+                        "message": (
+                            "LangChain Agent failed, falling back to "
+                            f"standard orchestrator: {e}"
+                        ),
                     },
                 )
                 print(
-                    f"LangChain Agent failed, falling back to standard orchestrator: {e}"
+                    "LangChain Agent failed, falling back to "
+                    f"standard orchestrator: {e}"
                 )
         return None
 
@@ -880,11 +899,15 @@ class Orchestrator:
                 "log_message",
                 {
                     "level": "INFO",
-                    "message": f"Result from worker for simple command '{command}': {json.dumps(result, indent=2)}",
+                    "message": (
+                        f"Result from worker for simple command '{command}': "
+                        f"{json.dumps(result, indent=2)}"
+                    ),
                 },
             )
             print(
-                f"Result from worker for simple command '{command}': {json.dumps(result, indent=2)}"
+                f"Result from worker for simple command '{command}': "
+                f"{json.dumps(result, indent=2)}"
             )
 
             if result.get("status") == "success":
@@ -908,9 +931,10 @@ class Orchestrator:
                     },
                 }
 
-        print(
-            f"DEBUG: _execute_simple_command could not determine a direct command for '{goal}'. Falling back to generate_task_plan."
-        )
+            print(
+                f"DEBUG: _execute_simple_command could not determine a direct "
+                f"command for '{goal}'. Falling back to generate_task_plan."
+            )
         return await self.generate_task_plan(goal, [{"role": "user", "content": goal}])
 
     async def _handle_command_approval(self, result):
@@ -956,7 +980,9 @@ class Orchestrator:
             except asyncio.TimeoutError:
                 self.pending_approvals.pop(task_id, None)
                 await event_manager.publish(
-                    "error", {"message": f"Command approval timeout for: {command}"}
+                    "error", {
+                        "message": f"Command approval timeout for: {command}"
+                    }
                 )
                 return {"approved": False, "message": "Approval timeout"}
         else:

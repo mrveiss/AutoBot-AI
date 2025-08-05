@@ -6,10 +6,13 @@ to create and configure the FastAPI application. The actual application logic
 has been moved to backend/app_factory.py for better modularity.
 """
 
-import os
 import uvicorn
 import logging
 import logging.config
+
+# Import the application factory
+from backend.app_factory import create_app
+from src.config import config as global_config_manager
 
 # Configure logging at the very beginning
 logging.basicConfig(
@@ -18,10 +21,6 @@ logging.basicConfig(
     handlers=[logging.FileHandler("logs/autobot_backend.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
-
-# Import the application factory
-from backend.app_factory import create_app
-from src.config import config as global_config_manager
 
 # Create the FastAPI application at module level for ASGI server
 app = create_app()
