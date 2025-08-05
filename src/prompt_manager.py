@@ -68,7 +68,7 @@ class PromptManager:
 
                     # Store both raw content and as Jinja2 template
                     self.prompts[prompt_key] = content
-                    self.templates[prompt_key] = Template(content)
+                    self.templates[prompt_key] = self.jinja_env.from_string(content)
 
                     logger.debug(f"Loaded prompt: {prompt_key} from {file_path}")
 

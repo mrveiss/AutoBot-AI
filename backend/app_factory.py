@@ -42,6 +42,7 @@ from backend.api.voice import router as voice_router
 from backend.api.agent import router as agent_router
 from backend.api.files import router as files_router
 from backend.api.websockets import router as websocket_router
+from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.developer import (
     router as developer_router,
     api_registry,
@@ -384,6 +385,7 @@ def add_api_routes(app: FastAPI) -> None:
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
         (agent_router, "/agent", ["agent"], "agent"),
+        (intelligent_agent_router, "/agent", ["intelligent-agent"], "intelligent_agent"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
     ]

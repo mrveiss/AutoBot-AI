@@ -174,10 +174,21 @@ class KnowledgeBase:
         self, file_path: str, file_type: str, metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         if self.index is None:
-            logging.error("KnowledgeBase not initialized. Call ainit() first.")
+            logging.warning("KnowledgeBase not initialized, attempting initialization...")
+            try:
+                await self.ainit()
+                logging.info("KnowledgeBase initialized successfully")
+            except Exception as e:
+                logging.error(f"Failed to initialize KnowledgeBase: {e}")
+                return {
+                    "status": "error",
+                    "message": f"KnowledgeBase initialization failed: {e}",
+                }
+        
+        if self.index is None:  # Still None after initialization attempt
             return {
                 "status": "error",
-                "message": "KnowledgeBase not initialized. Call ainit() first.",
+                "message": "KnowledgeBase initialization failed - index not available",
             }
         try:
             content = ""
@@ -226,7 +237,16 @@ class KnowledgeBase:
 
     async def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         if self.query_engine is None:
-            logging.error("KnowledgeBase not initialized. Call ainit() first.")
+            logging.warning("KnowledgeBase not initialized, attempting initialization...")
+            try:
+                await self.ainit()
+                logging.info("KnowledgeBase initialized successfully")
+            except Exception as e:
+                logging.error(f"Failed to initialize KnowledgeBase: {e}")
+                return []
+        
+        if self.query_engine is None:  # Still None after initialization attempt
+            logging.error("Query engine not available after initialization")
             return []
         try:
             response = self.query_engine.query(query)
