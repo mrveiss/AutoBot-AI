@@ -14,6 +14,46 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _extract_text_from_complex_json(data, max_length=500):
+    """
+    Extract meaningful text content from complex JSON structures.
+    Looks for text fields and concatenates them into a readable response.
+    """
+    text_parts = []
+    
+    def extract_recursive(obj, depth=0):
+        if depth > 3:  # Limit recursion depth
+            return
+            
+        if isinstance(obj, str) and obj.strip() and len(obj) > 10:
+            # Only include strings that look like actual text (not short keys/IDs)
+            text_parts.append(obj.strip())
+        elif isinstance(obj, dict):
+            for key, value in obj.items():
+                if key.lower() in ['text', 'message', 'content', 'response', 'description']:
+                    if isinstance(value, str) and value.strip():
+                        text_parts.append(value.strip())
+                    elif isinstance(value, list):
+                        for item in value:
+                            extract_recursive(item, depth + 1)
+                else:
+                    extract_recursive(value, depth + 1)
+        elif isinstance(obj, list):
+            for item in obj:
+                extract_recursive(item, depth + 1)
+    
+    extract_recursive(data)
+    
+    if text_parts:
+        # Join the text parts and limit length
+        combined_text = " ".join(text_parts)
+        if len(combined_text) > max_length:
+            combined_text = combined_text[:max_length] + "..."
+        return combined_text
+    
+    return None
+
+
 class ChatMessage(BaseModel):
     message: str
 
@@ -244,6 +284,9 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         else:
             result_dict = {"message": str(orchestrator_result)}
 
+        # Debug logging for empty responses
+        logging.info(f"Orchestrator result for chat {chat_id}: {result_dict}")
+        
         response_message = "An unexpected response format was received."
         tool_name = result_dict.get("tool_name")
         tool_args = result_dict.get("tool_args", {})
@@ -254,7 +297,70 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
 
         if tool_name == "respond_conversationally":
             response_text = tool_args.get("response_text", "No response text provided.")
-            response_message = result_dict.get("response_text") or response_text
+            result_response_text = result_dict.get("response_text")
+            
+            # Handle empty string, None, or whitespace-only responses
+            if result_response_text and result_response_text.strip():
+                # Try to extract plain text from JSON response if it's JSON
+                try:
+                    import json
+                    parsed_response = json.loads(result_response_text)
+                    if isinstance(parsed_response, dict):
+                        # Try common text fields in JSON response
+                        extracted_text = (
+                            parsed_response.get("text") or 
+                            parsed_response.get("message") or 
+                            parsed_response.get("content") or 
+                            parsed_response.get("response") or
+                            parsed_response.get("user") or  # Handle the "user" field from previous examples
+                            parsed_response.get("hello")    # Handle the "hello" field from recent test
+                        )
+                        
+                        # If no common field found, try more sophisticated extraction
+                        if not extracted_text:
+                            extracted_text = _extract_text_from_complex_json(parsed_response)
+                        
+                        # If we found a text field, use it
+                        if extracted_text and isinstance(extracted_text, str):
+                            response_message = extracted_text
+                        else:
+                            # If no direct text field found, log the structure and return raw JSON
+                            logging.info(f"JSON response without recognizable text field: {parsed_response}")
+                            # For now, return the JSON as-is so we can see what structure we're getting
+                            response_message = result_response_text
+                    else:
+                        response_message = result_response_text
+                except json.JSONDecodeError:
+                    # If it's not JSON, use it as-is
+                    response_message = result_response_text
+            elif response_text and response_text.strip():
+                # Apply same JSON extraction logic to response_text
+                try:
+                    import json
+                    parsed_response = json.loads(response_text)
+                    if isinstance(parsed_response, dict):
+                        extracted_text = (
+                            parsed_response.get("text") or 
+                            parsed_response.get("message") or 
+                            parsed_response.get("content") or 
+                            parsed_response.get("response") or
+                            parsed_response.get("user") or
+                            parsed_response.get("hello")
+                        )
+                        
+                        # If no common field found, try more sophisticated extraction
+                        if not extracted_text:
+                            extracted_text = _extract_text_from_complex_json(parsed_response)
+                        if extracted_text and isinstance(extracted_text, str):
+                            response_message = extracted_text
+                        else:
+                            response_message = response_text
+                    else:
+                        response_message = response_text
+                except json.JSONDecodeError:
+                    response_message = response_text
+            else:
+                response_message = "I apologize, but I wasn't able to generate a proper response. Could you please rephrase your question?"
         elif tool_name == "execute_system_command":
             command_output = tool_args.get("output", "")
             command_error = tool_args.get("error", "")
@@ -279,7 +385,12 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         elif result_dict.get("message"):
             response_message = result_dict["message"]
         else:
-            response_message = str(result_dict)
+            # Handle completely empty or invalid responses
+            if not result_dict or result_dict == {}:
+                response_message = "I'm sorry, I encountered an issue processing your request. Please try asking your question in a different way."
+                logging.warning(f"Empty orchestrator result for chat {chat_id}, message: {message}")
+            else:
+                response_message = str(result_dict)
 
         # Add bot response to chat history
         bot_message = {

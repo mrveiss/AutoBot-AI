@@ -1,0 +1,314 @@
+"""
+OS-Aware Tool Selection Module
+
+Selects appropriate tools based on OS capabilities and goal requirements.
+"""
+
+import logging
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+
+from src.intelligence.os_detector import OSDetector, OSType, LinuxDistro
+from src.intelligence.goal_processor import ProcessedGoal, GoalCategory
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ToolSelection:
+    """Selected tool with installation requirements."""
+    primary_command: str
+    fallback_commands: List[str]
+    install_command: Optional[str]
+    requires_install: bool
+    explanation: str
+
+
+class OSAwareToolSelector:
+    """Select the best tools based on OS and available capabilities."""
+
+    def __init__(self, os_detector: OSDetector):
+        """Initialize tool selector with OS detector."""
+        self.os_detector = os_detector
+        self.tool_mappings = self._initialize_tool_mappings()
+
+    def _initialize_tool_mappings(self) -> Dict:
+        """Initialize OS-specific tool mappings."""
+        return {
+            GoalCategory.NETWORK_DISCOVERY: {
+                "get_ip_address": {
+                    OSType.LINUX: ["ip addr show", "ifconfig", "hostname -I"],
+                    OSType.MACOS: ["ifconfig", "ipconfig getifaddr en0"],
+                    OSType.WINDOWS: ["ipconfig", "Get-NetIPAddress"]
+                },
+                "scan_network": {
+                    OSType.LINUX: [
+                        "nmap -sn {network}",
+                        "arp-scan -l",
+                        "ping -c 1 {target}"
+                    ],
+                    OSType.MACOS: [
+                        "nmap -sn {network}",
+                        "ping -c 1 {target}"
+                    ],
+                    OSType.WINDOWS: [
+                        "nmap -sn {network}",
+                        "ping {target}"
+                    ]
+                },
+                "discover_devices": {
+                    OSType.LINUX: [
+                        "nmap -sn {network}",
+                        "arp-scan {network}",
+                        "ping -c 1 {target}"
+                    ],
+                    OSType.MACOS: [
+                        "nmap -sn {network}",
+                        "ping -c 1 {target}"
+                    ],
+                    OSType.WINDOWS: [
+                        "nmap -sn {network}",
+                        "ping {target}"
+                    ]
+                }
+            },
+            GoalCategory.SECURITY_SCAN: {
+                "port_scan": {
+                    OSType.LINUX: [
+                        "nmap -p- {target}",
+                        "nc -zv {target} {port}"
+                    ],
+                    OSType.MACOS: [
+                        "nmap -p- {target}",
+                        "nc -zv {target} {port}"
+                    ],
+                    OSType.WINDOWS: [
+                        "nmap -p- {target}",
+                        "Test-NetConnection {target} -Port {port}"
+                    ]
+                },
+                "vulnerability_scan": {
+                    OSType.LINUX: [
+                        "nmap -sV --script vuln {target}",
+                        "nikto -h {target}"
+                    ],
+                    OSType.MACOS: [
+                        "nmap -sV --script vuln {target}"
+                    ],
+                    OSType.WINDOWS: [
+                        "nmap -sV --script vuln {target}"
+                    ]
+                }
+            },
+            GoalCategory.SYSTEM_UPDATE: {
+                "system_update": {
+                    OSType.LINUX: {
+                        LinuxDistro.UBUNTU: ["apt update && apt upgrade -y"],
+                        LinuxDistro.DEBIAN: ["apt update && apt upgrade -y"],
+                        LinuxDistro.CENTOS: ["yum update -y"],
+                        LinuxDistro.FEDORA: ["dnf update -y"],
+                        LinuxDistro.ARCH: ["pacman -Syu --noconfirm"],
+                        LinuxDistro.KALI: ["apt update && apt upgrade -y"]
+                    },
+                    OSType.MACOS: ["brew update && brew upgrade"],
+                    OSType.WINDOWS: ["winget upgrade --all"]
+                },
+                "os_update": {
+                    OSType.LINUX: {
+                        LinuxDistro.UBUNTU: ["apt update && apt upgrade -y"],
+                        LinuxDistro.DEBIAN: ["apt update && apt upgrade -y"],
+                        LinuxDistro.CENTOS: ["yum update -y"],
+                        LinuxDistro.FEDORA: ["dnf update -y"],
+                        LinuxDistro.ARCH: ["pacman -Syu --noconfirm"],
+                        LinuxDistro.KALI: ["apt update && apt upgrade -y"]
+                    },
+                    OSType.MACOS: ["softwareupdate -ia"],
+                    OSType.WINDOWS: ["Get-WindowsUpdate -Install -AcceptAll"]
+                }
+            },
+            GoalCategory.SYSTEM_INFO: {
+                "system_info": {
+                    OSType.LINUX: [
+                        "uname -a",
+                        "hostnamectl",
+                        "cat /etc/os-release"
+                    ],
+                    OSType.MACOS: [
+                        "system_profiler SPSoftwareDataType",
+                        "uname -a"
+                    ],
+                    OSType.WINDOWS: [
+                        "systeminfo",
+                        "Get-ComputerInfo"
+                    ]
+                },
+                "disk_usage": {
+                    OSType.LINUX: ["df -h", "du -sh /*"],
+                    OSType.MACOS: ["df -h", "du -sh /*"],
+                    OSType.WINDOWS: ["Get-PSDrive", "dir"]
+                },
+                "memory_info": {
+                    OSType.LINUX: ["free -h", "vmstat"],
+                    OSType.MACOS: ["vm_stat", "top -l 1 -s 0"],
+                    OSType.WINDOWS: ["Get-WmiObject -Class Win32_OperatingSystem"]
+                },
+                "hardware_info": {
+                    OSType.LINUX: ["lshw -short", "lscpu", "dmidecode"],
+                    OSType.MACOS: ["system_profiler SPHardwareDataType"],
+                    OSType.WINDOWS: ["Get-WmiObject -Class Win32_ComputerSystem"]
+                }
+            },
+            GoalCategory.PROCESS_MANAGEMENT: {
+                "list_processes": {
+                    OSType.LINUX: ["ps aux", "top -n 1", "htop"],
+                    OSType.MACOS: ["ps aux", "top -l 1"],
+                    OSType.WINDOWS: ["Get-Process", "tasklist"]
+                },
+                "kill_process": {
+                    OSType.LINUX: ["kill {pid}", "killall {name}", "pkill {name}"],
+                    OSType.MACOS: ["kill {pid}", "killall {name}"],
+                    OSType.WINDOWS: ["Stop-Process -Id {pid}", "taskkill /PID {pid}"]
+                }
+            },
+            GoalCategory.MONITORING: {
+                "system_monitor": {
+                    OSType.LINUX: ["top", "htop", "vmstat 1"],
+                    OSType.MACOS: ["top", "activity monitor"],
+                    OSType.WINDOWS: ["Get-Counter", "perfmon"]
+                },
+                "performance_check": {
+                    OSType.LINUX: ["top -n 1", "iotop", "nethogs"],
+                    OSType.MACOS: ["top -l 1", "fs_usage"],
+                    OSType.WINDOWS: ["Get-Counter", "typeperf"]
+                }
+            }
+        }
+
+    async def select_tool(self, goal: ProcessedGoal) -> ToolSelection:
+        """Select the best tool for the given goal."""
+        os_info = await self.os_detector.detect_system()
+
+        # Get tool mapping for this goal
+        if goal.category in self.tool_mappings:
+            category_tools = self.tool_mappings[goal.category]
+            if goal.intent in category_tools:
+                intent_tools = category_tools[goal.intent]
+
+                # Handle nested OS/distro mapping
+                if os_info.os_type in intent_tools:
+                    tools = intent_tools[os_info.os_type]
+
+                    # Handle Linux distro-specific tools
+                    if isinstance(tools, dict) and os_info.distro:
+                        if os_info.distro in tools:
+                            tools = tools[os_info.distro]
+                        else:
+                            # Fallback to common Linux tools
+                            fallback_distro = LinuxDistro.UBUNTU
+                            tools = tools.get(
+                                fallback_distro,
+                                list(tools.values())[0] if tools.values() else []
+                            )
+
+                    if isinstance(tools, list) and tools:
+                        # Select best available tool
+                        return await self._select_best_available_tool(tools, goal)
+
+        # Fallback to suggested tools from goal processing
+        if goal.suggested_tools:
+            return await self._select_best_available_tool(
+                goal.suggested_tools, goal
+            )
+
+        # No specific tools found - let LLM decide
+        return ToolSelection(
+            primary_command="",
+            fallback_commands=[],
+            install_command=None,
+            requires_install=False,
+            explanation=f"No specific tools mapped for: {goal.intent}"
+        )
+
+    async def _select_best_available_tool(
+        self,
+        tools: List[str],
+        goal: ProcessedGoal
+    ) -> ToolSelection:
+        """Select the best available tool from a list."""
+        available_tools = []
+        unavailable_tools = []
+
+        for tool_cmd in tools:
+            # Extract tool name from command
+            tool_name = tool_cmd.split()[0]
+
+            if self.os_detector.has_capability(tool_name):
+                available_tools.append(tool_cmd)
+            else:
+                unavailable_tools.append((tool_cmd, tool_name))
+
+        if available_tools:
+            # Use first available tool as primary
+            primary = available_tools[0]
+            fallbacks = available_tools[1:]
+
+            # Format command with parameters
+            formatted_primary = self._format_command(primary, goal.parameters)
+
+            return ToolSelection(
+                primary_command=formatted_primary,
+                fallback_commands=[
+                    self._format_command(cmd, goal.parameters)
+                    for cmd in fallbacks
+                ],
+                install_command=None,
+                requires_install=False,
+                explanation=f"Using available tool: {primary.split()[0]}"
+            )
+
+        elif unavailable_tools:
+            # Need to install a tool
+            tool_cmd, tool_name = unavailable_tools[0]
+            install_cmd = await self.os_detector.get_install_command(tool_name)
+
+            formatted_cmd = self._format_command(tool_cmd, goal.parameters)
+
+            return ToolSelection(
+                primary_command=formatted_cmd,
+                fallback_commands=[],
+                install_command=install_cmd,
+                requires_install=True,
+                explanation=f"Tool '{tool_name}' needs to be installed"
+            )
+
+        return ToolSelection(
+            primary_command="",
+            fallback_commands=[],
+            install_command=None,
+            requires_install=False,
+            explanation="No suitable tools found"
+        )
+
+    def _format_command(self, command: str, parameters: Dict[str, str]) -> str:
+        """Format command with parameters."""
+        formatted = command
+
+        # Default network for scanning if not specified
+        default_network = "192.168.1.0/24"
+
+        # Replace common placeholders
+        replacements = {
+            '{network}': parameters.get('network', default_network),
+            '{target}': parameters.get(
+                'target_ip',
+                parameters.get('target_host', '127.0.0.1')
+            ),
+            '{port}': parameters.get('port', '80'),
+            '{pid}': parameters.get('pid', '1'),
+            '{name}': parameters.get('process_name', 'unknown')
+        }
+
+        for placeholder, value in replacements.items():
+            formatted = formatted.replace(placeholder, value)
+
+        return formatted

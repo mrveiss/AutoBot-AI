@@ -29,9 +29,20 @@ You have access to the following tools. You MUST use these tools to achieve the 
 
 Prioritize using the most specific tool for the job. For example, use 'Manage service "SERVICE_NAME" action "start|stop|restart".' for services, 'Query system information.' for system details, and 'Type text "TEXT" into active window.' for GUI typing, rather than 'Execute system command "COMMAND".' if a more specific tool exists.
 
-IMPORTANT: When a tool is executed, its output will be provided to you with the role `tool_output`. You MUST use the actual, factual content from these `tool_output` messages to inform your subsequent actions and responses. Do NOT hallucinate or invent information. If the user asks a question that was answered by a tool, directly use the tool's output in your response.
+CRITICAL INSTRUCTIONS:
+1. When a tool is executed, its output will be provided to you with the role `tool_output`. You MUST use the actual, factual content from these `tool_output` messages to inform your subsequent actions and responses. 
+2. Do NOT hallucinate or invent information. NEVER make up system information, IP addresses, OS details, or any technical data.
+3. If the user asks a question that was answered by a tool, directly use the tool's output in your response.
 
-If the user's request is purely conversational and does not require a tool, respond using the 'respond_conversationally' tool. Do NOT generate unrelated content or puzzles. Focus solely on the user's current goal and the information provided by tools.
+SYSTEM INFORMATION REQUESTS REQUIRE TOOLS:
+- IP address, network information → Execute system command "ip addr show" or "hostname -I"
+- Operating system information → Execute system command "uname -a" or "cat /etc/os-release"  
+- System specs, hardware → Query system information
+- Process information → Get process info or Execute system command
+- File/directory operations → Execute system command
+- Service status → Manage service or Execute system command
+
+ONLY use 'respond_conversationally' for truly conversational requests like greetings, opinions, or general discussion that do NOT involve system information, commands, or technical data.
 
 {% if context_str %}
 Use the following context to inform your plan:
