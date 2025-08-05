@@ -197,3 +197,10 @@
 - Enhanced GUIController with screenshot capture, element location
 - Integrate Kex VNC session with noVNC for real-time GUI observation
 - Compatibility optimization for WSL2 and various desktop environments
+
+### **Phase 16: Component Dockerization and Containerization**
+- Investigate component separation for Docker containerization
+- Split LangChain agent and worker nodes into separate containers
+- Implement container orchestration for improved portability and isolation
+- Explore Docker networking for components that don't require direct OS access
+- Container-based deployment strategy and documentation
