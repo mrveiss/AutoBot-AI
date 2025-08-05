@@ -3,6 +3,7 @@ Shared utilities for testing connections to various services.
 Eliminates duplication across system.py, llm.py, and redis.py
 """
 import logging
+import os
 import requests
 import redis
 from typing import Dict, Any, Optional, Tuple
@@ -42,18 +43,20 @@ class ConnectionTester:
             # Fall back to legacy structure if new structure doesn't have the values
             if not ollama_endpoint:
                 ollama_endpoint = global_config_manager.get_nested(
-                    "backend.ollama_endpoint", "http://localhost:11434/api/generate"
+                    "backend.ollama_endpoint", 
+                    os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434/api/generate")
                 )
             if not ollama_model:
                 ollama_model = global_config_manager.get_nested(
-                    "backend.ollama_model", "phi:2.7b"
+                    "backend.ollama_model", 
+                    os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")
                 )
 
-            # Default fallbacks
+            # Default fallbacks with environment variable support
             if not ollama_endpoint:
-                ollama_endpoint = "http://localhost:11434/api/generate"
+                ollama_endpoint = os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434/api/generate")
             if not ollama_model:
-                ollama_model = "phi:2.7b"
+                ollama_model = os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")
 
             # Test Ollama connection
             ollama_check_url = ollama_endpoint.replace("/api/generate", "/api/tags")
@@ -119,16 +122,16 @@ class ConnectionTester:
 
             if task_transport_config.get("type") == "redis":
                 redis_config = task_transport_config.get("redis", {})
-                redis_host = redis_config.get("host", "localhost")
-                redis_port = redis_config.get("port", 6379)
+                redis_host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
+                redis_port = redis_config.get("port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379")))
             else:
                 # Check memory.redis config (current structure)
                 memory_config = global_config_manager.get("memory", {})
                 redis_config = memory_config.get("redis", {})
 
                 if redis_config.get("enabled", False):
-                    redis_host = redis_config.get("host", "localhost")
-                    redis_port = redis_config.get("port", 6379)
+                    redis_host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
+                    redis_port = redis_config.get("port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379")))
                 else:
                     return {
                         "status": "not_configured",
@@ -261,7 +264,7 @@ class ModelManager:
         """Get models from Ollama service"""
         try:
             ollama_config = global_config_manager.get_nested("llm_config.ollama", {})
-            ollama_host = ollama_config.get("host", "http://localhost:11434")
+            ollama_host = ollama_config.get("host", os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434"))
             ollama_url = f"{ollama_host}/api/tags"
 
             response = requests.get(ollama_url, timeout=10)
