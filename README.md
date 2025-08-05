@@ -317,14 +317,14 @@ AutoBot features an advanced **Prompt-to-Knowledge Base Synchronization System**
 ## 📄 Documentation Index
 
 ### 🎯 **Core Documentation**
-- **[Development Roadmap](docs/project.md)**: Complete development phases and project evolution
+- **[Project Roadmap](docs/project-roadmap.md)**: Complete development phases and project evolution
 - **[Phase Validation Report](docs/phase_validation.md)**: Comprehensive validation of all development phases
 
 ### 📋 **Project Management**
 - **[Active Tasks](docs/tasks.md)**: Current development roadmap and future phases
-- **[Project History](docs/project-history.md)**: Execution history and completed work
-- **[Project Status](docs/status.md)**: Current development status
+- **[Project Status](docs/status.md)**: Current development status snapshot
 - **[Decision Log](docs/decisions.md)**: Architecture and design decisions
+- **[Suggested Improvements](docs/suggested_improvements.md)**: Future enhancement recommendations
 
 ### 📚 **User Guides**
 - **[Installation Guide](docs/user_guide/01-installation.md)**: Step-by-step setup instructions
@@ -342,7 +342,6 @@ AutoBot features an advanced **Prompt-to-Knowledge Base Synchronization System**
 - **[External APIs](docs/external_apps/ollama_api.md)**: Ollama API integration details
 
 ### 🚀 **Development Progress**
-- **[Phase 2 Validation](docs/phase2_validation_progress.md)**: Core functionality validation results
 - **[Suggested Improvements](docs/suggested_improvements.md)**: Enhancement recommendations
 
 ---
