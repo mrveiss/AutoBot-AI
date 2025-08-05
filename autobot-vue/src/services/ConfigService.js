@@ -38,7 +38,7 @@ export class ConfigService {
       },
       defaults: {
         welcome_message: "Hello! How can I assist you today?",
-        model_name: 'tinyllama:latest',
+        model_name: 'deepseek-r1:14b',
         max_chat_messages: 100,
         connection_check_interval: 10000
       },
