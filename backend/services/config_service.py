@@ -20,7 +20,7 @@ class ConfigService:
         try:
             # Get the current LLM to determine which model is actually being used
             current_llm = global_config_manager.get_nested(
-                "llm_config.default_llm", "ollama_tinyllama"
+                "llm_config.default_llm", "ollama_deepseek-r1:14b"
             )
 
             # Build comprehensive config structure matching frontend expectations
@@ -280,16 +280,16 @@ class ConfigService:
 
             # Get default values from config with fallbacks
             default_llm_fallback = global_config_manager.get_nested(
-                "defaults.llm.default_llm", "ollama_tinyllama"
+                "defaults.llm.default_llm", "ollama_deepseek-r1:14b"
             )
             task_llm_fallback = global_config_manager.get_nested(
-                "defaults.llm.task_llm", "ollama_tinyllama"
+                "defaults.llm.task_llm", "ollama_deepseek-r1:14b"
             )
             ollama_endpoint_fallback = global_config_manager.get_nested(
                 "defaults.llm.ollama.endpoint", "http://localhost:11434/api/generate"
             )
             ollama_model_fallback = global_config_manager.get_nested(
-                "defaults.llm.ollama.model", "tinyllama:latest"
+                "defaults.llm.ollama.model", "deepseek-r1:14b"
             )
             ollama_host_fallback = global_config_manager.get_nested(
                 "defaults.llm.ollama.host", "http://localhost:11434"
