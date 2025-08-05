@@ -1,20 +1,17 @@
-import os
-import logging
 import json
-from typing import List, Dict, Any, Optional, cast
-import asyncio
-
-from llama_index.core import VectorStoreIndex, Document
-from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.storage.storage_context import StorageContext
-from llama_index.vector_stores.redis import RedisVectorStore
-from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
-from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
-from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
-from llama_index.core import ServiceContext, Settings
+import logging
+import os
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 from docx import Document as DocxDocument
+from llama_index.core import Settings, VectorStoreIndex, Document
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.storage.storage_context import StorageContext
+from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
+from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
+from llama_index.vector_stores.redis import RedisVectorStore
+from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
 from pypdf import PdfReader
 
 # Import the centralized ConfigManager
@@ -67,7 +64,7 @@ class KnowledgeBase:
         # Use centralized Redis client utility
         self.redis_client = get_redis_client(async_client=True)
         if self.redis_client:
-            logging.info(f"Redis client initialized via centralized utility")
+            logging.info("Redis client initialized via centralized utility")
         else:
             logging.warning(
                 "Redis client not available - Redis may be disabled in configuration"
@@ -105,7 +102,8 @@ class KnowledgeBase:
             )
         else:
             logging.warning(
-                f"LLM provider '{llm_provider}' not fully implemented for LlamaIndex. Defaulting to Ollama."
+                f"LLM provider '{llm_provider}' not fully implemented for "
+                "LlamaIndex. Defaulting to Ollama."
             )
             self.llm = LlamaIndexOllamaLLM(model=llm_model, base_url=llm_base_url)
             self.embed_model = LlamaIndexOllamaEmbedding(
@@ -132,11 +130,13 @@ class KnowledgeBase:
                 redis_kwargs={"db": self.redis_db},
             )
             logging.info(
-                f"LlamaIndex RedisVectorStore initialized with index: {self.redis_index_name}"
+                f"LlamaIndex RedisVectorStore initialized with index: "
+                f"{self.redis_index_name}"
             )
         except ImportError as e:
             logging.warning(
-                f"Could not import RedisVectorStoreSchema: {e}. Using fallback configuration."
+                f"Could not import RedisVectorStoreSchema: {e}. "
+                "Using fallback configuration."
             )
             self.vector_store = None
             logging.warning("Redis vector store disabled due to configuration issues.")
@@ -197,7 +197,8 @@ class KnowledgeBase:
                     content += para.text + "\n"
             else:
                 logging.warning(
-                    f"Unsupported file type for direct loading by LlamaIndex: {file_type}. Attempting as generic text."
+                    f"Unsupported file type for direct loading by LlamaIndex: "
+                    f"{file_type}. Attempting as generic text."
                 )
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
