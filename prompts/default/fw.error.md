@@ -1,5 +1,5 @@
 ~~~json
 {
-    "system_error": "{{error}}"
+    "system_error": {{error}}
 }
 ~~~
