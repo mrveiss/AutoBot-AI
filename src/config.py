@@ -204,12 +204,12 @@ class ConfigManager:
         # Ensure we have sensible defaults
         defaults = {
             "default_llm": "ollama",
-            "orchestrator_llm": os.getenv("AUTOBOT_ORCHESTRATOR_LLM", "phi:2.7b"),
+            "orchestrator_llm": os.getenv("AUTOBOT_ORCHESTRATOR_LLM", "deepseek-r1:14b"),
             "task_llm": os.getenv("AUTOBOT_TASK_LLM", "ollama"),
             "ollama": {
                 "host": os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434"),
                 "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
-                "model": os.getenv("AUTOBOT_OLLAMA_MODEL", "phi:2.7b"),
+                "model": os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b"),
                 "base_url": os.getenv(
                     "AUTOBOT_OLLAMA_BASE_URL", "http://localhost:11434"
                 ),

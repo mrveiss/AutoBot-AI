@@ -27,7 +27,7 @@ export class SettingsService {
         use_phi2: false,
         api_endpoint: 'http://localhost:8001',
         ollama_endpoint: 'http://localhost:11434',
-        ollama_model: 'tinyllama:latest',
+        ollama_model: 'deepseek-r1:14b',
         streaming: false
       },
       ui: {
