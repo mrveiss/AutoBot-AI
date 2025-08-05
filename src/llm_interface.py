@@ -1,18 +1,18 @@
-import os
-import requests
-import torch
-import time
-import logging
-from dotenv import load_dotenv
 import asyncio
 import json
+import logging
+import os
 import re
 
-load_dotenv()
+import requests
+import torch
+from dotenv import load_dotenv
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
 from src.prompt_manager import prompt_manager
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,8 +34,6 @@ class LocalLLM:
 
 
 local_llm = LocalLLM()
-
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 class MockPalm:
@@ -118,7 +116,8 @@ class LLMInterface:
         except KeyError:
             # Fallback to legacy loading for backward compatibility
             logger.warning(
-                f"Orchestrator prompt not found in prompt manager, using legacy file loading"
+                "Orchestrator prompt not found in prompt manager, "
+                "using legacy file loading"
             )
             self.orchestrator_system_prompt = self._load_composite_prompt(
                 global_config_manager.get_nested(
@@ -134,7 +133,7 @@ class LLMInterface:
         except KeyError:
             # Fallback to legacy loading for backward compatibility
             logger.warning(
-                f"Task prompt not found in prompt manager, using legacy file loading"
+                "Task prompt not found in prompt manager, using legacy file loading"
             )
             self.task_system_prompt = self._load_composite_prompt(
                 global_config_manager.get_nested(
@@ -152,7 +151,8 @@ class LLMInterface:
         except KeyError:
             # Fallback to legacy loading for backward compatibility
             logger.warning(
-                f"Tool interpreter prompt not found in prompt manager, using legacy file loading"
+                "Tool interpreter prompt not found in prompt manager, "
+                "using legacy file loading"
             )
             self.tool_interpreter_system_prompt = self._load_prompt_from_file(
                 global_config_manager.get_nested(
@@ -235,12 +235,17 @@ class LLMInterface:
 
             if not missing_models:
                 logger.info(
-                    f"✅ Ollama server is reachable and all configured models ({', '.join(all_configured_ollama_models)}) are available."
+                    f"✅ Ollama server is reachable and all configured models "
+                    f"({', '.join(all_configured_ollama_models)}) are available."
                 )
                 return True
             else:
+                models_missing = ", ".join(missing_models)
+                models_available = ", ".join(available_ollama_models)
                 logger.warning(
-                    f"⚠️ Ollama server is reachable, but the following configured models are not found: {', '.join(missing_models)}. Available models: {', '.join(available_ollama_models)}"
+                    f"⚠️ Ollama server is reachable, but the following configured "
+                    f"models are not found: {models_missing}. "
+                    f"Available models: {models_available}"
                 )
                 return False
         except requests.exceptions.ConnectionError:
@@ -293,7 +298,6 @@ class LLMInterface:
             pass
         except Exception as e:
             logger.warning(f"Error detecting OpenVINO devices: {e}")
-            pass
 
         try:
             import onnxruntime as rt
@@ -454,12 +458,11 @@ class LLMInterface:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.HTTPError as e:
-            print(
-                f"HTTP Error communicating with Ollama: {e.response.status_code} - {e.response.text}"
+            error_msg = (
+                f"HTTP Error communicating with Ollama: {e.response.status_code}"
             )
-            logger.error(
-                f"HTTP Error communicating with Ollama: {e.response.status_code} - {e.response.text}"
-            )
+            print(f"{error_msg} - {e.response.text}")
+            logger.error(f"{error_msg} - {e.response.text}")
             return None
         except requests.exceptions.ConnectionError as e:
             print(f"Connection Error communicating with Ollama: {e}")
@@ -525,7 +528,8 @@ class LLMInterface:
         **kwargs,
     ):
         print(
-            f"Transformers backend for {model_name} is a placeholder. Not implemented yet. Temp: {temperature}, Structured: {structured_output}"
+            f"Transformers backend for {model_name} is a placeholder. "
+            f"Not implemented yet. Temp: {temperature}, Structured: {structured_output}"
         )
         await asyncio.sleep(0.1)
         return {
@@ -559,7 +563,7 @@ async def safe_query(prompt, retries=2, initial_delay=1):
                     "❌ Quota exceeded on Google API after multiple retries. Using local fallback."
                 )
                 return await local_llm.generate(prompt)
-        except Exception as e:
+        except Exception:
             if i < retries:
                 delay = initial_delay * (2**i)
                 logger.exception(
