@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, Form
+from fastapi import APIRouter, Request, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import logging
@@ -26,13 +26,15 @@ async def receive_goal(request: Request, payload: GoalPayload):
     Receives a goal from the user to be executed by the orchestrator.
 
     Args:
-        payload (GoalPayload): The payload containing the goal, whether to use Phi-2 model, and user role.
+        payload (GoalPayload): The payload containing the goal, whether to
+            use Phi-2 model, and user role.
 
     Returns:
         dict: The result of the goal execution.
 
     Raises:
-        JSONResponse: Returns a 403 error if permission is denied, or a 500 error if an internal error occurs.
+        JSONResponse: Returns a 403 error if permission is denied, or a 500
+            error if an internal error occurs.
     """
     from src.event_manager import event_manager
 
@@ -80,8 +82,9 @@ async def receive_goal(request: Request, payload: GoalPayload):
             tool_args = {}
 
         if tool_name == "respond_conversationally":
+            default_text = "No response text provided."
             response_message = result_dict.get("response_text") or tool_args.get(
-                "response_text", "No response text provided."
+                "response_text", default_text
             )
             tool_output_content = None
         elif tool_name == "execute_system_command":
@@ -95,7 +98,10 @@ async def receive_goal(request: Request, payload: GoalPayload):
                 )
                 tool_output_content = command_output
             else:
-                response_message = f"Command failed ({command_status}).\nError:\n{command_error}\nOutput:\n{command_output}"
+                response_message = (
+                    f"Command failed ({command_status}).\nError:\n{command_error}"
+                    f"\nOutput:\n{command_output}"
+                )
                 tool_output_content = (
                     f"ERROR: {command_error}\nOUTPUT: {command_output}"
                 )
@@ -145,8 +151,9 @@ async def receive_goal(request: Request, payload: GoalPayload):
 async def pause_agent_api(request: Request, user_role: str = Form("user")):
     """
     Pauses the agent's current operation.
-    Note: This is currently a placeholder and returns a success status without actual functionality.
-    Full implementation will be added with backend integration.
+    Note: This is currently a placeholder and returns a success status
+    without actual functionality. Full implementation will be added with
+    backend integration.
     """
     from src.event_manager import event_manager
 
@@ -325,7 +332,10 @@ async def execute_command(
             logging.info(message)
             return {"message": message, "output": output, "status": "success"}
         else:
-            message = f"Command failed with exit code {process.returncode}.\nError:\n{error}\nOutput:\n{output}"
+            message = (
+                f"Command failed with exit code {process.returncode}."
+                f"\nError:\n{error}\nOutput:\n{output}"
+            )
             security_layer.audit_log(
                 "execute_command",
                 user_role,

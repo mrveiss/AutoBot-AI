@@ -1,8 +1,7 @@
-from fastapi import APIRouter, HTTPException, Request, Form, Query
+from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import os
-import json
 import uuid
 import time
 import logging
@@ -46,8 +45,9 @@ async def create_new_chat(request: Request):
             "rawData": None,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
+        name = f"Chat {chat_id[:8]}"
         chat_history_manager.save_session(
-            chat_id, messages=[initial_message], name=f"Chat {chat_id[:8]}"
+            chat_id, messages=[initial_message], name=name
         )
         return JSONResponse(
             status_code=200, content={"chatId": chat_id, "status": "success"}
@@ -253,9 +253,8 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
             tool_args = {}
 
         if tool_name == "respond_conversationally":
-            response_message = result_dict.get("response_text") or tool_args.get(
-                "response_text", "No response text provided."
-            )
+            response_text = tool_args.get("response_text", "No response text provided.")
+            response_message = result_dict.get("response_text") or response_text
         elif tool_name == "execute_system_command":
             command_output = tool_args.get("output", "")
             command_error = tool_args.get("error", "")
@@ -266,7 +265,10 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     f"Command executed successfully.\nOutput:\n{command_output}"
                 )
             else:
-                response_message = f"Command failed ({command_status}).\nError:\n{command_error}\nOutput:\n{command_output}"
+                response_message = (
+                    f"Command failed ({command_status}).\nError:\n{command_error}"
+                    f"\nOutput:\n{command_output}"
+                )
         elif tool_name:
             tool_output_content = tool_args.get(
                 "output", tool_args.get("message", str(tool_args))
@@ -390,20 +392,20 @@ async def cleanup_messages():
                                 # Special handling for .txt files - only remove if they match leftover patterns
                                 if filename.endswith(".txt"):
                                     # Only remove .txt files that match leftover patterns
+                                    patterns = [
+                                        "json_output",
+                                        "llm_response",
+                                        "planning",
+                                        "debug",
+                                        "temp",
+                                    ]
                                     if any(
                                         pattern in filename.lower()
-                                        for pattern in [
-                                            "json_output",
-                                            "llm_response",
-                                            "planning",
-                                            "debug",
-                                            "temp",
-                                        ]
+                                        for pattern in patterns
                                     ):
                                         pass  # Will be removed
                                     else:
                                         continue  # Skip legitimate .txt files
-
                                 try:
                                     file_size = os.path.getsize(filepath)
                                     os.remove(filepath)
