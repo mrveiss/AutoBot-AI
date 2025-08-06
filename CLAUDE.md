@@ -4,68 +4,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AutoBot is an enterprise-grade autonomous AI platform that provides advanced task automation, knowledge management, and system interaction capabilities. The system features a modern Vue 3 frontend with real-time monitoring, comprehensive knowledge management with template systems, and robust backend services with full API coverage. AutoBot has evolved through 4 major development phases to become a production-ready AI assistant platform.
+AutoBot is an enterprise-grade autonomous AI platform that provides advanced task automation, knowledge management, and system interaction capabilities. Built with Vue 3 frontend and FastAPI backend, it features real-time monitoring, comprehensive knowledge management with template systems, and multi-LLM support (Ollama, OpenAI, Anthropic).
 
-**Current Status**: ✅ ENTERPRISE-READY - All core features operational with advanced capabilities implemented
-**Latest Version**: Phase 4 Complete - Advanced Features Development (100% implemented)
-**System Health**: All components operational with real-time monitoring and comprehensive testing validation
+**Current Status**: Production-ready with Phase 4 complete
+**Key Features**: GUI automation, RAG-powered knowledge base, voice interface, Redis-backed task orchestration
 
 ## Architecture
 
-### Core Components
-- **Backend (Python FastAPI)**: Production-ready server in `backend/main.py` with comprehensive API endpoints, WebSocket support, and health monitoring
-- **Frontend (Vue 3 + TypeScript)**: Modern enterprise-grade application in `autobot-vue/` with:
-  - Real-time system health monitoring dashboard
-  - Advanced Knowledge Manager with template system
-  - Responsive design with glass-morphism effects
-  - Professional UI components and animations
-- **Core Modules** (`src/`):
-  - `orchestrator.py`: Advanced task planning with Redis-backed autonomous operation
-  - `llm_interface.py`: Multi-backend LLM support (Ollama, OpenAI, HuggingFace) with dynamic model management
-  - `knowledge_base.py`: Enterprise RAG system with ChromaDB + SQLite integration
-  - `worker_node.py`: Robust task execution with background processing
-  - `gui_controller.py`: GUI automation with OCR and window management
-  - `diagnostics.py`: Comprehensive system monitoring and real-time health checks
-  - `event_manager.py`: Centralized event bus with Redis-backed communication
+### Application Entry Points
+- **Backend**: `main.py` → `backend/app_factory.py` (FastAPI application factory pattern)
+- **Frontend**: `autobot-vue/` (Vue 3 + TypeScript + Vite)
+- **Configuration**: `src/config.py` (centralized config management)
 
-### Advanced Features (Phase 4)
-- **Knowledge Entry Templates**: 4 professional templates (Research Article, Meeting Notes, Bug Report, Learning Notes)
-- **Template Gallery**: Visual card-based interface with one-click application
-- **Modern Dashboard**: Real-time health monitoring with 15-second refresh intervals
-- **Enhanced Metrics**: Trend indicators and detailed system status descriptions
-- **Mobile-First Design**: Fully responsive across all screen sizes
-- **Enterprise UI**: Glass-morphism effects, smooth animations, professional polish
+### Core Backend Modules (`src/`)
+- `orchestrator.py`: Task planning with Redis-backed autonomous operation
+- `llm_interface.py`: Multi-LLM support (Ollama, OpenAI, Anthropic, HuggingFace)
+- `knowledge_base.py`: RAG system with ChromaDB vector storage + SQLite
+- `worker_node.py`: Task execution engine with background processing
+- `gui_controller.py`: GUI automation (PyAutoGUI, OCR with pytesseract)
+- `diagnostics.py`: System health monitoring (CPU, RAM, GPU metrics)
+- `event_manager.py`: WebSocket event streaming and Redis pub/sub
+- `voice_interface.py`: Speech recognition and TTS capabilities
+
+### API Structure (`backend/api/`)
+- `chat.py`: Chat endpoints and conversation management
+- `diagnostics.py`: System health and metrics endpoints
+- `files.py`: File browser and management API
+- `goal.py`: Goal submission and task planning
+- `knowledge_base.py`: Knowledge CRUD operations
+- `llm.py`: LLM configuration and model management
 
 ## Essential Commands
 
 ### Application Lifecycle
-**CRITICAL**: The application is ALWAYS run with:
 ```bash
+# Initial setup (creates venv, installs deps, configures environment)
+./setup_agent.sh
+
+# Run application (starts backend, frontend, and Redis)
 ./run_agent.sh
 ```
 
-**CRITICAL**: Dependencies and environment changes MUST be updated with:
+### Backend Development
 ```bash
-./setup_agent.sh
+# Activate virtual environment
+source venv/bin/activate
+
+# Run backend only
+python main.py
+# or with uvicorn for development
+uvicorn main:app --host 0.0.0.0 --port 8001 --log-level debug --reload
+
+# Run tests
+python -m pytest tests/
+python -m pytest tests/test_specific.py -v  # Run specific test
 ```
 
-### System Status Verification
-```bash
-# Check system health (all components should be operational)
-curl -s "http://localhost:8001/api/system/health" | python3 -m json.tool
-
-# Verify knowledge base entries
-curl -s "http://localhost:8001/api/knowledge_base/entries" | python3 -m json.tool
-
-# Check available LLM models
-curl -s "http://localhost:8001/api/llm/models" | python3 -m json.tool
-```
-
-### Development Commands (Vue Frontend)
+### Frontend Development
 ```bash
 cd autobot-vue
 
-# Development server (manual)
+# Install dependencies
+npm install
+
+# Development server with hot reload
 npm run dev
 
 # Build for production
@@ -77,131 +79,178 @@ npm run type-check
 # Linting (runs both oxlint and eslint)
 npm run lint
 
-# Format code
+# Format code with Prettier
 npm run format
 
-# Unit tests
+# Unit tests with Vitest
 npm run test:unit
+npm run test:unit -- --watch  # Watch mode
 
-# E2E tests
-npm run test:e2e
-npm run test:e2e:dev
+# E2E tests with Cypress
+npm run test:e2e       # Headless
+npm run test:e2e:dev   # Interactive
 ```
 
-## Code Architecture Principles
+### API Testing
+```bash
+# Health check
+curl -s "http://localhost:8001/api/system/health" | python3 -m json.tool
 
-### Code Reusability
-- **Maximize code reuse**: All common functionality must be extracted into shared modules
-- **No code duplication**: Identical or similar code blocks must be consolidated into reusable functions/classes
-- **Shared utilities**: Create utility modules for common operations (file handling, configuration, logging, etc.)
-- **Component-based design**: Build modular components that can be imported and reused across different parts of the system
+# Submit a goal
+curl -X POST "http://localhost:8001/api/goal" \
+  -H "Content-Type: application/json" \
+  -d '{"goal": "Create a Python hello world script"}'
 
-### Configuration Management
-- **Single configuration location**: All configuration files stored in `config/` directory
-- **Centralized config loading**: Use a single configuration manager that loads from `config/config.yaml`
-- **No hardcoded values**: All constants, paths, URLs, ports, and settings must be configurable
-- **Runtime configuration**: Support dynamic configuration updates through database or config file changes
-- **Environment-specific configs**: Support different configurations for development, testing, and production
+# Search knowledge base
+curl -X POST "http://localhost:8001/api/knowledge_base/search" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "machine learning", "limit": 5}'
 
-### Data Storage
-- **Single data location**: All data stored in `data/` directory
-- **Centralized data access**: Use data access layer to abstract storage mechanisms
-- **Consistent data formats**: Standardize data formats across all components
-- **Database-driven settings**: Store runtime settings and user preferences in database tables
+# Get LLM models
+curl -s "http://localhost:8001/api/llm/models" | python3 -m json.tool
+```
 
-### Configuration Files Structure
-- `config/config.yaml`: Main application configuration
-- `config/settings.json`: Runtime settings and user preferences
-- `config/config.yaml.template`: Template for initial setup
-- All modules must load configuration through centralized config manager
+## Configuration and Data Management
 
-### Data Directory Structure
-- `data/`: Root data directory for all persistent storage
-- `data/chats/`: Chat history and conversation data (JSON format)
-- `data/chromadb/`: Vector database storage for embeddings and semantic search
-- `data/knowledge_base.db`: SQLite database for structured knowledge entries
-- `data/audit.log`: Security and operational audit logs
-- `data/file_manager_root/`: File management and upload storage
-- `data/messages/`: System message and communication logs
+### Configuration System
+- **Primary Config**: `config/config.yaml` - all system settings
+- **Environment Variables**: Override with `AUTOBOT_` prefix (see `docs/environment-variables.md`)
+- **No Hardcoding**: All values (ports, paths, API keys) must be configurable
+- **Config Loading**: Through `src/config.py` singleton
 
-### Current Implementation Status
-**✅ PHASE 1**: System Stabilization - Knowledge Manager, LLM Health Monitoring, Service Validation
-**✅ PHASE 2**: Core Functionality Validation - API Testing, Memory System, LLM Integration
-**✅ PHASE 3**: Redis Background Tasks - Autonomous operation with Redis-backed orchestration
-**✅ PHASE 4**: Advanced Features Development - Knowledge Templates, Modern Dashboard, Comprehensive Testing
+### Environment Variable Examples
+```bash
+# Backend configuration
+export AUTOBOT_BACKEND_HOST=0.0.0.0
+export AUTOBOT_BACKEND_PORT=8001
 
-**Total Development Time**: 4 phases completed over comprehensive development cycle
-**Success Rate**: 100% - All objectives achieved with enterprise-grade quality
-**System Readiness**: Production-ready with advanced features fully operational
+# LLM configuration
+export AUTOBOT_LLM_DEFAULT=ollama_tinyllama
+export AUTOBOT_OLLAMA_HOST=http://localhost:11434
+export AUTOBOT_OPENAI_API_KEY=sk-...
 
-## Documentation and Task Management
+# Redis configuration
+export AUTOBOT_REDIS_ENABLED=true
+export AUTOBOT_REDIS_HOST=localhost
+```
 
-### Task Structure Requirements
-When adding tasks to `docs/tasks.md`, follow this hierarchical structure:
+### Data Storage Layout
+```
+data/
+├── chats/              # Chat history (JSON files)
+├── chromadb/           # Vector embeddings
+├── knowledge_base.db   # SQLite database
+├── file_manager_root/  # Uploaded files
+├── audit.log          # Security audit log
+└── messages/          # System messages
 
-1. **Tasks** (High-level features/goals)
-   - **Subtasks** (Component-level work)
-     - **Steps** (Specific implementation actions)
+logs/
+└── autobot.log        # Application logs
 
-### Task Dependencies
-Tasks must include dependency mapping to ensure proper execution order. Document task dependencies in the following format:
-- Task A depends on Task B completion
-- Subtask X requires Subtask Y infrastructure
-- Step 1 must complete before Step 2
+config/
+├── config.yaml        # Main configuration
+├── settings.json      # User preferences (optional)
+└── config.yaml.template  # Config template
+```
 
-### Documentation Files
-- `docs/tasks.md`: Todo list with task hierarchy and dependencies
-- `docs/task_log.md`: Execution summaries and completion records
-- `docs/project.md`: Project phases and detailed architecture
-- `docs/decisions.md`: Architecture and design decisions
-- `docs/status.md`: Current project status tracking
+## Key Architecture Patterns
 
-## Key Development Notes
+### Application Factory Pattern
+- `main.py` is a thin wrapper that imports from `backend/app_factory.py`
+- All FastAPI app configuration in `create_app()` function
+- Clean separation of app creation from server startup
 
-### Environment Management
-- Uses pyenv for Python 3.10.13 management
-- Uses nvm for Node.js 20.x LTS management
-- Redis server required for autonomous task transport and background processing
-- All dependencies managed through setup_agent.sh script
-- Pre-commit hooks active for code quality assurance
+### Dependency Management
+- Python: `pyenv` manages Python 3.10.13
+- Node.js: `nvm` manages Node.js 20.x LTS
+- Redis: Docker container managed by scripts
+- All handled automatically by `setup_agent.sh`
 
-### Application Architecture
-- **Backend**: Production-ready FastAPI server on configurable port (default 8001)
-- **Frontend**: Modern Vue 3 application on configurable port (default 5173)
-- **Redis**: Full Redis Stack with search, JSON, timeseries, and bloom filter modules
-- **Configuration**: Centralized via `config/config.yaml` with runtime validation
-- **Health Monitoring**: Real-time system status with 15-second refresh intervals
-- **API Coverage**: 6/6 major endpoints operational with comprehensive testing
+### Environment Scripts
+```bash
+# Development mode (debug logging)
+source scripts/set-env-development.sh
 
-### System Status (Current)
-- **Backend API**: ✅ 100% operational with comprehensive health monitoring
-- **Knowledge Base**: ✅ Full CRUD operations with template system
-- **LLM Integration**: ✅ Multi-model support with dynamic discovery
-- **Redis Tasks**: ✅ Background processing and autonomous operation enabled
-- **Frontend Dashboard**: ✅ Real-time monitoring with enterprise-grade UI
-- **Template System**: ✅ 4 professional templates with visual gallery
-- **System Health**: ✅ All components online and responsive
+# Production mode (optimized settings)
+source scripts/set-env-production.sh
 
-### Configuration-Driven Development
-- **Never hardcode**: Ports, file paths, URLs, API keys, timeouts, or any operational values
-- **Database settings**: Store user preferences, feature flags, and runtime settings in database
-- **Config validation**: Validate all configuration values on startup
-- **Config hot-reload**: Support configuration changes without application restart where possible
+# DeepSeek model configuration
+source scripts/set-env-deepseek.sh
+```
 
-### LLM Backend Support
-- Multiple LLM backends: Ollama (default), OpenAI, local HuggingFace models
-- All LLM settings stored in `config/config.yaml`
-- Model selection and parameters configurable at runtime
-- Hardware acceleration settings stored in configuration
+### Testing Strategy
+- Backend: pytest with fixtures in `tests/`
+- Frontend: Vitest for unit tests, Cypress for E2E
+- API: Comprehensive endpoint testing via curl/httpie
+- Integration: Full system tests with `run_agent.sh`
 
-### Data Storage Standards
-- SQLite database for knowledge base at `data/knowledge_base.db`
-- ChromaDB for vector embeddings at `data/chromadb/`
-- Chat history in `data/chats/` as JSON files
-- All data paths configurable through `config/config.yaml`
+## Development Workflow
 
-### Security & Monitoring
-- Security policies defined in configuration files
-- Audit logging to `data/audit.log`
-- Log levels and destinations configurable
-- Monitoring thresholds stored in database
+### Local Development Setup
+1. Fork and clone the repository
+2. Run `./setup_agent.sh` to configure environment
+3. Start development with `./run_agent.sh`
+4. Frontend dev server: `cd autobot-vue && npm run dev`
+5. Backend only: `python main.py`
+
+### Code Quality Tools
+- **Backend**: Black formatter, isort imports, flake8 linting
+- **Frontend**: ESLint + oxlint, Prettier formatting
+- **Pre-commit hooks**: Configured in `.pre-commit-config.yaml`
+- **Type checking**: mypy (Python), TypeScript strict mode
+
+### Common Development Tasks
+```bash
+# Add a new Python dependency
+echo "new-package==1.0.0" >> requirements.txt
+./setup_agent.sh  # Reinstalls all dependencies
+
+# Add a new npm dependency
+cd autobot-vue
+npm install new-package
+npm run type-check  # Verify TypeScript compatibility
+
+# Create a new API endpoint
+# 1. Add route handler in backend/api/
+# 2. Update OpenAPI schema if needed
+# 3. Add frontend API client in autobot-vue/src/services/
+# 4. Update types in autobot-vue/src/types/
+```
+
+### Debugging Tips
+- Backend logs: `tail -f logs/autobot.log`
+- Frontend console: Browser DevTools
+- API testing: Visit http://localhost:8001/docs for Swagger UI
+- WebSocket events: Monitor in browser Network tab
+- Redis monitoring: `docker exec -it autobot-redis redis-cli MONITOR`
+
+### Performance Considerations
+- Knowledge base queries use vector similarity (limit results)
+- File uploads processed asynchronously via Redis queue
+- Frontend uses lazy loading for large components
+- API responses paginated where applicable
+- WebSocket events throttled to prevent flooding
+
+## Important Notes
+
+### GUI Automation Dependencies
+- **PyAutoGUI**: Requires display access (may need `xhost +` on Linux)
+- **Tesseract OCR**: Optional, install with `apt-get install tesseract-ocr`
+- **Voice Interface**: Requires `portaudio` for microphone access
+
+### Redis Configuration
+- Started automatically by `run_agent.sh` as Docker container
+- Includes RedisStack modules: Search, JSON, TimeSeries, Bloom
+- Default port: 6379 (configurable via AUTOBOT_REDIS_PORT)
+- Persistent data in Docker volume `autobot-redis-data`
+
+### Security Considerations
+- Never commit `.env` files or API keys
+- File browser sandboxed to `data/file_manager_root/`
+- Command execution requires user approval
+- Audit logging tracks all sensitive operations
+
+### Hardware Acceleration
+- Intel NPU: Requires OpenVINO and Python 3.11+
+- NVIDIA GPU: CUDA toolkit required for GPU inference
+- CPU fallback: Always available, no special requirements
