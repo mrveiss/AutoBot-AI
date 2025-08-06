@@ -432,9 +432,7 @@ class Orchestrator:
                 "log_message",
                 {
                     "level": "INFO",
-                    "message": (
-                        f"Retrieved {len(retrieved_context)} context chunks."
-                    ),
+                    "message": (f"Retrieved {len(retrieved_context)} context chunks."),
                 },
             )
         else:
@@ -744,12 +742,13 @@ class Orchestrator:
                 "iterations",
             },
         )
-        print(
-            f"Goal execution completed after {max_iterations} iterations"
-        )
+        print(f"Goal execution completed after {max_iterations} iterations")
         return {
             "status": "warning",
-            "message": "Goal execution completed, but may not have fully achieved the objective.",
+            "message": (
+                "Goal execution completed, but may not have fully achieved "
+                "the objective."
+            ),
         }
 
     async def _execute_planned_action(
@@ -888,7 +887,10 @@ class Orchestrator:
                 messages.append(
                     {
                         "role": "user",
-                        "content": "User declined to approve the command. Please suggest an alternative approach.",
+                        "content": (
+                            "User declined to approve the command. "
+                            "Please suggest an alternative approach."
+                        ),
                     }
                 )
                 return {"completed": False}
@@ -927,13 +929,14 @@ class Orchestrator:
             command = "ifconfig"
         elif "ip addr" in goal.lower() or "ip address" in goal.lower():
             command = "ip addr show"
-        elif ("ps" in goal.lower() and "process" in goal.lower()):
+        elif "ps" in goal.lower() and "process" in goal.lower():
             command = "ps aux"
         elif "netstat" in goal.lower():
             command = "netstat -tuln"
 
         print(
-            f"DEBUG: _execute_simple_command called for goal: '{goal}', determined command: '{command}'"
+            f"DEBUG: _execute_simple_command called for goal: '{goal}', "
+            f"determined command: '{command}'"
         )
 
         if command:
@@ -1039,16 +1042,15 @@ class Orchestrator:
                 await event_manager.publish(
                     "error", {"message": f"Command approval timeout for: {command}"}
                 )
-                return {
-                    "approved": False, 
-                    "message": "Approval timeout"
-                }
+                return {"approved": False, "message": "Approval timeout"}
         else:
             await event_manager.publish(
                 "log_message",
                 {
                     "level": "WARNING",
-                    "message": "Local approval mechanism not implemented, auto-approving",
+                    "message": (
+                        "Local approval mechanism not implemented, auto-approving"
+                    ),
                 },
             )
             return {"approved": True, "message": "Auto-approved for local execution"}
