@@ -98,7 +98,8 @@ class SystemIntegration:
         if self.os_type == "Windows":
             cmd = [
                 "powershell",
-                "Get-Service | Select-Object Name, Status | ConvertTo-Csv -NoTypeInformation",
+                "Get-Service | Select-Object Name, Status | "
+                "ConvertTo-Csv -NoTypeInformation",
             ]
             result = self._run_command(cmd)
             if result["status"] == "success":
@@ -155,7 +156,8 @@ class SystemIntegration:
         if action not in ["start", "stop", "restart"]:
             return {
                 "status": "error",
-                "message": "Invalid service action. Must be 'start', 'stop', or 'restart'.",
+                "message": "Invalid service action. Must be 'start', "
+                "'stop', or 'restart'.",
             }
 
         if self.os_type == "Windows":
@@ -163,8 +165,9 @@ class SystemIntegration:
                 "powershell",
                 f"Set-Service -Name '{service_name}' -Status '{action}'",
             ]
-            # Note: Set-Service -Status doesn't directly start/stop, it sets desired state.
-            # For immediate action, use Start-Service, Stop-Service, Restart-Service
+            # Note: Set-Service -Status doesn't directly start/stop,
+            # it sets desired state. For immediate action, use Start-Service,
+            # Stop-Service, Restart-Service
             if action == "start":
                 cmd = ["powershell", f"Start-Service -Name '{service_name}'"]
             elif action == "stop":
@@ -196,8 +199,9 @@ class SystemIntegration:
 
     def execute_system_command(self, command: str) -> Dict[str, Any]:
         """Executes a general system command."""
-        # This is similar to execute_shell_command in worker_node, but kept here for abstraction
-        # and potential future OS-specific enhancements (e.g., direct API calls instead of shell)
+        # This is similar to execute_shell_command in worker_node,
+        # but kept here for abstraction and potential future OS-specific
+        # enhancements (e.g., direct API calls instead of shell)
         return self._run_command([command], shell=True)
 
     # --- Windows-specific (pywin32/COM - placeholders) ---
@@ -205,8 +209,9 @@ class SystemIntegration:
         self, app_name: str, action: str, **kwargs
     ) -> Dict[str, Any]:
         """
-        Placeholder for interacting with COM-based applications like Word/Excel using pywin32.
-        This would require pywin32 to be installed and specific COM object knowledge.
+        Placeholder for interacting with COM-based applications
+        like Word/Excel using pywin32. This would require pywin32 to be
+        installed and specific COM object knowledge.
         """
         if self.os_type != "Windows":
             return {"status": "error", "message": "This function is Windows-specific."}
@@ -218,16 +223,21 @@ class SystemIntegration:
         #     if action == "open_document":
         #         doc_path = kwargs.get("path")
         #         app.Documents.Open(doc_path)
-        #         return {"status": "success", "message": f"Opened {doc_path} in {app_name}."}
+        #         return {"status": "success",
+        #                 "message": f"Opened {doc_path} in {app_name}."}
         #     elif action == "save_document":
         #         app.ActiveDocument.SaveAs(kwargs.get("path"))
-        #         return {"status": "success", "message": f"Saved document in {app_name}."}
+        #         return {"status": "success",
+        #                 "message": f"Saved document in {app_name}."}
         #     # ... more actions
         # except Exception as e:
-        #     return {"status": "error", "message": f"COM interaction failed: {e}"}
+        #     return {"status": "error",
+        #             "message": f"COM interaction failed: {e}"}
         return {
             "status": "error",
-            "message": f"Windows COM interaction for '{app_name}' is a placeholder. Not implemented without pywin32 and specific use case.",
+            "message": f"Windows COM interaction for '{app_name}' is a "
+            "placeholder. Not implemented without pywin32 and "
+            "specific use case.",
         }
 
     # --- Linux-specific (DBus - placeholders) ---
@@ -242,7 +252,8 @@ class SystemIntegration:
             return {"status": "error", "message": "This function is Linux-specific."}
 
         # Example using dbus-send CLI tool (simpler, no extra Python lib needed)
-        # cmd = ["dbus-send", "--print-reply", "--dest", service, path, interface + "." + method] + list(args)
+        # cmd = ["dbus-send", "--print-reply", "--dest", service, path,
+        #        interface + "." + method] + list(args)
         # result = self._run_command(cmd)
         # return result
 
@@ -253,12 +264,15 @@ class SystemIntegration:
         #     obj = bus.get(service, path)
         #     method_to_call = getattr(obj, method)
         #     response = method_to_call(*args)
-        #     return {"status": "success", "response": str(response)}
+        #     return {"status": "success",
+        #             "response": str(response)"}
         # except Exception as e:
-        #     return {"status": "error", "message": f"DBus interaction failed: {e}"}
+        #     return {"status": "error",
+        #             "message": f"DBus interaction failed: {e}"}
         return {
             "status": "error",
-            "message": f"Linux DBus interaction for '{service}' is a placeholder. Not implemented without specific use case.",
+            "message": f"Linux DBus interaction for '{service}' is a "
+            "placeholder. Not implemented without specific use case.",
         }
 
     def get_process_info(
@@ -288,7 +302,8 @@ class SystemIntegration:
         if not processes_info and (process_name or pid):
             return {
                 "status": "error",
-                "message": f"No process found matching name '{process_name}' or PID '{pid}'.",
+                "message": f"No process found matching name '{process_name}' "
+                f"or PID '{pid}'.",
             }
 
         return {"status": "success", "processes": processes_info}
@@ -309,7 +324,8 @@ class SystemIntegration:
         except psutil.AccessDenied:
             return {
                 "status": "error",
-                "message": f"Access denied to terminate process with PID {pid}. Requires elevated privileges.",
+                "message": f"Access denied to terminate process with PID "
+                f"{pid}. Requires elevated privileges.",
             }
         except Exception as e:
             return {
@@ -327,7 +343,8 @@ class SystemIntegration:
                 url = "https://" + url  # Default to HTTPS
 
             response = requests.get(url, timeout=10)
-            response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+            # Raise an exception for HTTP errors (4xx or 5xx)
+            response.raise_for_status()
 
             content_type = response.headers.get("Content-Type", "").lower()
 
@@ -350,7 +367,8 @@ class SystemIntegration:
                 # For other content types, return a message indicating it's not text
                 return {
                     "status": "error",
-                    "message": f"Unsupported content type for direct text extraction: {content_type}",
+                    "message": f"Unsupported content type for direct text "
+                    f"extraction: {content_type}",
                     "url": url,
                 }
 
@@ -363,7 +381,7 @@ class SystemIntegration:
         except Exception as e:
             return {
                 "status": "error",
-                "message": f"An unexpected error occurred during web fetch: {e}",
+                "message": f"An unexpected error occurred during " f"web fetch: {e}",
                 "url": url,
             }
 

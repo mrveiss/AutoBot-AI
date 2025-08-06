@@ -1,14 +1,12 @@
 import os
 import json
-import time
 import platform
 import psutil
 import subprocess
 import asyncio
-import redis
 import torch
 import sys
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 
 from src.llm_interface import LLMInterface
 from src.knowledge_base import KnowledgeBase
@@ -44,12 +42,13 @@ class WorkerNode:
             # Use centralized Redis client utility
             self.redis_client = get_redis_client(async_client=False)
             if self.redis_client:
-                print(f"Worker connected to Redis via centralized utility")
+                print("Worker connected to Redis via centralized utility")
             else:
                 print("Worker failed to get Redis client from centralized utility")
         else:
             print(
-                "Worker node configured for local task transport. No Redis connection."
+                "Worker node configured for local task transport. "
+                "No Redis connection."
             )
 
         # Initialize modules that worker might need for task execution
@@ -70,7 +69,7 @@ class WorkerNode:
                 "count": psutil.cpu_count(logical=True),
                 "physical_count": psutil.cpu_count(logical=False),
                 "usage_percent": psutil.cpu_percent(interval=1),
-                "freq_mhz": psutil.cpu_freq().current if psutil.cpu_freq() else "N/A",
+                "freq_mhz": (psutil.cpu_freq().current if psutil.cpu_freq() else "N/A"),
             },
             "ram": {
                 "total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
@@ -104,7 +103,8 @@ class WorkerNode:
                     subprocess.check_output(
                         [
                             "nvidia-smi",
-                            "--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu,utilization.memory",
+                            "--query-gpu=name,memory.total,memory.used,"
+                            "memory.free,utilization.gpu,utilization.memory",
                             "--format=csv,noheader,nounits",
                         ]
                     )
@@ -187,7 +187,10 @@ class WorkerNode:
         task_id = task_payload.get("task_id", "N/A")
         user_role = task_payload.get("user_role", "guest")
 
-        if not self.security_layer.check_permission(user_role, f"allow_{task_type}"):
+        permission_check = self.security_layer.check_permission(
+            user_role, f"allow_{task_type}"
+        )
+        if not permission_check:
             self.security_layer.audit_log(
                 f"execute_task_{task_type}",
                 user_role,
@@ -200,7 +203,10 @@ class WorkerNode:
             )
             return {
                 "status": "error",
-                "message": f"Permission denied for role '{user_role}' to execute task type '{task_type}'.",
+                "message": (
+                    f"Permission denied for role '{user_role}' to execute "
+                    f"task type '{task_type}'."
+                ),
             }
 
         await event_manager.publish(
@@ -208,7 +214,8 @@ class WorkerNode:
             {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
         )
         print(
-            f"Worker {self.worker_id} executing task {task_id} of type '{task_type}' for role '{user_role}'..."
+            f"Worker {self.worker_id} executing task {task_id} of type "
+            f"'{task_type}' for role '{user_role}'..."
         )
 
         result = {"status": "error", "message": "Unknown task type."}
@@ -233,7 +240,10 @@ class WorkerNode:
                         {"task_id": task_id, "model": model_name},
                     )
                 else:
-                    result = {"status": "error", "message": "LLM completion failed."}
+                    result = {
+                        "status": "error",
+                        "message": "LLM completion failed.",
+                    }
                     self.security_layer.audit_log(
                         "llm_chat_completion",
                         user_role,
@@ -294,7 +304,10 @@ class WorkerNode:
                     # Command validation failed - SECURITY BLOCK
                     result = {
                         "status": "error",
-                        "message": f"Command blocked for security: {validation_result['reason']}",
+                        "message": (
+                            f"Command blocked for security: "
+                            f"{validation_result['reason']}"
+                        ),
                     }
                     self.security_layer.audit_log(
                         "execute_shell_command",
@@ -308,7 +321,8 @@ class WorkerNode:
                         },
                     )
                     print(
-                        f"🚨 SECURITY: Blocked potentially dangerous command: {command}"
+                        f"🚨 SECURITY: Blocked potentially dangerous command: "
+                        f"{command}"
                     )
                 else:
                     # Command validated - proceed with secure execution
@@ -317,14 +331,16 @@ class WorkerNode:
                         use_shell = validation_result["use_shell"]
 
                         if use_shell:
-                            # Use shell=True for commands that require it (safe because validated)
+                            # Use shell=True for commands that require it
+                            # (safe because validated)
                             process = await asyncio.create_subprocess_shell(
                                 command,
                                 stdout=asyncio.subprocess.PIPE,
                                 stderr=asyncio.subprocess.PIPE,
                             )
                         else:
-                            # Use shell=False for maximum security (preferred method)
+                            # Use shell=False for maximum security
+                            # (preferred method)
                             process = await asyncio.create_subprocess_exec(
                                 *parsed_command,
                                 stdout=asyncio.subprocess.PIPE,
@@ -554,7 +570,9 @@ class WorkerNode:
                 )
                 result = {
                     "status": "pending_approval",
-                    "message": f"Requested user approval for command: {command_to_approve}",
+                    "message": (
+                        f"Requested user approval for command: " f"{command_to_approve}"
+                    ),
                 }
                 self.security_layer.audit_log(
                     "ask_user_command_approval",
@@ -568,7 +586,10 @@ class WorkerNode:
                     "message": f"Unsupported task type: {task_type}",
                 }
         except Exception as e:
-            result = {"status": "error", "message": f"Error during task execution: {e}"}
+            result = {
+                "status": "error",
+                "message": f"Error during task execution: {e}",
+            }
             self.security_layer.audit_log(
                 f"execute_task_{task_type}",
                 user_role,
@@ -581,7 +602,8 @@ class WorkerNode:
             {"worker_id": self.worker_id, "task_id": task_id, "result": result},
         )
         print(
-            f"Worker {self.worker_id} finished task {task_id} with status: {result['status']}"
+            f"Worker {self.worker_id} finished task {task_id} with status: "
+            f"{result['status']}"
         )
         return result
 
@@ -590,7 +612,8 @@ class WorkerNode:
             pubsub = self.redis_client.pubsub()
             pubsub.subscribe("orchestrator_tasks")
             print(
-                f"Worker {self.worker_id} listening for tasks on 'orchestrator_tasks' channel."
+                f"Worker {self.worker_id} listening for tasks on "
+                "'orchestrator_tasks' channel."
             )
 
             for message in pubsub.listen():
@@ -601,7 +624,8 @@ class WorkerNode:
                     asyncio.create_task(self._process_and_respond(task_payload))
         else:
             print(
-                f"Worker {self.worker_id} running in local task execution mode. No external task listening."
+                f"Worker {self.worker_id} running in local task execution mode. "
+                "No external task listening."
             )
             while True:
                 await asyncio.sleep(10)
@@ -614,7 +638,8 @@ class WorkerNode:
             response_channel = f"worker_results_{task_id}"
             self.redis_client.publish(response_channel, json.dumps(result))
             print(
-                f"Worker {self.worker_id} sent result for task {task_id} to '{response_channel}'."
+                f"Worker {self.worker_id} sent result for task {task_id} to "
+                f"'{response_channel}'."
             )
         else:
             pass

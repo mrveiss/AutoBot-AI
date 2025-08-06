@@ -2,11 +2,10 @@
 Unified Tool Registry
 
 This module provides a centralized implementation of all tools used by both
-the standard orchestrator and LangChain orchestrator, eliminating code duplication.
+the standard orchestrator and LangChain orchestrator, eliminating code
+duplication.
 """
 
-import asyncio
-import json
 import logging
 import uuid
 import time
@@ -211,7 +210,7 @@ class ToolRegistry:
                     filename = metadata.get("filename", "N/A")
                     chunk_index = metadata.get("chunk_index", "N/A")
                     formatted_results.append(
-                        f"[{filename} - Chunk {chunk_index}]: {content_preview}"
+                        f"[{filename} - Chunk {chunk_index}]: " f"{content_preview}"
                     )
 
                 result_text = f"Found {len(results)} relevant results:\n" + "\n".join(
@@ -373,7 +372,8 @@ class ToolRegistry:
             "tool_name": "click_element",
             "tool_args": {"image_path": image_path},
             "result": result.get(
-                "output", result.get("message", f"Clicked element: {image_path}")
+                "output",
+                result.get("message", f"Clicked element: {image_path}"),
             ),
             "status": result.get("status", "success"),
         }
@@ -407,7 +407,10 @@ class ToolRegistry:
         result = await self._execute_worker_task(task)
         return {
             "tool_name": "ask_user_for_manual",
-            "tool_args": {"program_name": program_name, "question_text": question_text},
+            "tool_args": {
+                "program_name": program_name,
+                "question_text": question_text,
+            },
             "result": result.get(
                 "output", result.get("message", "User manual request sent")
             ),
@@ -434,8 +437,9 @@ class ToolRegistry:
         self, tool_name: str, tool_args: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Execute a tool by name with arguments. This method provides a unified interface
-        for both orchestrators to call tools using string names and arguments.
+        Execute a tool by name with arguments. This method provides a unified
+        interface for both orchestrators to call tools using string names and
+        arguments.
         """
         # Normalize tool name variations
         tool_name = tool_name.lower().replace("_", "").replace("-", "")
@@ -500,7 +504,8 @@ class ToolRegistry:
         # User interaction tools
         elif tool_name == "askuserformanual":
             return await self.ask_user_for_manual(
-                tool_args.get("program_name", ""), tool_args.get("question_text", "")
+                tool_args.get("program_name", ""),
+                tool_args.get("question_text", ""),
             )
 
         elif tool_name == "respondconversationally":

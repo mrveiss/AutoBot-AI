@@ -5,7 +5,6 @@ from datetime import datetime
 
 from backend.utils.connection_utils import ConnectionTester, ModelManager
 from backend.services.config_service import ConfigService
-from src.config import global_config_manager
 
 router = APIRouter()
 

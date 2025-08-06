@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException
 import logging
 import os
-import json
 
 router = APIRouter()
 

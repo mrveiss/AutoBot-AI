@@ -1,10 +1,9 @@
 import os
 import json
 import time
-import traceback
 import asyncio
 from collections import defaultdict
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import psutil
 
 from src.llm_interface import LLMInterface
@@ -49,7 +48,8 @@ class Diagnostics:
             print("pynvml initialized. GPU monitoring enabled.")
         except ImportError:
             print(
-                "pynvml not found. GPU monitoring disabled. Install with 'pip install pynvml' for NVIDIA GPU monitoring."
+                "pynvml not found. GPU monitoring disabled. "
+                "Install with 'pip install pynvml' for NVIDIA GPU monitoring."
             )
         except Exception as e:
             print(f"Failed to initialize pynvml: {e}. GPU monitoring disabled.")
@@ -69,7 +69,10 @@ class Diagnostics:
             json.dump(self.reliability_stats, f, indent=2)
 
     async def log_failure(
-        self, task_info: Dict[str, Any], error_message: str, tb: Optional[str] = None
+        self,
+        task_info: Dict[str, Any],
+        error_message: str,
+        tb: Optional[str] = None,
     ):
         if not self.diagnostics_enabled:
             return
@@ -96,7 +99,10 @@ class Diagnostics:
         self._save_reliability_stats()
 
     async def analyze_failure(
-        self, task_info: Dict[str, Any], error_message: str, tb: Optional[str] = None
+        self,
+        task_info: Dict[str, Any],
+        error_message: str,
+        tb: Optional[str] = None,
     ) -> Dict[str, Any]:
         analysis_report = {
             "task_id": task_info.get("task_id", "N/A"),
@@ -108,11 +114,17 @@ class Diagnostics:
         }
 
         if self.use_llm_for_analysis:
-            llm_prompt = f"Analyze the following error from a task execution. Suggest possible causes and potential solutions. Error: {error_message}\nTraceback:\n{tb}\nTask Info: {json.dumps(task_info)}"
+            llm_prompt = (
+                f"Analyze the following error from a task execution. "
+                f"Suggest possible causes and potential solutions. "
+                f"Error: {error_message}\nTraceback:\n{tb}\n"
+                f"Task Info: {json.dumps(task_info)}"
+            )
             messages = [
                 {
                     "role": "system",
-                    "content": "You are an AI diagnostics expert. Provide concise analysis and solutions.",
+                    "content": "You are an AI diagnostics expert. Provide concise "
+                    "analysis and solutions.",
                 },
                 {"role": "user", "content": llm_prompt},
             ]
@@ -124,7 +136,8 @@ class Diagnostics:
             )
             if llm_response and llm_response.get("choices"):
                 analysis_report["suggested_causes"].append(
-                    f"LLM Analysis: {llm_response['choices'][0]['message']['content']}"
+                    f"LLM Analysis: "
+                    f"{llm_response['choices'][0]['message']['content']}"
                 )
             else:
                 analysis_report["suggested_causes"].append("LLM analysis failed.")
@@ -152,7 +165,9 @@ class Diagnostics:
         )
 
         await event_manager.publish("diagnostics_report", analysis_report)
-        print(f"Diagnostics report generated: {json.dumps(analysis_report, indent=2)}")
+        print(
+            f"Diagnostics report generated: " f"{json.dumps(analysis_report, indent=2)}"
+        )
         return analysis_report
 
     async def request_user_permission(self, report: Dict[str, Any]) -> bool:
@@ -161,7 +176,9 @@ class Diagnostics:
                 "log_message",
                 {
                     "level": "INFO",
-                    "message": "Auto-applying fixes is enabled. Skipping user permission.",
+                    "message": (
+                        "Auto-applying fixes is enabled. " "Skipping user permission."
+                    ),
                 },
             )
             return True
@@ -175,7 +192,9 @@ class Diagnostics:
             {
                 "task_id": task_id,
                 "report": report,
-                "question": "A task failed. Do you approve applying the suggested fixes?",
+                "question": (
+                    "A task failed. Do you approve applying " "the suggested fixes?"
+                ),
             },
         )
         print(f"Requested user permission for task {task_id}. Waiting...")
@@ -188,7 +207,10 @@ class Diagnostics:
                 "log_message",
                 {
                     "level": "WARNING",
-                    "message": f"User permission for task {task_id} timed out. Fixes not applied.",
+                    "message": (
+                        f"User permission for task {task_id} timed out. "
+                        f"Fixes not applied."
+                    ),
                 },
             )
             return False
@@ -245,13 +267,20 @@ class Diagnostics:
                 metrics["gpu_info"] = [
                     {
                         "error": str(e),
-                        "message": "Could not retrieve GPU metrics. Ensure NVIDIA drivers are installed and pynvml is functioning.",
+                        "message": (
+                            "Could not retrieve GPU metrics. "
+                            "Ensure NVIDIA drivers are installed "
+                            "and pynvml is functioning."
+                        ),
                     }
                 ]
         else:
             metrics["gpu_info"].append(
                 {
-                    "message": "GPU monitoring is not enabled or pynvml is not installed/initialized."
+                    "message": (
+                        "GPU monitoring is not enabled or "
+                        "pynvml is not installed/initialized."
+                    )
                 }
             )
 

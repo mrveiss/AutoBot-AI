@@ -198,7 +198,8 @@ class ChatAPI:
                         logger.info(f"Cleaned up message directory: {session_dir}")
                 except Exception as cleanup_error:
                     logger.warning(
-                        f"Failed to cleanup message directory {session_dir}: {cleanup_error}"
+                        f"Failed to cleanup message directory {session_dir}: "
+                        f"{cleanup_error}"
                     )
 
     async def cleanup_all_message_files(self) -> Dict[str, Any]:
@@ -229,7 +230,8 @@ class ChatAPI:
                         logger.info(f"Cleaned up message directory: {session_dir}")
                     except Exception as cleanup_error:
                         logger.error(
-                            f"Failed to cleanup message directory {session_dir}: {cleanup_error}"
+                            f"Failed to cleanup message directory {session_dir}: "
+                            f"{cleanup_error}"
                         )
 
             # Remove the messages directory itself if it's empty
@@ -280,7 +282,10 @@ class ChatAPI:
 
             return {
                 "status": "success",
-                "message": f"Cleaned up {cleaned_chats} chat files and {cleaned_messages} message directories",
+                "message": (
+                    f"Cleaned up {cleaned_chats} chat files and "
+                    f"{cleaned_messages} message directories"
+                ),
                 "cleaned_chats": cleaned_chats,
                 "cleaned_messages": cleaned_messages,
                 "freed_space_bytes": total_size,

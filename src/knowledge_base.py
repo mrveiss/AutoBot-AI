@@ -8,7 +8,9 @@ from docx import Document as DocxDocument
 from llama_index.core import Settings, VectorStoreIndex, Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.storage.storage_context import StorageContext
-from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
+from llama_index.embeddings.ollama import (
+    OllamaEmbedding as LlamaIndexOllamaEmbedding,
+)
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.redis import RedisVectorStore
 from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
@@ -67,7 +69,7 @@ class KnowledgeBase:
             logging.info("Redis client initialized via centralized utility")
         else:
             logging.warning(
-                "Redis client not available - Redis may be disabled in configuration"
+                "Redis client not available - Redis may be disabled " "in configuration"
             )
 
         self.llm = None
@@ -84,13 +86,15 @@ class KnowledgeBase:
 
     async def ainit(self):  # Removed llm_config parameter
         """
-        Asynchronously initializes LlamaIndex components including LLM, Embedding model, and Vector Store.
+        Asynchronously initializes LlamaIndex components including LLM,
+        Embedding model, and Vector Store.
         """
         llm_config_data = (
             global_config_manager.get_llm_config()
         )  # Get LLM config from global manager
         llm_provider = llm_config_data.get("provider", "ollama")
-        llm_model = llm_config_data.get("model", "phi:2.7b")  # Use phi:2.7b as default
+        # Use phi:2.7b as default
+        llm_model = llm_config_data.get("model", "phi:2.7b")
         llm_base_url = llm_config_data.get("ollama", {}).get(
             "base_url", "http://localhost:11434"
         )
@@ -154,7 +158,8 @@ class KnowledgeBase:
                 )
             except Exception as e:
                 logging.warning(
-                    f"Could not load existing LlamaIndex from Redis: {e}. Creating a new index."
+                    f"Could not load existing LlamaIndex from Redis: {e}. "
+                    "Creating a new index."
                 )
                 self.index = VectorStoreIndex.from_documents(
                     [], storage_context=self.storage_context
@@ -164,17 +169,23 @@ class KnowledgeBase:
             logging.info("LlamaIndex VectorStoreIndex and QueryEngine initialized.")
         else:
             logging.warning(
-                "Creating in-memory VectorStoreIndex without Redis due to initialization issues."
+                "Creating in-memory VectorStoreIndex without Redis due to "
+                "initialization issues."
             )
             self.index = VectorStoreIndex.from_documents([])
             self.query_engine = self.index.as_query_engine(llm=self.llm)
             logging.info("In-memory VectorStoreIndex and QueryEngine initialized.")
 
     async def add_file(
-        self, file_path: str, file_type: str, metadata: Optional[Dict[str, Any]] = None
+        self,
+        file_path: str,
+        file_type: str,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         if self.index is None:
-            logging.warning("KnowledgeBase not initialized, attempting initialization...")
+            logging.warning(
+                "KnowledgeBase not initialized, attempting initialization..."
+            )
             try:
                 await self.ainit()
                 logging.info("KnowledgeBase initialized successfully")
@@ -184,11 +195,13 @@ class KnowledgeBase:
                     "status": "error",
                     "message": f"KnowledgeBase initialization failed: {e}",
                 }
-        
+
         if self.index is None:  # Still None after initialization attempt
             return {
                 "status": "error",
-                "message": "KnowledgeBase initialization failed - index not available",
+                "message": (
+                    "KnowledgeBase initialization failed - " "index not available"
+                ),
             }
         try:
             content = ""
@@ -233,18 +246,23 @@ class KnowledgeBase:
             }
         except Exception as e:
             logging.error(f"Error adding file {file_path} to KB: {str(e)}")
-            return {"status": "error", "message": f"Error adding file to KB: {str(e)}"}
+            return {
+                "status": "error",
+                "message": f"Error adding file to KB: {str(e)}",
+            }
 
     async def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         if self.query_engine is None:
-            logging.warning("KnowledgeBase not initialized, attempting initialization...")
+            logging.warning(
+                "KnowledgeBase not initialized, attempting initialization..."
+            )
             try:
                 await self.ainit()
                 logging.info("KnowledgeBase initialized successfully")
             except Exception as e:
                 logging.error(f"Failed to initialize KnowledgeBase: {e}")
                 return []
-        
+
         if self.query_engine is None:  # Still None after initialization attempt
             logging.error("Query engine not available after initialization")
             return []
@@ -387,7 +405,8 @@ class KnowledgeBase:
         try:
             # Get stats from LlamaIndex vector store (approximate count)
             if self.vector_store:
-                # This is a placeholder as LlamaIndex RedisVectorStore doesn't expose direct count
+                # This is a placeholder as LlamaIndex RedisVectorStore doesn't
+                # expose direct count
                 all_doc_keys = await self.redis_client.keys(
                     f"{self.redis_index_name}:doc:*"
                 )
@@ -467,7 +486,8 @@ class KnowledgeBase:
 
             detailed_stats["fact_types"] = fact_type_counts
 
-            # Placeholder for search queries and top category (would need separate logging/tracking)
+            # Placeholder for search queries and top category (would need
+            # separate logging/tracking)
             detailed_stats["searches_24h"] = 0  # Needs implementation
             if fact_type_counts:
                 detailed_stats["top_category"] = max(
@@ -481,7 +501,8 @@ class KnowledgeBase:
             return detailed_stats
 
     async def export_all_data(self) -> List[Dict[str, Any]]:
-        """Export all stored knowledge base data (facts and potentially vector store metadata)."""
+        """Export all stored knowledge base data (facts and potentially
+        vector store metadata)."""
         if not self.redis_client:
             return []
         exported_data = []
@@ -501,7 +522,8 @@ class KnowledgeBase:
                         }
                     )
 
-            # Export data from LlamaIndex (more complex, usually involves iterating nodes)
+            # Export data from LlamaIndex (more complex, usually involves
+            # iterating nodes)
             if self.index:
                 all_doc_keys = await self.redis_client.keys(
                     f"{self.redis_index_name}:doc:*"
@@ -511,7 +533,8 @@ class KnowledgeBase:
                     exported_data.append(
                         {
                             "id": key,
-                            "content": "LlamaIndex Document (content not directly exported here)",
+                            "content": "LlamaIndex Document (content not "
+                            "directly exported here)",
                             "metadata": {"source": "LlamaIndex", "key": key},
                             "type": "document_reference",
                         }
@@ -611,7 +634,8 @@ class KnowledgeBase:
             return False
 
     async def cleanup_old_entries(self, days_to_keep: int) -> Dict[str, Any]:
-        """Remove knowledge base entries (facts) older than a specified number of days."""
+        """Remove knowledge base entries (facts) older than a specified
+        number of days."""
         from datetime import datetime
 
         removed_count = 0
