@@ -22,7 +22,7 @@ export AUTOBOT_OLLAMA_ENDPOINT="http://localhost:11434/api/generate"
 # Frontend Configuration
 export VITE_API_BASE_URL="http://localhost:8001"
 
-# Message Display - Show relevant debugging info 
+# Message Display - Show relevant debugging info
 export AUTOBOT_SHOW_THOUGHTS="true"
 export AUTOBOT_SHOW_PLANNING="true"
 export AUTOBOT_SHOW_JSON="false"

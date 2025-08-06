@@ -5,8 +5,7 @@ Eliminates duplication across system.py, llm.py, and redis.py
 import logging
 import os
 import requests
-import redis
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any
 from datetime import datetime
 
 from src.config import global_config_manager
@@ -43,18 +42,22 @@ class ConnectionTester:
             # Fall back to legacy structure if new structure doesn't have the values
             if not ollama_endpoint:
                 ollama_endpoint = global_config_manager.get_nested(
-                    "backend.ollama_endpoint", 
-                    os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434/api/generate")
+                    "backend.ollama_endpoint",
+                    os.getenv(
+                        "AUTOBOT_OLLAMA_HOST", "http://localhost:11434/api/generate"
+                    ),
                 )
             if not ollama_model:
                 ollama_model = global_config_manager.get_nested(
-                    "backend.ollama_model", 
-                    os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")
+                    "backend.ollama_model",
+                    os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b"),
                 )
 
             # Default fallbacks with environment variable support
             if not ollama_endpoint:
-                ollama_endpoint = os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434/api/generate")
+                ollama_endpoint = os.getenv(
+                    "AUTOBOT_OLLAMA_HOST", "http://localhost:11434/api/generate"
+                )
             if not ollama_model:
                 ollama_model = os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")
 
@@ -76,22 +79,30 @@ class ConnectionTester:
 
                 if test_response.status_code == 200:
                     result = test_response.json()
+                    response_text = result.get("response", "No response text")
+                    test_response = (
+                        response_text[:100] + "..."
+                        if (response_text and
+                            response_text != "No response text")
+                        else "No response"
+                    )
                     return {
                         "status": "connected",
-                        "message": f"Successfully connected to Ollama with model '{ollama_model}'",
+                        "message": (
+                            f"Successfully connected to Ollama with model "
+                            f"'{ollama_model}'"
+                        ),
                         "endpoint": ollama_endpoint,
                         "model": ollama_model,
-                        "test_response": result.get("response", "No response text")[
-                            :100
-                        ]
-                        + "..."
-                        if result.get("response")
-                        else "No response",
+                        "test_response": test_response,
                     }
                 else:
                     return {
                         "status": "partial",
-                        "message": f"Connected to Ollama but model '{ollama_model}' failed to respond",
+                        "message": (
+                            f"Connected to Ollama but model '{ollama_model}' "
+                            "failed to respond"
+                        ),
                         "endpoint": ollama_endpoint,
                         "model": ollama_model,
                         "error": test_response.text,
@@ -122,26 +133,38 @@ class ConnectionTester:
 
             if task_transport_config.get("type") == "redis":
                 redis_config = task_transport_config.get("redis", {})
-                redis_host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
-                redis_port = redis_config.get("port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379")))
+                redis_host = redis_config.get(
+                    "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
+                )
+                redis_port = redis_config.get(
+                    "port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+                )
             else:
                 # Check memory.redis config (current structure)
                 memory_config = global_config_manager.get("memory", {})
                 redis_config = memory_config.get("redis", {})
 
                 if redis_config.get("enabled", False):
-                    redis_host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
-                    redis_port = redis_config.get("port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379")))
+                    redis_host = redis_config.get(
+                        "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
+                    )
+                    redis_port = redis_config.get(
+                        "port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+                    )
                 else:
                     return {
                         "status": "not_configured",
-                        "message": "Redis is not enabled in memory configuration",
+                        "message": (
+                            "Redis is not enabled in memory configuration"
+                        ),
                     }
 
             if not redis_host or not redis_port:
                 return {
                     "status": "not_configured",
-                    "message": "Redis configuration is incomplete (missing host or port)",
+                    "message": (
+                        "Redis configuration is incomplete (missing host or port)"
+                    ),
                 }
 
             redis_client = get_redis_client()
@@ -174,13 +197,15 @@ class ConnectionTester:
                     )
                 else:
                     redis_search_module_loaded = False
-            except:
+            except Exception:
                 # If we can't check modules, assume it's not loaded
                 redis_search_module_loaded = False
 
             return {
                 "status": "connected",
-                "message": f"Successfully connected to Redis at {redis_host}:{redis_port}",
+                "message": (
+                    f"Successfully connected to Redis at {redis_host}:{redis_port}"
+                ),
                 "host": redis_host,
                 "port": redis_port,
                 "redis_search_module_loaded": redis_search_module_loaded,
@@ -264,7 +289,9 @@ class ModelManager:
         """Get models from Ollama service"""
         try:
             ollama_config = global_config_manager.get_nested("llm_config.ollama", {})
-            ollama_host = ollama_config.get("host", os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434"))
+            ollama_host = ollama_config.get(
+                "host", os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434")
+            )
             ollama_url = f"{ollama_host}/api/tags"
 
             response = requests.get(ollama_url, timeout=10)
