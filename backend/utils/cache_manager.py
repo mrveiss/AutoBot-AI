@@ -5,9 +5,7 @@ Implements TTL-based caching for frequently requested API endpoints
 
 import json
 import logging
-import asyncio
-from typing import Any, Dict, Optional, Union
-from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 # Import centralized Redis client utility
 from src.utils.redis_client import get_redis_client
@@ -130,7 +128,7 @@ class CacheManager:
             try:
                 info = await self.redis_client.info("memory")
                 memory_usage = info.get("used_memory_human", "N/A")
-            except:
+            except Exception:
                 memory_usage = "N/A"
 
             return {
