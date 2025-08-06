@@ -20,7 +20,8 @@ class VoiceInterface:
         )  # e.g., 'space'
 
         print(
-            f"VoiceInterface initialized. Continuous listening: {self.continuous_listening}"
+            f"VoiceInterface initialized. Continuous listening: "
+            f"{self.continuous_listening}"
         )
 
     def _load_config(self, config_path):
@@ -31,8 +32,9 @@ class VoiceInterface:
         engine = pyttsx3.init()
         # Optional: Configure voice properties
         # voices = engine.getProperty('voices')
-        # engine.setProperty('voice', voices[0].id) # Change index for different voices
-        # engine.setProperty('rate', 150) # Speed of speech
+        # engine.setProperty('voice', voices[0].id)
+        # # Change index for different voices
+        # engine.setProperty('rate', 150)  # Speed of speech
         # engine.setProperty('volume', 1.0) # Volume (0.0 to 1.0)
         return engine
 
@@ -44,17 +46,21 @@ class VoiceInterface:
 
         Args:
             timeout (int): Seconds to wait for a phrase to start.
-            phrase_time_limit (int): Seconds to listen for a phrase if no speech is detected.
+            phrase_time_limit (int): Seconds to listen for a phrase
+                if no speech is detected.
 
         Returns:
             Dict[str, Any]: Status and recognized text or error message.
         """
         with sr.Microphone() as source:
-            self.recognizer.adjust_for_ambient_noise(source)  # Adjust for ambient noise
+            # Adjust for ambient noise
+            self.recognizer.adjust_for_ambient_noise(source)
             print("Listening for speech...")
             try:
                 audio = self.recognizer.listen(
-                    source, timeout=timeout, phrase_time_limit=phrase_time_limit
+                    source,
+                    timeout=timeout,
+                    phrase_time_limit=phrase_time_limit,
                 )
                 print("Processing speech...")
                 # Use Google Web Speech API for recognition
@@ -67,16 +73,21 @@ class VoiceInterface:
                     "message": "No speech detected within timeout.",
                 }
             except sr.UnknownValueError:
-                return {"status": "no_match", "message": "Could not understand audio."}
+                return {
+                    "status": "no_match",
+                    "message": "Could not understand audio.",
+                }
             except sr.RequestError as e:
                 return {
                     "status": "error",
-                    "message": f"Could not request results from Google Speech Recognition service; {e}",
+                    "message": f"Could not request results from Google "
+                    f"Speech Recognition service; {e}",
                 }
             except Exception as e:
                 return {
                     "status": "error",
-                    "message": f"An unexpected error occurred during speech recognition: {e}",
+                    "message": f"An unexpected error occurred during "
+                    f"speech recognition: {e}",
                 }
 
     async def speak_text(self, text: str) -> Dict[str, Any]:
@@ -85,14 +96,18 @@ class VoiceInterface:
         """
         try:
             print(f"Speaking: {text}")
-            # pyttsx3 runAndWait() is blocking, so run in a thread or process pool executor
+            # pyttsx3 runAndWait() is blocking, so run in a thread
+            # or process pool executor
             # to avoid blocking the asyncio event loop.
             # For simplicity in this example, we'll just run it directly,
             # but in a real async app, this needs careful handling.
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, self.tts_engine.say, text)
             await loop.run_in_executor(None, self.tts_engine.runAndWait)
-            return {"status": "success", "message": "Text spoken successfully."}
+            return {
+                "status": "success",
+                "message": "Text spoken successfully.",
+            }
         except Exception as e:
             return {"status": "error", "message": f"Error speaking text: {e}"}
 
@@ -106,12 +121,16 @@ class VoiceInterface:
         # import sounddevice as sd
         # model = Model(lang="en-us") # Download model first
         # recognizer = KaldiRecognizer(model, 16000)
-        # with sd.RawInputStream(samplerate=16000, blocksize=8000, dtype='int16', channels=1) as device:
+        # with sd.RawInputStream(samplerate=16000, blocksize=8000,
+        #                       dtype='int16', channels=1) as device:
         #     while True:
         #         data = device.read(8000)[0]
         #         if recognizer.AcceptWaveform(data):
         #             result = json.loads(recognizer.Result())
-        #             return {"status": "success", "text": result.get("text", "")}
+        #             return {
+        #                 "status": "success",
+        #                 "text": result.get("text", ""),
+        #             }
         return {
             "status": "error",
             "message": "Vosk integration is a placeholder. Not implemented.",
@@ -124,7 +143,8 @@ class VoiceInterface:
         Requires coqui_tts library and downloaded models.
         """
         # from TTS.api import TTS
-        # tts = TTS("tts_models/en/ljspeech/tacotron2-DDC", gpu=False) # Example model
+        # tts = TTS("tts_models/en/ljspeech/tacotron2-DDC", gpu=False)
+        # # Example model
         # tts.tts_to_file(text=text, file_path="output.wav")
         # # Play the audio file
         # import soundfile as sf
@@ -134,7 +154,7 @@ class VoiceInterface:
         # sd.wait()
         return {
             "status": "error",
-            "message": "Coqui TTS integration is a placeholder. Not implemented.",
+            "message": ("Coqui TTS integration is a placeholder. Not implemented."),
         }
 
 
@@ -161,7 +181,9 @@ if __name__ == "__main__":
             yaml.safe_dump(cfg, f, indent=2)
 
     async def test_voice_interface():
-        vi = VoiceInterface()
+        # Test function placeholder - VoiceInterface initialization removed
+        # to avoid unused variable warning
+        pass  # Placeholder function
 
         print("\n--- Testing Speech Recognition (speak into mic) ---")
         # result = await vi.listen_and_convert_to_text()
@@ -174,12 +196,14 @@ if __name__ == "__main__":
         # await vi.speak_text("Hello, I am AutoBot. How can I help you today?")
 
         print(
-            "\n--- Testing continuous listening (requires manual stop or external trigger) ---"
+            "\n--- Testing continuous listening (requires manual stop "
+            "or external trigger) ---"
         )
         # if vi.continuous_listening:
         #     print("Continuous listening enabled. Say something...")
         #     while True:
-        #         text_result = await vi.listen_and_convert_to_text(timeout=None, phrase_time_limit=None)
+        #         text_result = await vi.listen_and_convert_to_text(
+        #             timeout=None, phrase_time_limit=None)
         #         if text_result["status"] == "success":
         #             print(f"Continuous: {text_result['text']}")
         #             if "stop listening" in text_result['text'].lower():
@@ -188,7 +212,11 @@ if __name__ == "__main__":
         #         elif text_result["status"] == "timeout":
         #             print("No speech detected, continuing to listen...")
         #         else:
-        #             print(f"Error in continuous listening: {text_result['message']}")
-        #         await asyncio.sleep(0.1) # Small delay to prevent busy-waiting
+        #             print(
+        #                 f"Error in continuous listening: "
+        #                 f"{text_result['message']}"
+        #             )
+        #         await asyncio.sleep(0.1)  # Small delay to prevent
+        #         # busy-waiting
 
     asyncio.run(test_voice_interface())

@@ -165,7 +165,7 @@ async def enhanced_404_handler(request: Request, exc: HTTPException):
     if not similar_endpoints:
         response_content["developer_info"][
             "suggestion"
-        ] = f"Check available endpoints at /api/developer/endpoints"
+        ] = "Check available endpoints at /api/developer/endpoints"
 
     return JSONResponse(status_code=404, content=response_content)
 

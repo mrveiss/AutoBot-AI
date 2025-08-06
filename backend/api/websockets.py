@@ -52,10 +52,12 @@ async def websocket_endpoint(websocket: WebSocket):
             if message_type == "goal_received":
                 text = f"Goal received: \"{raw_data.get('goal', 'N/A')}\""
             elif message_type == "plan_ready":
-                text = f"Here is the plan:\n{raw_data.get('llm_response', 'No plan text available.')}"
+                plan_text = raw_data.get("llm_response", "No plan text available.")
+                text = f"Here is the plan:\n{plan_text}"
                 sender = "bot"
             elif message_type == "goal_completed":
-                text = f"Goal completed. Result: {json.dumps(raw_data.get('results', {}), indent=2)}"
+                results = json.dumps(raw_data.get("results", {}), indent=2)
+                text = f"Goal completed. Result: {results}"
             elif message_type == "command_execution_start":
                 text = f"Executing command: {raw_data.get('command', 'N/A')}"
             elif message_type == "command_execution_end":

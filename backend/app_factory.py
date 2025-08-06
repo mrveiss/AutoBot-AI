@@ -11,11 +11,11 @@ import logging
 import redis
 import socket
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi import APIRouter
-from typing import List, Union, cast, Sequence
+from typing import List, Union
 from enum import Enum
 
 # Import centralized configuration
@@ -79,11 +79,10 @@ async def _check_redis_modules(redis_host: str, redis_port: int) -> bool:
 
             # Try to get client info with proper error handling
             try:
-                client_info = r.client_list()
-                logger.info(f"Redis client info retrieved successfully")
+                r.client_list()
+                logger.info("Redis client info retrieved successfully")
             except Exception as e:
                 logger.warning(f"Could not get client info from Redis: {e}")
-                client_info = []
         except Exception as e:
             logger.warning(f"Could not connect to Redis: {e}")
             return False
@@ -114,7 +113,8 @@ async def _check_redis_modules(redis_host: str, redis_port: int) -> bool:
 
     except redis.ConnectionError as e:
         logger.error(
-            f"Failed to connect to Redis at {redis_host}:{redis_port} for module check: {e}"
+            f"Failed to connect to Redis at {redis_host}:{redis_port} for "
+            f"module check: {e}"
         )
         return False
     except Exception as e:
@@ -143,7 +143,8 @@ async def _initialize_core_components(app: FastAPI) -> None:
         logger.info("SecurityLayer initialized and stored in app.state")
 
         logger.info(
-            "Core components (Orchestrator, KB, Diagnostics, Voice, Security) initialized"
+            "Core components (Orchestrator, KB, Diagnostics, Voice, Security) "
+            "initialized"
         )
 
         # Verify components are accessible
@@ -214,7 +215,8 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
             )
         else:
             logger.info(
-                "Redis background tasks skipped - using local task transport or Redis unavailable"
+                "Redis background tasks skipped - using local task transport or "
+                "Redis unavailable"
             )
             app.state.background_tasks = []
 
@@ -251,7 +253,8 @@ async def _initialize_chat_history_manager(app: FastAPI) -> None:
     redis_port = redis_config.get("port", 6379)
 
     logger.info(
-        f"Redis configuration loaded: enabled={use_redis}, host={redis_host}, port={redis_port}"
+        f"Redis configuration loaded: enabled={use_redis}, host={redis_host}, "
+        f"port={redis_port}"
     )
 
     app.state.chat_history_manager = ChatHistoryManager(
@@ -272,10 +275,6 @@ async def _initialize_chat_history_manager(app: FastAPI) -> None:
 async def _initialize_redis_client(app: FastAPI) -> None:
     """Initialize the main Redis client for the application."""
     logger.debug("Initializing main Redis client...")
-
-    redis_config = global_config_manager.get_redis_config()
-    redis_host = redis_config.get("host", "localhost")
-    redis_port = redis_config.get("port", 6379)
 
     try:
         app.state.main_redis_client = get_redis_client()
@@ -333,7 +332,8 @@ def add_middleware(app: FastAPI) -> None:
     backend_config = global_config_manager.get_backend_config()
     cors_origins = backend_config.get("cors_origins", [])
 
-    # Use fallback if cors_origins is empty (since get() returns [] when key exists but is empty)
+    # Use fallback if cors_origins is empty
+    # (since get() returns [] when key exists but is empty)
     if not cors_origins:
         cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
@@ -385,7 +385,12 @@ def add_api_routes(app: FastAPI) -> None:
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
         (agent_router, "/agent", ["agent"], "agent"),
-        (intelligent_agent_router, "/agent", ["intelligent-agent"], "intelligent_agent"),
+        (
+            intelligent_agent_router,
+            "/agent",
+            ["intelligent-agent"],
+            "intelligent_agent",
+        ),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
     ]

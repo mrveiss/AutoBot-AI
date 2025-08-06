@@ -1,5 +1,4 @@
 import shutil
-import os
 import json
 import subprocess
 
@@ -57,7 +56,8 @@ def discover_tools():
         path = shutil.which(tool)
         if path:
             try:
-                # Attempt to get version, but handle cases where --version might not work
+                # Attempt to get version, but handle cases where --version
+                # might not work
                 version_output = subprocess.getoutput(f"{tool} --version")
                 version = (
                     version_output.splitlines()[0] if version_output else "available"

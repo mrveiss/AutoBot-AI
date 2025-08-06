@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Query
+from fastapi import APIRouter, HTTPException, File, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional
 import logging
 from datetime import datetime
 import tempfile
@@ -156,7 +156,8 @@ async def add_url_to_knowledge(request: dict):
         logger.info(f"Knowledge add URL request: {url} (method: {method})")
 
         if method == "fetch":
-            # For now, store as reference - actual fetching would require additional implementation
+            # For now, store as reference - actual fetching would require
+            # additional implementation
             metadata = {
                 "url": url,
                 "source": "URL",
@@ -231,7 +232,10 @@ async def add_file_to_knowledge(file: UploadFile = File(...)):
         if file_ext not in supported_extensions:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported file type: {file_ext}. Supported types: {', '.join(supported_extensions)}",
+                detail=(
+                    f"Unsupported file type: {file_ext}. "
+                    f"Supported types: {', '.join(supported_extensions)}"
+                ),
             )
 
         # Create temporary file
@@ -270,7 +274,8 @@ async def add_file_to_knowledge(file: UploadFile = File(...)):
                 os_module.unlink(temp_file_path)
             except Exception as cleanup_error:
                 logger.warning(
-                    f"Failed to clean up temporary file {temp_file_path}: {cleanup_error}"
+                    f"Failed to clean up temporary file {temp_file_path}: "
+                    f"{cleanup_error}"
                 )
 
     except HTTPException:
@@ -579,7 +584,6 @@ async def crawl_url(request: dict):
         # Import requests for web crawling
         try:
             import requests
-            from urllib.parse import urlparse
             import time
         except ImportError:
             raise HTTPException(
@@ -590,7 +594,11 @@ async def crawl_url(request: dict):
         # Crawl the URL
         try:
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/91.0.4472.124 Safari/537.36"
+                )
             }
 
             response = requests.get(url, headers=headers, timeout=30)
@@ -649,7 +657,11 @@ async def crawl_url(request: dict):
                 }
             else:
                 # Append to existing content
-                new_content = f"{original_content}\n\n--- Crawled Content from {url} ---\n{crawled_content}"
+                new_content = (
+                    f"{original_content}\n\n"
+                    f"--- Crawled Content from {url} ---\n"
+                    f"{crawled_content}"
+                )
                 new_metadata = {
                     **original_metadata,
                     "url": url,
@@ -658,7 +670,6 @@ async def crawl_url(request: dict):
                 }
 
             # Update the entry in knowledge base
-            collection = entry.get("collection", "default")
             success = await knowledge_base.update_fact(
                 int(entry_id), new_content, new_metadata
             )

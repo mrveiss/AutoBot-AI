@@ -4,8 +4,8 @@ import logging
 from backend.utils.connection_utils import ConnectionTester, ModelManager
 from backend.services.config_service import ConfigService
 
-# Import caching utilities
-from backend.utils.cache_manager import cache_response
+# Import caching utilities (cache_response temporarily disabled)
+# from backend.utils.cache_manager import cache_response
 
 router = APIRouter()
 
@@ -113,7 +113,7 @@ async def update_llm_provider(provider_data: dict):
             }
 
         # Update the LLM configuration
-        result = ConfigService.update_llm_config(llm_config_update)
+        ConfigService.update_llm_config(llm_config_update)
 
         return {
             "status": "success",

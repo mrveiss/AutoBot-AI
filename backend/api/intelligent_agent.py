@@ -4,7 +4,6 @@ Intelligent Agent API Endpoints
 Provides REST and WebSocket endpoints for the intelligent agent system.
 """
 
-import asyncio
 import logging
 from typing import Dict, Any, List
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -27,10 +26,7 @@ async def get_agent() -> IntelligentAgent:
     global _agent_instance
     if _agent_instance is None:
         _agent_instance = IntelligentAgent(
-            LLMInterface(),
-            KnowledgeBase(),
-            WorkerNode(),
-            CommandValidator()
+            LLMInterface(), KnowledgeBase(), WorkerNode(), CommandValidator()
         )
         await _agent_instance.initialize()
         logger.info("Intelligent agent initialized")
@@ -40,12 +36,14 @@ async def get_agent() -> IntelligentAgent:
 # Pydantic models for API
 class GoalRequest(BaseModel):
     """Request model for natural language goals."""
+
     goal: str
     context: Dict[str, Any] = {}
 
 
 class GoalResponse(BaseModel):
     """Response model for processed goals."""
+
     success: bool
     result: str
     execution_time: float
@@ -54,8 +52,9 @@ class GoalResponse(BaseModel):
 
 class SystemInfoResponse(BaseModel):
     """Response model for system information."""
+
     os_type: str
-    distro: str = None
+    distro: str = ""
     user: str
     capabilities: List[str]
     available_tools: List[str]
@@ -63,6 +62,7 @@ class SystemInfoResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Response model for health check."""
+
     status: str
     components: Dict[str, str]
     uptime: float
@@ -76,40 +76,40 @@ router = APIRouter(prefix="/api/agent", tags=["intelligent-agent"])
 async def process_natural_language_goal(request: GoalRequest):
     """
     Process a natural language goal and return the complete result.
-    
+
     This endpoint processes the goal completely and returns the final result.
     For real-time streaming, use the WebSocket endpoint instead.
     """
     try:
         agent = await get_agent()
-        
+
         import time
+
         start_time = time.time()
-        
+
         # Collect all chunks into a complete result
         result_chunks = []
         metadata = {}
-        
+
         async for chunk in agent.process_natural_language_goal(
-            request.goal, 
-            context=request.context
+            request.goal, context=request.context
         ):
             result_chunks.append(f"[{chunk.chunk_type}] {chunk.content}")
-            
+
             # Collect metadata from chunks
-            if hasattr(chunk, 'metadata') and chunk.metadata:
+            if hasattr(chunk, "metadata") and chunk.metadata:
                 metadata.update(chunk.metadata)
-        
+
         execution_time = time.time() - start_time
         result = "\n".join(result_chunks)
-        
+
         return GoalResponse(
             success=True,
             result=result,
             execution_time=execution_time,
-            metadata=metadata
+            metadata=metadata,
         )
-        
+
     except Exception as e:
         logger.error(f"Error processing goal '{request.goal}': {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -120,16 +120,16 @@ async def get_system_info():
     """Get comprehensive system information and capabilities."""
     try:
         agent = await get_agent()
-        system_info = await agent.get_system_info()
-        
+        system_info = await agent.get_system_status()
+
         return SystemInfoResponse(
             os_type=system_info["os_type"],
-            distro=system_info.get("distro"),
+            distro=system_info.get("distro", ""),
             user=system_info["user"],
             capabilities=system_info.get("capabilities", []),
-            available_tools=system_info.get("available_tools", [])
+            available_tools=system_info.get("available_tools", []),
         )
-        
+
     except Exception as e:
         logger.error(f"Error getting system info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -139,32 +139,25 @@ async def get_system_info():
 async def health_check():
     """Health check for the intelligent agent system."""
     try:
-        agent = await get_agent()
-        
+        await get_agent()
+
         # Check component health
         components = {
             "agent": "healthy",
             "os_detector": "healthy",
             "goal_processor": "healthy",
             "tool_selector": "healthy",
-            "streaming_executor": "healthy"
+            "streaming_executor": "healthy",
         }
-        
+
         # Get uptime (placeholder - would need to track actual start time)
         uptime = 0.0
-        
-        return HealthResponse(
-            status="healthy",
-            components=components,
-            uptime=uptime
-        )
-        
+        return HealthResponse(status="healthy", components=components, uptime=uptime)
+
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return HealthResponse(
-            status="unhealthy",
-            components={"error": str(e)},
-            uptime=0.0
+            status="unhealthy", components={"error": str(e)}, uptime=0.0
         )
 
 
@@ -174,10 +167,9 @@ async def reload_agent():
     try:
         global _agent_instance
         _agent_instance = None
-        agent = await get_agent()
-        
+        await get_agent()
+
         return {"status": "reloaded", "message": "Agent reloaded successfully"}
-        
     except Exception as e:
         logger.error(f"Error reloading agent: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -187,61 +179,55 @@ async def reload_agent():
 async def websocket_stream(websocket: WebSocket):
     """
     WebSocket endpoint for real-time streaming interaction with the agent.
-    
+
     Clients can send natural language goals and receive real-time updates
     as the agent processes and executes commands.
     """
     await websocket.accept()
     logger.info("WebSocket connection established")
-    
     try:
         agent = await get_agent()
-        
+
         while True:
             # Receive goal from client
             data = await websocket.receive_json()
             goal = data.get("goal", "")
             context = data.get("context", {})
-            
+
             if not goal:
-                await websocket.send_json({
-                    "type": "error",
-                    "content": "No goal provided"
-                })
+                await websocket.send_json(
+                    {"type": "error", "content": "No goal provided"}
+                )
                 continue
-            
             logger.info(f"Processing WebSocket goal: {goal}")
-            
             try:
                 # Stream chunks back to client
-                async for chunk in agent.process_natural_language_goal(goal, context=context):
-                    await websocket.send_json({
-                        "type": chunk.chunk_type,
-                        "content": chunk.content,
-                        "metadata": getattr(chunk, 'metadata', {})
-                    })
-                
+                async for chunk in agent.process_natural_language_goal(
+                    goal, context=context
+                ):
+                    await websocket.send_json(
+                        {
+                            "type": chunk.chunk_type,
+                            "content": chunk.content,
+                            "metadata": getattr(chunk, "metadata", {}),
+                        }
+                    )
                 # Send completion signal
-                await websocket.send_json({
-                    "type": "complete",
-                    "content": "Goal processing completed"
-                })
-                
+                await websocket.send_json(
+                    {"type": "complete", "content": "Goal processing completed"}
+                )
             except Exception as e:
                 logger.error(f"Error processing WebSocket goal: {e}")
-                await websocket.send_json({
-                    "type": "error",
-                    "content": f"Error processing goal: {str(e)}"
-                })
-                
+                await websocket.send_json(
+                    {"type": "error", "content": f"Error processing goal: {str(e)}"}
+                )
     except WebSocketDisconnect:
         logger.info("WebSocket connection closed")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         try:
-            await websocket.send_json({
-                "type": "error",
-                "content": f"WebSocket error: {str(e)}"
-            })
-        except:
-            pass  # Connection might be closed
+            await websocket.send_json(
+                {"type": "error", "content": f"WebSocket error: {str(e)}"}
+            )
+        except Exception as conn_error:
+            logger.debug(f"Connection error: {conn_error}")  # Connection closed
