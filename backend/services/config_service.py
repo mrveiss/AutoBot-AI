@@ -4,8 +4,7 @@ Eliminates duplication across settings.py, llm.py, and redis.py
 """
 import logging
 import yaml
-import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from src.config import global_config_manager
 
 logger = logging.getLogger(__name__)
@@ -452,10 +451,12 @@ class ConfigService:
             # Create a copy of the config data to avoid modifying the original
             filtered_config = config_data.copy()
 
-            # Remove prompts section - prompts are managed separately in prompts/ directory
+            # Remove prompts section - prompts are managed separately
+            # in prompts/ directory
             if "prompts" in filtered_config:
                 logger.info(
-                    "Removing prompts section from config - prompts are managed in prompts/ directory"
+                    "Removing prompts section from config - "
+                    "prompts are managed in prompts/ directory"
                 )
                 del filtered_config["prompts"]
 

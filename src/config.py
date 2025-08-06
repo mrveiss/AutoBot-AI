@@ -12,7 +12,7 @@ import os
 import yaml
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,8 @@ class ConfigManager:
     """Centralized configuration manager"""
 
     def __init__(self, config_dir: str = "config"):
-        # Find project root dynamically (directory containing this file is src/, parent is project root)
+        # Find project root dynamically (directory containing this file is
+        # src/, parent is project root)
         self.project_root = Path(__file__).parent.parent
         self.config_dir = self.project_root / config_dir
         self.base_config_file = self.config_dir / "config.yaml"
@@ -71,7 +72,8 @@ class ConfigManager:
         """Load user settings from JSON file"""
         if not self.settings_file.exists():
             logger.info(
-                f"Settings file not found: {self.settings_file}, using base configuration only"
+                f"Settings file not found: {self.settings_file}, "
+                "using base configuration only"
             )
             return {}
 
@@ -117,65 +119,71 @@ class ConfigManager:
             "AUTOBOT_BACKEND_TIMEOUT": ["backend", "timeout"],
             "AUTOBOT_BACKEND_MAX_RETRIES": ["backend", "max_retries"],
             "AUTOBOT_BACKEND_STREAMING": ["backend", "streaming"],
-            
             # LLM configuration
             "AUTOBOT_OLLAMA_HOST": ["backend", "ollama_endpoint"],
             "AUTOBOT_OLLAMA_MODEL": ["backend", "ollama_model"],
-            "AUTOBOT_OLLAMA_ENDPOINT": ["backend", "llm", "local", "providers", "ollama", "endpoint"],
-            "AUTOBOT_OLLAMA_SELECTED_MODEL": ["backend", "llm", "local", "providers", "ollama", "selected_model"],
+            "AUTOBOT_OLLAMA_ENDPOINT": [
+                "backend",
+                "llm",
+                "local",
+                "providers",
+                "ollama",
+                "endpoint",
+            ],
+            "AUTOBOT_OLLAMA_SELECTED_MODEL": [
+                "backend",
+                "llm",
+                "local",
+                "providers",
+                "ollama",
+                "selected_model",
+            ],
             "AUTOBOT_ORCHESTRATOR_LLM": ["llm_config", "orchestrator_llm"],
             "AUTOBOT_DEFAULT_LLM": ["llm_config", "default_llm"],
             "AUTOBOT_TASK_LLM": ["llm_config", "task_llm"],
             "AUTOBOT_LLM_PROVIDER_TYPE": ["backend", "llm", "provider_type"],
-            
-            # Redis configuration  
+            # Redis configuration
             "AUTOBOT_REDIS_HOST": ["memory", "redis", "host"],
             "AUTOBOT_REDIS_PORT": ["memory", "redis", "port"],
             "AUTOBOT_REDIS_ENABLED": ["memory", "redis", "enabled"],
-            
             # Chat configuration
             "AUTOBOT_CHAT_MAX_MESSAGES": ["chat", "max_messages"],
             "AUTOBOT_CHAT_WELCOME_MESSAGE": ["chat", "default_welcome_message"],
             "AUTOBOT_CHAT_AUTO_SCROLL": ["chat", "auto_scroll"],
             "AUTOBOT_CHAT_RETENTION_DAYS": ["chat", "message_retention_days"],
-            
             # Knowledge base configuration
             "AUTOBOT_KB_ENABLED": ["knowledge_base", "enabled"],
-            "AUTOBOT_KB_UPDATE_FREQUENCY": ["knowledge_base", "update_frequency_days"],
+            "AUTOBOT_KB_UPDATE_FREQUENCY": [
+                "knowledge_base",
+                "update_frequency_days",
+            ],
             "AUTOBOT_KB_DB_PATH": ["backend", "knowledge_base_db"],
-            
             # Logging configuration
             "AUTOBOT_LOG_LEVEL": ["logging", "log_level"],
             "AUTOBOT_LOG_TO_FILE": ["logging", "log_to_file"],
             "AUTOBOT_LOG_FILE_PATH": ["logging", "log_file_path"],
-            
             # Developer configuration
             "AUTOBOT_DEVELOPER_MODE": ["developer", "enabled"],
             "AUTOBOT_DEBUG_LOGGING": ["developer", "debug_logging"],
             "AUTOBOT_ENHANCED_ERRORS": ["developer", "enhanced_errors"],
-            
             # UI configuration
             "AUTOBOT_UI_THEME": ["ui", "theme"],
             "AUTOBOT_UI_FONT_SIZE": ["ui", "font_size"],
             "AUTOBOT_UI_LANGUAGE": ["ui", "language"],
             "AUTOBOT_UI_ANIMATIONS": ["ui", "animations"],
-            
             # Message display configuration
             "AUTOBOT_SHOW_THOUGHTS": ["message_display", "show_thoughts"],
             "AUTOBOT_SHOW_JSON": ["message_display", "show_json"],
             "AUTOBOT_SHOW_DEBUG": ["message_display", "show_debug"],
             "AUTOBOT_SHOW_PLANNING": ["message_display", "show_planning"],
             "AUTOBOT_SHOW_UTILITY": ["message_display", "show_utility"],
-            
             # Security configuration
             "AUTOBOT_ENABLE_ENCRYPTION": ["security", "enable_encryption"],
             "AUTOBOT_SESSION_TIMEOUT": ["security", "session_timeout_minutes"],
-            
             # Voice interface configuration
             "AUTOBOT_VOICE_ENABLED": ["voice_interface", "enabled"],
             "AUTOBOT_VOICE_RATE": ["voice_interface", "speech_rate"],
             "AUTOBOT_VOICE": ["voice_interface", "voice"],
-            
             # Legacy support
             "AUTOBOT_USE_LANGCHAIN": ["orchestrator", "use_langchain"],
             "AUTOBOT_USE_PHI2": ["backend", "use_phi2"],
@@ -192,13 +200,17 @@ class ConfigManager:
 
                 # Set the value in the config
                 self._set_nested_value(env_overrides, config_path, env_value)
-                logger.info(f"Applied environment override: {env_var} = {env_value}")
+                logger.info(
+                    f"Applied environment override: {env_var} = {env_value}"
+                )
 
         # Merge environment overrides
         if env_overrides:
             self._config = self._deep_merge(self._config, env_overrides)
 
-    def _set_nested_value(self, config: Dict[str, Any], path: list, value: Any) -> None:
+    def _set_nested_value(
+        self, config: Dict[str, Any], path: list, value: Any
+    ) -> None:
         """Set a nested value in a dictionary using a path list"""
         current = config
         for key in path[:-1]:
@@ -212,7 +224,9 @@ class ConfigManager:
         return self._config.get(key, default)
 
     def get_nested(self, path: str, default: Any = None) -> Any:
-        """Get a nested configuration value using dot notation (e.g., 'llm_config.ollama.model')"""
+        """Get nested config value using dot notation.
+        (e.g., 'llm_config.ollama.model')
+        """
         keys = path.split(".")
         current = self._config
 

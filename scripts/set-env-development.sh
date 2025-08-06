@@ -10,7 +10,7 @@ source "$(dirname "$0")/set-env-deepseek.sh"
 
 # Developer Configuration
 export AUTOBOT_DEVELOPER_MODE="true"
-export AUTOBOT_DEBUG_LOGGING="true" 
+export AUTOBOT_DEBUG_LOGGING="true"
 export AUTOBOT_LOG_LEVEL="debug"
 export AUTOBOT_LOG_TO_FILE="true"
 export AUTOBOT_LOG_FILE_PATH="data/autobot-debug.log"
