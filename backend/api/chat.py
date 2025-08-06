@@ -20,17 +20,22 @@ def _extract_text_from_complex_json(data, max_length=500):
     Looks for text fields and concatenates them into a readable response.
     """
     text_parts = []
-    
+
     def extract_recursive(obj, depth=0):
         if depth > 3:  # Limit recursion depth
             return
-            
         if isinstance(obj, str) and obj.strip() and len(obj) > 10:
             # Only include strings that look like actual text (not short keys/IDs)
             text_parts.append(obj.strip())
         elif isinstance(obj, dict):
             for key, value in obj.items():
-                if key.lower() in ['text', 'message', 'content', 'response', 'description']:
+                if key.lower() in [
+                    "text",
+                    "message",
+                    "content",
+                    "response",
+                    "description",
+                ]:
                     if isinstance(value, str) and value.strip():
                         text_parts.append(value.strip())
                     elif isinstance(value, list):
@@ -41,16 +46,14 @@ def _extract_text_from_complex_json(data, max_length=500):
         elif isinstance(obj, list):
             for item in obj:
                 extract_recursive(item, depth + 1)
-    
+
     extract_recursive(data)
-    
     if text_parts:
         # Join the text parts and limit length
         combined_text = " ".join(text_parts)
         if len(combined_text) > max_length:
             combined_text = combined_text[:max_length] + "..."
         return combined_text
-    
     return None
 
 
@@ -286,7 +289,6 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
 
         # Debug logging for empty responses
         logging.info(f"Orchestrator result for chat {chat_id}: {result_dict}")
-        
         response_message = "An unexpected response format was received."
         tool_name = result_dict.get("tool_name")
         tool_args = result_dict.get("tool_args", {})
@@ -298,35 +300,41 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         if tool_name == "respond_conversationally":
             response_text = tool_args.get("response_text", "No response text provided.")
             result_response_text = result_dict.get("response_text")
-            
             # Handle empty string, None, or whitespace-only responses
             if result_response_text and result_response_text.strip():
                 # Try to extract plain text from JSON response if it's JSON
                 try:
                     import json
+
                     parsed_response = json.loads(result_response_text)
                     if isinstance(parsed_response, dict):
                         # Try common text fields in JSON response
                         extracted_text = (
-                            parsed_response.get("text") or 
-                            parsed_response.get("message") or 
-                            parsed_response.get("content") or 
-                            parsed_response.get("response") or
-                            parsed_response.get("user") or  # Handle the "user" field from previous examples
-                            parsed_response.get("hello")    # Handle the "hello" field from recent test
+                            parsed_response.get("text")
+                            or parsed_response.get("message")
+                            or parsed_response.get("content")
+                            or parsed_response.get("response")
+                            or parsed_response.get("user")
+                            or parsed_response.get("user")
+                            or parsed_response.get("hello")  # Handle "hello" field
                         )
-                        
-                        # If no common field found, try more sophisticated extraction
+
+                        # If no common field found, try sophisticated extraction
                         if not extracted_text:
-                            extracted_text = _extract_text_from_complex_json(parsed_response)
-                        
+                            extracted_text = _extract_text_from_complex_json(
+                                parsed_response
+                            )
+
                         # If we found a text field, use it
                         if extracted_text and isinstance(extracted_text, str):
                             response_message = extracted_text
                         else:
-                            # If no direct text field found, log the structure and return raw JSON
-                            logging.info(f"JSON response without recognizable text field: {parsed_response}")
-                            # For now, return the JSON as-is so we can see what structure we're getting
+                            # If no text field found, log structure and return raw JSON
+                            logging.info(
+                                f"JSON response without recognizable text field: "
+                                f"{parsed_response}"
+                            )
+                            # Return JSON as-is to see structure
                             response_message = result_response_text
                     else:
                         response_message = result_response_text
@@ -337,20 +345,23 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                 # Apply same JSON extraction logic to response_text
                 try:
                     import json
+
                     parsed_response = json.loads(response_text)
                     if isinstance(parsed_response, dict):
                         extracted_text = (
-                            parsed_response.get("text") or 
-                            parsed_response.get("message") or 
-                            parsed_response.get("content") or 
-                            parsed_response.get("response") or
-                            parsed_response.get("user") or
-                            parsed_response.get("hello")
+                            parsed_response.get("text")
+                            or parsed_response.get("message")
+                            or parsed_response.get("content")
+                            or parsed_response.get("response")
+                            or parsed_response.get("user")
+                            or parsed_response.get("hello")
                         )
-                        
-                        # If no common field found, try more sophisticated extraction
+
+                        # If no common field found, try sophisticated extraction
                         if not extracted_text:
-                            extracted_text = _extract_text_from_complex_json(parsed_response)
+                            extracted_text = _extract_text_from_complex_json(
+                                parsed_response
+                            )
                         if extracted_text and isinstance(extracted_text, str):
                             response_message = extracted_text
                         else:
@@ -360,7 +371,10 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                 except json.JSONDecodeError:
                     response_message = response_text
             else:
-                response_message = "I apologize, but I wasn't able to generate a proper response. Could you please rephrase your question?"
+                response_message = (
+                    "I apologize, but I wasn't able to generate a proper response. "
+                    "Could you please rephrase your question?"
+                )
         elif tool_name == "execute_system_command":
             command_output = tool_args.get("output", "")
             command_error = tool_args.get("error", "")
@@ -387,8 +401,14 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         else:
             # Handle completely empty or invalid responses
             if not result_dict or result_dict == {}:
-                response_message = "I'm sorry, I encountered an issue processing your request. Please try asking your question in a different way."
-                logging.warning(f"Empty orchestrator result for chat {chat_id}, message: {message}")
+                response_message = (
+                    "I'm sorry, I encountered an issue processing your request. "
+                    "Please try asking your question in a different way."
+                )
+                logging.warning(
+                    f"Empty orchestrator result for chat {chat_id}, "
+                    f"message: {message}"
+                )
             else:
                 response_message = str(result_dict)
 
@@ -425,7 +445,8 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
 
 @router.post("/chats/cleanup_messages")
 async def cleanup_messages():
-    """Clean up all leftover message files including json_output, llm_response, planning and debug messages"""
+    """Clean up all leftover message files including json_output,
+    llm_response, planning and debug messages"""
     try:
         cleaned_files = []
         freed_space = 0
@@ -465,7 +486,8 @@ async def cleanup_messages():
             "temp_*",
             "*.temp",
             # Any .txt files that match leftover patterns
-            "*.txt",  # Will be filtered to exclude legitimate chat files
+            # Will be filtered to exclude legitimate chat files
+            "*.txt",
         ]
 
         # Specific patterns found in search results
@@ -478,7 +500,8 @@ async def cleanup_messages():
             "*_output*.json",
         ]
 
-        # ONLY scan data/messages/ directory - NEVER touch prompts/ or other system directories
+        # ONLY scan data/messages/ directory - NEVER touch prompts/ or
+        # other system directories
         messages_dir = "data/messages"
         if os.path.exists(messages_dir):
             logging.info(f"Scanning messages directory: {messages_dir}")
@@ -488,7 +511,8 @@ async def cleanup_messages():
                     logging.info(f"Processing chat folder: {chat_folder_path}")
                     folder_cleaned = False
 
-                    # Look for leftover files in each chat folder - ONLY in data/messages/
+                    # Look for leftover files in each chat folder - ONLY in
+                    # data/messages/
                     for file_pattern in file_patterns:
                         for filepath in glob.glob(
                             os.path.join(chat_folder_path, file_pattern)
@@ -496,13 +520,15 @@ async def cleanup_messages():
                             if os.path.isfile(filepath):
                                 filename = os.path.basename(filepath)
 
-                                # SAFETY CHECK: Only process files in data/messages/ directory
+                                # SAFETY CHECK: Only process files in data/messages/
                                 if not filepath.startswith("data/messages/"):
                                     continue
 
-                                # Special handling for .txt files - only remove if they match leftover patterns
+                                # Special handling for .txt files - only remove
+                                # if they match leftover patterns
                                 if filename.endswith(".txt"):
-                                    # Only remove .txt files that match leftover patterns
+                                    # Only remove .txt files that match
+                                    # leftover patterns
                                     patterns = [
                                         "json_output",
                                         "llm_response",
@@ -549,7 +575,8 @@ async def cleanup_messages():
                                     freed_space += file_size
                                     folder_cleaned = True
                                     logging.info(
-                                        f"Removed specific leftover file: {specific_filepath}"
+                                        f"Removed specific leftover file: "
+                                        f"{specific_filepath}"
                                     )
                                 elif os.path.isdir(specific_filepath):
                                     # Remove entire leftover directory
@@ -562,16 +589,19 @@ async def cleanup_messages():
                                     )
                                     shutil.rmtree(specific_filepath)
                                     cleaned_files.append(
-                                        f"Removed leftover directory: {specific_filepath}"
+                                        f"Removed leftover directory: "
+                                        f"{specific_filepath}"
                                     )
                                     freed_space += dir_size
                                     folder_cleaned = True
                                     logging.info(
-                                        f"Removed leftover directory: {specific_filepath}"
+                                        f"Removed leftover directory: "
+                                        f"{specific_filepath}"
                                     )
                             except Exception as e:
                                 logging.error(
-                                    f"Error removing specific leftover file/dir {specific_filepath}: {str(e)}"
+                                    f"Error removing specific leftover file/dir "
+                                    f"{specific_filepath}: {str(e)}"
                                 )
 
                     # Scan for specific patterns found in search results
@@ -591,10 +621,12 @@ async def cleanup_messages():
                                     )
                                 except Exception as e:
                                     logging.error(
-                                        f"Error removing specific pattern file {filepath}: {str(e)}"
+                                        f"Error removing specific pattern file "
+                                        f"{filepath}: {str(e)}"
                                     )
 
-                    # Remove empty chat folders or folders that only contained leftover files
+                    # Remove empty chat folders or folders that only contained
+                    # leftover files
                     try:
                         remaining_files = os.listdir(chat_folder_path)
                         if not remaining_files:
@@ -605,7 +637,9 @@ async def cleanup_messages():
                             )
                         elif folder_cleaned:
                             logging.info(
-                                f"Cleaned files from chat folder: {chat_folder_path}, remaining files: {remaining_files}"
+                                f"Cleaned files from chat folder: "
+                                f"{chat_folder_path}, remaining files: "
+                                f"{remaining_files}"
                             )
                     except Exception as e:
                         logging.error(
@@ -617,7 +651,8 @@ async def cleanup_messages():
         if os.path.exists(chat_data_dir):
             logging.info(f"Scanning main chat data directory: {chat_data_dir}")
             for file_pattern in file_patterns:
-                for filepath in glob.glob(os.path.join(chat_data_dir, file_pattern)):
+                pattern_path = os.path.join(chat_data_dir, file_pattern)
+                for filepath in glob.glob(pattern_path):
                     if os.path.isfile(filepath):
                         # Skip legitimate chat JSON files
                         filename = os.path.basename(filepath)

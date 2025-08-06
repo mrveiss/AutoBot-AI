@@ -177,7 +177,8 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
 async def resume_agent_api(request: Request, user_role: str = Form("user")):
     """
     Resumes the agent's operation if paused.
-    Note: This is currently a placeholder and returns a success status without actual functionality.
+    Note: This is currently a placeholder and returns a success status without
+    actual functionality.
     Full implementation will be added with backend integration.
     """
     from src.event_manager import event_manager
@@ -269,7 +270,8 @@ async def execute_command(
         dict: A dictionary containing the result of the command execution.
 
     Raises:
-        JSONResponse: Returns a 400 error if no command is provided, a 403 error if permission is denied,
+        JSONResponse: Returns a 400 error if no command is provided,
+                      a 403 error if permission is denied,
                       or a 500 error if an internal error occurs.
     """
     import asyncio
