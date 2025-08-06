@@ -133,7 +133,7 @@ class LLMInterface:
         except KeyError:
             # Fallback to legacy loading for backward compatibility
             logger.warning(
-                "Task prompt not found in prompt manager, using legacy file loading"
+                "Task prompt not found in prompt manager, " "using legacy file loading"
             )
             self.task_system_prompt = self._load_composite_prompt(
                 global_config_manager.get_nested(
@@ -243,24 +243,27 @@ class LLMInterface:
                 models_missing = ", ".join(missing_models)
                 models_available = ", ".join(available_ollama_models)
                 logger.warning(
-                    f"⚠️ Ollama server is reachable, but the following configured "
-                    f"models are not found: {models_missing}. "
+                    f"⚠️ Ollama server is reachable, but the following "
+                    f"configured models are not found: {models_missing}. "
                     f"Available models: {models_available}"
                 )
                 return False
         except requests.exceptions.ConnectionError:
             logger.error(
-                f"❌ Failed to connect to Ollama server at {self.ollama_host}. Is it running?"
+                f"❌ Failed to connect to Ollama server at {self.ollama_host}. "
+                "Is it running?"
             )
             return False
         except requests.exceptions.Timeout:
             logger.error(
-                f"❌ Ollama server at {self.ollama_host} timed out. It might be too busy or slow."
+                f"❌ Ollama server at {self.ollama_host} timed out. "
+                "It might be too busy or slow."
             )
             return False
         except requests.exceptions.RequestException as e:
             logger.error(
-                f"❌ An unexpected error occurred while checking Ollama connection: {e}"
+                f"❌ An unexpected error occurred while checking "
+                f"Ollama connection: {e}"
             )
             return False
         except Exception as e:
@@ -477,7 +480,7 @@ class LLMInterface:
             logger.error(f"Generic Request Error communicating with Ollama: {e}")
             return None
         except Exception as e:
-            print(f"An unexpected error occurred during Ollama chat completion: {e}")
+            print("An unexpected error occurred during Ollama chat completion: " f"{e}")
             logger.error(
                 f"An unexpected error occurred during Ollama chat completion: {e}"
             )
@@ -493,7 +496,8 @@ class LLMInterface:
     ):
         if not self.openai_api_key:
             print(
-                "OpenAI API key not found. Please set OPENAI_API_KEY in .env or config.yaml."
+                "OpenAI API key not found. "
+                "Please set OPENAI_API_KEY in .env or config.yaml."
             )
             return None
 
@@ -506,7 +510,7 @@ class LLMInterface:
             "model": model,
             "messages": messages,
             "temperature": temperature,
-            "response_format": {"type": "json_object"} if structured_output else None,
+            "response_format": ({"type": "json_object"} if structured_output else None),
             **kwargs,
         }
         try:
@@ -529,7 +533,8 @@ class LLMInterface:
     ):
         print(
             f"Transformers backend for {model_name} is a placeholder. "
-            f"Not implemented yet. Temp: {temperature}, Structured: {structured_output}"
+            f"Not implemented yet. Temp: {temperature}, "
+            f"Structured: {structured_output}"
         )
         await asyncio.sleep(0.1)
         return {
@@ -555,24 +560,28 @@ async def safe_query(prompt, retries=2, initial_delay=1):
             if i < retries:
                 delay = initial_delay * (2**i)
                 logger.warning(
-                    f"❌ Quota exceeded on Google API. Retrying in {delay} seconds (attempt {i+1}/{retries})."
+                    f"❌ Quota exceeded on Google API. Retrying in {delay} "
+                    f"seconds (attempt {i+1}/{retries})."
                 )
                 await asyncio.sleep(delay)
             else:
                 logger.error(
-                    "❌ Quota exceeded on Google API after multiple retries. Using local fallback."
+                    "❌ Quota exceeded on Google API after multiple retries. "
+                    "Using local fallback."
                 )
                 return await local_llm.generate(prompt)
         except Exception:
             if i < retries:
                 delay = initial_delay * (2**i)
                 logger.exception(
-                    f"🔧 LLM query failed (attempt {i+1}/{retries}). Retrying in {delay} seconds..."
+                    f"🔧 LLM query failed (attempt {i+1}/{retries}). "
+                    f"Retrying in {delay} seconds..."
                 )
                 await asyncio.sleep(delay)
             else:
                 logger.exception(
-                    "🔧 LLM query failed after multiple retries. Attempting local fallback."
+                    "🔧 LLM query failed after multiple retries. "
+                    "Attempting local fallback."
                 )
                 return await local_llm.generate(prompt)
     return await local_llm.generate(prompt)

@@ -22,7 +22,8 @@ class EventManager:
         config_path = "config/config.yaml"
         if not os.path.exists(config_path):
             logger.warning(
-                f"Config file not found at {config_path}. Using default debug_mode=False."
+                f"Config file not found at {config_path}. "
+                "Using default debug_mode=False."
             )
             return {"agent_behavior": {"debug_mode": False}}
         try:
@@ -30,7 +31,8 @@ class EventManager:
                 return yaml.safe_load(f)
         except Exception as e:
             logger.error(
-                f"Error loading config file {config_path}: {e}. Using default debug_mode=False."
+                f"Error loading config file {config_path}: {e}. "
+                "Using default debug_mode=False."
             )
             return {"agent_behavior": {"debug_mode": False}}
 
@@ -44,7 +46,9 @@ class EventManager:
         self._websocket_broadcast_callback = callback
 
     async def publish(self, event_type: str, payload: Dict[str, Any]):
-        """Publishes an event to all registered listeners and broadcasts via WebSocket."""
+        """Publishes an event to all registered listeners and broadcasts
+        via WebSocket.
+        """
         event_data = {"type": event_type, "payload": payload}
 
         # Broadcast via WebSocket if registered

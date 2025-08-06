@@ -1,18 +1,19 @@
 # src/gui_controller_dummy.py
-import os
-from typing import Tuple, List, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional
 import asyncio
 
 
 class GUIController:
     """
-    A dummy GUIController for environments where actual GUI automation is not supported or desired.
-    All methods will return a success status indicating the action was "skipped".
+    A dummy GUIController for environments where actual GUI automation
+    is not supported or desired. All methods will return a success status
+    indicating the action was "skipped".
     """
 
     def __init__(self):
         print(
-            "WARNING: Initializing Dummy GUIController. GUI automation features will be skipped."
+            "WARNING: Initializing Dummy GUIController. "
+            "GUI automation features will be skipped."
         )
         pass
 
@@ -21,7 +22,7 @@ class GUIController:
     ) -> Any:
         print("Dummy GUIController: _screenshot skipped.")
         await asyncio.sleep(0)
-        # Return a dummy image or None, depending on how it's used downstream
+        # Return a dummy image or None, depending on downstream usage
         return None
 
     async def click_element(
@@ -40,7 +41,8 @@ class GUIController:
         self, x: int, y: int, width: int, height: int
     ) -> Dict[str, Any]:
         print(
-            f"Dummy GUIController: read_text_from_region({x}, {y}, {width}, {height}) skipped."
+            f"Dummy GUIController: read_text_from_region("
+            f"{x}, {y}, {width}, {height}) skipped."
         )
         await asyncio.sleep(0)
         return {
@@ -66,7 +68,7 @@ class GUIController:
         }
 
     async def bring_window_to_front(self, app_title: str) -> Dict[str, Any]:
-        print(f"Dummy GUIController: bring_window_to_front('{app_title}') skipped.")
+        print(f"Dummy GUIController: bring_window_to_front('{app_title}') " f"skipped.")
         await asyncio.sleep(0)
         return {
             "status": "success",

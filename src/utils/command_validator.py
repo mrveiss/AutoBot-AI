@@ -16,7 +16,7 @@ Security Features:
 import re
 import shlex
 import logging
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Union
 from dataclasses import dataclass
 
 
@@ -33,7 +33,10 @@ class CommandPattern:
 
 
 class CommandValidator:
-    """Validates and sanitizes commands before execution to prevent injection attacks."""
+    """
+    Validates and sanitizes commands before execution to prevent injection
+    attacks.
+    """
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -118,7 +121,10 @@ class CommandValidator:
             "df": CommandPattern(
                 command="df",
                 allowed_args=["-h", "--human-readable"],
-                arg_patterns={"-h": r"^-h$", "--human-readable": r"^--human-readable$"},
+                arg_patterns={
+                    "-h": r"^-h$",
+                    "--human-readable": r"^--human-readable$",
+                },
                 max_args=1,
                 description="Disk space usage",
             ),
@@ -235,7 +241,9 @@ class CommandValidator:
             if not dangerous_check["safe"]:
                 return {
                     "valid": False,
-                    "reason": f"Dangerous pattern detected: {dangerous_check['pattern']}",
+                    "reason": (
+                        f"Dangerous pattern detected: " f"{dangerous_check['pattern']}"
+                    ),
                     "parsed_command": [],
                     "use_shell": False,
                 }
@@ -278,7 +286,10 @@ class CommandValidator:
             if len(args) > pattern.max_args:
                 return {
                     "valid": False,
-                    "reason": f"Too many arguments for '{base_command}' (max: {pattern.max_args}, got: {len(args)})",
+                    "reason": (
+                        f"Too many arguments for '{base_command}' "
+                        f"(max: {pattern.max_args}, got: {len(args)})"
+                    ),
                     "parsed_command": [],
                     "use_shell": False,
                 }
@@ -295,7 +306,8 @@ class CommandValidator:
 
             # Step 5: Success - command is safe
             self.logger.info(
-                f"Command validated successfully: {base_command} with {len(args)} args"
+                f"Command validated successfully: {base_command} "
+                f"with {len(args)} args"
             )
 
             return {
@@ -319,7 +331,7 @@ class CommandValidator:
         for pattern in self.dangerous_patterns:
             if re.search(pattern, command, re.IGNORECASE):
                 self.logger.warning(
-                    f"Dangerous pattern detected: {pattern} in command: {command}"
+                    f"Dangerous pattern detected: {pattern} in command: " f"{command}"
                 )
                 return {"safe": False, "pattern": pattern}
         return {"safe": True, "pattern": ""}
@@ -341,7 +353,10 @@ class CommandValidator:
                 if not valid_pattern:
                     return {
                         "valid": False,
-                        "reason": f"Argument '{arg}' not allowed for command '{pattern.command}'",
+                        "reason": (
+                            f"Argument '{arg}' not allowed for command "
+                            f"'{pattern.command}'"
+                        ),
                     }
 
             # Check for injection attempts in arguments
@@ -350,13 +365,22 @@ class CommandValidator:
                 if injection_char in arg:
                     return {
                         "valid": False,
-                        "reason": f"Potential injection character '{injection_char}' in argument '{arg}'",
+                        "reason": (
+                            f"Potential injection character "
+                            f"'{injection_char}' "
+                            f"in argument '{arg}'"
+                        ),
                     }
 
         return {"valid": True, "reason": "Arguments validated successfully"}
 
-    def get_whitelist_info(self) -> Dict[str, Dict[str, Union[str, List[str], int]]]:
-        """Get information about whitelisted commands for debugging/admin purposes."""
+    def get_whitelist_info(
+        self,
+    ) -> Dict[str, Dict[str, Union[str, List[str], int]]]:
+        """
+        Get information about whitelisted commands for debugging/admin
+        purposes.
+        """
         return {
             cmd: {
                 "description": pattern.description,

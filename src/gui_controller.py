@@ -1,17 +1,17 @@
 import pyautogui
-import time
-from PIL import Image
 import os
 import asyncio
 
 
 class GUIController:
     def __init__(self):
-        """Initialize the GUIController with safety settings and virtual display if needed."""
-        pyautogui.FAILSAFE = (
-            True  # Enable failsafe to stop script by moving mouse to upper-left corner
-        )
-        pyautogui.PAUSE = 0.5  # Add a small pause after each PyAutoGUI call for safety
+        """Initialize the GUIController with safety settings and virtual
+        display if needed.
+        """
+        # Enable failsafe to stop script by moving mouse to upper-left corner
+        pyautogui.FAILSAFE = True
+        # Add a small pause after each PyAutoGUI call for safety
+        pyautogui.PAUSE = 0.5
         self.screen_width, self.screen_height = pyautogui.size()
         self.virtual_display = False
         # Check if running under Xvfb or need virtual display
@@ -19,7 +19,8 @@ class GUIController:
             self.virtual_display = True
             # Note: Xvfb setup would be done externally or via system call if needed
             print(
-                "Warning: DISPLAY environment variable not set. GUI automation may not work without Xvfb."
+                "Warning: DISPLAY environment variable not set. "
+                "GUI automation may not work without Xvfb."
             )
 
     async def capture_screen(self):
@@ -86,12 +87,14 @@ class GUIController:
                 )
                 if result.stdout.strip():
                     print(
-                        "Kex is available. If GUI fails, consider starting a Kex session."
+                        "Kex is available. If GUI fails, consider starting "
+                        "a Kex session."
                     )
                     return True
                 else:
                     print(
-                        "Kex not found. GUI automation may fail without a VNC session."
+                        "Kex not found. GUI automation may fail without "
+                        "a VNC session."
                     )
                     return False
             except Exception as e:

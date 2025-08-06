@@ -12,10 +12,9 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, Any, List, Optional, Callable, Union
+from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, asdict
 import traceback
-import threading
 
 try:
     from src.utils.redis_client import get_redis_client
@@ -445,7 +444,7 @@ class TaskQueue:
             return
 
         self.logger.info(
-            f"Worker {worker_name} processing task {task_id}: {task.function_name}"
+            f"Worker {worker_name} processing task {task_id}: " f"{task.function_name}"
         )
 
         # Create result object
@@ -480,7 +479,8 @@ class TaskQueue:
             self.stats["total_execution_time"] += result.execution_time
 
             self.logger.info(
-                f"Task {task_id} completed successfully in {result.execution_time:.2f}s"
+                f"Task {task_id} completed successfully in "
+                f"{result.execution_time:.2f}s"
             )
 
         except asyncio.TimeoutError:
@@ -540,7 +540,8 @@ class TaskQueue:
             await self.redis.zadd(self.scheduled_key, {task.id: retry_time.timestamp()})
 
             self.logger.info(
-                f"Scheduling retry {result.retry_count}/{task.max_retries} for task {task.id} in {retry_delay}s"
+                f"Scheduling retry {result.retry_count}/{task.max_retries} "
+                f"for task {task.id} in {retry_delay}s"
             )
 
         else:
@@ -558,7 +559,7 @@ class TaskQueue:
         # Log performance metrics
         if result.execution_time:
             log_performance_metric(
-                f"task_execution_time",
+                "task_execution_time",
                 result.execution_time,
                 "seconds",
                 task_id=task.id,

@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Before any code changes - verify system state
 curl -s "http://localhost:8001/api/system/health" || echo "Backend not running"
-docker ps | grep redis || echo "Redis not running" 
+docker ps | grep redis || echo "Redis not running"
 ls data/knowledge_base.db || echo "Database missing"
 ```
 
@@ -37,7 +37,7 @@ AutoBot is an enterprise-grade autonomous AI platform with Vue 3 frontend and Fa
 ```
 src/
 ├── orchestrator.py      # ⚠️  CRITICAL - Task planning engine
-├── llm_interface.py     # 🔧 COMMON - LLM integrations  
+├── llm_interface.py     # 🔧 COMMON - LLM integrations
 ├── knowledge_base.py    # 📊 DATA - RAG + ChromaDB
 ├── worker_node.py       # ⚙️  BACKGROUND - Task execution
 ├── gui_controller.py    # 🖥️  GUI - Automation layer
@@ -87,11 +87,11 @@ npm run test:unit    # Vitest tests
 ```ini
 [flake8]
 max-line-length = 88
-extend-ignore = 
+extend-ignore =
     E203,  # Whitespace before ':'
     W503,  # Line break before binary operator
     F401,  # Module imported but unused (in __init__.py)
-exclude = 
+exclude =
     .git,
     __pycache__,
     venv,
@@ -104,26 +104,26 @@ exclude =
 ```python
 # ✅ CORRECT: Function with proper docstring and typing
 def process_knowledge_query(
-    query: str, 
+    query: str,
     limit: int = 5,
     similarity_threshold: float = 0.7
 ) -> List[Dict[str, Any]]:
     """Search knowledge base with vector similarity.
-    
+
     Args:
         query: Search query string
         limit: Maximum results to return
         similarity_threshold: Minimum similarity score (0.0-1.0)
-        
+
     Returns:
         List of matching documents with metadata
-        
+
     Raises:
         ValueError: If similarity_threshold not in valid range
     """
     if not 0.0 <= similarity_threshold <= 1.0:
         raise ValueError("similarity_threshold must be between 0.0 and 1.0")
-        
+
     # Implementation here...
     return results
 
@@ -157,10 +157,10 @@ from src.llm_interface import LLMInterface
 @router.post("/new-endpoint")
 async def new_endpoint(request: NewRequest) -> Dict[str, Any]:
     """Handle new functionality.
-    
+
     Args:
         request: Validated request model
-        
+
     Returns:
         Response with operation results
     """
@@ -201,17 +201,17 @@ def migrate_database():
     """Migrate database to new schema version."""
     conn = sqlite3.connect("data/knowledge_base.db")
     cursor = conn.cursor()
-    
+
     try:
         # Check current schema version
         cursor.execute("PRAGMA user_version")
         current_version = cursor.fetchone()[0]
-        
+
         if current_version < 2:
             # Apply migration
             cursor.execute("ALTER TABLE documents ADD COLUMN new_field TEXT")
             cursor.execute("PRAGMA user_version = 2")
-            
+
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -225,22 +225,22 @@ def migrate_database():
 # In src/llm_interface.py
 def add_new_llm_provider(self, provider_name: str, config: Dict[str, Any]):
     """Add new LLM provider configuration.
-    
+
     Args:
         provider_name: Unique identifier for provider
         config: Provider configuration dict
-        
+
     Raises:
         ValueError: If provider already exists
     """
     if provider_name in self.providers:
         raise ValueError(f"Provider {provider_name} already exists")
-        
+
     # Validate required config keys
     required_keys = ["api_key", "base_url", "model_name"]
     if not all(key in config for key in required_keys):
         raise ValueError(f"Missing required config keys: {required_keys}")
-        
+
     self.providers[provider_name] = LLMProvider(config)
 ```
 
@@ -325,7 +325,7 @@ lsof -p $(pgrep -f "python main.py")
 ### Configuration Management
 ```python
 # ❌ NEVER hardcode values
-api_key = "sk-1234567890abcdef"
+api_key = "sk-1234567890abcdef"  # pragma: allowlist secret
 redis_host = "localhost"
 
 # ✅ ALWAYS use config system
@@ -359,7 +359,7 @@ except Exception as e:
 # ❌ INCORRECT: Blocking operations in async functions
 async def bad_example():
     time.sleep(5)  # Blocks event loop
-    
+
 # ✅ CORRECT: Non-blocking operations
 async def good_example():
     await asyncio.sleep(5)  # Non-blocking
@@ -395,7 +395,7 @@ def test_search_functionality(kb):
     """Test knowledge base search returns expected results."""
     # Add test document
     kb.add_document("Test content", {"source": "test"})
-    
+
     # Search and verify
     results = kb.search("Test", limit=1)
     assert len(results) == 1

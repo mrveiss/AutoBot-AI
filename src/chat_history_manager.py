@@ -22,7 +22,8 @@ class ChatHistoryManager:
 
         Args:
             history_file (str): Path to the JSON file for persistent storage.
-            use_redis (bool): If True, attempts to use Redis for active memory storage for performance.
+            use_redis (bool): If True, attempts to use Redis for active memory
+                storage for performance.
             redis_host (str): Hostname for Redis server.
             redis_port (int): Port for Redis server.
         """
@@ -49,11 +50,13 @@ class ChatHistoryManager:
             self.redis_client = get_redis_client(async_client=False)
             if self.redis_client:
                 logging.info(
-                    "Redis connection established via centralized utility for active memory storage."
+                    "Redis connection established via centralized utility "
+                    "for active memory storage."
                 )
             else:
                 logging.error(
-                    "Failed to get Redis client from centralized utility. Falling back to file storage."
+                    "Failed to get Redis client from centralized utility. "
+                    "Falling back to file storage."
                 )
                 self.use_redis = False
 
@@ -70,7 +73,8 @@ class ChatHistoryManager:
         """Get the chats directory path from configuration."""
         data_config = global_config_manager.get("data", {})
         return data_config.get(
-            "chats_directory", os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats")
+            "chats_directory",
+            os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
         )
 
     def _load_history(self):
@@ -78,7 +82,8 @@ class ChatHistoryManager:
         Loads chat history from the JSON file or Redis if enabled.
 
         If using Redis, it attempts to load active session data from Redis.
-        If the file exists but cannot be decoded or read properly, it starts with an empty history.
+        If the file exists but cannot be decoded or read properly, it starts
+        with an empty history.
         If the file does not exist, it initializes an empty history.
         """
         if self.use_redis and self.redis_client:
@@ -91,11 +96,13 @@ class ChatHistoryManager:
                     return
                 elif history_data is not None:
                     logging.warning(
-                        f"Received non-string data from Redis for chat history: type={type(history_data)}"
+                        f"Received non-string data from Redis for chat "
+                        f"history: type={type(history_data)}"
                     )
             except Exception as e:
                 logging.error(
-                    f"Error loading history from Redis: {str(e)}. Falling back to file storage."
+                    f"Error loading history from Redis: {str(e)}. "
+                    f"Falling back to file storage."
                 )
 
         # Default to file storage
@@ -106,22 +113,26 @@ class ChatHistoryManager:
             except json.JSONDecodeError as e:
                 self.history = []
                 logging.warning(
-                    f"Could not decode JSON from {self.history_file}: {str(e)}. Starting with empty history."
+                    f"Could not decode JSON from {self.history_file}: "
+                    f"{str(e)}. Starting with empty history."
                 )
             except Exception as e:
                 self.history = []
                 logging.error(
-                    f"Error loading chat history from {self.history_file}: {str(e)}. Starting with empty history."
+                    f"Error loading chat history from {self.history_file}: "
+                    f"{str(e)}. Starting with empty history."
                 )
         else:
             self.history = []
             logging.info(
-                f"No history file found at {self.history_file}. Starting with empty history."
+                f"No history file found at {self.history_file}. "
+                f"Starting with empty history."
             )
 
     def _save_history(self):
         """
-        Saves current chat history to the JSON file and optionally to Redis if enabled.
+        Saves current chat history to the JSON file and optionally to Redis
+        if enabled.
 
         Logs an error if the save operation fails.
         """
@@ -136,7 +147,8 @@ class ChatHistoryManager:
         if self.use_redis and self.redis_client:
             try:
                 self.redis_client.set("autobot:chat_history", json.dumps(self.history))
-                # Optionally set an expiration time (e.g., 1 day) to clean up old data
+                # Optionally set expiration time (e.g., 1 day) to clean up
+                # old data
                 self.redis_client.expire("autobot:chat_history", 86400)
             except Exception as e:
                 logging.error(f"Error saving chat history to Redis: {str(e)}")
@@ -258,7 +270,8 @@ class ChatHistoryManager:
 
         Args:
             session_id (str): The identifier for the session to save.
-            messages (Optional[List[Dict[str, Any]]]): The messages to save (defaults to current history).
+            messages (Optional[List[Dict[str, Any]]]): The messages to save
+                (defaults to current history).
             name (str): Optional name for the chat session.
         """
         try:
@@ -281,7 +294,8 @@ class ChatHistoryManager:
                         chat_data = json.load(f)
                 except Exception as e:
                     logging.warning(
-                        f"Could not load existing chat data for {session_id}: {str(e)}"
+                        f"Could not load existing chat data for "
+                        f"{session_id}: {str(e)}"
                     )
 
             # Update chat data
@@ -386,7 +400,8 @@ if __name__ == "__main__":
     )
     print("History after adding messages:", manager.get_all_messages())
 
-    new_manager = ChatHistoryManager(test_file)  # Simulate new instance loading
+    # Simulate new instance loading
+    new_manager = ChatHistoryManager(test_file)
     print("History loaded by new manager:", new_manager.get_all_messages())
 
     new_manager.clear_history()
