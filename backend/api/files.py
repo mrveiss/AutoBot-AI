@@ -5,20 +5,18 @@ This module provides secure file management endpoints with proper sandboxing,
 path traversal protection, and authentication/authorization.
 """
 
-import os
 import shutil
 import mimetypes
 from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Depends, Form
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Form
+from fastapi.responses import FileResponse
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel, validator
 import logging
 
 from src.security_layer import SecurityLayer
-from src.config import config as global_config_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -154,7 +152,7 @@ def check_file_permissions(request: Request, operation: str) -> bool:
         if not has_permission:
             # Log unauthorized access attempt
             security_layer.audit_log(
-                action=f"file_access_denied",
+                action="file_access_denied",
                 user=user_role,
                 outcome="denied",
                 details={
@@ -254,7 +252,9 @@ async def list_files(request: Request, path: str = ""):
     # TODO: Re-enable strict permissions after frontend auth integration
     # Temporarily allow file listing for development
     # if not check_file_permissions(request, "view"):
-    #     raise HTTPException(status_code=403, detail="Insufficient permissions for file operations")
+    #     raise HTTPException(
+    #         status_code=403, detail="Insufficient permissions for file operations"
+    #     )
 
     try:
         target_path = validate_and_resolve_path(path)
@@ -345,7 +345,10 @@ async def upload_file(
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
+                detail=(
+                    f"File too large. Maximum size: "
+                    f"{MAX_FILE_SIZE // (1024*1024)}MB"
+                ),
             )
 
         # Validate and resolve target directory
@@ -541,7 +544,10 @@ async def delete_file(request: Request, file_operation: FileOperation):
                     {"path": file_operation.path, "type": "directory_recursive"},
                 )
                 return {
-                    "message": f"Directory '{target_path.name}' and all contents deleted successfully"
+                    "message": (
+                        f"Directory '{target_path.name}' and all contents "
+                        "deleted successfully"
+                    )
                 }
 
     except HTTPException:

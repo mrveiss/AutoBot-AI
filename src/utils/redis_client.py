@@ -1,6 +1,7 @@
 """
 Centralized Redis client utility
-Eliminates code duplication across modules by providing a singleton Redis client factory
+Eliminates code duplication across modules by providing a singleton Redis
+client factory
 """
 import os
 import redis
@@ -21,13 +22,16 @@ def get_redis_client(
     async_client: bool = False,
 ) -> Union[redis.Redis, async_redis.Redis, None]:
     """
-    Returns a singleton instance of the Redis client, configured from the global application config.
+    Returns a singleton instance of the Redis client, configured from the
+    global application config.
 
     Args:
-        async_client (bool): If True, returns async Redis client. If False, returns sync client.
+        async_client (bool): If True, returns async Redis client. If False,
+            returns sync client.
 
     Returns:
-        Union[redis.Redis, async_redis.Redis, None]: Redis client instance or None if Redis is disabled
+        Union[redis.Redis, async_redis.Redis, None]: Redis client instance or
+            None if Redis is disabled
     """
     global _redis_client, _async_redis_client
 
@@ -37,7 +41,8 @@ def get_redis_client(
         memory_config = global_config_manager.get("memory", {})
         redis_config = memory_config.get("redis", {})
 
-        # Fall back to task_transport.redis config if memory config not available
+        # Fall back to task_transport.redis config if memory config not
+        # available
         if not redis_config or not redis_config.get("enabled", False):
             task_transport_config = global_config_manager.get("task_transport", {})
             if task_transport_config.get("type") == "redis":
@@ -66,7 +71,7 @@ def get_redis_client(
                     decode_responses=True,
                 )
                 logger.info(
-                    f"Async Redis client initialized for {host}:{port} (DB: {db})"
+                    f"Async Redis client initialized for {host}:{port} " f"(DB: {db})"
                 )
             return _async_redis_client
         else:
@@ -115,7 +120,7 @@ def reset_redis_clients():
     if _redis_client:
         try:
             _redis_client.close()
-        except:
+        except Exception:  # noqa: S110
             pass
         _redis_client = None
 
@@ -123,7 +128,7 @@ def reset_redis_clients():
         try:
             # Async clients need different cleanup
             pass
-        except:
+        except Exception:  # noqa: S110
             pass
         _async_redis_client = None
 

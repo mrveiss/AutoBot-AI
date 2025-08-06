@@ -22,7 +22,9 @@ class SecurityLayer:
         )  # For simple demo auth
 
         os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
-        print(f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}")
+        print(
+            f"SecurityLayer initialized. Authentication enabled: " f"{self.enable_auth}"
+        )
         print(f"Audit log file: {self.audit_log_file}")
 
     def check_permission(
@@ -33,8 +35,10 @@ class SecurityLayer:
 
         Args:
             user_role (str): The role of the user performing the action.
-            action_type (str): The type of action being performed (e.g., 'files.view', 'files.delete', 'allow_shell_execute').
-            resource (str, optional): The specific resource being accessed (e.g., 'file_operation:delete').
+            action_type (str): The type of action being performed
+                (e.g., 'files.view', 'files.delete', 'allow_shell_execute').
+            resource (str, optional): The specific resource being accessed
+                (e.g., 'file_operation:delete').
 
         Returns:
             bool: True if permission is granted, False otherwise.
@@ -45,7 +49,8 @@ class SecurityLayer:
         # GOD MODE: Unrestricted access for god/superuser roles
         if user_role.lower() in ["god", "superuser", "root"]:
             print(
-                f"GOD MODE: Unrestricted access granted for role '{user_role}' to perform action '{action_type}' on resource '{resource}'."
+                f"GOD MODE: Unrestricted access granted for role '{user_role}' "
+                f"to perform action '{action_type}' on resource '{resource}'."
             )
             return True
 
@@ -57,7 +62,8 @@ class SecurityLayer:
         if action_type in role_permissions:
             return True
 
-        # Check for wildcard permissions (e.g., 'files.*' matches 'files.view', 'files.delete', etc.)
+        # Check for wildcard permissions
+        # (e.g., 'files.*' matches 'files.view', 'files.delete', etc.)
         for permission in role_permissions:
             if permission.endswith(".*"):
                 permission_prefix = permission[:-1]  # Remove the '*'
@@ -74,7 +80,8 @@ class SecurityLayer:
         # then check for 'files.view_sensitive' permission
 
         print(
-            f"Permission DENIED for role '{user_role}' to perform action '{action_type}' on resource '{resource}'."
+            f"Permission DENIED for role '{user_role}' to perform action "
+            f"'{action_type}' on resource '{resource}'."
         )
         return False
 
@@ -117,7 +124,8 @@ class SecurityLayer:
     def audit_log(self, action: str, user: str, outcome: str, details: Dict[str, Any]):
         """
         Logs an action to a tamper-resistant audit log file.
-        Currently append-only. For true tamper-resistance, hashing/encryption would be added.
+        Currently append-only. For true tamper-resistance,
+        hashing/encryption would be added.
         """
         log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
@@ -127,8 +135,9 @@ class SecurityLayer:
             "details": details,
         }
 
-        # For tamper-resistance, one could hash the previous log entry and include it here
-        # Or sign the log entries. For this demo, simple append-only.
+        # For tamper-resistance, one could hash the previous log entry
+        # and include it here. Or sign the log entries.
+        # For this demo, simple append-only.
 
         try:
             with open(self.audit_log_file, "a") as f:
@@ -136,7 +145,8 @@ class SecurityLayer:
             print(f"Audit log: {action} by {user} - {outcome}")
         except Exception as e:
             print(
-                f"ERROR: Failed to write to audit log file {self.audit_log_file}: {e}"
+                f"ERROR: Failed to write to audit log file "
+                f"{self.audit_log_file}: {e}"
             )
 
     # Basic user authentication (for demo purposes)
@@ -150,8 +160,9 @@ class SecurityLayer:
             return "admin"  # Default to admin role if auth is disabled
 
         if username in self.allowed_users and self.allowed_users[username] == password:
-            # In a real system, roles would be associated with users in a more robust way
-            # For this demo, we'll assume 'admin' user gets 'admin' role, others 'user'
+            # In a real system, roles would be associated with users
+            # in a more robust way. For this demo, we'll assume 'admin' user
+            # gets 'admin' role, others 'user'
             if username == "admin":
                 return "admin"
             else:
@@ -173,7 +184,8 @@ if __name__ == "__main__":
     print("\n--- Testing with Authentication DISABLED ---")
     security = SecurityLayer()
     print(
-        f"Can 'user' execute shell command? {security.check_permission('user', 'allow_shell_execute')}"
+        f"Can 'user' execute shell command? "
+        f"{security.check_permission('user', 'allow_shell_execute')}"
     )
     security.audit_log(
         "test_action", "test_user", "success", {"info": "demo disabled auth"}
@@ -199,21 +211,26 @@ if __name__ == "__main__":
 
     # Test authentication
     print(
-        f"Authenticate 'testuser': {security_enabled.authenticate_user('testuser', 'password123')}"
+        f"Authenticate 'testuser': "
+        f"{security_enabled.authenticate_user('testuser', 'password123')}"
     )
     print(
-        f"Authenticate 'baduser': {security_enabled.authenticate_user('baduser', 'wrongpass')}"
+        f"Authenticate 'baduser': "
+        f"{security_enabled.authenticate_user('baduser', 'wrongpass')}"
     )
 
     # Test permissions
     print(
-        f"Can 'admin' execute shell command? {security_enabled.check_permission('admin', 'allow_shell_execute')}"
+        f"Can 'admin' execute shell command? "
+        f"{security_enabled.check_permission('admin', 'allow_shell_execute')}"
     )
     print(
-        f"Can 'testuser_role' execute shell command? {security_enabled.check_permission('testuser_role', 'allow_shell_execute')}"
+        f"Can 'testuser_role' execute shell command? "
+        f"{security_enabled.check_permission('testuser_role', 'allow_shell_execute')}"
     )
     print(
-        f"Can 'testuser_role' submit goal? {security_enabled.check_permission('testuser_role', 'allow_goal_submission')}"
+        f"Can 'testuser_role' submit goal? "
+        f"{security_enabled.check_permission('testuser_role', 'allow_goal_submission')}"
     )
 
     # Test audit logging

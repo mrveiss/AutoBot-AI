@@ -77,7 +77,8 @@ class Orchestrator:
                     "utility. Falling back to local task transport."
                 )
                 print(msg)
-                self.task_transport_type = "local"  # Fallback to local if Redis fails
+                # Fallback to local if Redis fails
+                self.task_transport_type = "local"
                 self.local_worker = WorkerNode()
 
         if self.task_transport_type == "local":
@@ -105,7 +106,8 @@ class Orchestrator:
 
         try:
             while True:
-                # Use get_message with timeout instead of listen() for async compatibility
+                # Use get_message with timeout instead of listen()
+                # for async compatibility
                 message = pubsub.get_message(timeout=1.0)
                 if message is None:
                     await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
@@ -152,7 +154,10 @@ class Orchestrator:
                             "log_message",
                             {
                                 "level": "ERROR",
-                                "message": f"Failed to parse worker capabilities message: {e}",
+                                "message": (
+                                    f"Failed to parse worker capabilities "
+                                    f"message: {e}"
+                                ),
                             },
                         )
                     except Exception as e:
@@ -161,7 +166,10 @@ class Orchestrator:
                             "log_message",
                             {
                                 "level": "ERROR",
-                                "message": f"Error processing worker capabilities message: {e}",
+                                "message": (
+                                    f"Error processing worker capabilities "
+                                    f"message: {e}"
+                                ),
                             },
                         )
 
@@ -197,7 +205,8 @@ class Orchestrator:
 
         try:
             while True:
-                # Use get_message with timeout instead of listen() for async compatibility
+                # Use get_message with timeout instead of listen()
+                # for async compatibility
                 message = pubsub.get_message(timeout=1.0)
                 if message is None:
                     await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
@@ -220,7 +229,8 @@ class Orchestrator:
                             )
                         else:
                             print(
-                                f"Received unhandled approval message for task {task_id}: {data}"
+                                f"Received unhandled approval message for task "
+                                f"{task_id}: {data}"
                             )
                     except Exception as e:
                         print(f"Error processing command approval message: {e}")
@@ -245,7 +255,8 @@ class Orchestrator:
                 },
             )
             print(
-                f"LLM ({self.llm_interface.orchestrator_llm_alias}) connected successfully."
+                f"LLM ({self.llm_interface.orchestrator_llm_alias}) "
+                "connected successfully."
             )
         else:
             await event_manager.publish(
@@ -253,11 +264,14 @@ class Orchestrator:
                 {
                     "status": "disconnected",
                     "model": self.llm_interface.orchestrator_llm_alias,
-                    "message": "Failed to connect to Ollama or configured models not found.",
+                    "message": (
+                        "Failed to connect to Ollama or configured " "models not found."
+                    ),
                 },
             )
             print(
-                f"LLM ({self.llm_interface.orchestrator_llm_alias}) connection failed."
+                f"LLM ({self.llm_interface.orchestrator_llm_alias}) "
+                "connection failed."
             )
 
         if self.task_transport_type == "redis" and self.redis_client:
@@ -270,7 +284,10 @@ class Orchestrator:
             "log_message",
             {
                 "level": "INFO",
-                "message": f"System information collected: {json.dumps(self.system_info, indent=2)}",
+                "message": (
+                    f"System information collected: "
+                    f"{json.dumps(self.system_info, indent=2)}"
+                ),
             },
         )
         print("System information collected on startup.")
@@ -280,7 +297,10 @@ class Orchestrator:
             "log_message",
             {
                 "level": "INFO",
-                "message": f"Available tools collected: {json.dumps(self.available_tools, indent=2)}",
+                "message": (
+                    f"Available tools collected: "
+                    f"{json.dumps(self.available_tools, indent=2)}"
+                ),
             },
         )
         print("Available tools collected on startup.")
@@ -304,10 +324,12 @@ class Orchestrator:
                         "Skipping LangChain KB initialization."
                     )
                     self.knowledge_base = None
-                # KnowledgeBase.ainit() is now called in main.py's lifespan startup, no need to call it here.
+                # KnowledgeBase.ainit() is now called in main.py's lifespan
+                # startup, no need to call it here.
 
                 self.langchain_agent = LangChainAgentOrchestrator(
-                    config=global_config_manager.to_dict(),  # Pass the full config dict
+                    # Pass the full config dict
+                    config=global_config_manager.to_dict(),
                     worker_node=self.local_worker
                     if hasattr(self, "local_worker")
                     else None,
@@ -333,9 +355,7 @@ class Orchestrator:
                     "log_message",
                     {
                         "level": "ERROR",
-                        "message": (
-                            f"Failed to initialize LangChain Agent: {e}"
-                        ),
+                        "message": (f"Failed to initialize LangChain Agent: {e}"),
                     },
                 )
                 self.langchain_agent = None
@@ -344,10 +364,12 @@ class Orchestrator:
             kb_config = global_config_manager.get("knowledge_base", {})
             if kb_config.get("provider") == "disabled":
                 print(
-                    "Knowledge Base disabled in configuration. Skipping initialization."
+                    "Knowledge Base disabled in configuration. "
+                    "Skipping initialization."
                 )
                 self.knowledge_base = None
-            # KnowledgeBase.ainit() is now called in main.py's lifespan startup, no need to call it here.
+            # KnowledgeBase.ainit() is now called in main.py's lifespan
+            # startup, no need to call it here.
 
     def set_phi2_enabled(self, enabled: bool):
         self.phi2_enabled = enabled
@@ -410,7 +432,9 @@ class Orchestrator:
                 "log_message",
                 {
                     "level": "INFO",
-                    "message": f"Retrieved {len(retrieved_context)} context chunks.",
+                    "message": (
+                        f"Retrieved {len(retrieved_context)} context chunks."
+                    ),
                 },
             )
         else:
@@ -446,24 +470,44 @@ class Orchestrator:
 
                 # Add the dynamic parts that weren't in the legacy prompt
                 if context_str:
-                    system_prompt += f"\n\nUse the following context to inform your plan:\n{context_str}"
+                    system_prompt += (
+                        f"\n\nUse the following context to inform your plan:\n"
+                        f"{context_str}"
+                    )
 
-                system_prompt += f"\n\nOperating System Information:\n{json.dumps(self.system_info, indent=2)}\n"
-                system_prompt += f"\n\nAvailable System Tools:\n{json.dumps(self.available_tools, indent=2)}\n"
+                system_prompt += (
+                    f"\n\nOperating System Information:\n"
+                    f"{json.dumps(self.system_info, indent=2)}\n"
+                )
+                system_prompt += (
+                    f"\n\nAvailable System Tools:\n"
+                    f"{json.dumps(self.available_tools, indent=2)}\n"
+                )
             except KeyError:
                 # Final fallback - use the old hardcoded version
                 print(
-                    "Warning: No prompt found in prompt manager, using hardcoded fallback"
+                    "Warning: No prompt found in prompt manager, using "
+                    "hardcoded fallback"
                 )
                 system_prompt_parts = [
                     self.llm_interface.orchestrator_system_prompt,
-                    "You have access to the following tools. You MUST use these tools to achieve the user's goal.",
+                    "You have access to the following tools. You MUST use these "
+                    "tools to achieve the user's goal.",
                 ]
                 system_prompt = "\n".join(system_prompt_parts)
                 if context_str:
-                    system_prompt += f"\n\nUse the following context to inform your plan:\n{context_str}"
-                system_prompt += f"\n\nOperating System Information:\n{json.dumps(self.system_info, indent=2)}\n"
-                system_prompt += f"\n\nAvailable System Tools:\n{json.dumps(self.available_tools, indent=2)}\n"
+                    system_prompt += (
+                        f"\n\nUse the following context to inform your plan:\n"
+                        f"{context_str}"
+                    )
+                system_prompt += (
+                    f"\n\nOperating System Information:\n"
+                    f"{json.dumps(self.system_info, indent=2)}\n"
+                )
+                system_prompt += (
+                    f"\n\nAvailable System Tools:\n"
+                    f"{json.dumps(self.available_tools, indent=2)}\n"
+                )
 
         full_messages = [{"role": "system", "content": system_prompt}] + messages
 
@@ -524,18 +568,21 @@ class Orchestrator:
                     )
                     return {
                         "thoughts": [
-                            "The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+                            "The LLM returned unexpected JSON. "
+                            "Responding conversationally with the raw JSON."
                         ],
                         "tool_name": "respond_conversationally",
                         "tool_args": {"response_text": llm_raw_content},
                     }
             except json.JSONDecodeError:
                 print(
-                    f"LLM response is plain text. Treating as conversational: {llm_raw_content}"
+                    f"LLM response is plain text. "
+                    f"Treating as conversational: {llm_raw_content}"
                 )
                 return {
                     "thoughts": [
-                        "The user's request does not require a tool. Responding conversationally."
+                        "The user's request does not require a tool. "
+                        "Responding conversationally."
                     ],
                     "tool_name": "respond_conversationally",
                     "tool_args": {"response_text": llm_raw_content},
@@ -676,7 +723,10 @@ class Orchestrator:
                     "error", {"message": "Failed to generate action plan"}
                 )
                 print("Failed to generate action plan")
-                return {"status": "error", "message": "Failed to generate action plan."}
+                return {
+                    "status": "error",
+                    "message": "Failed to generate action plan.",
+                }
 
             # Execute the planned action
             execution_result = await self._execute_planned_action(action, messages)
@@ -690,10 +740,13 @@ class Orchestrator:
             "log_message",
             {
                 "level": "WARNING",
-                "message": f"Goal execution completed after {max_iterations} iterations",
+                "message": f"Goal execution completed after {max_iterations} "
+                "iterations",
             },
         )
-        print(f"Goal execution completed after {max_iterations} iterations")
+        print(
+            f"Goal execution completed after {max_iterations} iterations"
+        )
         return {
             "status": "warning",
             "message": "Goal execution completed, but may not have fully achieved the objective.",
@@ -793,7 +846,8 @@ class Orchestrator:
                 result_content = result.get(
                     "result",
                     result.get(
-                        "output", result.get("message", "Task completed successfully")
+                        "output",
+                        result.get("message", "Task completed successfully"),
                     ),
                 )
 
@@ -812,7 +866,9 @@ class Orchestrator:
                     "log_message",
                     {
                         "level": "INFO",
-                        "message": "Goal execution completed with conversational response",
+                        "message": (
+                            "Goal execution completed with conversational response"
+                        ),
                     },
                 )
                 print("Goal execution completed with conversational response")
@@ -826,7 +882,8 @@ class Orchestrator:
         elif result.get("status") == "pending_approval":
             approval_result = await self._handle_command_approval(result)
             if approval_result.get("approved"):
-                return {"completed": False}  # Continue with next iteration
+                # Continue with next iteration
+                return {"completed": False}
             else:
                 messages.append(
                     {
@@ -870,7 +927,7 @@ class Orchestrator:
             command = "ifconfig"
         elif "ip addr" in goal.lower() or "ip address" in goal.lower():
             command = "ip addr show"
-        elif "ps" in goal.lower() and "process" in goal.lower():
+        elif ("ps" in goal.lower() and "process" in goal.lower()):
             command = "ps aux"
         elif "netstat" in goal.lower():
             command = "netstat -tuln"
@@ -980,11 +1037,12 @@ class Orchestrator:
             except asyncio.TimeoutError:
                 self.pending_approvals.pop(task_id, None)
                 await event_manager.publish(
-                    "error", {
-                        "message": f"Command approval timeout for: {command}"
-                    }
+                    "error", {"message": f"Command approval timeout for: {command}"}
                 )
-                return {"approved": False, "message": "Approval timeout"}
+                return {
+                    "approved": False, 
+                    "message": "Approval timeout"
+                }
         else:
             await event_manager.publish(
                 "log_message",
