@@ -164,6 +164,53 @@ fi
 echo "Assuming Redis Stack is ready and accessible via localhost:6379 from within WSL2."
 echo "Please ensure the 'redis-stack' Docker container is running and healthy."
 
+# --- 4. Deploy/Start Playwright Service Docker Container ---
+echo "🔍 Checking for existing 'autobot-playwright' Docker container..."
+if docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright$'; then
+    echo "✅ 'autobot-playwright' container found."
+    if docker inspect -f '{{.State.Running}}' autobot-playwright | grep -q 'true'; then
+        echo "✅ 'autobot-playwright' container is already running."
+    else
+        echo "🔄 'autobot-playwright' container found but not running. Starting it..."
+        docker start autobot-playwright || { echo "❌ Failed to start 'autobot-playwright' container."; exit 1; }
+        echo "✅ 'autobot-playwright' container started."
+    fi
+else
+    echo "📦 'autobot-playwright' container not found. Deploying with docker-compose..."
+
+    # Check if docker-compose is available
+    if command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
+    elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+        COMPOSE_CMD="docker compose"
+    else
+        echo "❌ Neither docker-compose nor docker compose is available. Please install Docker Compose."
+        exit 1
+    fi
+
+    # Deploy Playwright service using docker-compose
+    $COMPOSE_CMD -f docker-compose.playwright.yml up -d || {
+        echo "❌ Failed to deploy 'autobot-playwright' container.";
+        exit 1;
+    }
+    echo "✅ 'autobot-playwright' container deployed and started."
+
+    # Wait for service to be healthy
+    echo "⏳ Waiting for Playwright service to be ready..."
+    for i in {1..30}; do
+        if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+            echo "✅ Playwright service is healthy and ready."
+            break
+        fi
+        echo "⏳ Waiting for Playwright service... (attempt $i/30)"
+        sleep 2
+    done
+
+    if ! curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+        echo "⚠️ Playwright service health check failed, but continuing setup..."
+    fi
+fi
+
 pyenv global "$PYTHON_VERSION"
 
 # --- 2. Create AutoBot venv ---
