@@ -8,7 +8,7 @@ import logging
 from typing import Dict, List, Any
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.config import Config
+from src.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +18,17 @@ class KBLibrarianAgent:
 
     def __init__(self):
         """Initialize the KB Librarian Agent."""
-        self.config = Config()
+        self.config = config
         self.knowledge_base = KnowledgeBase()
         self.llm = LLMInterface()
-        self.enabled = self.config.get("kb_librarian.enabled", True)
-        self.similarity_threshold = self.config.get(
+        self.enabled = self.config.get_nested("kb_librarian.enabled", True)
+        self.similarity_threshold = self.config.get_nested(
             "kb_librarian.similarity_threshold", 0.7
         )
-        self.max_results = self.config.get("kb_librarian.max_results", 5)
-        self.auto_summarize = self.config.get("kb_librarian.auto_summarize", True)
+        self.max_results = self.config.get_nested("kb_librarian.max_results", 5)
+        self.auto_summarize = self.config.get_nested(
+            "kb_librarian.auto_summarize", True
+        )
 
     def detect_question(self, text: str) -> bool:
         """Detect if the text contains a question.

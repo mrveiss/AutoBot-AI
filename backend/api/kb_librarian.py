@@ -30,7 +30,7 @@ class KBQueryResponse(BaseModel):
     summary: Optional[str] = None
 
 
-@router.post("/kb-librarian/query", response_model=KBQueryResponse)
+@router.post("/query", response_model=KBQueryResponse)
 async def query_knowledge_base(kb_query: KBQuery):
     """Query the knowledge base using the KB Librarian Agent.
 
@@ -74,7 +74,7 @@ async def query_knowledge_base(kb_query: KBQuery):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/kb-librarian/status")
+@router.get("/status")
 async def get_kb_librarian_status():
     """Get the status of the KB Librarian Agent.
 
@@ -97,7 +97,7 @@ async def get_kb_librarian_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/kb-librarian/configure")
+@router.put("/configure")
 async def configure_kb_librarian(
     enabled: Optional[bool] = None,
     similarity_threshold: Optional[float] = None,
