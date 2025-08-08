@@ -2,7 +2,7 @@ Prompt for GUI Designing AI: Redesign or Enhance the AutoBot Interface
 
 Description of the Current AutoBot GUI:
 
-AutoBot is an autonomous AI agent platform with a web-based graphical user interface (GUI) designed to facilitate interaction between users and the AI system. The interface is built using Vue.js for the frontend, served on port 8080, with a FastAPI backend running on port 8001 for handling API requests and WebSocket communication for real-time updates. Below is a detailed description of the current GUI based on the codebase structure and functionality:
+AutoBot is an autonomous AI agent platform with a web-based graphical user interface (GUI) designed to facilitate interaction between users and the AI system. The interface is built using Vue.js for the frontend, served on port 5173, with a FastAPI backend running on port 8001 for handling API requests and WebSocket communication for real-time updates. Below is a detailed description of the current GUI based on the codebase structure and functionality:
 
 1. **Layout and Structure**:
    - The GUI is a single-page application with a responsive design, likely featuring a main content area for chat interactions and a sidebar or top navigation bar for accessing different functionalities.

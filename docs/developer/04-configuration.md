@@ -32,9 +32,7 @@ backend:
   cors_origins:
     - "http://localhost:5173"               # Vue.js development server
     - "http://127.0.0.1:5173"
-    - "http://localhost:8080"               # Alternative frontend ports
-    - "http://127.0.0.1:8080"
-    - "http://localhost:3000"
+    - "http://localhost:3000"               # Playwright service port
     - "http://127.0.0.1:3000"
 
   # Data Storage Paths
