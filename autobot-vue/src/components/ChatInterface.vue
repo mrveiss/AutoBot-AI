@@ -85,7 +85,7 @@ export default {
     const messages = ref([]);
     const inputMessage = ref('');
     const chatMessages = ref(null);
-    const settings = ref(settingsService.getSettings());
+    const settings = ref(settingsService.getSettingsSync());
     const sidebarCollapsed = ref(false);
     const backendStarting = ref(false);
     const chatList = ref([]);
@@ -166,8 +166,11 @@ export default {
       await chatHistoryService.loadChatList();
       chatList.value = chatHistoryService.chatList;
 
-      // Load settings using centralized service (get reactive reference once)
-      settings.value = settingsService.getSettings();
+      // Load settings using centralized service (ensure async initialization)
+      settings.value = await settingsService.getSettings();
+
+      // Mark settings as loaded to enable auto-saving
+      isSettingsLoaded.value = true;
 
       // Check connections first
       await checkConnections();
