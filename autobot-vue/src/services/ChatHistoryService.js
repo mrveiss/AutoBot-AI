@@ -96,14 +96,30 @@ export class ChatHistoryService {
     try {
       const data = await apiClient.getChatMessages(chatId);
       console.log(`Loaded chat messages from backend for chat ${chatId}`);
-      return data.history || [];
+
+      // Normalize message format - backend uses 'messageType', frontend expects 'type'
+      const normalizedMessages = (data.history || []).map(msg => ({
+        ...msg,
+        type: msg.messageType || msg.type || 'response', // Ensure type field exists
+        messageType: undefined // Remove to avoid confusion
+      }));
+
+      console.log(`Normalized ${normalizedMessages.length} historical messages for filtering`);
+      return normalizedMessages;
     } catch (error) {
       console.error('Error loading chat messages from backend:', error);
       // Fallback to localStorage
       const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
       if (persistedMessages) {
         console.log(`Loaded chat messages from localStorage for chat ${chatId}`);
-        return JSON.parse(persistedMessages);
+        const localMessages = JSON.parse(persistedMessages);
+
+        // Also normalize localStorage messages in case they have messageType
+        return localMessages.map(msg => ({
+          ...msg,
+          type: msg.messageType || msg.type || 'response',
+          messageType: undefined
+        }));
       }
       return [];
     }
