@@ -166,15 +166,15 @@ export default {
       await chatHistoryService.loadChatList();
       chatList.value = chatHistoryService.chatList;
 
-      // Load settings using centralized service
+      // Load settings using centralized service (get reactive reference once)
       settings.value = settingsService.getSettings();
 
       // Check connections first
       await checkConnections();
 
       // Fetch backend settings to override with latest configuration
+      // This will update the reactive settings object automatically
       await settingsService.fetchBackendSettings();
-      settings.value = settingsService.getSettings(); // Refresh settings after backend fetch
 
       // Load system prompts on initialization
       await loadPrompts();
@@ -303,12 +303,23 @@ export default {
     // Don't auto-save to backend - only save to localStorage for persistence
     watch(settings, () => {
       if (isSettingsLoaded.value) {
-        settingsService.saveSettingsToLocalStorage(settings.value);
+        settingsService.saveSettings(); // Use the centralized save method
       }
     }, { deep: true });
 
     const filteredMessages = computed(() => {
-      return messages.value.filter(message => {
+      console.log('🔍 Filtering messages:', {
+        totalMessages: messages.value.length,
+        toggleStates: {
+          show_thoughts: settings.value.message_display.show_thoughts,
+          show_json: settings.value.message_display.show_json,
+          show_utility: settings.value.message_display.show_utility,
+          show_planning: settings.value.message_display.show_planning,
+          show_debug: settings.value.message_display.show_debug
+        }
+      });
+
+      const filtered = messages.value.filter(message => {
         if (message.sender === 'user') return true;
         if (message.type === 'response') return true; // Always show main responses
         if (message.type === 'thought' && settings.value.message_display.show_thoughts) return true;
@@ -319,6 +330,14 @@ export default {
         if (message.type === 'tool_output') return true; // Always show tool output
         return false;
       });
+
+      console.log('✅ Filtered messages:', {
+        originalCount: messages.value.length,
+        filteredCount: filtered.length,
+        messageTypes: messages.value.map(m => ({ type: m.type, sender: m.sender }))
+      });
+
+      return filtered;
     });
 
     const formatMessage = (text, type) => {
@@ -1147,11 +1166,8 @@ export default {
         await loadChatMessages(chatId);
       }
 
-      // Load settings from local storage if available
-      const savedSettings = localStorage.getItem('chat_settings');
-      if (savedSettings) {
-        settings.value = JSON.parse(savedSettings);
-      }
+      // Settings are now loaded through SettingsService - remove duplicate loading
+      // The SettingsService already handles localStorage loading
     });
 
     return {
