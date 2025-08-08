@@ -1,5 +1,19 @@
-import speech_recognition as sr
-import pyttsx3
+try:
+    import speech_recognition as sr
+
+    SPEECH_RECOGNITION_AVAILABLE = True
+except ImportError:
+    sr = None
+    SPEECH_RECOGNITION_AVAILABLE = False
+
+try:
+    import pyttsx3
+
+    PYTTSX3_AVAILABLE = True
+except ImportError:
+    pyttsx3 = None
+    PYTTSX3_AVAILABLE = False
+
 import yaml
 import os
 import asyncio
@@ -11,24 +25,36 @@ class VoiceInterface:
         self.config = self._load_config(config_path)
         self.voice_config = self.config.get("voice_interface", {})
 
-        self.recognizer = sr.Recognizer()
-        self.tts_engine = self._init_tts_engine()
+        self.recognizer = sr.Recognizer() if SPEECH_RECOGNITION_AVAILABLE else None
+        self.tts_engine = self._init_tts_engine() if PYTTSX3_AVAILABLE else None
 
         self.continuous_listening = self.voice_config.get("continuous_listening", False)
         self.push_to_talk_key = self.voice_config.get(
             "push_to_talk_key", None
         )  # e.g., 'space'
 
-        print(
+        availability_status = []
+        if not SPEECH_RECOGNITION_AVAILABLE:
+            availability_status.append("Speech Recognition unavailable")
+        if not PYTTSX3_AVAILABLE:
+            availability_status.append("Text-to-Speech unavailable")
+
+        status_msg = (
             f"VoiceInterface initialized. Continuous listening: "
             f"{self.continuous_listening}"
         )
+        if availability_status:
+            status_msg += f" ({', '.join(availability_status)})"
+
+        print(status_msg)
 
     def _load_config(self, config_path):
         with open(config_path, "r") as f:
             return yaml.safe_load(f)
 
     def _init_tts_engine(self):
+        if not PYTTSX3_AVAILABLE:
+            return None
         engine = pyttsx3.init()
         # Optional: Configure voice properties
         # voices = engine.getProperty('voices')
@@ -52,6 +78,15 @@ class VoiceInterface:
         Returns:
             Dict[str, Any]: Status and recognized text or error message.
         """
+        if not SPEECH_RECOGNITION_AVAILABLE or not self.recognizer:
+            return {
+                "status": "error",
+                "message": (
+                    "Speech recognition not available. Install speech_recognition "
+                    "and pyaudio."
+                ),
+            }
+
         with sr.Microphone() as source:
             # Adjust for ambient noise
             self.recognizer.adjust_for_ambient_noise(source)
@@ -94,6 +129,12 @@ class VoiceInterface:
         """
         Converts text to speech and plays it aloud.
         """
+        if not PYTTSX3_AVAILABLE or not self.tts_engine:
+            return {
+                "status": "error",
+                "message": "Text-to-speech not available. Install pyttsx3.",
+            }
+
         try:
             print(f"Speaking: {text}")
             # pyttsx3 runAndWait() is blocking, so run in a thread
