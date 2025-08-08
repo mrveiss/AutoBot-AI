@@ -547,6 +547,49 @@ fi
 # Add current directory to PYTHONPATH for module discovery
 export PYTHONPATH=$(pwd)
 
+# Function to initialize system knowledge
+initialize_system_knowledge() {
+    echo "🔄 Initializing system knowledge..."
+
+    python3 -c "
+import asyncio
+import sys
+from src.knowledge_base import KnowledgeBase
+from src.agents.system_knowledge_manager import SystemKnowledgeManager
+
+async def init_knowledge():
+    try:
+        kb = KnowledgeBase()
+        await kb.ainit()
+
+        manager = SystemKnowledgeManager(kb)
+        await manager.initialize_system_knowledge()
+
+        print('✅ System knowledge initialized successfully!')
+        return True
+    except Exception as e:
+        print(f'❌ Failed to initialize system knowledge: {e}')
+        import traceback
+        traceback.print_exc()
+        return False
+
+# Run the async function
+result = asyncio.run(init_knowledge())
+sys.exit(0 if result else 1)
+"
+
+    if [ $? -eq 0 ]; then
+        echo "✅ System knowledge initialization completed!"
+    else
+        echo "❌ System knowledge initialization failed!"
+        echo "⚠️ AutoBot will still work, but without pre-loaded system knowledge."
+        echo "You can retry initialization later by running the agent."
+    fi
+}
+
+# Initialize system knowledge
+initialize_system_knowledge
+
 python3 -c "
 from src.config import global_config_manager
 from src.orchestrator import Orchestrator
