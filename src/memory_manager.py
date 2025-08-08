@@ -11,13 +11,11 @@ import os
 import sqlite3
 import json
 import logging
-import yaml
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 import hashlib
 import pickle
-import base64
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
@@ -103,7 +101,8 @@ class LongTermMemoryManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id TEXT NOT NULL,
                 task_type TEXT NOT NULL,
-                status TEXT NOT NULL, -- 'TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'FAILED'
+                status TEXT NOT NULL, -- 'TODO', 'IN_PROGRESS', 'DONE',
+                                      -- 'BLOCKED', 'FAILED'
                 description TEXT NOT NULL,
                 result TEXT,
                 execution_time_ms INTEGER,
@@ -179,10 +178,12 @@ class LongTermMemoryManager:
 
         # Create indexes for performance
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)"
+            "CREATE INDEX IF NOT EXISTS idx_memory_category "
+            "ON memory_entries(category)"
         )
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)"
+            "CREATE INDEX IF NOT EXISTS idx_memory_timestamp "
+            "ON memory_entries(timestamp)"
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_task_status ON task_logs(status)"
@@ -191,7 +192,8 @@ class LongTermMemoryManager:
             "CREATE INDEX IF NOT EXISTS idx_task_type ON task_logs(task_type)"
         )
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_conversation_session ON conversations(session_id)"
+            "CREATE INDEX IF NOT EXISTS idx_conversation_session "
+            "ON conversations(session_id)"
         )
 
         conn.commit()
@@ -211,7 +213,8 @@ class LongTermMemoryManager:
         Store a memory entry in the long-term database
 
         Args:
-            category: Type of memory ('task', 'execution', 'state', 'config', 'fact', 'conversation')
+            category: Type of memory ('task', 'execution', 'state',
+                      'config', 'fact', 'conversation')
             content: The actual content to store
             metadata: Additional metadata as dictionary
             reference_path: Path to referenced markdown file
@@ -283,7 +286,10 @@ class LongTermMemoryManager:
         cursor = conn.cursor()
 
         try:
-            query = "SELECT id, category, content, metadata, timestamp, reference_path, embedding FROM memory_entries"
+            query = (
+                "SELECT id, category, content, metadata, timestamp, "
+                "reference_path, embedding FROM memory_entries"
+            )
             params = []
 
             conditions = []
@@ -348,8 +354,9 @@ class LongTermMemoryManager:
             cursor.execute(
                 """
                 INSERT INTO task_logs
-                (task_id, task_type, status, description, result, execution_time_ms, error_message,
-                 started_at, completed_at, metadata)
+                (task_id, task_type, status, description, result,
+                 execution_time_ms, error_message, started_at, completed_at,
+                 metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
@@ -361,9 +368,11 @@ class LongTermMemoryManager:
                     execution_time_ms,
                     error_message,
                     datetime.now().isoformat(),
-                    datetime.now().isoformat()
-                    if status in ["DONE", "FAILED"]
-                    else None,
+                    (
+                        datetime.now().isoformat()
+                        if status in ["DONE", "FAILED"]
+                        else None
+                    ),
                     metadata_json,
                 ),
             )
@@ -455,7 +464,7 @@ class LongTermMemoryManager:
                 raise RuntimeError("Failed to get lastrowid after insert")
 
             logging.info(
-                f"Stored config change {change_id} for section '{config_section}'"
+                f"Stored config change {change_id} for section " f"'{config_section}'"
             )
             return change_id
 
@@ -525,7 +534,8 @@ class LongTermMemoryManager:
             cursor.execute(
                 """
                 INSERT INTO markdown_refs
-                (file_path, line_start, line_end, content_excerpt, memory_entry_id, last_modified)
+                (file_path, line_start, line_end, content_excerpt,
+                 memory_entry_id, last_modified)
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
                 (
@@ -545,7 +555,8 @@ class LongTermMemoryManager:
                 raise RuntimeError("Failed to get lastrowid after insert")
 
             logging.info(
-                f"Linked markdown reference {ref_id} to memory entry {memory_entry_id}"
+                f"Linked markdown reference {ref_id} to memory entry "
+                f"{memory_entry_id}"
             )
             return ref_id
 
@@ -567,7 +578,8 @@ class LongTermMemoryManager:
 
         try:
             base_query = """
-                SELECT id, category, content, metadata, timestamp, reference_path, embedding
+                SELECT id, category, content, metadata, timestamp,
+                       reference_path, embedding
                 FROM memory_entries
                 WHERE content LIKE ?
             """
@@ -685,14 +697,16 @@ class LongTermMemoryManager:
 
             # Database size
             cursor.execute(
-                "SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()"
+                "SELECT page_count * page_size as size FROM "
+                "pragma_page_count(), pragma_page_size()"
             )
             stats["database_size_bytes"] = cursor.fetchone()[0]
 
             # Recent activity (last 7 days)
             week_ago = (datetime.now() - timedelta(days=7)).isoformat()
             cursor.execute(
-                "SELECT COUNT(*) FROM memory_entries WHERE timestamp >= ?", (week_ago,)
+                "SELECT COUNT(*) FROM memory_entries WHERE timestamp >= ?",
+                (week_ago,),
             )
             stats["recent_entries"] = cursor.fetchone()[0]
 

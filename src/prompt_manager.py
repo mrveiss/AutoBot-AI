@@ -5,19 +5,19 @@ This module provides a unified way to load, format, and manage all prompts
 across the AutoBot application, eliminating hardcoded prompts in Python code.
 """
 
-import os
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Optional, List
 import logging
-from jinja2 import Template, Environment, FileSystemLoader, TemplateNotFound
+from jinja2 import Template, Environment, FileSystemLoader
 
 logger = logging.getLogger(__name__)
 
 
 class PromptManager:
     """
-    Centralized prompt manager that loads and manages all prompts from the prompts/ directory.
+    Centralized prompt manager that loads and manages all prompts from the
+    prompts/ directory.
 
     Features:
     - Automatic prompt discovery and loading
@@ -59,7 +59,8 @@ class PromptManager:
 
                 try:
                     # Generate prompt key from file path
-                    # e.g., prompts/orchestrator/system_prompt.md -> orchestrator.system_prompt
+                    # e.g., prompts/orchestrator/system_prompt.md ->
+                    # orchestrator.system_prompt
                     relative_path = file_path.relative_to(self.prompts_dir)
                     prompt_key = self._path_to_key(relative_path)
 
@@ -105,7 +106,8 @@ class PromptManager:
         Get a prompt by key with optional template variable substitution.
 
         Args:
-            prompt_key: Dot notation key for the prompt (e.g., 'orchestrator.system_prompt')
+            prompt_key: Dot notation key for the prompt
+                        (e.g., 'orchestrator.system_prompt')
             **kwargs: Template variables for Jinja2 substitution
 
         Returns:
@@ -120,7 +122,8 @@ class PromptManager:
             if fallback_prompt is None:
                 available_keys = sorted(self.prompts.keys())
                 raise KeyError(
-                    f"Prompt '{prompt_key}' not found. Available prompts: {available_keys}"
+                    f"Prompt '{prompt_key}' not found. Available prompts: "
+                    f"{available_keys}"
                 )
             return fallback_prompt
 

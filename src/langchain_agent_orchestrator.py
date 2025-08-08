@@ -1,13 +1,9 @@
 import asyncio
-import json
 import logging
-from typing import Dict, Any, List, Optional, Callable
-import uuid
-import time
+from typing import Dict, Any, List, Optional
 
 from langchain.agents import initialize_agent, Tool
 from langchain.agents.agent_types import AgentType
-from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
 try:
     from langchain_community.llms import Ollama  # type: ignore
@@ -21,13 +17,13 @@ except ImportError:
             # Fallback - will cause runtime error if used
             Ollama = None
             logging.warning(
-                "Ollama integration not available. Install 'langchain-community' package for Ollama support."
+                "Ollama integration not available. Install 'langchain-community' "
+                "package for Ollama support."
             )
 
 from src.worker_node import WorkerNode
 from src.knowledge_base import KnowledgeBase
 from src.event_manager import event_manager
-from src.config import config
 from src.tools import ToolRegistry
 
 
@@ -67,15 +63,18 @@ class LangChainAgentOrchestrator:
         )
 
         logging.info(
-            f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}"
+            f"LangChain Agent initializing with model: {llm_model}, "
+            f"base_url: {llm_base_url}"
         )
         print(
-            f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}"
+            f"LangChain Agent initializing with model: {llm_model}, "
+            f"base_url: {llm_base_url}"
         )
 
         try:
             print(
-                f"DEBUG: Passing model='{llm_model}' and base_url='{llm_base_url}' to Ollama constructor."
+                f"DEBUG: Passing model='{llm_model}' and "
+                f"base_url='{llm_base_url}' to Ollama constructor."
             )
             self.llm = Ollama(
                 model=llm_model,  # Explicitly set model here
@@ -124,7 +123,11 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="execute_system_command",
-                description="Execute a system command. Use this for running shell commands, checking system status, or performing system operations. Input should be the command to execute.",
+                description=(
+                    "Execute a system command. Use this for running shell commands, "
+                    "checking system status, or performing system operations. "
+                    "Input should be the command to execute."
+                ),
                 func=self._execute_system_command,
             )
         )
@@ -132,7 +135,10 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="query_system_information",
-                description="Get system information including OS details, hardware specs, and system status. No input required.",
+                description=(
+                    "Get system information including OS details, hardware specs, "
+                    "and system status. No input required."
+                ),
                 func=self._query_system_information,
             )
         )
@@ -140,7 +146,9 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="list_system_services",
-                description="List all system services and their status. No input required.",
+                description=(
+                    "List all system services and their status. No input required."
+                ),
                 func=self._list_system_services,
             )
         )
@@ -148,7 +156,11 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="manage_service",
-                description="Manage a system service (start, stop, restart, enable, disable). Input should be 'service_name action' where action is one of: start, stop, restart, enable, disable.",
+                description=(
+                    "Manage a system service (start, stop, restart, enable, disable). "
+                    "Input should be 'service_name action' where action is one of: "
+                    "start, stop, restart, enable, disable."
+                ),
                 func=self._manage_service,
             )
         )
@@ -156,7 +168,10 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="get_process_info",
-                description="Get information about running processes. Input can be a process name or PID.",
+                description=(
+                    "Get information about running processes. Input can be "
+                    "a process name or PID."
+                ),
                 func=self._get_process_info,
             )
         )
@@ -164,7 +179,10 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="terminate_process",
-                description="Terminate a process by PID. Input should be the process ID (PID).",
+                description=(
+                    "Terminate a process by PID. Input should be "
+                    "the process ID (PID)."
+                ),
                 func=self._terminate_process,
             )
         )
@@ -172,7 +190,9 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="web_fetch",
-                description="Fetch content from a web URL. Input should be the URL to fetch.",
+                description=(
+                    "Fetch content from a web URL. Input should be the URL to fetch."
+                ),
                 func=self._web_fetch,
             )
         )
@@ -181,7 +201,10 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="search_knowledge_base",
-                description="Search the knowledge base for relevant information. Input should be the search query.",
+                description=(
+                    "Search the knowledge base for relevant information. "
+                    "Input should be the search query."
+                ),
                 func=self._search_knowledge_base,
             )
         )
@@ -189,7 +212,11 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="add_file_to_knowledge_base",
-                description="Add a file to the knowledge base. Input should be 'file_path file_type' where file_type is one of: txt, pdf, csv, docx.",
+                description=(
+                    "Add a file to the knowledge base. Input should be "
+                    "'file_path file_type' where file_type is one of: "
+                    "txt, pdf, csv, docx."
+                ),
                 func=self._add_file_to_knowledge_base,
             )
         )
@@ -197,7 +224,10 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="store_fact",
-                description="Store a fact in the knowledge base. Input should be the fact content to store.",
+                description=(
+                    "Store a fact in the knowledge base. Input should be "
+                    "the fact content to store."
+                ),
                 func=self._store_fact,
             )
         )
@@ -205,7 +235,10 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="get_fact",
-                description="Get facts from the knowledge base. Input can be a fact ID or search query.",
+                description=(
+                    "Get facts from the knowledge base. Input can be "
+                    "a fact ID or search query."
+                ),
                 func=self._get_fact,
             )
         )
@@ -219,7 +252,10 @@ class LangChainAgentOrchestrator:
             tools.append(
                 Tool(
                     name="type_text",
-                    description="Type text into the currently active window. Input should be the text to type.",
+                    description=(
+                        "Type text into the currently active window. "
+                        "Input should be the text to type."
+                    ),
                     func=self._type_text,
                 )
             )
@@ -227,7 +263,10 @@ class LangChainAgentOrchestrator:
             tools.append(
                 Tool(
                     name="click_element",
-                    description="Click on a GUI element by image path. Input should be the path to the image template.",
+                    description=(
+                        "Click on a GUI element by image path. "
+                        "Input should be the path to the image template."
+                    ),
                     func=self._click_element,
                 )
             )
@@ -235,7 +274,10 @@ class LangChainAgentOrchestrator:
             tools.append(
                 Tool(
                     name="bring_window_to_front",
-                    description="Bring a window to the front by application title. Input should be the window title.",
+                    description=(
+                        "Bring a window to the front by application title. "
+                        "Input should be the window title."
+                    ),
                     func=self._bring_window_to_front,
                 )
             )
@@ -244,7 +286,10 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="ask_user_for_manual",
-                description="Ask the user for a manual or help information about a specific program. Input should be 'program_name question_text'.",
+                description=(
+                    "Ask the user for a manual or help information about "
+                    "a specific program. Input should be 'program_name question_text'."
+                ),
                 func=self._ask_user_for_manual,
             )
         )
@@ -252,7 +297,10 @@ class LangChainAgentOrchestrator:
         tools.append(
             Tool(
                 name="respond_conversationally",
-                description="Respond to the user conversationally when no other tools are needed. Input should be the response text.",
+                description=(
+                    "Respond to the user conversationally when no other tools are "
+                    "needed. Input should be the response text."
+                ),
                 func=self._respond_conversationally,
             )
         )
