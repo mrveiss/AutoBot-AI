@@ -6,6 +6,7 @@
  */
 
 import apiClient from '@/utils/ApiClient.js';
+import { reactive } from 'vue';
 
 export class SettingsService {
   constructor() {
@@ -36,7 +37,7 @@ export class SettingsService {
       }
     };
 
-    this.settings = { ...this.defaultSettings };
+    this.settings = reactive({ ...this.defaultSettings });
     this.loadSettings();
   }
 
@@ -49,7 +50,8 @@ export class SettingsService {
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
         // Merge with defaults to ensure all properties exist
-        this.settings = this.mergeDeep(this.defaultSettings, parsed);
+        const mergedSettings = this.mergeDeep(this.defaultSettings, parsed);
+        Object.assign(this.settings, mergedSettings);
       }
     } catch (error) {
       console.error('Error loading settings from localStorage:', error);
@@ -104,7 +106,7 @@ export class SettingsService {
   async fetchBackendSettings() {
     try {
       const backendSettings = await apiClient.getBackendSettings();
-      this.settings.backend = { ...this.settings.backend, ...backendSettings };
+      Object.assign(this.settings.backend, backendSettings);
       await this.saveSettings(); // Persist the merged settings
       console.log('Backend settings loaded and merged successfully');
     } catch (error) {
@@ -114,10 +116,10 @@ export class SettingsService {
   }
 
   /**
-   * Get current settings (reactive copy)
+   * Get current settings (reactive reference)
    */
   getSettings() {
-    return { ...this.settings };
+    return this.settings; // Return direct reactive reference
   }
 
   /**
