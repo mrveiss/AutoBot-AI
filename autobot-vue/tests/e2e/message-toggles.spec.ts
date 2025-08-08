@@ -103,13 +103,16 @@ test.describe('Message Display Toggles', () => {
   test('should persist toggle state after page reload', async ({ page }) => {
     const thoughtsToggle = page.locator('label').filter({ hasText: 'Show Thoughts' }).locator('input[type="checkbox"]');
 
-    // Set a specific state
-    if (await thoughtsToggle.isChecked()) {
-      await thoughtsToggle.click(); // Uncheck if checked
-    }
+    // Get initial state and toggle to opposite
+    const initialState = await thoughtsToggle.isChecked();
+    await thoughtsToggle.click();
 
-    // Verify it's unchecked
-    await expect(thoughtsToggle).not.toBeChecked();
+    // Verify toggle changed
+    const newState = await thoughtsToggle.isChecked();
+    expect(newState).toBe(!initialState);
+
+    // Wait a bit for settings to be saved
+    await page.waitForTimeout(1000);
 
     // Reload page
     await page.reload();
@@ -123,9 +126,12 @@ test.describe('Message Display Toggles', () => {
       await page.waitForSelector('.sidebar-content', { state: 'visible' });
     }
 
-    // Verify state persisted
+    // Verify state persisted (should match the toggled state, not necessarily unchecked)
     const reloadedToggle = page.locator('label').filter({ hasText: 'Show Thoughts' }).locator('input[type="checkbox"]');
-    await expect(reloadedToggle).not.toBeChecked();
+    const persistedState = await reloadedToggle.isChecked();
+
+    // The persisted state should match what we set before reload
+    expect(persistedState).toBe(newState);
   });
 
   test('should filter historical messages when loading chat history', async ({ page }) => {

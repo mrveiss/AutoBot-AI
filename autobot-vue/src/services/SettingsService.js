@@ -38,14 +38,16 @@ export class SettingsService {
     };
 
     this.settings = reactive({ ...this.defaultSettings });
+    this.initialized = false;
     this.loadSettings();
   }
 
   /**
-   * Load settings from localStorage with fallback to defaults
+   * Load settings from localStorage and backend with fallback to defaults
    */
-  loadSettings() {
+  async loadSettings() {
     try {
+      // First, try to load from localStorage for immediate UI update
       const savedSettings = localStorage.getItem('chat_settings');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
@@ -53,9 +55,28 @@ export class SettingsService {
         const mergedSettings = this.mergeDeep(this.defaultSettings, parsed);
         Object.assign(this.settings, mergedSettings);
       }
+
+      // Then, try to fetch latest settings from backend and merge
+      try {
+        const backendSettings = await apiClient.getSettings();
+        if (backendSettings) {
+          // Merge backend settings with current settings
+          const finalSettings = this.mergeDeep(this.settings, backendSettings);
+          Object.assign(this.settings, finalSettings);
+
+          // Save the merged settings back to localStorage
+          localStorage.setItem('chat_settings', JSON.stringify(this.settings));
+          console.log('✅ Settings loaded and synchronized from backend');
+        }
+      } catch (backendError) {
+        console.warn('Could not load settings from backend, using localStorage/defaults:', backendError.message);
+      }
+
+      this.initialized = true;
     } catch (error) {
-      console.error('Error loading settings from localStorage:', error);
-      this.settings = { ...this.defaultSettings };
+      console.error('Error loading settings:', error);
+      Object.assign(this.settings, this.defaultSettings);
+      this.initialized = true;
     }
   }
 
@@ -64,14 +85,16 @@ export class SettingsService {
    */
   async saveSettings() {
     try {
-      // Save to localStorage
+      // Save to localStorage first for immediate persistence
       localStorage.setItem('chat_settings', JSON.stringify(this.settings));
 
-      // Save to backend
+      // Save to backend for server-side persistence
       await apiClient.saveSettings(this.settings);
-      console.log('Settings saved successfully');
+      console.log('✅ Settings saved successfully to both localStorage and backend');
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error('❌ Error saving settings:', error);
+      // Even if backend save fails, localStorage save should work
+      // so settings persist across page reloads locally
       throw error;
     }
   }
@@ -117,9 +140,21 @@ export class SettingsService {
 
   /**
    * Get current settings (reactive reference)
+   * Ensures settings are loaded before returning
    */
-  getSettings() {
+  async getSettings() {
+    if (!this.initialized) {
+      await this.loadSettings();
+    }
     return this.settings; // Return direct reactive reference
+  }
+
+  /**
+   * Get settings synchronously (for compatibility)
+   * Use this only when you're sure settings are already loaded
+   */
+  getSettingsSync() {
+    return this.settings;
   }
 
   /**
