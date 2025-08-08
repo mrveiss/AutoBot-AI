@@ -963,19 +963,12 @@ export default {
 
     const loadChatMessages = async (chatId) => {
       try {
-        const data = await apiClient.getChatMessages(chatId);
-        messages.value = data.history;
-        console.log(`Loaded chat messages from backend for chat ${chatId}.`);
+        // Use ChatHistoryService for consistent message normalization
+        messages.value = await chatHistoryService.loadChatMessages(chatId);
+        console.log(`Loaded and normalized chat messages for chat ${chatId}.`);
       } catch (error) {
         console.error('Error loading chat messages:', error);
-        // Fallback to local storage if backend fails
-        const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
-        if (persistedMessages) {
-          messages.value = JSON.parse(persistedMessages);
-          console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
-        } else {
-          messages.value = [];
-        }
+        messages.value = [];
       }
     };
 
