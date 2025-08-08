@@ -564,13 +564,35 @@ class Orchestrator:
                         "LLM returned unexpected JSON (not a tool call). "
                         f"Treating as conversational: {llm_raw_content}"
                     )
+
+                    # Check if the JSON is empty or malformed
+                    if (
+                        llm_raw_content.strip() in ["{}", "{\n\n}", "{ }", "{  }"]
+                        or not llm_raw_content.strip()
+                        or len(llm_raw_content.strip()) < 5
+                    ):
+                        # Generate a proper greeting response for empty JSON
+                        if any(
+                            greeting in messages[-1].get("content", "").lower()
+                            for greeting in ["hello", "hi", "hey"]
+                        ):
+                            response_text = "Hello! How can I assist you today?"
+                        else:
+                            response_text = (
+                                "I received your message but couldn't generate "
+                                "a proper response. Could you please try rephrasing "
+                                "your question?"
+                            )
+                    else:
+                        response_text = llm_raw_content
+
                     return {
                         "thoughts": [
                             "The LLM returned unexpected JSON. "
-                            "Responding conversationally with the raw JSON."
+                            "Providing a helpful conversational response."
                         ],
                         "tool_name": "respond_conversationally",
-                        "tool_args": {"response_text": llm_raw_content},
+                        "tool_args": {"response_text": response_text},
                     }
             except json.JSONDecodeError:
                 print(
