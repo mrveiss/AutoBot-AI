@@ -488,6 +488,32 @@ EOF
     fi
 fi
 
+# Update config file with correct message display defaults
+echo "🔧 Updating config file with correct message display defaults..."
+update_message_display_defaults() {
+    if [ -f "$CONFIG_FILE" ]; then
+        # Use sed to update the message_display section with correct defaults
+        sed -i.bak '
+            /^message_display:$/,/^[a-zA-Z]/ {
+                s/^  show_debug: true$/  show_debug: false/
+                s/^  show_json: true$/  show_json: false/
+                s/^  show_utility: true$/  show_utility: false/
+            }
+        ' "$CONFIG_FILE"
+
+        echo "✅ Updated message display defaults in $CONFIG_FILE"
+        echo "   - show_debug: false (was potentially true)"
+        echo "   - show_json: false (was potentially true)"
+        echo "   - show_utility: false (was potentially true)"
+        echo "   - Backup saved as: ${CONFIG_FILE}.bak"
+    else
+        echo "⚠️ Config file not found at $CONFIG_FILE"
+    fi
+}
+
+# Run the config update
+update_message_display_defaults
+
 # --- 7. Validate Configuration and Module Imports ---
 echo "🔍 Validating configuration and module imports..."
 
