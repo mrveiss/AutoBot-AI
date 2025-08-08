@@ -383,6 +383,11 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         if tool_name == "respond_conversationally":
             response_text = tool_args.get("response_text", "No response text provided.")
             result_response_text = result_dict.get("response_text")
+            logging.info(
+                f"🔍 DEBUG respond_conversationally: "
+                f"response_text={response_text}, "
+                f"result_response_text={result_response_text}"
+            )
             # Handle empty string, None, or whitespace-only responses
             if result_response_text and result_response_text.strip():
                 # Try to extract plain text from JSON response if it's JSON
@@ -458,6 +463,10 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     "I apologize, but I wasn't able to generate a proper response. "
                     "Could you please rephrase your question?"
                 )
+            logging.info(
+                f"🔍 DEBUG respond_conversationally final "
+                f"response_message: {response_message}"
+            )
         # Enhance response with KB findings if available
         if (
             kb_result.get("is_question")
