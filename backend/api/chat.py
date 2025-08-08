@@ -8,11 +8,74 @@ import logging
 import traceback
 import glob
 import shutil
-from src.agents import get_kb_librarian
+from src.agents import get_kb_librarian, get_librarian_assistant
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+def _should_research_web(message: str) -> bool:
+    """Determine if a message should trigger web research."""
+    # Research keywords that suggest current/recent information is needed
+    research_keywords = [
+        "latest",
+        "recent",
+        "current",
+        "new",
+        "update",
+        "2024",
+        "2025",
+        "today",
+        "now",
+        "this year",
+        "this month",
+        "breaking",
+        "news",
+        "announcement",
+        "release",
+        "launch",
+        "trending",
+    ]
+
+    # Avoid research for certain topics
+    avoid_keywords = [
+        "how to",
+        "tutorial",
+        "guide",
+        "definition",
+        "what is",
+        "explain",
+        "example",
+        "calculate",
+        "formula",
+        "code",
+    ]
+
+    message_lower = message.lower()
+
+    # Don't research if it looks like a how-to or basic definition request
+    if any(avoid in message_lower for avoid in avoid_keywords):
+        return False
+
+    # Research if it contains current/recent information keywords
+    if any(keyword in message_lower for keyword in research_keywords):
+        return True
+
+    # Research for factual questions about specific topics, companies, products
+    factual_patterns = [
+        r"\b(who is|what happened to|where is|when did|why did)\b",
+        r"\b(price of|cost of|value of)\b",
+        r"\b(stock|market|cryptocurrency|crypto)\b",
+        r"\b(company|startup|business|corporation)\b",
+    ]
+
+    import re
+
+    if any(re.search(pattern, message_lower) for pattern in factual_patterns):
+        return True
+
+    return False
 
 
 def _extract_text_from_complex_json(data, max_length=500):
@@ -280,6 +343,22 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         # First, check knowledge base using the KB Librarian Agent
         kb_librarian = get_kb_librarian()
         kb_result = await kb_librarian.process_query(message)
+
+        # If KB search found no results for a question, try web research
+        web_research_result = None
+        if (
+            kb_result.get("is_question", False)
+            and kb_result.get("documents_found", 0) == 0
+            and _should_research_web(message)
+        ):
+            try:
+                librarian_assistant = get_librarian_assistant()
+                web_research_result = await librarian_assistant.research_query(message)
+                logger.info(f"Web research completed for query: {message}")
+            except Exception as e:
+                logger.error(f"Web research failed: {e}")
+                web_research_result = {"error": str(e)}
+
         # Execute the goal using the orchestrator
         orchestrator_result = await orchestrator.execute_goal(
             message, [{"role": "user", "content": message}]
@@ -394,6 +473,46 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
             logging.info(
                 f"Enhanced response with {kb_result['documents_found']} KB documents"
             )
+
+        # Enhance response with web research results if available
+        elif (
+            web_research_result
+            and web_research_result.get("summary")
+            and not web_research_result.get("error")
+        ):
+            web_summary = web_research_result["summary"]
+            sources = web_research_result.get("sources", [])
+
+            # Format sources
+            sources_text = ""
+            if sources:
+                sources_text = "\n\n**Sources:**\n" + "\n".join(
+                    [
+                        f"• {source['title']} ({source['domain']}) - "
+                        f"Quality: {source.get('quality_score', 'N/A')}"
+                        for source in sources[:3]  # Show top 3 sources
+                    ]
+                )
+
+            # Prepend web research to response
+            response_message = (
+                f"🌐 **Web Research Results:**\n{web_summary}{sources_text}\n\n"
+                f"**Response:**\n{response_message}"
+            )
+
+            # Note about knowledge base storage
+            stored_count = len(web_research_result.get("stored_in_kb", []))
+            if stored_count > 0:
+                response_message += (
+                    f"\n\n*Note: {stored_count} high-quality sources were added "
+                    "to the knowledge base for future reference.*"
+                )
+
+            logging.info(
+                f"Enhanced response with web research: {len(sources)} sources found, "
+                f"{stored_count} stored in KB"
+            )
+
         elif tool_name == "execute_system_command":
             command_output = tool_args.get("output", "")
             command_error = tool_args.get("error", "")
@@ -444,6 +563,18 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
             bot_message["kb_search_performed"] = True
             bot_message["kb_documents_found"] = kb_result["documents_found"]
             bot_message["kb_documents"] = kb_result.get("documents", [])
+
+        # Add web research results to metadata if available
+        if web_research_result and not web_research_result.get("error"):
+            bot_message["web_research_performed"] = True
+            bot_message["web_sources_found"] = len(
+                web_research_result.get("sources", [])
+            )
+            bot_message["web_sources"] = web_research_result.get("sources", [])
+            bot_message["web_stored_in_kb"] = len(
+                web_research_result.get("stored_in_kb", [])
+            )
+
         existing_history.append(bot_message)
 
         # Save updated chat history

@@ -107,6 +107,32 @@ else
     exit 1
 fi
 
+# Start Playwright Service Docker container
+echo "Starting Playwright Service Docker container..."
+if docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright$'; then
+    if docker inspect -f '{{.State.Running}}' autobot-playwright | grep -q 'true'; then
+        echo "✅ 'autobot-playwright' container is already running."
+    else
+        echo "🔄 'autobot-playwright' container found but not running. Starting it..."
+        docker start autobot-playwright || { echo "❌ Failed to start 'autobot-playwright' container."; exit 1; }
+        echo "✅ 'autobot-playwright' container started."
+
+        # Wait for service to be ready
+        echo "⏳ Waiting for Playwright service to be ready..."
+        for i in {1..15}; do
+            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+                echo "✅ Playwright service is ready."
+                break
+            fi
+            echo "⏳ Waiting for Playwright service... (attempt $i/15)"
+            sleep 2
+        done
+    fi
+else
+    echo "❌ 'autobot-playwright' container not found. Please run setup_agent.sh to deploy it."
+    exit 1
+fi
+
 # Start backend (FastAPI) in background using uvicorn
 echo "Starting FastAPI backend on port 8001..."
 uvicorn main:app --host 0.0.0.0 --port 8001 --log-level debug &
