@@ -6,12 +6,9 @@ selected prompts into the knowledge base, making operational intelligence
 searchable and accessible during agent operations.
 """
 
-import os
 import re
-import asyncio
 import logging
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 import hashlib
 
@@ -311,7 +308,9 @@ class PromptKnowledgeSync:
                 logger.error(error_detail)
 
         logger.info(
-            f"Prompt sync completed: {results['imported']} imported, {results['updated']} updated, {results['skipped']} skipped, {results['errors']} errors"
+            f"Prompt sync completed: {results['imported']} imported, "
+            f"{results['updated']} updated, {results['skipped']} skipped, "
+            f"{results['errors']} errors"
         )
         return results
 
@@ -355,7 +354,8 @@ class PromptKnowledgeSync:
                         removed_count += 1
 
             logger.info(
-                f"Removed {removed_count} knowledge entries for prompt: {prompt_key}"
+                f"Removed {removed_count} knowledge entries for prompt: "
+                f"{prompt_key}"
             )
             return removed_count > 0
 
@@ -374,7 +374,8 @@ class PromptKnowledgeSync:
             for category_name, category_info in self.IMPORT_CATEGORIES.items():
                 collection_name = category_info["collection"]
 
-                # Get all facts and count those in this collection with auto_imported flag
+                # Get all facts and count those in this collection
+                # with auto_imported flag
                 all_facts = await self.knowledge_base.get_all_facts(collection="all")
 
                 auto_imported_count = sum(
