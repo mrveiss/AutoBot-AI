@@ -43,6 +43,7 @@ from backend.api.agent import router as agent_router
 from backend.api.files import router as files_router
 from backend.api.websockets import router as websocket_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
+from backend.api.kb_librarian import router as kb_librarian_router
 from backend.api.developer import (
     router as developer_router,
     api_registry,
@@ -393,6 +394,7 @@ def add_api_routes(app: FastAPI) -> None:
         ),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
+        (kb_librarian_router, "/kb-librarian", ["kb-librarian"], "kb_librarian"),
     ]
 
     for router, prefix, tags, name in routers_config:

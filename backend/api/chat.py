@@ -8,6 +8,7 @@ import logging
 import traceback
 import glob
 import shutil
+from src.agents import get_kb_librarian
 
 router = APIRouter()
 
@@ -276,6 +277,9 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         existing_history = chat_history_manager.load_session(chat_id) or []
         existing_history.append(user_message)
 
+        # First, check knowledge base using the KB Librarian Agent
+        kb_librarian = get_kb_librarian()
+        kb_result = await kb_librarian.process_query(message)
         # Execute the goal using the orchestrator
         orchestrator_result = await orchestrator.execute_goal(
             message, [{"role": "user", "content": message}]
@@ -375,6 +379,21 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     "I apologize, but I wasn't able to generate a proper response. "
                     "Could you please rephrase your question?"
                 )
+        # Enhance response with KB findings if available
+        if (
+            kb_result.get("is_question")
+            and kb_result.get("documents_found", 0) > 0
+            and "summary" in kb_result
+        ):
+            # Prepend KB findings to the response
+            kb_summary = kb_result["summary"]
+            response_message = (
+                f"📚 **Knowledge Base Information:**\n{kb_summary}\n\n"
+                f"**Response:**\n{response_message}"
+            )
+            logging.info(
+                f"Enhanced response with {kb_result['documents_found']} KB documents"
+            )
         elif tool_name == "execute_system_command":
             command_output = tool_args.get("output", "")
             command_error = tool_args.get("error", "")
@@ -420,6 +439,11 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
             "rawData": result_dict,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
+        # Add KB search results to metadata if available
+        if kb_result.get("is_question") and kb_result.get("documents_found", 0) > 0:
+            bot_message["kb_search_performed"] = True
+            bot_message["kb_documents_found"] = kb_result["documents_found"]
+            bot_message["kb_documents"] = kb_result.get("documents", [])
         existing_history.append(bot_message)
 
         # Save updated chat history
