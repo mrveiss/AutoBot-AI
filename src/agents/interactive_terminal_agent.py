@@ -1,0 +1,399 @@
+"""
+Interactive Terminal Agent for AutoBot
+Handles full terminal emulation with PTY support, sudo handling, and user takeover
+"""
+
+import asyncio
+import pty
+import os
+import select
+import termios
+import struct
+import fcntl
+import time
+from typing import Optional, Dict, Any
+import logging
+from datetime import datetime
+
+from src.event_manager import event_manager
+
+logger = logging.getLogger(__name__)
+
+
+class InteractiveTerminalAgent:
+    """Agent that manages interactive terminal sessions with full I/O"""
+
+    def __init__(self, chat_id: str):
+        self.chat_id = chat_id
+        self.master_fd: Optional[int] = None
+        self.slave_fd: Optional[int] = None
+        self.process: Optional[asyncio.subprocess.Process] = None
+        self.session_active = False
+        self.input_mode = "agent"  # "agent" or "user"
+        self.pending_sudo = False
+        self.command_buffer = ""
+        self.output_buffer = []
+        self.start_time = None
+        self.terminal_size = (80, 24)  # cols, rows
+
+    async def start_session(self, command: str, env: dict = None, cwd: str = None):
+        """Start an interactive terminal session"""
+        try:
+            # Create pseudo-terminal
+            self.master_fd, self.slave_fd = pty.openpty()
+
+            # Set terminal size
+            self._set_terminal_size(self.terminal_size[0], self.terminal_size[1])
+
+            # Make master_fd non-blocking
+            flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
+            fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+            # Prepare environment
+            env_vars = os.environ.copy()
+            if env:
+                env_vars.update(env)
+
+            # Set TERM environment variable for proper terminal support
+            env_vars["TERM"] = "xterm-256color"
+
+            # Start process with PTY
+            self.process = await asyncio.create_subprocess_exec(
+                "/bin/bash",
+                "-c",
+                command,
+                stdin=self.slave_fd,
+                stdout=self.slave_fd,
+                stderr=self.slave_fd,
+                env=env_vars,
+                cwd=cwd or os.getcwd(),
+                preexec_fn=os.setsid,
+            )
+
+            self.session_active = True
+            self.start_time = time.time()
+
+            # Notify session started
+            await event_manager.publish(
+                "terminal_session",
+                {
+                    "chat_id": self.chat_id,
+                    "status": "started",
+                    "command": command,
+                    "pid": self.process.pid,
+                },
+            )
+
+            # Start output streaming
+            asyncio.create_task(self._stream_output())
+
+            logger.info(f"Started terminal session for chat {self.chat_id}: {command}")
+
+        except Exception as e:
+            logger.error(f"Failed to start terminal session: {e}")
+            await self._send_error(f"Failed to start terminal: {str(e)}")
+            raise
+
+    async def _stream_output(self):
+        """Stream terminal output to chat in real-time"""
+        while self.session_active and self.process:
+            try:
+                # Check if process is still running
+                if self.process.returncode is not None:
+                    self.session_active = False
+                    await self._handle_session_end()
+                    break
+
+                # Check if data available
+                if await self._data_available():
+                    try:
+                        data = os.read(self.master_fd, 4096)
+                        if data:
+                            # Process the output
+                            await self._process_output(data)
+                        else:
+                            # EOF reached
+                            self.session_active = False
+                            await self._handle_session_end()
+                            break
+                    except OSError as e:
+                        if e.errno == 5:  # I/O error
+                            self.session_active = False
+                            await self._handle_session_end()
+                            break
+                        else:
+                            raise
+                else:
+                    await asyncio.sleep(0.01)
+
+            except Exception as e:
+                logger.error(f"Error in output streaming: {e}")
+                break
+
+    async def _data_available(self) -> bool:
+        """Check if data is available to read"""
+        if not self.master_fd:
+            return False
+
+        # Use select with timeout to check data availability
+        readable, _, _ = select.select([self.master_fd], [], [], 0)
+        return bool(readable)
+
+    async def _process_output(self, data: bytes):
+        """Process and send terminal output"""
+        try:
+            # Decode output
+            output = data.decode("utf-8", errors="replace")
+
+            # Add to buffer
+            self.output_buffer.append(output)
+
+            # Detect special prompts
+            if self._detect_sudo_prompt(output):
+                self.pending_sudo = True
+                await self._handle_sudo_prompt(output)
+            elif self._detect_input_prompt(output):
+                await self._handle_input_prompt(output)
+            else:
+                # Regular output
+                await self._send_to_chat(output)
+
+        except Exception as e:
+            logger.error(f"Error processing output: {e}")
+
+    def _detect_sudo_prompt(self, output: str) -> bool:
+        """Detect sudo password prompts"""
+        sudo_patterns = [
+            "[sudo] password",
+            "Password:",
+            "password for",
+            "[sudo] password for",
+        ]
+        return any(pattern in output for pattern in sudo_patterns)
+
+    def _detect_input_prompt(self, output: str) -> bool:
+        """Detect interactive prompts"""
+        prompt_patterns = [
+            "(y/N)",
+            "(Y/n)",
+            "[y/N]",
+            "[Y/n]",
+            "Continue?",
+            "Proceed?",
+            "Are you sure",
+            "Do you want to continue",
+        ]
+        return any(pattern in output for pattern in prompt_patterns)
+
+    async def _handle_sudo_prompt(self, prompt_data: str):
+        """Handle sudo password prompts"""
+        await event_manager.publish(
+            "terminal_output",
+            {
+                "chat_id": self.chat_id,
+                "output": prompt_data,
+                "type": "sudo_prompt",
+                "requires_input": True,
+                "input_type": "password",
+                "message": (
+                    "🔐 Sudo password required. "
+                    "Click 'Send Input' to provide password."
+                ),
+            },
+        )
+
+        # Switch to user input mode for password
+        self.input_mode = "user"
+
+    async def _handle_input_prompt(self, prompt_data: str):
+        """Handle interactive prompts"""
+        await event_manager.publish(
+            "terminal_output",
+            {
+                "chat_id": self.chat_id,
+                "output": prompt_data,
+                "type": "input_prompt",
+                "requires_input": True,
+                "input_type": "text",
+                "message": "⌨️ Input required. Enter your response.",
+            },
+        )
+
+    async def _send_to_chat(self, output: str):
+        """Send regular output to chat"""
+        await event_manager.publish(
+            "terminal_output",
+            {
+                "chat_id": self.chat_id,
+                "output": output,
+                "type": "output",
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
+    async def _send_error(self, error: str):
+        """Send error message to chat"""
+        await event_manager.publish(
+            "terminal_output",
+            {
+                "chat_id": self.chat_id,
+                "output": f"❌ Error: {error}",
+                "type": "error",
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
+    async def send_input(self, user_input: str, is_password: bool = False):
+        """Send user input to the terminal"""
+        if not self.master_fd or not self.session_active:
+            await self._send_error("Terminal session is not active")
+            return
+
+        try:
+            # Add newline if not present
+            if not user_input.endswith("\n"):
+                user_input += "\n"
+
+            # Write to terminal
+            os.write(self.master_fd, user_input.encode())
+
+            # Handle password masking
+            if is_password or self.pending_sudo:
+                await self._send_to_chat("*** [password sent]\n")
+                self.pending_sudo = False
+                # Return to agent mode after password
+                self.input_mode = "agent"
+            else:
+                # Echo the command for transparency
+                await self._send_to_chat(f"$ {user_input}")
+
+        except Exception as e:
+            logger.error(f"Error sending input: {e}")
+            await self._send_error(f"Failed to send input: {str(e)}")
+
+    async def take_control(self):
+        """Allow user to take full control of terminal"""
+        self.input_mode = "user"
+        await event_manager.publish(
+            "terminal_control",
+            {
+                "chat_id": self.chat_id,
+                "status": "user_control",
+                "message": (
+                    "🎮 You now have control of the terminal. " "Type commands directly."
+                ),
+            },
+        )
+
+    async def return_control(self):
+        """Return control to agent"""
+        self.input_mode = "agent"
+        await event_manager.publish(
+            "terminal_control",
+            {
+                "chat_id": self.chat_id,
+                "status": "agent_control",
+                "message": "🤖 Agent has resumed control of the terminal.",
+            },
+        )
+
+    async def resize_terminal(self, cols: int, rows: int):
+        """Resize the terminal"""
+        if self.master_fd:
+            self.terminal_size = (cols, rows)
+            self._set_terminal_size(cols, rows)
+
+    def _set_terminal_size(self, cols: int, rows: int):
+        """Set terminal size using ioctl"""
+        if self.master_fd:
+            size = struct.pack("HHHH", rows, cols, 0, 0)
+            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, size)
+
+    async def send_signal(self, signal_type: str):
+        """Send signal to the process"""
+        if self.process and self.session_active:
+            try:
+                if signal_type == "interrupt":
+                    self.process.send_signal(2)  # SIGINT (Ctrl+C)
+                elif signal_type == "quit":
+                    self.process.send_signal(3)  # SIGQUIT (Ctrl+\)
+                elif signal_type == "suspend":
+                    self.process.send_signal(20)  # SIGTSTP (Ctrl+Z)
+                elif signal_type == "kill":
+                    self.process.kill()
+
+                await self._send_to_chat(f"\n[Signal {signal_type} sent]\n")
+            except Exception as e:
+                logger.error(f"Error sending signal: {e}")
+
+    async def _handle_session_end(self):
+        """Handle terminal session end"""
+        duration = time.time() - self.start_time if self.start_time else 0
+        exit_code = self.process.returncode if self.process else -1
+
+        await event_manager.publish(
+            "terminal_session",
+            {
+                "chat_id": self.chat_id,
+                "status": "ended",
+                "exit_code": exit_code,
+                "duration": duration,
+                "output_lines": len(self.output_buffer),
+            },
+        )
+
+        # Cleanup
+        await self.cleanup()
+
+    async def wait_for_completion(
+        self, timeout: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Wait for the terminal session to complete"""
+        try:
+            if self.process:
+                await asyncio.wait_for(self.process.wait(), timeout=timeout)
+
+            return {
+                "exit_code": self.process.returncode if self.process else -1,
+                "duration": time.time() - self.start_time if self.start_time else 0,
+                "line_count": len(self.output_buffer),
+                "status": "completed",
+            }
+        except asyncio.TimeoutError:
+            return {
+                "exit_code": None,
+                "duration": time.time() - self.start_time if self.start_time else 0,
+                "line_count": len(self.output_buffer),
+                "status": "timeout",
+            }
+
+    async def cleanup(self):
+        """Clean up terminal session"""
+        self.session_active = False
+
+        if self.process:
+            try:
+                self.process.terminate()
+                await asyncio.sleep(0.1)
+                if self.process.returncode is None:
+                    self.process.kill()
+            except Exception:
+                pass
+
+        if self.master_fd:
+            try:
+                os.close(self.master_fd)
+            except Exception:
+                pass
+
+        if self.slave_fd:
+            try:
+                os.close(self.slave_fd)
+            except Exception:
+                pass
+
+        self.master_fd = None
+        self.slave_fd = None
+        self.process = None
+
+        logger.info(f"Cleaned up terminal session for chat {self.chat_id}")
