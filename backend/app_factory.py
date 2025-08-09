@@ -389,7 +389,7 @@ def add_api_routes(app: FastAPI) -> None:
         (agent_router, "/agent", ["agent"], "agent"),
         (
             intelligent_agent_router,
-            "/agent",
+            "/intelligent-agent",
             ["intelligent-agent"],
             "intelligent_agent",
         ),

@@ -68,8 +68,8 @@ class HealthResponse(BaseModel):
     uptime: float
 
 
-# Router
-router = APIRouter(prefix="/api/agent", tags=["intelligent-agent"])
+# Router - no prefix needed as it's added when mounting
+router = APIRouter(tags=["intelligent-agent"])
 
 
 @router.post("/process", response_model=GoalResponse)
@@ -122,12 +122,26 @@ async def get_system_info():
         agent = await get_agent()
         system_info = await agent.get_system_status()
 
+        # Handle both initialized and uninitialized states
+        if system_info.get("status") == "not_initialized":
+            return SystemInfoResponse(
+                os_type="unknown",
+                distro="",
+                user="",
+                capabilities=[],
+                available_tools=[],
+            )
+
+        # Extract from nested os_info
+        os_info = system_info.get("os_info", {})
+        capabilities_info = system_info.get("capabilities", {})
+
         return SystemInfoResponse(
-            os_type=system_info["os_type"],
-            distro=system_info.get("distro", ""),
-            user=system_info["user"],
-            capabilities=system_info.get("capabilities", []),
-            available_tools=system_info.get("available_tools", []),
+            os_type=os_info.get("os_type", "unknown"),
+            distro=os_info.get("distro", ""),
+            user=os_info.get("user", ""),
+            capabilities=list(capabilities_info.get("available_tools", {}).keys()),
+            available_tools=list(capabilities_info.get("installed_tools", [])),
         )
 
     except Exception as e:

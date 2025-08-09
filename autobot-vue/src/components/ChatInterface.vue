@@ -1,12 +1,11 @@
 <template>
-  <div class="flex h-full bg-white">
-    <div class="flex-1 flex flex-col">
-      <!-- Sidebar -->
-      <div class="w-80 bg-blueGray-100 border-r border-blueGray-200 flex flex-col transition-all duration-300" :class="{ 'w-12': sidebarCollapsed }">
-        <button class="p-3 border-b border-blueGray-200 text-blueGray-600 hover:bg-blueGray-200 transition-colors" @click="sidebarCollapsed = !sidebarCollapsed">
+  <div class="flex h-full bg-white overflow-hidden">
+    <!-- Sidebar -->
+    <div class="w-80 bg-blueGray-100 border-r border-blueGray-200 flex flex-col h-full overflow-hidden transition-all duration-300 flex-shrink-0" :class="{ 'w-12': sidebarCollapsed }">
+        <button class="p-3 border-b border-blueGray-200 text-blueGray-600 hover:bg-blueGray-200 transition-colors flex-shrink-0" @click="sidebarCollapsed = !sidebarCollapsed">
           <i :class="sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
         </button>
-        <div class="flex-1 overflow-y-auto p-4" v-if="!sidebarCollapsed">
+        <div class="flex-1 overflow-y-auto p-4" v-if="!sidebarCollapsed" style="max-height: calc(100vh - 300px);">
           <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Chat History</h3>
           <div class="space-y-2 mb-6">
             <div v-for="chat in chatList" :key="chat.chatId" class="p-3 rounded-lg cursor-pointer transition-all duration-150" :class="currentChatId === chat.chatId ? 'bg-indigo-100 border border-indigo-200' : 'bg-white hover:bg-blueGray-50 border border-blueGray-200'" @click="switchChat(chat.chatId)">
@@ -76,58 +75,78 @@
             </button>
           </div>
         </div>
-      </div>
-
-      <!-- Chat Messages -->
-      <div class="flex-1 flex flex-col">
-        <div class="flex-1 overflow-y-auto p-6 space-y-4" ref="chatMessages" role="log">
-          <div v-for="(message, index) in filteredMessages" :key="index" class="flex" :class="message.sender === 'user' ? 'justify-end' : 'justify-start'">
-            <div class="max-w-3xl rounded-lg p-4 shadow-sm" :class="message.sender === 'user' ? 'bg-indigo-500 text-white' : 'bg-white border border-blueGray-200 text-blueGray-700'">
-              <div class="message-content" v-html="formatMessage(message.text, message.type)"></div>
-              <div class="text-xs mt-2 opacity-70">{{ message.timestamp }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Chat Input -->
-        <div class="border-t border-blueGray-200 p-4">
-          <div class="flex items-end space-x-4">
-            <div class="flex-1">
-              <textarea
-                id="chat-input"
-                v-model="inputMessage"
-                placeholder="Type your message or goal for AutoBot..."
-                @keyup.enter="sendMessage"
-                rows="3"
-                class="w-full px-4 py-3 border border-blueGray-300 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              ></textarea>
-            </div>
-            <button
-              @click="sendMessage"
-              class="btn btn-primary px-6 py-3"
-              :disabled="!inputMessage.trim()"
-            >
-              <i class="fas fa-paper-plane mr-2"></i>
-              Send
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Terminal Sidebar -->
-      <TerminalSidebar
-        v-if="showTerminalSidebar"
-        :collapsed="terminalSidebarCollapsed"
-        @update:collapsed="terminalSidebarCollapsed = $event"
-        @open-new-tab="openTerminalInNewTab"
-      />
     </div>
+
+    <!-- Main Chat Container -->
+    <div class="flex-1 flex h-full overflow-hidden">
+      <!-- Chat Content Area -->
+      <div class="flex-1 flex flex-col h-full">
+          <!-- Chat Messages -->
+          <div class="flex-1 overflow-y-auto p-6 space-y-4" ref="chatMessages" role="log" style="max-height: calc(100vh - 300px); min-height: 400px;">
+            <div v-for="(message, index) in filteredMessages" :key="index" class="flex" :class="message.sender === 'user' ? 'justify-end' : 'justify-start'">
+              <div class="max-w-3xl rounded-lg p-4 shadow-sm" :class="message.sender === 'user' ? 'bg-indigo-500 text-white' : 'bg-white border border-blueGray-200 text-blueGray-700'">
+                <div class="message-content" v-html="formatMessage(message.text, message.type)"></div>
+                <div class="text-xs mt-2 opacity-70">{{ message.timestamp }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Input - Fixed at bottom -->
+          <div class="border-t border-blueGray-200 p-4 bg-white flex-shrink-0">
+            <!-- Attached Files Display -->
+            <div v-if="attachedFiles.length > 0" class="mb-3 flex flex-wrap gap-2">
+              <div v-for="(file, index) in attachedFiles" :key="index" class="attached-file-chip">
+                <span class="file-icon">{{ getFileIcon(file) }}</span>
+                <span class="file-name">{{ file.name }}</span>
+                <button @click="removeAttachment(index)" class="remove-btn">&times;</button>
+              </div>
+            </div>
+
+            <div class="flex items-end space-x-4">
+              <div class="flex-1">
+                <textarea
+                  v-model="inputMessage"
+                  @keydown.enter.exact.prevent="sendMessage"
+                  placeholder="Type your message or goal for AutoBot..."
+                  rows="3"
+                  class="w-full px-4 py-3 border border-blueGray-300 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                ></textarea>
+              </div>
+
+              <!-- File Attachment Buttons -->
+              <div class="flex flex-col gap-2">
+                <label class="btn btn-secondary p-2" title="Attach file">
+                  <i class="fas fa-paperclip"></i>
+                  <input type="file" @change="handleFileAttachment" multiple style="display: none;" />
+                </label>
+                <button
+                  @click="sendMessage"
+                  :disabled="!inputMessage.trim() && attachedFiles.length === 0"
+                  class="btn btn-primary px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i class="fas fa-paper-plane mr-2"></i>
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+      </div>
+    </div>
+
+    <!-- Terminal Sidebar -->
+    <TerminalSidebar
+      v-if="showTerminalSidebar"
+      :collapsed="terminalSidebarCollapsed"
+      @update:collapsed="terminalSidebarCollapsed = $event"
+      @open-new-tab="openTerminalInNewTab"
+    />
   </div>
 </template>
 
 <script>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import TerminalSidebar from './TerminalSidebar.vue';
+import apiClient from '../utils/ApiClient.js';
 
 export default {
   name: 'ChatInterface',
@@ -145,6 +164,7 @@ export default {
     const currentChatId = ref(null);
     const backendStarting = ref(false);
     const chatMessages = ref(null);
+    const attachedFiles = ref([]);
 
     // Settings
     const settings = ref({
@@ -174,54 +194,331 @@ export default {
 
     // Methods
     const formatMessage = (text, type) => {
-      if (type === 'thought') {
-        return `<div class="thought-message">${text}</div>`;
-      } else if (type === 'planning') {
-        return `<div class="planning-message"><strong>Planning:</strong> ${text}</div>`;
-      } else if (type === 'debug' || type === 'json') {
-        return `<div class="debug-message"><strong>Debug:</strong> <pre>${text}</pre></div>`;
-      } else if (type === 'utility') {
-        return `<div class="utility-message"><strong>Utility:</strong> ${text}</div>`;
-      } else if (type === 'tool_output') {
-        return `<div class="tool-output-message"><strong>Tool Output:</strong> ${text}</div>`;
+      // First clean and escape the text
+      let cleanedText = escapeJsonChars(text);
+
+      // Check if text is a structured response that needs parsing
+      const parsedContent = parseStructuredMessage(cleanedText);
+
+      if (parsedContent.length > 0) {
+        // Multiple message types found, format each separately
+        return parsedContent.map(item => formatSingleMessage(item.text, item.type)).join('');
       }
-      return text;
+
+      // Single message type
+      return formatSingleMessage(cleanedText, type);
+    };
+
+    const escapeJsonChars = (text) => {
+      if (!text) return '';
+
+      // Clean up JSON escape characters and brackets that are rendering literally
+      return text
+        .replace(/\\"/g, '"')           // Replace \" with "
+        .replace(/\\n/g, '\n')         // Replace \n with actual newlines
+        .replace(/\\r/g, '\r')         // Replace \r with carriage returns
+        .replace(/\\t/g, '\t')         // Replace \t with tabs
+        .replace(/\\\\/g, '\\')        // Replace \\\\ with single backslash
+        .replace(/^\{|\}$/g, '')       // Remove wrapping { }
+        .replace(/^\[|\]$/g, '')       // Remove wrapping [ ]
+        .replace(/^"|"$/g, '');        // Remove wrapping quotes
+    };
+
+    const parseStructuredMessage = (text) => {
+      const messages = [];
+      let remainingText = text;
+
+      // Check for "Tool Used:" pattern first - this is the most common format
+      const toolPattern = /Tool Used: ([^\n]+)[\n\s]*Output: (.*?)(?=\n\d{2}:\d{2}:\d{2}|\nTool Used:|$)/gis;
+      let toolMatch;
+
+      while ((toolMatch = toolPattern.exec(text)) !== null) {
+        // Add the tool usage as utility message
+        messages.push({
+          type: 'tool_output',
+          text: `<strong>${toolMatch[1].trim()}</strong>`,
+          order: toolMatch.index
+        });
+
+        const outputContent = toolMatch[2].trim();
+
+        // Try to parse the output as JSON
+        if (outputContent.startsWith('{') || outputContent.startsWith("{'")) {
+          try {
+            let jsonContent = outputContent;
+
+            // Handle single quotes to double quotes conversion
+            if (outputContent.startsWith("{'")) {
+              jsonContent = outputContent.replace(/'/g, '"');
+            }
+
+            const parsed = JSON.parse(jsonContent);
+
+            // Add the JSON output
+            messages.push({
+              type: 'json',
+              text: JSON.stringify(parsed, null, 2),
+              order: toolMatch.index + 1
+            });
+
+            // Check if it has response_text and extract the final response
+            if (parsed.response_text) {
+              let innerContent = parsed.response_text;
+
+              // If response_text is a string that looks like JSON, parse it
+              if (typeof innerContent === 'string' && (innerContent.startsWith('{') || innerContent.startsWith('{'))) {
+                try {
+                  const innerParsed = JSON.parse(innerContent);
+
+                  // Extract the actual conversational response
+                  if (innerParsed.response) {
+                    const responseText = typeof innerParsed.response === 'object'
+                      ? (innerParsed.response.greeting || innerParsed.response.message || JSON.stringify(innerParsed.response))
+                      : innerParsed.response;
+
+                    messages.push({
+                      type: 'response',
+                      text: responseText,
+                      order: toolMatch.index + 2
+                    });
+                  } else if (typeof innerParsed === 'string') {
+                    messages.push({
+                      type: 'response',
+                      text: innerParsed,
+                      order: toolMatch.index + 2
+                    });
+                  }
+                } catch {
+                  // If inner parsing fails, just show the response_text as regular content
+                  messages.push({
+                    type: 'response',
+                    text: innerContent,
+                    order: toolMatch.index + 2
+                  });
+                }
+              } else {
+                messages.push({
+                  type: 'response',
+                  text: innerContent,
+                  order: toolMatch.index + 2
+                });
+              }
+            }
+
+          } catch (e) {
+            // Not valid JSON, treat as regular utility output
+            messages.push({
+              type: 'utility',
+              text: outputContent,
+              order: toolMatch.index + 1
+            });
+          }
+        } else {
+          // Non-JSON output
+          messages.push({
+            type: 'utility',
+            text: outputContent,
+            order: toolMatch.index + 1
+          });
+        }
+
+        // Remove processed content from remaining text
+        remainingText = remainingText.replace(toolMatch[0], '').trim();
+      }
+
+      // Check for other structured patterns in remaining text
+      const patterns = [
+        { type: 'thought', pattern: /\[THOUGHT\](.*?)\[\/THOUGHT\]/gis },
+        { type: 'planning', pattern: /\[PLANNING\](.*?)\[\/PLANNING\]/gis },
+        { type: 'utility', pattern: /\[UTILITY\](.*?)\[\/UTILITY\]/gis },
+        { type: 'debug', pattern: /\[DEBUG\](.*?)\[\/DEBUG\]/gis },
+        { type: 'json', pattern: /\[JSON\](.*?)\[\/JSON\]/gis }
+      ];
+
+      patterns.forEach(({ type, pattern }) => {
+        let match;
+        while ((match = pattern.exec(remainingText)) !== null) {
+          messages.push({
+            type,
+            text: match[1].trim(),
+            order: match.index + 1000 // Ensure these come after tool outputs
+          });
+        }
+      });
+
+      // Sort messages by order to maintain proper sequence
+      messages.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+      return messages.length > 0 ? messages : [];
+    };
+
+    const formatSingleMessage = (text, type) => {
+      const escapedText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      switch (type) {
+        case 'thought':
+          return `<div class="thought-message">
+            <div class="message-header">💭 Thoughts</div>
+            <div class="message-content">${escapedText}</div>
+          </div>`;
+        case 'planning':
+          return `<div class="planning-message">
+            <div class="message-header">📋 Planning</div>
+            <div class="message-content">${escapedText}</div>
+          </div>`;
+        case 'utility':
+          return `<div class="utility-message">
+            <div class="message-header">⚙️ Utility</div>
+            <div class="message-content">${escapedText}</div>
+          </div>`;
+        case 'debug':
+          return `<div class="debug-message">
+            <div class="message-header">🐛 Debug</div>
+            <div class="message-content"><pre>${escapedText}</pre></div>
+          </div>`;
+        case 'json':
+          return `<div class="json-message">
+            <div class="message-header">📊 JSON Output</div>
+            <div class="message-content"><pre>${escapedText}</pre></div>
+          </div>`;
+        case 'tool_output':
+          return `<div class="tool-output-message">
+            <div class="message-header">🔧 Tool Output</div>
+            <div class="message-content">${escapedText}</div>
+          </div>`;
+        default:
+          return `<div class="regular-message">${escapedText}</div>`;
+      }
+    };
+
+    const determineMessageType = (text) => {
+      if (!text) return 'response';
+
+      // Check for JSON patterns
+      if (text.includes('response_text') || (text.startsWith('{') && text.includes('"status"'))) {
+        return 'json';
+      }
+
+      // Check for tool output patterns
+      if (text.includes('Tool Used:') && text.includes('Output:')) {
+        return 'tool_output';
+      }
+
+      // Check for structured message patterns
+      if (text.includes('[THOUGHT]') || text.includes('[PLANNING]') ||
+          text.includes('[UTILITY]') || text.includes('[DEBUG]')) {
+        return 'structured';
+      }
+
+      return 'response';
+    };
+
+    // File handling functions
+    const handleFileAttachment = (event) => {
+      const files = Array.from(event.target.files);
+      attachedFiles.value.push(...files);
+    };
+
+    const removeAttachment = (index) => {
+      attachedFiles.value.splice(index, 1);
+    };
+
+    const getFileIcon = (file) => {
+      const extension = file.name.split('.').pop().toLowerCase();
+      const iconMap = {
+        'txt': '📄',
+        'pdf': '📕',
+        'doc': '📘',
+        'docx': '📘',
+        'md': '📝',
+        'json': '📊',
+        'xml': '📋',
+        'csv': '📊',
+        'py': '🐍',
+        'js': '📜',
+        'html': '🌐',
+        'css': '🎨',
+        'img': '🖼️',
+        'png': '🖼️',
+        'jpg': '🖼️',
+        'jpeg': '🖼️',
+        'gif': '🖼️'
+      };
+      return iconMap[extension] || '📎';
     };
 
     const sendMessage = async () => {
-      if (!inputMessage.value.trim()) return;
+      if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return;
 
-      // Add user message
+      // Add user message with file info if any
+      let messageText = inputMessage.value;
+      if (attachedFiles.value.length > 0) {
+        const fileNames = attachedFiles.value.map(f => f.name).join(', ');
+        messageText += `\n\n📎 Attached files: ${fileNames}`;
+      }
+
       messages.value.push({
         sender: 'user',
-        text: inputMessage.value,
+        text: messageText,
         timestamp: new Date().toLocaleTimeString(),
         type: 'message'
       });
 
       const userInput = inputMessage.value;
+      const filesToUpload = [...attachedFiles.value];
       inputMessage.value = '';
+      attachedFiles.value = [];
 
       try {
+        // Upload files first if any
+        let uploadedFilePaths = [];
+        if (filesToUpload.length > 0) {
+          for (const file of filesToUpload) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const uploadResponse = await fetch('http://localhost:8001/api/files/upload', {
+              method: 'POST',
+              body: formData
+            });
+
+            if (uploadResponse.ok) {
+              const result = await uploadResponse.json();
+              uploadedFilePaths.push(result.path || file.name);
+            }
+          }
+        }
+
+        // Send message with file references
+        const messageData = {
+          message: userInput
+        };
+
+        if (uploadedFilePaths.length > 0) {
+          messageData.attachments = uploadedFilePaths;
+        }
+
         // Send to backend
-        const response = await fetch('http://localhost:8001/api/chat/send', {
+        const response = await fetch(`http://localhost:8001/api/chats/${currentChatId.value}/message`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            message: userInput,
-            chat_id: currentChatId.value
-          }),
+          body: JSON.stringify(messageData),
         });
 
         if (response.ok) {
           const result = await response.json();
+
+          // Process the response to determine message type and content
+          const responseText = result.response || result.response_text || 'No response received';
+          const messageType = determineMessageType(responseText);
+
           messages.value.push({
             sender: 'bot',
-            text: result.response || 'No response received',
+            text: responseText,
             timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
+            type: messageType
           });
         } else {
           messages.value.push({
@@ -248,14 +545,38 @@ export default {
       });
     };
 
-    const newChat = () => {
-      const newChatId = `chat-${Date.now()}`;
-      currentChatId.value = newChatId;
-      messages.value = [];
+    const newChat = async () => {
+      try {
+        // Create new chat via backend
+        const data = await apiClient.createNewChat();
+        const newChatId = data.chatId || `chat-${Date.now()}`;
 
-      // Add to chat list if not exists
-      if (!chatList.value.find(chat => chat.chatId === newChatId)) {
+        currentChatId.value = newChatId;
+        messages.value = [];
+
+        // Save to localStorage
+        localStorage.setItem('lastChatId', newChatId);
+
+        // Add to chat list
         chatList.value.unshift({
+          id: newChatId,
+          chatId: newChatId,
+          name: null,
+          lastMessage: null,
+          timestamp: new Date()
+        });
+
+        console.log('Created new chat:', newChatId);
+      } catch (error) {
+        console.error('Error creating new chat:', error);
+        // Fallback to local chat creation
+        const newChatId = `chat-${Date.now()}`;
+        currentChatId.value = newChatId;
+        messages.value = [];
+        localStorage.setItem('lastChatId', newChatId);
+
+        chatList.value.unshift({
+          id: newChatId,
           chatId: newChatId,
           name: null,
           lastMessage: null,
@@ -284,10 +605,19 @@ export default {
       }
     };
 
-    const switchChat = (chatId) => {
+    const switchChat = async (chatId) => {
+      // Save current chat messages before switching
+      if (currentChatId.value && messages.value.length > 0) {
+        await saveChatMessages(currentChatId.value);
+      }
+
       currentChatId.value = chatId;
-      // Load messages for this chat (would typically come from backend)
-      messages.value = [];
+
+      // Save the current chat ID to localStorage
+      localStorage.setItem('lastChatId', chatId);
+
+      // Load messages for this chat from backend
+      await loadChatMessages(chatId);
     };
 
     const editChatName = (chatId) => {
@@ -305,9 +635,44 @@ export default {
       return 'Chat preview...';
     };
 
-    const refreshChatList = () => {
-      // Refresh chat list from backend
-      console.log('Refreshing chat list...');
+    const refreshChatList = async () => {
+      try {
+        console.log('Refreshing chat list...');
+        const data = await apiClient.getChatList();
+        chatList.value = data.chats || [];
+        console.log('Loaded', chatList.value.length, 'chats');
+      } catch (error) {
+        console.error('Error loading chat list:', error);
+      }
+    };
+
+    const loadChatMessages = async (chatId) => {
+      try {
+        console.log('Loading messages for chat:', chatId);
+        const data = await apiClient.getChatMessages(chatId);
+        // Backend returns 'history' field, not 'messages'
+        messages.value = data.history || [];
+        console.log('Loaded', messages.value.length, 'messages');
+
+        // Scroll to bottom after loading
+        await nextTick();
+        if (chatMessages.value) {
+          chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+        }
+      } catch (error) {
+        console.error('Error loading chat messages:', error);
+        messages.value = [];
+      }
+    };
+
+    const saveChatMessages = async (chatId) => {
+      try {
+        console.log('Saving', messages.value.length, 'messages for chat:', chatId);
+        await apiClient.saveChatMessages(chatId, messages.value);
+        console.log('Messages saved successfully');
+      } catch (error) {
+        console.error('Error saving chat messages:', error);
+      }
     };
 
     const startBackendServer = async () => {
@@ -329,9 +694,7 @@ export default {
     };
 
     // Initialize
-    onMounted(() => {
-      newChat(); // Create initial chat
-
+    onMounted(async () => {
       // Load settings from localStorage
       const savedSettings = localStorage.getItem('chat-settings');
       if (savedSettings) {
@@ -340,6 +703,21 @@ export default {
         } catch (e) {
           console.error('Failed to load settings:', e);
         }
+      }
+
+      // Load chat list first
+      await refreshChatList();
+
+      // Try to load the last used chat
+      const lastChatId = localStorage.getItem('lastChatId');
+      if (lastChatId && chatList.value.some(chat => chat.chatId === lastChatId)) {
+        await switchChat(lastChatId);
+      } else if (chatList.value.length > 0) {
+        // Load the most recent chat
+        await switchChat(chatList.value[0].chatId);
+      } else {
+        // Create new chat only if no chats exist
+        await newChat();
       }
     });
 
@@ -365,7 +743,12 @@ export default {
       getChatPreview,
       refreshChatList,
       startBackendServer,
-      openTerminalInNewTab
+      openTerminalInNewTab,
+      // File handling
+      attachedFiles,
+      handleFileAttachment,
+      removeAttachment,
+      getFileIcon
     };
   }
 };
@@ -379,26 +762,192 @@ export default {
 }
 
 .message-content pre {
-  @apply bg-blueGray-100 p-2 rounded text-xs overflow-x-auto font-mono;
+  background-color: #f1f5f9;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  font-family: monospace;
+}
+
+/* Message type styles with headers */
+.message-header {
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  display: inline-block;
+}
+
+.message-content {
+  margin-top: 0.5rem;
+  line-height: 1.5;
 }
 
 .thought-message {
-  @apply border-l-4 border-blueGray-500 bg-blueGray-50 p-3 rounded-r italic;
+  border-left: 4px solid #64748b;
+  background-color: #f8fafc;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.thought-message .message-header {
+  background-color: #64748b;
+  color: white;
+}
+
+.thought-message .message-content {
+  font-style: italic;
+  color: #475569;
 }
 
 .planning-message {
-  @apply border-l-4 border-indigo-500 bg-indigo-50 p-3 rounded-r font-medium;
+  border-left: 4px solid #6366f1;
+  background-color: #eef2ff;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
 }
 
-.debug-message {
-  @apply border-l-4 border-yellow-500 bg-yellow-50 p-3 rounded-r text-xs;
+.planning-message .message-header {
+  background-color: #6366f1;
+  color: white;
+}
+
+.planning-message .message-content {
+  color: #3730a3;
+  font-weight: 500;
 }
 
 .utility-message {
-  @apply border-l-4 border-emerald-500 bg-emerald-50 p-3 rounded-r text-sm;
+  border-left: 4px solid #10b981;
+  background-color: #ecfdf5;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.utility-message .message-header {
+  background-color: #10b981;
+  color: white;
+}
+
+.utility-message .message-content {
+  color: #047857;
+}
+
+.debug-message {
+  border-left: 4px solid #eab308;
+  background-color: #fefce8;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.debug-message .message-header {
+  background-color: #eab308;
+  color: white;
+}
+
+.debug-message .message-content {
+  color: #92400e;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+
+.json-message {
+  border-left: 4px solid #8b5cf6;
+  background-color: #f5f3ff;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.json-message .message-header {
+  background-color: #8b5cf6;
+  color: white;
+}
+
+.json-message .message-content {
+  color: #6d28d9;
+  font-family: monospace;
+  font-size: 0.875rem;
+  background-color: #f8fafc;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  margin-top: 0.5rem;
+  overflow-x: auto;
 }
 
 .tool-output-message {
-  @apply border-l-4 border-emerald-500 bg-emerald-50 p-3 rounded-r font-mono text-sm;
+  border-left: 4px solid #06b6d4;
+  background-color: #ecfeff;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.tool-output-message .message-header {
+  background-color: #06b6d4;
+  color: white;
+}
+
+.tool-output-message .message-content {
+  color: #0891b2;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+
+.regular-message {
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  background-color: white;
+  border-radius: 0.5rem;
+  line-height: 1.6;
+}
+
+/* File attachment styles */
+.attached-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #e5e7eb;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+}
+
+.attached-file-chip .file-icon {
+  font-size: 1rem;
+}
+
+.attached-file-chip .remove-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.attached-file-chip .remove-btn:hover {
+  color: #ef4444;
+}
+
+.btn-secondary {
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #4b5563;
 }
 </style>
