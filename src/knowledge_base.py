@@ -40,8 +40,14 @@ class KnowledgeBase:
         self.vector_store_type = global_config_manager.get_nested(
             "llama_index.vector_store.type", "redis"
         )
-        self.embedding_model_name = global_config_manager.get_nested(
-            "llama_index.embedding.model", "nomic-embed-text"
+        # Get embedding model from unified configuration
+        unified_llm_config = global_config_manager.get_llm_config()
+        self.embedding_model_name = unified_llm_config.get("unified", {}).get(
+            "embedding", {}
+        ).get("providers", {}).get("ollama", {}).get(
+            "selected_model"
+        ) or global_config_manager.get_nested(
+            "llama_index.embedding.model", "nomic-embed-text:latest"
         )
         self.chunk_size = global_config_manager.get_nested(
             "llama_index.chunk_size", 512
@@ -57,10 +63,12 @@ class KnowledgeBase:
         self.redis_host = redis_config.get("host", "localhost")
         self.redis_port = redis_config.get("port", 6379)
         self.redis_password = redis_config.get("password", os.getenv("REDIS_PASSWORD"))
-        self.redis_db = redis_config.get("db", 0)
-        self.redis_index_name = redis_config.get(
-            "index_name", "autobot_knowledge_index"
-        )
+        # Use a separate Redis database (2) for knowledge base to avoid conflicts
+        self.redis_db = redis_config.get(
+            "kb_db", 2
+        )  # Default to db 2 for knowledge base
+        # Must use "llama_index" as the name - it's hardcoded in the library
+        self.redis_index_name = "llama_index"
 
         # Initialize Redis client for direct use (e.g., for facts/logs)
         # Use centralized Redis client utility
@@ -93,17 +101,72 @@ class KnowledgeBase:
             global_config_manager.get_llm_config()
         )  # Get LLM config from global manager
         llm_provider = llm_config_data.get("provider", "ollama")
-        # Use phi:2.7b as default
-        llm_model = llm_config_data.get("model", "phi:2.7b")
+        # Use unified config to get the actual selected model
+        llm_model = llm_config_data.get("ollama", {}).get("model", "tinyllama:latest")
         llm_base_url = llm_config_data.get("ollama", {}).get(
             "base_url", "http://localhost:11434"
         )
 
         if llm_provider == "ollama":
-            self.llm = LlamaIndexOllamaLLM(model=llm_model, base_url=llm_base_url)
-            self.embed_model = LlamaIndexOllamaEmbedding(
-                model_name=self.embedding_model_name, base_url=llm_base_url
-            )
+            # Try to initialize with configured model, with fallback handling
+            try:
+                self.llm = LlamaIndexOllamaLLM(model=llm_model, base_url=llm_base_url)
+                logging.info(
+                    f"KnowledgeBase: Successfully initialized with model '{llm_model}'"
+                )
+            except Exception as e:
+                logging.warning(
+                    f"KnowledgeBase: Model '{llm_model}' failed to initialize: {e}"
+                )
+                # Try fallback models in order of preference
+                fallback_models = [
+                    "deepseek-r1:14b",
+                    "artifish/llama3.2-uncensored:latest",
+                    "nomic-embed-text:latest",
+                ]
+                model_initialized = False
+
+                for fallback_model in fallback_models:
+                    try:
+                        logging.info(
+                            f"KnowledgeBase: Trying fallback model '{fallback_model}'"
+                        )
+                        self.llm = LlamaIndexOllamaLLM(
+                            model=fallback_model, base_url=llm_base_url
+                        )
+                        logging.info(
+                            f"KnowledgeBase: Successfully initialized with fallback model '{fallback_model}'"
+                        )
+                        model_initialized = True
+                        break
+                    except Exception as fallback_error:
+                        logging.warning(
+                            f"KnowledgeBase: Fallback model '{fallback_model}' also failed: {fallback_error}"
+                        )
+                        continue
+
+                if not model_initialized:
+                    logging.error(
+                        "KnowledgeBase: All LLM models failed to initialize. KnowledgeBase will be disabled."
+                    )
+                    raise Exception(
+                        f"No available Ollama models found. Original error with '{llm_model}': {e}"
+                    )
+
+            try:
+                self.embed_model = LlamaIndexOllamaEmbedding(
+                    model_name=self.embedding_model_name, base_url=llm_base_url
+                )
+                logging.info(
+                    f"KnowledgeBase: Successfully initialized embedding model '{self.embedding_model_name}'"
+                )
+            except Exception as e:
+                logging.error(
+                    f"KnowledgeBase: Embedding model '{self.embedding_model_name}' failed to initialize: {e}"
+                )
+                raise Exception(
+                    f"Embedding model '{self.embedding_model_name}' not available. Error: {e}"
+                )
         else:
             logging.warning(
                 f"LLM provider '{llm_provider}' not fully implemented for "
@@ -123,8 +186,24 @@ class KnowledgeBase:
         )
 
         try:
+            # Get the actual embedding dimension from the model
+            embedding_dim = 768  # Default for nomic-embed-text
+
+            # Try to get the actual dimension by creating a test embedding
+            try:
+                test_embedding = self.embed_model.get_text_embedding("test")
+                embedding_dim = len(test_embedding)
+                logging.info(f"Detected embedding dimension: {embedding_dim}")
+            except Exception as e:
+                logging.warning(
+                    f"Could not detect embedding dimension, using default {embedding_dim}: {e}"
+                )
+
             schema = RedisVectorStoreSchema(
-                index_name=self.redis_index_name, prefix="doc", overwrite=False
+                index_name=self.redis_index_name,
+                prefix="doc",
+                overwrite=True,  # Allow overwriting to fix dimension mismatch
+                vector_dims=embedding_dim,  # Use detected dimension
             )
 
             self.vector_store = RedisVectorStore(
@@ -149,21 +228,16 @@ class KnowledgeBase:
             self.storage_context = StorageContext.from_defaults(
                 vector_store=self.vector_store
             )
-            try:
-                self.index = VectorStoreIndex.from_vector_store(
-                    self.vector_store, storage_context=self.storage_context
-                )
-                logging.info(
-                    "LlamaIndex VectorStoreIndex loaded from existing Redis store."
-                )
-            except Exception as e:
-                logging.warning(
-                    f"Could not load existing LlamaIndex from Redis: {e}. "
-                    "Creating a new index."
-                )
-                self.index = VectorStoreIndex.from_documents(
-                    [], storage_context=self.storage_context
-                )
+            # Always create a new index with the correct embedding model
+            # This ensures the dimensions match our embedding model
+            self.index = VectorStoreIndex.from_documents(
+                [],
+                storage_context=self.storage_context,
+                embed_model=self.embed_model,  # Explicitly pass the embedding model
+            )
+            logging.info(
+                "LlamaIndex VectorStoreIndex created with correct embedding dimensions."
+            )
 
             self.query_engine = self.index.as_query_engine(llm=self.llm)
             logging.info("LlamaIndex VectorStoreIndex and QueryEngine initialized.")
@@ -266,6 +340,7 @@ class KnowledgeBase:
         if self.query_engine is None:  # Still None after initialization attempt
             logging.error("Query engine not available after initialization")
             return []
+
         try:
             response = self.query_engine.query(query)
 
@@ -281,10 +356,47 @@ class KnowledgeBase:
             logging.info(
                 f"Found {len(retrieved_info)} relevant chunks for query: '{query}'"
             )
+
+            # If no vector search results, fall back to fact search
+            if len(retrieved_info) == 0:
+                logging.info(
+                    f"No vector results for '{query}', falling back to fact search"
+                )
+                facts = await self.get_fact(query=query)
+                for fact in facts[:n_results]:
+                    retrieved_info.append(
+                        {
+                            "content": fact["content"],
+                            "metadata": fact["metadata"],
+                            "score": 0.8,  # Default score for fact matches
+                        }
+                    )
+                logging.info(
+                    f"Fact search found {len(retrieved_info)} results for '{query}'"
+                )
+
             return retrieved_info
         except Exception as e:
             logging.error(f"Error searching knowledge base: {str(e)}")
-            return []
+            # Try fact search as final fallback
+            try:
+                facts = await self.get_fact(query=query)
+                retrieved_info = []
+                for fact in facts[:n_results]:
+                    retrieved_info.append(
+                        {
+                            "content": fact["content"],
+                            "metadata": fact["metadata"],
+                            "score": 0.7,  # Lower score for fallback results
+                        }
+                    )
+                logging.info(
+                    f"Fallback fact search found {len(retrieved_info)} results"
+                )
+                return retrieved_info
+            except Exception as fact_error:
+                logging.error(f"Fact search also failed: {fact_error}")
+                return []
 
     async def store_fact(
         self, content: str, metadata: Optional[Dict[str, Any]] = None
@@ -347,20 +459,26 @@ class KnowledgeBase:
                     results = await pipe.execute()
 
                     for key, fact_data in zip(all_keys, results):
-                        if (
-                            fact_data
-                            and query.lower() in fact_data.get("content", "").lower()
-                        ):
-                            facts.append(
-                                {
-                                    "id": int(key.split(":")[1]),
-                                    "content": fact_data.get("content"),
-                                    "metadata": json.loads(
-                                        fact_data.get("metadata", "{}")
-                                    ),
-                                    "timestamp": fact_data.get("timestamp"),
-                                }
+                        if fact_data:
+                            content = fact_data.get("content", "").lower()
+                            query_words = query.lower().split()
+                            # Match if any significant query words are found in content
+                            matches = any(
+                                word in content
+                                for word in query_words
+                                if len(word) > 2  # Skip very short words
                             )
+                            if matches:
+                                facts.append(
+                                    {
+                                        "id": int(key.split(":")[1]),
+                                        "content": fact_data.get("content"),
+                                        "metadata": json.loads(
+                                            fact_data.get("metadata", "{}")
+                                        ),
+                                        "timestamp": fact_data.get("timestamp"),
+                                    }
+                                )
             else:
                 all_keys: List[str] = cast(
                     List[str], await self.redis_client.keys("fact:*")
