@@ -149,3 +149,84 @@ This document provides a prioritized roadmap for implementing the features outli
 
 **Testing Requirements**:
 - [ ] Tests that simulate failing tasks and verify that the correct recovery logic is triggered.
+
+---
+
+## Stage 4: Voice Interface Integration (Priority: Low)
+*Focus: Add voice interaction capabilities after all core functionality is stable.*
+
+## TASK: Implement Voice Interface Features
+**Priority**: Low
+**Effort Estimate**: 3-4 days
+**Impact**: Provides hands-free interaction with AutoBot, enhancing accessibility and user experience.
+**Dependencies**: All previous stages complete and stable.
+**Risk Factors**: Platform-specific audio dependencies, microphone permissions, and speech recognition accuracy.
+
+### Subtasks:
+#### 1. Fix Voice Interface Dependencies
+**Owner**: Backend Team
+**Estimate**: 1 day
+**Prerequisites**: Core system functioning properly.
+
+**Steps**:
+1. **Add Dependencies**: Add `speech_recognition` and `pyttsx3` to requirements.txt
+2. **Test Installation**: Ensure dependencies install correctly across platforms
+3. **Add Fallback**: Implement graceful degradation when voice libraries unavailable
+
+**Success Criteria**:
+- [ ] Voice interface imports successfully without breaking the system
+- [ ] System continues to work even if voice dependencies fail to install
+
+**Testing Requirements**:
+- [ ] Test on systems with and without audio hardware
+
+#### 2. Implement Wake Word Detection
+**Owner**: Backend Team
+**Estimate**: 1 day
+**Prerequisites**: Voice dependencies working.
+
+**Steps**:
+1. **Configure Wake Word**: Add configurable wake word (e.g., "Hey AutoBot")
+2. **Background Listener**: Implement continuous background listening for wake word
+3. **Activation Feedback**: Provide audio/visual feedback when wake word detected
+
+**Success Criteria**:
+- [ ] Agent responds to wake word within 2 seconds
+- [ ] False positive rate is minimal
+
+**Testing Requirements**:
+- [ ] Test with various accents and background noise levels
+
+#### 3. Voice Command Processing
+**Owner**: Backend Team
+**Estimate**: 1 day
+**Prerequisites**: Wake word detection working.
+
+**Steps**:
+1. **Command Parser**: Map voice commands to agent actions
+2. **Natural Language**: Support natural language variations of commands
+3. **Confirmation**: Add voice confirmation for critical actions
+
+**Success Criteria**:
+- [ ] Common commands work reliably (e.g., "start task", "check status")
+- [ ] Agent asks for confirmation before destructive actions
+
+**Testing Requirements**:
+- [ ] Test suite of common voice commands
+
+#### 4. Voice Feedback System
+**Owner**: Backend Team
+**Estimate**: 1 day
+**Prerequisites**: Voice command processing working.
+
+**Steps**:
+1. **Status Updates**: Provide spoken updates on task progress
+2. **Error Reporting**: Speak error messages and suggestions
+3. **Customizable Verbosity**: Allow users to configure feedback level
+
+**Success Criteria**:
+- [ ] Agent provides clear voice feedback for all major events
+- [ ] Voice feedback can be disabled/configured by user
+
+**Testing Requirements**:
+- [ ] Test voice feedback in various scenarios

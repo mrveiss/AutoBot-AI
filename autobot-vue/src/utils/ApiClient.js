@@ -316,7 +316,7 @@ class ApiClient {
   }
 
   // Utility methods
-  async uploadFile(endpoint, file, additionalData = {}) {
+  async uploadFileToEndpoint(endpoint, file, additionalData = {}) {
     const formData = new FormData();
     formData.append('file', file);
 
@@ -329,7 +329,7 @@ class ApiClient {
     return response.json();
   }
 
-  async downloadFile(endpoint, filename = null) {
+  async downloadFileFromEndpoint(endpoint, filename = null) {
     const response = await this.get(endpoint);
     const blob = await response.blob();
 
