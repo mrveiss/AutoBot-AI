@@ -44,7 +44,10 @@ class Orchestrator:
         self.diagnostics = Diagnostics()
 
         llm_config = global_config_manager.get_llm_config()
-        self.orchestrator_llm_model = llm_config.get("orchestrator_llm", "phi:2.7b")
+        self.orchestrator_llm_model = llm_config.get(
+            "orchestrator_llm",
+            llm_config.get("ollama", {}).get("model", "tinyllama:latest"),
+        )
         self.task_llm_model = llm_config.get("task_llm", "ollama")
         self.ollama_models = llm_config.get("ollama", {}).get("models", {})
         self.phi2_enabled = False  # This will be driven by config if needed

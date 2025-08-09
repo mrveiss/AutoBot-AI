@@ -82,8 +82,7 @@ class ConnectionTester:
                     response_text = result.get("response", "No response text")
                     test_response = (
                         response_text[:100] + "..."
-                        if (response_text and
-                            response_text != "No response text")
+                        if (response_text and response_text != "No response text")
                         else "No response"
                     )
                     return {
@@ -94,6 +93,7 @@ class ConnectionTester:
                         ),
                         "endpoint": ollama_endpoint,
                         "model": ollama_model,
+                        "current_model": ollama_model,
                         "test_response": test_response,
                     }
                 else:
@@ -105,6 +105,7 @@ class ConnectionTester:
                         ),
                         "endpoint": ollama_endpoint,
                         "model": ollama_model,
+                        "current_model": ollama_model,
                         "error": test_response.text,
                     }
             else:
@@ -154,9 +155,7 @@ class ConnectionTester:
                 else:
                     return {
                         "status": "not_configured",
-                        "message": (
-                            "Redis is not enabled in memory configuration"
-                        ),
+                        "message": ("Redis is not enabled in memory configuration"),
                     }
 
             if not redis_host or not redis_port:
@@ -218,6 +217,81 @@ class ConnectionTester:
             }
 
     @staticmethod
+    async def _get_embedding_status() -> Dict[str, Any]:
+        """Get current embedding model status"""
+        try:
+            # Get embedding configuration from unified config
+            llm_config = global_config_manager.get_llm_config()
+            embedding_config = llm_config.get("unified", {}).get("embedding", {})
+
+            if not embedding_config:
+                return {
+                    "connected": False,
+                    "current_model": None,
+                    "message": "No embedding configuration found",
+                }
+
+            provider = embedding_config.get("provider", "ollama")
+            provider_config = embedding_config.get("providers", {}).get(provider, {})
+            current_model = provider_config.get("selected_model")
+
+            if provider == "ollama":
+                # Test Ollama embedding model
+                ollama_host = provider_config.get("host", "http://localhost:11434")
+
+                # Check if model is available
+                tags_url = f"{ollama_host}/api/tags"
+                response = requests.get(tags_url, timeout=5)
+
+                if response.status_code == 200:
+                    available_models = [
+                        model["name"] for model in response.json().get("models", [])
+                    ]
+                    model_available = (
+                        current_model in available_models if current_model else False
+                    )
+
+                    return {
+                        "connected": True,
+                        "current_model": current_model,
+                        "model_available": model_available,
+                        "provider": provider,
+                        "message": f"Embedding model '{current_model}' {'available' if model_available else 'not found'}",
+                    }
+                else:
+                    return {
+                        "connected": False,
+                        "current_model": current_model,
+                        "provider": provider,
+                        "message": f"Cannot connect to Ollama at {ollama_host}",
+                    }
+
+            elif provider == "openai":
+                # For OpenAI, just return configured status
+                return {
+                    "connected": True,  # Assume connected if API key is configured
+                    "current_model": current_model,
+                    "provider": provider,
+                    "message": f"OpenAI embedding model '{current_model}' configured",
+                }
+
+            else:
+                return {
+                    "connected": False,
+                    "current_model": current_model,
+                    "provider": provider,
+                    "message": f"Unknown embedding provider: {provider}",
+                }
+
+        except Exception as e:
+            logger.error(f"Error getting embedding status: {str(e)}")
+            return {
+                "connected": False,
+                "current_model": None,
+                "message": f"Error checking embedding status: {str(e)}",
+            }
+
+    @staticmethod
     async def get_comprehensive_health_status() -> Dict[str, Any]:
         """Get comprehensive health status for all services"""
         try:
@@ -228,16 +302,27 @@ class ConnectionTester:
             # Test Redis
             redis_result = ConnectionTester.test_redis_connection()
 
+            # Get current embedding model status
+            embedding_status = await ConnectionTester._get_embedding_status()
+
             return {
                 "status": "healthy",
                 "backend": "connected",
                 "ollama": "connected" if ollama_healthy else "disconnected",
+                "llm_status": ollama_healthy,
+                "current_model": ollama_status.get("current_model"),
+                "embedding_status": embedding_status.get("connected", False),
+                "current_embedding_model": embedding_status.get("current_model"),
                 "redis_status": redis_result["status"],
                 "redis_search_module_loaded": redis_result.get(
                     "redis_search_module_loaded", False
                 ),
                 "timestamp": datetime.now().isoformat(),
-                "details": {"ollama": ollama_status, "redis": redis_result},
+                "details": {
+                    "ollama": ollama_status,
+                    "redis": redis_result,
+                    "embedding": embedding_status,
+                },
             }
         except Exception as e:
             logger.error(f"Error in comprehensive health check: {str(e)}")

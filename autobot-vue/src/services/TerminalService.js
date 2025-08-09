@@ -25,7 +25,7 @@ class TerminalService {
    */
   async createSession() {
     try {
-      const response = await fetch('/api/terminal/terminal/sessions', {
+      const response = await fetch('/api/terminal/sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -133,6 +133,11 @@ class TerminalService {
             content: `Process exited with code ${message.code}`,
             stream: 'system'
           });
+          break;
+
+        case 'connection':
+          // Handle connection status messages
+          this.triggerCallback(sessionId, 'onStatusChange', message.status || 'connected');
           break;
 
         default:
@@ -262,7 +267,7 @@ class TerminalService {
 
     // Then close the session on the server
     try {
-      const response = await fetch(`/api/terminal/terminal/sessions/${sessionId}`, {
+      const response = await fetch(`/api/terminal/sessions/${sessionId}`, {
         method: 'DELETE'
       });
 
@@ -280,7 +285,7 @@ class TerminalService {
    */
   async getSessions() {
     try {
-      const response = await fetch('/api/terminal/terminal/sessions');
+      const response = await fetch('/api/terminal/sessions');
       if (!response.ok) {
         throw new Error(`Failed to get sessions: ${response.statusText}`);
       }
@@ -299,7 +304,7 @@ class TerminalService {
    */
   async executeCommand(command, options = {}) {
     try {
-      const response = await fetch('/api/terminal/terminal/command', {
+      const response = await fetch('/api/terminal/command', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -330,7 +335,7 @@ class TerminalService {
    */
   async getSessionInfo(sessionId) {
     try {
-      const response = await fetch(`/api/terminal/terminal/sessions/${sessionId}`);
+      const response = await fetch(`/api/terminal/sessions/${sessionId}`);
       if (!response.ok) {
         throw new Error(`Failed to get session info: ${response.statusText}`);
       }

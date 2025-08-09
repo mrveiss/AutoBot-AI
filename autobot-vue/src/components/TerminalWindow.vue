@@ -132,9 +132,9 @@ export default {
     const router = useRouter();
     const terminalService = useTerminalService();
 
-    // Reactive data
-    const sessionId = ref(route.params.sessionId || route.query.sessionId);
-    const sessionTitle = ref(route.query.title || 'Terminal');
+    // Reactive data - handle missing route params gracefully
+    const sessionId = ref(route?.params?.sessionId || route?.query?.sessionId || 'default-session');
+    const sessionTitle = ref(route?.query?.title || 'Terminal');
     const outputLines = ref([]);
     const currentInput = ref('');
     const currentPrompt = ref('$ ');
@@ -467,7 +467,7 @@ export default {
 
     onUnmounted(() => {
       // Clean up
-      if (terminalService.isConnected(sessionId.value)) {
+      if (terminalService.isConnected && typeof terminalService.isConnected === 'function' && terminalService.isConnected(sessionId.value)) {
         terminalService.disconnect(sessionId.value);
       }
 
