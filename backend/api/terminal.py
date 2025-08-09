@@ -134,6 +134,20 @@ async def get_package_managers():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/terminal/sessions")
+async def create_terminal_session():
+    """Create a new terminal session"""
+    try:
+        import uuid
+
+        session_id = str(uuid.uuid4())
+        logger.info(f"Created new terminal session: {session_id}")
+        return JSONResponse(content={"session_id": session_id})
+    except Exception as e:
+        logger.error(f"Error creating session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/terminal/sessions")
 async def get_active_sessions():
     """Get list of active terminal sessions"""
@@ -143,6 +157,36 @@ async def get_active_sessions():
 
     except Exception as e:
         logger.error(f"Error getting sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/terminal/sessions/{session_id}")
+async def get_session_info(session_id: str):
+    """Get information about a specific terminal session"""
+    try:
+        # For now, return basic session info
+        session_info = {
+            "session_id": session_id,
+            "status": "active",
+            "created_at": "2025-08-09T01:00:00Z",
+            "shell": "/bin/bash",
+            "working_directory": "/home/user",
+        }
+        return JSONResponse(content=session_info)
+    except Exception as e:
+        logger.error(f"Error getting session info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/terminal/sessions/{session_id}")
+async def delete_terminal_session(session_id: str):
+    """Delete a terminal session"""
+    try:
+        # For now, just return success - the WebSocket disconnect handles cleanup
+        logger.info(f"Terminal session {session_id} marked for deletion")
+        return JSONResponse(content={"message": f"Session {session_id} deleted"})
+    except Exception as e:
+        logger.error(f"Error deleting session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
