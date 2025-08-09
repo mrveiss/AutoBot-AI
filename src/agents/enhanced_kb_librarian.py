@@ -187,7 +187,7 @@ METADATA:
             "timestamp": datetime.now().isoformat(),
         }
 
-        await self.knowledge_base.add_text(document_content, metadata=metadata)
+        await self.knowledge_base.store_fact(document_content, metadata=metadata)
 
         logger.info(f"Stored knowledge for tool: {tool_name}")
 
@@ -834,7 +834,7 @@ Found {len(tools)} tools for {tool_type}:
             "timestamp": datetime.now().isoformat(),
         }
 
-        await self.knowledge_base.add_text(summary_content, metadata=metadata)
+        await self.knowledge_base.store_fact(summary_content, metadata=metadata)
 
         # Store individual tool information
         for tool in tools:
@@ -989,7 +989,7 @@ METADATA:
             "timestamp": datetime.now().isoformat(),
         }
 
-        await self.knowledge_base.add_text(document_content, metadata=metadata)
+        await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info(f"Stored system documentation: {doc_title}")
 
     def _format_procedures(self, procedures: List[Dict[str, str]]) -> str:
@@ -1135,7 +1135,7 @@ METADATA:
             "timestamp": datetime.now().isoformat(),
         }
 
-        await self.knowledge_base.add_text(document_content, metadata=metadata)
+        await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info(f"Stored workflow documentation: {workflow_name}")
 
     def _format_prerequisites(self, prereqs: List[str]) -> str:

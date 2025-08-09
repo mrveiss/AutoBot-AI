@@ -46,6 +46,185 @@
       </div>
     </div>
 
+    <!-- Categories Tab -->
+    <div v-if="activeTab === 'categories'" class="tab-content">
+      <div class="categories-header">
+        <h3>Knowledge Categories</h3>
+        <button @click="refreshCategories" class="refresh-btn">Refresh</button>
+      </div>
+
+      <div v-if="loadingCategories" class="loading-message">
+        Loading categories...
+      </div>
+
+      <div v-else-if="categories.length > 0" class="categories-grid">
+        <div v-for="category in categories" :key="category.name" class="category-card">
+          <div class="category-icon">{{ category.icon || '📁' }}</div>
+          <h4>{{ category.name }}</h4>
+          <p class="category-description">{{ category.description || 'No description available' }}</p>
+          <div class="category-stats">
+            <span class="stat-item">
+              <span class="icon">📊</span> {{ category.count || 0 }} entries
+            </span>
+            <span class="stat-item" v-if="category.last_updated">
+              <span class="icon">📅</span> {{ formatDate(category.last_updated) }}
+            </span>
+          </div>
+          <div class="category-actions">
+            <button @click="browseCategory(category.name)" class="browse-btn">Browse</button>
+            <button @click="editCategory(category)" class="edit-btn">Edit</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="no-categories">
+        <div class="empty-state">
+          <span class="icon large">📂</span>
+          <h4>No categories found</h4>
+          <p>Categories will appear here as you add knowledge entries with different collections.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Knowledge Tab -->
+    <div v-if="activeTab === 'system'" class="tab-content">
+      <div class="system-knowledge-header">
+        <h3>System Knowledge & Documentation</h3>
+        <div class="header-actions">
+          <button @click="refreshSystemKnowledge" class="refresh-btn">Refresh</button>
+          <button @click="importSystemDocs" class="import-btn" :disabled="importingDocs">
+            {{ importingDocs ? 'Importing...' : 'Import Documentation' }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="loadingSystemKnowledge" class="loading-message">
+        Loading system knowledge...
+      </div>
+
+      <div v-else-if="systemKnowledge.length > 0" class="system-knowledge-list">
+        <div v-for="doc in systemKnowledge" :key="doc.id" class="system-doc-item">
+          <div class="doc-header">
+            <div class="doc-title">
+              <span class="doc-type-icon">{{ getDocTypeIcon(doc.type) }}</span>
+              <h4>{{ doc.title || doc.name }}</h4>
+              <div class="doc-badges">
+                <span class="badge doc-type">{{ doc.type || 'documentation' }}</span>
+                <span class="badge doc-status" :class="doc.status">{{ doc.status || 'active' }}</span>
+              </div>
+            </div>
+            <div class="doc-actions">
+              <button @click="viewSystemDoc(doc)" class="view-btn" title="View">👁</button>
+              <button @click="editSystemDoc(doc)" class="edit-btn" title="Edit" :disabled="doc.immutable">✏️</button>
+              <button @click="exportSystemDoc(doc)" class="export-btn" title="Export">💾</button>
+            </div>
+          </div>
+
+          <div class="doc-preview">
+            <p>{{ getDocPreview(doc) }}</p>
+          </div>
+
+          <div class="doc-meta">
+            <span class="doc-source" v-if="doc.source">
+              <span class="icon">📄</span> {{ doc.source }}
+            </span>
+            <span class="doc-version" v-if="doc.version">
+              <span class="icon">🏷️</span> v{{ doc.version }}
+            </span>
+            <span class="doc-updated" v-if="doc.updated_at">
+              <span class="icon">📅</span> {{ formatDate(doc.updated_at) }}
+            </span>
+            <span class="doc-size" v-if="doc.content">
+              <span class="icon">📏</span> {{ formatContentSize(doc.content.length) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="no-system-knowledge">
+        <div class="empty-state">
+          <span class="icon large">📚</span>
+          <h4>No system documentation found</h4>
+          <p>System documentation will appear here after import or creation.</p>
+          <button @click="importSystemDocs" class="import-btn primary" :disabled="importingDocs">
+            {{ importingDocs ? 'Importing...' : 'Import System Documentation' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Prompts Tab -->
+    <div v-if="activeTab === 'prompts'" class="tab-content">
+      <div class="system-prompts-header">
+        <h3>System Prompts & Templates</h3>
+        <div class="header-actions">
+          <button @click="refreshSystemPrompts" class="refresh-btn">Refresh</button>
+          <button @click="createSystemPrompt" class="create-btn">+ Create Prompt</button>
+          <button @click="importSystemPrompts" class="import-btn" :disabled="importingPrompts">
+            {{ importingPrompts ? 'Importing...' : 'Import Prompts' }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="loadingSystemPrompts" class="loading-message">
+        Loading system prompts...
+      </div>
+
+      <div v-else-if="systemPrompts.length > 0" class="system-prompts-grid">
+        <div v-for="prompt in systemPrompts" :key="prompt.id" class="prompt-card">
+          <div class="prompt-header">
+            <div class="prompt-title">
+              <span class="prompt-icon">{{ getPromptIcon(prompt.category) }}</span>
+              <h4>{{ prompt.name || prompt.title }}</h4>
+            </div>
+            <div class="prompt-actions">
+              <button @click="useSystemPrompt(prompt)" class="use-btn" title="Use Prompt">🎯</button>
+              <button @click="viewSystemPrompt(prompt)" class="view-btn" title="View">👁</button>
+              <button @click="editSystemPrompt(prompt)" class="edit-btn" title="Edit" :disabled="prompt.immutable">✏️</button>
+              <button @click="duplicateSystemPrompt(prompt)" class="duplicate-btn" title="Duplicate">📋</button>
+            </div>
+          </div>
+
+          <div class="prompt-description">
+            <p>{{ prompt.description || 'No description available' }}</p>
+          </div>
+
+          <div class="prompt-preview">
+            <code>{{ getPromptPreview(prompt.template || prompt.content) }}</code>
+          </div>
+
+          <div class="prompt-meta">
+            <div class="prompt-tags" v-if="prompt.tags && prompt.tags.length > 0">
+              <span v-for="tag in prompt.tags.slice(0, 3)" :key="tag" class="tag">{{ tag }}</span>
+              <span v-if="prompt.tags.length > 3" class="more-tags">+{{ prompt.tags.length - 3 }} more</span>
+            </div>
+            <div class="prompt-info">
+              <span class="prompt-category" v-if="prompt.category">
+                <span class="icon">🏷️</span> {{ prompt.category }}
+              </span>
+              <span class="prompt-version" v-if="prompt.version">
+                <span class="icon">📦</span> v{{ prompt.version }}
+              </span>
+              <span class="prompt-usage" v-if="prompt.usage_count !== undefined">
+                <span class="icon">📊</span> {{ prompt.usage_count }} uses
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="no-system-prompts">
+        <div class="empty-state">
+          <span class="icon large">🎯</span>
+          <h4>No system prompts found</h4>
+          <p>System prompts and templates will appear here after import or creation.</p>
+          <button @click="importSystemPrompts" class="import-btn primary" :disabled="importingPrompts">
+            {{ importingPrompts ? 'Importing...' : 'Import System Prompts' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Templates Tab -->
     <div v-if="activeTab === 'templates'" class="tab-content">
       <div class="templates-header">
@@ -412,7 +591,10 @@ export default {
     const activeTab = ref('search');
     const tabs = [
       { id: 'search', label: 'Search' },
+      { id: 'categories', label: 'Categories' },
       { id: 'entries', label: 'Knowledge Entries' },
+      { id: 'system', label: 'System Knowledge' },
+      { id: 'prompts', label: 'System Prompts' },
       { id: 'templates', label: 'Templates' },
       { id: 'manage', label: 'Manage' },
       { id: 'stats', label: 'Statistics' }
@@ -1116,6 +1298,220 @@ export default {
       }
     };
 
+    // Categories functionality
+    const categories = ref([]);
+    const loadingCategories = ref(false);
+
+    const loadCategories = async () => {
+      try {
+        loadingCategories.value = true;
+        const response = await apiClient.get('/api/knowledge_base/categories');
+        const data = await response.json();
+        categories.value = data.categories || [];
+      } catch (error) {
+        console.error('Error loading categories:', error);
+        categories.value = [];
+      } finally {
+        loadingCategories.value = false;
+      }
+    };
+
+    const refreshCategories = () => {
+      loadCategories();
+    };
+
+    const browseCategory = (categoryName) => {
+      // Switch to entries tab and filter by category
+      activeTab.value = 'entries';
+      entriesSearchQuery.value = categoryName;
+      filterEntries();
+    };
+
+    const editCategory = (category) => {
+      // TODO: Implement category editing
+      console.log('Edit category:', category);
+    };
+
+    // System Knowledge functionality
+    const systemKnowledge = ref([]);
+    const loadingSystemKnowledge = ref(false);
+    const importingDocs = ref(false);
+
+    const loadSystemKnowledge = async () => {
+      try {
+        loadingSystemKnowledge.value = true;
+        const response = await apiClient.get('/api/knowledge_base/system_knowledge/documentation');
+        const data = await response.json();
+        systemKnowledge.value = data.documentation || [];
+      } catch (error) {
+        console.error('Error loading system knowledge:', error);
+        systemKnowledge.value = [];
+      } finally {
+        loadingSystemKnowledge.value = false;
+      }
+    };
+
+    const refreshSystemKnowledge = () => {
+      loadSystemKnowledge();
+    };
+
+    const importSystemDocs = async () => {
+      try {
+        importingDocs.value = true;
+        const response = await fetch('/api/knowledge_base/system_knowledge/import_documentation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to import documentation');
+        }
+
+        const result = await response.json();
+        showSuccess(`Documentation imported successfully! Imported ${result.count || 0} documents.`);
+        await loadSystemKnowledge();
+      } catch (error) {
+        console.error('Error importing documentation:', error);
+        showError('Failed to import documentation: ' + error.message);
+      } finally {
+        importingDocs.value = false;
+      }
+    };
+
+    const getDocTypeIcon = (type) => {
+      const iconMap = {
+        'guide': '📚',
+        'api': '🔌',
+        'tutorial': '🎓',
+        'reference': '📖',
+        'configuration': '⚙️',
+        'documentation': '📄'
+      };
+      return iconMap[type] || '📄';
+    };
+
+    const viewSystemDoc = (doc) => {
+      // TODO: Implement system doc viewer
+      console.log('View system doc:', doc);
+    };
+
+    const editSystemDoc = (doc) => {
+      if (doc.immutable) {
+        showError('This document is immutable and cannot be edited');
+        return;
+      }
+      // TODO: Implement system doc editor
+      console.log('Edit system doc:', doc);
+    };
+
+    const exportSystemDoc = (doc) => {
+      // TODO: Implement system doc export
+      console.log('Export system doc:', doc);
+    };
+
+    const getDocPreview = (doc) => {
+      const content = doc.content || doc.description || '';
+      return content.length > 200 ? content.substring(0, 200) + '...' : content;
+    };
+
+    const formatContentSize = (size) => {
+      if (size < 1024) return `${size} chars`;
+      if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+      return `${Math.round(size / (1024 * 1024))} MB`;
+    };
+
+    // System Prompts functionality
+    const systemPrompts = ref([]);
+    const loadingSystemPrompts = ref(false);
+    const importingPrompts = ref(false);
+
+    const loadSystemPrompts = async () => {
+      try {
+        loadingSystemPrompts.value = true;
+        const response = await apiClient.get('/api/knowledge_base/system_knowledge/prompts');
+        const data = await response.json();
+        systemPrompts.value = data.prompts || [];
+      } catch (error) {
+        console.error('Error loading system prompts:', error);
+        systemPrompts.value = [];
+      } finally {
+        loadingSystemPrompts.value = false;
+      }
+    };
+
+    const refreshSystemPrompts = () => {
+      loadSystemPrompts();
+    };
+
+    const importSystemPrompts = async () => {
+      try {
+        importingPrompts.value = true;
+        const response = await fetch('/api/knowledge_base/system_knowledge/import_prompts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to import prompts');
+        }
+
+        const result = await response.json();
+        showSuccess(`Prompts imported successfully! Imported ${result.count || 0} prompts.`);
+        await loadSystemPrompts();
+      } catch (error) {
+        console.error('Error importing prompts:', error);
+        showError('Failed to import prompts: ' + error.message);
+      } finally {
+        importingPrompts.value = false;
+      }
+    };
+
+    const getPromptIcon = (category) => {
+      const iconMap = {
+        'agent': '🤖',
+        'chat': '💬',
+        'system': '⚙️',
+        'tool': '🔧',
+        'analysis': '🔍',
+        'creative': '🎨'
+      };
+      return iconMap[category] || '🎯';
+    };
+
+    const useSystemPrompt = (prompt) => {
+      // TODO: Implement prompt usage
+      console.log('Use system prompt:', prompt);
+    };
+
+    const viewSystemPrompt = (prompt) => {
+      // TODO: Implement system prompt viewer
+      console.log('View system prompt:', prompt);
+    };
+
+    const editSystemPrompt = (prompt) => {
+      if (prompt.immutable) {
+        showError('This prompt is immutable and cannot be edited');
+        return;
+      }
+      // TODO: Implement system prompt editor
+      console.log('Edit system prompt:', prompt);
+    };
+
+    const duplicateSystemPrompt = (prompt) => {
+      // TODO: Implement system prompt duplication
+      console.log('Duplicate system prompt:', prompt);
+    };
+
+    const createSystemPrompt = () => {
+      // TODO: Implement system prompt creation
+      console.log('Create new system prompt');
+    };
+
+    const getPromptPreview = (template) => {
+      const content = template || '';
+      return content.length > 100 ? content.substring(0, 100) + '...' : content;
+    };
+
     // Utility functions
     const formatFileSize = (bytes) => {
       if (bytes === 0) return '0 Bytes';
@@ -1130,6 +1526,9 @@ export default {
       loadSettings();
       loadStats();
       loadKnowledgeEntries();
+      loadCategories();
+      loadSystemKnowledge();
+      loadSystemPrompts();
     });
 
     return {
@@ -1221,7 +1620,44 @@ export default {
       currentTemplate,
       useTemplate,
       editTemplate,
-      deleteTemplate
+      deleteTemplate,
+
+      // Categories
+      categories,
+      loadingCategories,
+      loadCategories,
+      refreshCategories,
+      browseCategory,
+      editCategory,
+
+      // System Knowledge
+      systemKnowledge,
+      loadingSystemKnowledge,
+      importingDocs,
+      loadSystemKnowledge,
+      refreshSystemKnowledge,
+      importSystemDocs,
+      getDocTypeIcon,
+      viewSystemDoc,
+      editSystemDoc,
+      exportSystemDoc,
+      getDocPreview,
+      formatContentSize,
+
+      // System Prompts
+      systemPrompts,
+      loadingSystemPrompts,
+      importingPrompts,
+      loadSystemPrompts,
+      refreshSystemPrompts,
+      importSystemPrompts,
+      getPromptIcon,
+      useSystemPrompt,
+      viewSystemPrompt,
+      editSystemPrompt,
+      duplicateSystemPrompt,
+      createSystemPrompt,
+      getPromptPreview
     };
   }
 };
@@ -2103,6 +2539,446 @@ export default {
   padding: 8px 12px;
   background: #f8f9fa;
   border-radius: 4px;
+}
+
+/* Categories Tab Styles */
+.categories-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.category-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.category-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.category-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.category-card h4 {
+  margin: 0 0 8px 0;
+  color: #333;
+}
+
+.category-description {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 16px;
+  min-height: 40px;
+}
+
+.category-stats {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: #888;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.category-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.browse-btn, .edit-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.browse-btn {
+  background: #007bff;
+  color: white;
+}
+
+.browse-btn:hover {
+  background: #0056b3;
+}
+
+.edit-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #5a6268;
+}
+
+/* System Knowledge Tab Styles */
+.system-knowledge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.refresh-btn, .import-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.refresh-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.refresh-btn:hover {
+  background: #5a6268;
+}
+
+.import-btn {
+  background: #17a2b8;
+  color: white;
+}
+
+.import-btn:hover:not(:disabled) {
+  background: #138496;
+}
+
+.import-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+}
+
+.import-btn.primary {
+  background: #007bff;
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+.import-btn.primary:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.system-knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.system-doc-item {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.doc-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.doc-type-icon {
+  font-size: 20px;
+}
+
+.doc-title h4 {
+  margin: 0;
+  color: #333;
+}
+
+.doc-badges {
+  display: flex;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge.doc-type {
+  background: #e7f3ff;
+  color: #0066cc;
+}
+
+.badge.doc-status {
+  background: #e8f5e8;
+  color: #2e7d2e;
+}
+
+.badge.doc-status.inactive {
+  background: #fff2cd;
+  color: #856404;
+}
+
+.badge.doc-status.deprecated {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.doc-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.view-btn, .export-btn {
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  background: #6c757d;
+  color: white;
+}
+
+.view-btn:hover, .export-btn:hover {
+  background: #5a6268;
+}
+
+.doc-preview {
+  margin-bottom: 12px;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  color: #888;
+}
+
+.doc-source, .doc-version, .doc-updated, .doc-size {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* System Prompts Tab Styles */
+.system-prompts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.system-prompts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.prompt-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.3s ease;
+}
+
+.prompt-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.prompt-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.prompt-icon {
+  font-size: 18px;
+}
+
+.prompt-title h4 {
+  margin: 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.prompt-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.use-btn, .duplicate-btn {
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.use-btn {
+  background: #28a745;
+  color: white;
+}
+
+.use-btn:hover {
+  background: #218838;
+}
+
+.duplicate-btn {
+  background: #17a2b8;
+  color: white;
+}
+
+.duplicate-btn:hover {
+  background: #138496;
+}
+
+.prompt-description {
+  margin-bottom: 12px;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.4;
+  min-height: 40px;
+}
+
+.prompt-preview {
+  background: #2d3748;
+  color: #e2e8f0;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  max-height: 80px;
+}
+
+.prompt-preview code {
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+.prompt-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.prompt-tags .tag {
+  padding: 2px 6px;
+  background: #e9ecef;
+  color: #495057;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.more-tags {
+  padding: 2px 6px;
+  background: #dee2e6;
+  color: #6c757d;
+  border-radius: 10px;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.prompt-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: #888;
+}
+
+.prompt-category, .prompt-version, .prompt-usage {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Loading and Empty States */
+.loading-message {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-style: italic;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+}
+
+.empty-state .icon.large {
+  font-size: 64px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.empty-state h4 {
+  margin: 0 0 8px 0;
+  color: #333;
+}
+
+.empty-state p {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* Responsive design */
