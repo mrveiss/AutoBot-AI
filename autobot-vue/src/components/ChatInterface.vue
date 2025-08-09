@@ -1,91 +1,133 @@
 <template>
-  <div class="chat-interface">
-       <h2>Chat with AutoBot</h2>
-    <div class="chat-container">
-      <div class="chat-sidebar" :class="{ 'collapsed': sidebarCollapsed }">
-        <button class="toggle-sidebar" @click="sidebarCollapsed = !sidebarCollapsed">
-          {{ sidebarCollapsed ? '▶' : '◀' }}
+  <div class="flex h-full bg-white">
+    <div class="flex-1 flex flex-col">
+      <!-- Sidebar -->
+      <div class="w-80 bg-blueGray-100 border-r border-blueGray-200 flex flex-col transition-all duration-300" :class="{ 'w-12': sidebarCollapsed }">
+        <button class="p-3 border-b border-blueGray-200 text-blueGray-600 hover:bg-blueGray-200 transition-colors" @click="sidebarCollapsed = !sidebarCollapsed">
+          <i :class="sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
         </button>
-        <div class="sidebar-content" v-if="!sidebarCollapsed">
-          <h3>Chat History</h3>
-          <div class="conversation-list">
-            <div v-for="chat in chatList" :key="chat.chatId" class="conversation-item" :class="{ 'active': currentChatId === chat.chatId }" @click="switchChat(chat.chatId)">
-              <span>{{ chat.name || getChatPreview(chat.chatId) || `Chat ${chat.chatId ? chat.chatId.slice(0, 8) : 'Unknown'}...` }}</span>
-              <div class="conversation-actions">
-                <button class="action-icon" @click.stop="editChatName(chat.chatId)" title="Edit Name">✎</button>
-                <button class="action-icon delete" @click.stop="deleteSpecificChat(chat.chatId)" title="Delete">🗑️</button>
+        <div class="flex-1 overflow-y-auto p-4" v-if="!sidebarCollapsed">
+          <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Chat History</h3>
+          <div class="space-y-2 mb-6">
+            <div v-for="chat in chatList" :key="chat.chatId" class="p-3 rounded-lg cursor-pointer transition-all duration-150" :class="currentChatId === chat.chatId ? 'bg-indigo-100 border border-indigo-200' : 'bg-white hover:bg-blueGray-50 border border-blueGray-200'" @click="switchChat(chat.chatId)">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-blueGray-700 truncate">{{ chat.name || getChatPreview(chat.chatId) || `Chat ${chat.chatId ? chat.chatId.slice(0, 8) : 'Unknown'}...` }}</span>
+                <div class="flex items-center space-x-1">
+                  <button class="text-blueGray-400 hover:text-blueGray-600 p-1" @click.stop="editChatName(chat.chatId)" title="Edit Name">
+                    <i class="fas fa-edit text-xs"></i>
+                  </button>
+                  <button class="text-red-400 hover:text-red-600 p-1" @click.stop="deleteSpecificChat(chat.chatId)" title="Delete">
+                    <i class="fas fa-trash text-xs"></i>
+                  </button>
+                </div>
               </div>
             </div>
-            <div class="chat-control-buttons">
-              <button class="control-button small" @click="newChat">New Chat</button>
-              <button class="control-button small" @click="resetChat" :disabled="!currentChatId">Reset Chat</button>
-              <button class="control-button small" @click="deleteSpecificChat" :disabled="!currentChatId">Delete Chat</button>
-              <button class="control-button small" @click="refreshChatList">Refresh</button>
+            <div class="grid grid-cols-2 gap-2 pt-4 border-t border-blueGray-200">
+              <button class="btn btn-primary text-xs" @click="newChat">
+                <i class="fas fa-plus mr-1"></i>
+                New
+              </button>
+              <button class="btn btn-secondary text-xs" @click="resetChat" :disabled="!currentChatId">
+                <i class="fas fa-redo mr-1"></i>
+                Reset
+              </button>
+              <button class="btn btn-danger text-xs" @click="deleteSpecificChat" :disabled="!currentChatId">
+                <i class="fas fa-trash mr-1"></i>
+                Delete
+              </button>
+              <button class="btn btn-outline text-xs" @click="refreshChatList">
+                <i class="fas fa-sync mr-1"></i>
+                Refresh
+              </button>
             </div>
           </div>
-          <h3>Message Display</h3>
-          <div class="preference-toggle">
-            <label>
-              <input type="checkbox" v-model="settings.message_display.show_thoughts" />
-              Show Thoughts
+          <h3 class="text-lg font-semibold text-blueGray-700 mb-4 mt-6">Message Display</h3>
+          <div class="space-y-3">
+            <label class="flex items-center">
+              <input type="checkbox" v-model="settings.message_display.show_thoughts" class="mr-2" />
+              <span class="text-sm text-blueGray-600">Show Thoughts</span>
             </label>
-            <label>
-              <input type="checkbox" v-model="settings.message_display.show_json" />
-              Show JSON Output
+            <label class="flex items-center">
+              <input type="checkbox" v-model="settings.message_display.show_json" class="mr-2" />
+              <span class="text-sm text-blueGray-600">Show JSON Output</span>
             </label>
-            <label>
-              <input type="checkbox" v-model="settings.message_display.show_utility" />
-              Show Utility Messages
+            <label class="flex items-center">
+              <input type="checkbox" v-model="settings.message_display.show_utility" class="mr-2" />
+              <span class="text-sm text-blueGray-600">Show Utility Messages</span>
             </label>
-            <label>
-              <input type="checkbox" v-model="settings.message_display.show_planning" />
-              Show Planning Messages
+            <label class="flex items-center">
+              <input type="checkbox" v-model="settings.message_display.show_planning" class="mr-2" />
+              <span class="text-sm text-blueGray-600">Show Planning Messages</span>
             </label>
-            <label>
-              <input type="checkbox" v-model="settings.message_display.show_debug" />
-              Show Debug Messages
+            <label class="flex items-center">
+              <input type="checkbox" v-model="settings.message_display.show_debug" class="mr-2" />
+              <span class="text-sm text-blueGray-600">Show Debug Messages</span>
             </label>
-            <label>
-              <input type="checkbox" v-model="settings.chat.auto_scroll" />
-              Autoscroll
+            <label class="flex items-center">
+              <input type="checkbox" v-model="settings.chat.auto_scroll" class="mr-2" />
+              <span class="text-sm text-blueGray-600">Autoscroll</span>
             </label>
           </div>
-          <h3>Backend Control</h3>
-          <div class="preference-toggle">
-            <button class="control-button" @click="startBackendServer" :disabled="backendStarting">
+          <h3 class="text-lg font-semibold text-blueGray-700 mb-4 mt-6">Backend Control</h3>
+          <div class="mb-4">
+            <button class="btn btn-success w-full" @click="startBackendServer" :disabled="backendStarting">
+              <i class="fas fa-play mr-2"></i>
               {{ backendStarting ? 'Starting...' : 'Start Backend Server' }}
             </button>
           </div>
         </div>
       </div>
-      <div class="chat-messages" ref="chatMessages" role="log">
-        <div v-for="(message, index) in filteredMessages" :key="index" :class="['message', message.sender, message.type]">
-          <div class="message-content" v-html="formatMessage(message.text, message.type)"></div>
-          <div class="message-timestamp">{{ message.timestamp }}</div>
+
+      <!-- Chat Messages -->
+      <div class="flex-1 flex flex-col">
+        <div class="flex-1 overflow-y-auto p-6 space-y-4" ref="chatMessages" role="log">
+          <div v-for="(message, index) in filteredMessages" :key="index" class="flex" :class="message.sender === 'user' ? 'justify-end' : 'justify-start'">
+            <div class="max-w-3xl rounded-lg p-4 shadow-sm" :class="message.sender === 'user' ? 'bg-indigo-500 text-white' : 'bg-white border border-blueGray-200 text-blueGray-700'">
+              <div class="message-content" v-html="formatMessage(message.text, message.type)"></div>
+              <div class="text-xs mt-2 opacity-70">{{ message.timestamp }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input -->
+        <div class="border-t border-blueGray-200 p-4">
+          <div class="flex items-end space-x-4">
+            <div class="flex-1">
+              <textarea
+                id="chat-input"
+                v-model="inputMessage"
+                placeholder="Type your message or goal for AutoBot..."
+                @keyup.enter="sendMessage"
+                rows="3"
+                class="w-full px-4 py-3 border border-blueGray-300 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              ></textarea>
+            </div>
+            <button
+              @click="sendMessage"
+              class="btn btn-primary px-6 py-3"
+              :disabled="!inputMessage.trim()"
+            >
+              <i class="fas fa-paper-plane mr-2"></i>
+              Send
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- Terminal Sidebar -->
       <TerminalSidebar
+        v-if="showTerminalSidebar"
         :collapsed="terminalSidebarCollapsed"
         @update:collapsed="terminalSidebarCollapsed = $event"
         @open-new-tab="openTerminalInNewTab"
       />
     </div>
-    <!-- Chat controls moved to sidebar -->
-    <div class="chat-input">
-      <textarea id="chat-input" v-model="inputMessage" placeholder="Type your message or goal for AutoBot..." @keyup.enter="sendMessage"></textarea>
-      <button @click="sendMessage">Send</button>
-    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, nextTick, computed, watch } from 'vue';
-import apiClient from '@/utils/ApiClient.js';
-import chatHistoryService from '@/services/ChatHistoryService.js';
-import settingsService from '@/services/SettingsService.js';
-import TerminalSidebar from '@/components/TerminalSidebar.vue';
+import { ref, reactive, computed, onMounted, nextTick } from 'vue';
+import TerminalSidebar from './TerminalSidebar.vue';
 
 export default {
   name: 'ChatInterface',
@@ -93,1348 +135,236 @@ export default {
     TerminalSidebar
   },
   setup() {
-    const messages = ref([]);
-    const inputMessage = ref('');
-    const chatMessages = ref(null);
-    const chatInput = ref(null);
-    const settings = ref(settingsService.getSettingsSync());
+    // Reactive state
     const sidebarCollapsed = ref(false);
     const terminalSidebarCollapsed = ref(true);
-    const backendStarting = ref(false);
+    const showTerminalSidebar = ref(false);
+    const inputMessage = ref('');
+    const messages = ref([]);
     const chatList = ref([]);
     const currentChatId = ref(null);
-    const isAgentPaused = ref(false);
-    const isSettingsLoaded = ref(false);
-    const prompts = ref([]);
-    const defaults = ref({});
-    let eventSource = null;
+    const backendStarting = ref(false);
+    const chatMessages = ref(null);
 
-    // Enhanced UI state variables
-    const isProcessing = ref(false);
-    const isThinking = ref(false);
-    const isListening = ref(false);
-    const showTypingIndicator = ref(false);
-    const showSuggestions = ref(false);
-    const responseTime = ref(0);
-    const tokensUsed = ref(0);
-    const aiStatusText = ref('Ready to assist');
-    const inputPlaceholder = ref('Ask me anything or give me a task to complete...');
-    const suggestions = ref([
-      'Analyze this data for trends',
-      'Help me write a professional email',
-      'Explain quantum computing simply',
-      'Create a project timeline',
-      'Debug this code issue',
-      'Research latest AI developments'
-    ]);
-
-    // Connection status tracking
-    const backendStatus = ref({
-      connected: false,
-      class: 'disconnected',
-      text: 'Disconnected',
-      message: 'Backend server is not responding'
+    // Settings
+    const settings = ref({
+      message_display: {
+        show_thoughts: true,
+        show_json: false,
+        show_utility: false,
+        show_planning: true,
+        show_debug: false
+      },
+      chat: {
+        auto_scroll: true
+      }
     });
 
-    const llmStatus = ref({
-      connected: false,
-      class: 'disconnected',
-      text: 'Disconnected',
-      message: 'LLM service is not available'
-    });
-
-    // Connection status checking functions
-    const checkBackendConnection = async () => {
-      try {
-        await apiClient.checkHealth();
-        backendStatus.value = {
-          connected: true,
-          class: 'connected',
-          text: 'Connected',
-          message: 'Backend server is responding'
-        };
-        return true;
-      } catch (error) {
-        backendStatus.value = {
-          connected: false,
-          class: 'disconnected',
-          text: 'Disconnected',
-          message: `Backend connection failed: ${error.message}`
-        };
-        return false;
-      }
-    };
-
-    const checkLLMConnection = async () => {
-      try {
-        // This is a bit of a hack, but we can use the apiClient to check the LLM connection
-        // by calling an endpoint that we know will fail if the LLM is not available.
-        await apiClient.get('/api/llm/models');
-        llmStatus.value = {
-          connected: true,
-          class: 'connected',
-          text: 'Connected',
-          message: 'LLM service is available'
-        };
-        return true;
-      } catch (error) {
-        llmStatus.value = {
-          connected: false,
-          class: 'disconnected',
-          text: 'Disconnected',
-          message: `LLM connection failed: ${error.message}`
-        };
-        return false;
-      }
-    };
-
-    const checkConnections = async () => {
-      await checkBackendConnection();
-      await checkLLMConnection();
-    };
-
-    onMounted(async () => {
-      // Load chat list and messages using centralized service
-      await chatHistoryService.loadChatList();
-      chatList.value = chatHistoryService.chatList;
-
-      // Load settings using centralized service (ensure async initialization)
-      settings.value = await settingsService.getSettings();
-
-      // Mark settings as loaded to enable auto-saving
-      isSettingsLoaded.value = true;
-
-      // Check connections first
-      await checkConnections();
-
-      // Fetch backend settings to override with latest configuration
-      // This will update the reactive settings object automatically
-      await settingsService.fetchBackendSettings();
-
-      // Load system prompts on initialization
-      await loadPrompts();
-
-      // Handle chat ID from URL
-      let chatId = window.location.hash.split('chatId=')[1];
-      if (chatId) {
-        currentChatId.value = chatId;
-        messages.value = await chatHistoryService.loadChatMessages(chatId);
-      } else if (chatList.value.length > 0) {
-        // Select first available chat if no chat ID in URL
-        chatId = chatList.value[0].chatId;
-        window.location.hash = `chatId=${chatId}`;
-        currentChatId.value = chatId;
-        messages.value = await chatHistoryService.loadChatMessages(chatId);
-      }
-
-      // Set up periodic connection checking using configurable interval
-      const checkInterval = settingsService.getNestedProperty(settingsService.settings, 'defaults.connection_check_interval') || 10000;
-      setInterval(checkConnections, checkInterval);
-    });
-
-    // Function to save settings to local storage and backend
-    const saveSettings = async () => {
-      try {
-        await apiClient.saveSettings(settings.value);
-      } catch (error) {
-        console.error('Error saving settings to backend:', error);
-      }
-    };
-
-    // Function to save backend-specific settings
-    const saveBackendSettings = async () => {
-      try {
-        await apiClient.saveBackendSettings(settings.value.backend);
-        console.log('Backend settings saved successfully.');
-      } catch (error) {
-        console.error('Error saving backend settings:', error);
-      }
-    };
-
-    // Function to fetch backend settings
-    const fetchBackendSettings = async () => {
-      try {
-        const backendSettings = await apiClient.getBackendSettings();
-        settings.value.backend = { ...settings.value.backend, ...backendSettings };
-        console.log('Backend settings loaded successfully.');
-      } catch (error) {
-        console.error('Error loading backend settings:', error);
-      }
-    };
-
-    // Function to load system prompts from backend
-    const loadPrompts = async () => {
-      try {
-        const data = await apiClient.getPrompts();
-        prompts.value = data.prompts || [];
-        defaults.value = data.defaults || {};
-        console.log(`Loaded ${prompts.value.length} system prompts from backend.`);
-      } catch (error) {
-        console.error('Error loading system prompts:', error);
-      }
-    };
-
-    // Computed property to group prompts by type
-    const groupedPrompts = computed(() => {
-      const grouped = {};
-      prompts.value.forEach(prompt => {
-        const type = prompt.type || 'custom';
-        if (!grouped[type]) {
-          grouped[type] = { type, prompts: [] };
-        }
-        grouped[type].prompts.push(prompt);
-      });
-      return Object.values(grouped).sort((a, b) => {
-        if (a.type === 'default') return -1;
-        if (b.type === 'default') return 1;
-        return a.type.localeCompare(b.type);
-      });
-    });
-
-    // Function to edit a system prompt
-    const editPrompt = async (promptId) => {
-      const prompt = prompts.value.find(p => p.id === promptId);
-      if (!prompt) {
-        console.warn(`Prompt ${promptId} not found for editing.`);
-        return;
-      }
-      const newContent = window.prompt(`Edit prompt: ${prompt.name}`, prompt.content);
-      if (newContent !== null) {
-        try {
-          const updatedPrompt = await apiClient.savePrompt(promptId, newContent);
-          const index = prompts.value.findIndex(p => p.id === promptId);
-          if (index !== -1) {
-            prompts.value[index] = updatedPrompt;
-          }
-          console.log(`Updated prompt ${prompt.name} successfully.`);
-        } catch (error) {
-          console.error('Error updating prompt:', error);
-        }
-      }
-    };
-
-    // Function to revert a system prompt to default
-    const revertPrompt = async (promptId) => {
-      const prompt = prompts.value.find(p => p.id === promptId);
-      if (!prompt) {
-        console.warn(`Prompt ${promptId} not found for reverting.`);
-        return;
-      }
-      if (window.confirm(`Are you sure you want to revert ${prompt.name} to its default content?`)) {
-        try {
-          const updatedPrompt = await apiClient.revertPrompt(promptId);
-          const index = prompts.value.findIndex(p => p.id === promptId);
-          if (index !== -1) {
-            prompts.value[index] = updatedPrompt;
-          }
-          console.log(`Reverted prompt ${prompt.name} to default successfully.`);
-        } catch (error) {
-          console.error('Error reverting prompt:', error);
-        }
-      }
-    };
-
-    // Watch for changes in settings and save them to local storage only
-    // Don't auto-save to backend - only save to localStorage for persistence
-    watch(settings, () => {
-      if (isSettingsLoaded.value) {
-        settingsService.saveSettings(); // Use the centralized save method
-      }
-    }, { deep: true });
-
+    // Computed properties
     const filteredMessages = computed(() => {
-      console.log('🔍 Filtering messages:', {
-        totalMessages: messages.value.length,
-        toggleStates: {
-          show_thoughts: settings.value.message_display.show_thoughts,
-          show_json: settings.value.message_display.show_json,
-          show_utility: settings.value.message_display.show_utility,
-          show_planning: settings.value.message_display.show_planning,
-          show_debug: settings.value.message_display.show_debug
-        }
+      return messages.value.filter(message => {
+        if (message.type === 'thought' && !settings.value.message_display.show_thoughts) return false;
+        if (message.type === 'json' && !settings.value.message_display.show_json) return false;
+        if (message.type === 'utility' && !settings.value.message_display.show_utility) return false;
+        if (message.type === 'planning' && !settings.value.message_display.show_planning) return false;
+        if (message.type === 'debug' && !settings.value.message_display.show_debug) return false;
+        return true;
       });
-
-      const filtered = messages.value.filter(message => {
-        if (message.sender === 'user') return true;
-        if (message.type === 'response') return true; // Always show main responses
-        if (message.type === 'thought' && settings.value.message_display.show_thoughts) return true;
-        if (message.type === 'json' && settings.value.message_display.show_json) return true;
-        if (message.type === 'utility' && settings.value.message_display.show_utility) return true;
-        if (message.type === 'planning' && settings.value.message_display.show_planning) return true;
-        if (message.type === 'debug' && settings.value.message_display.show_debug) return true;
-        if (message.type === 'tool_output') return true; // Always show tool output
-        return false;
-      });
-
-      console.log('✅ Filtered messages:', {
-        originalCount: messages.value.length,
-        filteredCount: filtered.length,
-        messageTypes: messages.value.map(m => ({ type: m.type, sender: m.sender }))
-      });
-
-      return filtered;
     });
 
+    // Methods
     const formatMessage = (text, type) => {
-      // Custom formatting for different message types to clearly distinguish them
       if (type === 'thought') {
-        // Format thoughts as internal monologue about understanding user intent
-        let cleanedThought = text.replace(/\\n/g, ' ').replace(/\\"/g, '"').replace(/\\\\/g, '');
-        try {
-          const jsonObj = JSON.parse(cleanedThought);
-          if (jsonObj.thoughts && jsonObj.thoughts.length > 0) {
-            cleanedThought = jsonObj.thoughts.join(' ');
-          }
-        } catch (e) {
-          cleanedThought = cleanedThought.replace(/\{.*?\}/g, '');
-        }
-        return `<div class="thought-message"><strong>Thinking:</strong> <i>${cleanedThought}</i></div>`;
+        return `<div class="thought-message">${text}</div>`;
       } else if (type === 'planning') {
-        // Format planning messages to show the approach to solving the task
-        let cleanedPlan = text.replace(/\\n/g, ' ').replace(/\\"/g, '"').replace(/\\\\/g, '');
-        try {
-          const jsonStart = cleanedPlan.indexOf('{');
-          const jsonEnd = cleanedPlan.lastIndexOf('}');
-          if (jsonStart !== -1 && jsonEnd !== -1) {
-            const jsonStr = cleanedPlan.slice(jsonStart, jsonEnd + 1);
-            const jsonObj = JSON.parse(jsonStr);
-            let humanizedText = cleanedPlan.slice(0, jsonStart).trim();
-            if (!humanizedText) humanizedText = "Planning how to approach this:";
-            return `<div class="planning-message"><strong>Planning:</strong> <b>${humanizedText}</b></div>`;
-          }
-        } catch (e) {
-          cleanedPlan = cleanedPlan.replace(/\{.*?\}/g, '').replace(/\[.*?\]/g, '').replace(/"/g, '').trim();
-          return `<div class="planning-message"><strong>Planning:</strong> <b>${cleanedPlan}</b></div>`;
-        }
-        return `<div class="planning-message"><strong>Planning:</strong> <b>${cleanedPlan}</b></div>`;
-      } else if (type === 'json') {
-        // Display full JSON content when show_json toggle is on
-        if (settings.value.message_display.show_json) {
-          try {
-            const jsonObj = JSON.parse(text);
-            const formattedJson = JSON.stringify(jsonObj, null, 2);
-            return `<div class="json-message"><strong>JSON Output:</strong> <pre>${formattedJson}</pre></div>`;
-          } catch (e) {
-            // If parsing fails, show raw text
-            return `<div class="json-message"><strong>JSON Output (Parse Error):</strong> <pre>${text}</pre></div>`;
-          }
-        } else {
-          return ''; // Hide if toggle is off
-        }
-      } else if (type === 'debug') {
-        // Display full debug content when show_debug toggle is on
-        if (settings.value.message_display.show_debug) {
-          try {
-            const jsonObj = JSON.parse(text);
-            const formattedJson = JSON.stringify(jsonObj, null, 2);
-            return `<div class="debug-message"><strong>Debug:</strong> <pre>${formattedJson}</pre></div>`;
-          } catch (e) {
-            return `<div class="debug-message"><strong>Debug:</strong> ${text}</div>`;
-          }
-        } else {
-          return ''; // Hide if toggle is off
-        }
+        return `<div class="planning-message"><strong>Planning:</strong> ${text}</div>`;
+      } else if (type === 'debug' || type === 'json') {
+        return `<div class="debug-message"><strong>Debug:</strong> <pre>${text}</pre></div>`;
       } else if (type === 'utility') {
-        // Parse and extract clean content from utility messages
-        if (text.includes('Tool Used:') && text.includes('Output:')) {
-          // Extract the actual output content and hide utility info when toggle is off
-          if (!settings.value.message_display.show_utility) {
-            return ''; // Hide utility details
-          }
-          return `<div class="utility-message"><strong>Tool:</strong> <span style="color: #6c757d;">${text.replace(/\{.*?\}/g, '').replace(/\[.*?\]/g, '').replace(/"/g, '').trim()}</span></div>`;
-        }
-        return `<div class="utility-message"><strong>Utility:</strong> <span style="color: #6c757d;">${text.replace(/\{.*?\}/g, '').replace(/\[.*?\]/g, '').replace(/"/g, '').trim()}</span></div>`;
+        return `<div class="utility-message"><strong>Utility:</strong> ${text}</div>`;
       } else if (type === 'tool_output') {
-        // Parse tool output and extract clean JSON content
-        try {
-          // Handle the specific case: {'response_text': '{ "name": "John Doe", "age": 30, "city": "New York"}'}
-          let cleanOutput = text;
-
-          // First, try to parse the outer structure
-          if (text.includes('response_text')) {
-            const match = text.match(/\{'response_text':\s*'([^']+)'\}/);
-            if (match) {
-              cleanOutput = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-            }
-          }
-
-          // Try to parse as JSON and format nicely
-          try {
-            const jsonObj = JSON.parse(cleanOutput);
-            let formattedOutput = '';
-
-            // Format JSON object as readable text
-            for (const [key, value] of Object.entries(jsonObj)) {
-              formattedOutput += `${key}: ${value}, `;
-            }
-            // Remove trailing comma and space
-            formattedOutput = formattedOutput.replace(/, $/, '');
-
-            return `<div class="clean-output-message">${formattedOutput}</div>`;
-          } catch (jsonError) {
-            // If not valid JSON, return cleaned text
-            return `<div class="tool-output-message">${cleanOutput}</div>`;
-          }
-        } catch (e) {
-          return `<div class="tool-output-message">${text}</div>`;
-        }
-      } else if (type === 'response') {
-        // For response type, parse and clean the content
-        try {
-          // Handle tool output embedded in response
-          if (text.includes('Tool Used:') && text.includes('Output:')) {
-            const parts = text.split('Output:');
-            if (parts.length > 1) {
-              let outputPart = parts[1].trim();
-
-              // Parse the output part
-              if (outputPart.startsWith("{'response_text':")) {
-                const match = outputPart.match(/\{'response_text':\s*'([^']+)'\}/);
-                if (match) {
-                  const jsonStr = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                  try {
-                    const jsonObj = JSON.parse(jsonStr);
-                    let formattedOutput = '';
-
-                    // Format JSON object as readable text
-                    for (const [key, value] of Object.entries(jsonObj)) {
-                      formattedOutput += `${key}: ${value}, `;
-                    }
-                    // Remove trailing comma and space
-                    formattedOutput = formattedOutput.replace(/, $/, '');
-
-                    return `<div class="clean-response-message">${formattedOutput}</div>`;
-                  } catch (jsonError) {
-                    return `<div class="response-message">${jsonStr}</div>`;
-                  }
-                }
-              }
-            }
-          }
-
-          return `<div class="response-message">${text}</div>`;
-        } catch (e) {
-          return `<div class="response-message">${text}</div>`;
-        }
+        return `<div class="tool-output-message"><strong>Tool Output:</strong> ${text}</div>`;
       }
       return text;
     };
 
     const sendMessage = async () => {
-      if (inputMessage.value && inputMessage.value.trim()) {
-        const messageText = inputMessage.value;
-        // Clear input immediately to prevent multiple sends
-        inputMessage.value = '';
+      if (!inputMessage.value.trim()) return;
 
-        // Check if there is no active chat, create a new one if needed
-        let chatId = window.location.hash.split('chatId=')[1];
-        if (!chatId || !currentChatId.value) {
-          await newChat();
-          chatId = window.location.hash.split('chatId=')[1];
-        }
+      // Add user message
+      messages.value.push({
+        sender: 'user',
+        text: inputMessage.value,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'message'
+      });
 
-        // Add user message
-        messages.value.push({
-          sender: 'user',
-          text: messageText,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'user'
+      const userInput = inputMessage.value;
+      inputMessage.value = '';
+
+      try {
+        // Send to backend
+        const response = await fetch('http://localhost:8001/api/chat/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: userInput,
+            chat_id: currentChatId.value
+          }),
         });
 
-        try {
-          const requestBody = JSON.stringify({ message: messageText });
-          if (settings.value.message_display.show_json) {
-            messages.value.push({
-              sender: 'bot',
-              text: `Request to backend: ${requestBody}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'json'
-            });
-          }
-
-          // Always use the backend API endpoint for chat messages with specific chat ID
-          const result = await apiClient.sendChatMessage(messageText, { chatId });
-          if (result.type === 'streaming') {
-            handleStreamingResponseFromResponse(result.response);
-          } else {
-            const botResponse = result.data;
-            let responseText = botResponse.response || botResponse.text || JSON.stringify(botResponse);
-            let responseType = 'response';
-
-            // Process and clean the response to extract meaningful content
-            let cleanedResponse = responseText;
-            let finalResponseType = 'response';
-
-            // Parse the response if it contains tool output
-            if (responseText.includes('Tool Used:') && responseText.includes('Output:')) {
-              const parts = responseText.split('Output:');
-              if (parts.length > 1) {
-                let outputPart = parts[1].trim();
-
-                // Handle the specific case: {'response_text': '{ "name": "John Doe", "age": 30, "city": "New York"}'}
-                if (outputPart.includes('response_text')) {
-                  const match = outputPart.match(/\{'response_text':\s*'([^']+)'\}/);
-                  if (match) {
-                    const jsonStr = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                    try {
-                      const jsonObj = JSON.parse(jsonStr);
-                      let formattedOutput = '';
-
-                      // Format JSON object as readable text
-                      for (const [key, value] of Object.entries(jsonObj)) {
-                        formattedOutput += `${key}: ${value}, `;
-                      }
-                      // Remove trailing comma and space
-                      cleanedResponse = formattedOutput.replace(/, $/, '');
-                      finalResponseType = 'tool_output'; // Use tool_output for proper styling
-                    } catch (jsonError) {
-                      cleanedResponse = jsonStr;
-                    }
-                  }
-                }
-
-                // Also show utility info if the toggle is on
-                if (settings.value.message_display.show_utility) {
-                  const toolPart = parts[0].replace('Tool Used:', '').trim();
-                  messages.value.push({
-                    sender: 'bot',
-                    text: `Tool: ${toolPart}`,
-                    timestamp: new Date().toLocaleTimeString(),
-                    type: 'utility'
-                  });
-                }
-              }
-            }
-
-            // Show raw JSON if the toggle is on
-            if (settings.value.message_display.show_json) {
-              messages.value.push({
-                sender: 'bot',
-                text: `Response from backend: ${JSON.stringify(botResponse, null, 2)}`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'json'
-              });
-            }
-
-            // Show LLM details if utility toggle is on
-            if (botResponse.llm_request && settings.value.message_display.show_utility) {
-              messages.value.push({
-                sender: 'bot',
-                text: `LLM Request: ${JSON.stringify(botResponse.llm_request, null, 2)}`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'utility'
-              });
-            }
-            if (botResponse.llm_response && settings.value.message_display.show_utility) {
-              messages.value.push({
-                sender: 'bot',
-                text: `LLM Response: ${JSON.stringify(botResponse.llm_response, null, 2)}`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'utility'
-              });
-            }
-
-            // Add the main cleaned response
-            messages.value.push({
-              sender: 'bot',
-              text: cleanedResponse,
-              timestamp: new Date().toLocaleTimeString(),
-              type: finalResponseType
-            });
-          }
-        } catch (error) {
-          console.error('Error sending message:', error);
-          if (settings.value.message_display.show_utility) {
-            messages.value.push({
-              sender: 'bot',
-              text: `Error sending request to backend: ${error.message}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'utility'
-            });
-          }
+        if (response.ok) {
+          const result = await response.json();
           messages.value.push({
             sender: 'bot',
-            text: `Error: Unable to connect to the backend. Please ensure the server is running.`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
-        }
-
-        // Save messages after each update
-        saveMessagesToStorage();
-
-        // Scroll to the latest message if autoscroll is enabled
-        nextTick(() => {
-          if (chatMessages.value && settings.value.chat.auto_scroll) {
-            chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
-          }
-        });
-      }
-    };
-
-    const handleStreamingResponseFromResponse = (response) => {
-      if (eventSource) {
-        eventSource.close();
-      }
-      let fullResponseText = '';
-      let fullThoughtText = '';
-      let fullJsonText = '';
-      let fullUtilityText = '';
-      let fullPlanningText = '';
-      let currentToolCall = null;
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-
-      function readStream() {
-        reader.read().then(({ done, value }) => {
-          if (done) {
-            if (settings.value.message_display.show_utility) {
-              messages.value.push({
-                sender: 'bot',
-                text: 'Streaming response completed.',
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'utility'
-              });
-            }
-            const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-            if (lastBotMessageIndex >= 0) {
-              messages.value[lastBotMessageIndex].final = true;
-            }
-            const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
-            if (lastThoughtMessageIndex >= 0) {
-              messages.value[lastThoughtMessageIndex].final = true;
-            }
-            const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
-            if (lastJsonMessageIndex >= 0) {
-              messages.value[lastJsonMessageIndex].final = true;
-            }
-            const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
-            if (lastUtilityMessageIndex >= 0) {
-              messages.value[lastUtilityMessageIndex].final = true;
-            }
-            const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
-            if (lastPlanningMessageIndex >= 0) {
-              messages.value[lastPlanningMessageIndex].final = true;
-            }
-            saveMessagesToStorage();
-            return;
-          }
-
-          const chunk = decoder.decode(value, { stream: true });
-          if (settings.value.message_display.show_debug) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Raw chunk received: ${chunk}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-          }
-
-          try { // Outer try block for chunk parsing
-            const dataMatches = chunk.split('\n').filter(line => line.startsWith('data: '));
-            if (dataMatches.length > 0) {
-              for (const dataLine of dataMatches) {
-                const dataStr = dataLine.replace('data: ', '').trim();
-                if (!dataStr) continue;
-
-                try { // Inner try block for JSON parsing
-                  const data = JSON.parse(dataStr);
-
-                  if (settings.value.message_display.show_json) {
-                    messages.value.push({
-                      sender: 'bot',
-                      text: JSON.stringify(data, null, 2),
-                      timestamp: new Date().toLocaleTimeString(),
-                      type: 'json',
-                      final: false
-                    });
-                  }
-
-                  if (data.object === 'chat.completion.chunk' && data.choices && data.choices.length > 0) {
-                    const choice = data.choices[0];
-                    if (choice.delta) {
-                      if (choice.delta.content) {
-                        fullResponseText += choice.delta.content;
-                        const lastBotMessageIndex = messages.value.findLastIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-                        if (lastBotMessageIndex >= 0) {
-                          messages.value[lastBotMessageIndex].text = fullResponseText;
-                        } else {
-                          messages.value.push({
-                            sender: 'bot',
-                            text: fullResponseText,
-                            timestamp: new Date().toLocaleTimeString(),
-                            type: 'response',
-                            final: false
-                          });
-                        }
-                        nextTick(() => {
-                          if (chatMessages.value && settings.value.chat.auto_scroll) {
-                            chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
-                          }
-                        });
-                      }
-                      if (choice.delta.tool_calls) {
-                          const toolCallDelta = choice.delta.tool_calls[0];
-                          if (toolCallDelta.function) {
-                              if (toolCallDelta.function.name) {
-                                  if (!currentToolCall || currentToolCall.id !== toolCallDelta.id) {
-                                      currentToolCall = {
-                                          id: toolCallDelta.id,
-                                          name: toolCallDelta.function.name,
-                                          arguments: ''
-                                      };
-                                  }
-                              }
-                              if (toolCallDelta.function.arguments) {
-                                  if (currentToolCall) {
-                                      currentToolCall.arguments += toolCallDelta.function.arguments;
-                                  }
-                              }
-                          }
-                      }
-                    }
-                    if (choice.finish_reason) {
-                      if (choice.finish_reason === 'tool_calls' && data.choices[0].message && data.choices[0].message.tool_calls) {
-                        if (settings.value.message_display.show_utility) {
-                          messages.value.push({
-                            sender: 'bot',
-                            text: `Tool call requested: ${JSON.stringify(data.choices[0].message.tool_calls, null, 2)}`,
-                            timestamp: new Date().toLocaleTimeString(),
-                            type: 'utility'
-                          });
-                        }
-                        reader.cancel();
-
-                        const toolCall = currentToolCall;
-                        if (toolCall && (toolCall.name === 'fetch_wikipedia_content' || toolCall.name === 'get_wikipedia_content')) {
-                          try {
-                            const args = JSON.parse(toolCall.arguments || '{}');
-                            const searchQuery = args.search_query || 'unknown query';
-                            messages.value.push({
-                              sender: 'bot',
-                              text: `Fetching Wikipedia content for "${searchQuery}"...`,
-                              timestamp: new Date().toLocaleTimeString(),
-                              type: 'utility'
-                            });
-                            messages.value.push({
-                              sender: 'bot',
-                              text: `Wikipedia content for "${searchQuery}": [Simulated response] This is a placeholder for the actual Wikipedia content that would be fetched.`,
-                              timestamp: new Date().toLocaleTimeString(),
-                              type: 'response',
-                              final: true
-                            });
-                            saveMessagesToStorage();
-                          } catch (error) {
-                            if (settings.value.message_display.show_utility) {
-                              messages.value.push({
-                                sender: 'bot',
-                                text: `Error processing tool call arguments: ${error.message}`,
-                                timestamp: new Date().toLocaleTimeString(),
-                                type: 'utility'
-                              });
-                            }
-                          }
-                        }
-                        const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-                        if (lastBotMessageIndex >= 0) {
-                          messages.value[lastBotMessageIndex].final = true;
-                        }
-                        saveMessagesToStorage();
-                        currentToolCall = null;
-                        return;
-                      }
-                      const lastBotMessageIndex = messages.value.findLastIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-                      if (lastBotMessageIndex >= 0) {
-                        messages.value[lastBotMessageIndex].final = true;
-                      }
-                      saveMessagesToStorage();
-                      reader.cancel();
-                      return;
-                    }
-                  } else if (data.text) {
-                      if (data.type === 'thought') {
-                        fullThoughtText += data.text;
-                        const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
-                        if (lastThoughtMessageIndex >= 0) {
-                          messages.value[lastThoughtMessageIndex].text = data.full_text || fullThoughtText;
-                        } else if (settings.value.message_display.show_thoughts) {
-                          messages.value.push({
-                            sender: 'bot',
-                            text: data.full_text || fullThoughtText,
-                            timestamp: new Date().toLocaleTimeString(),
-                            type: 'thought',
-                            final: false
-                          });
-                        }
-                      } else if (data.type === 'json') {
-                        fullJsonText += data.text;
-                        const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
-                        if (lastJsonMessageIndex >= 0) {
-                          messages.value[lastJsonMessageIndex].text = data.full_text || fullJsonText;
-                        } else if (settings.value.message_display.show_json) {
-                          messages.value.push({
-                            sender: 'bot',
-                            text: data.full_text || fullJsonText,
-                            timestamp: new Date().toLocaleTimeString(),
-                            type: 'json',
-                            final: false
-                          });
-                        }
-                      } else if (data.type === 'utility') {
-                        fullUtilityText += data.text;
-                        const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
-                        if (lastUtilityMessageIndex >= 0) {
-                          messages.value[lastUtilityMessageIndex].text = data.full_text || fullUtilityText;
-                        } else if (settings.value.message_display.show_utility) {
-                          messages.value.push({
-                            sender: 'bot',
-                            text: data.full_text || fullUtilityText,
-                            timestamp: new Date().toLocaleTimeString(),
-                            type: 'utility',
-                            final: false
-                          });
-                        }
-                      } else if (data.type === 'planning') {
-                        fullPlanningText += data.text;
-                        const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
-                        if (lastPlanningMessageIndex >= 0) {
-                          messages.value[lastPlanningMessageIndex].text = data.full_text || fullPlanningText;
-                        } else if (settings.value.message_display.show_planning) {
-                          messages.value.push({
-                            sender: 'bot',
-                            text: data.full_text || fullPlanningText,
-                            timestamp: new Date().toLocaleTimeString(),
-                            type: 'planning',
-                            final: false
-                          });
-                        }
-                      } else {
-                        const currentMessageText = data.full_text || (fullResponseText + data.text);
-                        fullResponseText = currentMessageText;
-                        const lastBotMessageIndex = messages.value.findLastIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-                        if (lastBotMessageIndex >= 0) {
-                          messages.value[lastBotMessageIndex].text = currentMessageText;
-                        } else {
-                          messages.value.push({
-                            sender: 'bot',
-                            text: currentMessageText,
-                            timestamp: new Date().toLocaleTimeString(),
-                            type: 'response',
-                            final: false
-                          });
-                        }
-                      }
-                      nextTick(() => {
-                        if (chatMessages.value && settings.value.chat.auto_scroll) {
-                          chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
-                        }
-                      });
-                    }
-                    if (data.done) {
-                      const lastBotMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'response' && !msg.final);
-                      if (lastBotMessageIndex >= 0) {
-                        messages.value[lastBotMessageIndex].text = data.full_text || messages.value[lastBotMessageIndex].text;
-                        messages.value[lastBotMessageIndex].final = true;
-                      }
-                      const lastThoughtMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'thought' && !msg.final);
-                      if (lastThoughtMessageIndex >= 0) {
-                        messages.value[lastThoughtMessageIndex].text = data.full_text || messages.value[lastThoughtMessageIndex].text;
-                        messages.value[lastThoughtMessageIndex].final = true;
-                      }
-                      const lastJsonMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'json' && !msg.final);
-                      if (lastJsonMessageIndex >= 0) {
-                        messages.value[lastJsonMessageIndex].text = data.full_text || messages.value[lastJsonMessageIndex].text;
-                        messages.value[lastJsonMessageIndex].final = true;
-                      }
-                      const lastUtilityMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'utility' && !msg.final);
-                      if (lastUtilityMessageIndex >= 0) {
-                        messages.value[lastUtilityMessageIndex].text = data.full_text || messages.value[lastUtilityMessageIndex].text;
-                        messages.value[lastUtilityMessageIndex].final = true;
-                      }
-                      const lastPlanningMessageIndex = messages.value.findIndex(msg => msg.sender === 'bot' && msg.type === 'planning' && !msg.final);
-                      if (lastPlanningMessageIndex >= 0) {
-                        messages.value[lastPlanningMessageIndex].text = data.full_text || messages.value[lastPlanningMessageIndex].text;
-                        messages.value[lastPlanningMessageIndex].final = true;
-                      }
-                      saveMessagesToStorage();
-                      reader.cancel();
-                      return;
-                    }
-                } catch (error) { // Catch for inner try block
-                  console.error('Error parsing JSON data:', error, 'from data:', dataStr);
-                  if (settings.value.message_display.show_debug) {
-                    messages.value.push({
-                      sender: 'debug',
-                      text: `Error parsing JSON data: ${error.message} from data: ${dataStr}`,
-                      timestamp: new Date().toLocaleTimeString(),
-                      type: 'debug'
-                    });
-                  }
-                }
-              }
-            } else { // Else for dataMatches.length > 0
-              if (settings.value.message_display.show_debug) {
-                messages.value.push({
-                  sender: 'debug',
-                  text: `No data match found in chunk: ${chunk}`,
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'debug'
-                });
-              }
-            }
-          } catch (error) { // Catch for outer try block
-            console.error('Error parsing streaming data:', error, 'from chunk:', chunk);
-            if (settings.value.message_display.show_debug) {
-              messages.value.push({
-                sender: 'debug',
-                text: `Error parsing streaming data: ${error.message} from chunk: ${chunk}`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'debug'
-              });
-            }
-            messages.value.push({
-              sender: 'bot',
-              text: `Error: Streaming connection failed. Please try again.`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'response',
-              final: true
-            });
-            saveMessagesToStorage();
-          }
-          readStream(); // Recursive call to continue reading the stream
-        }).catch(error => { // Catch for the promise returned by reader.read().then()
-          console.error('Error reading stream:', error);
-          if (settings.value.message_display.show_debug) {
-            messages.value.push({
-              sender: 'debug',
-              text: `Error reading stream: ${error.message}`,
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'debug'
-            });
-          }
-          messages.value.push({
-            sender: 'bot',
-            text: `Error: Streaming connection failed. Please try again.`,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response',
-            final: true
-          });
-          saveMessagesToStorage();
-        });
-      }
-      readStream(); // Initial call to start reading the stream
-    };
-
-    const newChat = async () => {
-      try {
-        const newChatData = await apiClient.createNewChat();
-        messages.value = [];
-        const newChatId = newChatData.chatId; // Backend returns chatId, not chat_id
-        window.location.hash = `chatId=${newChatId}`;
-        currentChatId.value = newChatId;
-        console.log('New Chat created:', newChatId);
-        // Update chat list
-        chatList.value.push({ chatId: newChatId, name: '' });
-      } catch (error) {
-        console.error('Failed to create new chat:', error);
-        messages.value.push({
-          sender: 'bot',
-          text: 'Failed to create new chat. Please check backend.',
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
-        });
-      }
-    };
-
-    const resetChat = async () => {
-      try {
-        await apiClient.resetChat();
-        messages.value = [];
-        messages.value.push({
-          sender: 'bot',
-          text: 'Chat reset successfully.',
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
-        });
-      } catch (error) {
-        console.error('Error resetting chat:', error);
-        messages.value.push({
-          sender: 'bot',
-          text: 'Error resetting chat. Please check backend.',
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
-        });
-      }
-    };
-
-    const deleteChat = async (specificChatId = null) => {
-      const chatId = specificChatId || window.location.hash.split('chatId=')[1];
-      if (!chatId) {
-        messages.value.push({
-          sender: 'bot',
-          text: 'No active chat to delete.',
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
-        });
-        return;
-      }
-      try {
-        await apiClient.deleteChat(chatId);
-        // Remove from local storage
-        localStorage.removeItem(`chat_${chatId}_messages`);
-        // Remove from chat list
-        chatList.value = chatList.value.filter(chat => chat.chatId !== chatId);
-        // If the deleted chat was active, clear messages
-        if (!specificChatId || chatId === currentChatId.value) {
-          messages.value = [];
-          // Update current chat ID to null since no chat is active
-          currentChatId.value = null;
-          window.location.hash = '';
-          messages.value.push({
-            sender: 'bot',
-            text: 'Chat deleted successfully. Click "New Chat" to start a new conversation.',
+            text: result.response || 'No response received',
             timestamp: new Date().toLocaleTimeString(),
             type: 'response'
           });
         } else {
-          console.log(`Chat ${chatId} deleted successfully.`);
+          messages.value.push({
+            sender: 'bot',
+            text: 'Error: Could not get response from server',
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'error'
+          });
         }
       } catch (error) {
-        console.error('Error deleting chat:', error);
         messages.value.push({
           sender: 'bot',
-          text: 'Error deleting chat. Please check backend.',
+          text: `Error: ${error.message}`,
           timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
+          type: 'error'
+        });
+      }
+
+      // Auto-scroll
+      nextTick(() => {
+        if (chatMessages.value && settings.value.chat.auto_scroll) {
+          chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+        }
+      });
+    };
+
+    const newChat = () => {
+      const newChatId = `chat-${Date.now()}`;
+      currentChatId.value = newChatId;
+      messages.value = [];
+
+      // Add to chat list if not exists
+      if (!chatList.value.find(chat => chat.chatId === newChatId)) {
+        chatList.value.unshift({
+          chatId: newChatId,
+          name: null,
+          lastMessage: null,
+          timestamp: new Date()
         });
       }
     };
 
-    const loadChatMessages = async (chatId) => {
-      try {
-        // Use ChatHistoryService for consistent message normalization
-        messages.value = await chatHistoryService.loadChatMessages(chatId);
-        console.log(`Loaded and normalized chat messages for chat ${chatId}.`);
-      } catch (error) {
-        console.error('Error loading chat messages:', error);
+    const resetChat = () => {
+      messages.value = [];
+    };
+
+    const deleteSpecificChat = (chatId = null) => {
+      const targetChatId = chatId || currentChatId.value;
+      if (!targetChatId) return;
+
+      chatList.value = chatList.value.filter(chat => chat.chatId !== targetChatId);
+
+      if (currentChatId.value === targetChatId) {
         messages.value = [];
+        if (chatList.value.length > 0) {
+          switchChat(chatList.value[0].chatId);
+        } else {
+          newChat();
+        }
       }
     };
 
-    const saveMessagesToStorage = async () => {
-      const chatId = window.location.hash.split('chatId=')[1];
-      if (!chatId) {
-        console.warn('No chat ID found to save messages.');
-        return;
-      }
-      // Save to local storage
-      localStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(messages.value));
-      // Also save to backend
-      try {
-        await apiClient.saveChatMessages(chatId, messages.value);
-        console.log('Chat messages saved to backend successfully.');
-      } catch (error) {
-        console.error('Error saving chat messages to backend:', error);
+    const switchChat = (chatId) => {
+      currentChatId.value = chatId;
+      // Load messages for this chat (would typically come from backend)
+      messages.value = [];
+    };
+
+    const editChatName = (chatId) => {
+      const chat = chatList.value.find(c => c.chatId === chatId);
+      if (chat) {
+        const newName = prompt('Enter new chat name:', chat.name || '');
+        if (newName !== null) {
+          chat.name = newName.trim() || null;
+        }
       }
     };
 
-    // Function to start the backend server
+    const getChatPreview = (chatId) => {
+      // Return first few words of last message in this chat
+      return 'Chat preview...';
+    };
+
+    const refreshChatList = () => {
+      // Refresh chat list from backend
+      console.log('Refreshing chat list...');
+    };
+
     const startBackendServer = async () => {
       backendStarting.value = true;
       try {
-        const result = await apiClient.restartBackend();
-        console.log(`Backend server restart initiated: ${result.message}`);
+        // Simulate backend start
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log('Backend server started');
       } catch (error) {
-        console.error('Error restarting backend server:', error);
+        console.error('Failed to start backend:', error);
       } finally {
         backendStarting.value = false;
       }
     };
 
-    // Function to load chat list from backend or local storage
-    const loadChatList = async () => {
-      try {
-        // For now, just load from local storage since backend doesn't support multi-chat
-        loadChatListFromLocalStorage();
-      } catch (error) {
-        console.error('Error loading chat list:', error);
-        loadChatListFromLocalStorage();
-      }
+    const openTerminalInNewTab = () => {
+      // Open terminal in new tab
+      console.log('Opening terminal in new tab...');
     };
 
-    // Function to build chat list from local storage
-    const loadChatListFromLocalStorage = () => {
-      const localChats = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key.startsWith('chat_') && key.endsWith('_messages')) {
-          const chatId = key.split('_')[1];
-          localChats.push({ chatId, name: '' });
-        }
-      }
-      chatList.value = localChats;
-      console.log(`Loaded chat list from local storage with ${localChats.length} chats.`);
-    };
+    // Initialize
+    onMounted(() => {
+      newChat(); // Create initial chat
 
-    // Function to switch to a different chat
-    const switchChat = async (chatId) => {
-      if (chatId === currentChatId.value) return;
-      window.location.hash = `chatId=${chatId}`;
-      currentChatId.value = chatId;
-      messages.value = [];
-      // Always try to load from backend first
-      await loadChatMessages(chatId);
-    };
-
-    // Function to get a preview of the chat for display in the history list
-    const getChatPreview = (chatId) => {
-      const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
-      if (persistedMessages) {
+      // Load settings from localStorage
+      const savedSettings = localStorage.getItem('chat-settings');
+      if (savedSettings) {
         try {
-          const chatMessages = JSON.parse(persistedMessages);
-          if (chatMessages.length > 0) {
-            const userMessage = chatMessages.find(msg => msg.sender === 'user');
-            if (userMessage && userMessage.text) {
-              return userMessage.text.substring(0, 20) + (userMessage.text.length > 20 ? '...' : '');
-            }
-          }
+          Object.assign(settings.value, JSON.parse(savedSettings));
         } catch (e) {
-          console.error('Error parsing chat messages for preview:', e);
+          console.error('Failed to load settings:', e);
         }
       }
-      return '';
-    };
-
-    // Function to edit chat name
-    const editChatName = (chatId) => {
-      const newName = prompt('Enter a name for this chat:', chatList.value.find(chat => chat.chatId === chatId)?.name || '');
-      if (newName) {
-        const chatIndex = chatList.value.findIndex(chat => chat.chatId === chatId);
-        if (chatIndex !== -1) {
-          chatList.value[chatIndex].name = newName;
-          // Save updated chat list to local storage
-          localStorage.setItem('chat_list', JSON.stringify(chatList.value));
-          console.log(`Updated name for chat ${chatId} to "${newName}".`);
-        }
-      }
-    };
-
-    // Function to refresh chat list
-    const refreshChatList = async () => {
-      await loadChatList();
-      console.log(`Chat history list refreshed from backend.`);
-    };
-
-    // Function to handle specific chat deletion
-    const deleteSpecificChat = async (specificChatId = null) => {
-      const chatId = specificChatId || window.location.hash.split('chatId=')[1];
-      if (!chatId) {
-        messages.value.push({
-          sender: 'bot',
-          text: 'No active chat to delete.',
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
-        });
-        return;
-      }
-      try {
-        await apiClient.deleteChat(chatId);
-        // Remove from local storage
-        localStorage.removeItem(`chat_${chatId}_messages`);
-        // Remove from chat list
-        chatList.value = chatList.value.filter(chat => chat.chatId !== chatId);
-        // If the deleted chat was active, clear messages
-        if (!specificChatId || chatId === currentChatId.value) {
-          messages.value = [];
-          // Update current chat ID to null since no chat is active
-          currentChatId.value = null;
-          window.location.hash = '';
-          messages.value.push({
-            sender: 'bot',
-            text: 'Chat deleted successfully. Click "New Chat" to start a new conversation.',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'response'
-          });
-        } else {
-          console.log(`Chat ${chatId} deleted successfully.`);
-        }
-      } catch (error) {
-        console.error('Error deleting chat:', error);
-        messages.value.push({
-          sender: 'bot',
-          text: 'Error deleting chat. Please check backend.',
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
-        });
-      }
-    };
-
-    // Terminal functions
-    const openTerminalInNewTab = (terminalData) => {
-      const { sessionId, session } = terminalData;
-      const terminalUrl = `/terminal/${sessionId}?title=${encodeURIComponent(session.title || 'Terminal')}`;
-
-      // Open in new tab/window
-      const newTab = window.open(terminalUrl, '_blank', 'noopener,noreferrer');
-
-      if (!newTab) {
-        // Fallback if popup blocker prevents opening new tab
-        const userWantsToNavigate = confirm(
-          'Pop-up blocked. Would you like to navigate to the terminal in this tab instead?'
-        );
-        if (userWantsToNavigate) {
-          window.location.href = terminalUrl;
-        }
-      }
-    };
-
-    // Initial load of chat messages based on URL hash
-    onMounted(async () => {
-      // Load chat list for sidebar
-      await loadChatList();
-
-      // Load custom chat list names if available
-      const savedChatList = localStorage.getItem('chat_list');
-      if (savedChatList) {
-        try {
-          const customList = JSON.parse(savedChatList);
-          // Update names in the chat list based on custom names
-          chatList.value.forEach(chat => {
-            const customChat = customList.find(c => c.chatId === chat.chatId);
-            if (customChat && customChat.name) {
-              chat.name = customChat.name;
-            }
-          });
-        } catch (e) {
-          console.error('Error loading custom chat list names:', e);
-        }
-      }
-
-      let chatId = window.location.hash.split('chatId=')[1];
-      if (!chatId && chatList.value.length > 0) {
-        // If no chat ID in URL but we have chats, select the first one
-        chatId = chatList.value[0].chatId;
-        window.location.hash = `chatId=${chatId}`;
-      } else if (!chatId) {
-        // If no chat ID in URL and no existing chats, create a new chat
-        await newChat();
-        chatId = window.location.hash.split('chatId=')[1];
-      }
-
-      if (chatId) {
-        currentChatId.value = chatId;
-        // Always load from backend first to ensure sync
-        await loadChatMessages(chatId);
-      }
-
-      // Settings are now loaded through SettingsService - remove duplicate loading
-      // The SettingsService already handles localStorage loading
     });
 
-    // Missing function definitions for enhanced UI
-    const handleInput = (event) => {
-      // Handle input changes for enhanced UI features
-      if (event.target.value.length > 0) {
-        showSuggestions.value = false;
-        aiStatusText.value = 'Listening...';
-      } else {
-        aiStatusText.value = 'Ready to assist';
-      }
-    };
-
-    const handleEnterKey = (event) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        sendMessage();
-      }
-    };
-
-    const applySuggestion = (suggestion) => {
-      inputMessage.value = suggestion;
-      showSuggestions.value = false;
-      nextTick(() => {
-        if (chatInput.value) {
-          chatInput.value.focus();
-        }
-      });
-    };
-
-    const hideSuggestions = () => {
-      showSuggestions.value = false;
-    };
-
-    const toggleVoiceInput = () => {
-      isListening.value = !isListening.value;
-      if (isListening.value) {
-        aiStatusText.value = 'Listening for voice input...';
-        // Voice input logic would go here
-      } else {
-        aiStatusText.value = 'Ready to assist';
-      }
-    };
-
-    const attachFile = () => {
-      // File attachment logic would go here
-      console.log('File attachment feature not yet implemented');
-    };
-
-    const toggleEmojiPicker = () => {
-      // Emoji picker logic would go here
-      console.log('Emoji picker feature not yet implemented');
-    };
-
     return {
-      messages,
-      filteredMessages,
+      sidebarCollapsed,
+      terminalSidebarCollapsed,
+      showTerminalSidebar,
       inputMessage,
+      messages,
+      chatList,
+      currentChatId,
+      backendStarting,
       chatMessages,
-      chatInput,
-      isProcessing,
-      isThinking,
-      isListening,
-      showTypingIndicator,
-      showSuggestions,
-      responseTime,
-      tokensUsed,
-      aiStatusText,
-      inputPlaceholder,
-      suggestions,
-      handleInput,
-      handleEnterKey,
-      applySuggestion,
-      hideSuggestions,
-      toggleVoiceInput,
-      attachFile,
-      toggleEmojiPicker,
+      settings,
+      filteredMessages,
+      formatMessage,
       sendMessage,
       newChat,
       resetChat,
-      deleteChat,
-      formatMessage,
-      saveMessagesToStorage,
-      sidebarCollapsed,
-      settings,
-      backendStarting,
-      startBackendServer,
-      prompts,
-      defaults,
-      loadPrompts,
-      editPrompt,
-      revertPrompt,
-      chatList,
-      currentChatId,
-      switchChat,
-      getChatPreview,
-      editChatName,
-      refreshChatList,
       deleteSpecificChat,
-      groupedPrompts,
-      isAgentPaused,
-      backendStatus,
-      llmStatus,
-      checkConnections,
-      terminalSidebarCollapsed,
+      switchChat,
+      editChatName,
+      getChatPreview,
+      refreshChatList,
+      startBackendServer,
       openTerminalInNewTab
     };
   }
@@ -1442,364 +372,33 @@ export default {
 </script>
 
 <style scoped>
-.chat-interface {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: clamp(10px, 1.5vw, 15px);
-  overflow: hidden; /* Prevent overall scrolling */
-}
-
-.chat-container {
-  display: flex;
-  flex: 1;
-  min-height: 0; /* Ensure it shrinks properly */
-}
-
-.chat-sidebar {
-  width: clamp(200px, 20vw, 250px);
-  background-color: #f8f9fa;
-  border-right: 1px solid #e9ecef;
-  transition: width 0.3s ease;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.chat-sidebar.collapsed {
-  width: 40px;
-}
-
-.toggle-sidebar {
-  position: absolute;
-  top: 10px;
-  right: -20px;
-  width: 20px;
-  height: 30px;
-  background-color: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 0 4px 4px 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5;
-}
-
-.toggle-sidebar:hover {
-  background-color: #5a6268;
-}
-
-.sidebar-content {
-  padding: 10px;
-  overflow-y: auto;
-}
-
-.sidebar-content h3 {
-  margin: 0 0 10px 0;
-  font-size: clamp(14px, 1.8vw, 16px);
-  color: #007bff;
-}
-
-.settings-section {
-  margin-bottom: 15px;
-}
-
-.settings-section h4 {
-  margin: 0 0 8px 0;
-  font-size: clamp(12px, 1.6vw, 14px);
-  color: #343a40;
-  border-bottom: 1px solid #e9ecef;
-  padding-bottom: 5px;
-}
-
-.preference-toggle label {
-  display: block;
-  margin-bottom: 5px;
-  font-size: clamp(11px, 1.4vw, 13px);
-}
-
-.preference-toggle input[type="checkbox"],
-.preference-toggle input[type="radio"] {
-  margin-right: 5px;
-}
-
-.preference-toggle input[type="text"],
-.preference-toggle input[type="number"],
-.preference-toggle select {
-  margin-left: 5px;
-  border: 1px solid #ced4da;
-  border-radius: 3px;
-  padding: 2px 5px;
-  font-size: clamp(11px, 1.4vw, 13px);
-}
-
-.preference-toggle input[type="text"]:focus,
-.preference-toggle input[type="number"]:focus,
-.preference-toggle select:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
-.chat-interface h2 {
-  margin: 0 0 clamp(10px, 1.5vw, 15px) 0;
-  font-size: clamp(16px, 2vw, 20px);
-  color: #007bff;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto; /* Only the messages area scrolls */
-  padding: clamp(5px, 1vw, 10px);
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  margin-bottom: clamp(10px, 1.5vw, 15px);
-  min-height: 0; /* Ensure it shrinks properly */
-  margin-left: clamp(10px, 1.5vw, 15px);
-}
-
-.message {
-  margin-bottom: clamp(5px, 1vw, 10px);
-  padding: clamp(5px, 0.8vw, 8px) clamp(8px, 1.2vw, 12px);
-  border-radius: 4px;
-  max-width: 80%;
-  font-size: clamp(12px, 1.5vw, 14px);
-}
-
-.message.user {
-  background-color: #007bff;
-  color: white;
-  margin-left: auto;
-}
-
-.message.bot {
-  background-color: #e9ecef;
-  color: #333;
-  margin-right: auto;
-}
-
-.message.thought {
-  background-color: #f8f9fa;
-  border-left: 4px solid #6c757d;
-  font-style: italic;
-}
-
-.message.json, .message.debug {
-  background-color: #fff3cd;
-  border-left: 4px solid #ffc107;
-  font-size: clamp(10px, 1.2vw, 12px);
-}
-
-.message.utility {
-  background-color: #d4edda;
-  border-left: 4px solid #28a745;
-}
-
-.message.planning {
-  background-color: #cce5ff;
-  border-left: 4px solid #007bff;
-  font-weight: bold;
-}
-
-.message.tool-output {
-  background-color: #e2f0cb; /* Light green */
-  border-left: 4px solid #7cb342; /* Darker green */
-  font-family: 'Courier New', Courier, monospace;
-  font-size: clamp(10px, 1.2vw, 12px);
-}
-
-.thought-message, .planning-message, .response-message, .debug-message, .utility-message, .tool-output-message, .clean-output-message, .clean-response-message {
-  display: flex;
-  flex-direction: column;
-}
-
-.clean-output-message, .clean-response-message {
-  background-color: #f8f9fa;
-  border-left: 4px solid #28a745;
-  padding: 10px;
-  border-radius: 4px;
-  font-size: clamp(13px, 1.6vw, 15px);
-  color: #333;
-  line-height: 1.4;
-}
-
-.thought-message strong, .planning-message strong, .response-message strong, .debug-message strong, .utility-message strong {
-  color: #495057;
-  margin-bottom: 3px;
-}
-
+/* Message type specific styles */
 .message-content {
   word-wrap: break-word;
+  line-height: 1.5;
 }
 
 .message-content pre {
-  background-color: rgba(0, 0, 0, 0.05);
-  padding: 5px;
-  border-radius: 3px;
-  overflow-x: auto;
-  font-size: clamp(10px, 1.2vw, 12px);
+  @apply bg-blueGray-100 p-2 rounded text-xs overflow-x-auto font-mono;
 }
 
-.message-timestamp {
-  font-size: clamp(9px, 1vw, 11px);
-  margin-top: 5px;
-  opacity: 0.7;
+.thought-message {
+  @apply border-l-4 border-blueGray-500 bg-blueGray-50 p-3 rounded-r italic;
 }
 
-.chat-control-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(3px, 0.5vw, 5px);
-  margin-top: 10px;
+.planning-message {
+  @apply border-l-4 border-indigo-500 bg-indigo-50 p-3 rounded-r font-medium;
 }
 
-.chat-input {
-  display: flex;
-  gap: clamp(5px, 1vw, 10px);
-  position: sticky;
-  bottom: 0; /* Keep input area at the bottom */
-  background-color: white; /* Ensure background to avoid transparency */
-  padding: clamp(5px, 1vw, 10px) 0;
-  z-index: 10; /* Ensure it stays above other content if needed */
-  margin-left: clamp(10px, 1.5vw, 15px);
-  width: calc(100% - clamp(10px, 1.5vw, 15px));
+.debug-message {
+  @apply border-l-4 border-yellow-500 bg-yellow-50 p-3 rounded-r text-xs;
 }
 
-.chat-input textarea {
-  flex: 1;
-  padding: clamp(5px, 1vw, 10px);
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  resize: none;
-  min-height: clamp(40px, 6vw, 60px);
-  font-family: 'Arial', sans-serif;
-  font-size: clamp(12px, 1.5vw, 14px);
-  /* Removed text-size-adjust due to lack of support in Firefox and Safari */
+.utility-message {
+  @apply border-l-4 border-emerald-500 bg-emerald-50 p-3 rounded-r text-sm;
 }
 
-.chat-input button {
-  align-self: flex-end;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: clamp(5px, 1vw, 10px) clamp(10px, 2vw, 20px);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  font-size: clamp(12px, 1.5vw, 14px);
-}
-
-
-.chat-input button:hover {
-  background-color: #0056b3;
-}
-
-@media (max-width: 768px) {
-  .chat-input {
-    flex-direction: row; /* Keep input and button on the same line */
-    align-items: flex-end;
-  }
-
-  .chat-input textarea {
-    min-height: 40px; /* Smaller height on mobile */
-  }
-}
-
-.control-button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: clamp(5px, 1vw, 10px) clamp(10px, 2vw, 20px);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  font-size: clamp(12px, 1.5vw, 14px);
-}
-
-.control-button.small {
-  padding: clamp(3px, 0.5vw, 5px) clamp(5px, 1vw, 10px);
-  font-size: clamp(10px, 1.2vw, 12px);
-}
-
-.control-button:hover {
-  background-color: #0056b3;
-}
-
-.control-button:disabled {
-  background-color: #6c757d;
-  cursor: not-allowed;
-}
-
-.conversation-list {
-  margin-bottom: 15px;
-  max-height: 300px;
-  overflow-y: auto;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  padding: 5px;
-}
-
-.conversation-item {
-  padding: 8px;
-  cursor: pointer;
-  border-radius: 3px;
-  margin-bottom: 2px;
-  transition: background-color 0.2s;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.conversation-actions {
-  display: none;
-  gap: 5px;
-}
-
-.conversation-item:hover .conversation-actions {
-  display: flex;
-}
-
-.action-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: background-color 0.2s;
-}
-
-.action-icon:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-.action-icon.delete {
-  color: #dc3545;
-}
-
-.action-icon.delete:hover {
-  background-color: rgba(220, 53, 69, 0.2);
-}
-
-.conversation-item:hover {
-  background-color: #e9ecef;
-}
-
-.conversation-item.active {
-  background-color: #007bff;
-  color: white;
-}
-
-.conversation-item span {
-  font-size: clamp(11px, 1.4vw, 13px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
+.tool-output-message {
+  @apply border-l-4 border-emerald-500 bg-emerald-50 p-3 rounded-r font-mono text-sm;
 }
 </style>
