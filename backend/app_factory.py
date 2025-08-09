@@ -45,6 +45,7 @@ from backend.api.websockets import router as websocket_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.kb_librarian import router as kb_librarian_router
 from backend.api.terminal import router as terminal_router
+from backend.api.system_knowledge_bridge import router as system_knowledge_bridge_router
 from backend.api.developer import (
     router as developer_router,
     api_registry,
@@ -383,6 +384,12 @@ def add_api_routes(app: FastAPI) -> None:
         (settings_router, "/settings", ["settings"], "settings"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
+        (
+            system_knowledge_bridge_router,
+            "",
+            ["system_knowledge"],
+            "system_knowledge_bridge",
+        ),
         (llm_router, "/llm", ["llm"], "llm"),
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
