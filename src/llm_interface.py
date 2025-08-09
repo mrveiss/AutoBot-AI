@@ -87,11 +87,16 @@ class LLMInterface:
         self.ollama_models = global_config_manager.get_nested(
             "llm_config.ollama.models", {}
         )
-        self.orchestrator_llm_alias = global_config_manager.get_nested(
-            "llm_config.default_llm", "ollama_deepseek-r1:14b"
+        # Use unified configuration for LLM models
+        unified_llm_config = global_config_manager.get_llm_config()
+        selected_model = unified_llm_config.get("ollama", {}).get(
+            "model", "deepseek-r1:14b"
         )
-        self.task_llm_alias = global_config_manager.get_nested(
-            "llm_config.task_llm", "ollama_deepseek-r1:14b"
+        self.orchestrator_llm_alias = unified_llm_config.get(
+            "orchestrator_llm", f"ollama_{selected_model}"
+        )
+        self.task_llm_alias = unified_llm_config.get(
+            "task_llm", f"ollama_{selected_model}"
         )
 
         self.orchestrator_llm_settings = global_config_manager.get_nested(
