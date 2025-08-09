@@ -1672,6 +1672,7 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 0; /* Allow flexbox to shrink */
 }
 
 .knowledge-manager h2 {
@@ -1710,6 +1711,9 @@ export default {
 .tab-content {
   flex: 1;
   overflow-y: auto;
+  min-height: 0; /* Allow flexbox to shrink */
+  display: flex;
+  flex-direction: column;
 }
 
 .tab-content h3 {
@@ -1753,9 +1757,16 @@ export default {
   cursor: not-allowed;
 }
 
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* Allow scrolling within results */
+}
+
 .search-results h4 {
   color: #333;
   margin-bottom: 15px;
+  flex-shrink: 0; /* Keep header visible */
 }
 
 .search-result {
@@ -1775,6 +1786,10 @@ export default {
 .result-content {
   margin-bottom: 10px;
   line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+  word-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .result-metadata {
@@ -2011,6 +2026,14 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-shrink: 0; /* Keep header visible */
+}
+
+.entries-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Allow scrolling */
 }
 
 .entries-header h3 {
@@ -2049,6 +2072,7 @@ export default {
   display: flex;
   gap: 10px;
   margin-bottom: 15px;
+  flex-shrink: 0; /* Keep search bar visible */
 }
 
 .search-input {
@@ -2095,6 +2119,9 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* Allow scrolling within list */
 }
 
 .entry-item {
@@ -2496,6 +2523,9 @@ export default {
   white-space: pre-wrap;
   line-height: 1.6;
   color: #333;
+  max-height: 400px;
+  overflow-y: auto;
+  word-wrap: break-word;
 }
 
 .view-meta {
