@@ -12,6 +12,14 @@ export default defineConfig({
     vueJsx(),
     vueDevTools(),
   ],
+  css: {
+    devSourcemap: true,
+    transformer: 'postcss',
+    lightningcss: {
+      // Disable lightningcss minification that's causing issues with Tailwind
+      minify: false,
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
@@ -28,6 +36,7 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: '.',
     emptyOutDir: true,
+    cssMinify: 'esbuild', // Use esbuild instead of lightningcss
     rollupOptions: {
       output: {
         manualChunks(id) {

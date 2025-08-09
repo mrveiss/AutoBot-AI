@@ -92,37 +92,184 @@ async def get_current_llm():
 
 @router.post("/provider")
 async def update_llm_provider(provider_data: dict):
-    """Update LLM provider configuration"""
+    """Update LLM provider configuration using unified config system"""
     try:
-        logger.info(f"Received LLM provider update: {provider_data}")
+        logger.info(f"UNIFIED CONFIG: Received LLM provider update: {provider_data}")
 
-        # Convert frontend provider data to backend config format
-        llm_config_update = {
-            "provider_type": provider_data.get("provider_type", "local"),
-        }
+        from src.config import global_config_manager
 
-        if provider_data.get("provider_type") == "local":
-            llm_config_update["local"] = {
-                "provider": provider_data.get("local_provider", "ollama"),
-                "selected_model": provider_data.get("local_model", ""),
-            }
+        # Handle streaming setting
+        if "streaming" in provider_data:
+            logger.info(
+                f"UNIFIED CONFIG: Updating streaming setting to: {provider_data['streaming']}"
+            )
+            global_config_manager.set_nested(
+                "backend.streaming", provider_data["streaming"]
+            )
+
+        # Handle local provider updates (Ollama)
+        if provider_data.get("provider_type") == "local" and provider_data.get(
+            "local_model"
+        ):
+            model_name = provider_data.get("local_model")
+            logger.info(f"UNIFIED CONFIG: Updating Ollama model to: {model_name}")
+
+            # Use the unified model update method
+            global_config_manager.update_llm_model(model_name)
+
+        # Handle cloud provider updates
         elif provider_data.get("provider_type") == "cloud":
-            llm_config_update["cloud"] = {
-                "provider": provider_data.get("cloud_provider", "openai"),
-                "selected_model": provider_data.get("cloud_model", ""),
-            }
+            if provider_data.get("cloud_provider") and provider_data.get("cloud_model"):
+                cloud_provider = provider_data.get("cloud_provider")
+                cloud_model = provider_data.get("cloud_model")
+                logger.info(
+                    f"UNIFIED CONFIG: Updating cloud provider to: {cloud_provider}, model: {cloud_model}"
+                )
 
-        # Update the LLM configuration
-        ConfigService.update_llm_config(llm_config_update)
+                # Update provider type
+                global_config_manager.set_nested("backend.llm.provider_type", "cloud")
+                global_config_manager.set_nested(
+                    "backend.llm.cloud.provider", cloud_provider
+                )
+                global_config_manager.set_nested(
+                    f"backend.llm.cloud.providers.{cloud_provider}.selected_model",
+                    cloud_model,
+                )
+
+        # Save all changes
+        global_config_manager.save_settings()
+
+        # Return current configuration
+        current_llm_config = global_config_manager.get_llm_config()
 
         return {
             "status": "success",
-            "message": "LLM provider configuration updated successfully",
-            "updated_config": llm_config_update,
+            "message": "LLM provider configuration updated successfully using unified config system",
+            "current_config": {
+                "provider_type": current_llm_config.get("unified", {}).get(
+                    "provider_type", "local"
+                ),
+                "selected_model": (
+                    current_llm_config.get("unified", {})
+                    .get("local", {})
+                    .get("providers", {})
+                    .get("ollama", {})
+                    .get("selected_model")
+                    or current_llm_config.get("ollama", {}).get("model", "unknown")
+                ),
+                "streaming": global_config_manager.get_nested(
+                    "backend.streaming", False
+                ),
+            },
         }
 
     except Exception as e:
         logger.error(f"Error updating LLM provider: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Error updating LLM provider: {str(e)}"
+        )
+
+
+@router.get("/embedding/models")
+async def get_available_embedding_models():
+    """Get list of available embedding models"""
+    try:
+        # For now, return Ollama models (embedding models are typically the same as LLM models)
+        result = await ModelManager.get_available_models()
+        if result["status"] == "error":
+            raise HTTPException(status_code=500, detail=result["error"])
+
+        # Filter to common embedding models if possible, otherwise return all
+        embedding_models = []
+        for model in result["models"]:
+            model_name = (
+                model.get("name", "") if isinstance(model, dict) else str(model)
+            )
+            # Common embedding model patterns
+            if any(
+                pattern in model_name.lower()
+                for pattern in ["embed", "nomic", "all-minilm", "sentence"]
+            ):
+                embedding_models.append(model)
+            elif "text" in model_name.lower() and any(
+                size in model_name.lower() for size in ["small", "large", "medium"]
+            ):
+                embedding_models.append(model)
+
+        # If no specific embedding models found, include some common ones
+        if not embedding_models:
+            embedding_models = [
+                {"name": "nomic-embed-text", "available": True, "type": "ollama"},
+                {"name": "all-minilm:l6-v2", "available": True, "type": "ollama"},
+            ]
+
+        return {"models": embedding_models, "total_count": len(embedding_models)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting available embedding models: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting available embedding models: {str(e)}",
+        )
+
+
+@router.post("/embedding")
+async def update_embedding_model(embedding_data: dict):
+    """Update embedding model configuration"""
+    try:
+        logger.info(
+            f"UNIFIED CONFIG: Received embedding model update: {embedding_data}"
+        )
+
+        from src.config import global_config_manager
+
+        provider = embedding_data.get("provider", "ollama")
+        model = embedding_data.get("model")
+
+        if not model:
+            raise HTTPException(status_code=400, detail="Model name is required")
+
+        logger.info(f"UNIFIED CONFIG: Updating embedding model to: {provider}/{model}")
+
+        # Update embedding configuration in unified config
+        global_config_manager.set_nested(f"backend.llm.embedding.provider", provider)
+        global_config_manager.set_nested(
+            f"backend.llm.embedding.providers.{provider}.selected_model", model
+        )
+
+        if "endpoint" in embedding_data:
+            global_config_manager.set_nested(
+                f"backend.llm.embedding.providers.{provider}.endpoint",
+                embedding_data["endpoint"],
+            )
+
+        if provider == "openai" and "api_key" in embedding_data:
+            global_config_manager.set_nested(
+                f"backend.llm.embedding.providers.{provider}.api_key",
+                embedding_data["api_key"],
+            )
+
+        # Use the dedicated embedding model update method
+        global_config_manager.update_embedding_model(model)
+
+        # Get current configuration for response
+        current_config = global_config_manager.get_llm_config()
+        embedding_config = current_config.get("unified", {}).get("embedding", {})
+
+        return {
+            "status": "success",
+            "message": f"Embedding model updated to {provider}/{model}",
+            "current_config": {
+                "provider": embedding_config.get("provider", provider),
+                "selected_model": embedding_config.get("providers", {})
+                .get(provider, {})
+                .get("selected_model", model),
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error updating embedding model: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error updating embedding model: {str(e)}"
         )

@@ -1,264 +1,236 @@
 <template>
   <div id="app" class="min-h-screen bg-blueGray-50">
-    <!-- Sidebar -->
-    <nav class="md:left-0 md:block md:fixed md:top-0 md:bottom-0 md:overflow-y-auto md:flex-row md:flex-nowrap md:overflow-hidden shadow-xl bg-white flex flex-wrap items-center justify-between relative md:w-64 z-10 py-4 px-6">
-      <div class="md:flex-col md:items-stretch md:min-h-full md:flex-nowrap px-0 flex flex-wrap items-center justify-between w-full mx-auto">
+    <!-- Top Brand Bar -->
+    <nav class="bg-white shadow-lg flex flex-wrap items-center justify-between w-full z-[9998] relative py-4 px-6">
+      <div class="flex flex-row items-center justify-between w-full mx-auto">
         <!-- Brand -->
-        <div class="flex items-center">
+        <div class="flex items-center flex-shrink-0">
           <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-full flex items-center justify-center shadow-lg">
             <span class="text-white text-xl font-bold">A</span>
           </div>
           <span class="ml-3 text-xl font-semibold text-blueGray-700">AutoBot Pro</span>
         </div>
 
-        <!-- Mobile menu button -->
-        <button
-          class="cursor-pointer text-black opacity-50 md:hidden px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent"
-          type="button"
-          @click="toggleNavbar"
-        >
-          <i class="fas fa-bars"></i>
-        </button>
+        <!-- Mobile menu button and dropdown container -->
+        <div class="relative" ref="mobileMenuContainer">
+          <button
+            class="cursor-pointer text-black opacity-50 md:hidden px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent"
+            type="button"
+            @click="toggleNavbar"
+          >
+            <i class="fas fa-bars" :class="navbarOpen ? 'fa-times' : 'fa-bars'"></i>
+          </button>
 
-        <!-- Navigation -->
-        <div
-          class="md:flex md:flex-col md:items-stretch md:opacity-100 md:relative md:mt-4 md:shadow-none shadow absolute top-0 left-0 right-0 z-40 overflow-y-auto overflow-x-hidden h-auto items-center flex-1 rounded"
-          :class="[navbarOpen ? 'bg-white m-2 mt-16 px-6 py-3' : 'hidden']"
-        >
-          <!-- Navigation links -->
-          <ul class="md:flex-col md:min-w-full flex flex-col list-none mt-6">
-            <li class="items-center">
-              <a
-                @click="activeTab = 'dashboard'"
-                :class="[activeTab === 'dashboard' ? 'text-indigo-500 bg-indigo-50' : 'text-blueGray-700 hover:text-blueGray-500']"
-                class="text-xs uppercase py-3 px-4 font-bold block rounded-lg cursor-pointer transition-all duration-150"
-              >
-                <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
-                Dashboard
-              </a>
-            </li>
-            <li class="items-center">
-              <a
-                @click="activeTab = 'chat'"
-                :class="[activeTab === 'chat' ? 'text-indigo-500 bg-indigo-50' : 'text-blueGray-700 hover:text-blueGray-500']"
-                class="text-xs uppercase py-3 px-4 font-bold block rounded-lg cursor-pointer transition-all duration-150"
-              >
-                <i class="fas fa-comments mr-2 text-sm"></i>
-                AI Assistant
-              </a>
-            </li>
-            <li class="items-center">
-              <a
-                @click="activeTab = 'voice'"
-                :class="[activeTab === 'voice' ? 'text-indigo-500 bg-indigo-50' : 'text-blueGray-700 hover:text-blueGray-500']"
-                class="text-xs uppercase py-3 px-4 font-bold block rounded-lg cursor-pointer transition-all duration-150"
-              >
-                <i class="fas fa-microphone mr-2 text-sm"></i>
-                Voice Interface
-              </a>
-            </li>
-            <li class="items-center">
-              <a
-                @click="activeTab = 'knowledge'"
-                :class="[activeTab === 'knowledge' ? 'text-indigo-500 bg-indigo-50' : 'text-blueGray-700 hover:text-blueGray-500']"
-                class="text-xs uppercase py-3 px-4 font-bold block rounded-lg cursor-pointer transition-all duration-150"
-              >
-                <i class="fas fa-brain mr-2 text-sm"></i>
-                Knowledge Base
-              </a>
-            </li>
-            <li class="items-center">
-              <a
-                @click="activeTab = 'terminal'"
-                :class="[activeTab === 'terminal' ? 'text-indigo-500 bg-indigo-50' : 'text-blueGray-700 hover:text-blueGray-500']"
-                class="text-xs uppercase py-3 px-4 font-bold block rounded-lg cursor-pointer transition-all duration-150"
-              >
-                <i class="fas fa-terminal mr-2 text-sm"></i>
-                Terminal
-              </a>
-            </li>
-            <li class="items-center">
-              <a
-                @click="activeTab = 'files'"
-                :class="[activeTab === 'files' ? 'text-indigo-500 bg-indigo-50' : 'text-blueGray-700 hover:text-blueGray-500']"
-                class="text-xs uppercase py-3 px-4 font-bold block rounded-lg cursor-pointer transition-all duration-150"
-              >
-                <i class="fas fa-folder mr-2 text-sm"></i>
-                File Manager
-              </a>
-            </li>
-            <li class="items-center">
-              <a
-                @click="activeTab = 'monitor'"
-                :class="[activeTab === 'monitor' ? 'text-indigo-500 bg-indigo-50' : 'text-blueGray-700 hover:text-blueGray-500']"
-                class="text-xs uppercase py-3 px-4 font-bold block rounded-lg cursor-pointer transition-all duration-150"
-              >
-                <i class="fas fa-chart-line mr-2 text-sm"></i>
-                System Monitor
-              </a>
-            </li>
-            <li class="items-center">
-              <a
-                @click="activeTab = 'settings'"
-                :class="[activeTab === 'settings' ? 'text-indigo-500 bg-indigo-50' : 'text-blueGray-700 hover:text-blueGray-500']"
-                class="text-xs uppercase py-3 px-4 font-bold block rounded-lg cursor-pointer transition-all duration-150"
-              >
-                <i class="fas fa-cog mr-2 text-sm"></i>
-                Settings
-              </a>
-            </li>
-          </ul>
-
-          <!-- Status section -->
-          <div class="mt-auto pt-6 border-t border-blueGray-200">
-            <h6 class="text-xs uppercase text-blueGray-400 font-bold tracking-wider mb-3">System Status</h6>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="text-xs text-blueGray-600">Backend</span>
-                <span :class="['text-xs font-semibold', backendStatus.class === 'connected' ? 'text-emerald-500' : 'text-red-500']">
-                  {{ backendStatus.text }}
-                </span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-xs text-blueGray-600">LLM</span>
-                <span :class="['text-xs font-semibold', llmStatus.class === 'connected' ? 'text-emerald-500' : 'text-red-500']">
-                  {{ llmStatus.text }}
-                </span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-xs text-blueGray-600">Redis</span>
-                <span :class="['text-xs font-semibold', redisStatus.class === 'connected' ? 'text-emerald-500' : 'text-red-500']">
-                  {{ redisStatus.text }}
-                </span>
-              </div>
+          <!-- Mobile Navigation Menu -->
+          <div
+            v-if="navbarOpen"
+            class="md:hidden fixed top-16 right-4 z-[99999] w-64"
+            @click.stop
+          >
+            <div class="mt-2 bg-white rounded-lg p-4 shadow-xl border border-blueGray-200" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+              <ul class="flex flex-col space-y-2">
+                <li>
+                  <a
+                    @click="activeTab = 'dashboard'; navbarOpen = false"
+                    :class="[activeTab === 'dashboard' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
+                    Dashboard
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="activeTab = 'chat'; navbarOpen = false"
+                    :class="[activeTab === 'chat' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-comments mr-2 text-sm"></i>
+                    AI Assistant
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="activeTab = 'voice'; navbarOpen = false"
+                    :class="[activeTab === 'voice' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-microphone mr-2 text-sm"></i>
+                    Voice Interface
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="activeTab = 'knowledge'; navbarOpen = false"
+                    :class="[activeTab === 'knowledge' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-brain mr-2 text-sm"></i>
+                    Knowledge Base
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="activeTab = 'terminal'; navbarOpen = false"
+                    :class="[activeTab === 'terminal' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-terminal mr-2 text-sm"></i>
+                    Terminal
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="activeTab = 'files'; navbarOpen = false"
+                    :class="[activeTab === 'files' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-folder mr-2 text-sm"></i>
+                    File Manager
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="activeTab = 'monitor'; navbarOpen = false"
+                    :class="[activeTab === 'monitor' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-chart-line mr-2 text-sm"></i>
+                    System Monitor
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="activeTab = 'settings'; navbarOpen = false"
+                    :class="[activeTab === 'settings' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-cog mr-2 text-sm"></i>
+                    Settings
+                  </a>
+                </li>
+              </ul>
             </div>
           </div>
+        </div>
+
+        <!-- User menu (Right) -->
+        <div class="flex items-center flex-shrink-0">
+          <a class="text-blueGray-600 hover:text-blueGray-800 px-3 py-2 flex items-center text-xs uppercase font-bold">
+            <i class="fas fa-user-circle text-lg mr-2"></i>
+            Admin User
+          </a>
         </div>
       </div>
     </nav>
 
     <!-- Main content -->
-    <div class="relative md:ml-64 bg-blueGray-50 min-h-screen">
-      <!-- Navbar -->
-      <nav class="absolute top-0 left-0 w-full z-10 bg-transparent md:flex-row md:flex-nowrap md:justify-start flex items-center p-4">
-        <div class="w-full mx-auto items-center flex justify-between md:flex-nowrap flex-wrap md:px-10 px-4">
-          <!-- Page heading -->
-          <h1 class="text-white text-2xl font-semibold">{{ pageTitle }}</h1>
-          <!-- User menu -->
-          <ul class="flex-col md:flex-row list-none items-center hidden md:flex">
-            <a class="text-blueGray-200 hover:text-white px-3 py-2 flex items-center text-xs uppercase font-bold">
-              <i class="fas fa-user-circle text-lg mr-2"></i>
-              Admin User
-            </a>
-          </ul>
-        </div>
-      </nav>
+    <div class="relative bg-blueGray-50" :class="activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
 
-      <!-- Header gradient -->
-      <div class="relative bg-gradient-to-br from-indigo-600 to-indigo-800 md:pt-32 pb-32 pt-12">
+      <!-- Header gradient with navigation -->
+      <div class="relative bg-gradient-to-br from-indigo-600 to-indigo-800 md:pt-4 pb-4 pt-2 z-40">
         <div class="px-4 md:px-10 mx-auto w-full">
-          <!-- Dashboard cards (only show on dashboard) -->
-          <div v-if="activeTab === 'dashboard'" class="flex flex-wrap">
-            <div class="w-full lg:w-6/12 xl:w-3/12 px-4">
-              <div class="relative flex flex-col min-w-0 break-words bg-white rounded-lg mb-6 xl:mb-0 shadow-lg">
-                <div class="flex-auto p-4">
-                  <div class="flex flex-wrap">
-                    <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
-                      <h5 class="text-blueGray-400 uppercase font-bold text-xs">Active Sessions</h5>
-                      <span class="font-semibold text-xl text-blueGray-700">{{ activeSessions }}</span>
-                    </div>
-                    <div class="relative w-auto pl-4 flex-initial">
-                      <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-red-500">
-                        <i class="fas fa-users"></i>
-                      </div>
-                    </div>
-                  </div>
-                  <p class="text-sm text-blueGray-400 mt-4">
-                    <span class="text-emerald-500 mr-2">
-                      <i class="fas fa-arrow-up"></i> 3.48%
-                    </span>
-                    <span class="whitespace-nowrap">Since last month</span>
-                  </p>
-                </div>
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+            <!-- Page heading removed - tab name already shown in navigation -->
+
+            <!-- Navigation Links -->
+            <div class="flex items-center relative">
+              <!-- Desktop Navigation -->
+              <div class="hidden md:flex">
+                <ul class="flex flex-row list-none space-x-1">
+                  <li>
+                    <a
+                      @click="activeTab = 'dashboard'"
+                      :class="[activeTab === 'dashboard' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
+                      Dashboard
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="activeTab = 'chat'"
+                      :class="[activeTab === 'chat' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-comments mr-2 text-sm"></i>
+                      AI Assistant
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="activeTab = 'voice'"
+                      :class="[activeTab === 'voice' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-microphone mr-2 text-sm"></i>
+                      Voice Interface
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="activeTab = 'knowledge'"
+                      :class="[activeTab === 'knowledge' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-brain mr-2 text-sm"></i>
+                      Knowledge Base
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="activeTab = 'terminal'"
+                      :class="[activeTab === 'terminal' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-terminal mr-2 text-sm"></i>
+                      Terminal
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="activeTab = 'files'"
+                      :class="[activeTab === 'files' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-folder mr-2 text-sm"></i>
+                      File Manager
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="activeTab = 'monitor'"
+                      :class="[activeTab === 'monitor' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-chart-line mr-2 text-sm"></i>
+                      System Monitor
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="activeTab = 'settings'"
+                      :class="[activeTab === 'settings' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-cog mr-2 text-sm"></i>
+                      Settings
+                    </a>
+                  </li>
+                </ul>
               </div>
-            </div>
-            <div class="w-full lg:w-6/12 xl:w-3/12 px-4">
-              <div class="relative flex flex-col min-w-0 break-words bg-white rounded-lg mb-6 xl:mb-0 shadow-lg">
-                <div class="flex-auto p-4">
-                  <div class="flex flex-wrap">
-                    <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
-                      <h5 class="text-blueGray-400 uppercase font-bold text-xs">Knowledge Items</h5>
-                      <span class="font-semibold text-xl text-blueGray-700">{{ knowledgeItems }}</span>
-                    </div>
-                    <div class="relative w-auto pl-4 flex-initial">
-                      <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-orange-500">
-                        <i class="fas fa-database"></i>
-                      </div>
-                    </div>
-                  </div>
-                  <p class="text-sm text-blueGray-400 mt-4">
-                    <span class="text-emerald-500 mr-2">
-                      <i class="fas fa-arrow-up"></i> 12%
-                    </span>
-                    <span class="whitespace-nowrap">Since last week</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div class="w-full lg:w-6/12 xl:w-3/12 px-4">
-              <div class="relative flex flex-col min-w-0 break-words bg-white rounded-lg mb-6 xl:mb-0 shadow-lg">
-                <div class="flex-auto p-4">
-                  <div class="flex flex-wrap">
-                    <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
-                      <h5 class="text-blueGray-400 uppercase font-bold text-xs">Tasks Completed</h5>
-                      <span class="font-semibold text-xl text-blueGray-700">{{ tasksCompleted }}</span>
-                    </div>
-                    <div class="relative w-auto pl-4 flex-initial">
-                      <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-emerald-500">
-                        <i class="fas fa-check-circle"></i>
-                      </div>
-                    </div>
-                  </div>
-                  <p class="text-sm text-blueGray-400 mt-4">
-                    <span class="text-orange-500 mr-2">
-                      <i class="fas fa-arrow-down"></i> 1.10%
-                    </span>
-                    <span class="whitespace-nowrap">Since yesterday</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div class="w-full lg:w-6/12 xl:w-3/12 px-4">
-              <div class="relative flex flex-col min-w-0 break-words bg-white rounded-lg mb-6 xl:mb-0 shadow-lg">
-                <div class="flex-auto p-4">
-                  <div class="flex flex-wrap">
-                    <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
-                      <h5 class="text-blueGray-400 uppercase font-bold text-xs">Performance</h5>
-                      <span class="font-semibold text-xl text-blueGray-700">{{ performance }}%</span>
-                    </div>
-                    <div class="relative w-auto pl-4 flex-initial">
-                      <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-lightBlue-500">
-                        <i class="fas fa-tachometer-alt"></i>
-                      </div>
-                    </div>
-                  </div>
-                  <p class="text-sm text-blueGray-400 mt-4">
-                    <span class="text-emerald-500 mr-2">
-                      <i class="fas fa-arrow-up"></i> 12%
-                    </span>
-                    <span class="whitespace-nowrap">Since last month</span>
-                  </p>
-                </div>
-              </div>
+
             </div>
           </div>
         </div>
       </div>
 
+
       <!-- Content area -->
-      <div class="px-4 md:px-10 mx-auto w-full -m-24">
-        <div class="flex flex-wrap mt-4">
-          <div class="w-full mb-12 px-4">
+      <div class="px-4 md:px-10 mx-auto w-full" :class="activeTab === 'dashboard' ? 'mt-0' : (activeTab === 'chat' ? 'flex-1 flex flex-col' : 'mt-4')">
+        <div class="flex flex-wrap" :class="activeTab === 'chat' ? 'flex-1 h-full' : 'mt-4'">
+          <div class="w-full px-4" :class="activeTab === 'chat' ? 'flex-1 h-full flex flex-col' : 'mb-12'">
             <Transition name="fade-slide" mode="out-in">
               <!-- Dashboard View -->
               <div v-if="activeTab === 'dashboard'" key="dashboard" class="relative flex flex-col min-w-0 break-words w-full mb-6 shadow-lg rounded-lg bg-white">
@@ -314,30 +286,116 @@
                       </div>
                     </div>
                   </div>
+
+                  <!-- Stats Cards Section -->
+                  <div class="mt-6">
+                    <h3 class="text-lg font-semibold text-blueGray-700 mb-4 px-6">System Statistics</h3>
+                    <div class="grid grid-cols-2 gap-4 px-8">
+                      <!-- Active Sessions Card -->
+                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
+                        <div class="flex-auto p-3">
+                          <div class="flex flex-wrap">
+                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
+                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Active Sessions</h5>
+                              <span class="font-semibold text-xl text-blueGray-700">{{ activeSessions }}</span>
+                            </div>
+                            <div class="relative w-auto pl-4 flex-initial">
+                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-red-500">
+                                <i class="fas fa-users"></i>
+                              </div>
+                            </div>
+                          </div>
+                          <p class="text-sm text-blueGray-400 mt-4">
+                            <span class="text-emerald-500 mr-2">
+                              <i class="fas fa-arrow-up"></i> 3.48%
+                            </span>
+                            <span class="whitespace-nowrap">Since last month</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Knowledge Items Card -->
+                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
+                        <div class="flex-auto p-3">
+                          <div class="flex flex-wrap">
+                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
+                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Knowledge Items</h5>
+                              <span class="font-semibold text-xl text-blueGray-700">{{ knowledgeItems }}</span>
+                            </div>
+                            <div class="relative w-auto pl-4 flex-initial">
+                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-orange-500">
+                                <i class="fas fa-database"></i>
+                              </div>
+                            </div>
+                          </div>
+                          <p class="text-sm text-blueGray-400 mt-4">
+                            <span class="text-emerald-500 mr-2">
+                              <i class="fas fa-arrow-up"></i> 12%
+                            </span>
+                            <span class="whitespace-nowrap">Since last week</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Tasks Completed Card -->
+                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
+                        <div class="flex-auto p-3">
+                          <div class="flex flex-wrap">
+                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
+                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Tasks Completed</h5>
+                              <span class="font-semibold text-xl text-blueGray-700">{{ tasksCompleted }}</span>
+                            </div>
+                            <div class="relative w-auto pl-4 flex-initial">
+                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-emerald-500">
+                                <i class="fas fa-check-circle"></i>
+                              </div>
+                            </div>
+                          </div>
+                          <p class="text-sm text-blueGray-400 mt-4">
+                            <span class="text-orange-500 mr-2">
+                              <i class="fas fa-arrow-down"></i> 1.10%
+                            </span>
+                            <span class="whitespace-nowrap">Since yesterday</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Performance Card -->
+                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
+                        <div class="flex-auto p-3">
+                          <div class="flex flex-wrap">
+                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
+                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Performance</h5>
+                              <span class="font-semibold text-xl text-blueGray-700">{{ performance }}%</span>
+                            </div>
+                            <div class="relative w-auto pl-4 flex-initial">
+                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-lightBlue-500">
+                                <i class="fas fa-tachometer-alt"></i>
+                              </div>
+                            </div>
+                          </div>
+                          <p class="text-sm text-blueGray-400 mt-4">
+                            <span class="text-emerald-500 mr-2">
+                              <i class="fas fa-arrow-up"></i> 12%
+                            </span>
+                            <span class="whitespace-nowrap">Since last month</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <!-- Chat View -->
-              <section v-else-if="activeTab === 'chat'" key="chat" class="card">
-                <div class="card-header bg-gradient-to-r from-indigo-500 to-indigo-600 text-white">
-                  <div class="flex items-center justify-between">
-                    <h2 class="text-xl font-bold">AI Assistant</h2>
-                    <button @click="newChat" class="btn bg-white bg-opacity-20 hover:bg-opacity-30 text-white text-sm">
-                      <i class="fas fa-plus mr-2"></i>
-                      New Chat
-                    </button>
-                  </div>
+              <div v-else-if="activeTab === 'chat'" key="chat" class="w-full flex-1 flex justify-start">
+                <div class="w-full flex-1">
+                  <ChatInterface :key="activeChatId" />
                 </div>
-                <div class="card-body p-0">
-                  <ChatInterface v-if="activeChatId" :key="activeChatId" />
-                </div>
-              </section>
+              </div>
 
               <!-- Voice View -->
               <section v-else-if="activeTab === 'voice'" key="voice" class="card">
-                <div class="card-header">
-                  <h2 class="text-xl font-bold text-blueGray-700">Voice Interface</h2>
-                </div>
                 <div class="card-body">
                   <VoiceInterface />
                 </div>
@@ -345,9 +403,6 @@
 
               <!-- Knowledge View -->
               <section v-else-if="activeTab === 'knowledge'" key="knowledge" class="card">
-                <div class="card-header">
-                  <h2 class="text-xl font-bold text-blueGray-700">Knowledge Base</h2>
-                </div>
                 <div class="card-body p-0">
                   <KnowledgeManager />
                 </div>
@@ -355,9 +410,6 @@
 
               <!-- Terminal View -->
               <section v-else-if="activeTab === 'terminal'" key="terminal" class="card bg-blueGray-900">
-                <div class="card-header bg-blueGray-800">
-                  <h2 class="text-xl font-bold text-white">Terminal</h2>
-                </div>
                 <div class="card-body p-0">
                   <TerminalWindow />
                 </div>
@@ -365,9 +417,6 @@
 
               <!-- Settings View -->
               <section v-else-if="activeTab === 'settings'" key="settings" class="card">
-                <div class="card-header">
-                  <h2 class="text-xl font-bold text-blueGray-700">System Settings</h2>
-                </div>
                 <div class="card-body">
                   <SettingsPanel />
                 </div>
@@ -375,32 +424,20 @@
 
               <!-- Files View -->
               <section v-else-if="activeTab === 'files'" key="files" class="card">
-                <div class="card-header">
-                  <div class="flex items-center justify-between">
-                    <h2 class="text-xl font-bold text-blueGray-700">File Manager</h2>
-                    <button @click="uploadFile" class="btn btn-primary text-sm">
-                      <i class="fas fa-upload mr-2"></i>
-                      Upload
-                    </button>
-                  </div>
-                </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                   <FileBrowser />
                 </div>
               </section>
 
               <!-- Monitor View -->
               <section v-else-if="activeTab === 'monitor'" key="monitor" class="card">
-                <div class="card-header">
-                  <div class="flex items-center justify-between">
-                    <h2 class="text-xl font-bold text-blueGray-700">System Monitor</h2>
+                <div class="card-body p-0">
+                  <div class="mb-4 px-6 pt-6">
                     <button @click="refreshStats" class="btn btn-primary text-sm">
                       <i class="fas fa-sync mr-2"></i>
                       Refresh
                     </button>
                   </div>
-                </div>
-                <div class="card-body p-0">
                   <SystemMonitor />
                 </div>
               </section>
@@ -409,6 +446,7 @@
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -437,6 +475,7 @@ export default {
     const activeTab = ref('dashboard');
     const activeChatId = ref(`chat-${Date.now()}`);
     const navbarOpen = ref(false);
+    const mobileMenuContainer = ref(null);
 
     // Dashboard stats
     const activeSessions = ref(3);
@@ -467,17 +506,21 @@ export default {
       navbarOpen.value = !navbarOpen.value;
     };
 
+    const closeNavbarOnClickOutside = (event) => {
+      if (navbarOpen.value && mobileMenuContainer.value && !mobileMenuContainer.value.contains(event.target)) {
+        navbarOpen.value = false;
+      }
+    };
+
     const newChat = () => {
       activeChatId.value = `chat-${Date.now()}`;
     };
 
-    const uploadFile = () => {
-      console.log('Upload file clicked');
-    };
 
     const refreshStats = () => {
       console.log('Refresh stats clicked');
     };
+
 
     const checkConnectionStatus = async () => {
       try {
@@ -507,6 +550,9 @@ export default {
       checkConnectionStatus();
       statusCheckInterval = setInterval(checkConnectionStatus, 10000);
 
+      // Add click-outside listener for mobile menu
+      document.addEventListener('click', closeNavbarOnClickOutside);
+
       // Simulate dashboard updates
       setInterval(() => {
         activeSessions.value = Math.floor(Math.random() * 5) + 1;
@@ -518,12 +564,15 @@ export default {
       if (statusCheckInterval) {
         clearInterval(statusCheckInterval);
       }
+      // Remove click-outside listener
+      document.removeEventListener('click', closeNavbarOnClickOutside);
     });
 
     return {
       activeTab,
       activeChatId,
       navbarOpen,
+      mobileMenuContainer,
       backendStatus,
       llmStatus,
       redisStatus,
@@ -534,7 +583,6 @@ export default {
       performance,
       toggleNavbar,
       newChat,
-      uploadFile,
       refreshStats
     };
   }
@@ -542,8 +590,203 @@ export default {
 </script>
 
 <style>
-@import './assets/tailwind.css';
+@import './assets/vue-notus.css';
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css');
+
+/* Vue Notus Color Mappings for App.vue */
+.bg-blueGray-50 { background-color: var(--blue-gray-50); }
+.bg-blueGray-100 { background-color: var(--blue-gray-100); }
+.bg-blueGray-200 { background-color: var(--blue-gray-200); }
+.bg-blueGray-400 { background-color: var(--blue-gray-400); }
+.bg-blueGray-800 { background-color: var(--blue-gray-800); }
+.bg-blueGray-900 { background-color: var(--blue-gray-900); }
+
+.text-blueGray-200 { color: var(--blue-gray-200); }
+.text-blueGray-400 { color: var(--blue-gray-400); }
+.text-blueGray-600 { color: var(--blue-gray-600); }
+.text-blueGray-700 { color: var(--blue-gray-700); }
+
+.text-indigo-500 { color: var(--indigo-500); }
+.bg-indigo-50 { background-color: var(--indigo-50); }
+.bg-indigo-500 { background-color: var(--indigo-500); }
+.bg-indigo-600 { background-color: var(--indigo-600); }
+.bg-indigo-700 { background-color: var(--indigo-700); }
+.bg-indigo-800 { background-color: var(--indigo-800); }
+
+.text-emerald-500 { color: var(--emerald-500); }
+.bg-emerald-500 { background-color: var(--emerald-500); }
+.text-red-500 { color: var(--red-500); }
+.bg-red-500 { background-color: var(--red-500); }
+.bg-orange-500 { background-color: var(--orange-500); }
+.text-orange-500 { color: var(--orange-500); }
+
+.border-blueGray-200 { border-color: var(--blue-gray-200); }
+
+.hover\\:text-blueGray-500:hover { color: var(--blue-gray-500); }
+.hover\\:text-white:hover { color: white; }
+.active\\:bg-indigo-600:active { background-color: var(--indigo-600); }
+
+/* Gradient backgrounds */
+.from-indigo-500 { --tw-gradient-from: var(--indigo-500); }
+.to-indigo-700 { --tw-gradient-to: var(--indigo-700); }
+.from-indigo-600 { --tw-gradient-from: var(--indigo-600); }
+.to-indigo-800 { --tw-gradient-to: var(--indigo-800); }
+.bg-gradient-to-br {
+  background: linear-gradient(to bottom right, var(--tw-gradient-from, var(--indigo-500)), var(--tw-gradient-to, var(--indigo-700)));
+}
+.bg-gradient-to-r {
+  background: linear-gradient(to right, var(--tw-gradient-from, var(--indigo-500)), var(--tw-gradient-to, var(--indigo-600)));
+}
+
+/* Light blue colors for dashboard cards */
+.bg-lightBlue-500 { background-color: #0ea5e9; }
+.text-lightBlue-500 { color: #0ea5e9; }
+
+/* Table styling */
+.divide-y > * + * { border-top-width: 1px; }
+.divide-blueGray-200 > * + * { border-color: var(--blue-gray-200); }
+.min-w-full { min-width: 100%; }
+.overflow-x-auto { overflow-x: auto; }
+.h-8 { height: 2rem; }
+.w-8 { width: 2rem; }
+.-m-12 { margin: -3rem; }
+.-mt-6 { margin-top: -1.5rem; }
+.mt-0 { margin-top: 0; }
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.gap-4 { gap: 1rem; }
+.bg-yellow-100 { background-color: #fef3c7; }
+.text-yellow-800 { color: #92400e; }
+.mb-4 { margin-bottom: 1rem; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.text-indigo-200 { color: #c7d2fe; }
+.bg-opacity-10 { background-color: rgba(255, 255, 255, 0.1); }
+.bg-opacity-20 { background-color: rgba(255, 255, 255, 0.2); }
+.hover\:bg-opacity-10:hover { background-color: rgba(255, 255, 255, 0.1); }
+.h-screen { height: 100vh; }
+.justify-start { justify-content: flex-start; }
+.top-full { top: 100%; }
+.backdrop-blur-sm { backdrop-filter: blur(4px); }
+.bg-opacity-95 { background-color: rgba(255, 255, 255, 0.95); }
+.border-opacity-20 { border-color: rgba(255, 255, 255, 0.2); }
+.mx-4 { margin-left: 1rem; margin-right: 1rem; }
+.mt-2 { margin-top: 0.5rem; }
+.hover\:bg-indigo-50:hover { background-color: var(--indigo-50); }
+.hover\:text-indigo-600:hover { color: var(--indigo-600); }
+.w-64 { width: 16rem; }
+
+/* Essential layout utilities missing from Vue Notus */
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-nowrap { flex-wrap: nowrap; }
+.flex-col { flex-direction: column; }
+.flex-row { flex-direction: row; }
+.min-h-full { min-height: 100%; }
+.min-h-screen { min-height: 100vh; }
+.list-none { list-style: none; }
+.block { display: block; }
+.relative { position: relative; }
+.absolute { position: absolute; }
+.fixed { position: fixed; }
+.z-10 { z-index: 10; }
+.z-40 { z-index: 40; }
+.z-50 { z-index: 50; }
+.z-60 { z-index: 60; }
+.z-70 { z-index: 70; }
+.overflow-hidden { overflow: hidden; }
+.overflow-y-auto { overflow-y: auto; }
+.overflow-x-hidden { overflow-x: hidden; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.mt-auto { margin-top: auto; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mb-12 { margin-bottom: 3rem; }
+.ml-3 { margin-left: 0.75rem; }
+.mr-2 { margin-right: 0.5rem; }
+.pt-6 { padding-top: 1.5rem; }
+.pt-8 { padding-top: 2rem; }
+.pt-12 { padding-top: 3rem; }
+.pb-16 { padding-bottom: 4rem; }
+.pb-32 { padding-bottom: 8rem; }
+.px-0 { padding-left: 0; padding-right: 0; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.w-full { width: 100%; }
+.w-12 { width: 3rem; }
+.h-12 { height: 3rem; }
+.h-auto { height: auto; }
+.max-w-full { max-width: 100%; }
+.flex-grow { flex-grow: 1; }
+.flex-initial { flex: 0 1 auto; }
+.flex-auto { flex: 1 1 auto; }
+.flex-1 { flex: 1 1 0%; }
+.whitespace-nowrap { white-space: nowrap; }
+.cursor-pointer { cursor: pointer; }
+.uppercase { text-transform: uppercase; }
+.font-bold { font-weight: 700; }
+.font-semibold { font-weight: 600; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.tracking-wider { letter-spacing: 0.05em; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.space-y-3 > * + * { margin-top: 0.75rem; }
+.space-x-2 > * + * { margin-left: 0.5rem; }
+.space-x-4 > * + * { margin-left: 1rem; }
+
+.inline-flex { display: inline-flex; }
+.ml-auto { margin-left: auto; }
+.flex-shrink-0 { flex-shrink: 0; }
+.justify-center { justify-content: center; }
+
+/* Medium screen grid utilities */
+@media (min-width: 768px) {
+  .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Large screen grid utilities */
+@media (min-width: 1024px) {
+  .lg\\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Responsive utilities */
+@media (min-width: 768px) {
+  .md\\:left-0 { left: 0; }
+  .md\\:block { display: block; }
+  .md\\:fixed { position: fixed; }
+  .md\\:top-0 { top: 0; }
+  .md\\:bottom-0 { bottom: 0; }
+  .md\\:w-64 { width: 16rem; }
+  .md\\:flex { display: flex; }
+  .md\\:flex-col { flex-direction: column; }
+  .md\\:flex-row { flex-direction: row; }
+  .md\\:flex-nowrap { flex-wrap: nowrap; }
+  .md\\:items-stretch { align-items: stretch; }
+  .md\\:min-h-full { min-height: 100%; }
+  .md\\:min-w-full { min-width: 100%; }
+  .md\\:opacity-100 { opacity: 1; }
+  .md\\:relative { position: relative; }
+  .md\\:mt-4 { margin-top: 1rem; }
+  .md\\:shadow-none { box-shadow: none; }
+  .md\\:overflow-y-auto { overflow-y: auto; }
+  .md\\:overflow-hidden { overflow: hidden; }
+  .md\\:hidden { display: none; }
+  .md\\:ml-64 { margin-left: 16rem; }
+  .md\\:flex-nowrap { flex-wrap: nowrap; }
+  .md\\:justify-start { justify-content: flex-start; }
+  .md\\:px-10 { padding-left: 2.5rem; padding-right: 2.5rem; }
+  .md\\:pt-16 { padding-top: 4rem; }
+  .md\\:pt-32 { padding-top: 8rem; }
+}
 
 /* Transitions */
 .fade-slide-enter-active,
