@@ -1222,6 +1222,47 @@ export default {
 }
 
 .info-item strong {
-  color: #343a40;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+@media (max-width: 768px) {
+  .settings-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-title {
+    font-size: 24px;
+  }
+
+  .tab-btn {
+    padding: 12px;
+  }
+
+  .settings-actions {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .action-buttons {
+    justify-content: center;
+  }
+
+  .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .setting-item label {
+    margin-right: 0;
+  }
+
+  .setting-item input[type="text"],
+  .setting-item input[type="number"],
+  .setting-item input[type="password"],
+  .setting-item select {
+    max-width: none;
+  }
 }
 </style>
