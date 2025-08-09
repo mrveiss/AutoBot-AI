@@ -96,6 +96,7 @@ export default {
     const messages = ref([]);
     const inputMessage = ref('');
     const chatMessages = ref(null);
+    const chatInput = ref(null);
     const settings = ref(settingsService.getSettingsSync());
     const sidebarCollapsed = ref(false);
     const terminalSidebarCollapsed = ref(true);
@@ -107,6 +108,25 @@ export default {
     const prompts = ref([]);
     const defaults = ref({});
     let eventSource = null;
+
+    // Enhanced UI state variables
+    const isProcessing = ref(false);
+    const isThinking = ref(false);
+    const isListening = ref(false);
+    const showTypingIndicator = ref(false);
+    const showSuggestions = ref(false);
+    const responseTime = ref(0);
+    const tokensUsed = ref(0);
+    const aiStatusText = ref('Ready to assist');
+    const inputPlaceholder = ref('Ask me anything or give me a task to complete...');
+    const suggestions = ref([
+      'Analyze this data for trends',
+      'Help me write a professional email',
+      'Explain quantum computing simply',
+      'Create a project timeline',
+      'Debug this code issue',
+      'Research latest AI developments'
+    ]);
 
     // Connection status tracking
     const backendStatus = ref({
@@ -415,13 +435,87 @@ export default {
           return ''; // Hide if toggle is off
         }
       } else if (type === 'utility') {
+        // Parse and extract clean content from utility messages
+        if (text.includes('Tool Used:') && text.includes('Output:')) {
+          // Extract the actual output content and hide utility info when toggle is off
+          if (!settings.value.message_display.show_utility) {
+            return ''; // Hide utility details
+          }
+          return `<div class="utility-message"><strong>Tool:</strong> <span style="color: #6c757d;">${text.replace(/\{.*?\}/g, '').replace(/\[.*?\]/g, '').replace(/"/g, '').trim()}</span></div>`;
+        }
         return `<div class="utility-message"><strong>Utility:</strong> <span style="color: #6c757d;">${text.replace(/\{.*?\}/g, '').replace(/\[.*?\]/g, '').replace(/"/g, '').trim()}</span></div>`;
       } else if (type === 'tool_output') {
-        // Format tool output messages
-        return `<div class="tool-output-message"><strong>Tool Output:</strong> <pre>${text}</pre></div>`;
+        // Parse tool output and extract clean JSON content
+        try {
+          // Handle the specific case: {'response_text': '{ "name": "John Doe", "age": 30, "city": "New York"}'}
+          let cleanOutput = text;
+
+          // First, try to parse the outer structure
+          if (text.includes('response_text')) {
+            const match = text.match(/\{'response_text':\s*'([^']+)'\}/);
+            if (match) {
+              cleanOutput = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            }
+          }
+
+          // Try to parse as JSON and format nicely
+          try {
+            const jsonObj = JSON.parse(cleanOutput);
+            let formattedOutput = '';
+
+            // Format JSON object as readable text
+            for (const [key, value] of Object.entries(jsonObj)) {
+              formattedOutput += `${key}: ${value}, `;
+            }
+            // Remove trailing comma and space
+            formattedOutput = formattedOutput.replace(/, $/, '');
+
+            return `<div class="clean-output-message">${formattedOutput}</div>`;
+          } catch (jsonError) {
+            // If not valid JSON, return cleaned text
+            return `<div class="tool-output-message">${cleanOutput}</div>`;
+          }
+        } catch (e) {
+          return `<div class="tool-output-message">${text}</div>`;
+        }
       } else if (type === 'response') {
-        // For response type, display the text directly
-        return `<div class="response-message"><strong>Response:</strong> ${text}</div>`;
+        // For response type, parse and clean the content
+        try {
+          // Handle tool output embedded in response
+          if (text.includes('Tool Used:') && text.includes('Output:')) {
+            const parts = text.split('Output:');
+            if (parts.length > 1) {
+              let outputPart = parts[1].trim();
+
+              // Parse the output part
+              if (outputPart.startsWith("{'response_text':")) {
+                const match = outputPart.match(/\{'response_text':\s*'([^']+)'\}/);
+                if (match) {
+                  const jsonStr = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                  try {
+                    const jsonObj = JSON.parse(jsonStr);
+                    let formattedOutput = '';
+
+                    // Format JSON object as readable text
+                    for (const [key, value] of Object.entries(jsonObj)) {
+                      formattedOutput += `${key}: ${value}, `;
+                    }
+                    // Remove trailing comma and space
+                    formattedOutput = formattedOutput.replace(/, $/, '');
+
+                    return `<div class="clean-response-message">${formattedOutput}</div>`;
+                  } catch (jsonError) {
+                    return `<div class="response-message">${jsonStr}</div>`;
+                  }
+                }
+              }
+            }
+          }
+
+          return `<div class="response-message">${text}</div>`;
+        } catch (e) {
+          return `<div class="response-message">${text}</div>`;
+        }
       }
       return text;
     };
@@ -467,12 +561,52 @@ export default {
             let responseText = botResponse.response || botResponse.text || JSON.stringify(botResponse);
             let responseType = 'response';
 
-            // Handle new chat message response format
-            if (botResponse.response) {
-              responseText = botResponse.response;
-              responseType = 'response';
+            // Process and clean the response to extract meaningful content
+            let cleanedResponse = responseText;
+            let finalResponseType = 'response';
+
+            // Parse the response if it contains tool output
+            if (responseText.includes('Tool Used:') && responseText.includes('Output:')) {
+              const parts = responseText.split('Output:');
+              if (parts.length > 1) {
+                let outputPart = parts[1].trim();
+
+                // Handle the specific case: {'response_text': '{ "name": "John Doe", "age": 30, "city": "New York"}'}
+                if (outputPart.includes('response_text')) {
+                  const match = outputPart.match(/\{'response_text':\s*'([^']+)'\}/);
+                  if (match) {
+                    const jsonStr = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                    try {
+                      const jsonObj = JSON.parse(jsonStr);
+                      let formattedOutput = '';
+
+                      // Format JSON object as readable text
+                      for (const [key, value] of Object.entries(jsonObj)) {
+                        formattedOutput += `${key}: ${value}, `;
+                      }
+                      // Remove trailing comma and space
+                      cleanedResponse = formattedOutput.replace(/, $/, '');
+                      finalResponseType = 'tool_output'; // Use tool_output for proper styling
+                    } catch (jsonError) {
+                      cleanedResponse = jsonStr;
+                    }
+                  }
+                }
+
+                // Also show utility info if the toggle is on
+                if (settings.value.message_display.show_utility) {
+                  const toolPart = parts[0].replace('Tool Used:', '').trim();
+                  messages.value.push({
+                    sender: 'bot',
+                    text: `Tool: ${toolPart}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    type: 'utility'
+                  });
+                }
+              }
             }
 
+            // Show raw JSON if the toggle is on
             if (settings.value.message_display.show_json) {
               messages.value.push({
                 sender: 'bot',
@@ -482,7 +616,7 @@ export default {
               });
             }
 
-            // Extract detailed LLM request and response if available
+            // Show LLM details if utility toggle is on
             if (botResponse.llm_request && settings.value.message_display.show_utility) {
               messages.value.push({
                 sender: 'bot',
@@ -500,11 +634,12 @@ export default {
               });
             }
 
+            // Add the main cleaned response
             messages.value.push({
               sender: 'bot',
-              text: responseText,
+              text: cleanedResponse,
               timestamp: new Date().toLocaleTimeString(),
-              type: responseType
+              type: finalResponseType
             });
           }
         } catch (error) {
@@ -1197,11 +1332,81 @@ export default {
       // The SettingsService already handles localStorage loading
     });
 
+    // Missing function definitions for enhanced UI
+    const handleInput = (event) => {
+      // Handle input changes for enhanced UI features
+      if (event.target.value.length > 0) {
+        showSuggestions.value = false;
+        aiStatusText.value = 'Listening...';
+      } else {
+        aiStatusText.value = 'Ready to assist';
+      }
+    };
+
+    const handleEnterKey = (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    };
+
+    const applySuggestion = (suggestion) => {
+      inputMessage.value = suggestion;
+      showSuggestions.value = false;
+      nextTick(() => {
+        if (chatInput.value) {
+          chatInput.value.focus();
+        }
+      });
+    };
+
+    const hideSuggestions = () => {
+      showSuggestions.value = false;
+    };
+
+    const toggleVoiceInput = () => {
+      isListening.value = !isListening.value;
+      if (isListening.value) {
+        aiStatusText.value = 'Listening for voice input...';
+        // Voice input logic would go here
+      } else {
+        aiStatusText.value = 'Ready to assist';
+      }
+    };
+
+    const attachFile = () => {
+      // File attachment logic would go here
+      console.log('File attachment feature not yet implemented');
+    };
+
+    const toggleEmojiPicker = () => {
+      // Emoji picker logic would go here
+      console.log('Emoji picker feature not yet implemented');
+    };
+
     return {
       messages,
       filteredMessages,
       inputMessage,
       chatMessages,
+      chatInput,
+      isProcessing,
+      isThinking,
+      isListening,
+      showTypingIndicator,
+      showSuggestions,
+      responseTime,
+      tokensUsed,
+      aiStatusText,
+      inputPlaceholder,
+      suggestions,
+      handleInput,
+      handleEnterKey,
+      applySuggestion,
+      hideSuggestions,
+      toggleVoiceInput,
+      attachFile,
+      toggleEmojiPicker,
       sendMessage,
       newChat,
       resetChat,
@@ -1408,9 +1613,19 @@ export default {
   font-size: clamp(10px, 1.2vw, 12px);
 }
 
-.thought-message, .planning-message, .response-message, .debug-message, .utility-message, .tool-output-message {
+.thought-message, .planning-message, .response-message, .debug-message, .utility-message, .tool-output-message, .clean-output-message, .clean-response-message {
   display: flex;
   flex-direction: column;
+}
+
+.clean-output-message, .clean-response-message {
+  background-color: #f8f9fa;
+  border-left: 4px solid #28a745;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: clamp(13px, 1.6vw, 15px);
+  color: #333;
+  line-height: 1.4;
 }
 
 .thought-message strong, .planning-message strong, .response-message strong, .debug-message strong, .utility-message strong {
