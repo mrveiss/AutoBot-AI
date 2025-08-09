@@ -45,6 +45,12 @@
             LLM
           </button>
           <button
+            :class="{ active: activeBackendSubTab === 'embedding' }"
+            @click="activeBackendSubTab = 'embedding'"
+          >
+            Embedding
+          </button>
+          <button
             :class="{ active: activeBackendSubTab === 'memory' }"
             @click="activeBackendSubTab = 'memory'"
           >
@@ -133,7 +139,7 @@
               </div>
               <div class="setting-item">
                 <label>Model</label>
-                <select v-model="settings.backend.llm.local.providers.ollama.selected_model">
+                <select v-model="settings.backend.llm.local.providers.ollama.selected_model" @change="notifyBackendOfProviderChange">
                   <option v-for="model in settings.backend.llm.local.providers.ollama.models" :key="model" :value="model">{{ model }}</option>
                 </select>
               </div>
@@ -145,7 +151,7 @@
               </div>
               <div class="setting-item">
                 <label>Model</label>
-                <select v-model="settings.backend.llm.local.providers.lmstudio.selected_model">
+                <select v-model="settings.backend.llm.local.providers.lmstudio.selected_model" @change="notifyBackendOfProviderChange">
                   <option v-for="model in settings.backend.llm.local.providers.lmstudio.models" :key="model" :value="model">{{ model }}</option>
                 </select>
               </div>
@@ -170,7 +176,7 @@
               </div>
               <div class="setting-item">
                 <label>Model</label>
-                <select v-model="settings.backend.llm.cloud.providers.openai.selected_model">
+                <select v-model="settings.backend.llm.cloud.providers.openai.selected_model" @change="notifyBackendOfProviderChange">
                   <option v-for="model in settings.backend.llm.cloud.providers.openai.models" :key="model" :value="model">{{ model }}</option>
                 </select>
               </div>
@@ -186,7 +192,7 @@
               </div>
               <div class="setting-item">
                 <label>Model</label>
-                <select v-model="settings.backend.llm.cloud.providers.anthropic.selected_model">
+                <select v-model="settings.backend.llm.cloud.providers.anthropic.selected_model" @change="notifyBackendOfProviderChange">
                   <option v-for="model in settings.backend.llm.cloud.providers.anthropic.models" :key="model" :value="model">{{ model }}</option>
                 </select>
               </div>
@@ -202,10 +208,70 @@
           </div>
           <div class="setting-item">
             <label>Enable Streaming</label>
-            <input type="checkbox" v-model="settings.backend.streaming" />
+            <input type="checkbox" v-model="settings.backend.streaming" @change="notifyBackendOfProviderChange" />
           </div>
           <div class="settings-actions">
             <button @click="loadModels">Refresh Models</button>
+          </div>
+        </div>
+        <div v-if="activeBackendSubTab === 'embedding'" class="sub-tab-content">
+          <h3>Embedding Model Settings</h3>
+          <div class="setting-item">
+            <label>Current Embedding Model Status</label>
+            <div class="embedding-status-display">
+              <div class="status-line">
+                <span class="status-label">Connection:</span>
+                <span :class="['status-value', healthStatus.embedding?.connected ? 'connected' : 'disconnected']">
+                  {{ healthStatus.embedding?.connected ? 'Connected' : 'Disconnected' }}
+                </span>
+              </div>
+              <div class="status-line" v-if="healthStatus.embedding?.connected && healthStatus.embedding?.current_model">
+                <span class="status-label">Active Model:</span>
+                <span class="status-value">{{ healthStatus.embedding.current_model }}</span>
+              </div>
+              <div class="status-line">
+                <span class="status-label">Configured:</span>
+                <span class="status-value">{{ getCurrentEmbeddingConfig() }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>Embedding Provider</label>
+            <select v-model="settings.backend.llm.embedding.provider" @change="onEmbeddingProviderChange">
+              <option value="ollama">Ollama</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+          <div v-if="settings.backend.llm.embedding.provider === 'ollama'">
+            <div class="setting-item">
+              <label>Ollama Endpoint</label>
+              <input type="text" v-model="settings.backend.llm.embedding.providers.ollama.endpoint" />
+            </div>
+            <div class="setting-item">
+              <label>Embedding Model</label>
+              <select v-model="settings.backend.llm.embedding.providers.ollama.selected_model" @change="notifyBackendOfEmbeddingChange">
+                <option v-for="model in settings.backend.llm.embedding.providers.ollama.models" :key="model" :value="model">{{ model }}</option>
+              </select>
+            </div>
+          </div>
+          <div v-else-if="settings.backend.llm.embedding.provider === 'openai'">
+            <div class="setting-item">
+              <label>API Key</label>
+              <input type="password" v-model="settings.backend.llm.embedding.providers.openai.api_key" placeholder="Enter API Key" />
+            </div>
+            <div class="setting-item">
+              <label>Endpoint</label>
+              <input type="text" v-model="settings.backend.llm.embedding.providers.openai.endpoint" />
+            </div>
+            <div class="setting-item">
+              <label>Embedding Model</label>
+              <select v-model="settings.backend.llm.embedding.providers.openai.selected_model" @change="notifyBackendOfEmbeddingChange">
+                <option v-for="model in settings.backend.llm.embedding.providers.openai.models" :key="model" :value="model">{{ model }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button @click="loadEmbeddingModels">Refresh Embedding Models</button>
           </div>
         </div>
         <div v-if="activeBackendSubTab === 'memory'" class="sub-tab-content">
@@ -432,7 +498,12 @@
       </div>
     </div>
     <div class="settings-actions">
-      <button @click="saveSettings">Save Settings</button>
+      <button @click="saveSettings" :disabled="isSaving" class="save-button">
+        {{ isSaving ? 'Saving...' : 'Save Settings' }}
+      </button>
+      <div v-if="saveMessage" :class="['save-message', saveMessageType]">
+        {{ saveMessage }}
+      </div>
     </div>
   </div>
 </template>
@@ -465,6 +536,21 @@ export default {
     const settings = ref({});
     const isSettingsLoaded = ref(false);
     const developerInfo = ref(null);
+    const healthStatus = ref({
+      llm: {
+        connected: false,
+        current_model: null
+      },
+      embedding: {
+        connected: false,
+        current_model: null
+      }
+    });
+
+    // Save state management
+    const isSaving = ref(false);
+    const saveMessage = ref('');
+    const saveMessageType = ref(''); // 'success' or 'error'
 
     // Computed property for CORS origins as a string for input field
     const corsOriginsString = computed({
@@ -476,12 +562,47 @@ export default {
       }
     });
 
+    // Function to check health status
+    const checkHealthStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/system/health');
+        if (response.ok) {
+          const data = await response.json();
+          healthStatus.value = {
+            llm: {
+              connected: data.llm_status || false,
+              current_model: data.current_model || null
+            },
+            embedding: {
+              connected: data.embedding_status || false,
+              current_model: data.current_embedding_model || null
+            }
+          };
+        }
+      } catch (error) {
+        console.error('Error checking health status:', error);
+      }
+    };
+
+    let healthCheckInterval;
+
     onMounted(async () => {
       // Load settings from backend
       await loadSettingsFromBackend();
       isSettingsLoaded.value = true;
       // Load models after settings are loaded
       await loadModels();
+      await loadEmbeddingModels();
+      // Check health status
+      await checkHealthStatus();
+      // Set up periodic health checks
+      healthCheckInterval = setInterval(checkHealthStatus, 10000); // Check every 10 seconds
+    });
+
+    onUnmounted(() => {
+      if (healthCheckInterval) {
+        clearInterval(healthCheckInterval);
+      }
     });
 
     // Function to deep merge objects
@@ -532,12 +653,12 @@ export default {
             provider: 'ollama', // Default local provider
             providers: {
               ollama: {
-                endpoint: '',
+                endpoint: 'http://localhost:11434/api/generate',
                 models: [],
                 selected_model: ''
               },
               lmstudio: {
-                endpoint: '',
+                endpoint: 'http://localhost:1234/v1/chat/completions',
                 models: [],
                 selected_model: ''
               }
@@ -557,6 +678,22 @@ export default {
                 endpoint: '',
                 models: [],
                 selected_model: ''
+              }
+            }
+          },
+          embedding: {
+            provider: 'ollama', // Default embedding provider
+            providers: {
+              ollama: {
+                endpoint: 'http://localhost:11434/api/embeddings',
+                models: [],
+                selected_model: 'nomic-embed-text'
+              },
+              openai: {
+                api_key: '',
+                endpoint: 'https://api.openai.com/v1/embeddings',
+                models: ['text-embedding-ada-002', 'text-embedding-3-small', 'text-embedding-3-large'],
+                selected_model: 'text-embedding-ada-002'
               }
             }
           }
@@ -628,7 +765,8 @@ export default {
     // Function to load settings from backend config.yaml
     const loadSettingsFromBackend = async () => {
       try {
-        const configSettings = await apiClient.get('/api/settings/config');
+        const response = await apiClient.get('/api/settings/config');
+        const configSettings = await response.json();
         console.log('Loaded settings from config.yaml:', configSettings);
         settings.value = deepMerge(defaultSettings(), configSettings);
         // Save to local storage as well
@@ -655,11 +793,43 @@ export default {
 
     // Function to save settings to config.yaml via backend
     const saveSettings = async () => {
+      isSaving.value = true;
+      saveMessage.value = '';
+      saveMessageType.value = '';
+
       try {
-        await apiClient.post('/api/settings/config', settings.value);
-        console.log('Settings saved successfully to config.yaml and reloaded.');
+        // Create a deep copy of settings without prompts data (prompts shouldn't be saved to config.yaml)
+        const settingsToSave = JSON.parse(JSON.stringify(settings.value));
+        delete settingsToSave.prompts;
+
+        const response = await apiClient.post('/api/settings/config', settingsToSave);
+        const result = await response.json();
+        console.log('Settings saved successfully to config.yaml:', result);
+
+        // Reload settings from backend after successful save
+        await loadSettingsFromBackend();
+
+        // Show success message
+        saveMessage.value = 'Settings saved successfully!';
+        saveMessageType.value = 'success';
+
+        // Clear message after 3 seconds
+        setTimeout(() => {
+          saveMessage.value = '';
+          saveMessageType.value = '';
+        }, 3000);
       } catch (error) {
         console.error('Error saving settings to backend:', error);
+        saveMessage.value = `Error saving settings: ${error.message}`;
+        saveMessageType.value = 'error';
+
+        // Clear error message after 5 seconds
+        setTimeout(() => {
+          saveMessage.value = '';
+          saveMessageType.value = '';
+        }, 5000);
+      } finally {
+        isSaving.value = false;
       }
     };
 
@@ -710,37 +880,66 @@ export default {
     const loadModels = async () => {
       try {
         console.log('Loading models from backend...');
-        const data = await apiClient.get('/api/llm/models');
+        const response = await fetch('http://localhost:8001/api/llm/models');
+        const data = await response.json();
         console.log('Model data received:', data);
+        console.log('Response structure:', {
+          hasModels: !!data.models,
+          modelsIsArray: Array.isArray(data.models),
+          modelsLength: data.models?.length,
+          firstModel: data.models?.[0]
+        });
 
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
 
           if (provider === 'ollama') {
             // Handle the new API response format with model objects
+            let availableModels = [];
+
+            // Try different response structures
             if (data.models && Array.isArray(data.models)) {
-              const availableModels = data.models
-                .filter(model => model.available && (model.type === 'ollama' || !model.type))
-                .map(model => model.name);
-
-              settings.value.backend.llm.local.providers.ollama.models = availableModels;
-              console.log(`Loaded ${availableModels.length} Ollama models:`, availableModels);
-
-              // Auto-select first model if none selected
-              if (!settings.value.backend.llm.local.providers.ollama.selected_model && availableModels.length > 0) {
-                settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0];
-                console.log('Auto-selected model:', availableModels[0]);
+              // If models have a structure with 'available' and 'type' fields
+              if (data.models.length > 0 && typeof data.models[0] === 'object') {
+                availableModels = data.models
+                  .filter(model => {
+                    // Include models that are available and either have no type or are ollama type
+                    return model.available !== false && (!model.type || model.type === 'ollama');
+                  })
+                  .map(model => model.name || model.id || model);
+              } else {
+                // If models are just strings
+                availableModels = data.models;
               }
+            } else if (Array.isArray(data)) {
+              // If the response is directly an array
+              availableModels = data.map(model =>
+                typeof model === 'string' ? model : (model.name || model.id || model)
+              );
+            }
 
-              // Validate current selection is still available
-              const currentModel = settings.value.backend.llm.local.providers.ollama.selected_model;
-              if (currentModel && !availableModels.includes(currentModel)) {
-                console.log(`Current model ${currentModel} no longer available, switching to ${availableModels[0]}`);
-                settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0] || '';
+            settings.value.backend.llm.local.providers.ollama.models = availableModels;
+            console.log(`Loaded ${availableModels.length} Ollama models:`, availableModels);
+
+            if (availableModels.length === 0) {
+              console.warn('No Ollama models found. Raw API response:', data);
+              // Try to provide helpful feedback
+              if (data.error) {
+                console.error('API Error:', data.error);
               }
-            } else {
-              console.warn('No Ollama models found in response');
-              settings.value.backend.llm.local.providers.ollama.models = [];
+            }
+
+            // Auto-select first model if none selected
+            if (!settings.value.backend.llm.local.providers.ollama.selected_model && availableModels.length > 0) {
+              settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0];
+              console.log('Auto-selected model:', availableModels[0]);
+            }
+
+            // Validate current selection is still available
+            const currentModel = settings.value.backend.llm.local.providers.ollama.selected_model;
+            if (currentModel && !availableModels.includes(currentModel)) {
+              console.log(`Current model ${currentModel} no longer available, switching to ${availableModels[0]}`);
+              settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0] || '';
             }
 
           } else if (provider === 'lmstudio') {
@@ -765,7 +964,6 @@ export default {
           }
         }
         console.log('Models loaded successfully');
-
       } catch (error) {
         console.error('Error loading models:', error);
         if (settings.value.backend.llm.provider_type === 'local') {
@@ -813,16 +1011,36 @@ export default {
 
     const notifyBackendOfProviderChange = async () => {
       try {
+        const providerType = settings.value.backend.llm.provider_type;
         const providerData = {
-          provider_type: settings.value.backend.llm.provider_type,
-          local_provider: settings.value.backend.llm.provider_type === 'local' ? settings.value.backend.llm.local.provider : '',
-          local_model: settings.value.backend.llm.provider_type === 'local' ? settings.value.backend.llm.local.providers[settings.value.backend.llm.local.provider].selected_model : '',
-          cloud_provider: settings.value.backend.llm.provider_type === 'cloud' ? settings.value.backend.llm.cloud.provider : '',
-          cloud_model: settings.value.backend.llm.provider_type === 'cloud' ? settings.value.backend.llm.cloud.providers[settings.value.backend.llm.cloud.provider].selected_model : ''
+          provider_type: providerType,
+          streaming: settings.value.backend.streaming
         };
+
+        if (providerType === 'local') {
+          const provider = settings.value.backend.llm.local.provider;
+          const providerSettings = settings.value.backend.llm.local.providers[provider];
+
+          providerData.local_provider = provider;
+          providerData.local_model = providerSettings.selected_model;
+          providerData.local_endpoint = providerSettings.endpoint;
+        } else {
+          const provider = settings.value.backend.llm.cloud.provider;
+          const providerSettings = settings.value.backend.llm.cloud.providers[provider];
+
+          providerData.cloud_provider = provider;
+          providerData.cloud_model = providerSettings.selected_model;
+          providerData.cloud_api_key = providerSettings.api_key;
+          providerData.cloud_endpoint = providerSettings.endpoint;
+        }
+
         console.log('Notifying backend of provider change:', providerData);
-        await apiClient.post('/api/llm/provider', providerData);
-        console.log('Backend notified of provider change successfully');
+        const response = await apiClient.post('/api/llm/provider', providerData);
+        const result = await response.json();
+        console.log('Backend notified of provider change successfully:', result);
+
+        // Update health status after provider change
+        await checkHealthStatus();
       } catch (error) {
         console.error('Error notifying backend of provider change:', error);
       }
@@ -836,9 +1054,11 @@ export default {
       if (providerType === 'local') {
         const provider = settings.value.backend.llm.local?.provider || 'ollama';
         const selectedModel = settings.value.backend.llm.local?.providers?.[provider]?.selected_model;
+        const endpoint = settings.value.backend.llm.local?.providers?.[provider]?.endpoint;
 
         if (selectedModel) {
-          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}`;
+          const endpointInfo = endpoint ? ` @ ${endpoint}` : '';
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}${endpointInfo}`;
         } else {
           return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
         }
@@ -909,10 +1129,20 @@ export default {
       onCloudProviderChange,
       notifyBackendOfProviderChange,
       getCurrentLLMDisplay,
+      getCurrentLLMConfig: getCurrentLLMDisplay,
+      getCurrentEmbeddingConfig,
+      onEmbeddingProviderChange,
+      notifyBackendOfEmbeddingChange,
+      loadEmbeddingModels,
+      healthStatus,
+      checkHealthStatus,
       developerInfo,
       updateDeveloperConfig,
       loadDeveloperInfo,
-      showApiEndpoints
+      showApiEndpoints,
+      isSaving,
+      saveMessage,
+      saveMessageType
     };
   }
 };
@@ -1222,7 +1452,7 @@ export default {
 }
 
 .info-item strong {
-  color: rgba(255, 255, 255, 0.9);
+  color: #495057;
 }
 
 @media (max-width: 768px) {
@@ -1264,5 +1494,92 @@ export default {
   .setting-item select {
     max-width: none;
   }
+}
+
+/* Save button and message styles */
+.save-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.save-button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.save-message {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.save-message.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.save-message.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.settings-actions {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* LLM and Embedding status display styles */
+.llm-status-display,
+.embedding-status-display {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 5px 0;
+}
+
+.status-line {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.status-line:last-child {
+  margin-bottom: 0;
+}
+
+.status-label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.status-value {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+}
+
+.status-value.connected {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.status-value.disconnected {
+  color: #dc3545;
+  font-weight: 500;
 }
 </style>

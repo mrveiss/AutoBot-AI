@@ -13,6 +13,51 @@ import yaml
 import json
 import logging
 from typing import Dict, Any
+
+# GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when writing config files
+_original_yaml_dump = yaml.dump
+_original_yaml_safe_dump = yaml.safe_dump
+
+
+def _filtered_yaml_dump(data, stream=None, **kwargs):
+    """Wrapper that filters prompts from any YAML dump operation"""
+    if isinstance(data, dict) and stream is not None:
+        # Check if this looks like a config file write (stream is a file-like object)
+        if hasattr(stream, "name") and "config" in str(stream.name):
+            # Filter out prompts for config files
+            import copy
+
+            filtered_data = copy.deepcopy(data)
+            if "prompts" in filtered_data:
+                logging.getLogger(__name__).info(
+                    f"GLOBAL YAML PROTECTION: Filtering prompts from {stream.name}"
+                )
+                del filtered_data["prompts"]
+            return _original_yaml_dump(filtered_data, stream, **kwargs)
+    return _original_yaml_dump(data, stream, **kwargs)
+
+
+def _filtered_yaml_safe_dump(data, stream=None, **kwargs):
+    """Wrapper that filters prompts from any YAML safe_dump operation"""
+    if isinstance(data, dict) and stream is not None:
+        # Check if this looks like a config file write
+        if hasattr(stream, "name") and "config" in str(stream.name):
+            # Filter out prompts for config files
+            import copy
+
+            filtered_data = copy.deepcopy(data)
+            if "prompts" in filtered_data:
+                logging.getLogger(__name__).info(
+                    f"GLOBAL YAML PROTECTION: Filtering prompts from {stream.name}"
+                )
+                del filtered_data["prompts"]
+            return _original_yaml_safe_dump(filtered_data, stream, **kwargs)
+    return _original_yaml_safe_dump(data, stream, **kwargs)
+
+
+# Apply the monkey patches
+yaml.dump = _filtered_yaml_dump
+yaml.safe_dump = _filtered_yaml_safe_dump
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -200,17 +245,13 @@ class ConfigManager:
 
                 # Set the value in the config
                 self._set_nested_value(env_overrides, config_path, env_value)
-                logger.info(
-                    f"Applied environment override: {env_var} = {env_value}"
-                )
+                logger.info(f"Applied environment override: {env_var} = {env_value}")
 
         # Merge environment overrides
         if env_overrides:
             self._config = self._deep_merge(self._config, env_overrides)
 
-    def _set_nested_value(
-        self, config: Dict[str, Any], path: list, value: Any
-    ) -> None:
+    def _set_nested_value(self, config: Dict[str, Any], path: list, value: Any) -> None:
         """Set a nested value in a dictionary using a path list"""
         current = config
         for key in path[:-1]:
@@ -218,6 +259,34 @@ class ConfigManager:
                 current[key] = {}
             current = current[key]
         current[path[-1]] = value
+
+    def _get_default_ollama_model(self) -> str:
+        """Get the first available Ollama model or fallback to environment/hardcoded default"""
+        # First check environment variable
+        env_model = os.getenv("AUTOBOT_OLLAMA_MODEL")
+        if env_model:
+            return env_model
+
+        # Try to auto-detect available models
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["ollama", "list"], capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().split("\n")[1:]  # Skip header
+                if lines and lines[0].strip():
+                    first_model = lines[0].split()[0]  # Get first model name
+                    logger.info(
+                        f"UNIFIED CONFIG: Auto-detected first available model: '{first_model}'"
+                    )
+                    return first_model
+        except Exception as e:
+            logger.warning(f"Could not auto-detect available models: {e}")
+
+        # Fallback to hardcoded default
+        return "deepseek-r1:14b"
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key"""
@@ -256,9 +325,19 @@ class ConfigManager:
     def save_settings(self) -> None:
         """Save current configuration to settings.json"""
         try:
+            # Filter out prompts before saving (prompts are managed separately in prompts/ directory)
+            import copy
+
+            filtered_config = copy.deepcopy(self._config)
+            if "prompts" in filtered_config:
+                logger.info(
+                    "GLOBAL CONFIG MANAGER: Removing prompts section from settings save - prompts are managed in prompts/ directory"
+                )
+                del filtered_config["prompts"]
+
             self.settings_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.settings_file, "w", encoding="utf-8") as f:
-                json.dump(self._config, f, indent=2, ensure_ascii=False)
+                json.dump(filtered_config, f, indent=2, ensure_ascii=False)
             logger.info(f"Settings saved to {self.settings_file}")
         except Exception as e:
             logger.error(f"Failed to save settings: {e}")
@@ -273,27 +352,103 @@ class ConfigManager:
         return self._config.copy()
 
     def get_llm_config(self) -> Dict[str, Any]:
-        """Get LLM configuration with fallback defaults"""
-        llm_config = self.get("llm_config", {})
+        """Get LLM configuration with fallback defaults - UNIFIED VERSION"""
 
-        # Ensure we have sensible defaults
+        # SINGLE SOURCE: Use backend.llm as the authoritative config
+        backend_llm = self.get_nested("backend.llm", {})
+
+        # Legacy migration: if backend.llm is empty but legacy fields exist, migrate them
+        if not backend_llm:
+            legacy_ollama_model = self.get_nested("backend.ollama_model")
+            if legacy_ollama_model:
+                logger.info(
+                    f"MIGRATION: Moving legacy ollama_model '{legacy_ollama_model}' to new structure"
+                )
+                backend_llm = {
+                    "provider_type": "local",
+                    "local": {
+                        "provider": "ollama",
+                        "providers": {
+                            "ollama": {
+                                "endpoint": self.get_nested(
+                                    "backend.ollama_endpoint",
+                                    "http://localhost:11434/api/generate",
+                                ),
+                                "host": os.getenv(
+                                    "AUTOBOT_OLLAMA_HOST", "http://localhost:11434"
+                                ),
+                                "models": [],
+                                "selected_model": legacy_ollama_model,
+                            }
+                        },
+                    },
+                }
+                # Update the config with migrated structure
+                self.set_nested("backend.llm", backend_llm)
+
+        # Sensible defaults for the new structure
         defaults = {
-            "default_llm": "ollama",
-            "orchestrator_llm": os.getenv(
-                "AUTOBOT_ORCHESTRATOR_LLM", "deepseek-r1:14b"
-            ),
-            "task_llm": os.getenv("AUTOBOT_TASK_LLM", "ollama"),
-            "ollama": {
-                "host": os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434"),
-                "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
-                "model": os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b"),
-                "base_url": os.getenv(
-                    "AUTOBOT_OLLAMA_BASE_URL", "http://localhost:11434"
-                ),
+            "provider_type": "local",
+            "local": {
+                "provider": "ollama",
+                "providers": {
+                    "ollama": {
+                        "endpoint": os.getenv(
+                            "AUTOBOT_OLLAMA_ENDPOINT",
+                            "http://localhost:11434/api/generate",
+                        ),
+                        "host": os.getenv(
+                            "AUTOBOT_OLLAMA_HOST", "http://localhost:11434"
+                        ),
+                        "models": [],
+                        "selected_model": self._get_default_ollama_model(),
+                    }
+                },
+            },
+            "embedding": {
+                "provider": "ollama",
+                "providers": {
+                    "ollama": {
+                        "endpoint": os.getenv(
+                            "AUTOBOT_EMBEDDING_ENDPOINT",
+                            "http://localhost:11434/api/embeddings",
+                        ),
+                        "host": os.getenv(
+                            "AUTOBOT_EMBEDDING_HOST", "http://localhost:11434"
+                        ),
+                        "models": [],
+                        "selected_model": os.getenv(
+                            "AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text"
+                        ),
+                    }
+                },
             },
         }
 
-        return self._deep_merge(defaults, llm_config)
+        # Return the unified config
+        unified_config = self._deep_merge(defaults, backend_llm)
+
+        # BACKWARD COMPATIBILITY: Also expose legacy format for old code
+        legacy_format = {
+            "default_llm": f"ollama_{unified_config['local']['providers']['ollama']['selected_model']}"
+            if unified_config.get("provider_type") == "local"
+            else "ollama",
+            "orchestrator_llm": os.getenv(
+                "AUTOBOT_ORCHESTRATOR_LLM",
+                unified_config["local"]["providers"]["ollama"]["selected_model"],
+            ),
+            "task_llm": os.getenv("AUTOBOT_TASK_LLM", "ollama"),
+            "ollama": {
+                "host": unified_config["local"]["providers"]["ollama"]["host"],
+                "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
+                "model": unified_config["local"]["providers"]["ollama"][
+                    "selected_model"
+                ],
+                "base_url": unified_config["local"]["providers"]["ollama"]["host"],
+            },
+        }
+
+        return self._deep_merge(legacy_format, {"unified": unified_config})
 
     def get_redis_config(self) -> Dict[str, Any]:
         """Get Redis configuration with fallback defaults"""
@@ -326,6 +481,64 @@ class ConfigManager:
 
         return self._deep_merge(defaults, backend_config)
 
+    def update_llm_model(self, model_name: str) -> None:
+        """Update the selected LLM model using unified configuration"""
+        logger.info(f"UNIFIED CONFIG: Updating selected model to '{model_name}'")
+
+        # Update the unified structure
+        self.set_nested("backend.llm.local.providers.ollama.selected_model", model_name)
+
+        # Save the changes immediately
+        self.save_settings()
+        self._save_config_to_yaml()
+
+        logger.info(f"Model updated to '{model_name}' in unified configuration")
+
+    def _save_config_to_yaml(self) -> None:
+        """Save configuration to config.yaml file (PROTECTED AGAINST PROMPTS)"""
+        try:
+            # Filter out prompts and legacy fields before saving
+            import copy
+
+            filtered_config = copy.deepcopy(self._config)
+
+            if "prompts" in filtered_config:
+                logger.info(
+                    "YAML CONFIG SAVE: Removing prompts section - prompts are managed in prompts/ directory"
+                )
+                del filtered_config["prompts"]
+
+            # Remove legacy fields that are now handled by backend.llm
+            if "backend" in filtered_config:
+                backend = filtered_config["backend"]
+
+                # Only remove legacy fields if backend.llm is properly configured
+                if (
+                    backend.get("llm", {})
+                    .get("local", {})
+                    .get("providers", {})
+                    .get("ollama", {})
+                    .get("selected_model")
+                ):
+                    if "ollama_model" in backend:
+                        logger.info(
+                            "YAML CONFIG SAVE: Removing legacy ollama_model field - now managed by backend.llm.local.providers.ollama.selected_model"
+                        )
+                        del backend["ollama_model"]
+                    if "ollama_endpoint" in backend:
+                        logger.info(
+                            "YAML CONFIG SAVE: Removing legacy ollama_endpoint field - now managed by backend.llm.local.providers.ollama.endpoint"
+                        )
+                        del backend["ollama_endpoint"]
+
+            self.base_config_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.base_config_file, "w", encoding="utf-8") as f:
+                yaml.dump(filtered_config, f, default_flow_style=False, indent=2)
+            logger.info(f"Configuration saved to {self.base_config_file}")
+        except Exception as e:
+            logger.error(f"Failed to save YAML configuration: {e}")
+            raise
+
     def validate_config(self) -> Dict[str, Any]:
         """Validate configuration and return status of dependencies"""
         status = {
@@ -347,6 +560,23 @@ class ConfigManager:
             status["issues"].append("Redis enabled but no host specified")
 
         return status
+
+    def update_embedding_model(self, model_name: str) -> None:
+        """Update the selected embedding model using unified configuration"""
+        logger.info(f"UNIFIED CONFIG: Updating embedding model to '{model_name}'")
+
+        # Update the unified structure
+        self.set_nested(
+            "backend.llm.embedding.providers.ollama.selected_model", model_name
+        )
+
+        # Save the changes immediately
+        self.save_settings()
+        self._save_config_to_yaml()
+
+        logger.info(
+            f"Embedding model updated to '{model_name}' in unified configuration"
+        )
 
 
 # Global configuration instance

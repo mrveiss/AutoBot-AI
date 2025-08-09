@@ -1,6 +1,5 @@
 <template>
   <div class="knowledge-manager">
-    <h2>Knowledge Base Manager</h2>
 
     <div class="tabs">
       <button
@@ -370,14 +369,26 @@
             <div class="form-row">
               <div class="form-group">
                 <label for="entry-source">Source</label>
-                <input
-                  type="text"
-                  id="entry-source"
-                  v-model="currentEntry.source"
-                  placeholder="Document name, URL, or source reference"
-                />
+                <div class="source-input-group">
+                  <input
+                    type="text"
+                    id="entry-source"
+                    v-model="currentEntry.source"
+                    placeholder="Document name, URL, or source reference"
+                  />
+                  <button type="button" @click="showFileSelector = true" class="file-select-btn" title="Select from files">
+                    📁
+                  </button>
+                  <label class="file-upload-btn" title="Upload new file">
+                    📤
+                    <input type="file" @change="handleFileUpload" style="display: none;" />
+                  </label>
+                </div>
                 <small v-if="isUrlSource(currentEntry.source)" class="url-hint">
                   🕷️ URL detected - you can leave content empty to auto-crawl
+                </small>
+                <small v-if="selectedFile" class="file-hint">
+                  📄 Selected file: {{ selectedFile.name }}
                 </small>
               </div>
 
@@ -577,11 +588,39 @@
         {{ statsMessage }}
       </div>
     </div>
+    <!-- File Selector Modal -->
+    <div v-if="showFileSelector" class="modal-overlay" @click="showFileSelector = false">
+      <div class="modal file-selector-modal" @click.stop>
+        <div class="modal-header">
+          <h3>Select File</h3>
+          <button @click="showFileSelector = false" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="file-list-container">
+            <div v-if="availableFiles.length === 0" class="loading-files">
+              Loading files...
+            </div>
+            <div v-else class="file-list">
+              <div
+                v-for="file in availableFiles"
+                :key="file.name"
+                class="file-item"
+                @click="selectFileForKnowledge(file)"
+              >
+                <span class="file-icon">{{ getFileIcon(file) }}</span>
+                <span class="file-name">{{ file.name }}</span>
+                <span class="file-size">{{ formatFileSize(file.size) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 
 export default {
@@ -625,6 +664,11 @@ export default {
     });
     const tagsInput = ref('');
     const newLink = ref({ url: '', title: '' });
+
+    // File integration
+    const showFileSelector = ref(false);
+    const selectedFile = ref(null);
+    const availableFiles = ref([]);
 
     // Templates functionality
     const knowledgeTemplates = ref([
@@ -687,7 +731,6 @@ export default {
     const textSource = ref('');
     const urlContent = ref('');
     const urlMethod = ref('fetch');
-    const selectedFile = ref(null);
     const adding = ref(false);
     const addMessage = ref('');
     const addMessageType = ref('');
@@ -744,9 +787,6 @@ export default {
     };
 
     // Add content functionality
-    const handleFileUpload = (event) => {
-      selectedFile.value = event.target.files[0];
-    };
 
     const addContent = async () => {
       adding.value = true;
@@ -830,14 +870,25 @@ export default {
     const loadKnowledgeEntries = async () => {
       try {
         loading.value = true;
+        console.log('Loading knowledge entries from:', apiClient.getBaseUrl() + '/api/knowledge_base/entries');
         const response = await apiClient.get('/api/knowledge_base/entries');
         const data = await response.json();
+        console.log('Knowledge entries response:', data);
         knowledgeEntries.value = data.entries || [];
         filteredKnowledgeEntries.value = knowledgeEntries.value;
       } catch (error) {
         console.error('Error loading knowledge entries:', error);
-        knowledgeEntries.value = [];
-        filteredKnowledgeEntries.value = [];
+        // Try to use search endpoint as fallback
+        try {
+          console.log('Trying fallback search...');
+          const searchResponse = await apiClient.searchKnowledge('', 100);
+          knowledgeEntries.value = searchResponse.results || [];
+          filteredKnowledgeEntries.value = knowledgeEntries.value;
+        } catch (fallbackError) {
+          console.error('Fallback search also failed:', fallbackError);
+          knowledgeEntries.value = [];
+          filteredKnowledgeEntries.value = [];
+        }
       } finally {
         loading.value = false;
       }
@@ -863,6 +914,160 @@ export default {
 
     const refreshEntries = () => {
       loadKnowledgeEntries();
+    };
+
+    // File integration functions
+    const loadAvailableFiles = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/files/list');
+        if (response.ok) {
+          const data = await response.json();
+          availableFiles.value = data.files || [];
+        }
+      } catch (error) {
+        console.error('Error loading files:', error);
+        availableFiles.value = [];
+      }
+    };
+
+    const handleFileUpload = async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      try {
+        console.log('Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('http://localhost:8001/api/files/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Upload result:', result);
+          selectedFile.value = { name: file.name, path: result.path };
+          currentEntry.value.source = file.name;
+
+          // Try to extract content from the uploaded file
+          await extractFileContent(result.path || file.name);
+
+          // Also set collection based on file type
+          if (!currentEntry.value.collection || currentEntry.value.collection === 'default') {
+            const extension = file.name.split('.').pop().toLowerCase();
+            if (extension === 'pdf') {
+              currentEntry.value.collection = 'documents';
+            } else if (['md', 'txt'].includes(extension)) {
+              currentEntry.value.collection = 'text-files';
+            } else if (['json', 'xml'].includes(extension)) {
+              currentEntry.value.collection = 'data-files';
+            }
+          }
+
+        } else {
+          const errorText = await response.text();
+          console.error('Upload failed:', response.status, errorText);
+          showError(`Upload failed: ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        showError('Error uploading file: ' + error.message);
+      }
+
+      // Clear the input
+      event.target.value = '';
+    };
+
+    const selectFileForKnowledge = async (file) => {
+      selectedFile.value = file;
+      currentEntry.value.source = file.name;
+      showFileSelector.value = false;
+
+      // Try to extract content from the file
+      await extractFileContent(file.path || file.name);
+    };
+
+    const extractFileContent = async (filePath) => {
+      try {
+        console.log('Extracting content from file:', filePath);
+        const response = await fetch(`http://localhost:8001/api/files/view/${encodeURIComponent(filePath)}`);
+        if (response.ok) {
+          const contentType = response.headers.get('content-type');
+          console.log('File content type:', contentType);
+
+          // Handle different file types
+          if (contentType && (contentType.includes('text') || contentType.includes('application/json'))) {
+            const content = await response.text();
+            console.log('Extracted content length:', content.length);
+            currentEntry.value.content = content;
+
+            // Auto-generate title if empty
+            if (!currentEntry.value.title) {
+              const fileName = filePath.split('/').pop();
+              const baseName = fileName.replace(/\.[^/.]+$/, ''); // Remove extension
+              currentEntry.value.title = baseName.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            }
+
+            showSuccess(`Successfully extracted ${content.length} characters from ${filePath}`);
+          } else if (contentType && contentType.includes('pdf')) {
+            // For PDF files, try to extract text via backend
+            try {
+              const pdfResponse = await fetch(`http://localhost:8001/api/files/extract-text/${encodeURIComponent(filePath)}`);
+              if (pdfResponse.ok) {
+                const pdfData = await pdfResponse.json();
+                currentEntry.value.content = pdfData.text || '';
+                showSuccess(`Successfully extracted ${pdfData.text?.length || 0} characters from PDF`);
+              } else {
+                showError('Could not extract text from PDF file');
+              }
+            } catch (pdfError) {
+              console.error('PDF extraction error:', pdfError);
+              showError('PDF text extraction is not available');
+            }
+          } else {
+            showError(`Unsupported file type: ${contentType}. Please use text files, JSON, or PDFs.`);
+          }
+        } else {
+          console.error('Failed to fetch file:', response.status, response.statusText);
+          showError(`Failed to access file: ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error extracting file content:', error);
+        showError('Error extracting file content: ' + error.message);
+      }
+    };
+
+    const getFileIcon = (file) => {
+      const extension = file.name.split('.').pop().toLowerCase();
+      const iconMap = {
+        'txt': '📄',
+        'pdf': '📕',
+        'doc': '📘',
+        'docx': '📘',
+        'md': '📝',
+        'json': '📊',
+        'xml': '📋',
+        'csv': '📊',
+        'py': '🐍',
+        'js': '📜',
+        'html': '🌐',
+        'css': '🎨',
+        'img': '🖼️',
+        'png': '🖼️',
+        'jpg': '🖼️',
+        'jpeg': '🖼️',
+        'gif': '🖼️'
+      };
+      return iconMap[extension] || '📎';
+    };
+
+    const formatFileSize = (bytes) => {
+      if (!bytes) return '0 B';
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     };
 
     const getEntryTitle = (entry) => {
@@ -938,7 +1143,7 @@ export default {
         }
 
         // Call backend to crawl URL and extract content
-        const response = await fetch('/api/knowledge/crawl_url', {
+        const response = await fetch('http://localhost:8001/api/knowledge/crawl_url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1040,7 +1245,7 @@ export default {
 
       crawlingInModal.value = true;
       try {
-        const response = await fetch('/api/knowledge/crawl_url', {
+        const response = await fetch('http://localhost:8001/api/knowledge/crawl_url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1069,28 +1274,73 @@ export default {
       try {
         loading.value = true;
 
+        // Add automatic tags based on content
+        let finalTags = [...(currentEntry.value.tags || [])];
+        if (currentEntry.value.content) {
+          const contentLower = currentEntry.value.content.toLowerCase();
+          const autoTags = [];
+
+          // Add OS-specific tags
+          if (contentLower.includes('debian') || contentLower.includes('ubuntu')) {
+            autoTags.push('debian', 'linux', 'operating-system');
+          }
+          if (contentLower.includes('windows')) {
+            autoTags.push('windows', 'operating-system');
+          }
+          if (contentLower.includes('macos') || contentLower.includes('mac os')) {
+            autoTags.push('macos', 'operating-system');
+          }
+
+          // Add tech-specific tags
+          if (contentLower.includes('python')) autoTags.push('python', 'programming');
+          if (contentLower.includes('javascript') || contentLower.includes('node')) {
+            autoTags.push('javascript', 'programming');
+          }
+          if (contentLower.includes('docker')) autoTags.push('docker', 'containerization');
+          if (contentLower.includes('kubernetes')) autoTags.push('kubernetes', 'orchestration');
+
+          // Add manual/documentation tags
+          if (contentLower.includes('manual') || contentLower.includes('guide') || contentLower.includes('tutorial')) {
+            autoTags.push('manual', 'documentation');
+          }
+
+          // Merge with existing tags
+          finalTags = [...new Set([...finalTags, ...autoTags])];
+        }
+
         const entryData = {
           type: currentEntry.value.title || currentEntry.value.source || 'Manual Entry',
           content: currentEntry.value.content,
           source: currentEntry.value.source,
           title: currentEntry.value.title,
+          collection: currentEntry.value.collection || 'default',
           metadata: {
             source: currentEntry.value.source,
-            tags: currentEntry.value.tags,
+            tags: finalTags,
             links: currentEntry.value.links,
-            title: currentEntry.value.title
+            title: currentEntry.value.title,
+            // Add file metadata if file is selected
+            ...(selectedFile.value && {
+              file_path: selectedFile.value.path || selectedFile.value.name,
+              file_name: selectedFile.value.name,
+              resource_type: 'knowledge',
+              content_extracted: true,
+              content_length: currentEntry.value.content?.length || 0
+            })
           }
         };
 
+        console.log('Saving entry data:', entryData);
+
         let response;
         if (showEditModal.value) {
-          response = await fetch(`/api/knowledge_base/entries/${currentEntry.value.id}`, {
+          response = await fetch(`http://localhost:8001/api/knowledge_base/entries/${currentEntry.value.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entryData)
           });
         } else {
-          response = await fetch('/api/knowledge_base/entries', {
+          response = await fetch('http://localhost:8001/api/knowledge_base/entries', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entryData)
@@ -1098,7 +1348,9 @@ export default {
         }
 
         if (!response.ok) {
-          throw new Error(`Failed to ${showEditModal.value ? 'update' : 'create'} entry`);
+          const errorText = await response.text();
+          console.error('API Response:', response.status, response.statusText, errorText);
+          throw new Error(`Failed to ${showEditModal.value ? 'update' : 'create'} entry: ${response.status} ${response.statusText}`);
         }
 
         // If it's a new URL entry with no content, auto-crawl it
@@ -1106,7 +1358,7 @@ export default {
           const result = await response.json();
           if (result.id) {
             try {
-              const crawlResponse = await fetch('/api/knowledge/crawl_url', {
+              const crawlResponse = await fetch('http://localhost:8001/api/knowledge/crawl_url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1358,7 +1610,7 @@ export default {
     const importSystemDocs = async () => {
       try {
         importingDocs.value = true;
-        const response = await fetch('/api/knowledge_base/system_knowledge/import_documentation', {
+        const response = await fetch('http://localhost:8001/api/knowledge_base/system_knowledge/import_documentation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -1446,7 +1698,7 @@ export default {
     const importSystemPrompts = async () => {
       try {
         importingPrompts.value = true;
-        const response = await fetch('/api/knowledge_base/system_knowledge/import_prompts', {
+        const response = await fetch('http://localhost:8001/api/knowledge_base/system_knowledge/import_prompts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -1513,13 +1765,13 @@ export default {
     };
 
     // Utility functions
-    const formatFileSize = (bytes) => {
-      if (bytes === 0) return '0 Bytes';
-      const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    };
+
+    // Watch for file selector modal
+    watch(showFileSelector, (newVal) => {
+      if (newVal) {
+        loadAvailableFiles();
+      }
+    });
 
     // Initialize component
     onMounted(() => {
@@ -1580,6 +1832,15 @@ export default {
       crawlCurrentEntry,
       crawlingInModal,
 
+      // File integration
+      showFileSelector,
+      selectedFile,
+      availableFiles,
+      handleFileUpload,
+      selectFileForKnowledge,
+      getFileIcon,
+      formatFileSize,
+
       // Add content
       addContentType,
       textContent,
@@ -1587,11 +1848,9 @@ export default {
       textSource,
       urlContent,
       urlMethod,
-      selectedFile,
       adding,
       addMessage,
       addMessageType,
-      handleFileUpload,
       addContent,
 
       // Manage
@@ -3059,5 +3318,91 @@ export default {
     width: 95%;
     margin: 20px;
   }
+}
+
+/* File Integration Styles */
+.source-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.source-input-group input {
+  flex: 1;
+}
+
+.file-select-btn,
+.file-upload-btn {
+  padding: 8px 12px;
+  background: #f1f3f5;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.file-select-btn:hover,
+.file-upload-btn:hover {
+  background: #e9ecef;
+  border-color: #6c757d;
+}
+
+.file-hint {
+  color: #28a745;
+  font-style: italic;
+}
+
+.file-selector-modal {
+  max-width: 600px;
+  max-height: 70vh;
+}
+
+.file-list-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.file-list {
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin: 4px 0;
+  background: #f8f9fa;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.file-item:hover {
+  background: #e9ecef;
+  transform: translateX(4px);
+}
+
+.file-icon {
+  font-size: 24px;
+}
+
+.file-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.file-size {
+  color: #6c757d;
+  font-size: 0.875em;
+}
+
+.loading-files {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
 }
 </style>

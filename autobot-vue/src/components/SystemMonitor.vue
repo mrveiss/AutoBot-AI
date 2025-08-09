@@ -30,6 +30,13 @@
             </div>
           </div>
           <div class="metric-item">
+            <div class="metric-label">NPU Usage</div>
+            <div class="metric-bar">
+              <div class="bar-fill npu" :style="{ width: `${metrics.npu}%` }"></div>
+              <span class="metric-value">{{ metrics.npu }}%</span>
+            </div>
+          </div>
+          <div class="metric-item">
             <div class="metric-label">Network I/O</div>
             <div class="metric-bar">
               <div class="bar-fill network" :style="{ width: `${metrics.network}%` }"></div>
@@ -197,6 +204,7 @@ export default {
       cpu: 0,
       memory: 0,
       gpu: 0,
+      npu: 0,
       network: 0,
       networkSpeed: 0
     });
@@ -206,7 +214,7 @@ export default {
       { name: 'LLM Service', version: 'v2.1.0', status: 'online', statusText: 'Connected' },
       { name: 'Redis Cache', version: 'v7.0', status: 'online', statusText: 'Connected' },
       { name: 'Knowledge Base', version: 'v1.0.1', status: 'online', statusText: 'Ready' },
-      { name: 'Voice Interface', version: 'v1.1.0', status: 'warning', statusText: 'Partial' },
+      { name: 'Voice Interface', version: 'v1.1.0', status: 'online', statusText: 'Ready' },
       { name: 'File Manager', version: 'v1.0.0', status: 'online', statusText: 'Active' }
     ]);
 
@@ -288,6 +296,7 @@ export default {
       metrics.value.cpu = Math.floor(Math.random() * 100);
       metrics.value.memory = Math.floor(Math.random() * 100);
       metrics.value.gpu = Math.floor(Math.random() * 100);
+      metrics.value.npu = Math.floor(Math.random() * 100);
       metrics.value.network = Math.floor(Math.random() * 100);
       metrics.value.networkSpeed = Math.floor(Math.random() * 1024 * 1024 * 100); // 0-100 MB/s
     };
@@ -298,7 +307,8 @@ export default {
         timestamp: now,
         cpu: metrics.value.cpu,
         memory: metrics.value.memory,
-        gpu: metrics.value.gpu
+        gpu: metrics.value.gpu,
+        npu: metrics.value.npu
       });
 
       // Keep only last 100 data points
@@ -357,21 +367,25 @@ export default {
       drawLine('cpu', '#ef4444');
       drawLine('memory', '#10b981');
       drawLine('gpu', '#3b82f6');
+      drawLine('npu', '#f59e0b');
 
       // Draw labels
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillStyle = 'var(--blue-gray-800)';
       ctx.font = '12px Inter';
       ctx.fillText('CPU', padding + 10, padding + 20);
-      ctx.fillText('Memory', padding + 60, padding + 20);
-      ctx.fillText('GPU', padding + 130, padding + 20);
+      ctx.fillText('Memory', padding + 50, padding + 20);
+      ctx.fillText('GPU', padding + 100, padding + 20);
+      ctx.fillText('NPU', padding + 140, padding + 20);
 
       // Draw legend colors
       ctx.fillStyle = '#ef4444';
       ctx.fillRect(padding - 5, padding + 10, 10, 2);
       ctx.fillStyle = '#10b981';
-      ctx.fillRect(padding + 45, padding + 10, 10, 2);
+      ctx.fillRect(padding + 35, padding + 10, 10, 2);
       ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(padding + 115, padding + 10, 10, 2);
+      ctx.fillRect(padding + 85, padding + 10, 10, 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(padding + 125, padding + 10, 10, 2);
     };
 
     const addLog = (level, message) => {
@@ -431,20 +445,20 @@ export default {
         updatePerformanceHistory();
         drawChart();
 
-        // Simulate service status updates
-        services.value.forEach(service => {
-          if (Math.random() < 0.05) { // 5% chance to change status
-            const statuses = ['online', 'warning', 'offline'];
-            const statusTexts = {
-              'online': ['Running', 'Connected', 'Active', 'Ready'],
-              'warning': ['Partial', 'Degraded', 'Slow'],
-              'offline': ['Stopped', 'Error', 'Failed']
-            };
-            const newStatus = statuses[Math.floor(Math.random() * statuses.length)];
-            service.status = newStatus;
-            service.statusText = statusTexts[newStatus][Math.floor(Math.random() * statusTexts[newStatus].length)];
+        // Update service status from backend
+        try {
+          const healthResponse = await apiClient.get('/api/system/health');
+          if (healthResponse.status === 'healthy') {
+            // Update backend API status
+            const backendService = services.value.find(s => s.name === 'Backend API');
+            if (backendService) {
+              backendService.status = 'online';
+              backendService.statusText = 'Running';
+            }
           }
-        });
+        } catch (error) {
+          console.warn('Could not fetch system health:', error);
+        }
 
       } finally {
         setTimeout(() => {
@@ -515,7 +529,7 @@ export default {
 <style scoped>
 .system-monitor {
   height: 100%;
-  color: white;
+  color: var(--blue-gray-700);
 }
 
 .monitor-grid {
@@ -535,13 +549,12 @@ export default {
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  background: white;
+  border: 1px solid var(--blue-gray-200);
+  border-radius: 0.5rem;
   padding: 0;
   overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .card-header {
@@ -549,20 +562,20 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--blue-gray-200);
+  background: var(--blue-gray-50);
 }
 
 .card-header h3 {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--blue-gray-800);
 }
 
 .refresh-indicator {
   font-size: 16px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--blue-gray-500);
   transition: transform 0.3s ease;
 }
 
@@ -595,13 +608,13 @@ export default {
 .metric-label {
   min-width: 120px;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--blue-gray-700);
 }
 
 .metric-bar {
   flex: 1;
   height: 8px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--blue-gray-200);
   border-radius: 4px;
   position: relative;
   overflow: hidden;
@@ -633,15 +646,16 @@ export default {
 .bar-fill.cpu { background: linear-gradient(90deg, #ef4444, #dc2626); }
 .bar-fill.memory { background: linear-gradient(90deg, #10b981, #059669); }
 .bar-fill.gpu { background: linear-gradient(90deg, #3b82f6, #2563eb); }
-.bar-fill.network { background: linear-gradient(90deg, #f59e0b, #d97706); }
-.bar-fill.storage { background: linear-gradient(90deg, #8b5cf6, #7c3aed); }
-.bar-fill.llm { background: linear-gradient(90deg, #06b6d4, #0891b2); }
-.bar-fill.kb { background: linear-gradient(90deg, #ec4899, #db2777); }
+.bar-fill.npu { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.bar-fill.network { background: linear-gradient(90deg, #8b5cf6, #7c3aed); }
+.bar-fill.storage { background: linear-gradient(90deg, #06b6d4, #0891b2); }
+.bar-fill.llm { background: linear-gradient(90deg, #ec4899, #db2777); }
+.bar-fill.kb { background: linear-gradient(90deg, #a855f7, #9333ea); }
 
 .metric-value {
   font-size: 14px;
   font-weight: 600;
-  color: white;
+  color: var(--blue-gray-800);
   min-width: 60px;
   text-align: right;
 }
@@ -651,7 +665,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--blue-gray-100);
 }
 
 .service-item:last-child {
@@ -669,7 +683,7 @@ export default {
 .service-name {
   font-size: 13px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--blue-gray-800);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -677,7 +691,7 @@ export default {
 
 .service-version {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--blue-gray-500);
 }
 
 .service-status {
@@ -706,7 +720,7 @@ export default {
 
 .status-summary, .api-stats {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--blue-gray-600);
 }
 
 .chart-controls {
@@ -715,9 +729,9 @@ export default {
 }
 
 .time-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--blue-gray-100);
+  border: 1px solid var(--blue-gray-300);
+  color: var(--blue-gray-600);
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 12px;
@@ -726,8 +740,9 @@ export default {
 }
 
 .time-btn:hover, .time-btn.active {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--indigo-500);
   color: white;
+  border-color: var(--indigo-500);
 }
 
 .endpoint-group {
@@ -741,7 +756,7 @@ export default {
 .group-name {
   font-size: 13px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--blue-gray-800);
   margin-bottom: 6px;
 }
 
@@ -750,7 +765,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--blue-gray-50);
   border-radius: 4px;
   margin-bottom: 4px;
   border-left: 3px solid transparent;
@@ -777,15 +792,15 @@ export default {
   font-weight: 600;
   padding: 1px 4px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
+  background: var(--blue-gray-200);
+  color: var(--blue-gray-700);
   flex-shrink: 0;
 }
 
 .path {
   font-family: 'Courier New', monospace;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--blue-gray-700);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -800,7 +815,7 @@ export default {
 
 .response-time {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--blue-gray-500);
 }
 
 .status-indicator {
@@ -821,9 +836,9 @@ export default {
 }
 
 .log-filter {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  background: white;
+  border: 1px solid var(--blue-gray-300);
+  color: var(--blue-gray-700);
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 12px;
@@ -831,21 +846,22 @@ export default {
 }
 
 .log-filter option {
-  background: #2c3e50;
-  color: white;
+  background: white;
+  color: var(--blue-gray-700);
   padding: 4px 8px;
 }
 
 .log-filter:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--indigo-500);
+  background: white;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
 .clear-logs {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--red-500);
+  color: var(--red-500);
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 12px;
@@ -854,7 +870,8 @@ export default {
 }
 
 .clear-logs:hover {
-  background: rgba(239, 68, 68, 0.3);
+  background: var(--red-500);
+  color: white;
 }
 
 .logs-content {
@@ -877,7 +894,7 @@ export default {
 }
 
 .log-time {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--blue-gray-500);
 }
 
 .log-level {
@@ -890,7 +907,7 @@ export default {
 .log-entry.info .log-level { color: #10b981; }
 
 .log-message {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--blue-gray-700);
 }
 
 .resource-item {
@@ -915,13 +932,13 @@ export default {
 .resource-name {
   font-size: 13px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--blue-gray-800);
   margin-bottom: 3px;
 }
 
 .resource-usage {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--blue-gray-600);
   margin-bottom: 6px;
   white-space: nowrap;
   overflow: hidden;
@@ -930,7 +947,7 @@ export default {
 
 .resource-bar {
   height: 6px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--blue-gray-200);
   border-radius: 3px;
   overflow: hidden;
 }
