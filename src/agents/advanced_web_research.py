@@ -18,6 +18,11 @@ try:
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
+    # Create dummy types for type hints when Playwright isn't available
+    Browser = Any
+    Page = Any
+    BrowserContext = Any
+    async_playwright = None
     logging.warning("Playwright not available. Install with: pip install playwright")
 
 try:

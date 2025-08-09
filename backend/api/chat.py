@@ -499,7 +499,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     [
                         f"• {source['title']} ({source['domain']}) - "
                         f"Quality: {source.get('quality_score', 'N/A')}"
-                        for source in sources[:3]  # Show top 3 sources
+                        for source in sources[:3]
                     ]
                 )
 

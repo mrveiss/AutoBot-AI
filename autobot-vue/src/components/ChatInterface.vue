@@ -64,6 +64,13 @@
           <div class="message-timestamp">{{ message.timestamp }}</div>
         </div>
       </div>
+
+      <!-- Terminal Sidebar -->
+      <TerminalSidebar
+        :collapsed="terminalSidebarCollapsed"
+        @update:collapsed="terminalSidebarCollapsed = $event"
+        @open-new-tab="openTerminalInNewTab"
+      />
     </div>
     <!-- Chat controls moved to sidebar -->
     <div class="chat-input">
@@ -78,15 +85,20 @@ import { ref, onMounted, nextTick, computed, watch } from 'vue';
 import apiClient from '@/utils/ApiClient.js';
 import chatHistoryService from '@/services/ChatHistoryService.js';
 import settingsService from '@/services/SettingsService.js';
+import TerminalSidebar from '@/components/TerminalSidebar.vue';
 
 export default {
   name: 'ChatInterface',
+  components: {
+    TerminalSidebar
+  },
   setup() {
     const messages = ref([]);
     const inputMessage = ref('');
     const chatMessages = ref(null);
     const settings = ref(settingsService.getSettingsSync());
     const sidebarCollapsed = ref(false);
+    const terminalSidebarCollapsed = ref(true);
     const backendStarting = ref(false);
     const chatList = ref([]);
     const currentChatId = ref(null);
@@ -1123,6 +1135,25 @@ export default {
       }
     };
 
+    // Terminal functions
+    const openTerminalInNewTab = (terminalData) => {
+      const { sessionId, session } = terminalData;
+      const terminalUrl = `/terminal/${sessionId}?title=${encodeURIComponent(session.title || 'Terminal')}`;
+
+      // Open in new tab/window
+      const newTab = window.open(terminalUrl, '_blank', 'noopener,noreferrer');
+
+      if (!newTab) {
+        // Fallback if popup blocker prevents opening new tab
+        const userWantsToNavigate = confirm(
+          'Pop-up blocked. Would you like to navigate to the terminal in this tab instead?'
+        );
+        if (userWantsToNavigate) {
+          window.location.href = terminalUrl;
+        }
+      }
+    };
+
     // Initial load of chat messages based on URL hash
     onMounted(async () => {
       // Load chat list for sidebar
@@ -1197,7 +1228,9 @@ export default {
       isAgentPaused,
       backendStatus,
       llmStatus,
-      checkConnections
+      checkConnections,
+      terminalSidebarCollapsed,
+      openTerminalInNewTab
     };
   }
 };

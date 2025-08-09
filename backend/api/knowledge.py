@@ -8,12 +8,14 @@ import tempfile
 import os as os_module
 
 from src.knowledge_base import KnowledgeBase
+from src.agents.system_knowledge_manager import SystemKnowledgeManager
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
 knowledge_base: KnowledgeBase | None = None
+system_knowledge_manager: SystemKnowledgeManager | None = None
 
 
 class GetFactRequest(BaseModel):
@@ -27,7 +29,7 @@ class SearchRequest(BaseModel):
 
 
 async def init_knowledge_base():
-    global knowledge_base
+    global knowledge_base, system_knowledge_manager
     if knowledge_base is None:
         try:
             knowledge_base = KnowledgeBase()
@@ -36,6 +38,14 @@ async def init_knowledge_base():
         except Exception as e:
             logger.error(f"Failed to initialize knowledge base: {str(e)}")
             knowledge_base = None
+
+    if system_knowledge_manager is None and knowledge_base is not None:
+        try:
+            system_knowledge_manager = SystemKnowledgeManager(knowledge_base)
+            logger.info("System knowledge manager initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize system knowledge manager: {str(e)}")
+            system_knowledge_manager = None
 
 
 @router.post("/get_fact")
@@ -697,3 +707,284 @@ async def crawl_url(request: dict):
     except Exception as e:
         logger.error(f"Error crawling URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/categories")
+async def get_knowledge_categories():
+    """Get knowledge base categories with statistics"""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+
+        if knowledge_base is None:
+            return {
+                "categories": [],
+                "count": 0,
+                "status": "error",
+                "message": "Knowledge base not available",
+            }
+
+        logger.info("Knowledge categories request")
+
+        # Get all entries and categorize them
+        entries = await knowledge_base.get_all_facts("all")
+        categories = {}
+
+        for entry in entries:
+            metadata = entry.get("metadata", {})
+            collection = entry.get("collection", metadata.get("collection", "default"))
+
+            if collection not in categories:
+                categories[collection] = {
+                    "name": collection,
+                    "description": f"Entries in {collection} category",
+                    "icon": "📁",
+                    "count": 0,
+                    "last_updated": None,
+                    "metadata": {},
+                }
+
+            categories[collection]["count"] += 1
+
+            # Update last_updated with most recent entry
+            entry_date = metadata.get("created_at") or metadata.get("updated_at")
+            if entry_date:
+                if (
+                    not categories[collection]["last_updated"]
+                    or entry_date > categories[collection]["last_updated"]
+                ):
+                    categories[collection]["last_updated"] = entry_date
+
+        # Convert to list format expected by frontend
+        categories_list = list(categories.values())
+
+        return {
+            "categories": categories_list,
+            "count": len(categories_list),
+            "status": "success",
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting knowledge categories: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting knowledge categories: {str(e)}"
+        )
+
+
+@router.get("/system_knowledge/documentation")
+async def get_system_documentation():
+    """Get all system documentation entries"""
+    try:
+        if knowledge_base is None or system_knowledge_manager is None:
+            await init_knowledge_base()
+
+        if knowledge_base is None:
+            return {
+                "documentation": [],
+                "count": 0,
+                "status": "error",
+                "message": "Knowledge base not available",
+            }
+
+        logger.info("System documentation request")
+
+        # Get system documentation from knowledge base
+        # Query for entries with system source or documentation type
+        try:
+            system_docs_entries = await knowledge_base.search(
+                "type:system_documentation OR source:system", limit=100
+            )
+        except Exception:
+            # Fallback to getting all entries and filtering
+            all_entries = await knowledge_base.get_all_facts("all")
+            system_docs_entries = []
+            for entry in all_entries:
+                metadata = entry.get("metadata", {})
+                if (
+                    metadata.get("type") == "system_documentation"
+                    or metadata.get("source") == "system"
+                    or "system" in metadata.get("tags", [])
+                ):
+                    system_docs_entries.append(entry)
+
+        # Format for frontend consumption
+        formatted_docs = []
+        for entry in system_docs_entries:
+            metadata = entry.get("metadata", {})
+            formatted_doc = {
+                "id": entry.get("id", "unknown"),
+                "title": metadata.get("title", entry.get("content", "")[:50] + "..."),
+                "name": metadata.get("name", metadata.get("title", "System Document")),
+                "content": entry.get("content", ""),
+                "description": metadata.get("description", "System documentation"),
+                "type": metadata.get("type", "documentation"),
+                "source": metadata.get("source", "system"),
+                "version": metadata.get("version", "1.0"),
+                "status": metadata.get("status", "active"),
+                "immutable": metadata.get("immutable", True),
+                "updated_at": metadata.get("updated_at"),
+                "created_at": metadata.get("created_at"),
+                "metadata": metadata,
+            }
+            formatted_docs.append(formatted_doc)
+
+        return {
+            "documentation": formatted_docs,
+            "count": len(formatted_docs),
+            "status": "success",
+        }
+
+    except Exception as e:
+        logger.error(f"Error retrieving system documentation: {e}")
+        return {
+            "documentation": [],
+            "count": 0,
+            "status": "error",
+            "message": f"Failed to retrieve system documentation: {str(e)}",
+        }
+
+
+@router.get("/system_knowledge/prompts")
+async def get_system_prompts():
+    """Get all system prompts and templates"""
+    try:
+        if knowledge_base is None or system_knowledge_manager is None:
+            await init_knowledge_base()
+
+        if knowledge_base is None:
+            return {
+                "prompts": [],
+                "count": 0,
+                "status": "error",
+                "message": "Knowledge base not available",
+            }
+
+        logger.info("System prompts request")
+
+        # Get system prompts from knowledge base
+        try:
+            system_prompts_entries = await knowledge_base.search(
+                "type:system_prompt OR type:prompt_template OR category:prompt",
+                limit=100,
+            )
+        except Exception:
+            # Fallback to getting all entries and filtering
+            all_entries = await knowledge_base.get_all_facts("all")
+            system_prompts_entries = []
+            for entry in all_entries:
+                metadata = entry.get("metadata", {})
+                if (
+                    metadata.get("type") in ["system_prompt", "prompt_template"]
+                    or metadata.get("category") == "prompt"
+                    or "prompt" in metadata.get("tags", [])
+                ):
+                    system_prompts_entries.append(entry)
+
+        # Format for frontend consumption
+        formatted_prompts = []
+        for entry in system_prompts_entries:
+            metadata = entry.get("metadata", {})
+            formatted_prompt = {
+                "id": entry.get("id", "unknown"),
+                "name": metadata.get("name", metadata.get("title", "System Prompt")),
+                "title": metadata.get("title", metadata.get("name", "System Prompt")),
+                "description": metadata.get("description", "System prompt or template"),
+                "template": entry.get("content", ""),
+                "content": entry.get("content", ""),
+                "category": metadata.get("category", "general"),
+                "tags": metadata.get("tags", []),
+                "version": metadata.get("version", "1.0"),
+                "usage_count": metadata.get("usage_count", 0),
+                "immutable": metadata.get("immutable", True),
+                "created_at": metadata.get("created_at"),
+                "updated_at": metadata.get("updated_at"),
+                "metadata": metadata,
+            }
+            formatted_prompts.append(formatted_prompt)
+
+        return {
+            "prompts": formatted_prompts,
+            "count": len(formatted_prompts),
+            "status": "success",
+        }
+
+    except Exception as e:
+        logger.error(f"Error retrieving system prompts: {e}")
+        return {
+            "prompts": [],
+            "count": 0,
+            "status": "error",
+            "message": f"Failed to retrieve system prompts: {str(e)}",
+        }
+
+
+@router.post("/system_knowledge/import_documentation")
+async def import_system_documentation():
+    """Import system documentation from templates and files"""
+    try:
+        if knowledge_base is None or system_knowledge_manager is None:
+            await init_knowledge_base()
+
+        if system_knowledge_manager is None:
+            return {
+                "status": "error",
+                "message": "System knowledge manager not available",
+                "count": 0,
+            }
+
+        logger.info("System documentation import request")
+
+        # Initialize system knowledge (this will import documentation)
+        await system_knowledge_manager.initialize_system_knowledge(
+            force_reinstall=False
+        )
+
+        return {
+            "status": "success",
+            "message": "System documentation imported successfully",
+            "count": 1,
+        }
+
+    except Exception as e:
+        logger.error(f"Error importing system documentation: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to import system documentation: {str(e)}",
+            "count": 0,
+        }
+
+
+@router.post("/system_knowledge/import_prompts")
+async def import_system_prompts():
+    """Import system prompts from templates and files"""
+    try:
+        if knowledge_base is None or system_knowledge_manager is None:
+            await init_knowledge_base()
+
+        if system_knowledge_manager is None:
+            return {
+                "status": "error",
+                "message": "System knowledge manager not available",
+                "count": 0,
+            }
+
+        logger.info("System prompts import request")
+
+        # Initialize system knowledge (this will import prompts)
+        await system_knowledge_manager.initialize_system_knowledge(
+            force_reinstall=False
+        )
+
+        return {
+            "status": "success",
+            "message": "System prompts imported successfully",
+            "count": 1,
+        }
+
+    except Exception as e:
+        logger.error(f"Error importing system prompts: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to import system prompts: {str(e)}",
+            "count": 0,
+        }
