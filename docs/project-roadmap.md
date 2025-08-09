@@ -559,7 +559,22 @@ This revised approach allows users fine-grained control over hardware utilizatio
     *   Core agent settings (permissions, logging).
 *   **Accessibility:** Accessible via `http://localhost:port` on the machine running the orchestrator.
 
-### 5. Cross-Platform Compatibility & Installation
+### 5. Voice Interface Integration
+
+*   **Voice Control:** Natural language voice commands for hands-free operation
+*   **Features:**
+    *   Wake word detection ("Hey AutoBot")
+    *   Speech-to-text for command input
+    *   Text-to-speech for status updates and confirmations
+    *   Voice command processing for common agent actions
+*   **Implementation:**
+    *   Fix dependencies (speech_recognition, pyttsx3)
+    *   Implement wake word detection with background listening
+    *   Map voice commands to agent actions
+    *   Add voice feedback for task status updates
+*   **Configuration:** Control panel settings for enabling/disabling voice, wake word customization, and feedback verbosity
+
+### 6. Cross-Platform Compatibility & Installation
 
 *   **Supported OS:** Orchestrator and Worker Nodes must run natively on both Linux and Windows.
 *   **Core Language:** Python preferred for cross-platform core logic.
