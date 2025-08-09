@@ -67,7 +67,7 @@
             v-model="settings.speech_rate"
             class="voice-slider"
           >
-          <span>{{ settings.speech_rate }}x</span>
+          <span style="color: #374151; font-weight: 500;">{{ settings.speech_rate }}x</span>
         </div>
         <div class="setting-group">
           <label>Voice Pitch</label>
@@ -79,7 +79,7 @@
             v-model="settings.pitch"
             class="voice-slider"
           >
-          <span>{{ settings.pitch }}x</span>
+          <span style="color: #374151; font-weight: 500;">{{ settings.pitch }}x</span>
         </div>
         <div class="setting-group">
           <label>Auto-Listen After Response</label>
@@ -354,11 +354,19 @@ export default {
 </script>
 
 <style scoped>
+:root {
+  --blue-gray-700: #374151;
+}
+
 .voice-interface {
   display: flex;
   flex-direction: column;
   height: 100%;
-  color: white;
+  color: #374151;
+  background-color: white;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  padding: 20px;
 }
 
 .voice-container {
@@ -409,8 +417,8 @@ export default {
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  border: 3px solid rgba(255, 255, 255, 0.2);
+  background: rgba(99, 102, 241, 0.1);
+  border: 3px solid rgba(99, 102, 241, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -482,9 +490,9 @@ export default {
 }
 
 .voice-btn.secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(99, 102, 241, 0.1);
+  color: #374151;
+  border: 1px solid rgba(99, 102, 241, 0.2);
 }
 
 .voice-btn:hover:not(:disabled) {
@@ -500,13 +508,17 @@ export default {
 
 .voice-settings {
   padding: 24px;
+  background: rgba(248, 250, 252, 0.8);
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .voice-settings h3 {
   margin: 0 0 20px 0;
   font-size: 18px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: #374151;
 }
 
 .setting-group {
@@ -519,14 +531,15 @@ export default {
 
 .setting-group label {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
+  color: #374151;
   min-width: 120px;
+  font-weight: 500;
 }
 
 .setting-group select {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #374151;
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 14px;
@@ -540,13 +553,17 @@ export default {
 
 .voice-history {
   padding: 24px;
+  background: rgba(248, 250, 252, 0.8);
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .voice-history h3 {
   margin: 0 0 20px 0;
   font-size: 18px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: #374151;
 }
 
 .history-list {
@@ -559,19 +576,21 @@ export default {
   grid-template-columns: auto 1fr auto;
   gap: 12px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(148, 163, 184, 0.1);
   border-radius: 8px;
   margin-bottom: 8px;
   font-size: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .command-time {
-  color: rgba(255, 255, 255, 0.6);
+  color: #6b7280;
   font-size: 12px;
 }
 
 .command-text {
-  color: rgba(255, 255, 255, 0.9);
+  color: #374151;
+  font-weight: 500;
 }
 
 .command-confidence {
@@ -582,10 +601,11 @@ export default {
 
 .voice-status-display {
   grid-column: 1 / -1;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(248, 250, 252, 0.8);
   border-radius: 12px;
   padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #374151;
 }
 
 .transcription {

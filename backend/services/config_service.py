@@ -88,68 +88,8 @@ class ConfigService:
                     "streaming": global_config_manager.get_nested(
                         "backend.streaming", False
                     ),
-                    "llm": {
-                        "provider_type": "local",  # Default to local
-                        "local": {
-                            "provider": "ollama",  # Default to ollama
-                            "providers": {
-                                "ollama": {
-                                    "endpoint": global_config_manager.get_nested(
-                                        "llm_config.ollama.host",
-                                        "http://localhost:11434",
-                                    )
-                                    + "/api/generate",
-                                    "host": global_config_manager.get_nested(
-                                        "llm_config.ollama.host",
-                                        "http://localhost:11434",
-                                    ),
-                                    "models": [],  # Will be loaded dynamically
-                                    "selected_model": current_llm,
-                                },
-                                "lmstudio": {
-                                    "endpoint": "http://localhost:1234/v1",
-                                    "models": [],
-                                    "selected_model": "",
-                                },
-                            },
-                        },
-                        "cloud": {
-                            "provider": "openai",
-                            "providers": {
-                                "openai": {
-                                    "api_key": global_config_manager.get_nested(
-                                        "llm_config.openai.api_key", ""
-                                    ),
-                                    "endpoint": global_config_manager.get_nested(
-                                        "llm_config.openai.endpoint",
-                                        "https://api.openai.com/v1",
-                                    ),
-                                    "models": global_config_manager.get_nested(
-                                        "llm_config.openai.models",
-                                        ["gpt-3.5-turbo", "gpt-4"],
-                                    ),
-                                    "selected_model": "",
-                                },
-                                "anthropic": {
-                                    "api_key": global_config_manager.get_nested(
-                                        "llm_config.anthropic.api_key", ""
-                                    ),
-                                    "endpoint": global_config_manager.get_nested(
-                                        "llm_config.anthropic.endpoint",
-                                        "https://api.anthropic.com/v1",
-                                    ),
-                                    "models": global_config_manager.get_nested(
-                                        "llm_config.anthropic.models",
-                                        [
-                                            "claude-3-sonnet-20240229",
-                                            "claude-3-haiku-20240307",
-                                        ],
-                                    ),
-                                    "selected_model": "",
-                                },
-                            },
-                        },
-                    },
+                    # Use unified LLM configuration
+                    "llm": global_config_manager.get_llm_config().get("unified", {}),
                 },
                 "ui": {
                     "theme": global_config_manager.get_nested("ui.theme", "light"),
@@ -272,47 +212,10 @@ class ConfigService:
 
     @staticmethod
     def get_llm_config() -> Dict[str, Any]:
-        """Get current LLM configuration"""
+        """Get current LLM configuration using unified config system"""
         try:
-            llm_config = global_config_manager.get("llm_config", {})
-            backend_config = global_config_manager.get("backend", {})
-
-            # Get default values from config with fallbacks
-            default_llm_fallback = global_config_manager.get_nested(
-                "defaults.llm.default_llm", "ollama_deepseek-r1:14b"
-            )
-            task_llm_fallback = global_config_manager.get_nested(
-                "defaults.llm.task_llm", "ollama_deepseek-r1:14b"
-            )
-            ollama_endpoint_fallback = global_config_manager.get_nested(
-                "defaults.llm.ollama.endpoint", "http://localhost:11434/api/generate"
-            )
-            ollama_model_fallback = global_config_manager.get_nested(
-                "defaults.llm.ollama.model", "deepseek-r1:14b"
-            )
-            ollama_host_fallback = global_config_manager.get_nested(
-                "defaults.llm.ollama.host", "http://localhost:11434"
-            )
-
-            return {
-                "default_llm": llm_config.get("default_llm", default_llm_fallback),
-                "task_llm": llm_config.get("task_llm", task_llm_fallback),
-                "ollama": {
-                    "endpoint": backend_config.get(
-                        "ollama_endpoint", ollama_endpoint_fallback
-                    ),
-                    "model": backend_config.get("ollama_model", ollama_model_fallback),
-                    "host": llm_config.get("ollama", {}).get(
-                        "host", ollama_host_fallback
-                    ),
-                    "models": llm_config.get("ollama", {}).get("models", {}),
-                },
-                "openai": llm_config.get("openai", {}),
-                "orchestrator_llm_settings": llm_config.get(
-                    "orchestrator_llm_settings", {}
-                ),
-                "task_llm_settings": llm_config.get("task_llm_settings", {}),
-            }
+            logger.info("UNIFIED CONFIG SERVICE: Getting LLM configuration")
+            return global_config_manager.get_llm_config()
         except Exception as e:
             logger.error(f"Error getting LLM config: {str(e)}")
             raise
@@ -337,63 +240,42 @@ class ConfigService:
 
     @staticmethod
     def update_llm_config(config_data: Dict[str, Any]) -> Dict[str, str]:
-        """Update LLM configuration"""
+        """Update LLM configuration using unified config system"""
         try:
-            # Load current config
-            current_config = global_config_manager.to_dict()
+            logger.info(
+                f"UNIFIED CONFIG SERVICE: Updating LLM configuration with: {config_data}"
+            )
 
-            # Update LLM configuration
-            if "llm_config" not in current_config:
-                current_config["llm_config"] = {}
-            if "backend" not in current_config:
-                current_config["backend"] = {}
+            # Handle Ollama model updates through unified config
+            if "ollama" in config_data and "model" in config_data["ollama"]:
+                model_name = config_data["ollama"]["model"]
+                logger.info(
+                    f"UNIFIED CONFIG SERVICE: Updating Ollama model to: {model_name}"
+                )
+                global_config_manager.update_llm_model(model_name)
 
-            llm_config = current_config["llm_config"]
-            backend_config = current_config["backend"]
+            # Handle other LLM configuration updates
+            if "local" in config_data and "selected_model" in config_data["local"]:
+                model_name = config_data["local"]["selected_model"]
+                logger.info(
+                    f"UNIFIED CONFIG SERVICE: Updating local model to: {model_name}"
+                )
+                global_config_manager.update_llm_model(model_name)
 
-            # Update basic LLM settings
-            if "default_llm" in config_data:
-                llm_config["default_llm"] = config_data["default_llm"]
-            if "task_llm" in config_data:
-                llm_config["task_llm"] = config_data["task_llm"]
+            # Handle legacy format updates
+            for key, value in config_data.items():
+                if key not in ["ollama", "local", "cloud"]:
+                    global_config_manager.set_nested(f"llm_config.{key}", value)
 
-            # Update Ollama settings
-            if "ollama" in config_data:
-                ollama_data = config_data["ollama"]
-                if "ollama" not in llm_config:
-                    llm_config["ollama"] = {}
+            # Save all changes
+            global_config_manager.save_settings()
 
-                if "endpoint" in ollama_data:
-                    backend_config["ollama_endpoint"] = ollama_data["endpoint"]
-                if "model" in ollama_data:
-                    backend_config["ollama_model"] = ollama_data["model"]
-                if "host" in ollama_data:
-                    llm_config["ollama"]["host"] = ollama_data["host"]
-                if "models" in ollama_data:
-                    llm_config["ollama"]["models"] = ollama_data["models"]
-
-            # Update OpenAI settings
-            if "openai" in config_data:
-                llm_config["openai"] = config_data["openai"]
-
-            # Update orchestrator and task LLM settings
-            if "orchestrator_llm_settings" in config_data:
-                llm_config["orchestrator_llm_settings"] = config_data[
-                    "orchestrator_llm_settings"
-                ]
-            if "task_llm_settings" in config_data:
-                llm_config["task_llm_settings"] = config_data["task_llm_settings"]
-
-            # Save updated config to file
-            ConfigService._save_config_to_file(current_config)
-
-            # Reload the global config manager
-            global_config_manager.reload()
-
-            logger.info(f"Updated LLM configuration: {config_data}")
+            logger.info(
+                "UNIFIED CONFIG SERVICE: LLM configuration updated successfully"
+            )
             return {
                 "status": "success",
-                "message": "LLM configuration updated successfully",
+                "message": "LLM configuration updated successfully using unified config system",
             }
         except Exception as e:
             logger.error(f"Error updating LLM config: {str(e)}")
@@ -429,8 +311,18 @@ class ConfigService:
             if "priority" in config_data:
                 redis_config["priority"] = int(config_data["priority"])
 
+            # Filter out prompts before saving (prompts are managed separately)
+            import copy
+
+            filtered_config = copy.deepcopy(current_config)
+            if "prompts" in filtered_config:
+                logger.info(
+                    "Removing prompts section from Redis config save - prompts are managed in prompts/ directory"
+                )
+                del filtered_config["prompts"]
+
             # Save updated config to file
-            ConfigService._save_config_to_file(current_config)
+            ConfigService._save_config_to_file(filtered_config)
 
             # Reload the global config manager
             global_config_manager.reload()
@@ -496,8 +388,18 @@ class ConfigService:
             # Update backend settings
             current_config["backend"] = backend_settings
 
+            # Filter out prompts before saving (prompts are managed separately)
+            import copy
+
+            filtered_config = copy.deepcopy(current_config)
+            if "prompts" in filtered_config:
+                logger.info(
+                    "Removing prompts section from backend settings save - prompts are managed in prompts/ directory"
+                )
+                del filtered_config["prompts"]
+
             # Save updated config to file
-            ConfigService._save_config_to_file(current_config)
+            ConfigService._save_config_to_file(filtered_config)
 
             # Reload the global config manager
             global_config_manager.reload()
@@ -514,8 +416,18 @@ class ConfigService:
     @staticmethod
     def _save_config_to_file(config: Dict[str, Any]) -> None:
         """Save configuration to config.yaml file"""
+        # SAFETY NET: Always filter out prompts before saving (prompts are managed separately)
+        import copy
+
+        filtered_config = copy.deepcopy(config)
+        if "prompts" in filtered_config:
+            logger.info(
+                "SAFETY NET: Removing prompts section from config save - prompts are managed in prompts/ directory"
+            )
+            del filtered_config["prompts"]
+
         # Use the same dynamic path resolution as the config manager
         config_file_path = global_config_manager.base_config_file
         config_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_file_path, "w") as f:
-            yaml.dump(config, f, default_flow_style=False)
+            yaml.dump(filtered_config, f, default_flow_style=False)
