@@ -82,10 +82,8 @@ class KBLibrarianAgent:
         """
         try:
             # Search for relevant documents
-            results = self.knowledge_base.search(
-                query,
-                limit=self.max_results,
-                similarity_threshold=self.similarity_threshold,
+            results = await self.knowledge_base.search(
+                query, n_results=self.max_results
             )
 
             logger.info(
@@ -133,7 +131,9 @@ class KBLibrarianAgent:
         )
 
         try:
-            response = await self.llm.chat([{"role": "system", "content": prompt}])
+            response = await self.llm.chat_completion(
+                messages=[{"role": "system", "content": prompt}], llm_type="task"
+            )
             return response
 
         except Exception as e:
@@ -150,17 +150,25 @@ class KBLibrarianAgent:
             Dictionary containing search results and optional summary
         """
         if not self.enabled:
-            return {"enabled": False, "message": "KB Librarian is disabled"}
-
-        # Check if this is a question
-        is_question = self.detect_question(query)
-
-        if not is_question:
             return {
-                "enabled": True,
+                "enabled": False,
                 "is_question": False,
-                "message": "Not detected as a question",
+                "query": query,
+                "documents_found": 0,
+                "documents": [],
+                "message": "KB Librarian is disabled",
             }
+
+        # Always search regardless of question detection for better results
+        # if not is_question:
+        #     return {
+        #         "enabled": True,
+        #         "is_question": False,
+        #         "query": query,
+        #         "documents_found": 0,
+        #         "documents": [],
+        #         "message": "Not detected as a question",
+        #     }
 
         # Search the knowledge base
         documents = await self.search_knowledge_base(query)
