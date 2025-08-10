@@ -90,6 +90,12 @@ class Orchestrator:
 
         # Initialize unified tool registry to eliminate code duplication
         self.tool_registry = None
+        
+        # Initialize system info
+        self.system_info = get_os_info()
+        
+        # Initialize available tools
+        self.available_tools = discover_tools()
 
     async def _listen_for_worker_capabilities(self):
         """
