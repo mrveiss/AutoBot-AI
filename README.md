@@ -11,10 +11,11 @@ AutoBot is an enterprise-grade autonomous AI platform that provides advanced tas
 ## 🚀 Key Features
 
 ### 🤖 AI-Powered Intelligence
+- **Multi-Agent Workflow Orchestration**: Coordinates specialized agents for complex tasks
 - **Multi-LLM Support**: Ollama (local), OpenAI, Anthropic Claude integration
-- **Intelligent Task Planning**: Breaks down complex goals into executable steps
+- **Intelligent Request Classification**: Automatically determines workflow complexity (Simple/Research/Install/Complex)
 - **Context-Aware Responses**: RAG-powered knowledge base with ChromaDB vector storage
-- **Configurable AI Behavior**: Temperature settings, model selection, and custom prompts
+- **Real-time Agent Coordination**: Research, Knowledge Management, System Commands, and Orchestrator agents
 - **🧠 Prompt Intelligence Sync**: Transforms agent into expert system with operational intelligence
 
 ### 🎯 System Interaction
@@ -35,6 +36,66 @@ AutoBot is an enterprise-grade autonomous AI platform that provides advanced tas
 - **Fact Storage**: Structured data storage with SQLite backend
 - **Content Upload**: Drag-and-drop file processing and URL ingestion
 - **Template System**: Professional knowledge entry templates with visual gallery
+
+## 🔄 Multi-Agent Workflow Orchestration
+
+AutoBot's breakthrough feature transforms simple chat interactions into sophisticated multi-agent workflows that coordinate specialized agents for comprehensive task completion.
+
+### 🎯 The Transformation
+
+**Before (Generic Responses):**
+```
+User: "find tools for network scanning"
+AutoBot: "Port Scanner, Sniffing Software, Password Cracking Tools, Reconnaissance Tools"
+```
+
+**After (Intelligent Workflow Orchestration):**
+```
+🎯 Classification: Complex
+🤖 Agents: research, librarian, knowledge_manager, system_commands, orchestrator
+⏱️ Duration: 3 minutes
+👤 Approvals: 2
+
+📋 Workflow Steps:
+   1. Librarian: Search Knowledge Base
+   2. Research: Research Tools
+   3. Orchestrator: Present Tool Options (requires your approval)
+   4. Research: Get Installation Guide
+   5. Knowledge_Manager: Store Tool Info
+   6. Orchestrator: Create Install Plan (requires your approval)
+   7. System_Commands: Install Tool
+   8. System_Commands: Verify Installation
+```
+
+### 🧠 Workflow Classification System
+
+- **Simple**: Direct conversational responses (e.g., "What is 2+2?")
+- **Research**: Web research + knowledge base storage
+- **Install**: System commands and installation workflows
+- **Complex**: Full multi-agent coordination with approvals
+
+### 🔧 Key Components
+
+- **Request Classifier**: Analyzes complexity and determines optimal workflow
+- **Agent Registry**: Manages specialized agent capabilities and coordination
+- **Workflow Engine**: Orchestrates multi-step agent coordination
+- **Approval System**: Human oversight for critical operations
+- **Progress Tracking**: Real-time workflow monitoring and updates
+
+### 💡 Example Workflows
+
+#### Research Workflow: "Find Python web frameworks"
+1. **Librarian**: Search existing knowledge base
+2. **Research**: Web research for current frameworks
+3. **Knowledge_Manager**: Store findings for future reference
+4. **Orchestrator**: Present comprehensive comparison
+
+#### Installation Workflow: "Install Docker"
+1. **Librarian**: Check for existing installation guides
+2. **Research**: Get latest Docker installation steps
+3. **Orchestrator**: Create installation plan (requires approval)
+4. **System_Commands**: Execute installation commands
+5. **System_Commands**: Verify successful installation
 
 ---
 
