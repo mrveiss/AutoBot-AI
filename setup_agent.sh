@@ -229,56 +229,111 @@ echo "--- END PYENV DEBUG INFO ---"
 echo "✅ Virtual environment $VENV_PATH created."
 
 # --- 3. Activate and install main requirements ---
-echo "--- Python Dependencies Installation ---"
+echo "--- Python Dependencies Installation for Multi-Agent Architecture ---"
 source "$VENV_PATH/bin/activate"
 if [ ! -f "$REQUIREMENTS_FILE" ]; then
     echo "⚠️ Warning: $REQUIREMENTS_FILE not found. Skipping pip install."
 else
-    echo "📦 Installing requirements in groups to resolve dependency conflicts..."
+    echo "📦 Installing requirements in optimized groups for multi-agent architecture..."
 
-    # Group 1: Core dependencies
-    echo "⬇️ Installing Group 1: Core dependencies..."
+    # Group 1: Core Framework Dependencies
+    echo "⬇️ Installing Group 1: Core Framework Dependencies..."
     cat > requirements_group_1.txt << EOF
-fastapi==0.115.9
+fastapi>=0.115.0
 uvicorn>=0.30.0
 requests==2.31.0
 pyyaml==6.0.1
+pydantic>=2.8.0
+websockets>=11.0.0
+aiohttp>=3.9.0
+beautifulsoup4>=4.12.0
 redis>=5.0,<6.0
-pyautogui==0.9.54
-mouseinfo==0.1.3
-pillow==9.4.0
-numpy==1.26.4
-markdownify==0.11.6
-python-docx
-psutil
+psutil>=5.9.0
+click>=8.1.0
+python-dotenv>=1.0.0
+jsonschema>=4.20.0
+validators>=0.22.0
 EOF
     pip install -r requirements_group_1.txt || { echo "❌ Failed to install Group 1 requirements."; deactivate; exit 1; }
     echo "✅ Group 1 dependencies installed."
 
-    # Group 2: LangChain and LangChain Community
-    echo "⬇️ Installing Group 2: LangChain and LangChain Community..."
+    # Group 2: AI/ML Framework Dependencies (Critical for Multi-Agent)
+    echo "⬇️ Installing Group 2: AI/ML Framework Dependencies..."
     cat > requirements_group_2.txt << EOF
-langchain
-langchain-community
+torch>=2.0.0
+transformers>=4.36.0
+sentence-transformers>=2.2.0
+tiktoken>=0.5.0
+numpy>=1.26.0
+pillow>=10.0.0
 EOF
     pip install -r requirements_group_2.txt || { echo "❌ Failed to install Group 2 requirements."; deactivate; exit 1; }
     echo "✅ Group 2 dependencies installed."
 
-    # Group 3: LlamaIndex and its sub-packages
-    echo "⬇️ Installing Group 3: LlamaIndex and related packages..."
+    # Group 3: LangChain Ecosystem
+    echo "⬇️ Installing Group 3: LangChain Ecosystem..."
     cat > requirements_group_3.txt << EOF
-llama-index
-llama-index-llms-ollama
-llama-index-embeddings-ollama
-llama-index-vector-stores-redis
-transformers
+langchain
+langchain-community
+langchain-experimental
 EOF
     pip install -r requirements_group_3.txt || { echo "❌ Failed to install Group 3 requirements."; deactivate; exit 1; }
     echo "✅ Group 3 dependencies installed."
 
+    # Group 4: LlamaIndex Ecosystem
+    echo "⬇️ Installing Group 4: LlamaIndex Ecosystem..."
+    cat > requirements_group_4.txt << EOF
+llama-index
+llama-index-llms-ollama
+llama-index-embeddings-ollama
+llama-index-vector-stores-redis
+llama-index-readers-file
+EOF
+    pip install -r requirements_group_4.txt || { echo "❌ Failed to install Group 4 requirements."; deactivate; exit 1; }
+    echo "✅ Group 4 dependencies installed."
+
+    # Group 5: Specialized Agent Dependencies
+    echo "⬇️ Installing Group 5: Specialized Agent Dependencies..."
+    cat > requirements_group_5.txt << EOF
+chromadb>=0.4.0
+httpx>=0.25.0
+sh>=2.0.0
+python-docx>=1.1.0
+pypdf>=3.17.0
+markdownify==0.11.6
+nltk>=3.8.0
+textstat>=0.7.3
+EOF
+    pip install -r requirements_group_5.txt || { echo "❌ Failed to install Group 5 requirements."; deactivate; exit 1; }
+    echo "✅ Group 5 dependencies installed."
+
+    # Group 6: GUI Automation & System Integration
+    echo "⬇️ Installing Group 6: GUI Automation & System Integration..."
+    cat > requirements_group_6.txt << EOF
+pyautogui==0.9.54
+mouseinfo==0.1.3
+opencv-python>=4.8.0
+pygetwindow>=0.0.9
+EOF
+    pip install -r requirements_group_6.txt || { echo "❌ Failed to install Group 6 requirements."; deactivate; exit 1; }
+    echo "✅ Group 6 dependencies installed."
+
+    # Group 7: Monitoring & Development Tools
+    echo "⬇️ Installing Group 7: Monitoring & Development Tools..."
+    cat > requirements_group_7.txt << EOF
+rich>=13.7.0
+tqdm>=4.66.0
+structlog>=23.2.0
+prometheus-client>=0.19.0
+pre-commit>=3.6.0
+detect-secrets>=1.4.0
+EOF
+    pip install -r requirements_group_7.txt || { echo "❌ Failed to install Group 7 requirements."; deactivate; exit 1; }
+    echo "✅ Group 7 dependencies installed."
+
     # Clean up temporary files
-    rm requirements_group_1.txt requirements_group_2.txt requirements_group_3.txt
-    echo "✅ All Python dependencies installed."
+    rm requirements_group_*.txt
+    echo "✅ All Multi-Agent Architecture dependencies installed."
 fi
 
 # Ensure GUI automation dependencies are installed (these are already in group 1, but keeping for redundancy/clarity)
@@ -345,7 +400,97 @@ except Exception as e:
     print(f'⚠️ OpenVINO test failed: {e}')
 " || echo "⚠️ OpenVINO test script failed"
 
-# --- 4. Check and install Node.js and npm via nvm ---
+# --- 4. Install Required Ollama Models for Multi-Agent Architecture ---
+echo "🤖 Installing required Ollama models for multi-agent architecture..."
+
+# Check if Ollama is installed
+if ! command -v ollama &>/dev/null; then
+    echo "❌ Ollama not found. Please install Ollama first:"
+    echo "curl -fsSL https://ollama.com/install.sh | sh"
+    echo "Then run this setup script again."
+    exit 1
+fi
+
+# Function to install model with retry logic
+install_ollama_model() {
+    local model=$1
+    local description=$2
+    echo "📥 Installing $description ($model)..."
+    
+    # Check if model is already installed
+    if ollama list | grep -q "$model"; then
+        echo "✅ $description ($model) already installed."
+        return 0
+    fi
+    
+    # Install with timeout and retry
+    local max_attempts=3
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        echo "⏳ Attempt $attempt/$max_attempts: Installing $model..."
+        
+        if timeout 600s ollama pull "$model"; then
+            echo "✅ Successfully installed $description ($model)"
+            return 0
+        else
+            echo "❌ Failed to install $model (attempt $attempt/$max_attempts)"
+            if [ $attempt -eq $max_attempts ]; then
+                echo "💡 You can manually install this model later with: ollama pull $model"
+                return 1
+            fi
+            attempt=$((attempt + 1))
+            echo "⏳ Waiting 10 seconds before retry..."
+            sleep 10
+        fi
+    done
+}
+
+# Install required models for multi-agent architecture
+echo "🎯 Installing models as per multi-agent architecture requirements..."
+
+# Core models for the architecture
+install_ollama_model "llama3.2:1b-instruct-q4_K_M" "Chat Agent & System Commands Agent (Llama 3.2 1B)"
+install_ollama_model "llama3.2:3b-instruct-q4_K_M" "Orchestrator & RAG Agent (Llama 3.2 3B)"
+
+# Embedding model for knowledge base
+install_ollama_model "nomic-embed-text:latest" "Knowledge Base Embeddings"
+
+# Fallback models (if specific quantized versions not available)
+if ! ollama list | grep -q "llama3.2:1b-instruct-q4_K_M"; then
+    echo "⚠️ Specific 1B quantized model not available, trying alternatives..."
+    install_ollama_model "llama3.2:1b" "Fallback Chat Agent (Llama 3.2 1B)"
+fi
+
+if ! ollama list | grep -q "llama3.2:3b-instruct-q4_K_M"; then
+    echo "⚠️ Specific 3B quantized model not available, trying alternatives..."
+    install_ollama_model "llama3.2:3b" "Fallback Orchestrator (Llama 3.2 3B)"
+fi
+
+# Optional: Install backup models for compatibility
+echo "🔄 Installing backup models for compatibility..."
+install_ollama_model "artifish/llama3.2-uncensored:latest" "Backup General Purpose Model"
+
+# Verify model installation
+echo "🔍 Verifying installed models..."
+ollama list
+
+# Test model functionality
+echo "🧪 Testing model functionality..."
+echo "Testing 1B model for chat agent..."
+echo "Hello, test!" | ollama run llama3.2:1b-instruct-q4_K_M >/dev/null 2>&1 || \
+echo "Hello, test!" | ollama run llama3.2:1b >/dev/null 2>&1 || \
+echo "Hello, test!" | ollama run artifish/llama3.2-uncensored:latest >/dev/null 2>&1 || \
+echo "⚠️ Warning: 1B model test failed"
+
+echo "Testing 3B model for orchestrator..."
+echo "Plan a simple task" | ollama run llama3.2:3b-instruct-q4_K_M >/dev/null 2>&1 || \
+echo "Plan a simple task" | ollama run llama3.2:3b >/dev/null 2>&1 || \
+echo "⚠️ Warning: 3B model test failed"
+
+echo "✅ Ollama model installation and verification completed!"
+
+# --- 5. Check and install Node.js and npm via nvm ---
 echo "🔍 Checking for nvm (Node Version Manager)..."
 if ! command -v nvm &>/dev/null; then
     echo "📦 nvm not found. Installing nvm..."
@@ -591,17 +736,35 @@ sys.exit(0 if result else 1)
 initialize_system_knowledge
 
 python3 -c "
+# Test core modules
 from src.config import global_config_manager
 from src.orchestrator import Orchestrator
 from src.llm_interface import LLMInterface
 from src.knowledge_base import KnowledgeBase
 from src.worker_node import WorkerNode
 from src.diagnostics import Diagnostics
-print('✅ All modules imported successfully!')
-print(f'✅ Config loaded - LLM model: {global_config_manager.get_nested(\"llm_config.ollama.model\")}')
+print('✅ Core modules imported successfully!')
+
+# Test multi-agent architecture modules
+from src.agents import (
+    get_chat_agent, get_enhanced_system_commands_agent, get_rag_agent,
+    get_agent_orchestrator, AgentType
+)
+print('✅ Multi-agent architecture modules imported successfully!')
+
+# Test task-specific model configuration
+chat_model = global_config_manager.get_task_specific_model('chat')
+orchestrator_model = global_config_manager.get_task_specific_model('orchestrator')
+rag_model = global_config_manager.get_task_specific_model('rag')
+print(f'✅ Agent model configuration - Chat: {chat_model}')
+print(f'✅ Agent model configuration - Orchestrator: {orchestrator_model}')
+print(f'✅ Agent model configuration - RAG: {rag_model}')
+
+# Test legacy configuration
 print(f'✅ Config loaded - Redis host: {global_config_manager.get_nested(\"memory.redis.host\")}')
 print(f'✅ Config loaded - Server port: {global_config_manager.get_nested(\"backend.server_port\")}')
-print('✅ Configuration validation completed successfully!')
+
+print('✅ Multi-Agent Architecture configuration validation completed successfully!')
 "
 
 if [ $? -eq 0 ]; then
