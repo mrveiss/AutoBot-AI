@@ -459,29 +459,29 @@ class ConfigManager:
         Returns:
             Model name for the specified agent
         """
-        # Multi-agent model configuration with uncensored models for unrestricted capabilities
+        # Multi-agent model configuration with available uncensored models for unrestricted capabilities
         agent_models = {
-            # Core Orchestration - uncensored for flexible reasoning
-            "orchestrator": "artifish/llama3.2-uncensored:3b",     # Main coordinator - 3B uncensored
-            "default": "artifish/llama3.2-uncensored:3b",          # Fallback to orchestrator model
+            # Core Orchestration - use uncensored model for flexible reasoning
+            "orchestrator": "artifish/llama3.2-uncensored:latest", # Main coordinator - uncensored 2.2GB
+            "default": "artifish/llama3.2-uncensored:latest",      # Fallback to orchestrator model
             
-            # Specialized Agents - uncensored variants for full capabilities
-            "chat": "artifish/llama3.2-uncensored:1b",             # 1B uncensored for conversations
-            "system_commands": "artifish/llama3.2-uncensored:1b",  # 1B uncensored for command generation
-            "rag": "artifish/llama3.2-uncensored:3b",              # 3B uncensored for document synthesis
-            "knowledge_retrieval": "artifish/llama3.2-uncensored:1b", # 1B uncensored for fact lookup
-            "research": "artifish/llama3.2-uncensored:3b",         # 3B uncensored for web research
+            # Specialized Agents - optimized for task complexity
+            "chat": "llama3.2:1b-instruct-q4_K_M",                # 1B for fast conversations (807MB)
+            "system_commands": "llama3.2:1b-instruct-q4_K_M",     # 1B for command generation (807MB)
+            "rag": "artifish/llama3.2-uncensored:latest",          # Uncensored for document synthesis (2.2GB)
+            "knowledge_retrieval": "llama3.2:1b-instruct-q4_K_M", # 1B for fast fact lookup (807MB)
+            "research": "artifish/llama3.2-uncensored:latest",     # Uncensored for web research (2.2GB)
             
-            # Legacy compatibility - uncensored variants
-            "search": "artifish/llama3.2-uncensored:1b",           # Fast search queries
-            "code": "artifish/llama3.2-uncensored:1b",             # Code understanding
-            "analysis": "artifish/llama3.2-uncensored:3b",         # Analysis tasks
-            "planning": "artifish/llama3.2-uncensored:3b",         # Task planning
+            # Legacy compatibility - use available models
+            "search": "llama3.2:1b-instruct-q4_K_M",              # Fast search queries (807MB)
+            "code": "llama3.2:1b-instruct-q4_K_M",                # Code understanding (807MB)
+            "analysis": "artifish/llama3.2-uncensored:latest",     # Analysis tasks (2.2GB)
+            "planning": "artifish/llama3.2-uncensored:latest",     # Task planning (2.2GB)
             
-            # Fallback to standard models if uncensored variants unavailable
-            "orchestrator_fallback": "llama3.2:3b-instruct-q4_K_M",
-            "chat_fallback": "llama3.2:1b-instruct-q4_K_M",
-            "fallback": "artifish/llama3.2-uncensored:latest",     # General fallback
+            # Fallback models for when uncensored is not needed
+            "orchestrator_fallback": "llama3.2:3b-instruct-q4_K_M", # Standard 3B (2.0GB)
+            "chat_fallback": "llama3.2:1b-instruct-q4_K_M",        # Standard 1B (807MB)
+            "fallback": "artifish/llama3.2-uncensored:latest",     # General fallback (2.2GB)
         }
         
         # Allow environment override for specific tasks
