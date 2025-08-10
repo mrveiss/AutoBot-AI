@@ -53,6 +53,14 @@ data/audit.log
 data/chat_history.json
 data/reliability_stats.json
 
+# Generated runtime data
+data/*.json
+data/*.db
+data/*.log
+data/session_*
+data/workflow_*
+data/agent_*
+
 # Backend data
 backend/data/chats/*
 
