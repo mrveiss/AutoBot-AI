@@ -1111,6 +1111,87 @@ export default {
       }
     };
 
+    // Function to get current embedding configuration display
+    const getCurrentEmbeddingConfig = () => {
+      if (!settings.value.backend?.llm?.embedding) return 'Not configured';
+
+      const provider = settings.value.backend.llm.embedding.provider || 'ollama';
+      const providerSettings = settings.value.backend.llm.embedding.providers?.[provider];
+      const selectedModel = providerSettings?.selected_model;
+
+      if (selectedModel) {
+        const endpointInfo = providerSettings?.endpoint ? ` @ ${providerSettings.endpoint}` : '';
+        return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}${endpointInfo}`;
+      } else {
+        return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+      }
+    };
+
+    // Function to handle embedding provider change
+    const onEmbeddingProviderChange = async () => {
+      await loadEmbeddingModels();
+      await notifyBackendOfEmbeddingChange();
+    };
+
+    // Function to notify backend of embedding configuration change
+    const notifyBackendOfEmbeddingChange = async () => {
+      try {
+        const provider = settings.value.backend.llm.embedding.provider;
+        const providerSettings = settings.value.backend.llm.embedding.providers[provider];
+
+        const embeddingData = {
+          provider: provider,
+          model: providerSettings.selected_model,
+          endpoint: providerSettings.endpoint
+        };
+
+        if (provider === 'openai') {
+          embeddingData.api_key = providerSettings.api_key;
+        }
+
+        console.log('Notifying backend of embedding change:', embeddingData);
+        const response = await apiClient.post('/api/llm/embedding', embeddingData);
+        const result = await response.json();
+        console.log('Backend notified of embedding change successfully:', result);
+
+        // Update health status after embedding change
+        await checkHealthStatus();
+      } catch (error) {
+        console.error('Error notifying backend of embedding change:', error);
+      }
+    };
+
+    // Function to load embedding models
+    const loadEmbeddingModels = async () => {
+      try {
+        console.log('Loading embedding models from backend...');
+        const provider = settings.value.backend.llm.embedding.provider;
+
+        if (provider === 'ollama') {
+          // Load Ollama embedding models
+          const response = await fetch('http://localhost:8001/api/llm/embedding/models');
+          const data = await response.json();
+
+          if (data.models && Array.isArray(data.models)) {
+            settings.value.backend.llm.embedding.providers.ollama.models = data.models;
+            console.log(`Loaded ${data.models.length} Ollama embedding models:`, data.models);
+
+            // Auto-select first model if none selected
+            if (!settings.value.backend.llm.embedding.providers.ollama.selected_model && data.models.length > 0) {
+              settings.value.backend.llm.embedding.providers.ollama.selected_model = data.models[0];
+            }
+          }
+        }
+        // OpenAI models are predefined, no need to load them
+        console.log('Embedding models loaded successfully');
+      } catch (error) {
+        console.error('Error loading embedding models:', error);
+        if (settings.value.backend.llm.embedding.provider === 'ollama') {
+          settings.value.backend.llm.embedding.providers.ollama.models = [];
+        }
+      }
+    };
+
     return {
       settings,
       saveSettings,
