@@ -4,10 +4,11 @@ Enhance Workflow UI with additional features
 Adds workflow notifications and better user experience
 """
 
+
 def create_workflow_notification_component():
     """Create a workflow notification component for real-time updates."""
-    
-    component_content = '''<template>
+
+    component_content = """<template>
   <div class="workflow-notifications" v-if="notifications.length > 0">
     <div class="notifications-header">
       <h4>
@@ -20,9 +21,9 @@ def create_workflow_notification_component():
         Clear All
       </button>
     </div>
-    
+
     <div class="notifications-list">
-      <div 
+      <div
         v-for="notification in notifications"
         :key="notification.id"
         class="notification-item"
@@ -31,22 +32,22 @@ def create_workflow_notification_component():
         <div class="notification-icon">
           <i :class="getNotificationIcon(notification.type)"></i>
         </div>
-        
+
         <div class="notification-content">
           <div class="notification-title">{{ notification.title }}</div>
           <div class="notification-message">{{ notification.message }}</div>
           <div class="notification-time">{{ formatTime(notification.timestamp) }}</div>
         </div>
-        
+
         <div class="notification-actions">
-          <button 
+          <button
             v-if="notification.actionRequired"
             @click="handleNotificationAction(notification)"
             class="btn-action"
           >
             {{ notification.actionText }}
           </button>
-          
+
           <button @click="dismissNotification(notification.id)" class="btn-dismiss">
             <i class="fas fa-times"></i>
           </button>
@@ -73,7 +74,7 @@ const eventSource = ref(null)
 const getNotificationIcon = (type) => {
   const icons = {
     'info': 'fas fa-info-circle',
-    'success': 'fas fa-check-circle', 
+    'success': 'fas fa-check-circle',
     'warning': 'fas fa-exclamation-triangle',
     'error': 'fas fa-times-circle',
     'approval': 'fas fa-user-check',
@@ -92,7 +93,7 @@ const addNotification = (notification) => {
     timestamp: Date.now(),
     ...notification
   })
-  
+
   // Auto-remove info notifications after 10 seconds
   if (notification.type === 'info') {
     setTimeout(() => {
@@ -117,7 +118,7 @@ const handleNotificationAction = (notification) => {
     // Handle approval action
     approveWorkflowStep(notification.workflowId, notification.stepId)
   }
-  
+
   dismissNotification(notification.id)
 }
 
@@ -129,16 +130,16 @@ const approveWorkflowStep = async (workflowId, stepId) => {
       approved: true,
       timestamp: Date.now()
     })
-    
+
     addNotification({
       type: 'success',
       title: 'Step Approved',
       message: `Workflow step ${stepId} has been approved and will continue execution.`
     })
-    
+
   } catch (error) {
     addNotification({
-      type: 'error', 
+      type: 'error',
       title: 'Approval Failed',
       message: `Failed to approve workflow step: ${error.message}`
     })
@@ -155,15 +156,15 @@ const startNotificationPolling = () => {
       message: 'Network scanning tool research workflow has begun.'
     })
   }, 2000)
-  
+
   setTimeout(() => {
     addNotification({
       type: 'progress',
-      title: 'Research In Progress', 
+      title: 'Research In Progress',
       message: 'Searching for network scanning tools...'
     })
   }, 5000)
-  
+
   setTimeout(() => {
     addNotification({
       type: 'approval',
@@ -348,14 +349,15 @@ defineExpose({
   background: #f1f3f4;
   color: #495057;
 }
-</style>'''
-    
+</style>"""
+
     return component_content
+
 
 def create_workflow_progress_widget():
     """Create a compact workflow progress widget."""
-    
-    widget_content = '''<template>
+
+    widget_content = """<template>
   <div class="workflow-progress-widget" v-if="activeWorkflow">
     <div class="widget-header" @click="toggleExpanded">
       <div class="workflow-info">
@@ -365,8 +367,8 @@ def create_workflow_progress_widget():
         </div>
         <div class="workflow-progress">
           <div class="progress-bar">
-            <div 
-              class="progress-fill" 
+            <div
+              class="progress-fill"
               :style="{ width: progressPercentage + '%' }"
             ></div>
           </div>
@@ -375,7 +377,7 @@ def create_workflow_progress_widget():
           </span>
         </div>
       </div>
-      
+
       <div class="widget-controls">
         <button v-if="hasApprovalPending" @click.stop="openApprovals" class="btn-approval">
           <i class="fas fa-exclamation-circle"></i>
@@ -386,7 +388,7 @@ def create_workflow_progress_widget():
         </button>
       </div>
     </div>
-    
+
     <div v-if="expanded" class="widget-content">
       <div class="workflow-details">
         <div class="detail-row">
@@ -404,7 +406,7 @@ def create_workflow_progress_widget():
           <span class="value">{{ activeWorkflow.agents_involved.join(', ') }}</span>
         </div>
       </div>
-      
+
       <div class="current-step" v-if="currentStepInfo">
         <h5>Current Step:</h5>
         <div class="step-info">
@@ -417,7 +419,7 @@ def create_workflow_progress_widget():
           </div>
         </div>
       </div>
-      
+
       <div class="widget-actions">
         <button @click="openFullWorkflowView" class="btn-view">
           <i class="fas fa-external-link-alt"></i>
@@ -476,7 +478,7 @@ const hasApprovalPending = computed(() => {
 // Methods
 const loadWorkflowData = async () => {
   if (!props.workflowId) return
-  
+
   try {
     const response = await apiService.get(`/api/workflow/workflow/${props.workflowId}`)
     activeWorkflow.value = response.workflow
@@ -501,7 +503,7 @@ const openFullWorkflowView = () => {
 
 const cancelWorkflow = async () => {
   if (!confirm('Are you sure you want to cancel this workflow?')) return
-  
+
   try {
     await apiService.delete(`/api/workflow/workflow/${props.workflowId}`)
     activeWorkflow.value = null
@@ -514,7 +516,7 @@ const cancelWorkflow = async () => {
 // Lifecycle
 onMounted(() => {
   loadWorkflowData()
-  
+
   // Refresh every 3 seconds
   refreshInterval.value = setInterval(() => {
     loadWorkflowData()
@@ -661,7 +663,7 @@ onUnmounted(() => {
 }
 
 .value.simple { color: #28a745; }
-.value.research { color: #17a2b8; }  
+.value.research { color: #17a2b8; }
 .value.install { color: #ffc107; }
 .value.complex { color: #dc3545; }
 
@@ -739,44 +741,55 @@ onUnmounted(() => {
 .btn-cancel:hover {
   background: #c82333;
 }
-</style>'''
-    
+</style>"""
+
     return widget_content
+
 
 def main():
     """Create enhanced UI components for workflow orchestration."""
-    
+
     print("🎨 Creating Enhanced Workflow UI Components")
     print("=" * 60)
-    
+
     # Create notification component
     notification_component = create_workflow_notification_component()
-    
-    with open('/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowNotifications.vue', 'w') as f:
+
+    with open(
+        "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowNotifications.vue",
+        "w",
+    ) as f:
         f.write(notification_component)
-    
+
     print("✅ Created WorkflowNotifications.vue")
     print("   - Real-time workflow notifications")
-    print("   - User approval prompts") 
+    print("   - User approval prompts")
     print("   - Progress updates")
     print("   - Auto-dismiss for info notifications")
-    
+
     # Create progress widget
     progress_widget = create_workflow_progress_widget()
-    
-    with open('/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowProgressWidget.vue', 'w') as f:
+
+    with open(
+        "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowProgressWidget.vue",
+        "w",
+    ) as f:
         f.write(progress_widget)
-    
+
     print("✅ Created WorkflowProgressWidget.vue")
     print("   - Compact floating progress widget")
     print("   - Expandable workflow details")
     print("   - Quick approval actions")
     print("   - Cancel workflow capability")
-    
+
     print(f"\n📋 Usage Instructions:")
     print("1. Import components in your main App.vue:")
-    print("   import WorkflowNotifications from './components/WorkflowNotifications.vue'")
-    print("   import WorkflowProgressWidget from './components/WorkflowProgressWidget.vue'")
+    print(
+        "   import WorkflowNotifications from './components/WorkflowNotifications.vue'"
+    )
+    print(
+        "   import WorkflowProgressWidget from './components/WorkflowProgressWidget.vue'"
+    )
     print("")
     print("2. Add to template:")
     print("   <WorkflowNotifications :workflow-id='activeWorkflowId' />")
@@ -786,9 +799,10 @@ def main():
     print("   - Floating notifications for workflow events")
     print("   - Compact progress widget in bottom-right corner")
     print("   - Real-time updates and user interaction")
-    
+
     print(f"\n🎉 Enhanced UI Components Created Successfully!")
     print("   AutoBot now has professional workflow orchestration UI!")
+
 
 if __name__ == "__main__":
     main()
