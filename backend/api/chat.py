@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from typing import List, Dict, Any
 import os
 import uuid
 import time
@@ -8,6 +9,7 @@ import logging
 import traceback
 import glob
 import shutil
+import json
 from src.agents import get_kb_librarian, get_librarian_assistant
 
 router = APIRouter()
@@ -77,6 +79,19 @@ def _should_research_web(message: str) -> bool:
 
     return False
 
+
+async def _send_typed_message(existing_history: List[Dict], message_type: str, content: str, chat_history_manager, chat_id: str):
+    """Send a typed message as a separate chat message."""
+    typed_message = {
+        "sender": "bot",
+        "text": content,
+        "messageType": message_type,
+        "rawData": None,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    existing_history.append(typed_message)
+    # Save immediately to ensure message appears
+    chat_history_manager.save_session(chat_id, messages=existing_history)
 
 def _extract_text_from_complex_json(data, max_length=500):
     """
@@ -375,6 +390,9 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         response_message = "An unexpected response format was received."
         tool_name = result_dict.get("tool_name")
         tool_args = result_dict.get("tool_args", {})
+        
+        # Debug logging for tool detection
+        logging.info(f"🔍 DEBUG tool_name detected: '{tool_name}'")
 
         # Ensure tool_args is a dictionary
         if not isinstance(tool_args, dict):
@@ -467,23 +485,24 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                 f"🔍 DEBUG respond_conversationally final "
                 f"response_message: {response_message}"
             )
-        # Enhance response with KB findings if available
+        # Send KB findings as separate utility message if available
         if (
             kb_result.get("is_question")
             and kb_result.get("documents_found", 0) > 0
             and "summary" in kb_result
         ):
-            # Prepend KB findings to the response
             kb_summary = kb_result["summary"]
-            response_message = (
-                f"📚 **Knowledge Base Information:**\n{kb_summary}\n\n"
-                f"**Response:**\n{response_message}"
-            )
+            kb_utility_message = f"📚 **Knowledge Base Information:**\n{kb_summary}"
+            await _send_typed_message(existing_history, "utility", kb_utility_message, chat_history_manager, chat_id)
             logging.info(
-                f"Enhanced response with {kb_result['documents_found']} KB documents"
+                f"Sent KB findings as separate utility message: {kb_result['documents_found']} documents"
             )
+        elif kb_result.get("is_question") and kb_result.get("documents_found", 0) == 0:
+            # Send "no KB info" as utility message when it's a question but no results found
+            kb_utility_message = "📚 **Knowledge Base Information:** None"
+            await _send_typed_message(existing_history, "utility", kb_utility_message, chat_history_manager, chat_id)
 
-        # Enhance response with web research results if available
+        # Send web research results as separate utility message if available  
         elif (
             web_research_result
             and web_research_result.get("summary")
@@ -503,22 +522,18 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     ]
                 )
 
-            # Prepend web research to response
-            response_message = (
-                f"🌐 **Web Research Results:**\n{web_summary}{sources_text}\n\n"
-                f"**Response:**\n{response_message}"
-            )
+            # Send web research as separate utility message
+            web_utility_message = f"🌐 **Web Research Results:**\n{web_summary}{sources_text}"
+            await _send_typed_message(existing_history, "utility", web_utility_message, chat_history_manager, chat_id)
 
-            # Note about knowledge base storage
+            # Send storage note as separate utility message
             stored_count = len(web_research_result.get("stored_in_kb", []))
             if stored_count > 0:
-                response_message += (
-                    f"\n\n*Note: {stored_count} high-quality sources were added "
-                    "to the knowledge base for future reference.*"
-                )
+                storage_note = f"*Note: {stored_count} high-quality sources were added to the knowledge base for future reference.*"
+                await _send_typed_message(existing_history, "utility", storage_note, chat_history_manager, chat_id)
 
             logging.info(
-                f"Enhanced response with web research: {len(sources)} sources found, "
+                f"Sent web research as separate utility messages: {len(sources)} sources found, "
                 f"{stored_count} stored in KB"
             )
 
@@ -536,6 +551,50 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     f"Command failed ({command_status}).\nError:\n{command_error}"
                     f"\nOutput:\n{command_output}"
                 )
+        elif tool_name == "workflow_orchestrator":
+            # Handle workflow orchestration results - send separate messages
+            logging.info(f"🚀 WORKFLOW ORCHESTRATOR HANDLER ACTIVATED for chat {chat_id}")
+            workflow_details = result_dict.get("workflow_details", {})
+            tool_args = result_dict.get("tool_args", {})
+            
+            # Send planning message
+            planning_info = f"""Classification: {tool_args.get('message_classification', 'unknown')}
+Agents Involved: {', '.join(tool_args.get('agents_involved', []))}
+Planned Steps: {tool_args.get('planned_steps', 0)}
+Estimated Duration: {tool_args.get('estimated_duration', 'unknown')}
+User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
+            
+            await _send_typed_message(existing_history, "planning", planning_info, chat_history_manager, chat_id)
+            
+            # Send thoughts message about workflow execution
+            thoughts_text = f"Analyzing request complexity and determining optimal agent coordination strategy. This {tool_args.get('message_classification', 'unknown')} request requires {tool_args.get('planned_steps', 0)} coordinated steps across {len(tool_args.get('agents_involved', []))} specialized agents."
+            
+            await _send_typed_message(existing_history, "thought", thoughts_text, chat_history_manager, chat_id)
+            
+            # Send utility messages for each agent step
+            agent_results = workflow_details.get("agent_results", [])
+            for result in agent_results:
+                utility_text = f"Step {result['step']}: {result['agent']} agent completed '{result['action']}' in {result['duration']} - {result['result']}"
+                await _send_typed_message(existing_history, "utility", utility_text, chat_history_manager, chat_id)
+                
+                # Send debug message for each step execution
+                debug_text = f"Agent: {result['agent']} | Action: {result['action']} | Duration: {result['duration']} | Status: completed"
+                await _send_typed_message(existing_history, "debug", debug_text, chat_history_manager, chat_id)
+            
+            # Send JSON output with technical details
+            json_output = {
+                "workflow_executed": result_dict.get("workflow_executed", False),
+                "classification": tool_args.get("message_classification"),
+                "agents_coordinated": len(tool_args.get("agents_involved", [])),
+                "steps_executed": workflow_details.get("steps_executed", 0),
+                "execution_status": workflow_details.get("execution_status"),
+                "total_duration": sum(float(r["duration"].replace("s", "")) for r in agent_results) if agent_results else 0
+            }
+            
+            await _send_typed_message(existing_history, "json", json.dumps(json_output, indent=2), chat_history_manager, chat_id)
+            
+            # Main response message
+            response_message = workflow_details.get("response_text", result_dict.get("response_text", "Multi-agent workflow coordination completed successfully."))
         elif tool_name:
             tool_output_content = tool_args.get(
                 "output", tool_args.get("message", str(tool_args))
@@ -559,32 +618,33 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
             else:
                 response_message = str(result_dict)
 
-        # Add bot response to chat history
-        bot_message = {
-            "sender": "bot",
-            "text": response_message,
-            "messageType": "response",
-            "rawData": result_dict,
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        # Add KB search results to metadata if available
-        if kb_result.get("is_question") and kb_result.get("documents_found", 0) > 0:
-            bot_message["kb_search_performed"] = True
-            bot_message["kb_documents_found"] = kb_result["documents_found"]
-            bot_message["kb_documents"] = kb_result.get("documents", [])
+        # Add bot response to chat history (skip for workflow orchestrator since separate messages already sent)
+        if tool_name != "workflow_orchestrator":
+            bot_message = {
+                "sender": "bot",
+                "text": response_message,
+                "messageType": "response",
+                "rawData": result_dict,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            # Add KB search results to metadata if available
+            if kb_result.get("is_question") and kb_result.get("documents_found", 0) > 0:
+                bot_message["kb_search_performed"] = True
+                bot_message["kb_documents_found"] = kb_result["documents_found"]
+                bot_message["kb_documents"] = kb_result.get("documents", [])
 
-        # Add web research results to metadata if available
-        if web_research_result and not web_research_result.get("error"):
-            bot_message["web_research_performed"] = True
-            bot_message["web_sources_found"] = len(
-                web_research_result.get("sources", [])
-            )
-            bot_message["web_sources"] = web_research_result.get("sources", [])
-            bot_message["web_stored_in_kb"] = len(
-                web_research_result.get("stored_in_kb", [])
-            )
+            # Add web research results to metadata if available
+            if web_research_result and not web_research_result.get("error"):
+                bot_message["web_research_performed"] = True
+                bot_message["web_sources_found"] = len(
+                    web_research_result.get("sources", [])
+                )
+                bot_message["web_sources"] = web_research_result.get("sources", [])
+                bot_message["web_stored_in_kb"] = len(
+                    web_research_result.get("stored_in_kb", [])
+                )
 
-        existing_history.append(bot_message)
+            existing_history.append(bot_message)
 
         # Save updated chat history
         chat_history_manager.save_session(chat_id, messages=existing_history)
