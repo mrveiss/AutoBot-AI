@@ -8,8 +8,8 @@
         </div>
         <div class="workflow-progress">
           <div class="progress-bar">
-            <div 
-              class="progress-fill" 
+            <div
+              class="progress-fill"
               :style="{ width: progressPercentage + '%' }"
             ></div>
           </div>
@@ -18,7 +18,7 @@
           </span>
         </div>
       </div>
-      
+
       <div class="widget-controls">
         <button v-if="hasApprovalPending" @click.stop="openApprovals" class="btn-approval">
           <i class="fas fa-exclamation-circle"></i>
@@ -29,7 +29,7 @@
         </button>
       </div>
     </div>
-    
+
     <div v-if="expanded" class="widget-content">
       <div class="workflow-details">
         <div class="detail-row">
@@ -47,7 +47,7 @@
           <span class="value">{{ activeWorkflow.agents_involved.join(', ') }}</span>
         </div>
       </div>
-      
+
       <div class="current-step" v-if="currentStepInfo">
         <h5>Current Step:</h5>
         <div class="step-info">
@@ -60,7 +60,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="widget-actions">
         <button @click="openFullWorkflowView" class="btn-view">
           <i class="fas fa-external-link-alt"></i>
@@ -119,7 +119,7 @@ const hasApprovalPending = computed(() => {
 // Methods
 const loadWorkflowData = async () => {
   if (!props.workflowId) return
-  
+
   try {
     const response = await apiService.get(`/api/workflow/workflow/${props.workflowId}`)
     activeWorkflow.value = response.workflow
@@ -144,7 +144,7 @@ const openFullWorkflowView = () => {
 
 const cancelWorkflow = async () => {
   if (!confirm('Are you sure you want to cancel this workflow?')) return
-  
+
   try {
     await apiService.delete(`/api/workflow/workflow/${props.workflowId}`)
     activeWorkflow.value = null
@@ -157,7 +157,7 @@ const cancelWorkflow = async () => {
 // Lifecycle
 onMounted(() => {
   loadWorkflowData()
-  
+
   // Refresh every 3 seconds
   refreshInterval.value = setInterval(() => {
     loadWorkflowData()
@@ -304,7 +304,7 @@ onUnmounted(() => {
 }
 
 .value.simple { color: #28a745; }
-.value.research { color: #17a2b8; }  
+.value.research { color: #17a2b8; }
 .value.install { color: #ffc107; }
 .value.complex { color: #dc3545; }
 
