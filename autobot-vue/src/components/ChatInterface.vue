@@ -69,9 +69,19 @@
           </div>
           <h3 class="text-lg font-semibold text-blueGray-700 mb-4 mt-6">Backend Control</h3>
           <div class="mb-4">
-            <button class="btn btn-success w-full" @click="startBackendServer" :disabled="backendStarting">
-              <i class="fas fa-play mr-2"></i>
-              {{ backendStarting ? 'Starting...' : 'Start Backend Server' }}
+            <button class="btn btn-primary w-full" @click="reloadSystem" :disabled="systemReloading">
+              <i class="fas fa-sync mr-2"></i>
+              {{ systemReloading ? 'Reloading...' : 'Reload System' }}
+            </button>
+          </div>
+          <!-- Reload needed notification -->
+          <div v-if="reloadNeeded" class="mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+            <div class="flex items-center">
+              <i class="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>
+              <span class="text-sm text-yellow-800">System reload recommended</span>
+            </div>
+            <button @click="reloadSystem" class="mt-2 text-xs bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700">
+              Reload Now
             </button>
           </div>
         </div>
@@ -85,7 +95,7 @@
           <div class="flex-1 overflow-y-auto p-6 space-y-4" ref="chatMessages" role="log" style="max-height: calc(100vh - 300px); min-height: 400px;">
             <div v-for="(message, index) in filteredMessages" :key="index" class="flex" :class="message.sender === 'user' ? 'justify-end' : 'justify-start'">
               <div class="max-w-3xl rounded-lg p-4 shadow-sm" :class="message.sender === 'user' ? 'bg-indigo-500 text-white' : 'bg-white border border-blueGray-200 text-blueGray-700'">
-                <div class="message-content" v-html="formatMessage(message.text, message.type)"></div>
+                <div class="message-content" :data-type="message.type" v-html="formatMessage(message.text, message.type)"></div>
                 <div class="text-xs mt-2 opacity-70">{{ message.timestamp }}</div>
               </div>
             </div>
@@ -163,6 +173,8 @@ export default {
     const chatList = ref([]);
     const currentChatId = ref(null);
     const backendStarting = ref(false);
+    const systemReloading = ref(false);
+    const reloadNeeded = ref(false);
     const chatMessages = ref(null);
     const attachedFiles = ref([]);
 
@@ -529,6 +541,16 @@ export default {
           });
         }
       } catch (error) {
+        // Check if this is an LLM model error that requires system reload
+        if (error.message && (
+          error.message.includes('Unsupported LLM model type') ||
+          error.message.includes('model type') ||
+          error.message.includes('LLM') ||
+          error.response?.status === 500
+        )) {
+          setReloadNeeded(true);
+        }
+        
         messages.value.push({
           sender: 'bot',
           text: `Error: ${error.message}`,
@@ -589,18 +611,38 @@ export default {
       messages.value = [];
     };
 
-    const deleteSpecificChat = (chatId = null) => {
+    const deleteSpecificChat = async (chatId = null) => {
       const targetChatId = chatId || currentChatId.value;
       if (!targetChatId) return;
 
-      chatList.value = chatList.value.filter(chat => chat.chatId !== targetChatId);
+      try {
+        // Delete from backend first
+        await apiClient.deleteChat(targetChatId);
+        console.log(`Chat ${targetChatId} deleted successfully from backend`);
 
-      if (currentChatId.value === targetChatId) {
-        messages.value = [];
-        if (chatList.value.length > 0) {
-          switchChat(chatList.value[0].chatId);
-        } else {
-          newChat();
+        // Then update frontend state
+        chatList.value = chatList.value.filter(chat => chat.chatId !== targetChatId);
+
+        if (currentChatId.value === targetChatId) {
+          messages.value = [];
+          if (chatList.value.length > 0) {
+            switchChat(chatList.value[0].chatId);
+          } else {
+            newChat();
+          }
+        }
+      } catch (error) {
+        console.error('Error deleting chat:', error);
+        // Still update frontend state even if backend call fails
+        chatList.value = chatList.value.filter(chat => chat.chatId !== targetChatId);
+        
+        if (currentChatId.value === targetChatId) {
+          messages.value = [];
+          if (chatList.value.length > 0) {
+            switchChat(chatList.value[0].chatId);
+          } else {
+            newChat();
+          }
         }
       }
     };
@@ -675,17 +717,54 @@ export default {
       }
     };
 
-    const startBackendServer = async () => {
-      backendStarting.value = true;
+    const reloadSystem = async () => {
+      systemReloading.value = true;
       try {
-        // Simulate backend start
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        console.log('Backend server started');
+        console.log('Reloading system...');
+        const response = await apiClient.post('/api/system/reload');
+        
+        if (response.data.status === 'success') {
+          console.log('System reloaded successfully:', response.data);
+          reloadNeeded.value = false; // Clear reload notification
+          
+          // Show success message to user (you might want to add a toast notification here)
+          const reloadResults = response.data.reload_results || [];
+          const reloadedModules = response.data.reloaded_modules || [];
+          
+          console.log('Reload results:', reloadResults);
+          console.log('Reloaded modules:', reloadedModules);
+          
+          // Add system message to chat
+          const systemMessage = {
+            sender: 'system',
+            text: `System reloaded successfully. Modules updated: ${reloadedModules.length}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'system'
+          };
+          messages.value.push(systemMessage);
+          
+        } else {
+          throw new Error('System reload failed');
+        }
       } catch (error) {
-        console.error('Failed to start backend:', error);
+        console.error('Failed to reload system:', error);
+        
+        // Add error message to chat
+        const errorMessage = {
+          sender: 'system',
+          text: `System reload failed: ${error.message}`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'error'
+        };
+        messages.value.push(errorMessage);
       } finally {
-        backendStarting.value = false;
+        systemReloading.value = false;
       }
+    };
+
+    // Function to check if reload is needed (you can call this when detecting errors)
+    const setReloadNeeded = (needed = true) => {
+      reloadNeeded.value = needed;
     };
 
     const openTerminalInNewTab = () => {
@@ -742,7 +821,10 @@ export default {
       editChatName,
       getChatPreview,
       refreshChatList,
-      startBackendServer,
+      reloadSystem,
+      systemReloading,
+      reloadNeeded,
+      setReloadNeeded,
       openTerminalInNewTab,
       // File handling
       attachedFiles,
@@ -783,6 +865,24 @@ export default {
 .message-content {
   margin-top: 0.5rem;
   line-height: 1.5;
+}
+
+/* System message styling */
+.message-content[data-type="system"] {
+  background-color: #e0f2fe;
+  border: 1px solid #0277bd;
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  color: #01579b;
+}
+
+/* Error message styling */
+.message-content[data-type="error"] {
+  background-color: #ffebee;
+  border: 1px solid #f44336;
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  color: #c62828;
 }
 
 .thought-message {
