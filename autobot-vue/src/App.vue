@@ -1,5 +1,5 @@
 <template>
-  <div id="app" class="min-h-screen bg-blueGray-50">
+  <div class="min-h-screen bg-blueGray-50">
     <!-- Top Brand Bar -->
     <nav class="bg-white shadow-lg flex flex-wrap items-center justify-between w-full z-[9998] relative py-4 px-6">
       <div class="flex flex-row items-center justify-between w-full mx-auto">
@@ -31,7 +31,7 @@
               <ul class="flex flex-col space-y-2">
                 <li>
                   <a
-                    @click="activeTab = 'dashboard'; navbarOpen = false"
+                    @click="updateRoute('dashboard')"
                     :class="[activeTab === 'dashboard' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
@@ -41,7 +41,7 @@
                 </li>
                 <li>
                   <a
-                    @click="activeTab = 'chat'; navbarOpen = false"
+                    @click="updateRoute('chat')"
                     :class="[activeTab === 'chat' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
@@ -51,7 +51,7 @@
                 </li>
                 <li>
                   <a
-                    @click="activeTab = 'voice'; navbarOpen = false"
+                    @click="updateRoute('voice')"
                     :class="[activeTab === 'voice' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
@@ -61,7 +61,7 @@
                 </li>
                 <li>
                   <a
-                    @click="activeTab = 'knowledge'; navbarOpen = false"
+                    @click="updateRoute('knowledge')"
                     :class="[activeTab === 'knowledge' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
@@ -71,7 +71,7 @@
                 </li>
                 <li>
                   <a
-                    @click="activeTab = 'terminal'; navbarOpen = false"
+                    @click="updateRoute('terminal')"
                     :class="[activeTab === 'terminal' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
@@ -81,7 +81,7 @@
                 </li>
                 <li>
                   <a
-                    @click="activeTab = 'files'; navbarOpen = false"
+                    @click="updateRoute('files')"
                     :class="[activeTab === 'files' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
@@ -91,7 +91,7 @@
                 </li>
                 <li>
                   <a
-                    @click="activeTab = 'monitor'; navbarOpen = false"
+                    @click="updateRoute('monitor')"
                     :class="[activeTab === 'monitor' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
@@ -101,7 +101,7 @@
                 </li>
                 <li>
                   <a
-                    @click="activeTab = 'settings'; navbarOpen = false"
+                    @click="updateRoute('settings')"
                     :class="[activeTab === 'settings' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
@@ -140,7 +140,7 @@
                 <ul class="flex flex-row list-none space-x-1">
                   <li>
                     <a
-                      @click="activeTab = 'dashboard'"
+                      @click="updateRoute('dashboard')"
                       :class="[activeTab === 'dashboard' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
@@ -150,7 +150,7 @@
                   </li>
                   <li>
                     <a
-                      @click="activeTab = 'chat'"
+                      @click="updateRoute('chat')"
                       :class="[activeTab === 'chat' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
@@ -160,7 +160,7 @@
                   </li>
                   <li>
                     <a
-                      @click="activeTab = 'voice'"
+                      @click="updateRoute('voice')"
                       :class="[activeTab === 'voice' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
@@ -170,7 +170,7 @@
                   </li>
                   <li>
                     <a
-                      @click="activeTab = 'knowledge'"
+                      @click="updateRoute('knowledge')"
                       :class="[activeTab === 'knowledge' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
@@ -180,7 +180,7 @@
                   </li>
                   <li>
                     <a
-                      @click="activeTab = 'terminal'"
+                      @click="updateRoute('terminal')"
                       :class="[activeTab === 'terminal' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
@@ -190,7 +190,7 @@
                   </li>
                   <li>
                     <a
-                      @click="activeTab = 'files'"
+                      @click="updateRoute('files')"
                       :class="[activeTab === 'files' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
@@ -200,7 +200,7 @@
                   </li>
                   <li>
                     <a
-                      @click="activeTab = 'monitor'"
+                      @click="updateRoute('monitor')"
                       :class="[activeTab === 'monitor' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
@@ -210,7 +210,7 @@
                   </li>
                   <li>
                     <a
-                      @click="activeTab = 'settings'"
+                      @click="updateRoute('settings')"
                       :class="[activeTab === 'settings' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
@@ -231,7 +231,8 @@
       <div class="px-4 md:px-10 mx-auto w-full" :class="activeTab === 'dashboard' ? 'mt-0' : (activeTab === 'chat' ? 'flex-1 flex flex-col' : 'mt-4')">
         <div class="flex flex-wrap" :class="activeTab === 'chat' ? 'flex-1 h-full' : 'mt-4'">
           <div class="w-full px-4" :class="activeTab === 'chat' ? 'flex-1 h-full flex flex-col' : 'mb-12'">
-            <Transition name="fade-slide" mode="out-in">
+            <!-- Remove Transition for debugging -->
+            <div>
               <!-- Dashboard View -->
               <div v-if="activeTab === 'dashboard'" key="dashboard" class="relative flex flex-col min-w-0 break-words w-full mb-6 shadow-lg rounded-lg bg-white">
                 <div class="rounded-t mb-0 px-6 py-6">
@@ -267,19 +268,19 @@
                     <div class="bg-blueGray-50 rounded-lg p-6">
                       <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Quick Actions</h3>
                       <div class="grid grid-cols-2 gap-3">
-                        <button @click="activeTab = 'chat'" class="btn btn-primary text-sm">
+                        <button @click="updateRoute('chat')" class="btn btn-primary text-sm">
                           <i class="fas fa-comments mr-2"></i>
                           New Chat
                         </button>
-                        <button @click="activeTab = 'knowledge'" class="btn btn-secondary text-sm">
+                        <button @click="updateRoute('knowledge')" class="btn btn-secondary text-sm">
                           <i class="fas fa-plus mr-2"></i>
                           Add Knowledge
                         </button>
-                        <button @click="activeTab = 'files'" class="btn btn-success text-sm">
+                        <button @click="updateRoute('files')" class="btn btn-success text-sm">
                           <i class="fas fa-upload mr-2"></i>
                           Upload File
                         </button>
-                        <button @click="activeTab = 'terminal'" class="btn btn-outline text-sm">
+                        <button @click="updateRoute('terminal')" class="btn btn-outline text-sm">
                           <i class="fas fa-terminal mr-2"></i>
                           Terminal
                         </button>
@@ -441,7 +442,7 @@
                   <SystemMonitor />
                 </div>
               </section>
-            </Transition>
+            </div>
           </div>
         </div>
       </div>
@@ -476,6 +477,11 @@ export default {
     const activeChatId = ref(`chat-${Date.now()}`);
     const navbarOpen = ref(false);
     const mobileMenuContainer = ref(null);
+    // Simple tab switching without router
+    const updateRoute = (tab) => {
+      activeTab.value = tab;
+      navbarOpen.value = false; // Close mobile menu
+    };
 
     // Dashboard stats
     const activeSessions = ref(3);
@@ -582,6 +588,7 @@ export default {
       tasksCompleted,
       performance,
       toggleNavbar,
+      updateRoute,
       newChat,
       refreshStats
     };
