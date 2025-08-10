@@ -46,6 +46,7 @@ from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.kb_librarian import router as kb_librarian_router
 from backend.api.terminal import router as terminal_router
 from backend.api.system_knowledge_bridge import router as system_knowledge_bridge_router
+from backend.api.workflow import router as workflow_router
 from backend.api.developer import (
     router as developer_router,
     api_registry,
@@ -404,6 +405,7 @@ def add_api_routes(app: FastAPI) -> None:
         (developer_router, "/developer", ["developer"], "developer"),
         (kb_librarian_router, "/kb-librarian", ["kb-librarian"], "kb_librarian"),
         (terminal_router, "/terminal", ["terminal"], "terminal"),
+        (workflow_router, "/workflow", ["workflow"], "workflow"),
     ]
 
     for router, prefix, tags, name in routers_config:

@@ -101,6 +101,16 @@
                 </li>
                 <li>
                   <a
+                    @click="updateRoute('workflows')"
+                    :class="[activeTab === 'workflows' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-project-diagram mr-2 text-sm"></i>
+                    Workflows
+                  </a>
+                </li>
+                <li>
+                  <a
                     @click="updateRoute('settings')"
                     :class="[activeTab === 'settings' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
@@ -206,6 +216,16 @@
                     >
                       <i class="fas fa-chart-line mr-2 text-sm"></i>
                       System Monitor
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('workflows')"
+                      :class="[activeTab === 'workflows' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-project-diagram mr-2 text-sm"></i>
+                      Workflows
                     </a>
                   </li>
                   <li>
@@ -416,6 +436,12 @@
                 </div>
               </section>
 
+              <!-- Workflows View -->
+              <section v-else-if="activeTab === 'workflows'" key="workflows" class="card">
+                <div class="card-body p-0">
+                  <WorkflowApproval />
+                </div>
+              </section>
               <!-- Settings View -->
               <section v-else-if="activeTab === 'settings'" key="settings" class="card">
                 <div class="card-body">
@@ -460,6 +486,7 @@ import TerminalWindow from './components/TerminalWindow.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import FileBrowser from './components/FileBrowser.vue';
 import SystemMonitor from './components/SystemMonitor.vue';
+import WorkflowApproval from './components/WorkflowApproval.vue';
 
 export default {
   name: 'App',
@@ -470,7 +497,8 @@ export default {
     TerminalWindow,
     SettingsPanel,
     FileBrowser,
-    SystemMonitor
+    SystemMonitor,
+    WorkflowApproval
   },
   setup() {
     const activeTab = ref('dashboard');
