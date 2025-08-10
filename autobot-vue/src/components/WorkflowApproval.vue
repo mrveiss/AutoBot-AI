@@ -6,20 +6,20 @@
         <i class="fas fa-project-diagram"></i>
         Active Workflows
       </h3>
-      
+
       <div v-if="loading" class="loading">
         <i class="fas fa-spinner fa-spin"></i>
         Loading workflows...
       </div>
-      
+
       <div v-else-if="workflows.length === 0" class="no-workflows">
         <i class="fas fa-info-circle"></i>
         No active workflows
       </div>
-      
+
       <div v-else class="workflows-list">
-        <div 
-          v-for="workflow in workflows" 
+        <div
+          v-for="workflow in workflows"
           :key="workflow.workflow_id"
           class="workflow-card"
           :class="{ 'selected': selectedWorkflowId === workflow.workflow_id }"
@@ -34,7 +34,7 @@
               {{ workflow.status }}
             </div>
           </div>
-          
+
           <div class="workflow-meta">
             <div class="meta-item">
               <i class="fas fa-layer-group"></i>
@@ -49,11 +49,11 @@
               {{ workflow.agents_involved.join(', ') }}
             </div>
           </div>
-          
+
           <div class="workflow-progress">
             <div class="progress-bar">
-              <div 
-                class="progress-fill" 
+              <div
+                class="progress-fill"
                 :style="{ width: (workflow.current_step / workflow.total_steps * 100) + '%' }"
               ></div>
             </div>
@@ -61,14 +61,14 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Workflow Details -->
     <div v-if="selectedWorkflow" class="workflow-details">
       <h3 class="section-title">
         <i class="fas fa-tasks"></i>
         Workflow Details
       </h3>
-      
+
       <div class="workflow-info">
         <div class="info-row">
           <span class="label">Classification:</span>
@@ -87,16 +87,16 @@
           </span>
         </div>
       </div>
-      
+
       <!-- Workflow Steps -->
       <div class="workflow-steps">
         <h4>Workflow Steps</h4>
         <div class="steps-list">
-          <div 
-            v-for="(step, index) in workflowSteps" 
+          <div
+            v-for="(step, index) in workflowSteps"
             :key="step.step_id"
             class="step-card"
-            :class="{ 
+            :class="{
               'current': index === selectedWorkflow.current_step,
               'completed': step.status === 'completed',
               'waiting-approval': step.status === 'waiting_approval',
@@ -124,22 +124,22 @@
                 <i v-else class="fas fa-circle text-muted"></i>
               </div>
             </div>
-            
+
             <!-- Approval Interface -->
             <div v-if="step.status === 'waiting_approval'" class="approval-interface">
               <div class="approval-message">
                 <i class="fas fa-exclamation-triangle"></i>
                 This step requires your approval to continue.
               </div>
-              
+
               <div class="approval-details">
                 <p><strong>Agent:</strong> {{ step.agent_type }}</p>
                 <p><strong>Action:</strong> {{ step.action }}</p>
                 <p v-if="step.result"><strong>Result:</strong> {{ step.result }}</p>
               </div>
-              
+
               <div class="approval-actions">
-                <button 
+                <button
                   class="btn btn-success"
                   @click="approveStep(selectedWorkflow.workflow_id, step.step_id)"
                   :disabled="approvingSteps.has(step.step_id)"
@@ -147,7 +147,7 @@
                   <i class="fas fa-check"></i>
                   Approve
                 </button>
-                <button 
+                <button
                   class="btn btn-danger"
                   @click="denyStep(selectedWorkflow.workflow_id, step.step_id)"
                   :disabled="approvingSteps.has(step.step_id)"
@@ -157,7 +157,7 @@
                 </button>
               </div>
             </div>
-            
+
             <!-- Step Result -->
             <div v-if="step.result && step.status !== 'waiting_approval'" class="step-result">
               <div class="result-label">Result:</div>
@@ -166,10 +166,10 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Workflow Actions -->
       <div class="workflow-actions">
-        <button 
+        <button
           v-if="selectedWorkflow.status === 'executing' || selectedWorkflow.status === 'waiting_approval'"
           class="btn btn-danger"
           @click="cancelWorkflow(selectedWorkflow.workflow_id)"
@@ -177,8 +177,8 @@
           <i class="fas fa-stop"></i>
           Cancel Workflow
         </button>
-        
-        <button 
+
+        <button
           class="btn btn-secondary"
           @click="refreshWorkflows"
         >
@@ -248,9 +248,9 @@ const loadWorkflows = async () => {
 
 const selectWorkflow = async (workflowId: string) => {
   if (selectedWorkflowId.value === workflowId) return
-  
+
   selectedWorkflowId.value = workflowId
-  
+
   try {
     // Get workflow details
     const workflowResponse = await apiService.get(`/api/workflow/workflow/${workflowId}`)
@@ -264,7 +264,7 @@ const selectWorkflow = async (workflowId: string) => {
 const approveStep = async (workflowId: string, stepId: string) => {
   try {
     approvingSteps.value.add(stepId)
-    
+
     await apiService.post(`/api/workflow/workflow/${workflowId}/approve`, {
       workflow_id: workflowId,
       step_id: stepId,
@@ -272,10 +272,10 @@ const approveStep = async (workflowId: string, stepId: string) => {
       user_input: null,
       timestamp: Date.now()
     })
-    
+
     // Refresh workflow details
     await selectWorkflow(workflowId)
-    
+
   } catch (error) {
     console.error('Failed to approve step:', error)
   } finally {
@@ -286,7 +286,7 @@ const approveStep = async (workflowId: string, stepId: string) => {
 const denyStep = async (workflowId: string, stepId: string) => {
   try {
     approvingSteps.value.add(stepId)
-    
+
     await apiService.post(`/api/workflow/workflow/${workflowId}/approve`, {
       workflow_id: workflowId,
       step_id: stepId,
@@ -294,10 +294,10 @@ const denyStep = async (workflowId: string, stepId: string) => {
       user_input: null,
       timestamp: Date.now()
     })
-    
+
     // Refresh workflow details
     await selectWorkflow(workflowId)
-    
+
   } catch (error) {
     console.error('Failed to deny step:', error)
   } finally {
@@ -309,11 +309,11 @@ const cancelWorkflow = async (workflowId: string) => {
   if (!confirm('Are you sure you want to cancel this workflow?')) {
     return
   }
-  
+
   try {
     await apiService.delete(`/api/workflow/workflow/${workflowId}`)
     await loadWorkflows()
-    
+
     // Clear selection if cancelled workflow was selected
     if (selectedWorkflowId.value === workflowId) {
       selectedWorkflowId.value = null
@@ -327,7 +327,7 @@ const cancelWorkflow = async (workflowId: string) => {
 
 const refreshWorkflows = async () => {
   await loadWorkflows()
-  
+
   // Refresh selected workflow details
   if (selectedWorkflowId.value) {
     await selectWorkflow(selectedWorkflowId.value)
@@ -337,7 +337,7 @@ const refreshWorkflows = async () => {
 // Lifecycle
 onMounted(() => {
   loadWorkflows()
-  
+
   // Set up auto-refresh
   refreshInterval.value = window.setInterval(() => {
     refreshWorkflows()
