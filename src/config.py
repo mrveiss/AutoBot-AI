@@ -459,24 +459,29 @@ class ConfigManager:
         Returns:
             Model name for the specified agent
         """
-        # Multi-agent model configuration using uncensored models for hardware constraints
+        # Multi-agent model configuration with uncensored models for unrestricted capabilities
         agent_models = {
-            # Core Orchestration
-            "orchestrator": "artifish/llama3.2-uncensored:3b",     # Main coordinator - 3B for complex reasoning
+            # Core Orchestration - uncensored for flexible reasoning
+            "orchestrator": "artifish/llama3.2-uncensored:3b",     # Main coordinator - 3B uncensored
             "default": "artifish/llama3.2-uncensored:3b",          # Fallback to orchestrator model
             
-            # Specialized Agents
-            "chat": "artifish/llama3.2-uncensored:1b",             # 1B for quick conversational responses
-            "system_commands": "artifish/llama3.2-uncensored:1b",  # 1B for command generation/validation
-            "rag": "artifish/llama3.2-uncensored:3b",              # 3B for document synthesis
-            "knowledge_retrieval": "artifish/llama3.2-uncensored:1b", # 1B for fast fact lookup
-            "research": "artifish/llama3.2-uncensored:3b",         # 3B for web research coordination
+            # Specialized Agents - uncensored variants for full capabilities
+            "chat": "artifish/llama3.2-uncensored:1b",             # 1B uncensored for conversations
+            "system_commands": "artifish/llama3.2-uncensored:1b",  # 1B uncensored for command generation
+            "rag": "artifish/llama3.2-uncensored:3b",              # 3B uncensored for document synthesis
+            "knowledge_retrieval": "artifish/llama3.2-uncensored:1b", # 1B uncensored for fact lookup
+            "research": "artifish/llama3.2-uncensored:3b",         # 3B uncensored for web research
             
-            # Legacy compatibility
+            # Legacy compatibility - uncensored variants
             "search": "artifish/llama3.2-uncensored:1b",           # Fast search queries
             "code": "artifish/llama3.2-uncensored:1b",             # Code understanding
             "analysis": "artifish/llama3.2-uncensored:3b",         # Analysis tasks
             "planning": "artifish/llama3.2-uncensored:3b",         # Task planning
+            
+            # Fallback to standard models if uncensored variants unavailable
+            "orchestrator_fallback": "llama3.2:3b-instruct-q4_K_M",
+            "chat_fallback": "llama3.2:1b-instruct-q4_K_M",
+            "fallback": "artifish/llama3.2-uncensored:latest",     # General fallback
         }
         
         # Allow environment override for specific tasks
