@@ -150,7 +150,7 @@
       @update:collapsed="terminalSidebarCollapsed = $event"
       @open-new-tab="openTerminalInNewTab"
     />
-    
+
     <!-- Workflow Progress Widget (floating) -->
     <WorkflowProgressWidget
       v-if="activeWorkflowId"
@@ -158,7 +158,7 @@
       @open-full-view="openFullWorkflowView"
       @workflow-cancelled="onWorkflowCancelled"
     />
-    
+
     <!-- Workflow Approval Modal -->
     <div v-if="showWorkflowApproval" class="workflow-modal-overlay" @click="showWorkflowApproval = false">
       <div class="workflow-modal" @click.stop>
@@ -204,7 +204,7 @@ export default {
     const reloadNeeded = ref(false);
     const chatMessages = ref(null);
     const attachedFiles = ref([]);
-    
+
     // Workflow state
     const activeWorkflowId = ref(null);
     const showWorkflowApproval = ref(false);
@@ -556,24 +556,24 @@ export default {
 
         if (workflowResponse.ok) {
           const workflowResult = await workflowResponse.json();
-          
+
           if (workflowResult.type === 'workflow_orchestration') {
             // Workflow orchestration triggered
             activeWorkflowId.value = workflowResult.workflow_id;
-            
+
             messages.value.push({
               sender: 'bot',
               text: `🔄 Workflow orchestration started for your request. I've broken this down into ${workflowResult.workflow_response.workflow_preview.length} coordinated steps involving multiple agents.`,
               timestamp: new Date().toLocaleTimeString(),
               type: 'workflow'
             });
-            
+
             // Show workflow details
             if (workflowResult.workflow_response.workflow_preview) {
               const stepsList = workflowResult.workflow_response.workflow_preview
                 .map((step, i) => `${i + 1}. ${step}`)
                 .join('\n');
-              
+
               messages.value.push({
                 sender: 'bot',
                 text: `**Workflow Steps:**\n${stepsList}`,
@@ -611,7 +611,7 @@ export default {
         )) {
           setReloadNeeded(true);
         }
-        
+
         messages.value.push({
           sender: 'bot',
           text: `Error: ${error.message}`,
@@ -696,7 +696,7 @@ export default {
         console.error('Error deleting chat:', error);
         // Still update frontend state even if backend call fails
         chatList.value = chatList.value.filter(chat => chat.chatId !== targetChatId);
-        
+
         if (currentChatId.value === targetChatId) {
           messages.value = [];
           if (chatList.value.length > 0) {
@@ -783,18 +783,18 @@ export default {
       try {
         console.log('Reloading system...');
         const response = await apiClient.post('/api/system/reload');
-        
+
         if (response.data.status === 'success') {
           console.log('System reloaded successfully:', response.data);
           reloadNeeded.value = false; // Clear reload notification
-          
+
           // Show success message to user (you might want to add a toast notification here)
           const reloadResults = response.data.reload_results || [];
           const reloadedModules = response.data.reloaded_modules || [];
-          
+
           console.log('Reload results:', reloadResults);
           console.log('Reloaded modules:', reloadedModules);
-          
+
           // Add system message to chat
           const systemMessage = {
             sender: 'system',
@@ -803,13 +803,13 @@ export default {
             type: 'system'
           };
           messages.value.push(systemMessage);
-          
+
         } else {
           throw new Error('System reload failed');
         }
       } catch (error) {
         console.error('Failed to reload system:', error);
-        
+
         // Add error message to chat
         const errorMessage = {
           sender: 'system',
@@ -856,11 +856,11 @@ export default {
     const connectWebSocket = () => {
       const wsUrl = `ws://localhost:8001/ws`;
       websocket.value = new WebSocket(wsUrl);
-      
+
       websocket.value.onopen = () => {
         console.log('WebSocket connected for workflow updates');
       };
-      
+
       websocket.value.onmessage = (event) => {
         try {
           const eventData = JSON.parse(event.data);
@@ -869,11 +869,11 @@ export default {
           console.error('Failed to parse WebSocket message:', error);
         }
       };
-      
+
       websocket.value.onerror = (error) => {
         console.error('WebSocket error:', error);
       };
-      
+
       websocket.value.onclose = () => {
         console.log('WebSocket disconnected, attempting to reconnect...');
         setTimeout(connectWebSocket, 3000);
@@ -883,7 +883,7 @@ export default {
     const handleWebSocketEvent = (eventData) => {
       const eventType = eventData.type;
       const payload = eventData.payload;
-      
+
       if (eventType.startsWith('workflow_')) {
         // Handle workflow events
         if (eventType === 'workflow_step_started') {
@@ -929,7 +929,7 @@ export default {
             activeWorkflowId.value = null;
           }
         }
-        
+
         // Auto-scroll to show new workflow updates
         nextTick(() => {
           if (chatMessages.value && settings.value.chat.auto_scroll) {
