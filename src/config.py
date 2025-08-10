@@ -285,8 +285,8 @@ class ConfigManager:
         except Exception as e:
             logger.warning(f"Could not auto-detect available models: {e}")
 
-        # Fallback to hardcoded default
-        return "deepseek-r1:14b"
+        # Fallback to hardcoded default - use smaller, faster model for hardware constraints
+        return "artifish/llama3.2-uncensored:latest"
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key"""
@@ -352,7 +352,7 @@ class ConfigManager:
         return self._config.copy()
 
     def get_llm_config(self) -> Dict[str, Any]:
-        """Get LLM configuration with fallback defaults - UNIFIED VERSION"""
+        """Get LLM configuration with fallback defaults - UNIFIED VERSION WITH MULTI-MODEL SUPPORT"""
 
         # SINGLE SOURCE: Use backend.llm as the authoritative config
         backend_llm = self.get_nested("backend.llm", {})
@@ -449,6 +449,179 @@ class ConfigManager:
         }
 
         return self._deep_merge(legacy_format, {"unified": unified_config})
+
+    def get_task_specific_model(self, task_type: str = "default") -> str:
+        """Get model for specific task types to optimize performance and resource usage.
+        
+        Args:
+            task_type: Agent type (orchestrator, chat, system_commands, rag, knowledge_retrieval, research)
+            
+        Returns:
+            Model name for the specified agent
+        """
+        # Multi-agent model configuration using uncensored models for hardware constraints
+        agent_models = {
+            # Core Orchestration
+            "orchestrator": "artifish/llama3.2-uncensored:3b",     # Main coordinator - 3B for complex reasoning
+            "default": "artifish/llama3.2-uncensored:3b",          # Fallback to orchestrator model
+            
+            # Specialized Agents
+            "chat": "artifish/llama3.2-uncensored:1b",             # 1B for quick conversational responses
+            "system_commands": "artifish/llama3.2-uncensored:1b",  # 1B for command generation/validation
+            "rag": "artifish/llama3.2-uncensored:3b",              # 3B for document synthesis
+            "knowledge_retrieval": "artifish/llama3.2-uncensored:1b", # 1B for fast fact lookup
+            "research": "artifish/llama3.2-uncensored:3b",         # 3B for web research coordination
+            
+            # Legacy compatibility
+            "search": "artifish/llama3.2-uncensored:1b",           # Fast search queries
+            "code": "artifish/llama3.2-uncensored:1b",             # Code understanding
+            "analysis": "artifish/llama3.2-uncensored:3b",         # Analysis tasks
+            "planning": "artifish/llama3.2-uncensored:3b",         # Task planning
+        }
+        
+        # Allow environment override for specific tasks
+        env_key = f"AUTOBOT_MODEL_{task_type.upper()}"
+        env_model = os.getenv(env_key)
+        if env_model:
+            logger.info(f"Using environment override for {task_type}: {env_model}")
+            return env_model
+        
+        # Get from config with fallback
+        config_key = f"backend.llm.task_models.{task_type}"
+        configured_model = self.get_nested(config_key)
+        if configured_model:
+            return configured_model
+        
+        # Use agent-specific default or fall back to general default
+        return agent_models.get(task_type, agent_models["default"])
+
+    def get_hardware_acceleration_config(self, task_type: str = "default") -> Dict[str, Any]:
+        """Get hardware acceleration configuration for a specific task type.
+        
+        Args:
+            task_type: Agent type (orchestrator, chat, system_commands, etc.)
+            
+        Returns:
+            Dict containing hardware acceleration settings
+        """
+        try:
+            # Import here to avoid circular dependency
+            from src.hardware_acceleration import get_hardware_acceleration_manager
+            
+            hw_manager = get_hardware_acceleration_manager()
+            device_config = hw_manager.get_ollama_device_config(task_type)
+            
+            # Add configuration override support
+            base_config = {
+                "hardware_acceleration": {
+                    "enabled": os.getenv("AUTOBOT_HARDWARE_ACCELERATION", "true").lower() == "true",
+                    "priority_order": ["npu", "gpu", "cpu"],
+                    "device_assignments": device_config,
+                    "cpu_reserved_cores": int(os.getenv("AUTOBOT_CPU_RESERVED_CORES", "2")),
+                    "memory_optimization": os.getenv("AUTOBOT_MEMORY_OPTIMIZATION", "enabled") == "enabled"
+                }
+            }
+            
+            # Allow per-task overrides
+            task_override_key = f"AUTOBOT_DEVICE_{task_type.upper()}"
+            if os.getenv(task_override_key):
+                base_config["hardware_acceleration"]["device_assignments"]["device_type"] = os.getenv(task_override_key)
+            
+            return base_config
+            
+        except Exception as e:
+            logger.warning(f"Failed to get hardware acceleration config: {e}")
+            # Fallback to CPU-only configuration
+            return {
+                "hardware_acceleration": {
+                    "enabled": False,
+                    "device_type": "cpu",
+                    "fallback_reason": str(e)
+                }
+            }
+
+    def get_ollama_runtime_config(self, task_type: str = "default") -> Dict[str, Any]:
+        """Get Ollama runtime configuration with hardware optimization.
+        
+        Args:
+            task_type: Agent type for task-specific optimization
+            
+        Returns:
+            Dict containing Ollama runtime configuration
+        """
+        # Get hardware acceleration config
+        hw_config = self.get_hardware_acceleration_config(task_type)
+        device_config = hw_config["hardware_acceleration"]["device_assignments"]
+        
+        # Base Ollama configuration
+        ollama_config = {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "num_predict": 512,
+            "stop": ["</s>", "<|end|>", "<|eot_id|>"],
+        }
+        
+        # Add device-specific options
+        if device_config.get("ollama_options"):
+            ollama_config.update(device_config["ollama_options"])
+        
+        # Task-specific optimizations
+        task_optimizations = {
+            "chat": {
+                "temperature": 0.8,
+                "num_predict": 256,  # Shorter responses for chat
+                "top_p": 0.9
+            },
+            "system_commands": {
+                "temperature": 0.3,  # More deterministic for commands
+                "num_predict": 128,
+                "top_p": 0.7
+            },
+            "knowledge_retrieval": {
+                "temperature": 0.4,  # Factual responses
+                "num_predict": 200,
+                "top_p": 0.8
+            },
+            "rag": {
+                "temperature": 0.6,  # Balanced for synthesis
+                "num_predict": 512,
+                "top_p": 0.85
+            },
+            "research": {
+                "temperature": 0.7,  # Creative for research
+                "num_predict": 600,
+                "top_p": 0.9
+            },
+            "orchestrator": {
+                "temperature": 0.5,  # Balanced for coordination
+                "num_predict": 400,
+                "top_p": 0.8
+            }
+        }
+        
+        # Apply task-specific optimizations
+        if task_type in task_optimizations:
+            ollama_config.update(task_optimizations[task_type])
+        
+        # Environment variable overrides
+        env_overrides = {
+            "AUTOBOT_LLM_TEMPERATURE": "temperature",
+            "AUTOBOT_LLM_TOP_P": "top_p",
+            "AUTOBOT_LLM_NUM_PREDICT": "num_predict"
+        }
+        
+        for env_var, config_key in env_overrides.items():
+            env_value = os.getenv(env_var)
+            if env_value:
+                try:
+                    if config_key in ["temperature", "top_p"]:
+                        ollama_config[config_key] = float(env_value)
+                    elif config_key == "num_predict":
+                        ollama_config[config_key] = int(env_value)
+                except ValueError:
+                    logger.warning(f"Invalid value for {env_var}: {env_value}")
+        
+        return ollama_config
 
     def get_redis_config(self) -> Dict[str, Any]:
         """Get Redis configuration with fallback defaults"""
