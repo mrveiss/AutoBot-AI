@@ -3,7 +3,7 @@
 
 This guide shows how to deploy AutoBot with optimal hardware utilization:
 - **WSL2**: Main system, GPU workloads, orchestration
-- **Windows Host**: Native NPU worker for fast inference  
+- **Windows Host**: Native NPU worker for fast inference
 - **Docker**: Containerized services (Playwright, Knowledge Base, etc.)
 
 ## 🏗️ Architecture Overview
@@ -11,7 +11,7 @@ This guide shows how to deploy AutoBot with optimal hardware utilization:
 ```
 ┌─────────────── WINDOWS HOST ────────────────┐
 │  ┌─────────────────┐    ┌──────────────────┐ │
-│  │   NPU Worker    │    │   Docker Desktop │ │ 
+│  │   NPU Worker    │    │   Docker Desktop │ │
 │  │  (Port 8080)    │    │                  │ │
 │  │                 │    │  ┌─────────────┐ │ │
 │  │ • Chat (1B)     │    │  │ Research    │ │ │
@@ -190,7 +190,7 @@ watch -n 1 "nvidia-smi; echo '---'; curl -s http://localhost:8001/api/monitoring
 
 ### NPU Worker Handles:
 - **Chat conversations** (1B model) → 0.5-1.5s response
-- **Text embeddings** → 10-50ms per text  
+- **Text embeddings** → 10-50ms per text
 - **System commands** → Fast NLP processing
 - **Text classification** → <100ms processing
 
@@ -254,7 +254,7 @@ docker stats
 - Batch small requests when possible
 - Monitor thermal throttling
 
-### GPU Optimization  
+### GPU Optimization
 - Reserve GPU memory efficiently
 - Use tensor parallelism for large models
 - Implement model swapping for memory management
