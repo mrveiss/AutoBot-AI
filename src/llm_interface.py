@@ -392,7 +392,7 @@ class LLMInterface:
 
         llm_params = {"temperature": settings.get("temperature", 0.7), **kwargs}
 
-        if llm_type == "orchestrator" and model_alias.startswith("ollama_"):
+        if llm_type == "orchestrator" and (model_alias.startswith("ollama_") or not any(model_alias.startswith(prefix) for prefix in ["ollama_", "openai_", "transformers_"])):
             llm_params["structured_output"] = True
 
         if model_alias.startswith("ollama_"):
@@ -408,7 +408,11 @@ class LLMInterface:
                 model_name, messages, **llm_params
             )
         else:
-            raise ValueError(f"Unsupported LLM model type: {model_name}")
+            # Default to Ollama for models without prefix (like artifish/llama3.2-uncensored:latest)
+            logger.info(f"Model '{model_alias}' has no prefix, defaulting to Ollama provider")
+            return await self._ollama_chat_completion(
+                model_name, messages, **llm_params
+            )
 
     async def _ollama_chat_completion(
         self,
