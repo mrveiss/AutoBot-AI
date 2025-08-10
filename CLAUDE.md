@@ -45,7 +45,9 @@ src/
 
 backend/api/
 ├── chat.py             # 💬 API - Chat endpoints
+├── workflow.py         # 🔄 API - Multi-agent workflow orchestration
 ├── goal.py            # 🎯 API - Task planning
+├── websockets.py      # 📡 API - Real-time workflow updates
 └── knowledge_base.py  # 🔍 API - KB operations
 ```
 
@@ -79,6 +81,129 @@ npm run lint         # ESLint + oxlint
 npm run format       # Prettier
 npm run type-check   # TypeScript validation
 npm run test:unit    # Vitest tests
+```
+
+## 🔄 MULTI-AGENT WORKFLOW ORCHESTRATION
+
+### Workflow System Overview
+AutoBot now features comprehensive multi-agent workflow orchestration that intelligently coordinates specialized agents instead of providing generic responses.
+
+**Transformation Example:**
+- **Before**: "find tools for network scanning" → "Port Scanner, Sniffing Software, Password Cracking Tools"
+- **After**: 8-step coordinated workflow with research, knowledge management, user approvals, and system operations
+
+### Workflow API Endpoints
+```bash
+# Core workflow orchestration endpoints
+GET    /api/workflow/workflows                    # List active workflows
+POST   /api/workflow/execute                      # Execute new workflow
+GET    /api/workflow/workflow/{id}/status         # Get workflow status
+POST   /api/workflow/workflow/{id}/approve        # Approve workflow steps
+DELETE /api/workflow/workflow/{id}                # Cancel workflow
+GET    /api/workflow/workflow/{id}/pending_approvals # Get pending approvals
+```
+
+### Testing Workflow Orchestration
+```bash
+# Test workflow API endpoints
+python3 test_workflow_api.py
+
+# Test end-to-end workflow execution
+python3 test_complete_system.py
+
+# Test live workflow coordination
+python3 test_live_workflow.py
+
+# Verify backend workflow integration
+python3 verify_backend_config.py
+```
+
+### Workflow Types and Classification
+1. **Simple** - Direct conversational responses (e.g., "What is 2+2?")
+2. **Research** - Web research + knowledge base storage
+3. **Install** - System commands and installation workflows
+4. **Complex** - Full 8-step multi-agent coordination
+
+### Example Complex Workflow: Network Scanning Tools
+```
+🎯 Classification: complex
+🤖 Agents: research, librarian, knowledge_manager, system_commands, orchestrator
+⏱️  Duration: 3 minutes
+👤 Approvals: 2
+
+📋 Workflow Steps:
+   1. Librarian: Search Knowledge Base
+   2. Research: Research Tools
+   3. Orchestrator: Present Tool Options (requires approval)
+   4. Research: Get Installation Guide
+   5. Knowledge_Manager: Store Tool Info
+   6. Orchestrator: Create Install Plan (requires approval)
+   7. System_Commands: Install Tool
+   8. System_Commands: Verify Installation
+```
+
+### Frontend Workflow Components
+```vue
+<!-- Main workflow integration in ChatInterface.vue -->
+<WorkflowProgressWidget
+  v-if="activeWorkflowId"
+  :workflow-id="activeWorkflowId"
+  @open-full-view="openFullWorkflowView"
+  @workflow-cancelled="onWorkflowCancelled"
+/>
+
+<WorkflowApproval /> <!-- Full workflow management dashboard -->
+```
+
+### WebSocket Workflow Events
+```javascript
+// Workflow event types for real-time updates
+workflow_step_started    // Step execution begins
+workflow_step_completed  // Step finished successfully
+workflow_approval_required // User approval needed
+workflow_completed      // All steps finished
+workflow_failed        // Error occurred
+```
+
+### Development Guidelines for Workflow Features
+
+#### Adding New Workflow Steps
+```python
+# In src/orchestrator.py - plan_workflow_steps()
+WorkflowStep(
+    id="new_step_id",
+    agent_type="agent_name",
+    action="action_description",
+    inputs={"param": "value"},
+    user_approval_required=False,  # Set True for approval steps
+    dependencies=["previous_step_id"]  # Optional dependencies
+)
+```
+
+#### Adding New Agent Types
+```python
+# 1. Register in src/orchestrator.py agent_registry
+self.agent_registry = {
+    "new_agent": "Agent description and capabilities"
+}
+
+# 2. Implement in backend/api/workflow.py execute_single_step()
+elif agent_type == "new_agent":
+    # Agent implementation
+    result = await new_agent_implementation(step, orchestrator)
+    return result
+```
+
+#### Testing New Workflows
+```python
+# Add test cases in test_workflow_orchestration.py
+def test_new_workflow_type():
+    orchestrator = Orchestrator()
+    complexity = orchestrator.classify_request_complexity("new request type")
+    assert complexity == TaskComplexity.NEW_TYPE
+
+    steps = orchestrator.plan_workflow_steps("test request", complexity)
+    assert len(steps) > 0
 ```
 
 ## 🏗️ CODE QUALITY REQUIREMENTS
