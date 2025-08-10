@@ -9,8 +9,10 @@ from typing import Dict, Any, List
 from enum import Enum
 from dataclasses import dataclass
 
+
 class TaskType(Enum):
     """Types of tasks suitable for NPU processing."""
+
     CHAT_INFERENCE = "chat_inference"
     EMBEDDING_GENERATION = "embedding_generation"
     LIGHTWEIGHT_REASONING = "lightweight_reasoning"
@@ -18,29 +20,32 @@ class TaskType(Enum):
     SENTIMENT_ANALYSIS = "sentiment_analysis"
     SMALL_MODEL_INFERENCE = "small_model_inference"
 
+
 @dataclass
 class NPUTask:
     """NPU task definition."""
+
     task_id: str
     task_type: TaskType
     model_name: str
     input_data: Dict[str, Any]
     priority: int = 1
     timeout_seconds: int = 30
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'task_id': self.task_id,
-            'task_type': self.task_type.value,
-            'model_name': self.model_name,
-            'input_data': self.input_data,
-            'priority': self.priority,
-            'timeout_seconds': self.timeout_seconds
+            "task_id": self.task_id,
+            "task_type": self.task_type.value,
+            "model_name": self.model_name,
+            "input_data": self.input_data,
+            "priority": self.priority,
+            "timeout_seconds": self.timeout_seconds,
         }
+
 
 class NPUWorkerArchitecture:
     """Design for Native NPU Worker architecture."""
-    
+
     def __init__(self):
         self.architecture = {
             "overview": {
@@ -52,16 +57,16 @@ class NPUWorkerArchitecture:
                     "Access to Intel NPU hardware acceleration",
                     "Optimal task distribution (NPU for small models, GPU for large)",
                     "Maintains WSL2 development environment",
-                    "True hardware utilization of Intel Core Ultra"
-                ]
+                    "True hardware utilization of Intel Core Ultra",
+                ],
             },
             "components": self.get_components(),
             "task_distribution": self.get_task_distribution(),
             "communication_protocol": self.get_communication_protocol(),
             "deployment_strategy": self.get_deployment_strategy(),
-            "performance_optimization": self.get_performance_optimization()
+            "performance_optimization": self.get_performance_optimization(),
         }
-    
+
     def get_components(self) -> Dict[str, Any]:
         """Define system components."""
         return {
@@ -70,41 +75,41 @@ class NPUWorkerArchitecture:
                 "components": [
                     "AutoBot Orchestrator (main coordinator)",
                     "FastAPI Backend (web interface)",
-                    "Vue Frontend (user interface)", 
+                    "Vue Frontend (user interface)",
                     "Redis (task queue + data storage)",
                     "GPU-based agents (RAG, Research, Large models)",
                     "System Commands Agent",
                     "File Manager",
-                    "ChromaDB (vector database)"
+                    "ChromaDB (vector database)",
                 ],
                 "models": [
                     "artifish/llama3.2-uncensored:latest (2.2GB) - GPU",
                     "deepseek-r1:14b (8.4GB) - GPU for complex reasoning",
-                    "llama3.2:3b-instruct-q4_K_M (2GB) - GPU backup"
-                ]
+                    "llama3.2:3b-instruct-q4_K_M (2GB) - GPU backup",
+                ],
             },
             "windows_npu_worker": {
                 "role": "Fast, efficient small model inference",
                 "components": [
                     "NPU Task Processor",
-                    "OpenVINO NPU Runtime", 
+                    "OpenVINO NPU Runtime",
                     "Task Queue Client (Redis connection)",
                     "Model Cache Manager",
-                    "Health Monitor"
+                    "Health Monitor",
                 ],
                 "models": [
                     "llama3.2:1b-instruct-q4_K_M (807MB) - Chat Agent",
                     "nomic-embed-text (274MB) - Embeddings",
-                    "Custom NPU-optimized models"
+                    "Custom NPU-optimized models",
                 ],
                 "hardware": [
                     "Intel Core Ultra 9 185H NPU",
                     "OpenVINO NPU plugin",
-                    "Native Windows NPU drivers"
-                ]
-            }
+                    "Native Windows NPU drivers",
+                ],
+            },
         }
-    
+
     def get_task_distribution(self) -> Dict[str, Any]:
         """Define which tasks go to which system."""
         return {
@@ -112,18 +117,18 @@ class NPUWorkerArchitecture:
                 "description": "Fast, lightweight tasks ideal for NPU",
                 "task_types": [
                     "Chat conversations (1B model)",
-                    "Text embeddings generation", 
+                    "Text embeddings generation",
                     "System command understanding",
                     "Quick knowledge retrieval queries",
                     "Text classification/sentiment",
-                    "Simple Q&A tasks"
+                    "Simple Q&A tasks",
                 ],
                 "characteristics": [
                     "Model size < 2GB",
                     "Response time < 2 seconds required",
                     "High frequency, low complexity",
-                    "Power-efficient processing needed"
-                ]
+                    "Power-efficient processing needed",
+                ],
             },
             "wsl2_gpu_tasks": {
                 "description": "Complex, resource-intensive tasks",
@@ -133,14 +138,14 @@ class NPUWorkerArchitecture:
                     "Complex reasoning (14B models)",
                     "Code generation/analysis",
                     "Multi-document synthesis",
-                    "Vector database operations"
+                    "Vector database operations",
                 ],
                 "characteristics": [
                     "Model size > 2GB",
                     "Complex multi-step reasoning",
                     "Parallel processing beneficial",
-                    "Memory-intensive operations"
-                ]
+                    "Memory-intensive operations",
+                ],
             },
             "routing_logic": {
                 "decision_factors": [
@@ -148,21 +153,21 @@ class NPUWorkerArchitecture:
                     "Expected response time",
                     "Task complexity",
                     "Available hardware capacity",
-                    "Power consumption preference"
+                    "Power consumption preference",
                 ],
-                "fallback_strategy": "WSL2 GPU handles NPU tasks if NPU unavailable"
-            }
+                "fallback_strategy": "WSL2 GPU handles NPU tasks if NPU unavailable",
+            },
         }
-    
+
     def get_communication_protocol(self) -> Dict[str, Any]:
         """Define communication between WSL2 and NPU worker."""
         return {
             "redis_queue_system": {
                 "queue_names": [
                     "npu_tasks_pending",
-                    "npu_tasks_processing", 
+                    "npu_tasks_processing",
                     "npu_tasks_completed",
-                    "npu_tasks_failed"
+                    "npu_tasks_failed",
                 ],
                 "message_format": {
                     "task_id": "uuid4",
@@ -172,8 +177,8 @@ class NPUWorkerArchitecture:
                     "priority": "int (1-10)",
                     "timeout_seconds": "int",
                     "created_at": "ISO timestamp",
-                    "worker_id": "string"
-                }
+                    "worker_id": "string",
+                },
             },
             "http_api": {
                 "npu_worker_endpoints": [
@@ -181,10 +186,10 @@ class NPUWorkerArchitecture:
                     "GET /npu/health - Worker health status",
                     "GET /npu/models - Available NPU models",
                     "POST /npu/model/load - Load specific model",
-                    "GET /npu/stats - Performance statistics"
+                    "GET /npu/stats - Performance statistics",
                 ],
                 "authentication": "API key or JWT tokens",
-                "network": "Host network bridge (WSL2 ↔ Windows)"
+                "network": "Host network bridge (WSL2 ↔ Windows)",
             },
             "monitoring": {
                 "heartbeat_interval": "10 seconds",
@@ -194,11 +199,11 @@ class NPUWorkerArchitecture:
                     "Task processing time",
                     "Queue depth",
                     "Error rate",
-                    "Power consumption"
-                ]
-            }
+                    "Power consumption",
+                ],
+            },
         }
-    
+
     def get_deployment_strategy(self) -> Dict[str, Any]:
         """Deployment and setup strategy."""
         return {
@@ -209,15 +214,15 @@ class NPUWorkerArchitecture:
                     "3. Deploy NPU worker service",
                     "4. Configure Windows service auto-start",
                     "5. Setup Redis client connection to WSL2",
-                    "6. Pull and optimize NPU models"
+                    "6. Pull and optimize NPU models",
                 ],
                 "wsl2_system": [
                     "1. Configure Redis for external connections",
                     "2. Add NPU worker client to orchestrator",
                     "3. Update task routing logic",
                     "4. Configure firewall rules",
-                    "5. Test hybrid communication"
-                ]
+                    "5. Test hybrid communication",
+                ],
             },
             "network_configuration": {
                 "wsl2_redis_bind": "0.0.0.0:6379 (accessible from Windows)",
@@ -225,20 +230,20 @@ class NPUWorkerArchitecture:
                 "security": "Redis AUTH + API keys",
                 "firewall_rules": [
                     "Allow WSL2 ↔ Windows host communication",
-                    "Block external Redis access"
-                ]
+                    "Block external Redis access",
+                ],
             },
             "model_distribution": {
                 "strategy": "Pull models on both systems",
                 "npu_models": [
                     "ollama pull llama3.2:1b-instruct-q4_K_M",
                     "ollama pull nomic-embed-text",
-                    "Convert to OpenVINO NPU format"
+                    "Convert to OpenVINO NPU format",
                 ],
-                "synchronization": "Version tracking in Redis"
-            }
+                "synchronization": "Version tracking in Redis",
+            },
         }
-    
+
     def get_performance_optimization(self) -> Dict[str, Any]:
         """Performance optimization strategies."""
         return {
@@ -247,72 +252,73 @@ class NPUWorkerArchitecture:
                 "quantization": "INT8 for maximum NPU efficiency",
                 "batch_processing": "Process multiple small requests together",
                 "model_caching": "Keep 1B and embedding models resident",
-                "memory_management": "Efficient NPU memory usage"
+                "memory_management": "Efficient NPU memory usage",
             },
             "load_balancing": {
                 "strategy": "Least-loaded worker selection",
                 "failover": "GPU takes over if NPU overwhelmed",
                 "priority_queuing": "High-priority tasks first",
-                "circuit_breaker": "Disable NPU if error rate > 10%"
+                "circuit_breaker": "Disable NPU if error rate > 10%",
             },
             "monitoring_integration": {
                 "metrics_collection": [
                     "NPU utilization via Intel tools",
                     "Task completion time",
-                    "Queue wait time", 
+                    "Queue wait time",
                     "Power consumption",
-                    "Thermal throttling events"
+                    "Thermal throttling events",
                 ],
                 "alerts": [
                     "NPU worker disconnected",
                     "High error rate",
                     "Queue backlog",
-                    "Performance degradation"
-                ]
+                    "Performance degradation",
+                ],
             },
             "expected_performance": {
                 "chat_response_time": "0.5-1.5 seconds (vs 2-4s on CPU)",
                 "embedding_generation": "10-50ms per text (vs 100-200ms)",
                 "power_efficiency": "5-10W NPU vs 50-100W GPU",
                 "concurrent_requests": "2-4 simultaneous on NPU",
-                "availability": "99.9% with GPU fallback"
-            }
+                "availability": "99.9% with GPU fallback",
+            },
         }
-    
+
     def generate_architecture_file(self) -> str:
         """Generate comprehensive architecture documentation."""
         return json.dumps(self.architecture, indent=2, default=str)
-    
+
     def print_summary(self):
         """Print architecture summary."""
         print("🏗️  AutoBot Hybrid NPU Worker Architecture")
         print("=" * 60)
         print("\n📋 Concept:")
         print(f"   {self.architecture['overview']['concept']}")
-        
+
         print("\n🎯 Benefits:")
-        for benefit in self.architecture['overview']['benefits']:
+        for benefit in self.architecture["overview"]["benefits"]:
             print(f"   ✅ {benefit}")
-        
+
         print("\n🔄 Task Distribution:")
-        npu_tasks = self.architecture['task_distribution']['npu_worker_tasks']
+        npu_tasks = self.architecture["task_distribution"]["npu_worker_tasks"]
         print(f"   NPU Worker: {', '.join(npu_tasks['task_types'][:3])}...")
-        
-        gpu_tasks = self.architecture['task_distribution']['wsl2_gpu_tasks'] 
+
+        gpu_tasks = self.architecture["task_distribution"]["wsl2_gpu_tasks"]
         print(f"   WSL2 GPU: {', '.join(gpu_tasks['task_types'][:3])}...")
-        
+
         print("\n⚡ Expected Performance:")
-        perf = self.architecture['performance_optimization']['expected_performance']
+        perf = self.architecture["performance_optimization"]["expected_performance"]
         print(f"   Chat Response: {perf['chat_response_time']}")
         print(f"   Power Usage: {perf['power_efficiency']}")
         print(f"   Availability: {perf['availability']}")
 
+
 if __name__ == "__main__":
     architecture = NPUWorkerArchitecture()
     architecture.print_summary()
-    
+
     # Generate full architecture file
-    with open('/home/kali/Desktop/AutoBot/NPU_WORKER_ARCHITECTURE.json', 'w') as f:
+    with open("/home/kali/Desktop/AutoBot/NPU_WORKER_ARCHITECTURE.json", "w") as f:
         f.write(architecture.generate_architecture_file())
-    
+
     print(f"\n📄 Full architecture saved to NPU_WORKER_ARCHITECTURE.json")
