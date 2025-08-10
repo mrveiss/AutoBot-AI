@@ -102,6 +102,36 @@ async def websocket_endpoint(websocket: WebSocket):
                 text = f"Diagnostics Report: {json.dumps(raw_data, indent=2)}"
             elif message_type == "user_permission_request":
                 text = f"User Permission Request: {json.dumps(raw_data, indent=2)}"
+            elif message_type == "workflow_step_started":
+                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+                step_desc = raw_data.get("description", "N/A")
+                text = f"🔄 Workflow {workflow_id}: Started step - {step_desc}"
+                sender = "workflow"
+            elif message_type == "workflow_step_completed":
+                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+                step_desc = raw_data.get("description", "N/A")
+                result = raw_data.get("result", "Completed")
+                text = f"✅ Workflow {workflow_id}: Completed step - {step_desc}. Result: {result}"
+                sender = "workflow"
+            elif message_type == "workflow_approval_required":
+                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+                step_desc = raw_data.get("description", "N/A")
+                text = f"⏸️ Workflow {workflow_id}: Approval required for - {step_desc}"
+                sender = "workflow"
+            elif message_type == "workflow_completed":
+                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+                total_steps = raw_data.get("total_steps", 0)
+                text = f"🎉 Workflow {workflow_id}: Completed successfully with {total_steps} steps"
+                sender = "workflow"
+            elif message_type == "workflow_failed":
+                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+                error = raw_data.get("error", "Unknown error")
+                text = f"❌ Workflow {workflow_id}: Failed - {error}"
+                sender = "workflow-error"
+            elif message_type == "workflow_cancelled":
+                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+                text = f"🛑 Workflow {workflow_id}: Cancelled by user"
+                sender = "workflow"
 
             # Add to chat history if we have meaningful text
             if text:

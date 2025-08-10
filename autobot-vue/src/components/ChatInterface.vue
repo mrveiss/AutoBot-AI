@@ -150,18 +150,45 @@
       @update:collapsed="terminalSidebarCollapsed = $event"
       @open-new-tab="openTerminalInNewTab"
     />
+    
+    <!-- Workflow Progress Widget (floating) -->
+    <WorkflowProgressWidget
+      v-if="activeWorkflowId"
+      :workflow-id="activeWorkflowId"
+      @open-full-view="openFullWorkflowView"
+      @workflow-cancelled="onWorkflowCancelled"
+    />
+    
+    <!-- Workflow Approval Modal -->
+    <div v-if="showWorkflowApproval" class="workflow-modal-overlay" @click="showWorkflowApproval = false">
+      <div class="workflow-modal" @click.stop>
+        <div class="modal-header">
+          <h2>Workflow Management</h2>
+          <button @click="showWorkflowApproval = false" class="close-btn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-content">
+          <WorkflowApproval />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import TerminalSidebar from './TerminalSidebar.vue';
+import WorkflowApproval from './WorkflowApproval.vue';
+import WorkflowProgressWidget from './WorkflowProgressWidget.vue';
 import apiClient from '../utils/ApiClient.js';
 
 export default {
   name: 'ChatInterface',
   components: {
-    TerminalSidebar
+    TerminalSidebar,
+    WorkflowApproval,
+    WorkflowProgressWidget
   },
   setup() {
     // Reactive state
@@ -177,15 +204,20 @@ export default {
     const reloadNeeded = ref(false);
     const chatMessages = ref(null);
     const attachedFiles = ref([]);
+    
+    // Workflow state
+    const activeWorkflowId = ref(null);
+    const showWorkflowApproval = ref(false);
+    const websocket = ref(null);
 
     // Settings
     const settings = ref({
       message_display: {
-        show_thoughts: true,
         show_json: false,
-        show_utility: false,
         show_planning: true,
-        show_debug: false
+        show_debug: false,
+        show_thoughts: true,
+        show_utility: false
       },
       chat: {
         auto_scroll: true
@@ -510,28 +542,57 @@ export default {
           messageData.attachments = uploadedFilePaths;
         }
 
-        // Send to backend
-        const response = await fetch(`http://localhost:8001/api/chats/${currentChatId.value}/message`, {
+        // Check if this should use workflow orchestration
+        const workflowResponse = await fetch('http://localhost:8001/api/workflow/execute', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(messageData),
+          body: JSON.stringify({
+            user_message: userInput,
+            auto_approve: false
+          }),
         });
 
-        if (response.ok) {
-          const result = await response.json();
+        if (workflowResponse.ok) {
+          const workflowResult = await workflowResponse.json();
+          
+          if (workflowResult.type === 'workflow_orchestration') {
+            // Workflow orchestration triggered
+            activeWorkflowId.value = workflowResult.workflow_id;
+            
+            messages.value.push({
+              sender: 'bot',
+              text: `🔄 Workflow orchestration started for your request. I've broken this down into ${workflowResult.workflow_response.workflow_preview.length} coordinated steps involving multiple agents.`,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'workflow'
+            });
+            
+            // Show workflow details
+            if (workflowResult.workflow_response.workflow_preview) {
+              const stepsList = workflowResult.workflow_response.workflow_preview
+                .map((step, i) => `${i + 1}. ${step}`)
+                .join('\n');
+              
+              messages.value.push({
+                sender: 'bot',
+                text: `**Workflow Steps:**\n${stepsList}`,
+                timestamp: new Date().toLocaleTimeString(),
+                type: 'planning'
+              });
+            }
+          } else {
+            // Direct execution
+            const responseText = workflowResult.result?.response || workflowResult.result?.response_text || 'No response received';
+            const messageType = determineMessageType(responseText);
 
-          // Process the response to determine message type and content
-          const responseText = result.response || result.response_text || 'No response received';
-          const messageType = determineMessageType(responseText);
-
-          messages.value.push({
-            sender: 'bot',
-            text: responseText,
-            timestamp: new Date().toLocaleTimeString(),
-            type: messageType
-          });
+            messages.value.push({
+              sender: 'bot',
+              text: responseText,
+              timestamp: new Date().toLocaleTimeString(),
+              type: messageType
+            });
+          }
         } else {
           messages.value.push({
             sender: 'bot',
@@ -772,6 +833,112 @@ export default {
       console.log('Opening terminal in new tab...');
     };
 
+    // Workflow methods
+    const openFullWorkflowView = (view) => {
+      if (view === 'approvals' || view === 'workflow') {
+        showWorkflowApproval.value = true;
+      }
+    };
+
+    const onWorkflowCancelled = (workflowId) => {
+      if (activeWorkflowId.value === workflowId) {
+        activeWorkflowId.value = null;
+      }
+      messages.value.push({
+        sender: 'bot',
+        text: `❌ Workflow ${workflowId} has been cancelled.`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'system'
+      });
+    };
+
+    // WebSocket methods
+    const connectWebSocket = () => {
+      const wsUrl = `ws://localhost:8001/ws`;
+      websocket.value = new WebSocket(wsUrl);
+      
+      websocket.value.onopen = () => {
+        console.log('WebSocket connected for workflow updates');
+      };
+      
+      websocket.value.onmessage = (event) => {
+        try {
+          const eventData = JSON.parse(event.data);
+          handleWebSocketEvent(eventData);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      };
+      
+      websocket.value.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+      
+      websocket.value.onclose = () => {
+        console.log('WebSocket disconnected, attempting to reconnect...');
+        setTimeout(connectWebSocket, 3000);
+      };
+    };
+
+    const handleWebSocketEvent = (eventData) => {
+      const eventType = eventData.type;
+      const payload = eventData.payload;
+      
+      if (eventType.startsWith('workflow_')) {
+        // Handle workflow events
+        if (eventType === 'workflow_step_started') {
+          messages.value.push({
+            sender: 'workflow',
+            text: `🔄 Started: ${payload.description}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'workflow'
+          });
+        } else if (eventType === 'workflow_step_completed') {
+          messages.value.push({
+            sender: 'workflow',
+            text: `✅ Completed: ${payload.description}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'workflow'
+          });
+        } else if (eventType === 'workflow_approval_required') {
+          activeWorkflowId.value = payload.workflow_id;
+          messages.value.push({
+            sender: 'workflow',
+            text: `⏸️ Approval Required: ${payload.description}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'workflow'
+          });
+        } else if (eventType === 'workflow_completed') {
+          messages.value.push({
+            sender: 'workflow',
+            text: `🎉 Workflow completed successfully! (${payload.total_steps} steps)`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'workflow'
+          });
+          if (activeWorkflowId.value === payload.workflow_id) {
+            activeWorkflowId.value = null;
+          }
+        } else if (eventType === 'workflow_failed') {
+          messages.value.push({
+            sender: 'workflow',
+            text: `❌ Workflow failed: ${payload.error}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'workflow'
+          });
+          if (activeWorkflowId.value === payload.workflow_id) {
+            activeWorkflowId.value = null;
+          }
+        }
+        
+        // Auto-scroll to show new workflow updates
+        nextTick(() => {
+          if (chatMessages.value && settings.value.chat.auto_scroll) {
+            chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+          }
+        });
+      }
+    };
+
     // Initialize
     onMounted(async () => {
       // Load settings from localStorage
@@ -783,6 +950,9 @@ export default {
           console.error('Failed to load settings:', e);
         }
       }
+
+      // Connect WebSocket for real-time updates
+      connectWebSocket();
 
       // Load chat list first
       await refreshChatList();
@@ -797,6 +967,13 @@ export default {
       } else {
         // Create new chat only if no chats exist
         await newChat();
+      }
+    });
+
+    // Cleanup
+    onUnmounted(() => {
+      if (websocket.value) {
+        websocket.value.close();
       }
     });
 
@@ -830,7 +1007,15 @@ export default {
       attachedFiles,
       handleFileAttachment,
       removeAttachment,
-      getFileIcon
+      getFileIcon,
+      // Workflow handling
+      activeWorkflowId,
+      showWorkflowApproval,
+      openFullWorkflowView,
+      onWorkflowCancelled,
+      // WebSocket
+      connectWebSocket,
+      handleWebSocketEvent
     };
   }
 };
@@ -1049,5 +1234,74 @@ export default {
 
 .btn-secondary:hover {
   background-color: #4b5563;
+}
+
+/* Workflow modal styles */
+.workflow-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.workflow-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 1200px;
+  max-height: 90%;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.close-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.modal-content {
+  height: calc(90vh - 80px);
+  overflow-y: auto;
+}
+
+/* Workflow message type */
+.message-content[data-type="workflow"] {
+  background-color: #eff6ff;
+  border: 1px solid #3b82f6;
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  color: #1e40af;
 }
 </style>
