@@ -70,10 +70,12 @@ check_python_module "src.agents.agent_orchestrator" "Agent Orchestrator"
 # Ollama models
 echo -e "\n${BLUE}🦙 Ollama Models${NC}"
 if command -v ollama &>/dev/null; then
-    check_item "Llama 3.2 1B model" "ollama list | grep -E 'llama3.2.*1b'"
-    check_item "Llama 3.2 3B model" "ollama list | grep -E 'llama3.2.*3b'"
+    check_item "Uncensored 1B model" "ollama list | grep 'artifish/llama3.2-uncensored:1b'"
+    check_item "Uncensored 3B model" "ollama list | grep 'artifish/llama3.2-uncensored:3b'"
+    check_item "General uncensored model" "ollama list | grep 'artifish/llama3.2-uncensored'"
     check_item "Nomic embeddings model" "ollama list | grep 'nomic-embed-text'"
-    check_item "Backup model available" "ollama list | grep 'artifish/llama3.2-uncensored'"
+    check_item "Fallback 1B model" "ollama list | grep -E 'llama3.2.*1b'"
+    check_item "Fallback 3B model" "ollama list | grep -E 'llama3.2.*3b'"
 else
     echo "⚠️  Ollama not available - skipping model checks"
 fi

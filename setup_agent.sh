@@ -446,46 +446,50 @@ install_ollama_model() {
     done
 }
 
-# Install required models for multi-agent architecture
-echo "🎯 Installing models as per multi-agent architecture requirements..."
+# Install required uncensored models for multi-agent architecture
+echo "🎯 Installing uncensored models for unrestricted multi-agent capabilities..."
 
-# Core models for the architecture
-install_ollama_model "llama3.2:1b-instruct-q4_K_M" "Chat Agent & System Commands Agent (Llama 3.2 1B)"
-install_ollama_model "llama3.2:3b-instruct-q4_K_M" "Orchestrator & RAG Agent (Llama 3.2 3B)"
+# Primary uncensored models for the architecture
+install_ollama_model "artifish/llama3.2-uncensored:1b" "Chat Agent & System Commands Agent (Llama 3.2 1B Uncensored)"
+install_ollama_model "artifish/llama3.2-uncensored:3b" "Orchestrator & RAG Agent (Llama 3.2 3B Uncensored)"
 
-# Embedding model for knowledge base
+# Embedding model for knowledge base (no uncensored variant needed)
 install_ollama_model "nomic-embed-text:latest" "Knowledge Base Embeddings"
 
-# Fallback models (if specific quantized versions not available)
-if ! ollama list | grep -q "llama3.2:1b-instruct-q4_K_M"; then
-    echo "⚠️ Specific 1B quantized model not available, trying alternatives..."
-    install_ollama_model "llama3.2:1b" "Fallback Chat Agent (Llama 3.2 1B)"
+# Fallback: Try general uncensored model if specific sizes not available
+if ! ollama list | grep -q "artifish/llama3.2-uncensored:1b"; then
+    echo "⚠️ Specific 1B uncensored model not available, trying general uncensored..."
+    install_ollama_model "artifish/llama3.2-uncensored:latest" "General Uncensored Model (will use for 1B tasks)"
 fi
 
-if ! ollama list | grep -q "llama3.2:3b-instruct-q4_K_M"; then
-    echo "⚠️ Specific 3B quantized model not available, trying alternatives..."
-    install_ollama_model "llama3.2:3b" "Fallback Orchestrator (Llama 3.2 3B)"
+if ! ollama list | grep -q "artifish/llama3.2-uncensored:3b"; then
+    echo "⚠️ Specific 3B uncensored model not available, trying general uncensored..."
+    if ! ollama list | grep -q "artifish/llama3.2-uncensored:latest"; then
+        install_ollama_model "artifish/llama3.2-uncensored:latest" "General Uncensored Model (will use for 3B tasks)"
+    fi
 fi
 
-# Optional: Install backup models for compatibility
-echo "🔄 Installing backup models for compatibility..."
-install_ollama_model "artifish/llama3.2-uncensored:latest" "Backup General Purpose Model"
+# Install standard models as ultimate fallback only
+echo "🔄 Installing standard models as ultimate fallback..."
+install_ollama_model "llama3.2:1b-instruct-q4_K_M" "Standard 1B Fallback"
+install_ollama_model "llama3.2:3b-instruct-q4_K_M" "Standard 3B Fallback"
 
 # Verify model installation
 echo "🔍 Verifying installed models..."
 ollama list
 
-# Test model functionality
-echo "🧪 Testing model functionality..."
-echo "Testing 1B model for chat agent..."
-echo "Hello, test!" | ollama run llama3.2:1b-instruct-q4_K_M >/dev/null 2>&1 || \
-echo "Hello, test!" | ollama run llama3.2:1b >/dev/null 2>&1 || \
+# Test model functionality with uncensored models first
+echo "🧪 Testing uncensored model functionality..."
+echo "Testing 1B uncensored model for chat agent..."
+echo "Hello, test!" | ollama run artifish/llama3.2-uncensored:1b >/dev/null 2>&1 || \
 echo "Hello, test!" | ollama run artifish/llama3.2-uncensored:latest >/dev/null 2>&1 || \
+echo "Hello, test!" | ollama run llama3.2:1b-instruct-q4_K_M >/dev/null 2>&1 || \
 echo "⚠️ Warning: 1B model test failed"
 
-echo "Testing 3B model for orchestrator..."
+echo "Testing 3B uncensored model for orchestrator..."
+echo "Plan a simple task" | ollama run artifish/llama3.2-uncensored:3b >/dev/null 2>&1 || \
+echo "Plan a simple task" | ollama run artifish/llama3.2-uncensored:latest >/dev/null 2>&1 || \
 echo "Plan a simple task" | ollama run llama3.2:3b-instruct-q4_K_M >/dev/null 2>&1 || \
-echo "Plan a simple task" | ollama run llama3.2:3b >/dev/null 2>&1 || \
 echo "⚠️ Warning: 3B model test failed"
 
 echo "✅ Ollama model installation and verification completed!"

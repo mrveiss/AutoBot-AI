@@ -38,15 +38,17 @@ This will:
 
 ## Multi-Agent Models Required
 
-The setup script will automatically download:
+The setup script will automatically download uncensored models for unrestricted capabilities:
 
-### Core Models
-- **llama3.2:1b-instruct-q4_K_M** - Chat Agent & System Commands (1.2GB)
-- **llama3.2:3b-instruct-q4_K_M** - Orchestrator & RAG Agent (3.5GB)
+### Core Uncensored Models
+- **artifish/llama3.2-uncensored:1b** - Chat Agent & System Commands (1.2GB)
+- **artifish/llama3.2-uncensored:3b** - Orchestrator & RAG Agent (3.5GB)
 - **nomic-embed-text:latest** - Knowledge Base Embeddings (274MB)
 
-### Backup Model
-- **artifish/llama3.2-uncensored:latest** - General fallback (2.0GB)
+### Fallback Models
+- **artifish/llama3.2-uncensored:latest** - General uncensored fallback (2.0GB)
+- **llama3.2:1b-instruct-q4_K_M** - Standard 1B fallback (1.2GB)
+- **llama3.2:3b-instruct-q4_K_M** - Standard 3B fallback (3.5GB)
 
 **Total Download Size**: ~7GB
 
@@ -66,17 +68,17 @@ Agent Orchestrator (3B) → Routes requests to specialized agents
 If automatic installation fails:
 
 ```bash
-# Essential models
-ollama pull llama3.2:1b-instruct-q4_K_M
-ollama pull llama3.2:3b-instruct-q4_K_M
+# Essential uncensored models
+ollama pull artifish/llama3.2-uncensored:1b
+ollama pull artifish/llama3.2-uncensored:3b
 ollama pull nomic-embed-text:latest
 
-# Fallback (if quantized versions unavailable)
-ollama pull llama3.2:1b
-ollama pull llama3.2:3b
-
-# Backup model
+# General uncensored fallback
 ollama pull artifish/llama3.2-uncensored:latest
+
+# Standard fallback models (if uncensored not available)
+ollama pull llama3.2:1b-instruct-q4_K_M
+ollama pull llama3.2:3b-instruct-q4_K_M
 ```
 
 ## Configuration Override
@@ -84,10 +86,10 @@ ollama pull artifish/llama3.2-uncensored:latest
 Set specific models via environment variables:
 
 ```bash
-export AUTOBOT_MODEL_CHAT="llama3.2:1b"
-export AUTOBOT_MODEL_ORCHESTRATOR="llama3.2:3b"
-export AUTOBOT_MODEL_RAG="llama3.2:3b"
-export AUTOBOT_MODEL_SYSTEM_COMMANDS="llama3.2:1b"
+export AUTOBOT_MODEL_CHAT="artifish/llama3.2-uncensored:1b"
+export AUTOBOT_MODEL_ORCHESTRATOR="artifish/llama3.2-uncensored:3b"
+export AUTOBOT_MODEL_RAG="artifish/llama3.2-uncensored:3b"
+export AUTOBOT_MODEL_SYSTEM_COMMANDS="artifish/llama3.2-uncensored:1b"
 ```
 
 ## Troubleshooting
@@ -107,10 +109,10 @@ export AUTOBOT_MODEL_SYSTEM_COMMANDS="llama3.2:1b"
 
 3. **Memory issues**
    - Close other applications
-   - Use smaller models:
+   - Use smaller uncensored models:
      ```bash
-     export AUTOBOT_MODEL_ORCHESTRATOR="llama3.2:1b"
-     export AUTOBOT_MODEL_RAG="llama3.2:1b"
+     export AUTOBOT_MODEL_ORCHESTRATOR="artifish/llama3.2-uncensored:1b"
+     export AUTOBOT_MODEL_RAG="artifish/llama3.2-uncensored:1b"
      ```
 
 4. **Docker issues**
