@@ -11,9 +11,9 @@
         Clear All
       </button>
     </div>
-    
+
     <div class="notifications-list">
-      <div 
+      <div
         v-for="notification in notifications"
         :key="notification.id"
         class="notification-item"
@@ -22,22 +22,22 @@
         <div class="notification-icon">
           <i :class="getNotificationIcon(notification.type)"></i>
         </div>
-        
+
         <div class="notification-content">
           <div class="notification-title">{{ notification.title }}</div>
           <div class="notification-message">{{ notification.message }}</div>
           <div class="notification-time">{{ formatTime(notification.timestamp) }}</div>
         </div>
-        
+
         <div class="notification-actions">
-          <button 
+          <button
             v-if="notification.actionRequired"
             @click="handleNotificationAction(notification)"
             class="btn-action"
           >
             {{ notification.actionText }}
           </button>
-          
+
           <button @click="dismissNotification(notification.id)" class="btn-dismiss">
             <i class="fas fa-times"></i>
           </button>
@@ -64,7 +64,7 @@ const eventSource = ref(null)
 const getNotificationIcon = (type) => {
   const icons = {
     'info': 'fas fa-info-circle',
-    'success': 'fas fa-check-circle', 
+    'success': 'fas fa-check-circle',
     'warning': 'fas fa-exclamation-triangle',
     'error': 'fas fa-times-circle',
     'approval': 'fas fa-user-check',
@@ -83,7 +83,7 @@ const addNotification = (notification) => {
     timestamp: Date.now(),
     ...notification
   })
-  
+
   // Auto-remove info notifications after 10 seconds
   if (notification.type === 'info') {
     setTimeout(() => {
@@ -108,7 +108,7 @@ const handleNotificationAction = (notification) => {
     // Handle approval action
     approveWorkflowStep(notification.workflowId, notification.stepId)
   }
-  
+
   dismissNotification(notification.id)
 }
 
@@ -120,16 +120,16 @@ const approveWorkflowStep = async (workflowId, stepId) => {
       approved: true,
       timestamp: Date.now()
     })
-    
+
     addNotification({
       type: 'success',
       title: 'Step Approved',
       message: `Workflow step ${stepId} has been approved and will continue execution.`
     })
-    
+
   } catch (error) {
     addNotification({
-      type: 'error', 
+      type: 'error',
       title: 'Approval Failed',
       message: `Failed to approve workflow step: ${error.message}`
     })
@@ -146,15 +146,15 @@ const startNotificationPolling = () => {
       message: 'Network scanning tool research workflow has begun.'
     })
   }, 2000)
-  
+
   setTimeout(() => {
     addNotification({
       type: 'progress',
-      title: 'Research In Progress', 
+      title: 'Research In Progress',
       message: 'Searching for network scanning tools...'
     })
   }, 5000)
-  
+
   setTimeout(() => {
     addNotification({
       type: 'approval',
