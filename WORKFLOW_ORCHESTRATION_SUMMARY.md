@@ -18,7 +18,7 @@ The user identified a critical gap in AutoBot: agents were giving generic, unhel
 class TaskComplexity(Enum):
     SIMPLE = "simple"           # Single agent can handle
     RESEARCH = "research"       # Requires web research
-    INSTALL = "install"         # Requires system commands  
+    INSTALL = "install"         # Requires system commands
     COMPLEX = "complex"         # Multi-agent coordination needed
 
 @dataclass
@@ -74,7 +74,7 @@ async def get_installation_guide(tool_name: str):
 ```python
 self.agent_registry = {
     "research": "Web research with Playwright",
-    "librarian": "Knowledge base search and storage", 
+    "librarian": "Knowledge base search and storage",
     "system_commands": "Execute shell commands and installations",
     "rag": "Document analysis and synthesis",
     "knowledge_manager": "Structured information storage",

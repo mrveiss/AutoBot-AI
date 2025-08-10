@@ -26,7 +26,7 @@ python3 test_workflow_api.py
 
 **Expected Results:**
 - ✅ All workflow endpoints operational
-- ✅ Multi-agent orchestration working  
+- ✅ Multi-agent orchestration working
 - ✅ Request classification accurate
 - ✅ Chat integration successful
 
@@ -34,7 +34,7 @@ python3 test_workflow_api.py
 1. Open: `http://localhost:5173`
 2. Navigate to **"Workflows"** tab (new tab added)
 3. Try complex requests in the chat interface:
-   - "find tools for network scanning" 
+   - "find tools for network scanning"
    - "how to install Docker"
    - "research Python web frameworks"
 
@@ -59,7 +59,7 @@ AutoBot: "Port Scanner, Sniffing Software, Password Cracking Tools, Reconnaissan
    3. Orchestrator: Present Tool Options (requires your approval)
    4. Research: Get Installation Guide
    5. Knowledge_Manager: Store Tool Info
-   6. Orchestrator: Create Install Plan (requires your approval)  
+   6. Orchestrator: Create Install Plan (requires your approval)
    7. System_Commands: Install Tool
    8. System_Commands: Verify Installation
 ```
@@ -80,7 +80,7 @@ AutoBot: "Port Scanner, Sniffing Software, Password Cracking Tools, Reconnaissan
 ### **API Endpoints Available:**
 ```
 GET    /api/workflow/workflows                    - List active workflows
-POST   /api/workflow/execute                      - Execute new workflow  
+POST   /api/workflow/execute                      - Execute new workflow
 GET    /api/workflow/workflow/{id}/status         - Get workflow status
 POST   /api/workflow/workflow/{id}/approve        - Approve workflow steps
 DELETE /api/workflow/workflow/{id}                - Cancel workflow
@@ -96,7 +96,7 @@ GET    /api/workflow/workflow/{id}/pending_approvals - Get pending approvals
 
 **Expected:** Direct conversational response, no workflow
 
-### **2. Research Requests (Research Workflow)**  
+### **2. Research Requests (Research Workflow)**
 - "Find information about Python libraries"
 - "What are the best JavaScript frameworks?"
 - "Research machine learning tools"
@@ -105,7 +105,7 @@ GET    /api/workflow/workflow/{id}/pending_approvals - Get pending approvals
 
 ### **3. Installation Requests (Install Workflow)**
 - "How do I install Docker?"
-- "Install Node.js on Ubuntu" 
+- "Install Node.js on Ubuntu"
 - "Setup Python development environment"
 
 **Expected:** Installation workflow with system commands
@@ -131,7 +131,7 @@ Workflow orchestration planned: {...}
 ### **In API Responses:**
 ```json
 {
-  "type": "workflow_orchestration", 
+  "type": "workflow_orchestration",
   "workflow_response": {
     "message_classification": "complex",
     "agents_involved": ["research", "librarian", "orchestrator"],
