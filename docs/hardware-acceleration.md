@@ -15,7 +15,7 @@ This ensures optimal performance while preserving CPU resources for Redis, syste
 - **Power**: Ultra-low power consumption
 
 ### 2. GPU (Graphics Processing Unit) - **MEDIUM PRIORITY**
-- **Optimal for**: 3B models (Orchestrator, RAG, Research agents)  
+- **Optimal for**: 3B models (Orchestrator, RAG, Research agents)
 - **Benefits**: High parallel processing power
 - **Memory Usage**: ~3.5GB per 3B model
 - **Power**: Higher power consumption but fast execution
@@ -34,7 +34,7 @@ This ensures optimal performance while preserving CPU resources for Redis, syste
 | Knowledge Retrieval | 1B | NPU | CPU |
 | System Commands | 1B | NPU | CPU |
 | RAG Agent | 3B | GPU | CPU |
-| Orchestrator | 3B | GPU | CPU |  
+| Orchestrator | 3B | GPU | CPU |
 | Research Agent | 3B | GPU | CPU |
 
 ## Configuration
@@ -65,7 +65,7 @@ The system automatically detects available hardware:
 - OpenVINO NPU support
 - lspci neural/AI hardware
 
-# GPU Detection  
+# GPU Detection
 - nvidia-smi for NVIDIA GPUs
 - rocm-smi for AMD GPUs
 - intel_gpu_top for Intel GPUs
@@ -79,7 +79,7 @@ The system automatically detects available hardware:
 
 ### NPU Optimizations
 - Single-threaded execution for efficiency
-- Minimal memory footprint  
+- Minimal memory footprint
 - OpenVINO integration when available
 - Power-efficient inference
 
@@ -89,7 +89,7 @@ The system automatically detects available hardware:
 - CUDA environment optimization
 - Parallel execution for larger models
 
-### CPU Optimizations  
+### CPU Optimizations
 - NUMA topology awareness
 - Thread count limited to preserve system resources
 - OpenMP/MKL thread management
@@ -131,9 +131,9 @@ rag_config = global_config_manager.get_ollama_runtime_config("rag")
 - Intel NPU drivers installed
 - OpenVINO runtime (optional but recommended)
 
-### For GPU Support  
+### For GPU Support
 - NVIDIA GPU with CUDA support, or
-- AMD GPU with ROCm support, or  
+- AMD GPU with ROCm support, or
 - Intel GPU with Intel GPU drivers
 
 ### Minimum CPU Requirements
@@ -152,12 +152,12 @@ ls /dev/intel_npu*
 python3 -c "from openvino.runtime import Core; print([d for d in Core().available_devices if 'NPU' in d])"
 ```
 
-### GPU Issues  
+### GPU Issues
 ```bash
 # Check NVIDIA GPU
 nvidia-smi
 
-# Check AMD GPU  
+# Check AMD GPU
 rocm-smi --showproductname
 
 # Check Intel GPU
@@ -180,7 +180,7 @@ print(json.dumps(hw.get_device_status(), indent=2))
 The hardware acceleration system seamlessly integrates with the multi-agent architecture:
 
 1. **Automatic Assignment**: Each agent automatically uses its optimal hardware
-2. **Fallback Support**: Graceful fallback to CPU when preferred hardware unavailable  
+2. **Fallback Support**: Graceful fallback to CPU when preferred hardware unavailable
 3. **Resource Management**: CPU cores reserved for Redis and system operations
 4. **Configuration Override**: Environment variables allow manual hardware assignment
 5. **Performance Monitoring**: Real-time hardware utilization tracking
@@ -188,7 +188,7 @@ The hardware acceleration system seamlessly integrates with the multi-agent arch
 ## Benefits
 
 - **⚡ 3-5x faster inference** on NPU for small models
-- **🚀 2-3x faster inference** on GPU for large models  
+- **🚀 2-3x faster inference** on GPU for large models
 - **💾 Reduced memory pressure** on CPU
 - **🔋 Lower power consumption** with NPU utilization
 - **⚖️ Balanced resource allocation** across system components
