@@ -11,38 +11,42 @@ backend:
       providers:
         anthropic:
           api_key: ''
-          endpoint: ''
-          models: []
+          endpoint: https://api.anthropic.com/v1
+          models:
+          - claude-3-sonnet-20240229
+          - claude-3-haiku-20240307
           selected_model: ''
         openai:
           api_key: ''
-          endpoint: ''
-          models: []
+          endpoint: https://api.openai.com/v1
+          models:
+          - gpt-3.5-turbo
+          - gpt-4
           selected_model: ''
     local:
       provider: ollama
       providers:
         lmstudio:
-          endpoint: ''
+          endpoint: http://localhost:1234/v1
           models: []
           selected_model: ''
         ollama:
           endpoint: http://localhost:11434/api/generate
-          models: []
-          selected_model: ''
+          host: http://localhost:11434
+          models:
+          - nomic-embed-text:latest
+          - artifish/llama3.2-uncensored:latest
+          - deepseek-r1:14b
+          selected_model: artifish/llama3.2-uncensored:latest
     provider_type: local
   max_retries: 3
-  ollama_endpoint: http://localhost:11434
-  ollama_model: tinyllama:latest
   reliability_stats_file: ''
   server_host: 0.0.0.0
   server_port: 8001
-  streaming: false
+  streaming: true
   timeout: 60
-  use_phi2: false
 chat:
   auto_scroll: true
-  default_welcome_message: Hello! How can I assist you today?
   max_messages: 100
   message_retention_days: 30
 developer:
