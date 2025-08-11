@@ -7,11 +7,12 @@ import asyncio
 import subprocess
 import time
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 import psutil
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
 import requests
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
@@ -71,15 +72,17 @@ class HardwareMonitor:
                         "memory_total_mb": int(parts[2].strip()),
                         "utilization_percent": int(parts[3].strip()),
                         "temperature_c": int(parts[4].strip()),
-                        "power_draw_w": float(parts[5].strip())
-                        if len(parts) > 5 and parts[5].strip()
-                        else 0,
+                        "power_draw_w": (
+                            float(parts[5].strip())
+                            if len(parts) > 5 and parts[5].strip()
+                            else 0
+                        ),
                         "memory_utilization_percent": round(
                             (int(parts[1].strip()) / int(parts[2].strip())) * 100, 1
                         ),
-                        "efficiency_rating": "optimal"
-                        if int(parts[3].strip()) > 20
-                        else "idle",
+                        "efficiency_rating": (
+                            "optimal" if int(parts[3].strip()) > 20 else "idle"
+                        ),
                     }
 
                     # Add clock speeds if available
@@ -134,9 +137,9 @@ class HardwareMonitor:
                     version_info = f.read()
                     if "WSL" in version_info or "Microsoft" in version_info:
                         npu_status["wsl_limitation"] = True
-                        npu_status[
-                            "recommendation"
-                        ] = "NPU requires native Windows or Linux for hardware access"
+                        npu_status["recommendation"] = (
+                            "NPU requires native Windows or Linux for hardware access"
+                        )
             except:
                 pass
 
@@ -189,12 +192,14 @@ class HardwareMonitor:
                     "percent_per_core": cpu_percent[:8],  # Show first 8 cores
                     "cores_physical": psutil.cpu_count(logical=False),
                     "cores_logical": psutil.cpu_count(logical=True),
-                    "frequency_mhz": psutil.cpu_freq().current
-                    if psutil.cpu_freq()
-                    else 0,
-                    "load_average": psutil.getloadavg()
-                    if hasattr(psutil, "getloadavg")
-                    else [0, 0, 0],
+                    "frequency_mhz": (
+                        psutil.cpu_freq().current if psutil.cpu_freq() else 0
+                    ),
+                    "load_average": (
+                        psutil.getloadavg()
+                        if hasattr(psutil, "getloadavg")
+                        else [0, 0, 0]
+                    ),
                 },
                 "memory": {
                     "total_gb": round(memory.total / (1024**3), 2),
@@ -349,10 +354,11 @@ async def test_inference_performance():
                 "success": True,
                 "response_time_seconds": round(response_time, 2),
                 "response_length": len(data.get("response", "")),
-                "words_per_second": len(data.get("response", "").split())
-                / response_time
-                if response_time > 0
-                else 0,
+                "words_per_second": (
+                    len(data.get("response", "").split()) / response_time
+                    if response_time > 0
+                    else 0
+                ),
                 "gpu_utilized": True,  # Assume GPU was used based on our configuration
             }
         return {"success": False, "error": f"HTTP {response.status_code}"}

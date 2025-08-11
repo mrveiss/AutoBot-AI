@@ -1,12 +1,13 @@
-from fastapi import APIRouter, HTTPException, Request, Form
-from fastapi.responses import JSONResponse
-import logging
 import importlib
+import logging
 import sys
 from datetime import datetime
 
-from backend.utils.connection_utils import ConnectionTester, ModelManager
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import JSONResponse
+
 from backend.services.config_service import ConfigService
+from backend.utils.connection_utils import ConnectionTester, ModelManager
 
 router = APIRouter()
 
@@ -53,19 +54,19 @@ async def reload_system(request: Request):
     try:
         logger.info("System reload request received")
         reload_results = []
-        
+
         # List of modules to reload
         modules_to_reload = [
-            'src.llm_interface',
-            'src.config',
-            'src.orchestrator',
-            'backend.services.config_service',
-            'backend.utils.connection_utils'
+            "src.llm_interface",
+            "src.config",
+            "src.orchestrator",
+            "backend.services.config_service",
+            "backend.utils.connection_utils",
         ]
-        
+
         reloaded_modules = []
         failed_modules = []
-        
+
         for module_name in modules_to_reload:
             try:
                 if module_name in sys.modules:
@@ -77,39 +78,41 @@ async def reload_system(request: Request):
             except Exception as e:
                 failed_modules.append({"module": module_name, "error": str(e)})
                 logger.error(f"Failed to reload module {module_name}: {str(e)}")
-        
+
         # Reinitialize app state if available
-        if hasattr(request.app.state, 'llm_interface'):
+        if hasattr(request.app.state, "llm_interface"):
             try:
                 # Reinitialize LLM interface
                 from src.llm_interface import LLMInterface
+
                 request.app.state.llm_interface = LLMInterface()
                 logger.info("Reinitialized LLM interface")
                 reload_results.append("LLM interface reinitialized")
             except Exception as e:
                 logger.error(f"Failed to reinitialize LLM interface: {str(e)}")
                 failed_modules.append({"component": "LLM interface", "error": str(e)})
-        
+
         # Reinitialize orchestrator if available
-        if hasattr(request.app.state, 'orchestrator'):
+        if hasattr(request.app.state, "orchestrator"):
             try:
                 from src.orchestrator import Orchestrator
+
                 request.app.state.orchestrator = Orchestrator()
                 logger.info("Reinitialized orchestrator")
                 reload_results.append("Orchestrator reinitialized")
             except Exception as e:
                 logger.error(f"Failed to reinitialize orchestrator: {str(e)}")
                 failed_modules.append({"component": "Orchestrator", "error": str(e)})
-        
+
         return {
-            "status": "success", 
+            "status": "success",
             "message": "System reload completed",
             "reloaded_modules": reloaded_modules,
             "failed_modules": failed_modules,
             "reload_results": reload_results,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
     except Exception as e:
         logger.error(f"Error processing reload request: {str(e)}")
         raise HTTPException(

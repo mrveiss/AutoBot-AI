@@ -5,15 +5,16 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 """
 
 import logging
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from src.intelligence.intelligent_agent import IntelligentAgent
-from src.llm_interface import LLMInterface
 from src.knowledge_base import KnowledgeBase
-from src.worker_node import WorkerNode
+from src.llm_interface import LLMInterface
 from src.utils.command_validator import CommandValidator
+from src.worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
 

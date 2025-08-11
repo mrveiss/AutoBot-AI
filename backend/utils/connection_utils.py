@@ -2,11 +2,13 @@
 Shared utilities for testing connections to various services.
 Eliminates duplication across system.py, llm.py, and redis.py
 """
+
 import logging
 import os
-import requests
-from typing import Dict, Any
 from datetime import datetime
+from typing import Any, Dict
+
+import requests
 
 from src.config import global_config_manager
 from src.utils.redis_client import get_redis_client

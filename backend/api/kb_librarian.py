@@ -1,9 +1,11 @@
 """KB Librarian API endpoints."""
 
+import logging
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
-import logging
+
 from src.agents import get_kb_librarian
 
 router = APIRouter()
