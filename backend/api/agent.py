@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Request, Form
+import json
+import logging
+
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import logging
-import json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -275,6 +276,7 @@ async def execute_command(
                       or a 500 error if an internal error occurs.
     """
     import asyncio
+
     from src.event_manager import event_manager
 
     security_layer = request.app.state.security_layer

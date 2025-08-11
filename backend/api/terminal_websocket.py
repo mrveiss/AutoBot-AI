@@ -3,10 +3,11 @@ Terminal WebSocket Handler for AutoBot
 Handles bi-directional WebSocket communication for interactive terminal sessions
 """
 
+import asyncio
 import json
 import logging
-import asyncio
-from typing import Dict, Any
+from typing import Any, Dict
+
 from fastapi import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
@@ -38,6 +39,21 @@ class TerminalWebSocketHandler:
         self.event_subscriptions[chat_id] = event_task
 
         logger.info(f"Terminal WebSocket connected for chat {chat_id}")
+
+        # Initialize terminal session for this chat if it doesn't exist
+        try:
+            # Start an interactive bash shell for this chat session
+            asyncio.create_task(
+                system_command_agent.execute_interactive_command(
+                    command="bash",
+                    chat_id=chat_id,
+                    description="Initialize interactive terminal session",
+                    require_confirmation=False,
+                )
+            )
+            logger.info(f"Initialized terminal session for chat {chat_id}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize terminal session for {chat_id}: {e}")
 
         # Send initial connection success message
         await self._send_message(

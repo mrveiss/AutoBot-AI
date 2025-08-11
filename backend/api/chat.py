@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Request, Form, Query
+import glob
+import json
+import logging
+import os
+import shutil
+import time
+import traceback
+import uuid
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
-import os
-import uuid
-import time
-import logging
-import traceback
-import glob
-import shutil
-import json
+
 from src.agents import get_kb_librarian, get_librarian_assistant
 
 router = APIRouter()
@@ -235,13 +237,43 @@ async def delete_chat(chat_id: str, request: Request):
     """Delete a specific chat session."""
     chat_history_manager = request.app.state.chat_history_manager
     try:
+        # Try to delete the session
         if chat_history_manager.delete_session(chat_id):
             return JSONResponse(
                 status_code=200, content={"message": "Chat deleted successfully"}
             )
-        else:
-            return JSONResponse(status_code=404, content={"error": "Chat not found"})
+
+        # If direct deletion failed, try to find chat with partial matching for legacy formats
+        # Get all sessions and try to find a match
+        try:
+            all_sessions = chat_history_manager.list_sessions()
+            # Look for exact match first, then partial match
+            matching_session = None
+
+            for session in all_sessions:
+                session_id = session.get("chatId", session.get("sessionId", ""))
+                if session_id == chat_id:
+                    matching_session = session_id
+                    break
+                elif chat_id in session_id or session_id in chat_id:
+                    matching_session = session_id
+                    break
+
+            if matching_session:
+                if chat_history_manager.delete_session(matching_session):
+                    return JSONResponse(
+                        status_code=200,
+                        content={"message": "Chat deleted successfully"},
+                    )
+
+        except Exception as lookup_error:
+            logging.warning(f"Error during chat lookup: {lookup_error}")
+
+        # If still not found, return 404
+        return JSONResponse(status_code=404, content={"error": "Chat not found"})
+
     except Exception as e:
+        logging.error(f"Error deleting chat {chat_id}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -643,11 +675,11 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
                 "agents_coordinated": len(tool_args.get("agents_involved", [])),
                 "steps_executed": workflow_details.get("steps_executed", 0),
                 "execution_status": workflow_details.get("execution_status"),
-                "total_duration": sum(
-                    float(r["duration"].replace("s", "")) for r in agent_results
-                )
-                if agent_results
-                else 0,
+                "total_duration": (
+                    sum(float(r["duration"].replace("s", "")) for r in agent_results)
+                    if agent_results
+                    else 0
+                ),
             }
 
             await _send_typed_message(

@@ -3,10 +3,11 @@ System Knowledge Bridge API - Maps knowledge base facts to system knowledge form
 This bridges the gap between populated facts and frontend expectations.
 """
 
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
 import logging
 from datetime import datetime
+from typing import Any, Dict
+
+from fastapi import APIRouter, HTTPException
 
 from src.knowledge_base import KnowledgeBase
 
@@ -262,8 +263,8 @@ async def import_system_prompts() -> Dict[str, Any]:
         kb = KnowledgeBase()
         await kb.ainit()
 
-        import os
         import glob
+        import os
 
         # Find prompt files
         prompt_patterns = [

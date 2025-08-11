@@ -3,12 +3,13 @@ System Knowledge API endpoints for managing system documentation and prompts.
 Provides endpoints for retrieving, importing, and managing system knowledge.
 """
 
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
 import logging
+from typing import Any, Dict
 
-from src.manage_system_knowledge import SystemKnowledgeManager
+from fastapi import APIRouter, HTTPException
+
 from src.config import Config
+from src.manage_system_knowledge import SystemKnowledgeManager
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
 import logging
+
+from fastapi import APIRouter, HTTPException
 
 from backend.services.config_service import ConfigService
 
