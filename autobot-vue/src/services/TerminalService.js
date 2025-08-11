@@ -16,7 +16,7 @@ class TerminalService {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.hostname;
     const port = import.meta.env.DEV ? '8001' : window.location.port;
-    return `${protocol}//${host}:${port}/api/terminal/ws/terminal`;
+    return `${protocol}//${host}:${port}/api/terminal/ws/simple`;
   }
 
   /**
@@ -25,7 +25,7 @@ class TerminalService {
    */
   async createSession() {
     try {
-      const response = await fetch('/api/terminal/sessions', {
+      const response = await fetch('/api/terminal/simple/sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -174,12 +174,7 @@ class TerminalService {
 
       connection.send(message);
 
-      // Echo the input locally for immediate feedback
-      this.triggerCallback(sessionId, 'onOutput', {
-        content: input,
-        stream: 'echo'
-      });
-
+      // Don't echo locally - let the backend handle it
       return true;
     } catch (error) {
       console.error('Failed to send input:', error);
@@ -286,7 +281,7 @@ class TerminalService {
    */
   async getSessions() {
     try {
-      const response = await fetch('/api/terminal/sessions');
+      const response = await fetch('/api/terminal/simple/sessions');
       if (!response.ok) {
         throw new Error(`Failed to get sessions: ${response.statusText}`);
       }
