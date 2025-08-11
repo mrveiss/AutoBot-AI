@@ -14,7 +14,7 @@ class TerminalService {
 
   getWebSocketUrl() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname;
+    const host = import.meta.env.DEV ? 'localhost' : window.location.hostname;
     const port = import.meta.env.DEV ? '8001' : window.location.port;
     return `${protocol}//${host}:${port}/api/terminal/ws/simple`;
   }
@@ -25,7 +25,8 @@ class TerminalService {
    */
   async createSession() {
     try {
-      const response = await fetch('/api/terminal/simple/sessions', {
+      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const response = await fetch(`${baseUrl}/api/terminal/simple/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -263,7 +264,8 @@ class TerminalService {
 
     // Then close the session on the server
     try {
-      const response = await fetch(`/api/terminal/sessions/${sessionId}`, {
+      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const response = await fetch(`${baseUrl}/api/terminal/sessions/${sessionId}`, {
         method: 'DELETE'
       });
 
@@ -281,7 +283,8 @@ class TerminalService {
    */
   async getSessions() {
     try {
-      const response = await fetch('/api/terminal/simple/sessions');
+      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const response = await fetch(`${baseUrl}/api/terminal/simple/sessions`);
       if (!response.ok) {
         throw new Error(`Failed to get sessions: ${response.statusText}`);
       }
@@ -300,7 +303,8 @@ class TerminalService {
    */
   async executeCommand(command, options = {}) {
     try {
-      const response = await fetch('/api/terminal/command', {
+      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const response = await fetch(`${baseUrl}/api/terminal/command`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -331,7 +335,8 @@ class TerminalService {
    */
   async getSessionInfo(sessionId) {
     try {
-      const response = await fetch(`/api/terminal/sessions/${sessionId}`);
+      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const response = await fetch(`${baseUrl}/api/terminal/sessions/${sessionId}`);
       if (!response.ok) {
         throw new Error(`Failed to get session info: ${response.statusText}`);
       }
