@@ -133,7 +133,10 @@ class Orchestrator:
             self.local_worker = WorkerNode()
 
         # Initialize unified tool registry to eliminate code duplication
-        self.tool_registry = None
+        worker_node = self.local_worker if hasattr(self, "local_worker") else None
+        self.tool_registry = ToolRegistry(
+            worker_node=worker_node, knowledge_base=self.knowledge_base
+        )
 
         # Initialize system info
         self.system_info = get_os_info()
