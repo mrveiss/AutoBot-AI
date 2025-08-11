@@ -6,7 +6,6 @@ Tests all workflow endpoints after backend restart
 
 import asyncio
 import aiohttp
-import json
 import time
 
 
@@ -66,13 +65,16 @@ async def test_workflow_endpoints():
                     workflow_response = result.get("workflow_response", {})
                     if workflow_response:
                         print(
-                            f"   🎯 Classification: {workflow_response.get('message_classification')}"
+                            f"   🎯 Classification: "
+                            f"{workflow_response.get('message_classification')}"
                         )
                         print(
-                            f"   🤖 Agents: {', '.join(workflow_response.get('agents_involved', []))}"
+                            f"   🤖 Agents: "
+                            f"{', '.join(workflow_response.get('agents_involved', []))}"
                         )
                         print(
-                            f"   ⏱️  Duration: {workflow_response.get('estimated_duration')}"
+                            f"   ⏱️  Duration: "
+                            f"{workflow_response.get('estimated_duration')}"
                         )
                         print(f"   📋 Steps: {workflow_response.get('planned_steps')}")
 
