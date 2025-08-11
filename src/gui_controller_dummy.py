@@ -1,6 +1,6 @@
 # src/gui_controller_dummy.py
-from typing import Tuple, Dict, Any, Optional
 import asyncio
+from typing import Any, Dict, Optional, Tuple
 
 
 class GUIController:

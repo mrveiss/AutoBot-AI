@@ -12,7 +12,7 @@ import platform
 import shutil
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional, Tuple, Set
+from typing import Dict, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 

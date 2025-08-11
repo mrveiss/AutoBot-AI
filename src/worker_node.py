@@ -1,23 +1,23 @@
-import os
-import json
-import platform
-import psutil
-import subprocess
 import asyncio
-import torch
+import json
+import os
+import platform
+import subprocess
 import sys
-from typing import Dict, Any
+from typing import Any, Dict
 
-from src.llm_interface import LLMInterface
-from src.knowledge_base import KnowledgeBase
-from src.event_manager import event_manager
-from src.system_integration import SystemIntegration
-from src.security_layer import SecurityLayer
+import psutil
+import torch
 
 # Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
-from src.utils.redis_client import get_redis_client
+from src.event_manager import event_manager
+from src.knowledge_base import KnowledgeBase
+from src.llm_interface import LLMInterface
+from src.security_layer import SecurityLayer
+from src.system_integration import SystemIntegration
 from src.utils.command_validator import command_validator
+from src.utils.redis_client import get_redis_client
 
 # Conditional import for GUIController based on OS
 if sys.platform.startswith("linux"):
@@ -73,9 +73,7 @@ class WorkerNode:
             },
             "ram": {
                 "total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-                "available_gb": round(
-                    psutil.virtual_memory().available / (1024**3), 2
-                ),
+                "available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
                 "usage_percent": psutil.virtual_memory().percent,
             },
             "gpu": {"cuda_available": torch.cuda.is_available(), "cuda_devices": []},

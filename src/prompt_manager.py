@@ -5,11 +5,12 @@ This module provides a unified way to load, format, and manage all prompts
 across the AutoBot application, eliminating hardcoded prompts in Python code.
 """
 
+import logging
 import re
 from pathlib import Path
-from typing import Dict, Optional, List
-import logging
-from jinja2 import Template, Environment, FileSystemLoader
+from typing import Dict, List, Optional
+
+from jinja2 import Environment, FileSystemLoader, Template
 
 logger = logging.getLogger(__name__)
 

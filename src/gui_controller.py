@@ -1,6 +1,7 @@
-import pyautogui
-import os
 import asyncio
+import os
+
+import pyautogui
 
 
 class GUIController:

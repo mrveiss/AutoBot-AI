@@ -4,16 +4,16 @@ Includes browser automation, anti-detection, and CAPTCHA handling
 """
 
 import asyncio
+import base64
 import logging
 import random
 import time
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
-import base64
 
 try:
-    from playwright.async_api import async_playwright, Browser, Page, BrowserContext
+    from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
@@ -827,7 +827,7 @@ class AdvancedWebResearcher:
 
 # Factory function for easy integration
 async def create_advanced_web_researcher(
-    config: Dict[str, Any] = None
+    config: Dict[str, Any] = None,
 ) -> AdvancedWebResearcher:
     """Create and initialize advanced web researcher"""
     researcher = AdvancedWebResearcher(config)

@@ -7,13 +7,13 @@ duplication.
 """
 
 import logging
-import uuid
 import time
-from typing import Dict, Any, List, Optional, TYPE_CHECKING
+import uuid
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from src.worker_node import WorkerNode
     from src.knowledge_base import KnowledgeBase
+    from src.worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
 

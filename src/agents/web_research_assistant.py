@@ -3,10 +3,10 @@ Web Research Assistant for AutoBot
 Handles web research queries and integrates findings into knowledge base
 """
 
-import logging
-from typing import Dict, Any, List
-from datetime import datetime
 import asyncio
+import logging
+from datetime import datetime
+from typing import Any, Dict, List
 
 try:
     from src.agents.advanced_web_research import AdvancedWebResearcher

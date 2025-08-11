@@ -1,12 +1,13 @@
+import json
+import os
 import platform
 import subprocess
-import os
-import json
+from typing import Any, Dict, List, Optional
+
 import requests  # Import requests for web fetching
-from markdownify import (
+from markdownify import (  # Import markdownify for HTML to Markdown conversion
     markdownify as md,
-)  # Import markdownify for HTML to Markdown conversion
-from typing import Dict, Any, List, Optional
+)
 
 
 class SystemIntegration:

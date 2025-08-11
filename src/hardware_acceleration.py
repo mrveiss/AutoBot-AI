@@ -5,14 +5,15 @@ Manages hardware acceleration with priority: NPU > GPU > CPU
 Optimizes model execution across different hardware targets.
 """
 
+import json
 import logging
 import os
-import subprocess
-import json
-from typing import Dict, List, Optional, Any, Tuple
-from enum import Enum
-import psutil
 import platform
+import subprocess
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
+import psutil
 
 logger = logging.getLogger(__name__)
 

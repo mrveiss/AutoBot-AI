@@ -5,15 +5,15 @@ presents results with proper source attribution, and can store quality informati
 in the knowledge base for future reference.
 """
 
-import logging
-from typing import Dict, List, Any, Optional
-from urllib.parse import urlparse
 import json
+import logging
 import re
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 try:
-    from playwright.async_api import async_playwright, Browser, Page
+    from playwright.async_api import Browser, Page, async_playwright
 
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
