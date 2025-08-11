@@ -7,7 +7,9 @@ between the backend and frontend clients.
 
 import json
 import logging
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
 from src.event_manager import event_manager
 
 logger = logging.getLogger(__name__)

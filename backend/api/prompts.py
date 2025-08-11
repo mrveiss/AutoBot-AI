@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
 import logging
 import os
+
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 
@@ -89,9 +90,11 @@ async def save_prompt(prompt_id: str, request: dict):
             "id": prompt_id,
             "name": prompt_name,
             "type": prompt_type if prompt_type else "custom",
-            "path": file_path.replace(prompts_dir + "/", "")
-            if prompts_dir in file_path
-            else file_path,
+            "path": (
+                file_path.replace(prompts_dir + "/", "")
+                if prompts_dir in file_path
+                else file_path
+            ),
             "content": content,
         }
     except Exception as e:
@@ -128,9 +131,11 @@ async def revert_prompt(prompt_id: str):
                 "id": prompt_id,
                 "name": prompt_name,
                 "type": prompt_type if prompt_type else "custom",
-                "path": custom_file_path.replace(prompts_dir + "/", "")
-                if prompts_dir in custom_file_path
-                else custom_file_path,
+                "path": (
+                    custom_file_path.replace(prompts_dir + "/", "")
+                    if prompts_dir in custom_file_path
+                    else custom_file_path
+                ),
                 "content": default_content,
             }
         else:

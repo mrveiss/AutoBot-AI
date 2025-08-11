@@ -7,10 +7,11 @@ Provides developer mode functionality including:
 - Debug information and system diagnostics
 """
 
-from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import JSONResponse
-from typing import Dict, List, Any
 import logging
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from src.config import config as global_config_manager
 
@@ -196,9 +197,11 @@ async def enhanced_405_handler(request: Request, exc: HTTPException):
             "requested_method": method,
             "requested_path": path,
             "allowed_methods": allowed_methods,
-            "suggestion": f"Try one of: {', '.join(allowed_methods)}"
-            if allowed_methods
-            else "No methods available for this path",
+            "suggestion": (
+                f"Try one of: {', '.join(allowed_methods)}"
+                if allowed_methods
+                else "No methods available for this path"
+            ),
         },
     }
 
