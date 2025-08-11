@@ -361,11 +361,10 @@ class Orchestrator:
         )
         print("Available tools collected on startup.")
 
-        # Initialize unified tool registry to eliminate code duplication
-        worker_node = self.local_worker if hasattr(self, "local_worker") else None
-        self.tool_registry = ToolRegistry(
-            worker_node=worker_node, knowledge_base=self.knowledge_base
-        )
+        # Tool registry already initialized in constructor
+        # Just update the worker_node if needed
+        if hasattr(self, "local_worker") and self.tool_registry:
+            self.tool_registry.worker_node = self.local_worker
 
         if (
             self.use_langchain
@@ -1172,27 +1171,14 @@ class Orchestrator:
 
     def classify_request_complexity(self, user_message: str) -> TaskComplexity:
         """Classify user request complexity to determine workflow needs."""
-        message_lower = user_message.lower()
-
-        # Keywords that indicate complex workflows
-        research_keywords = ["find", "search", "tools", "best", "recommend", "compare"]
-        install_keywords = ["install", "setup", "configure", "run", "execute"]
-        complex_keywords = ["how to", "guide", "tutorial", "step by step"]
-
-        keyword_counts = {
-            "research": sum(1 for kw in research_keywords if kw in message_lower),
-            "install": sum(1 for kw in install_keywords if kw in message_lower),
-            "complex": sum(1 for kw in complex_keywords if kw in message_lower),
-        }
-
-        # Decision logic for workflow orchestration
-        if keyword_counts["research"] >= 2 or "tools" in message_lower:
-            return TaskComplexity.COMPLEX
-        elif keyword_counts["install"] >= 1:
-            return TaskComplexity.INSTALL
-        elif keyword_counts["research"] >= 1:
-            return TaskComplexity.RESEARCH
-        else:
+        # Use the Redis-based workflow classifier
+        try:
+            from src.workflow_classifier import WorkflowClassifier
+            classifier = WorkflowClassifier(self.redis_client)
+            return classifier.classify_request(user_message)
+        except Exception as e:
+            # Fallback to simple classification if Redis classifier fails
+            print(f"Classification error, falling back to simple: {e}")
             return TaskComplexity.SIMPLE
 
     def plan_workflow_steps(
