@@ -3,13 +3,17 @@ Workflow API endpoints for multi-agent orchestration
 Handles workflow approvals, progress tracking, and coordination
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
-from typing import Dict, Any, Optional
 import asyncio
 import uuid
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from pydantic import BaseModel
+
 from src.event_manager import event_manager
+from src.metrics.system_monitor import system_monitor
+from src.metrics.workflow_metrics import workflow_metrics
 
 router = APIRouter()
 
@@ -163,9 +167,9 @@ async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResp
     return {
         "success": True,
         "message": f"Workflow step {'approved' if approval.approved else 'denied'}",
-        "next_action": "continue_execution"
-        if approval.approved
-        else "workflow_cancelled",
+        "next_action": (
+            "continue_execution" if approval.approved else "workflow_cancelled"
+        ),
     }
 
 
@@ -214,6 +218,19 @@ async def execute_workflow(
             "auto_approve": request.auto_approve,
         }
 
+        # Start workflow metrics tracking
+        metrics_data = {
+            "user_message": request.user_message,
+            "complexity": workflow_response.get("message_classification", "unknown"),
+            "total_steps": len(workflow_response.get("workflow_preview", [])),
+            "agents_involved": workflow_response.get("agents_involved", []),
+        }
+        workflow_metrics.start_workflow_tracking(workflow_id, metrics_data)
+
+        # Record initial system metrics
+        initial_resources = system_monitor.get_current_metrics()
+        workflow_metrics.record_resource_usage(workflow_id, initial_resources)
+
         # Convert workflow preview to executable steps
         steps = []
         for i, step_desc in enumerate(workflow_response.get("workflow_preview", [])):
@@ -223,9 +240,9 @@ async def execute_workflow(
                 "status": "pending",
                 "requires_approval": "requires your approval" in step_desc,
                 "agent_type": step_desc.split(":")[0].lower(),
-                "action": step_desc.split(":")[1].strip()
-                if ":" in step_desc
-                else step_desc,
+                "action": (
+                    step_desc.split(":")[1].strip() if ":" in step_desc else step_desc
+                ),
                 "started_at": None,
                 "completed_at": None,
             }
@@ -376,6 +393,14 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
     )
     action = step["action"]
     description = step["description"]
+    step_id = step.get("step_id", f"step_{agent_type}")
+
+    # Start step timing
+    workflow_metrics.start_step_timing(workflow_id, step_id, agent_type)
+
+    # Record resource usage at step start
+    step_resources = system_monitor.get_current_metrics()
+    workflow_metrics.record_resource_usage(workflow_id, step_resources)
 
     try:
         if agent_type == "librarian":
@@ -451,6 +476,50 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
             await kb.add_document(content, metadata)
             step["result"] = "Information stored in knowledge base for future reference"
 
+        elif agent_type == "security_scanner":
+            # Security scanning agent
+            from src.agents.security_scanner_agent import security_scanner_agent
+
+            # Extract scan parameters from action
+            scan_context = step.get("inputs", {})
+            if "port scan" in action.lower():
+                scan_context["scan_type"] = "port_scan"
+            elif "vulnerability" in action.lower():
+                scan_context["scan_type"] = "vulnerability_scan"
+            elif "ssl" in action.lower():
+                scan_context["scan_type"] = "ssl_scan"
+            elif "service" in action.lower():
+                scan_context["scan_type"] = "service_detection"
+
+            result = await security_scanner_agent.execute(action, scan_context)
+            step[
+                "result"
+            ] = f"Security scan completed: {result.get('status')} - {result.get('message', 'Scan results available')}"
+            step["scan_results"] = result
+
+        elif agent_type == "network_discovery":
+            # Network discovery agent
+            from src.agents.network_discovery_agent import network_discovery_agent
+
+            # Extract discovery parameters
+            discovery_context = step.get("inputs", {})
+            if "network scan" in action.lower():
+                discovery_context["task_type"] = "network_scan"
+            elif "host discovery" in action.lower():
+                discovery_context["task_type"] = "host_discovery"
+            elif "arp" in action.lower():
+                discovery_context["task_type"] = "arp_scan"
+            elif "asset inventory" in action.lower():
+                discovery_context["task_type"] = "asset_inventory"
+            elif "network map" in action.lower():
+                discovery_context["task_type"] = "network_map"
+
+            result = await network_discovery_agent.execute(action, discovery_context)
+            step[
+                "result"
+            ] = f"Network discovery completed: {result.get('status')} - Found {result.get('hosts_found', 0)} hosts"
+            step["discovery_results"] = result
+
         elif agent_type == "system_commands":
             # Real system command execution
             from src.agents.enhanced_system_commands_agent import (
@@ -491,6 +560,14 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
     except Exception as e:
         step["result"] = f"Error executing step: {str(e)}"
         step["status"] = "failed"
+
+        # End step timing with failure
+        workflow_metrics.end_step_timing(
+            workflow_id, step_id, success=False, error=str(e)
+        )
+    else:
+        # End step timing with success
+        workflow_metrics.end_step_timing(workflow_id, step_id, success=True)
 
 
 @router.delete("/workflow/{workflow_id}")
