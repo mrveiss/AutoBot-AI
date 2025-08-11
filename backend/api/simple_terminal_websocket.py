@@ -90,7 +90,28 @@ class SimpleTerminalSession:
                     )
                 return True
 
-            # Execute other commands
+            # Handle interactive commands that start new shells
+            interactive_commands = [
+                "sudo bash",
+                "bash",
+                "sh",
+                "zsh",
+                "fish",
+                "sudo su",
+                "su",
+            ]
+            if any(command.strip().startswith(cmd) for cmd in interactive_commands):
+                await self.send_message(
+                    {
+                        "type": "output",
+                        "content": f"Interactive command '{command}' not supported "
+                        f"in web terminal.\nUse regular commands instead.\n"
+                        f"kali@autobot:{self.current_dir}$ ",
+                    }
+                )
+                return True
+
+            # Execute other commands with timeout
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
@@ -99,22 +120,48 @@ class SimpleTerminalSession:
                 env=self.env,
             )
 
-            # Stream output in real-time
-            while True:
-                output = await process.stdout.read(1024)
-                if not output:
-                    break
+            # Stream output in real-time with timeout
+            try:
+                while True:
+                    # Read with timeout to prevent hanging
+                    try:
+                        output = await asyncio.wait_for(
+                            process.stdout.read(1024), timeout=0.5
+                        )
+                        if not output:
+                            break
 
-                # Send output to client
+                        # Send output to client
+                        await self.send_message(
+                            {
+                                "type": "output",
+                                "content": output.decode("utf-8", errors="replace"),
+                            }
+                        )
+                    except asyncio.TimeoutError:
+                        # Check if process is still running
+                        if process.returncode is not None:
+                            break
+                        continue
+
+                # Wait for process to complete with timeout
+                await asyncio.wait_for(process.wait(), timeout=10.0)
+
+            except asyncio.TimeoutError:
+                # Kill hanging process
+                try:
+                    process.terminate()
+                    await asyncio.wait_for(process.wait(), timeout=2.0)
+                except Exception:
+                    process.kill()
+
                 await self.send_message(
                     {
                         "type": "output",
-                        "content": output.decode("utf-8", errors="replace"),
+                        "content": f"\nCommand '{command}' timed out "
+                        f"and was terminated.\n",
                     }
                 )
-
-            # Wait for process to complete
-            await process.wait()
 
             # Send new prompt
             await self.send_message(
