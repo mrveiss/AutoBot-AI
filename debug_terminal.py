@@ -15,7 +15,7 @@ from datetime import datetime
 def test_terminal_api():
     """Test the terminal REST API endpoints"""
     print("🔍 Testing Terminal REST API...")
-    
+
     # Test session creation
     try:
         response = requests.post(
@@ -23,9 +23,9 @@ def test_terminal_api():
             json={
                 "shell": "/bin/bash",
                 "environment": {},
-                "working_directory": "/home/kali"
+                "working_directory": "/home/kali",
             },
-            timeout=5
+            timeout=5,
         )
         if response.status_code == 200:
             session_data = response.json()
@@ -33,7 +33,9 @@ def test_terminal_api():
             print(f"✅ Session creation successful: {session_id}")
             return session_id
         else:
-            print(f"❌ Session creation failed: {response.status_code} - {response.text}")
+            print(
+                f"❌ Session creation failed: {response.status_code} - {response.text}"
+            )
             return None
     except Exception as e:
         print(f"❌ Session creation error: {e}")
@@ -43,27 +45,26 @@ def test_terminal_api():
 async def test_terminal_websocket(session_id):
     """Test the terminal WebSocket connection"""
     print(f"\n🔍 Testing Terminal WebSocket for session {session_id}...")
-    
+
     uri = f"ws://localhost:8001/api/terminal/ws/terminal/{session_id}"
-    
+
     try:
         async with websockets.connect(uri) as websocket:
             print(f"✅ WebSocket connected to {uri}")
-            
+
             # Send a simple command
-            command_msg = json.dumps({
-                "type": "input",
-                "text": "echo 'Hello from terminal test'\n"
-            })
-            
+            command_msg = json.dumps(
+                {"type": "input", "text": "echo 'Hello from terminal test'\n"}
+            )
+
             await websocket.send(command_msg)
-            print(f"📤 Sent command: echo 'Hello from terminal test'")
-            
+            print("📤 Sent command: echo 'Hello from terminal test'")
+
             # Wait for response
             try:
                 response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
                 print(f"📥 Received response: {response}")
-                
+
                 # Try to parse as JSON
                 try:
                     data = json.loads(response)
@@ -73,10 +74,10 @@ async def test_terminal_websocket(session_id):
                         print(f"📊 Terminal response type: {data.get('type')}")
                 except json.JSONDecodeError:
                     print(f"📊 Raw terminal output: {response}")
-                    
+
             except asyncio.TimeoutError:
                 print("⏰ Timeout waiting for terminal response")
-                
+
     except Exception as e:
         print(f"❌ WebSocket connection error: {e}")
 
@@ -84,7 +85,7 @@ async def test_terminal_websocket(session_id):
 def test_system_health():
     """Test overall system health"""
     print("\n🔍 Testing System Health...")
-    
+
     try:
         response = requests.get("http://localhost:8001/api/system/health", timeout=5)
         if response.status_code == 200:
@@ -99,12 +100,15 @@ def test_system_health():
 def test_workflow_api():
     """Test workflow API that we know is working"""
     print("\n🔍 Testing Workflow API (known working)...")
-    
+
     try:
-        response = requests.get("http://localhost:8001/api/workflow/workflows", timeout=5)
+        response = requests.get(
+            "http://localhost:8001/api/workflow/workflows", timeout=5
+        )
         if response.status_code == 200:
             workflow_data = response.json()
-            print(f"✅ Workflow API working: {len(workflow_data.get('workflows', []))} active workflows")
+            workflow_count = len(workflow_data.get('workflows', []))
+            print(f"✅ Workflow API working: {workflow_count} active workflows")
         else:
             print(f"❌ Workflow API failed: {response.status_code}")
     except Exception as e:
@@ -117,25 +121,24 @@ async def main():
     print("=" * 50)
     print(f"🕐 Test started at: {datetime.now()}")
     print()
-    
+
     # Test system health first
     test_system_health()
-    
+
     # Test workflow API to ensure backend is responding
     test_workflow_api()
-    
+
     # Test terminal API
     session_id = test_terminal_api()
-    
+
     if session_id:
         # Test WebSocket if session creation succeeded
         await test_terminal_websocket(session_id)
-        
+
         # Clean up session
         try:
             delete_response = requests.delete(
-                f"http://localhost:8001/api/terminal/sessions/{session_id}",
-                timeout=5
+                f"http://localhost:8001/api/terminal/sessions/{session_id}", timeout=5
             )
             if delete_response.status_code == 200:
                 print(f"🧹 Session {session_id} cleaned up successfully")
@@ -143,7 +146,7 @@ async def main():
                 print(f"⚠️ Session cleanup warning: {delete_response.status_code}")
         except Exception as e:
             print(f"⚠️ Session cleanup error: {e}")
-    
+
     print("\n📋 DIAGNOSTIC SUMMARY:")
     print("=" * 50)
     print("If you see '✅' for all tests, the terminal should be working.")
@@ -167,7 +170,7 @@ if __name__ == "__main__":
         print("Usage: python3 debug_terminal.py")
         print("This tool tests the terminal API and WebSocket connections")
         sys.exit(0)
-    
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
