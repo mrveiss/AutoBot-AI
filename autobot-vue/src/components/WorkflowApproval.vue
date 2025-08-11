@@ -237,7 +237,7 @@ const formatDate = (dateString: string) => {
 const loadWorkflows = async () => {
   try {
     loading.value = true
-    const response = await apiService.get('/api/workflow/workflow/workflows')
+    const response = await apiService.get('/api/workflow/workflows')
     workflows.value = response.workflows || []
   } catch (error) {
     console.error('Failed to load workflows:', error)
