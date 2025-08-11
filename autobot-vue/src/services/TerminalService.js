@@ -73,6 +73,7 @@ class TerminalService {
 
       ws.onopen = () => {
         console.log(`Connected to terminal session ${sessionId}`);
+        // Backend will automatically initialize the terminal session
         this.triggerCallback(sessionId, 'onStatusChange', 'connected');
       };
 
@@ -168,7 +169,7 @@ class TerminalService {
     try {
       const message = JSON.stringify({
         type: 'input',
-        content: input + '\n'
+        text: input + '\n'  // Backend expects 'text' not 'content'
       });
 
       connection.send(message);
@@ -402,11 +403,16 @@ export function useTerminalService() {
   const connectionStatus = ref('disconnected');
 
   return {
-    // Service instance
-    ...terminalService,
+    // Service instance methods
+    sendInput: terminalService.sendInput.bind(terminalService),
+    sendSignal: terminalService.sendSignal.bind(terminalService),
+    resize: terminalService.resize.bind(terminalService),
+    connect: terminalService.connect.bind(terminalService),
+    disconnect: terminalService.disconnect.bind(terminalService),
+    closeSession: terminalService.closeSession.bind(terminalService),
+    isConnected: terminalService.isConnected.bind(terminalService),
 
     // Reactive state
-    isConnected,
     sessions,
     connectionStatus,
 
