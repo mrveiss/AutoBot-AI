@@ -90,17 +90,41 @@ class SimpleTerminalSession:
                     )
                 return True
 
-            # Handle interactive commands that start new shells
-            interactive_commands = [
-                "sudo bash",
+            # Block only commands that start interactive shells
+            # Allow all sudo commands except those that start interactive shells
+            cmd_stripped = command.strip()
+
+            # List of exact commands that start interactive shells
+            blocked_commands = {
                 "bash",
                 "sh",
                 "zsh",
                 "fish",
+                "csh",
+                "tcsh",
+                "sudo bash",
+                "sudo sh",
+                "sudo zsh",
+                "sudo fish",
+                "sudo csh",
+                "sudo tcsh",
                 "sudo su",
                 "su",
-            ]
-            if any(command.strip().startswith(cmd) for cmd in interactive_commands):
+                "su -",
+            }
+
+            # Check if this is exactly a blocked command or starts a shell with options
+            is_blocked = False
+            if cmd_stripped in blocked_commands:
+                is_blocked = True
+            else:
+                # Check for shell commands with options (like "bash -i")
+                shell_commands = ["bash", "sh", "zsh", "fish", "csh", "tcsh"]
+                first_word = cmd_stripped.split()[0] if cmd_stripped.split() else ""
+                if first_word in shell_commands:
+                    is_blocked = True
+
+            if is_blocked:
                 await self.send_message(
                     {
                         "type": "output",
