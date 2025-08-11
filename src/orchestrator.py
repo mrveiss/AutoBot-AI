@@ -1,36 +1,32 @@
 # src/orchestrator.py
 import asyncio
 import json
-from typing import Dict, Any, List, Optional
-import uuid
+import re
 import time
 import traceback
-import re
-from enum import Enum
+import uuid
 from dataclasses import dataclass
-
-from src.llm_interface import LLMInterface
-from src.event_manager import event_manager
-from src.knowledge_base import KnowledgeBase
-from src.worker_node import WorkerNode, GUI_AUTOMATION_SUPPORTED
-from src.diagnostics import Diagnostics
-from src.system_info_collector import get_os_info
-from src.tool_discovery import discover_tools
-from src.tools import ToolRegistry
-from src.prompt_manager import prompt_manager
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 # Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
+from src.diagnostics import Diagnostics
+from src.event_manager import event_manager
+from src.knowledge_base import KnowledgeBase
+from src.llm_interface import LLMInterface
+from src.prompt_manager import prompt_manager
+from src.system_info_collector import get_os_info
+from src.tool_discovery import discover_tools
+from src.tools import ToolRegistry
+from src.types import TaskComplexity
 from src.utils.redis_client import get_redis_client
+from src.worker_node import GUI_AUTOMATION_SUPPORTED, WorkerNode
 
 # Workflow orchestration enhancements
 
 
-class TaskComplexity(Enum):
-    SIMPLE = "simple"  # Single agent can handle
-    RESEARCH = "research"  # Requires web research
-    INSTALL = "install"  # Requires system commands
-    COMPLEX = "complex"  # Multi-agent coordination needed
+# TaskComplexity moved to src.types to avoid duplicate definitions
 
 
 class WorkflowStatus(Enum):
@@ -98,6 +94,8 @@ class Orchestrator:
 
         # Workflow orchestration enhancements
         self.active_workflows: Dict[str, List[WorkflowStep]] = {}
+        # Cache classification results to avoid inconsistent LLM responses
+        self._classification_cache: Dict[str, TaskComplexity] = {}
         self.agent_registry = {
             "research": "Web research with Playwright",
             "librarian": "Knowledge base search and storage",
@@ -106,6 +104,8 @@ class Orchestrator:
             "knowledge_manager": "Structured information storage",
             "orchestrator": "Workflow planning and coordination",
             "chat": "Conversational responses",
+            "security_scanner": "Security vulnerability scanning and assessment",
+            "network_discovery": "Network asset discovery and mapping",
         }
 
         self.langchain_agent = None
@@ -385,9 +385,9 @@ class Orchestrator:
                 self.langchain_agent = LangChainAgentOrchestrator(
                     # Pass the full config dict
                     config=global_config_manager.to_dict(),
-                    worker_node=self.local_worker
-                    if hasattr(self, "local_worker")
-                    else None,
+                    worker_node=(
+                        self.local_worker if hasattr(self, "local_worker") else None
+                    ),
                     knowledge_base=self.knowledge_base,
                 )
 
@@ -909,7 +909,13 @@ class Orchestrator:
             if self.tool_registry:
                 result = await self.tool_registry.execute_tool(tool_name, tool_args)
             else:
-                result = {"status": "error", "message": "Tool registry not initialized"}
+                # Debug information for tool registry issue
+                debug_info = f"Tool registry is None. Available attributes: {[attr for attr in dir(self) if 'tool' in attr.lower()]}"
+                print(f"DEBUG: {debug_info}")
+                result = {
+                    "status": "error",
+                    "message": f"Tool registry not initialized. {debug_info}",
+                }
 
             tool_output_content = result.get(
                 "result",
@@ -1169,17 +1175,49 @@ class Orchestrator:
     ):
         return await self.generate_task_plan(goal, messages)
 
-    def classify_request_complexity(self, user_message: str) -> TaskComplexity:
-        """Classify user request complexity to determine workflow needs."""
-        # Use the Redis-based workflow classifier
+    async def classify_request_complexity(self, user_message: str) -> TaskComplexity:
+        """Classify user request complexity using intelligent agent."""
+        # Check cache first to avoid inconsistent LLM responses
+        cache_key = hash(user_message)
+        if cache_key in self._classification_cache:
+            cached_result = self._classification_cache[cache_key]
+            print(f"Using cached classification: {cached_result.value}")
+            return cached_result
+
         try:
-            from src.workflow_classifier import WorkflowClassifier
-            classifier = WorkflowClassifier(self.redis_client)
-            return classifier.classify_request(user_message)
+            from src.agents.classification_agent import ClassificationAgent
+
+            agent = ClassificationAgent(self.llm_interface)
+            result = await agent.classify_request(user_message)
+
+            # Store detailed classification result for workflow planning
+            self._last_classification_result = result
+
+            print(
+                f"Classification: {result.complexity.value} (confidence: {result.confidence:.2f})"
+            )
+            print(f"Reasoning: {result.reasoning}")
+
+            # Cache the result
+            self._classification_cache[cache_key] = result.complexity
+
+            return result.complexity
         except Exception as e:
-            # Fallback to simple classification if Redis classifier fails
-            print(f"Classification error, falling back to simple: {e}")
-            return TaskComplexity.SIMPLE
+            # Fallback to Redis-based classifier
+            print(f"LLM classification error, using Redis fallback: {e}")
+            try:
+                from src.workflow_classifier import WorkflowClassifier
+
+                classifier = WorkflowClassifier(self.redis_client)
+                fallback_result = classifier.classify_request(user_message)
+                # Cache the fallback result too
+                self._classification_cache[cache_key] = fallback_result
+                return fallback_result
+            except Exception as e2:
+                print(f"Redis classification error, falling back to simple: {e2}")
+                simple_result = TaskComplexity.SIMPLE
+                self._classification_cache[cache_key] = simple_result
+                return simple_result
 
     def plan_workflow_steps(
         self, user_message: str, complexity: TaskComplexity
@@ -1220,6 +1258,103 @@ class Orchestrator:
                         "research_results": "{web_research.outputs}",
                     },
                     dependencies=["kb_search", "web_research"],
+                ),
+            ]
+
+        elif complexity == TaskComplexity.INSTALL:
+            return [
+                WorkflowStep(
+                    id="research_install",
+                    agent_type="research",
+                    action="research_installation",
+                    inputs={"query": user_message},
+                ),
+                WorkflowStep(
+                    id="plan_install",
+                    agent_type="orchestrator",
+                    action="create_install_plan",
+                    inputs={"install_info": "{research_install.outputs}"},
+                    user_approval_required=True,
+                    dependencies=["research_install"],
+                ),
+                WorkflowStep(
+                    id="execute_install",
+                    agent_type="system_commands",
+                    action="install_software",
+                    inputs={"install_plan": "{plan_install.outputs}"},
+                    dependencies=["plan_install"],
+                ),
+                WorkflowStep(
+                    id="verify_install",
+                    agent_type="system_commands",
+                    action="verify_installation",
+                    inputs={"software_info": "{research_install.outputs}"},
+                    dependencies=["execute_install"],
+                ),
+            ]
+
+        elif complexity == TaskComplexity.SECURITY_SCAN:
+            # Security scanning workflow
+            return [
+                WorkflowStep(
+                    id="validate_target",
+                    agent_type="security_scanner",
+                    action="validate_scan_target",
+                    inputs={"user_message": user_message},
+                ),
+                WorkflowStep(
+                    id="network_discovery",
+                    agent_type="network_discovery",
+                    action="perform_host_discovery",
+                    inputs={"target": "{validate_target.outputs.target}"},
+                    dependencies=["validate_target"],
+                ),
+                WorkflowStep(
+                    id="port_scan",
+                    agent_type="security_scanner",
+                    action="perform_port_scan",
+                    inputs={
+                        "target": "{validate_target.outputs.target}",
+                        "hosts": "{network_discovery.outputs.hosts}",
+                    },
+                    dependencies=["network_discovery"],
+                ),
+                WorkflowStep(
+                    id="service_detection",
+                    agent_type="security_scanner",
+                    action="detect_services",
+                    inputs={"scan_results": "{port_scan.outputs}"},
+                    dependencies=["port_scan"],
+                ),
+                WorkflowStep(
+                    id="vulnerability_assessment",
+                    agent_type="security_scanner",
+                    action="assess_vulnerabilities",
+                    inputs={
+                        "services": "{service_detection.outputs}",
+                        "scan_results": "{port_scan.outputs}",
+                    },
+                    user_approval_required=True,
+                    dependencies=["service_detection"],
+                ),
+                WorkflowStep(
+                    id="generate_report",
+                    agent_type="orchestrator",
+                    action="compile_security_report",
+                    inputs={
+                        "discovery": "{network_discovery.outputs}",
+                        "ports": "{port_scan.outputs}",
+                        "services": "{service_detection.outputs}",
+                        "vulnerabilities": "{vulnerability_assessment.outputs}",
+                    },
+                    dependencies=["vulnerability_assessment"],
+                ),
+                WorkflowStep(
+                    id="store_results",
+                    agent_type="knowledge_manager",
+                    action="store_scan_results",
+                    inputs={"report": "{generate_report.outputs}"},
+                    dependencies=["generate_report"],
                 ),
             ]
 
@@ -1296,7 +1431,7 @@ class Orchestrator:
         """Create comprehensive workflow response instead of simple chat."""
 
         # Classify the request
-        complexity = self.classify_request_complexity(user_message)
+        complexity = await self.classify_request_complexity(user_message)
 
         # Plan the workflow
         workflow_steps = self.plan_workflow_steps(user_message, complexity)
@@ -1339,6 +1474,7 @@ class Orchestrator:
             workflow_id = str(uuid.uuid4())
             self.active_workflows[workflow_id] = workflow_steps
             response["workflow_id"] = workflow_id
+            response["workflow_steps"] = workflow_steps
 
         return response
 
@@ -1364,6 +1500,8 @@ class Orchestrator:
             "knowledge_manager": 5,  # Storage
             "orchestrator": 2,  # Planning
             "chat": 1,  # Simple response
+            "security_scanner": 120,  # Security scans
+            "network_discovery": 60,  # Network discovery
         }
 
         total_seconds = sum(duration_map.get(step.agent_type, 10) for step in steps)
@@ -1379,7 +1517,7 @@ class Orchestrator:
 
     async def should_use_workflow_orchestration(self, user_message: str) -> bool:
         """Determine if a request should use multi-agent workflow orchestration."""
-        complexity = self.classify_request_complexity(user_message)
+        complexity = await self.classify_request_complexity(user_message)
         should_orchestrate = complexity != TaskComplexity.SIMPLE
 
         if should_orchestrate:
