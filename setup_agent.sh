@@ -164,6 +164,28 @@ fi
 echo "Assuming Redis Stack is ready and accessible via localhost:6379 from within WSL2."
 echo "Please ensure the 'redis-stack' Docker container is running and healthy."
 
+# --- 3.5. Install Browser Dependencies for GUI Testing ---
+echo "🌐 Installing browser dependencies for GUI testing..."
+sudo apt update
+sudo apt install -y \
+    libicu66 libicu-dev \
+    libjpeg8 libjpeg8-dev \
+    libwebp6 libwebpdemux2 libwebpmux3 \
+    libffi7 libffi-dev \
+    libglib2.0-0 libgtk-3-0 libgconf-2-4 \
+    libasound2 libxss1 libatk-bridge2.0-0 \
+    libdrm2 libxcomposite1 libxdamage1 libxrandr2 \
+    libgbm1 libxkbcommon0 libatspi2.0-0 \
+    libx11-xcb1 libxcb-dri3-0 libxcb1 libxcursor1 \
+    libxfixes3 libxi6 libxrender1 libxext6 \
+    fonts-liberation libappindicator3-1 libnss3 \
+    lsb-release xdg-utils || {
+    echo "⚠️ Failed to install some browser dependencies. GUI testing may be limited."
+    echo "   This is common on some systems and may not affect basic functionality."
+    echo "✅ Continuing with setup..."
+}
+echo "✅ Browser dependencies installation completed."
+
 # --- 4. Deploy/Start Playwright Service Docker Container ---
 echo "🔍 Checking for existing 'autobot-playwright' Docker container..."
 if docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright$'; then
@@ -552,6 +574,18 @@ timeout 300s npm install || {
         exit 1
     }
 }
+
+# Install Playwright browsers for GUI testing
+echo "🌐 Installing Playwright browsers for GUI testing..."
+npx playwright install --with-deps || {
+    echo "⚠️ Failed to install Playwright browsers with system dependencies."
+    echo "   Trying without system dependencies..."
+    npx playwright install || {
+        echo "⚠️ Failed to install Playwright browsers. GUI testing will be limited."
+        echo "   You can manually install later with: npx playwright install"
+    }
+}
+echo "✅ Playwright browser installation completed."
 
 # Build frontend with timeout
 echo "🏗️ Building frontend..."
