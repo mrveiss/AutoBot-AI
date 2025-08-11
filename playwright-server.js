@@ -10,16 +10,36 @@ async function initBrowser() {
   try {
     if (!browser || !browser.isConnected()) {
       console.log('🚀 Launching Chromium browser...');
-      browser = await chromium.launch({
-        headless: true,
+
+      // Check if we should run in headless or headed mode
+      const headlessMode = process.env.HEADLESS !== 'false';
+      console.log(`Browser mode: ${headlessMode ? 'headless' : 'headed (visible)'}`);
+
+      const launchOptions = {
+        headless: headlessMode,
         args: [
           '--no-sandbox',
           '--disable-dev-shm-usage',
-          '--disable-gpu',
           '--disable-web-security',
-          '--disable-features=VizDisplayCompositor'
+          '--disable-features=VizDisplayCompositor',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
         ]
-      });
+      };
+
+      // Add headed mode specific options
+      if (!headlessMode) {
+        launchOptions.args.push(
+          '--start-maximized',
+          '--disable-infobars',
+          '--disable-extensions'
+        );
+        // Set slower execution for visibility
+        launchOptions.slowMo = 500; // 500ms delay between actions
+      }
+
+      browser = await chromium.launch(launchOptions);
       console.log('✅ Browser launched successfully');
     }
     return browser;
@@ -71,7 +91,7 @@ app.post('/search', async (req, res) => {
     await page.waitForTimeout(3000);
 
     let results = [];
-    
+
     try {
       const resultSelectors = [
         '[data-testid="result"]',
@@ -135,21 +155,201 @@ app.post('/search', async (req, res) => {
   }
 });
 
+// Add comprehensive message testing endpoint
+app.post('/send-test-message', async (req, res) => {
+  console.log('💬 Received message test request:', req.body);
+  try {
+    const { frontend_url = 'http://localhost:5173', message = 'what network scanning tools do we have available?' } = req.body;
+
+    const browser = await initBrowser();
+    const page = await browser.newPage();
+
+    console.log('🌐 Navigating to frontend:', frontend_url);
+    await page.goto(frontend_url, { waitUntil: 'networkidle', timeout: 30000 });
+
+    // Wait for Vue.js app to fully load
+    await page.waitForTimeout(3000);
+
+    const results = {
+      success: true,
+      frontend_url,
+      message_sent: message,
+      timestamp: new Date().toISOString(),
+      steps: []
+    };
+
+    // Step 1: Navigate to AI Assistant
+    console.log('🧭 Clicking AI ASSISTANT navigation...');
+    try {
+      const aiAssistantButton = page.getByText('AI ASSISTANT');
+      await aiAssistantButton.click();
+      await page.waitForTimeout(2000);
+
+      results.steps.push({
+        step: 'Navigate to AI Assistant',
+        status: 'SUCCESS',
+        details: 'AI Assistant section opened'
+      });
+    } catch (error) {
+      results.steps.push({
+        step: 'Navigate to AI Assistant',
+        status: 'FAILED',
+        details: error.message
+      });
+    }
+
+    // Step 2: Find message input
+    console.log('🔍 Looking for message input field...');
+    try {
+      const messageInput = page.locator('textarea[placeholder*="message"], textarea[placeholder*="Type"], textarea').first();
+
+      if (await messageInput.count() > 0) {
+        console.log('✅ Message input found');
+
+        // Step 3: Type the test message
+        console.log(`💬 Typing message: "${message}"`);
+        await messageInput.fill(message);
+        await page.waitForTimeout(1000);
+
+        results.steps.push({
+          step: 'Type message',
+          status: 'SUCCESS',
+          details: `Message typed: "${message}"`
+        });
+
+        // Step 4: Send the message
+        console.log('📤 Looking for send button...');
+        const sendSelectors = [
+          'text=Send',
+          'button[type="submit"]',
+          '.send-button',
+          '.btn:has-text("Send")',
+          'button:has-text("Send")'
+        ];
+
+        let messageSent = false;
+        for (const selector of sendSelectors) {
+          try {
+            const sendBtn = page.locator(selector);
+            if (await sendBtn.count() > 0) {
+              console.log(`📤 Clicking send button: ${selector}`);
+              await sendBtn.click();
+              messageSent = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+
+        if (messageSent) {
+          await page.waitForTimeout(3000); // Wait for response
+
+          results.steps.push({
+            step: 'Send message',
+            status: 'SUCCESS',
+            details: 'Message sent successfully'
+          });
+
+          // Step 5: Check for workflow response
+          console.log('⏳ Waiting for workflow response...');
+          await page.waitForTimeout(5000);
+
+          // Look for workflow indicators
+          const workflowIndicators = [
+            '.workflow-progress',
+            '.workflow-step',
+            '[data-testid="workflow"]',
+            'text=workflow',
+            'text=step',
+            'text=approval'
+          ];
+
+          let workflowDetected = false;
+          const workflowDetails = [];
+
+          for (const indicator of workflowIndicators) {
+            try {
+              const elements = await page.locator(indicator).count();
+              if (elements > 0) {
+                workflowDetected = true;
+                workflowDetails.push(`Found ${elements} elements matching "${indicator}"`);
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+
+          results.steps.push({
+            step: 'Check workflow response',
+            status: workflowDetected ? 'SUCCESS' : 'PENDING',
+            details: workflowDetected ? workflowDetails.join(', ') : 'Workflow may still be processing'
+          });
+
+        } else {
+          results.steps.push({
+            step: 'Send message',
+            status: 'FAILED',
+            details: 'Send button not found'
+          });
+        }
+
+      } else {
+        results.steps.push({
+          step: 'Find message input',
+          status: 'FAILED',
+          details: 'Message input field not found'
+        });
+      }
+
+    } catch (error) {
+      results.steps.push({
+        step: 'Find message input',
+        status: 'FAILED',
+        details: error.message
+      });
+    }
+
+    // Take screenshot for debugging
+    try {
+      const screenshot = await page.screenshot({ fullPage: true, type: 'png' });
+      results.screenshot_size = screenshot.length;
+      results.has_screenshot = true;
+      console.log(`📸 Screenshot captured: ${screenshot.length} bytes`);
+    } catch (error) {
+      results.screenshot_error = error.message;
+    }
+
+    await page.close();
+
+    console.log('✅ Message test completed');
+    res.json(results);
+
+  } catch (error) {
+    console.error('❌ Message test error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Add frontend testing endpoint
 app.post('/test-frontend', async (req, res) => {
   console.log('🎯 Received frontend test request:', req.body);
   try {
     const { frontend_url = 'http://localhost:5173' } = req.body;
-    
+
     const browser = await initBrowser();
     const page = await browser.newPage();
-    
+
     console.log('🌐 Navigating to frontend:', frontend_url);
     await page.goto(frontend_url, { waitUntil: 'networkidle', timeout: 30000 });
-    
+
     // Wait for Vue.js app to fully load
     await page.waitForTimeout(5000);
-    
+
     // Wait for Vue app to be mounted
     try {
       await page.waitForSelector('#app', { timeout: 10000 });
@@ -157,14 +357,14 @@ app.post('/test-frontend', async (req, res) => {
     } catch (e) {
       console.log('⚠️ Vue app container not found');
     }
-    
+
     const results = {
       success: true,
       frontend_url,
       timestamp: new Date().toISOString(),
       tests: []
     };
-    
+
     // Test 1: Check if page loaded
     const title = await page.title();
     results.tests.push({
@@ -172,7 +372,7 @@ app.post('/test-frontend', async (req, res) => {
       status: title ? 'PASS' : 'FAIL',
       details: `Title: ${title}`
     });
-    
+
     // Test 2: Check for main navigation
     const navItems = ['DASHBOARD', 'AI ASSISTANT', 'VOICE INTERFACE', 'KNOWLEDGE BASE', 'TERMINAL', 'FILE MANAGER', 'SYSTEM MONITOR', 'SETTINGS'];
     for (const navItem of navItems) {
@@ -184,7 +384,7 @@ app.post('/test-frontend', async (req, res) => {
           status: isVisible ? 'PASS' : 'FAIL',
           details: isVisible ? 'Navigation item found' : 'Navigation item not visible'
         });
-        
+
         if (isVisible) {
           await element.click();
           await page.waitForTimeout(1000);
@@ -198,34 +398,34 @@ app.post('/test-frontend', async (req, res) => {
         });
       }
     }
-    
+
     // Test 3: Check AI Assistant functionality
     try {
       console.log('🤖 Navigating to AI Assistant...');
       const aiAssistantButton = page.getByText('AI ASSISTANT');
       await aiAssistantButton.click();
       await page.waitForTimeout(5000);
-      
+
       console.log('📍 Current URL after AI Assistant click:', page.url());
-      
+
       // Wait for ChatInterface component to load
       console.log('⏳ Waiting for chat interface to load...');
       await page.waitForTimeout(3000);
-      
+
       // Debug: Check what's actually in the DOM
       const chatSection = page.locator('[key="chat"], .chat-interface, [data-testid="chat"]');
       const chatSectionCount = await chatSection.count();
       console.log(`🔍 Chat sections found: ${chatSectionCount}`);
-      
+
       if (chatSectionCount > 0) {
         const chatSectionHTML = await chatSection.first().innerHTML();
         console.log('📝 Chat section HTML preview:', chatSectionHTML.substring(0, 200) + '...');
       }
-      
+
       // Look for chat interface elements with multiple selectors
       const messageSelectors = [
         'textarea[placeholder*="message"]',
-        'input[placeholder*="message"]', 
+        'input[placeholder*="message"]',
         'textarea[placeholder*="Type"]',
         'input[placeholder*="Type"]',
         '.chat-input textarea',
@@ -233,10 +433,10 @@ app.post('/test-frontend', async (req, res) => {
         'textarea',
         'input[type="text"]'
       ];
-      
+
       let hasMessageInput = false;
       let messageInputDetails = 'No message input found';
-      
+
       for (const selector of messageSelectors) {
         try {
           const inputs = await page.locator(selector).count();
@@ -249,13 +449,13 @@ app.post('/test-frontend', async (req, res) => {
           continue;
         }
       }
-      
+
       results.tests.push({
         name: 'Chat Interface',
-        status: hasMessageInput ? 'PASS' : 'FAIL', 
+        status: hasMessageInput ? 'PASS' : 'FAIL',
         details: messageInputDetails
       });
-      
+
       // Test Reload System button with multiple selectors
       const reloadSelectors = [
         'text=Reload System',
@@ -265,10 +465,10 @@ app.post('/test-frontend', async (req, res) => {
         '.reload-button',
         '.btn:has-text("Reload")'
       ];
-      
+
       let hasReloadButton = false;
       let reloadButtonDetails = 'No reload button found';
-      
+
       for (const selector of reloadSelectors) {
         try {
           const buttons = await page.locator(selector).count();
@@ -281,24 +481,24 @@ app.post('/test-frontend', async (req, res) => {
           continue;
         }
       }
-      
+
       results.tests.push({
         name: 'Reload System Button',
         status: hasReloadButton ? 'PASS' : 'FAIL',
         details: reloadButtonDetails
       });
-      
+
       // Test sending a message if input is found
       if (hasMessageInput) {
         try {
           const textarea = page.locator('textarea').first();
           await textarea.fill('Test message from Playwright');
           await page.waitForTimeout(1000);
-          
+
           // Look for send button
           const sendSelectors = ['text=Send', 'button[type="submit"]', '.send-button', '.btn:has-text("Send")'];
           let messageSent = false;
-          
+
           for (const selector of sendSelectors) {
             try {
               const sendBtn = page.locator(selector);
@@ -311,7 +511,7 @@ app.post('/test-frontend', async (req, res) => {
               continue;
             }
           }
-          
+
           results.tests.push({
             name: 'Message Sending',
             status: messageSent ? 'PASS' : 'FAIL',
@@ -320,12 +520,12 @@ app.post('/test-frontend', async (req, res) => {
         } catch (error) {
           results.tests.push({
             name: 'Message Sending',
-            status: 'FAIL', 
+            status: 'FAIL',
             details: error.message
           });
         }
       }
-      
+
     } catch (error) {
       results.tests.push({
         name: 'AI Assistant Navigation',
@@ -333,12 +533,12 @@ app.post('/test-frontend', async (req, res) => {
         details: error.message
       });
     }
-    
+
     // Capture page HTML for debugging
     try {
       // Wait a bit more to ensure all elements are loaded
       await page.waitForTimeout(2000);
-      
+
       // Extract key elements for debugging
       const allButtons = await page.locator('button').all();
       const buttonTexts = [];
@@ -352,12 +552,12 @@ app.post('/test-frontend', async (req, res) => {
           continue;
         }
       }
-      
+
       // Look for all form elements
       const textareas = await page.locator('textarea').count();
       const inputs = await page.locator('input').count();
       const forms = await page.locator('form').count();
-      
+
       // Get current page structure
       const navItems = await page.locator('nav a, .nav a, [role="navigation"] a, .sidebar a').all();
       const navTexts = [];
@@ -371,12 +571,12 @@ app.post('/test-frontend', async (req, res) => {
           continue;
         }
       }
-      
+
       results.debug_info = {
         page_title: await page.title(),
         url: page.url(),
         textareas: textareas,
-        inputs: inputs, 
+        inputs: inputs,
         forms: forms,
         button_texts: buttonTexts.slice(0, 15),
         navigation_texts: navTexts.slice(0, 10),
@@ -387,7 +587,7 @@ app.post('/test-frontend', async (req, res) => {
     } catch (error) {
       results.debug_error = error.message;
     }
-    
+
     // Take screenshot for debugging
     try {
       const screenshot = await page.screenshot({ fullPage: true, type: 'png' });
@@ -397,22 +597,22 @@ app.post('/test-frontend', async (req, res) => {
     } catch (error) {
       results.screenshot_error = error.message;
     }
-    
+
     await page.close();
-    
+
     const passCount = results.tests.filter(t => t.status === 'PASS').length;
     const totalTests = results.tests.length;
-    
+
     results.summary = {
       total_tests: totalTests,
       passed: passCount,
       failed: totalTests - passCount,
       success_rate: `${Math.round((passCount / totalTests) * 100)}%`
     };
-    
+
     console.log('✅ Frontend testing completed:', results.summary);
     res.json(results);
-    
+
   } catch (error) {
     console.error('❌ Frontend test error:', error);
     res.status(500).json({
