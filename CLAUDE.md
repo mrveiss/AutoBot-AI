@@ -81,6 +81,12 @@ npm run lint         # ESLint + oxlint
 npm run format       # Prettier
 npm run type-check   # TypeScript validation
 npm run test:unit    # Vitest tests
+
+# GUI Testing (Playwright)
+npm run test:playwright           # Run all GUI tests
+npm run test:playwright:headed    # Run GUI tests with browser UI
+npm run test:playwright:ui        # Run GUI tests with Playwright UI
+npm run test:playwright:report    # View test results report
 ```
 
 ## 🔄 MULTI-AGENT WORKFLOW ORCHESTRATION
