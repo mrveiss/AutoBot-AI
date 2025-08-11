@@ -7,6 +7,9 @@ import asyncio
 import json
 import logging
 import os
+import pty
+import subprocess
+import threading
 from typing import Dict, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -15,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class SimpleTerminalSession:
-    """Simple terminal session that actually works"""
+    """Full-featured terminal session with PTY support for sudo commands"""
 
     def __init__(self, session_id: str):
         self.session_id = session_id
@@ -23,30 +26,31 @@ class SimpleTerminalSession:
         self.current_dir = "/home/kali"
         self.env = os.environ.copy()
         self.active = False
+        self.pty_fd = None
+        self.process = None
+        self.reader_thread = None
 
     async def connect(self, websocket: WebSocket):
-        """Connect WebSocket to this session"""
+        """Connect WebSocket to this session and start PTY shell"""
         await websocket.accept()
         self.websocket = websocket
         self.active = True
+
+        # Start PTY shell process
+        await self.start_pty_shell()
 
         # Send connection confirmation
         await self.send_message(
             {
                 "type": "connection",
                 "status": "connected",
-                "message": "Simple terminal connected",
+                "message": "Full terminal connected with sudo support",
                 "session_id": self.session_id,
                 "working_dir": self.current_dir,
             }
         )
 
-        # Send initial prompt
-        await self.send_message(
-            {"type": "output", "content": f"kali@autobot:{self.current_dir}$ "}
-        )
-
-        logger.info(f"Simple terminal session {self.session_id} connected")
+        logger.info(f"Full terminal session {self.session_id} connected")
 
     async def send_message(self, data: dict):
         """Send message to WebSocket"""
@@ -56,159 +60,142 @@ class SimpleTerminalSession:
             except Exception as e:
                 logger.error(f"Error sending message: {e}")
 
+    async def start_pty_shell(self):
+        """Start a PTY shell process for full interactivity"""
+        try:
+            # Create PTY
+            master_fd, slave_fd = pty.openpty()
+            self.pty_fd = master_fd
+
+            # Start shell process with PTY
+            self.process = subprocess.Popen(
+                ["/bin/bash"],
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                cwd=self.current_dir,
+                env=self.env,
+                preexec_fn=os.setsid,
+            )
+
+            # Close slave fd (process has it)
+            os.close(slave_fd)
+
+            # Start reader thread
+            self.reader_thread = threading.Thread(
+                target=self._read_pty_output, daemon=True
+            )
+            self.reader_thread.start()
+
+            logger.info(f"PTY shell started for session {self.session_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to start PTY shell: {e}")
+            await self.send_message(
+                {"type": "error", "message": f"Failed to start terminal: {str(e)}"}
+            )
+
+    def _read_pty_output(self):
+        """Read output from PTY in separate thread"""
+        import select
+
+        try:
+            while self.active and self.pty_fd:
+                try:
+                    # Read with timeout
+                    ready, _, _ = select.select([self.pty_fd], [], [], 0.1)
+
+                    if ready:
+                        data = os.read(self.pty_fd, 1024)
+                        if data and self.websocket:
+                            # Send to WebSocket synchronously from thread
+                            try:
+                                message = json.dumps(
+                                    {
+                                        "type": "output",
+                                        "content": data.decode(
+                                            "utf-8", errors="replace"
+                                        ),
+                                    }
+                                )
+                                # Use the event loop to send message
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                loop.run_until_complete(
+                                    self.websocket.send_text(message)
+                                )
+                                loop.close()
+                            except Exception as e:
+                                logger.error(f"Error sending PTY output: {e}")
+                                break
+                except OSError:
+                    break
+                except Exception as e:
+                    logger.error(f"Error reading PTY: {e}")
+                    break
+        except Exception as e:
+            logger.error(f"PTY reader thread error: {e}")
+
+    async def send_input(self, text: str):
+        """Send input to PTY shell"""
+        if self.pty_fd and self.active:
+            try:
+                os.write(self.pty_fd, text.encode("utf-8"))
+            except Exception as e:
+                logger.error(f"Error writing to PTY: {e}")
+
     async def execute_command(self, command: str) -> bool:
-        """Execute a command and stream output"""
+        """Send command to PTY shell (now supports all commands including sudo)"""
         if not command.strip():
             return False
 
-        logger.info(f"Executing command: {command}")
+        logger.info(f"Sending to PTY: {command}")
 
         try:
-            # Handle cd command specially
-            if command.strip().startswith("cd "):
-                path = command.strip()[3:].strip()
-                if path == "":
-                    path = os.path.expanduser("~")
-                elif not os.path.isabs(path):
-                    path = os.path.join(self.current_dir, path)
-
-                if os.path.exists(path) and os.path.isdir(path):
-                    self.current_dir = os.path.abspath(path)
-                    await self.send_message(
-                        {
-                            "type": "output",
-                            "content": f"kali@autobot:{self.current_dir}$ ",
-                        }
-                    )
-                else:
-                    await self.send_message(
-                        {
-                            "type": "output",
-                            "content": f"cd: {path}: No such file or directory\n"
-                            f"kali@autobot:{self.current_dir}$ ",
-                        }
-                    )
-                return True
-
-            # Block only commands that start interactive shells
-            # Allow all sudo commands except those that start interactive shells
-            cmd_stripped = command.strip()
-
-            # List of exact commands that start interactive shells
-            blocked_commands = {
-                "bash",
-                "sh",
-                "zsh",
-                "fish",
-                "csh",
-                "tcsh",
-                "sudo bash",
-                "sudo sh",
-                "sudo zsh",
-                "sudo fish",
-                "sudo csh",
-                "sudo tcsh",
-                "sudo su",
-                "su",
-                "su -",
-            }
-
-            # Check if this is exactly a blocked command or starts a shell with options
-            is_blocked = False
-            if cmd_stripped in blocked_commands:
-                is_blocked = True
-            else:
-                # Check for shell commands with options (like "bash -i")
-                shell_commands = ["bash", "sh", "zsh", "fish", "csh", "tcsh"]
-                first_word = cmd_stripped.split()[0] if cmd_stripped.split() else ""
-                if first_word in shell_commands:
-                    is_blocked = True
-
-            if is_blocked:
-                await self.send_message(
-                    {
-                        "type": "output",
-                        "content": f"Interactive command '{command}' not supported "
-                        f"in web terminal.\nUse regular commands instead.\n"
-                        f"kali@autobot:{self.current_dir}$ ",
-                    }
-                )
-                return True
-
-            # Execute other commands with timeout
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=self.current_dir,
-                env=self.env,
-            )
-
-            # Stream output in real-time with timeout
-            try:
-                while True:
-                    # Read with timeout to prevent hanging
-                    try:
-                        output = await asyncio.wait_for(
-                            process.stdout.read(1024), timeout=0.5
-                        )
-                        if not output:
-                            break
-
-                        # Send output to client
-                        await self.send_message(
-                            {
-                                "type": "output",
-                                "content": output.decode("utf-8", errors="replace"),
-                            }
-                        )
-                    except asyncio.TimeoutError:
-                        # Check if process is still running
-                        if process.returncode is not None:
-                            break
-                        continue
-
-                # Wait for process to complete with timeout
-                await asyncio.wait_for(process.wait(), timeout=10.0)
-
-            except asyncio.TimeoutError:
-                # Kill hanging process
-                try:
-                    process.terminate()
-                    await asyncio.wait_for(process.wait(), timeout=2.0)
-                except Exception:
-                    process.kill()
-
-                await self.send_message(
-                    {
-                        "type": "output",
-                        "content": f"\nCommand '{command}' timed out "
-                        f"and was terminated.\n",
-                    }
-                )
-
-            # Send new prompt
-            await self.send_message(
-                {"type": "output", "content": f"kali@autobot:{self.current_dir}$ "}
-            )
-
+            # Send command to PTY shell
+            await self.send_input(command + "\n")
             return True
 
         except Exception as e:
-            logger.error(f"Command execution error: {e}")
+            logger.error(f"PTY command error: {e}")
             await self.send_message(
-                {"type": "error", "message": f"Command failed: {str(e)}"}
-            )
-            await self.send_message(
-                {"type": "output", "content": f"kali@autobot:{self.current_dir}$ "}
+                {"type": "error", "message": f"Terminal error: {str(e)}"}
             )
             return False
 
     def disconnect(self):
-        """Disconnect session"""
+        """Disconnect session and clean up PTY"""
         self.active = False
+
+        # Close PTY
+        if self.pty_fd:
+            try:
+                os.close(self.pty_fd)
+            except Exception:
+                pass
+            self.pty_fd = None
+
+        # Terminate shell process
+        if self.process:
+            try:
+                self.process.terminate()
+                self.process.wait(timeout=2)
+            except Exception:
+                try:
+                    self.process.kill()
+                except Exception:
+                    pass
+            self.process = None
+
+        # Wait for reader thread to finish
+        if self.reader_thread and self.reader_thread.is_alive():
+            try:
+                self.reader_thread.join(timeout=1)
+            except Exception:
+                pass
+
         self.websocket = None
-        logger.info(f"Simple terminal session {self.session_id} disconnected")
+        logger.info(f"Full terminal session {self.session_id} disconnected")
 
 
 class SimpleTerminalHandler:
