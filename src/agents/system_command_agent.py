@@ -5,10 +5,10 @@ terminal streaming
 """
 
 import asyncio
-import os
 import logging
-from typing import Dict, Any, List, Optional
+import os
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from src.agents.interactive_terminal_agent import InteractiveTerminalAgent
 from src.event_manager import event_manager

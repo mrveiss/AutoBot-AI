@@ -8,25 +8,24 @@ to OS-aware command execution with real-time streaming and intelligent commentar
 import asyncio
 import logging
 import time
-from typing import AsyncGenerator, Dict, Any, Optional, List
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
+from src.intelligence.goal_processor import GoalProcessor, ProcessedGoal
+# Import our new intelligent agent components
+from src.intelligence.os_detector import OSDetector, OSInfo, get_os_detector
+from src.intelligence.streaming_executor import (
+    ChunkType,
+    StreamChunk,
+    StreamingCommandExecutor,
+)
+from src.intelligence.tool_selector import OSAwareToolSelector
+from src.knowledge_base import KnowledgeBase
 # Import existing AutoBot components
 from src.llm_interface import LLMInterface
-from src.knowledge_base import KnowledgeBase
-from src.worker_node import WorkerNode
 from src.utils.command_validator import CommandValidator
-
-# Import our new intelligent agent components
-from src.intelligence.os_detector import OSDetector, get_os_detector, OSInfo
-from src.intelligence.goal_processor import GoalProcessor, ProcessedGoal
-from src.intelligence.tool_selector import OSAwareToolSelector
-from src.intelligence.streaming_executor import (
-    StreamingCommandExecutor,
-    StreamChunk,
-    ChunkType,
-)
+from src.worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
 
@@ -461,10 +460,10 @@ class IntelligentAgent:
                         # Validate command safety
                         if self.command_validator.is_command_safe(command):
                             # Execute the command
-                            async for chunk in (
-                                self.streaming_executor.execute_with_streaming(
-                                    command, user_input, timeout=300
-                                )
+                            async for (
+                                chunk
+                            ) in self.streaming_executor.execute_with_streaming(
+                                command, user_input, timeout=300
                             ):
                                 yield chunk
 

@@ -1,5 +1,5 @@
-import shutil
 import json
+import shutil
 import subprocess
 
 ESSENTIAL_TOOLS = [

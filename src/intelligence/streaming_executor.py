@@ -7,14 +7,14 @@ commentary and analysis for the intelligent agent system.
 
 import asyncio
 import logging
+import shlex
 import subprocess
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import AsyncGenerator, Dict, List, Optional, Any
-import shlex
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from src.llm_interface import LLMInterface
 from src.utils.command_validator import CommandValidator

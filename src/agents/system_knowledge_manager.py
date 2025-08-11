@@ -3,16 +3,17 @@ System Knowledge Manager for AutoBot
 Manages immutable system knowledge templates and their runtime copies
 """
 
-import shutil
-import yaml
 import json
 import logging
-from pathlib import Path
-from typing import Dict, Any, List
+import shutil
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
-from src.knowledge_base import KnowledgeBase
+import yaml
+
 from src.agents.enhanced_kb_librarian import EnhancedKBLibrarian
+from src.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 

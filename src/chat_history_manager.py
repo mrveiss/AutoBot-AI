@@ -1,8 +1,8 @@
 import json
+import logging
 import os
 import time
-import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 # Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
