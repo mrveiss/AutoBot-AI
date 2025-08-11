@@ -2,9 +2,12 @@
 Centralized configuration service for backend API.
 Eliminates duplication across settings.py, llm.py, and redis.py
 """
+
 import logging
+from typing import Any, Dict
+
 import yaml
-from typing import Dict, Any
+
 from src.config import global_config_manager
 
 logger = logging.getLogger(__name__)

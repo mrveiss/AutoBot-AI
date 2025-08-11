@@ -1,14 +1,15 @@
-from fastapi import APIRouter, HTTPException, File, UploadFile
+import logging
+import os as os_module
+import tempfile
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional
-import logging
-from datetime import datetime
-import tempfile
-import os as os_module
 
-from src.knowledge_base import KnowledgeBase
 from src.agents.system_knowledge_manager import SystemKnowledgeManager
+from src.knowledge_base import KnowledgeBase
 
 router = APIRouter()
 
@@ -593,8 +594,9 @@ async def crawl_url(request: dict):
 
         # Import requests for web crawling
         try:
-            import requests
             import time
+
+            import requests
         except ImportError:
             raise HTTPException(
                 status_code=500,

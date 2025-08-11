@@ -3,15 +3,16 @@ Terminal API endpoints for AutoBot
 Provides REST API for terminal operations and WebSocket connections
 """
 
-from fastapi import APIRouter, WebSocket, HTTPException, Request
+import logging
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Request, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional
-import logging
 
 from backend.api.terminal_websocket import (
-    terminal_websocket_endpoint,
     system_command_agent,
+    terminal_websocket_endpoint,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,10 +40,99 @@ class TerminalInputRequest(BaseModel):
     is_password: Optional[bool] = False
 
 
+class SessionCreateRequest(BaseModel):
+    shell: Optional[str] = "/bin/bash"
+    environment: Optional[dict] = {}
+    working_directory: Optional[str] = "/home/user"
+
+
 @router.websocket("/ws/terminal/{chat_id}")
 async def websocket_terminal(websocket: WebSocket, chat_id: str):
     """WebSocket endpoint for terminal sessions"""
     await terminal_websocket_endpoint(websocket, chat_id)
+
+
+@router.post("/sessions")
+async def create_session(request: SessionCreateRequest):
+    """Create a new terminal session"""
+    try:
+        # Generate a session ID
+        import uuid
+
+        session_id = str(uuid.uuid4())
+
+        # For now, we'll just return the session ID
+        # In a full implementation, you would set up the terminal session here
+        return JSONResponse(
+            content={
+                "session_id": session_id,
+                "shell": request.shell,
+                "working_directory": request.working_directory,
+                "status": "created",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error creating session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions")
+async def get_sessions():
+    """Get list of active sessions"""
+    try:
+        # For now, return an empty list
+        # In a full implementation, you would return actual session data
+        return JSONResponse(content=[])
+    except Exception as e:
+        logger.error(f"Error getting sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions/{session_id}")
+async def get_session_info(session_id: str):
+    """Get information about a specific session"""
+    try:
+        # For now, return basic session info
+        return JSONResponse(
+            content={
+                "session_id": session_id,
+                "status": "active",
+                "shell": "/bin/bash",
+                "working_directory": "/home/user",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error getting session info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/sessions/{session_id}")
+async def close_session(session_id: str):
+    """Close a terminal session"""
+    try:
+        # For now, just acknowledge the close
+        return JSONResponse(content={"session_id": session_id, "status": "closed"})
+    except Exception as e:
+        logger.error(f"Error closing session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/command")
+async def execute_single_command(request: CommandRequest):
+    """Execute a single command and return result"""
+    try:
+        result = await system_command_agent.execute_interactive_command(
+            command=request.command,
+            chat_id="terminal-single-command",
+            description=request.description,
+            require_confirmation=False,  # Don't require confirmation for single commands
+            timeout=request.timeout or 30.0,
+        )
+
+        return JSONResponse(content=result)
+    except Exception as e:
+        logger.error(f"Error executing single command: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/terminal/command")
