@@ -14,10 +14,11 @@ except ImportError:
     pyttsx3 = None
     PYTTSX3_AVAILABLE = False
 
-import yaml
-import os
 import asyncio
-from typing import Dict, Any, Optional
+import os
+from typing import Any, Dict, Optional
+
+import yaml
 
 
 class VoiceInterface:

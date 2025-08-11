@@ -3,11 +3,13 @@ Centralized Redis client utility
 Eliminates code duplication across modules by providing a singleton Redis
 client factory
 """
+
+import logging
 import os
+from typing import Optional, Union
+
 import redis
 import redis.asyncio as async_redis
-from typing import Optional, Union
-import logging
 
 from src.config import config as global_config_manager
 

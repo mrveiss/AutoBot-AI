@@ -5,10 +5,11 @@ acting like a helpful librarian that finds relevant information before answering
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
+from src.config import config
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.config import config
 
 logger = logging.getLogger(__name__)
 

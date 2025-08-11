@@ -8,11 +8,12 @@ This module provides a unified configuration system that:
 - Provides a single source of truth for all configuration
 """
 
-import os
-import yaml
 import json
 import logging
-from typing import Dict, Any
+import os
+from typing import Any, Dict
+
+import yaml
 
 # GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when writing config files
 _original_yaml_dump = yaml.dump
@@ -430,9 +431,11 @@ class ConfigManager:
 
         # BACKWARD COMPATIBILITY: Also expose legacy format for old code
         legacy_format = {
-            "default_llm": f"ollama_{unified_config['local']['providers']['ollama']['selected_model']}"
-            if unified_config.get("provider_type") == "local"
-            else "ollama",
+            "default_llm": (
+                f"ollama_{unified_config['local']['providers']['ollama']['selected_model']}"
+                if unified_config.get("provider_type") == "local"
+                else "ollama"
+            ),
             "orchestrator_llm": os.getenv(
                 "AUTOBOT_ORCHESTRATOR_LLM",
                 unified_config["local"]["providers"]["ollama"]["selected_model"],
@@ -452,88 +455,97 @@ class ConfigManager:
 
     def get_task_specific_model(self, task_type: str = "default") -> str:
         """Get model for specific task types to optimize performance and resource usage.
-        
+
         Args:
             task_type: Agent type (orchestrator, chat, system_commands, rag, knowledge_retrieval, research)
-            
+
         Returns:
             Model name for the specified agent
         """
         # Multi-agent model configuration with available uncensored models for unrestricted capabilities
         agent_models = {
             # Core Orchestration - use uncensored model for flexible reasoning
-            "orchestrator": "artifish/llama3.2-uncensored:latest", # Main coordinator - uncensored 2.2GB
-            "default": "artifish/llama3.2-uncensored:latest",      # Fallback to orchestrator model
-            
+            "orchestrator": "artifish/llama3.2-uncensored:latest",  # Main coordinator - uncensored 2.2GB
+            "default": "artifish/llama3.2-uncensored:latest",  # Fallback to orchestrator model
             # Specialized Agents - optimized for task complexity
-            "chat": "llama3.2:1b-instruct-q4_K_M",                # 1B for fast conversations (807MB)
-            "system_commands": "llama3.2:1b-instruct-q4_K_M",     # 1B for command generation (807MB)
-            "rag": "artifish/llama3.2-uncensored:latest",          # Uncensored for document synthesis (2.2GB)
-            "knowledge_retrieval": "llama3.2:1b-instruct-q4_K_M", # 1B for fast fact lookup (807MB)
-            "research": "artifish/llama3.2-uncensored:latest",     # Uncensored for web research (2.2GB)
-            
+            "chat": "llama3.2:1b-instruct-q4_K_M",  # 1B for fast conversations (807MB)
+            "system_commands": "llama3.2:1b-instruct-q4_K_M",  # 1B for command generation (807MB)
+            "rag": "artifish/llama3.2-uncensored:latest",  # Uncensored for document synthesis (2.2GB)
+            "knowledge_retrieval": "llama3.2:1b-instruct-q4_K_M",  # 1B for fast fact lookup (807MB)
+            "research": "artifish/llama3.2-uncensored:latest",  # Uncensored for web research (2.2GB)
             # Legacy compatibility - use available models
-            "search": "llama3.2:1b-instruct-q4_K_M",              # Fast search queries (807MB)
-            "code": "llama3.2:1b-instruct-q4_K_M",                # Code understanding (807MB)
-            "analysis": "artifish/llama3.2-uncensored:latest",     # Analysis tasks (2.2GB)
-            "planning": "artifish/llama3.2-uncensored:latest",     # Task planning (2.2GB)
-            
+            "search": "llama3.2:1b-instruct-q4_K_M",  # Fast search queries (807MB)
+            "code": "llama3.2:1b-instruct-q4_K_M",  # Code understanding (807MB)
+            "analysis": "artifish/llama3.2-uncensored:latest",  # Analysis tasks (2.2GB)
+            "planning": "artifish/llama3.2-uncensored:latest",  # Task planning (2.2GB)
             # Fallback models for when uncensored is not needed
-            "orchestrator_fallback": "llama3.2:3b-instruct-q4_K_M", # Standard 3B (2.0GB)
-            "chat_fallback": "llama3.2:1b-instruct-q4_K_M",        # Standard 1B (807MB)
-            "fallback": "artifish/llama3.2-uncensored:latest",     # General fallback (2.2GB)
+            "orchestrator_fallback": "llama3.2:3b-instruct-q4_K_M",  # Standard 3B (2.0GB)
+            "chat_fallback": "llama3.2:1b-instruct-q4_K_M",  # Standard 1B (807MB)
+            "fallback": "artifish/llama3.2-uncensored:latest",  # General fallback (2.2GB)
         }
-        
+
         # Allow environment override for specific tasks
         env_key = f"AUTOBOT_MODEL_{task_type.upper()}"
         env_model = os.getenv(env_key)
         if env_model:
             logger.info(f"Using environment override for {task_type}: {env_model}")
             return env_model
-        
+
         # Get from config with fallback
         config_key = f"backend.llm.task_models.{task_type}"
         configured_model = self.get_nested(config_key)
         if configured_model:
             return configured_model
-        
+
         # Use agent-specific default or fall back to general default
         return agent_models.get(task_type, agent_models["default"])
 
-    def get_hardware_acceleration_config(self, task_type: str = "default") -> Dict[str, Any]:
+    def get_hardware_acceleration_config(
+        self, task_type: str = "default"
+    ) -> Dict[str, Any]:
         """Get hardware acceleration configuration for a specific task type.
-        
+
         Args:
             task_type: Agent type (orchestrator, chat, system_commands, etc.)
-            
+
         Returns:
             Dict containing hardware acceleration settings
         """
         try:
             # Import here to avoid circular dependency
             from src.hardware_acceleration import get_hardware_acceleration_manager
-            
+
             hw_manager = get_hardware_acceleration_manager()
             device_config = hw_manager.get_ollama_device_config(task_type)
-            
+
             # Add configuration override support
             base_config = {
                 "hardware_acceleration": {
-                    "enabled": os.getenv("AUTOBOT_HARDWARE_ACCELERATION", "true").lower() == "true",
+                    "enabled": os.getenv(
+                        "AUTOBOT_HARDWARE_ACCELERATION", "true"
+                    ).lower()
+                    == "true",
                     "priority_order": ["npu", "gpu", "cpu"],
                     "device_assignments": device_config,
-                    "cpu_reserved_cores": int(os.getenv("AUTOBOT_CPU_RESERVED_CORES", "2")),
-                    "memory_optimization": os.getenv("AUTOBOT_MEMORY_OPTIMIZATION", "enabled") == "enabled"
+                    "cpu_reserved_cores": int(
+                        os.getenv("AUTOBOT_CPU_RESERVED_CORES", "2")
+                    ),
+                    "memory_optimization": os.getenv(
+                        "AUTOBOT_MEMORY_OPTIMIZATION", "enabled"
+                    )
+                    == "enabled",
                 }
             }
-            
+
             # Allow per-task overrides
             task_override_key = f"AUTOBOT_DEVICE_{task_type.upper()}"
             if os.getenv(task_override_key):
-                base_config["hardware_acceleration"]["device_assignments"]["device_type"] = os.getenv(task_override_key)
-            
+                base_config["hardware_acceleration"]["device_assignments"][
+                    "device_type"
+                ] = os.getenv(task_override_key)
+
             return base_config
-            
+
         except Exception as e:
             logger.warning(f"Failed to get hardware acceleration config: {e}")
             # Fallback to CPU-only configuration
@@ -541,23 +553,23 @@ class ConfigManager:
                 "hardware_acceleration": {
                     "enabled": False,
                     "device_type": "cpu",
-                    "fallback_reason": str(e)
+                    "fallback_reason": str(e),
                 }
             }
 
     def get_ollama_runtime_config(self, task_type: str = "default") -> Dict[str, Any]:
         """Get Ollama runtime configuration with hardware optimization.
-        
+
         Args:
             task_type: Agent type for task-specific optimization
-            
+
         Returns:
             Dict containing Ollama runtime configuration
         """
         # Get hardware acceleration config
         hw_config = self.get_hardware_acceleration_config(task_type)
         device_config = hw_config["hardware_acceleration"]["device_assignments"]
-        
+
         # Base Ollama configuration
         ollama_config = {
             "temperature": 0.7,
@@ -565,56 +577,56 @@ class ConfigManager:
             "num_predict": 512,
             "stop": ["</s>", "<|end|>", "<|eot_id|>"],
         }
-        
+
         # Add device-specific options
         if device_config.get("ollama_options"):
             ollama_config.update(device_config["ollama_options"])
-        
+
         # Task-specific optimizations
         task_optimizations = {
             "chat": {
                 "temperature": 0.8,
                 "num_predict": 256,  # Shorter responses for chat
-                "top_p": 0.9
+                "top_p": 0.9,
             },
             "system_commands": {
                 "temperature": 0.3,  # More deterministic for commands
                 "num_predict": 128,
-                "top_p": 0.7
+                "top_p": 0.7,
             },
             "knowledge_retrieval": {
                 "temperature": 0.4,  # Factual responses
                 "num_predict": 200,
-                "top_p": 0.8
+                "top_p": 0.8,
             },
             "rag": {
                 "temperature": 0.6,  # Balanced for synthesis
                 "num_predict": 512,
-                "top_p": 0.85
+                "top_p": 0.85,
             },
             "research": {
                 "temperature": 0.7,  # Creative for research
                 "num_predict": 600,
-                "top_p": 0.9
+                "top_p": 0.9,
             },
             "orchestrator": {
                 "temperature": 0.5,  # Balanced for coordination
                 "num_predict": 400,
-                "top_p": 0.8
-            }
+                "top_p": 0.8,
+            },
         }
-        
+
         # Apply task-specific optimizations
         if task_type in task_optimizations:
             ollama_config.update(task_optimizations[task_type])
-        
+
         # Environment variable overrides
         env_overrides = {
             "AUTOBOT_LLM_TEMPERATURE": "temperature",
             "AUTOBOT_LLM_TOP_P": "top_p",
-            "AUTOBOT_LLM_NUM_PREDICT": "num_predict"
+            "AUTOBOT_LLM_NUM_PREDICT": "num_predict",
         }
-        
+
         for env_var, config_key in env_overrides.items():
             env_value = os.getenv(env_var)
             if env_value:
@@ -625,7 +637,7 @@ class ConfigManager:
                         ollama_config[config_key] = int(env_value)
                 except ValueError:
                     logger.warning(f"Invalid value for {env_var}: {env_value}")
-        
+
         return ollama_config
 
     def get_redis_config(self) -> Dict[str, Any]:

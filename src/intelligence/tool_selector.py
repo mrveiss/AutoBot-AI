@@ -5,11 +5,11 @@ Selects appropriate tools based on OS capabilities and goal requirements.
 """
 
 import logging
-from typing import Dict, List, Optional
 from dataclasses import dataclass
+from typing import Dict, List, Optional
 
-from src.intelligence.os_detector import OSDetector, OSType, LinuxDistro
-from src.intelligence.goal_processor import ProcessedGoal, GoalCategory
+from src.intelligence.goal_processor import GoalCategory, ProcessedGoal
+from src.intelligence.os_detector import LinuxDistro, OSDetector, OSType
 
 logger = logging.getLogger(__name__)
 

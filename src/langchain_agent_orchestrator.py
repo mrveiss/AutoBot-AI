@@ -1,8 +1,8 @@
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-from langchain.agents import initialize_agent, Tool
+from langchain.agents import Tool, initialize_agent
 from langchain.agents.agent_types import AgentType
 
 try:
@@ -21,10 +21,10 @@ except ImportError:
                 "package for Ollama support."
             )
 
-from src.worker_node import WorkerNode
-from src.knowledge_base import KnowledgeBase
 from src.event_manager import event_manager
+from src.knowledge_base import KnowledgeBase
 from src.tools import ToolRegistry
+from src.worker_node import WorkerNode
 
 
 class LangChainAgentOrchestrator:

@@ -1,6 +1,6 @@
-import platform
-import os
 import json
+import os
+import platform
 import subprocess
 
 

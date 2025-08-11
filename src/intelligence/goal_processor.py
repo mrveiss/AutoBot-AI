@@ -9,9 +9,9 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from enum import Enum
 from typing import Dict, List
-from difflib import SequenceMatcher
 
 logger = logging.getLogger(__name__)
 
