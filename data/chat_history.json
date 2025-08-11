@@ -769,5 +769,59 @@
       }
     },
     "timestamp": "2025-08-11 12:37:53"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow e74fab6d: Started step - 1. Research: Research Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "e74fab6d-4895-4add-8d95-825ca8a7ef84",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "step_index": 0,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 14:22:50"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow e74fab6d: Completed step - 1. Research: Research Installation. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "e74fab6d-4895-4add-8d95-825ca8a7ef84",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 14:22:51"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow e74fab6d: Started step - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "e74fab6d-4895-4add-8d95-825ca8a7ef84",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "step_index": 1,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 14:22:51"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow e74fab6d: Approval required for - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "e74fab6d-4895-4add-8d95-825ca8a7ef84",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "context": {
+        "step_index": 1,
+        "agent_type": "2. orchestrator",
+        "action": "Create Install Plan (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 14:22:51"
   }
 ]
