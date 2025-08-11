@@ -38,7 +38,7 @@ async def test_workflow_endpoints():
             return False
 
         # Test 2: Execute workflow
-        print(f"\n2. Testing POST /workflow/execute")
+        print(f"\n2. Testing POST /execute")
         print("-" * 40)
 
         workflow_request = {
@@ -50,7 +50,7 @@ async def test_workflow_endpoints():
 
         try:
             async with session.post(
-                f"{base_url}/workflow/execute", json=workflow_request
+                f"{base_url}/execute", json=workflow_request
             ) as response:
                 if response.status == 200:
                     result = await response.json()
