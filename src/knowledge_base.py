@@ -5,12 +5,10 @@ from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 from docx import Document as DocxDocument
-from llama_index.core import Settings, VectorStoreIndex, Document
+from llama_index.core import Document, Settings, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.storage.storage_context import StorageContext
-from llama_index.embeddings.ollama import (
-    OllamaEmbedding as LlamaIndexOllamaEmbedding,
-)
+from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.redis import RedisVectorStore
 from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
@@ -18,7 +16,6 @@ from pypdf import PdfReader
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
-
 # Import centralized Redis client utility
 from src.utils.redis_client import get_redis_client
 

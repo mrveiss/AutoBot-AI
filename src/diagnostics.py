@@ -1,16 +1,16 @@
-import os
-import json
-import time
 import asyncio
+import json
+import os
+import time
 from collections import defaultdict
-from typing import Dict, Any, Optional
-import psutil
+from typing import Any, Dict, Optional
 
-from src.llm_interface import LLMInterface
-from src.event_manager import event_manager
+import psutil
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
+from src.event_manager import event_manager
+from src.llm_interface import LLMInterface
 
 
 class Diagnostics:

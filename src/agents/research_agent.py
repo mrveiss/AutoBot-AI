@@ -6,13 +6,14 @@ Provides web research capabilities for multi-agent workflows
 
 import asyncio
 import json
+import logging
 import time
-from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import aiohttp
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

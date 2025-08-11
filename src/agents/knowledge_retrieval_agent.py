@@ -7,10 +7,11 @@ simple fact retrieval, and quick question answering without complex synthesis.
 
 import logging
 import time
-from typing import Dict, Any, List, Optional
-from src.llm_interface import LLMInterface
+from typing import Any, Dict, List, Optional
+
 from src.config import config as global_config_manager
 from src.knowledge_base import KnowledgeBase
+from src.llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 

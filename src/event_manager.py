@@ -1,9 +1,10 @@
 # src/event_manager.py
-import yaml
-import os
-import logging
 import asyncio  # Added back asyncio import
-from typing import Dict, Any, Callable, Awaitable, Optional
+import logging
+import os
+from typing import Any, Awaitable, Callable, Dict, Optional
+
+import yaml
 
 logger = logging.getLogger(__name__)
 

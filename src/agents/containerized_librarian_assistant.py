@@ -5,11 +5,12 @@ presents results with proper source attribution, and can store quality informati
 in the knowledge base for future reference.
 """
 
-import aiohttp
-import logging
-from typing import Dict, List, Any, Optional
 import json
+import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 from src.config import config
 from src.knowledge_base import KnowledgeBase

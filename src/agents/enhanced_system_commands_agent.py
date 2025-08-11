@@ -5,13 +5,14 @@ Uses lightweight Llama 3.2 1B model for efficient command generation with securi
 Handles system operations, shell commands, and system administration tasks.
 """
 
-import logging
 import json
+import logging
 import re
 import shlex
-from typing import Dict, Any, List, Optional, Tuple
-from src.llm_interface import LLMInterface
+from typing import Any, Dict, List, Optional, Tuple
+
 from src.config import config as global_config_manager
+from src.llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -22,92 +23,157 @@ class EnhancedSystemCommandsAgent:
     def __init__(self):
         """Initialize the System Commands Agent with 1B model for efficiency."""
         self.llm_interface = LLMInterface()
-        self.model_name = global_config_manager.get_task_specific_model("system_commands")
+        self.model_name = global_config_manager.get_task_specific_model(
+            "system_commands"
+        )
         self.agent_type = "system_commands"
-        
+
         # Security: Define allowed commands and dangerous patterns
         self.allowed_commands = {
-            'ls', 'dir', 'pwd', 'cd', 'cat', 'head', 'tail', 'grep', 'find',
-            'ps', 'top', 'htop', 'df', 'du', 'free', 'lscpu', 'lsblk',
-            'ifconfig', 'ip', 'netstat', 'ss', 'ping', 'curl', 'wget',
-            'systemctl', 'service', 'journalctl', 'dmesg', 'uname', 'whoami',
-            'which', 'whereis', 'file', 'stat', 'chmod', 'chown', 'mkdir',
-            'rmdir', 'cp', 'mv', 'touch', 'ln', 'tar', 'gzip', 'gunzip',
-            'zip', 'unzip', 'sort', 'uniq', 'wc', 'awk', 'sed', 'cut'
+            "ls",
+            "dir",
+            "pwd",
+            "cd",
+            "cat",
+            "head",
+            "tail",
+            "grep",
+            "find",
+            "ps",
+            "top",
+            "htop",
+            "df",
+            "du",
+            "free",
+            "lscpu",
+            "lsblk",
+            "ifconfig",
+            "ip",
+            "netstat",
+            "ss",
+            "ping",
+            "curl",
+            "wget",
+            "systemctl",
+            "service",
+            "journalctl",
+            "dmesg",
+            "uname",
+            "whoami",
+            "which",
+            "whereis",
+            "file",
+            "stat",
+            "chmod",
+            "chown",
+            "mkdir",
+            "rmdir",
+            "cp",
+            "mv",
+            "touch",
+            "ln",
+            "tar",
+            "gzip",
+            "gunzip",
+            "zip",
+            "unzip",
+            "sort",
+            "uniq",
+            "wc",
+            "awk",
+            "sed",
+            "cut",
         }
-        
+
         self.dangerous_patterns = [
-            r'rm\s+-rf\s+/', r'rm\s+-rf\s+\*', r':(){ :|:& };:',  # Dangerous rm, fork bomb
-            r'dd\s+.*of=/dev/', r'mkfs', r'fdisk', r'cfdisk',      # Disk operations
-            r'iptables\s+-F', r'ufw\s+disable', r'firewall-cmd',   # Firewall changes
-            r'passwd', r'usermod', r'userdel', r'groupdel',        # User management
-            r'chmod\s+777', r'chmod\s+-R\s+777',                  # Dangerous permissions
-            r'curl.*\|\s*bash', r'wget.*\|\s*sh',                 # Pipe to shell
-            r'sudo\s+su\s*-', r'su\s+-',                          # Root access
+            r"rm\s+-rf\s+/",
+            r"rm\s+-rf\s+\*",
+            r":(){ :|:& };:",  # Dangerous rm, fork bomb
+            r"dd\s+.*of=/dev/",
+            r"mkfs",
+            r"fdisk",
+            r"cfdisk",  # Disk operations
+            r"iptables\s+-F",
+            r"ufw\s+disable",
+            r"firewall-cmd",  # Firewall changes
+            r"passwd",
+            r"usermod",
+            r"userdel",
+            r"groupdel",  # User management
+            r"chmod\s+777",
+            r"chmod\s+-R\s+777",  # Dangerous permissions
+            r"curl.*\|\s*bash",
+            r"wget.*\|\s*sh",  # Pipe to shell
+            r"sudo\s+su\s*-",
+            r"su\s+-",  # Root access
         ]
-        
+
         logger.info(f"System Commands Agent initialized with model: {self.model_name}")
 
     async def process_command_request(
-        self, 
-        request: str, 
-        context: Optional[Dict[str, Any]] = None
+        self, request: str, context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Process a system command request and generate safe, validated commands.
-        
+
         Args:
             request: User's command request
             context: Optional context (OS info, current directory, etc.)
-            
+
         Returns:
             Dict containing command, validation status, and metadata
         """
         try:
             logger.info(f"System Commands Agent processing: {request[:50]}...")
-            
+
             # Prepare security-focused system prompt
             system_prompt = self._get_system_commands_prompt()
-            
+
             # Build context-aware messages
             messages = [{"role": "system", "content": system_prompt}]
-            
+
             # Add context if available
             if context:
                 context_str = self._build_context_string(context)
-                messages.append({"role": "system", "content": f"Context: {context_str}"})
-            
+                messages.append(
+                    {"role": "system", "content": f"Context: {context_str}"}
+                )
+
             # Add user request
             messages.append({"role": "user", "content": request})
-            
+
             # Generate command using focused settings
             response = await self.llm_interface.chat_completion(
                 messages=messages,
                 llm_type="system_commands",  # Uses system_commands model
                 temperature=0.3,  # Lower temperature for more predictable commands
-                max_tokens=256,   # Commands should be concise
-                top_p=0.8
+                max_tokens=256,  # Commands should be concise
+                top_p=0.8,
             )
-            
+
             # Extract and validate command
             command_info = self._extract_and_validate_command(response)
-            
+
             # Additional security validation
-            security_check = self._security_validate_command(command_info.get("command", ""))
+            security_check = self._security_validate_command(
+                command_info.get("command", "")
+            )
             command_info.update(security_check)
-            
+
             return {
-                "status": "success" if command_info.get("is_safe", False) else "warning",
+                "status": (
+                    "success" if command_info.get("is_safe", False) else "warning"
+                ),
                 **command_info,
                 "agent_type": "system_commands",
                 "model_used": self.model_name,
                 "metadata": {
                     "agent": "EnhancedSystemCommandsAgent",
                     "security_checked": True,
-                    "validation_level": "strict"
-                }
+                    "validation_level": "strict",
+                },
             }
-            
+
         except Exception as e:
             logger.error(f"System Commands Agent error: {e}")
             return {
@@ -117,7 +183,7 @@ class EnhancedSystemCommandsAgent:
                 "is_safe": False,
                 "error": str(e),
                 "agent_type": "system_commands",
-                "model_used": self.model_name
+                "model_used": self.model_name,
             }
 
     def _get_system_commands_prompt(self) -> str:
@@ -159,20 +225,20 @@ If asked to do something potentially harmful, explain why it's risky and suggest
     def _build_context_string(self, context: Dict[str, Any]) -> str:
         """Build context string for better command generation."""
         context_parts = []
-        
+
         if "os_info" in context:
             os_info = context["os_info"]
             if "name" in os_info:
                 context_parts.append(f"OS: {os_info['name']}")
             if "version" in os_info:
                 context_parts.append(f"Version: {os_info['version']}")
-        
+
         if "current_directory" in context:
             context_parts.append(f"Current Directory: {context['current_directory']}")
-        
+
         if "user" in context:
             context_parts.append(f"User: {context['user']}")
-        
+
         return " | ".join(context_parts)
 
     def _extract_and_validate_command(self, response: Any) -> Dict[str, Any]:
@@ -180,32 +246,34 @@ If asked to do something potentially harmful, explain why it's risky and suggest
         try:
             # Extract response content
             content = self._extract_response_content(response)
-            
+
             # Try to parse as JSON first
             try:
                 parsed = json.loads(content)
                 if isinstance(parsed, dict) and "command" in parsed:
                     return {
                         "command": parsed.get("command", "").strip(),
-                        "explanation": parsed.get("explanation", "No explanation provided"),
+                        "explanation": parsed.get(
+                            "explanation", "No explanation provided"
+                        ),
                         "safety_level": parsed.get("safety_level", "unknown"),
                         "alternative": parsed.get("alternative", ""),
-                        "is_structured": True
+                        "is_structured": True,
                     }
             except json.JSONDecodeError:
                 pass
-            
+
             # Fallback: try to extract command from text
             command = self._extract_command_from_text(content)
-            
+
             return {
                 "command": command,
                 "explanation": content,
                 "safety_level": "unknown",
                 "alternative": "",
-                "is_structured": False
+                "is_structured": False,
             }
-            
+
         except Exception as e:
             logger.error(f"Error extracting command: {e}")
             return {
@@ -213,77 +281,79 @@ If asked to do something potentially harmful, explain why it's risky and suggest
                 "explanation": f"Failed to extract command: {e}",
                 "safety_level": "dangerous",
                 "alternative": "",
-                "is_structured": False
+                "is_structured": False,
             }
 
     def _extract_command_from_text(self, text: str) -> str:
         """Extract command from unstructured text response."""
         # Look for common command patterns
         patterns = [
-            r'```(?:bash|sh|shell)?\n(.*?)\n```',  # Code blocks
-            r'`([^`]+)`',                          # Inline code
-            r'^([\w\-]+(?:\s+[\w\-\.\/\=]+)*)',   # Command at start of line
+            r"```(?:bash|sh|shell)?\n(.*?)\n```",  # Code blocks
+            r"`([^`]+)`",  # Inline code
+            r"^([\w\-]+(?:\s+[\w\-\.\/\=]+)*)",  # Command at start of line
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, text, re.MULTILINE | re.DOTALL)
             if match:
                 command = match.group(1).strip()
-                if command and not command.startswith('#'):  # Skip comments
+                if command and not command.startswith("#"):  # Skip comments
                     return command
-        
+
         return text.strip()
 
     def _security_validate_command(self, command: str) -> Dict[str, Any]:
         """Perform security validation of the generated command."""
         if not command:
             return {"is_safe": False, "security_warning": "Empty command"}
-        
+
         # Check for dangerous patterns
         for pattern in self.dangerous_patterns:
             if re.search(pattern, command, re.IGNORECASE):
                 return {
                     "is_safe": False,
                     "security_warning": f"Command contains dangerous pattern: {pattern}",
-                    "recommended_action": "reject"
+                    "recommended_action": "reject",
                 }
-        
+
         # Parse command to check the main command
         try:
             # Use shlex to safely parse the command
             parts = shlex.split(command)
             if not parts:
                 return {"is_safe": False, "security_warning": "Unable to parse command"}
-            
-            main_command = parts[0].split('/')[-1]  # Get basename
-            
+
+            main_command = parts[0].split("/")[-1]  # Get basename
+
             # Check if main command is in allowed list
             if main_command not in self.allowed_commands:
                 return {
                     "is_safe": False,
                     "security_warning": f"Command '{main_command}' not in allowed commands list",
-                    "recommended_action": "review_manually"
+                    "recommended_action": "review_manually",
                 }
-            
+
             # Additional checks for specific commands
-            if main_command == "rm" and any(flag in parts for flag in ["-rf", "-r", "-f"]):
+            if main_command == "rm" and any(
+                flag in parts for flag in ["-rf", "-r", "-f"]
+            ):
                 return {
                     "is_safe": False,
                     "security_warning": "rm command with potentially dangerous flags",
-                    "recommended_action": "reject"
+                    "recommended_action": "reject",
                 }
-            
+
             return {
                 "is_safe": True,
                 "security_warning": None,
-                "main_command": main_command
+                "main_command": main_command,
             }
-            
+
         except Exception as e:
             return {
                 "is_safe": False,
                 "security_warning": f"Failed to parse command: {e}",
-                "recommended_action": "reject"
+                "recommended_action": "reject",
             }
 
     def _extract_response_content(self, response: Any) -> str:
@@ -294,21 +364,21 @@ If asked to do something potentially harmful, explain why it's risky and suggest
                     content = response["message"].get("content")
                     if content:
                         return content.strip()
-                
+
                 if "choices" in response and isinstance(response["choices"], list):
                     if len(response["choices"]) > 0:
                         choice = response["choices"][0]
                         if "message" in choice and "content" in choice["message"]:
                             return choice["message"]["content"].strip()
-                
+
                 if "content" in response:
                     return response["content"].strip()
-            
+
             if isinstance(response, str):
                 return response.strip()
-            
+
             return str(response)
-            
+
         except Exception as e:
             logger.error(f"Error extracting response content: {e}")
             return "Error extracting command response"
@@ -316,20 +386,42 @@ If asked to do something potentially harmful, explain why it's risky and suggest
     def is_system_command_request(self, message: str) -> bool:
         """
         Determine if a message is a system command request.
-        
+
         Args:
             message: The user's message
-            
+
         Returns:
             bool: True if system commands agent should handle it
         """
         command_patterns = [
-            "run", "execute", "command", "shell", "bash", "terminal", "system",
-            "list files", "show processes", "check disk", "memory usage", "network",
-            "ifconfig", "ps", "ls", "df", "free", "top", "netstat", "ip addr",
-            "system info", "os info", "uptime", "users", "who", "w"
+            "run",
+            "execute",
+            "command",
+            "shell",
+            "bash",
+            "terminal",
+            "system",
+            "list files",
+            "show processes",
+            "check disk",
+            "memory usage",
+            "network",
+            "ifconfig",
+            "ps",
+            "ls",
+            "df",
+            "free",
+            "top",
+            "netstat",
+            "ip addr",
+            "system info",
+            "os info",
+            "uptime",
+            "users",
+            "who",
+            "w",
         ]
-        
+
         message_lower = message.lower()
         return any(pattern in message_lower for pattern in command_patterns)
 

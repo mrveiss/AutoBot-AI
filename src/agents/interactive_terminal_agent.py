@@ -4,16 +4,16 @@ Handles full terminal emulation with PTY support, sudo handling, and user takeov
 """
 
 import asyncio
-import pty
-import os
-import select
-import termios
-import struct
 import fcntl
-import time
-from typing import Optional, Dict, Any
 import logging
+import os
+import pty
+import select
+import struct
+import termios
+import time
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 from src.event_manager import event_manager
 
@@ -280,7 +280,8 @@ class InteractiveTerminalAgent:
                 "chat_id": self.chat_id,
                 "status": "user_control",
                 "message": (
-                    "🎮 You now have control of the terminal. " "Type commands directly."
+                    "🎮 You now have control of the terminal. "
+                    "Type commands directly."
                 ),
             },
         )

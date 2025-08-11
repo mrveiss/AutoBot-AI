@@ -5,12 +5,12 @@ discovery
 """
 
 import logging
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from src.knowledge_base import KnowledgeBase
 from src.agents.web_research_assistant import WebResearchAssistant
 from src.event_manager import event_manager
+from src.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
