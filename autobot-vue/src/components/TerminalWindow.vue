@@ -130,10 +130,43 @@ export default {
   setup() {
     const route = useRoute();
     const router = useRouter();
-    const terminalService = useTerminalService();
 
-    // Reactive data - handle missing route params gracefully
-    const sessionId = ref(route?.params?.sessionId || route?.query?.sessionId || 'default-session');
+    // Get the terminal service with all its methods
+    const {
+      sendInput,
+      sendSignal,
+      isConnected,
+      resize,
+      connect: connectToService,
+      disconnect,
+      createSession,
+      closeSession
+    } = useTerminalService();
+
+    // Get current chat ID from parent or route params
+    const getCurrentChatId = () => {
+      // Try to get from route params first
+      if (route?.params?.sessionId) {
+        return route.params.sessionId;
+      }
+      if (route?.query?.sessionId) {
+        return route.query.sessionId;
+      }
+
+      // Try to get current chat ID from localStorage or session storage
+      const storedChatId = localStorage.getItem('currentChatId');
+      if (storedChatId && storedChatId !== 'null') {
+        return storedChatId;
+      }
+
+      // Generate a new chat-specific terminal session ID
+      const timestamp = Date.now();
+      const newChatId = `chat_${timestamp}`;
+      localStorage.setItem('currentChatId', newChatId);
+      return newChatId;
+    };
+
+    const sessionId = ref(getCurrentChatId());
     const sessionTitle = ref(route?.query?.title || 'Terminal');
     const outputLines = ref([]);
     const currentInput = ref('');
@@ -173,7 +206,7 @@ export default {
       connectionStatus.value = 'connecting';
 
       try {
-        await terminalService.connect(sessionId.value, {
+        await connectToService(sessionId.value, {
           onOutput: handleOutput,
           onPromptChange: handlePromptChange,
           onStatusChange: handleStatusChange,
@@ -191,8 +224,8 @@ export default {
       hideReconnectModal();
 
       // Disconnect first if connected
-      if (terminalService.isConnected(sessionId.value)) {
-        terminalService.disconnect(sessionId.value);
+      if (isConnected(sessionId.value)) {
+        disconnect(sessionId.value);
       }
 
       // Clear output and reset state
@@ -218,7 +251,7 @@ export default {
       historyIndex.value = commandHistory.value.length;
 
       // Send to terminal
-      terminalService.sendInput(sessionId.value, command);
+      sendInput(sessionId.value, command);
 
       // Clear input
       currentInput.value = '';
@@ -260,14 +293,14 @@ export default {
         case 'c':
           if (event.ctrlKey) {
             event.preventDefault();
-            terminalService.sendSignal(sessionId.value, 'SIGINT');
+            sendSignal(sessionId.value, 'SIGINT');
           }
           break;
 
         case 'd':
           if (event.ctrlKey && !currentInput.value) {
             event.preventDefault();
-            terminalService.sendInput(sessionId.value, 'exit');
+            sendInput(sessionId.value, 'exit');
           }
           break;
 
@@ -292,8 +325,8 @@ export default {
 
     const closeWindow = () => {
       if (confirm('Are you sure you want to close this terminal window?')) {
-        if (terminalService.isConnected(sessionId.value)) {
-          terminalService.disconnect(sessionId.value);
+        if (isConnected(sessionId.value)) {
+          disconnect(sessionId.value);
         }
         window.close();
       }
@@ -424,7 +457,7 @@ export default {
 
     // Handle window resize
     const handleResize = () => {
-      if (terminalMain.value && terminalService.isConnected(sessionId.value)) {
+      if (terminalMain.value && isConnected(sessionId.value)) {
         const rect = terminalMain.value.getBoundingClientRect();
         const charWidth = 8; // Approximate character width
         const charHeight = 16; // Approximate character height
@@ -432,13 +465,13 @@ export default {
         const cols = Math.floor((rect.width - 20) / charWidth);
         const rows = Math.floor((rect.height - 100) / charHeight);
 
-        terminalService.resize(sessionId.value, rows, cols);
+        resize(sessionId.value, rows, cols);
       }
     };
 
     // Handle window beforeunload
     const handleBeforeUnload = (event) => {
-      if (terminalService.isConnected(sessionId.value)) {
+      if (isConnected(sessionId.value)) {
         event.preventDefault();
         event.returnValue = 'You have an active terminal session. Are you sure you want to close?';
         return event.returnValue;
@@ -467,8 +500,8 @@ export default {
 
     onUnmounted(() => {
       // Clean up
-      if (terminalService.isConnected && typeof terminalService.isConnected === 'function' && terminalService.isConnected(sessionId.value)) {
-        terminalService.disconnect(sessionId.value);
+      if (isConnected && typeof isConnected === 'function' && isConnected(sessionId.value)) {
+        disconnect(sessionId.value);
       }
 
       // Remove event listeners
@@ -480,8 +513,8 @@ export default {
     watch(() => route.params.sessionId, (newSessionId) => {
       if (newSessionId && newSessionId !== sessionId.value) {
         // Disconnect from old session
-        if (sessionId.value && terminalService.isConnected(sessionId.value)) {
-          terminalService.disconnect(sessionId.value);
+        if (sessionId.value && isConnected(sessionId.value)) {
+          disconnect(sessionId.value);
         }
 
         // Connect to new session
