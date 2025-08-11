@@ -41,19 +41,30 @@ class TerminalWebSocketHandler:
         logger.info(f"Terminal WebSocket connected for chat {chat_id}")
 
         # Initialize terminal session for this chat if it doesn't exist
+        session_initialized = False
         try:
             # Start an interactive bash shell for this chat session
-            asyncio.create_task(
-                system_command_agent.execute_interactive_command(
-                    command="bash",
-                    chat_id=chat_id,
-                    description="Initialize interactive terminal session",
-                    require_confirmation=False,
-                )
+            # Try the full path first
+            logger.info(f"Attempting to initialize terminal session for chat {chat_id}")
+            await system_command_agent.execute_interactive_command(
+                command="/bin/bash -i",
+                chat_id=chat_id,
+                description="Initialize interactive terminal session",
+                require_confirmation=False,
             )
-            logger.info(f"Initialized terminal session for chat {chat_id}")
+            session_initialized = True
+            logger.info(f"Successfully initialized terminal session for chat {chat_id}")
         except Exception as e:
-            logger.warning(f"Failed to initialize terminal session for {chat_id}: {e}")
+            logger.error(f"Failed to initialize terminal session for {chat_id}: {e}")
+            # Send error message to client
+            await self._send_message(
+                websocket,
+                {
+                    "type": "error",
+                    "message": f"Failed to initialize terminal session: {str(e)}",
+                    "details": str(e)
+                }
+            )
 
         # Send initial connection success message
         await self._send_message(

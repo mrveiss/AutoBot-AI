@@ -14,6 +14,10 @@ from backend.api.terminal_websocket import (
     system_command_agent,
     terminal_websocket_endpoint,
 )
+from backend.api.simple_terminal_websocket import (
+    simple_terminal_handler,
+    simple_terminal_websocket_endpoint,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +54,12 @@ class SessionCreateRequest(BaseModel):
 async def websocket_terminal(websocket: WebSocket, chat_id: str):
     """WebSocket endpoint for terminal sessions"""
     await terminal_websocket_endpoint(websocket, chat_id)
+
+
+@router.websocket("/ws/simple/{session_id}")
+async def websocket_simple_terminal(websocket: WebSocket, session_id: str):
+    """WebSocket endpoint for simple terminal sessions"""
+    await simple_terminal_websocket_endpoint(websocket, session_id)
 
 
 @router.post("/sessions")
@@ -247,6 +257,18 @@ async def get_active_sessions():
 
     except Exception as e:
         logger.error(f"Error getting sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/simple/sessions")
+async def get_simple_sessions():
+    """Get list of active simple terminal sessions"""
+    try:
+        sessions = simple_terminal_handler.get_active_sessions()
+        return JSONResponse(content={"sessions": sessions})
+
+    except Exception as e:
+        logger.error(f"Error getting simple sessions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
