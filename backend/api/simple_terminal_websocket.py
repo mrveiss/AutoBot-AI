@@ -7,8 +7,6 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
-from datetime import datetime
 from typing import Dict, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -33,19 +31,20 @@ class SimpleTerminalSession:
         self.active = True
 
         # Send connection confirmation
-        await self.send_message({
-            "type": "connection",
-            "status": "connected",
-            "message": "Simple terminal connected",
-            "session_id": self.session_id,
-            "working_dir": self.current_dir
-        })
+        await self.send_message(
+            {
+                "type": "connection",
+                "status": "connected",
+                "message": "Simple terminal connected",
+                "session_id": self.session_id,
+                "working_dir": self.current_dir,
+            }
+        )
 
         # Send initial prompt
-        await self.send_message({
-            "type": "output",
-            "content": f"kali@autobot:{self.current_dir}$ "
-        })
+        await self.send_message(
+            {"type": "output", "content": f"kali@autobot:{self.current_dir}$ "}
+        )
 
         logger.info(f"Simple terminal session {self.session_id} connected")
 
@@ -66,24 +65,29 @@ class SimpleTerminalSession:
 
         try:
             # Handle cd command specially
-            if command.strip().startswith('cd '):
+            if command.strip().startswith("cd "):
                 path = command.strip()[3:].strip()
-                if path == '':
-                    path = os.path.expanduser('~')
+                if path == "":
+                    path = os.path.expanduser("~")
                 elif not os.path.isabs(path):
                     path = os.path.join(self.current_dir, path)
 
                 if os.path.exists(path) and os.path.isdir(path):
                     self.current_dir = os.path.abspath(path)
-                    await self.send_message({
-                        "type": "output",
-                        "content": f"kali@autobot:{self.current_dir}$ "
-                    })
+                    await self.send_message(
+                        {
+                            "type": "output",
+                            "content": f"kali@autobot:{self.current_dir}$ ",
+                        }
+                    )
                 else:
-                    await self.send_message({
-                        "type": "output", 
-                        "content": f"cd: {path}: No such file or directory\nkali@autobot:{self.current_dir}$ "
-                    })
+                    await self.send_message(
+                        {
+                            "type": "output",
+                            "content": f"cd: {path}: No such file or directory\n"
+                            f"kali@autobot:{self.current_dir}$ ",
+                        }
+                    )
                 return True
 
             # Execute other commands
@@ -92,7 +96,7 @@ class SimpleTerminalSession:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=self.current_dir,
-                env=self.env
+                env=self.env,
             )
 
             # Stream output in real-time
@@ -102,32 +106,31 @@ class SimpleTerminalSession:
                     break
 
                 # Send output to client
-                await self.send_message({
-                    "type": "output",
-                    "content": output.decode('utf-8', errors='replace')
-                })
+                await self.send_message(
+                    {
+                        "type": "output",
+                        "content": output.decode("utf-8", errors="replace"),
+                    }
+                )
 
             # Wait for process to complete
             await process.wait()
 
             # Send new prompt
-            await self.send_message({
-                "type": "output",
-                "content": f"kali@autobot:{self.current_dir}$ "
-            })
+            await self.send_message(
+                {"type": "output", "content": f"kali@autobot:{self.current_dir}$ "}
+            )
 
             return True
 
         except Exception as e:
             logger.error(f"Command execution error: {e}")
-            await self.send_message({
-                "type": "error",
-                "message": f"Command failed: {str(e)}"
-            })
-            await self.send_message({
-                "type": "output", 
-                "content": f"kali@autobot:{self.current_dir}$ "
-            })
+            await self.send_message(
+                {"type": "error", "message": f"Command failed: {str(e)}"}
+            )
+            await self.send_message(
+                {"type": "output", "content": f"kali@autobot:{self.current_dir}$ "}
+            )
             return False
 
     def disconnect(self):
@@ -159,10 +162,12 @@ class SimpleTerminalHandler:
                 try:
                     message = await websocket.receive_text()
                     data = json.loads(message)
+                    logger.info(f"Received message: {data}")
 
                     msg_type = data.get("type", "")
                     if msg_type == "input":
-                        text = data.get("text", "").rstrip('\n\r')
+                        text = data.get("text", "").rstrip("\n\r")
+                        logger.info(f"Processing input: '{text}'")
                         if text:
                             await session.execute_command(text)
 
@@ -186,7 +191,7 @@ class SimpleTerminalHandler:
             {
                 "session_id": session_id,
                 "working_dir": session.current_dir,
-                "active": session.active
+                "active": session.active,
             }
             for session_id, session in self.sessions.items()
             if session.active
