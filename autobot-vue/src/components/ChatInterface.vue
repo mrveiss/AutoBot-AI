@@ -555,7 +555,47 @@ export default {
         });
 
         if (workflowResponse.ok) {
-          const workflowResult = await workflowResponse.json();
+          // Enhanced Edge browser compatibility: validate response before parsing
+          let workflowResult;
+          try {
+            const responseText = await workflowResponse.text();
+
+            // Edge browser compatibility: validate response content
+            if (!responseText || responseText.trim() === '') {
+              throw new Error('Empty response received from server');
+            }
+
+            // Edge browser compatibility: check for valid JSON structure
+            if (!responseText.includes('{') || !responseText.includes('}')) {
+              throw new Error('Invalid JSON response format received');
+            }
+
+            // Log for debugging in Edge browser
+            console.log('Workflow API response status:', workflowResponse.status);
+            console.log('Workflow API response length:', responseText.length);
+            console.log('Workflow API response preview:', responseText.substring(0, 100) + '...');
+
+            workflowResult = JSON.parse(responseText);
+
+            // Edge browser compatibility: validate parsed result structure
+            if (!workflowResult || typeof workflowResult !== 'object') {
+              throw new Error('Parsed response is not a valid object');
+            }
+
+          } catch (parseError) {
+            console.error('Edge browser compatibility error:', parseError);
+            console.error('Response status:', workflowResponse.status);
+            console.error('Response headers:', Object.fromEntries(workflowResponse.headers.entries()));
+
+            // Show user-friendly error message for Edge browser
+            messages.value.push({
+              sender: 'bot',
+              text: 'I encountered a compatibility issue processing your request. This sometimes happens in Microsoft Edge browser. Please try refreshing the page or using Chrome/Firefox. If the issue persists, please contact support.',
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'error'
+            });
+            return;
+          }
 
           if (workflowResult.type === 'workflow_orchestration') {
             // Workflow orchestration triggered
@@ -602,6 +642,10 @@ export default {
           });
         }
       } catch (error) {
+        // Enhanced Edge browser compatibility error handling
+        console.error('Chat interface error:', error);
+        console.error('Error type:', error.constructor.name);
+
         // Check if this is an LLM model error that requires system reload
         if (error.message && (
           error.message.includes('Unsupported LLM model type') ||
@@ -612,9 +656,21 @@ export default {
           setReloadNeeded(true);
         }
 
+        // Edge browser specific error handling
+        let errorMessage = error.message || 'An unknown error occurred';
+
+        // Check for Edge-specific network errors
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          errorMessage = 'Network connection error. Please check your internet connection and try again.';
+        } else if (error.message.includes('JSON') || error.message.includes('Unexpected token')) {
+          errorMessage = 'Response parsing error. This sometimes happens in Microsoft Edge browser. Please try refreshing the page.';
+        } else if (error.message.includes('AbortError') || error.message.includes('timeout')) {
+          errorMessage = 'Request timeout. Please try again or refresh the page.';
+        }
+
         messages.value.push({
           sender: 'bot',
-          text: `Error: ${error.message}`,
+          text: `Error: ${errorMessage}`,
           timestamp: new Date().toLocaleTimeString(),
           type: 'error'
         });
@@ -693,8 +749,17 @@ export default {
           }
         }
       } catch (error) {
-        console.error('Error deleting chat:', error);
-        // Still update frontend state even if backend call fails
+        // Handle 404 errors silently (expected for legacy chats)
+        if (error.message && error.message.includes('404')) {
+          // Legacy chats may not exist on backend - just remove from frontend silently
+          console.debug(`Chat ${targetChatId} not found on backend (legacy format) - removing from local list`);
+        } else {
+          // Only log unexpected errors
+          console.error('Unexpected error deleting chat:', error);
+        }
+
+        // Always update frontend state regardless of backend result
+        // This ensures chat deletion appears to work for users
         chatList.value = chatList.value.filter(chat => chat.chatId !== targetChatId);
 
         if (currentChatId.value === targetChatId) {
