@@ -96,10 +96,8 @@
 ### **For User**:
 1. **Restart Backend**: Run `./run_agent.sh` to activate new terminal endpoints
 2. **Test WorkflowApproval**: Verify no more 404 errors in workflow dashboard
-3. **Browser Dependencies**: Install missing libraries for full browser testing:
-   ```bash
-   sudo apt-get install libicu66 libjpeg8 libwebp6 libffi7
-   ```
+3. **Browser Dependencies**: Automatically installed by `./setup_agent.sh` (includes GUI testing libraries)
+   - Note: Re-run `./setup_agent.sh` if you encounter browser dependency issues
 
 ### **For Development**:
 1. **UI Element Identifiers**: Add data-testid attributes for more reliable testing
