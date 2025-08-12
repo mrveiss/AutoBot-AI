@@ -17,7 +17,7 @@
             class="cursor-pointer text-black opacity-50 md:hidden px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent"
             type="button"
             @click="toggleNavbar"
-          >
+           aria-label="No">
             <i class="fas fa-bars" :class="navbarOpen ? 'fa-times' : 'fa-bars'"></i>
           </button>
 
@@ -26,7 +26,7 @@
             v-if="navbarOpen"
             class="md:hidden fixed top-16 right-4 z-[99999] w-64"
             @click.stop
-          >
+           tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
             <div class="mt-2 bg-white rounded-lg p-4 shadow-xl border border-blueGray-200" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
               <ul class="flex flex-col space-y-2">
                 <li>
@@ -254,16 +254,22 @@
             <!-- Remove Transition for debugging -->
             <div>
               <!-- Dashboard View -->
-              <div v-if="activeTab === 'dashboard'" key="dashboard" class="relative flex flex-col min-w-0 break-words w-full mb-6 shadow-lg rounded-lg bg-white">
-                <div class="rounded-t mb-0 px-6 py-6">
-                  <div class="text-center flex justify-between">
-                    <h6 class="text-blueGray-700 text-xl font-bold">System Overview</h6>
-                    <button class="bg-indigo-500 text-white active:bg-indigo-600 text-xs font-bold uppercase px-3 py-1 rounded outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150" type="button">
-                      <i class="fas fa-sync mr-1"></i> Refresh
-                    </button>
-                  </div>
+              <div v-if="activeTab === 'dashboard'" key="dashboard">
+                <!-- Phase Status Indicator -->
+                <div class="w-full mb-6">
+                  <PhaseStatusIndicator />
                 </div>
-                <div class="flex-auto px-6 py-6">
+
+                <div class="relative flex flex-col min-w-0 break-words w-full mb-6 shadow-lg rounded-lg bg-white">
+                  <div class="rounded-t mb-0 px-6 py-6">
+                    <div class="text-center flex justify-between">
+                      <h6 class="text-blueGray-700 text-xl font-bold">System Overview</h6>
+                      <button class="bg-indigo-500 text-white active:bg-indigo-600 text-xs font-bold uppercase px-3 py-1 rounded outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150" type="button" aria-label="No">
+                        <i class="fas fa-sync mr-1"></i> Refresh
+                      </button>
+                    </div>
+                  </div>
+                  <div class="flex-auto px-6 py-6">
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-blueGray-50 rounded-lg p-6">
                       <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Recent Activity</h3>
@@ -288,19 +294,19 @@
                     <div class="bg-blueGray-50 rounded-lg p-6">
                       <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Quick Actions</h3>
                       <div class="grid grid-cols-2 gap-3">
-                        <button @click="updateRoute('chat')" class="btn btn-primary text-sm">
+                        <button @click="updateRoute('chat')" class="btn btn-primary text-sm" aria-label="Button">
                           <i class="fas fa-comments mr-2"></i>
                           New Chat
                         </button>
-                        <button @click="updateRoute('knowledge')" class="btn btn-secondary text-sm">
+                        <button @click="updateRoute('knowledge')" class="btn btn-secondary text-sm" aria-label="No">
                           <i class="fas fa-plus mr-2"></i>
                           Add Knowledge
                         </button>
-                        <button @click="updateRoute('files')" class="btn btn-success text-sm">
+                        <button @click="updateRoute('files')" class="btn btn-success text-sm" aria-label="Upload">
                           <i class="fas fa-upload mr-2"></i>
                           Upload File
                         </button>
-                        <button @click="updateRoute('terminal')" class="btn btn-outline text-sm">
+                        <button @click="updateRoute('terminal')" class="btn btn-outline text-sm" aria-label="Button">
                           <i class="fas fa-terminal mr-2"></i>
                           Terminal
                         </button>
@@ -405,6 +411,7 @@
                       </div>
                     </div>
                   </div>
+                  </div>
                 </div>
               </div>
 
@@ -460,7 +467,7 @@
               <section v-else-if="activeTab === 'monitor'" key="monitor" class="card">
                 <div class="card-body p-0">
                   <div class="mb-4 px-6 pt-6">
-                    <button @click="refreshStats" class="btn btn-primary text-sm">
+                    <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh">
                       <i class="fas fa-sync mr-2"></i>
                       Refresh
                     </button>
@@ -475,6 +482,20 @@
     </div>
 
   </div>
+
+  <!-- Global Elevation Dialog -->
+  <ElevationDialog
+    ref="elevationDialog"
+    :show="showElevationDialog"
+    :operation="elevationOperation"
+    :command="elevationCommand"
+    :reason="elevationReason"
+    :risk-level="elevationRiskLevel"
+    :request-id="elevationRequestId"
+    @approved="onElevationApproved"
+    @cancelled="onElevationCancelled"
+    @close="onElevationClose"
+  />
 </template>
 
 <script>
@@ -487,6 +508,9 @@ import SettingsPanel from './components/SettingsPanel.vue';
 import FileBrowser from './components/FileBrowser.vue';
 import SystemMonitor from './components/SystemMonitor.vue';
 import WorkflowApproval from './components/WorkflowApproval.vue';
+import PhaseStatusIndicator from './components/PhaseStatusIndicator.vue';
+import ElevationDialog from './components/ElevationDialog.vue';
+import elevationService from './services/elevationService';
 
 export default {
   name: 'App',
@@ -498,7 +522,9 @@ export default {
     SettingsPanel,
     FileBrowser,
     SystemMonitor,
-    WorkflowApproval
+    WorkflowApproval,
+    PhaseStatusIndicator,
+    ElevationDialog
   },
   setup() {
     const activeTab = ref('dashboard');
@@ -552,7 +578,28 @@ export default {
 
 
     const refreshStats = () => {
-      console.log('Refresh stats clicked');
+    };
+
+    // Elevation Dialog state
+    const elevationDialog = ref(null);
+    const showElevationDialog = ref(false);
+    const elevationOperation = ref('');
+    const elevationCommand = ref('');
+    const elevationReason = ref('');
+    const elevationRiskLevel = ref('MEDIUM');
+    const elevationRequestId = ref('');
+
+    // Elevation Dialog handlers
+    const onElevationApproved = (data) => {
+      showElevationDialog.value = false;
+    };
+
+    const onElevationCancelled = (requestId) => {
+      showElevationDialog.value = false;
+    };
+
+    const onElevationClose = () => {
+      showElevationDialog.value = false;
     };
 
 
@@ -587,6 +634,11 @@ export default {
       // Add click-outside listener for mobile menu
       document.addEventListener('click', closeNavbarOnClickOutside);
 
+      // Register elevation dialog with service
+      if (elevationDialog.value) {
+        elevationService.registerDialog(elevationDialog.value);
+      }
+
       // Simulate dashboard updates
       setInterval(() => {
         activeSessions.value = Math.floor(Math.random() * 5) + 1;
@@ -618,7 +670,18 @@ export default {
       toggleNavbar,
       updateRoute,
       newChat,
-      refreshStats
+      refreshStats,
+      // Elevation Dialog
+      elevationDialog,
+      showElevationDialog,
+      elevationOperation,
+      elevationCommand,
+      elevationReason,
+      elevationRiskLevel,
+      elevationRequestId,
+      onElevationApproved,
+      onElevationCancelled,
+      onElevationClose
     };
   }
 };

@@ -67,7 +67,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(file, index) in files" :key="file.name || file.id || `file-${index}`">
+          <tr v-for="(file, index) in files" :key="index">
             <td>{{ file.name }}</td>
             <td>{{ file.is_dir ? 'Directory' : 'File' }}</td>
             <td>{{ file.is_dir ? '-' : formatSize(file.size) }}</td>

@@ -24,7 +24,7 @@
           class="workflow-card"
           :class="{ 'selected': selectedWorkflowId === workflow.workflow_id }"
           @click="selectWorkflow(workflow.workflow_id)"
-        >
+         tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
           <div class="workflow-header">
             <div class="workflow-title">
               <i class="fas fa-cogs"></i>
@@ -143,7 +143,7 @@
                   class="btn btn-success"
                   @click="approveStep(selectedWorkflow.workflow_id, step.step_id)"
                   :disabled="approvingSteps.has(step.step_id)"
-                >
+                 aria-label="Confirm">
                   <i class="fas fa-check"></i>
                   Approve
                 </button>
@@ -151,7 +151,7 @@
                   class="btn btn-danger"
                   @click="denyStep(selectedWorkflow.workflow_id, step.step_id)"
                   :disabled="approvingSteps.has(step.step_id)"
-                >
+                 aria-label="Close">
                   <i class="fas fa-times"></i>
                   Deny
                 </button>
@@ -173,7 +173,7 @@
           v-if="selectedWorkflow.status === 'executing' || selectedWorkflow.status === 'waiting_approval'"
           class="btn btn-danger"
           @click="cancelWorkflow(selectedWorkflow.workflow_id)"
-        >
+         aria-label="Cancel">
           <i class="fas fa-stop"></i>
           Cancel Workflow
         </button>
@@ -181,7 +181,7 @@
         <button
           class="btn btn-secondary"
           @click="refreshWorkflows"
-        >
+         aria-label="Refresh">
           <i class="fas fa-sync"></i>
           Refresh
         </button>

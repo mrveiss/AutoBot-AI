@@ -82,7 +82,6 @@ export class ConfigService {
       if (response.ok) {
         const externalConfig = await response.json();
         this.config = this.mergeDeep(this.config, externalConfig);
-        console.log('External configuration loaded from backend');
       }
     } catch (error) {
       console.warn('Could not load external configuration from backend:', error.message);

@@ -73,7 +73,6 @@ class TerminalService {
       this.callbacks.set(sessionId, callbacks);
 
       ws.onopen = () => {
-        console.log(`Connected to terminal session ${sessionId}`);
         // Backend will automatically initialize the terminal session
         this.triggerCallback(sessionId, 'onStatusChange', 'connected');
       };
@@ -83,7 +82,6 @@ class TerminalService {
       };
 
       ws.onclose = (event) => {
-        console.log(`Terminal session ${sessionId} disconnected:`, event.code, event.reason);
         this.connections.delete(sessionId);
         this.callbacks.delete(sessionId);
         this.triggerCallback(sessionId, 'onStatusChange', 'disconnected');

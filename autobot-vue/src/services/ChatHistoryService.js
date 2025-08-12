@@ -20,7 +20,6 @@ export class ChatHistoryService {
       // Try backend first
       const data = await apiClient.getChatList();
       this.chatList = data.chats || [];
-      console.log(`Loaded ${this.chatList.length} chats from backend`);
     } catch (error) {
       console.error('Error loading chat list from backend:', error);
       // Fallback to localStorage
@@ -45,7 +44,6 @@ export class ChatHistoryService {
       }
     }
     this.chatList = localChats;
-    console.log(`Loaded ${localChats.length} chats from localStorage`);
   }
 
   /**
@@ -95,7 +93,6 @@ export class ChatHistoryService {
   async loadChatMessages(chatId) {
     try {
       const data = await apiClient.getChatMessages(chatId);
-      console.log(`Loaded chat messages from backend for chat ${chatId}`);
 
       // Normalize message format - backend uses 'messageType', frontend expects 'type'
       const normalizedMessages = (data.history || []).map(msg => ({
@@ -104,14 +101,12 @@ export class ChatHistoryService {
         messageType: undefined // Remove to avoid confusion
       }));
 
-      console.log(`Normalized ${normalizedMessages.length} historical messages for filtering`);
       return normalizedMessages;
     } catch (error) {
       console.error('Error loading chat messages from backend:', error);
       // Fallback to localStorage
       const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
       if (persistedMessages) {
-        console.log(`Loaded chat messages from localStorage for chat ${chatId}`);
         const localMessages = JSON.parse(persistedMessages);
 
         // Also normalize localStorage messages in case they have messageType
@@ -140,7 +135,6 @@ export class ChatHistoryService {
     // Save to backend
     try {
       await apiClient.saveChatMessages(chatId, messages);
-      console.log('Chat messages saved to backend successfully');
     } catch (error) {
       console.error('Error saving chat messages to backend:', error);
     }
@@ -157,7 +151,6 @@ export class ChatHistoryService {
       // Add to chat list
       this.chatList.push({ chatId: newChatId, name: '' });
 
-      console.log('New chat created:', newChatId);
       return newChatId;
     } catch (error) {
       console.error('Failed to create new chat:', error);
@@ -182,7 +175,6 @@ export class ChatHistoryService {
       // Remove from chat list
       this.chatList = this.chatList.filter(chat => chat.chatId !== chatId);
 
-      console.log(`Chat ${chatId} deleted successfully`);
       return true;
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -200,7 +192,6 @@ export class ChatHistoryService {
 
       // Save updated chat list to localStorage
       localStorage.setItem('chat_list', JSON.stringify(this.chatList));
-      console.log(`Updated name for chat ${chatId} to "${newName}"`);
       return true;
     }
     return false;
@@ -248,7 +239,6 @@ export class ChatHistoryService {
   async resetChat(chatId) {
     try {
       await apiClient.resetChat(chatId);
-      console.log(`Chat ${chatId} reset successfully`);
       return true;
     } catch (error) {
       console.error('Error resetting chat:', error);

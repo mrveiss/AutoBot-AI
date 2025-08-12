@@ -8,7 +8,7 @@
     <div class="history-list-container">
       <div v-if="history.length === 0" class="no-history">No chat history available.</div>
       <div v-else class="history-entries">
-        <div v-for="(entry, index) in history" :key="entry.id || `history-${entry.date}`" class="history-entry" @click="viewHistoryEntry(entry)" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
+        <div v-for="(entry, index) in history" :key="index" class="history-entry" @click="viewHistoryEntry(entry)" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
           <div class="history-summary">
             <span class="history-date">{{ entry.date }}</span>
             <span class="history-preview">{{ entry.preview }}</span>

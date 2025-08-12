@@ -66,7 +66,6 @@ export class SettingsService {
 
           // Save the merged settings back to localStorage
           localStorage.setItem('chat_settings', JSON.stringify(this.settings));
-          console.log('✅ Settings loaded and synchronized from backend');
         }
       } catch (backendError) {
         console.warn('Could not load settings from backend, using localStorage/defaults:', backendError.message);
@@ -90,7 +89,6 @@ export class SettingsService {
 
       // Save to backend for server-side persistence
       await apiClient.saveSettings(this.settings);
-      console.log('✅ Settings saved successfully to both localStorage and backend');
     } catch (error) {
       console.error('❌ Error saving settings:', error);
       // Even if backend save fails, localStorage save should work
@@ -116,7 +114,6 @@ export class SettingsService {
   async saveBackendSettings() {
     try {
       await apiClient.saveBackendSettings(this.settings.backend);
-      console.log('Backend settings saved successfully');
     } catch (error) {
       console.error('Error saving backend settings:', error);
       throw error;
@@ -131,7 +128,6 @@ export class SettingsService {
       const backendSettings = await apiClient.getBackendSettings();
       Object.assign(this.settings.backend, backendSettings);
       await this.saveSettings(); // Persist the merged settings
-      console.log('Backend settings loaded and merged successfully');
     } catch (error) {
       console.error('Error loading backend settings:', error);
       throw error;
@@ -241,7 +237,6 @@ export class SettingsService {
   async updateDeveloperConfig(config) {
     try {
       await apiClient.post('/api/developer/config', config);
-      console.log('Developer config updated successfully');
       return true;
     } catch (error) {
       console.error('Failed to update developer config:', error);
