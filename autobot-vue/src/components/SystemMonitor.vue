@@ -77,7 +77,7 @@
               class="time-btn"
               :class="{ active: selectedTimeframe === timeframe.value }"
               @click="selectedTimeframe = timeframe.value"
-            >
+             aria-label="{{ timeframe.label }}">
               {{ timeframe.label }}
             </button>
           </div>
@@ -128,7 +128,7 @@
               <option value="warning">Warnings</option>
               <option value="info">Info</option>
             </select>
-            <button class="clear-logs" @click="clearLogs">Clear</button>
+            <button class="clear-logs" @click="clearLogs" aria-label="Clear">Clear</button>
           </div>
         </div>
         <div class="logs-content" ref="logsContainer">

@@ -107,7 +107,6 @@ class ChatManager {
 
       if (response.ok) {
         const messages = await response.json();
-        console.log(`Loaded ${messages.length} messages from backend for chat ${chatId}`);
         return messages;
       } else {
         console.warn(`Backend failed for chat ${chatId}, falling back to localStorage`);
@@ -126,7 +125,6 @@ class ChatManager {
       const stored = localStorage.getItem(key);
       if (stored) {
         const messages = JSON.parse(stored);
-        console.log(`Loaded ${messages.length} messages from localStorage for chat ${chatId}`);
         return messages;
       }
     } catch (error) {
@@ -151,7 +149,6 @@ class ChatManager {
       });
 
       if (response.ok) {
-        console.log(`Messages saved to backend for chat ${chatId}`);
         return { status: 'success', location: 'backend' };
       } else {
         console.warn(`Failed to save to backend for chat ${chatId}:`, response.statusText);
@@ -168,7 +165,6 @@ class ChatManager {
     try {
       const key = `chat_${chatId}_messages`;
       localStorage.setItem(key, JSON.stringify(messages));
-      console.log(`Messages saved to localStorage for chat ${chatId}`);
     } catch (error) {
       console.error(`Error saving to localStorage for chat ${chatId}:`, error);
     }
@@ -182,7 +178,6 @@ class ChatManager {
       throw new Error(`Invalid chat ID for deletion: ${chatId}`);
     }
 
-    console.log('ChatManager: Attempting to delete chat with ID:', chatId);
 
     try {
       // Try to delete from backend first
@@ -191,7 +186,6 @@ class ChatManager {
       });
 
       if (response.ok) {
-        console.log(`Chat ${chatId} deleted from backend`);
       } else {
         console.warn(`Failed to delete chat ${chatId} from backend:`, response.statusText);
       }
@@ -207,7 +201,6 @@ class ChatManager {
       this.currentChatId = null;
     }
 
-    console.log('ChatManager: Chat deletion completed for:', chatId);
     return { status: 'success' };
   }
 
@@ -216,7 +209,6 @@ class ChatManager {
     try {
       const key = `chat_${chatId}_messages`;
       localStorage.removeItem(key);
-      console.log(`Chat ${chatId} deleted from localStorage`);
     } catch (error) {
       console.error(`Error deleting chat ${chatId} from localStorage:`, error);
     }
@@ -233,7 +225,6 @@ class ChatManager {
       });
 
       if (response.ok) {
-        console.log(`Chat ${chatId} reset successfully`);
 
         // Also reset in localStorage
         const initialMessage = [{
@@ -352,7 +343,6 @@ class ChatManager {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Message cleanup completed:', result);
         return result;
       } else {
         throw new Error(`Cleanup failed: ${response.statusText}`);

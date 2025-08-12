@@ -32,14 +32,14 @@
           class="voice-btn primary"
           @click="toggleListening"
           :disabled="isProcessing"
-        >
+         aria-label="{{ islistening ? 'stop listening' : 'start listening' }}">
           {{ isListening ? 'Stop Listening' : 'Start Listening' }}
         </button>
         <button
           class="voice-btn secondary"
           @click="testTTS"
           :disabled="isListening || isProcessing"
-        >
+         aria-label="Test voice">
           Test Voice
         </button>
       </div>

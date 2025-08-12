@@ -40,7 +40,6 @@ export function useChatHistory() {
       }
     }
     chatList.value = localChats;
-    console.log(`Chat history loaded from local storage: ${localChats.length} chats`);
     return localChats;
   };
 
@@ -79,7 +78,6 @@ export function useChatHistory() {
       }));
 
       chatList.value = processedChats;
-      console.log(`Chat history loaded from backend: ${processedChats.length} chats`);
     } catch (error) {
       console.error('Error loading chat list from backend:', error);
       // Fallback to local storage
@@ -128,7 +126,6 @@ export function useChatHistory() {
         window.location.hash = '';
       }
 
-      console.log(`Chat ${chatId} deleted successfully`);
       return { success: true, message: 'Chat deleted successfully' };
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -156,7 +153,6 @@ export function useChatHistory() {
       currentChatId.value = newChatId;
       window.location.hash = `chatId=${newChatId}`;
 
-      console.log('New Chat created:', newChatId);
       return { success: true, chatId: newChatId };
     } catch (error) {
       console.error('Failed to create new chat:', error);
@@ -170,7 +166,6 @@ export function useChatHistory() {
 
     window.location.hash = `chatId=${chatId}`;
     currentChatId.value = chatId;
-    console.log('Switched to chat:', chatId);
   };
 
   // Function to edit chat name
@@ -188,7 +183,6 @@ export function useChatHistory() {
       }));
       localStorage.setItem('chat_list', JSON.stringify(customChatList));
 
-      console.log(`Updated name for chat ${chatId} to "${newName}"`);
       return true;
     }
     return false;
