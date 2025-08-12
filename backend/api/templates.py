@@ -8,7 +8,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.types import TaskComplexity
+from src.autobot_types import TaskComplexity
 from src.workflow_templates import TemplateCategory, workflow_template_manager
 
 router = APIRouter()

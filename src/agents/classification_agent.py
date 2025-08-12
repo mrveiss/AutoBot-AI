@@ -10,9 +10,10 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from src.llm_interface import LLMInterface
-from src.types import TaskComplexity
+from src.autobot_types import TaskComplexity
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
+from .base_agent import LocalAgent, AgentRequest, AgentResponse
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +31,80 @@ class ClassificationResult:
     context_analysis: Dict[str, Any]
 
 
-class ClassificationAgent:
+class ClassificationAgent(LocalAgent):
     """Intelligent agent that understands user intent for workflow classification."""
 
     def __init__(self, llm_interface: Optional[LLMInterface] = None):
+        super().__init__("classification")
         self.llm = llm_interface or LLMInterface()
         self.redis_client = get_redis_client()
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
+        self.capabilities = [
+            "intent_classification",
+            "complexity_analysis", 
+            "workflow_routing",
+            "request_classification",
+            "agent_selection"
+        ]
+        
+        # Initialize classification prompt
+        self._initialize_classification_prompt()
 
-        # Classification prompt template
+    async def process_request(self, request: AgentRequest) -> AgentResponse:
+        """
+        Process agent request using the standardized interface.
+        """
+        try:
+            action = request.action
+            payload = request.payload
+            
+            if action == "classify_request":
+                user_message = payload.get("message", "")
+                result = await self.classify_request(user_message)
+                
+                # Convert ClassificationResult to dict for serialization
+                result_dict = {
+                    "complexity": result.complexity.value,
+                    "confidence": result.confidence,
+                    "reasoning": result.reasoning,
+                    "suggested_agents": result.suggested_agents,
+                    "estimated_steps": result.estimated_steps,
+                    "user_approval_needed": result.user_approval_needed,
+                    "context_analysis": result.context_analysis
+                }
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result=result_dict
+                )
+                
+            else:
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="error",
+                    result=None,
+                    error=f"Unknown action: {action}"
+                )
+                
+        except Exception as e:
+            logger.error(f"Classification agent error: {e}")
+            return AgentResponse(
+                request_id=request.request_id,
+                agent_type=self.agent_type,
+                status="error",
+                result=None,
+                error=str(e)
+            )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities this agent supports."""
+        return self.capabilities.copy()
+
+    def _initialize_classification_prompt(self):
+        """Initialize the classification prompt template"""
         self.classification_prompt = """
 You are an intelligent classification agent for AutoBot, a multi-agent workflow orchestration system.
 

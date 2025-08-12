@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import redis
 
-from src.types import TaskComplexity
+from src.autobot_types import TaskComplexity
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,13 @@ class WorkflowClassifier:
         self.redis_client = redis_client or get_redis_client()
         self.rules_key = "autobot:workflow:classification:rules"
         self.keywords_key = "autobot:workflow:classification:keywords"
-        self._initialize_default_rules()
+        # Only initialize if Redis client is available
+        if self.redis_client:
+            try:
+                self._initialize_default_rules()
+            except Exception as e:
+                logger.error(f"Failed to initialize classification rules: {e}")
+                self.redis_client = None
 
     def _initialize_default_rules(self):
         """Initialize default classification rules if not present."""
@@ -146,6 +152,11 @@ class WorkflowClassifier:
         """Classify user request using Redis-stored rules and keywords."""
         message_lower = user_message.lower()
 
+        # Fall back to simple classification if Redis not available
+        if not self.redis_client:
+            logger.warning("Redis not available, using fallback classification")
+            return self._fallback_classification(message_lower)
+
         try:
             # Get keywords from Redis
             keywords_data = self.redis_client.get(self.keywords_key)
@@ -191,7 +202,36 @@ class WorkflowClassifier:
         except Exception as e:
             logger.error(f"Error in classification: {e}")
             # Fallback to simple classification
-            return TaskComplexity.SIMPLE
+            return self._fallback_classification(message_lower)
+
+    def _fallback_classification(self, message_lower: str) -> TaskComplexity:
+        """Simple fallback classification without Redis."""
+        # Simple keyword-based classification
+        complex_keywords = ["install", "setup", "configure", "guide", "tutorial", "how to"]
+        research_keywords = ["find", "search", "tools", "best", "recommend", "compare"]
+        security_network_keywords = ["scan", "security", "network", "port", "vulnerabilities"]
+        
+        # Check for security/network combined
+        has_security = any(kw in message_lower for kw in ["scan", "security", "vulnerabilities"])
+        has_network = any(kw in message_lower for kw in ["network", "port", "firewall"])
+        if has_security and has_network:
+            return TaskComplexity.COMPLEX
+        
+        # Check for complex tasks
+        complex_count = sum(1 for kw in complex_keywords if kw in message_lower)
+        if complex_count >= 2:
+            return TaskComplexity.COMPLEX
+        
+        # Check for installation tasks
+        if any(kw in message_lower for kw in ["install", "setup", "configure"]):
+            return TaskComplexity.INSTALL
+        
+        # Check for research tasks
+        research_count = sum(1 for kw in research_keywords if kw in message_lower)
+        if research_count >= 1:
+            return TaskComplexity.RESEARCH
+        
+        return TaskComplexity.SIMPLE
 
     def _evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:
         """Evaluate a simple condition string."""

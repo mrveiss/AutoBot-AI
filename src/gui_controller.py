@@ -1,5 +1,6 @@
 import asyncio
 import os
+import subprocess
 
 import pyautogui
 
@@ -15,14 +16,47 @@ class GUIController:
         pyautogui.PAUSE = 0.5
         self.screen_width, self.screen_height = pyautogui.size()
         self.virtual_display = False
+        self.xvfb_process = None
         # Check if running under Xvfb or need virtual display
         if "DISPLAY" not in os.environ:
             self.virtual_display = True
-            # Note: Xvfb setup would be done externally or via system call if needed
             print(
                 "Warning: DISPLAY environment variable not set. "
-                "GUI automation may not work without Xvfb."
+                "Attempting to start virtual display."
             )
+            self.start_virtual_display()
+
+    def __del__(self):
+        """Destructor to clean up resources."""
+        self.stop_virtual_display()
+
+    def start_virtual_display(self):
+        """Start Xvfb virtual display if not already running."""
+        try:
+            # Check if Xvfb is installed
+            if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:
+                print("Error: Xvfb is not installed. Please install it to use the virtual display.")
+                return
+
+            # Start Xvfb
+            self.xvfb_process = subprocess.Popen(
+                ["Xvfb", ":99", "-screen", "0", "1280x1024x24"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            os.environ["DISPLAY"] = ":99"
+            print("Virtual display started on :99")
+        except Exception as e:
+            print(f"Error starting virtual display: {e}")
+
+    def stop_virtual_display(self):
+        """Stop the Xvfb virtual display if it was started by this controller."""
+        if self.xvfb_process:
+            self.xvfb_process.terminate()
+            self.xvfb_process = None
+            if "DISPLAY" in os.environ:
+                del os.environ["DISPLAY"]
+            print("Virtual display stopped.")
 
     async def capture_screen(self):
         """Capture a screenshot of the current screen."""
@@ -108,25 +142,30 @@ async def main():
     # Test the GUIController
     controller = GUIController()
     if controller.virtual_display:
-        print("Running without DISPLAY. GUI operations may be limited.")
-    else:
-        # Test screenshot
-        screenshot = await controller.capture_screen()
-        if screenshot:
-            screenshot.save("test_screenshot.png")
-            print("Screenshot saved as test_screenshot.png")
+        print("Running in virtual display. GUI operations will be performed in the background.")
+        # Give Xvfb a moment to start
+        await asyncio.sleep(2)
 
-        # Test locating an element (requires an image file to match)
-        # location = await controller.locate_element_by_image("sample_element.png")
-        # if location:
-        #     await controller.click_at(location.x, location.y)
-        #     await controller.draw_visual_feedback(location.x, location.y)
+    # Test screenshot
+    screenshot = await controller.capture_screen()
+    if screenshot:
+        screenshot.save("test_screenshot.png")
+        print("Screenshot saved as test_screenshot.png")
 
-        # Test typing
-        await controller.type_text("Hello, AutoBot!")
+    # Test locating an element (requires an image file to match)
+    # location = await controller.locate_element_by_image("sample_element.png")
+    # if location:
+    #     await controller.click_at(location.x, location.y)
+    #     await controller.draw_visual_feedback(location.x, location.y)
 
-        # Check WSL2 and Kex
-        controller.check_wsl2_kex()
+    # Test typing
+    await controller.type_text("Hello, AutoBot!")
+
+    # Check WSL2 and Kex
+    controller.check_wsl2_kex()
+
+    # Clean up
+    controller.stop_virtual_display()
 
 
 if __name__ == "__main__":

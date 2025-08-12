@@ -14,6 +14,14 @@ from pydantic import BaseModel
 
 from src.agents import get_kb_librarian, get_librarian_assistant
 
+# Import workflow automation for terminal integration
+try:
+    from backend.api.workflow_automation import workflow_manager
+    WORKFLOW_AUTOMATION_AVAILABLE = True
+except ImportError:
+    workflow_manager = None
+    WORKFLOW_AUTOMATION_AVAILABLE = False
+
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
@@ -364,6 +372,14 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         # Get the orchestrator and chat_history_manager from app state
         orchestrator = getattr(request.app.state, "orchestrator", None)
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
+        
+        # Get chat knowledge manager if available
+        chat_knowledge_manager = None
+        try:
+            from backend.api.chat_knowledge import chat_knowledge_manager as ckm
+            chat_knowledge_manager = ckm
+        except ImportError:
+            logging.info("Chat knowledge manager not available")
 
         if orchestrator is None:
             logging.error("orchestrator not found in app.state")
@@ -394,6 +410,50 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         existing_history = chat_history_manager.load_session(chat_id) or []
         existing_history.append(user_message)
 
+        # Update chat knowledge context if available
+        enhanced_message = message
+        if chat_knowledge_manager:
+            try:
+                # Get or create context for this chat
+                context = chat_knowledge_manager.chat_contexts.get(chat_id)
+                if not context:
+                    # Extract topic from first few messages
+                    topic = f"Chat about: {message[:50]}..." if len(message) > 50 else message
+                    context = await chat_knowledge_manager.create_or_update_context(
+                        chat_id=chat_id,
+                        topic=topic
+                    )
+                
+                # Add temporary knowledge from this message
+                if len(message) > 100:  # Only store substantial messages
+                    await chat_knowledge_manager.add_temporary_knowledge(
+                        chat_id=chat_id,
+                        content=message,
+                        metadata={"type": "user_message", "timestamp": user_message["timestamp"]}
+                    )
+                
+                # Get relevant context from previous messages and knowledge
+                chat_context = await chat_knowledge_manager.search_chat_knowledge(
+                    query=message,
+                    chat_id=chat_id,
+                    include_temporary=True
+                )
+                
+                # Enhance message with context for better responses
+                if chat_context and len(chat_context) > 0:
+                    context_summary = "\n".join([
+                        f"- {item['content'][:100]}..." 
+                        for item in chat_context[:3]  # Top 3 relevant contexts
+                    ])
+                    enhanced_message = f"""Based on our previous conversation context:
+{context_summary}
+
+Current question: {message}"""
+                    logging.info(f"Enhanced message with {len(chat_context)} context items")
+                    
+            except Exception as e:
+                logging.error(f"Failed to update chat knowledge context: {e}")
+
         # First, check knowledge base using the KB Librarian Agent
         kb_librarian = get_kb_librarian()
         kb_result = await kb_librarian.process_query(message)
@@ -413,10 +473,39 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                 logger.error(f"Web research failed: {e}")
                 web_research_result = {"error": str(e)}
 
-        # Execute the goal using the orchestrator
+        # Execute the goal using the orchestrator with enhanced context
         orchestrator_result = await orchestrator.execute_goal(
-            message, [{"role": "user", "content": message}]
+            enhanced_message, [{"role": "user", "content": enhanced_message}]
         )
+
+        # Check if this should trigger an automated workflow
+        workflow_triggered = False
+        if WORKFLOW_AUTOMATION_AVAILABLE and workflow_manager:
+            try:
+                # Check if message indicates need for automated execution
+                automation_keywords = [
+                    "install", "setup", "configure", "deploy", "update", "upgrade",
+                    "build", "compile", "run steps", "execute workflow", "automate",
+                    "step by step", "automatically", "batch", "sequence"
+                ]
+                
+                if any(keyword in message.lower() for keyword in automation_keywords):
+                    # Create workflow from chat request
+                    workflow_id = await workflow_manager.create_workflow_from_chat_request(
+                        message, chat_id
+                    )
+                    
+                    if workflow_id:
+                        workflow_triggered = True
+                        logger.info(f"Created automated workflow {workflow_id} for chat {chat_id}")
+                        
+                        # Add workflow info to orchestrator result
+                        if isinstance(orchestrator_result, dict):
+                            orchestrator_result["workflow_id"] = workflow_id
+                            orchestrator_result["workflow_triggered"] = True
+            
+            except Exception as e:
+                logger.error(f"Failed to create workflow from chat: {e}")
 
         # Process the result similar to the /goal endpoint
         if isinstance(orchestrator_result, dict):

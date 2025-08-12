@@ -9,7 +9,7 @@
 🎯 **Scan Results:**
 - **Files Scanned:** 1
 - **Files with Vulnerabilities:** 1
-- **Clean Files:** 0 
+- **Clean Files:** 0
 - **Files with Errors:** 0
 - **Total Vulnerabilities Found:** 6
 - **Total Fixes Applied:** 0
@@ -80,5 +80,5 @@
 
 
 ---
-**Security Fix Agent v1.0.0**  
+**Security Fix Agent v1.0.0**
 *Generated automatically by AutoBot Security Suite*

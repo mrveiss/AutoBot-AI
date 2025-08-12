@@ -13,20 +13,28 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
+from .base_agent import LocalAgent, AgentRequest, AgentResponse
 
 logger = logging.getLogger(__name__)
 
 
-class EnhancedSystemCommandsAgent:
+class EnhancedSystemCommandsAgent(LocalAgent):
     """System commands agent with security-focused prompting and validation."""
 
     def __init__(self):
         """Initialize the System Commands Agent with 1B model for efficiency."""
+        super().__init__("enhanced_system_commands")
         self.llm_interface = LLMInterface()
         self.model_name = global_config_manager.get_task_specific_model(
             "system_commands"
         )
-        self.agent_type = "system_commands"
+        self.capabilities = [
+            "command_generation",
+            "security_validation",
+            "shell_operations",
+            "system_administration",
+            "command_explanation"
+        ]
 
         # Security: Define allowed commands and dangerous patterns
         self.allowed_commands = {
@@ -109,6 +117,61 @@ class EnhancedSystemCommandsAgent:
         ]
 
         logger.info(f"System Commands Agent initialized with model: {self.model_name}")
+
+    async def process_request(self, request: AgentRequest) -> AgentResponse:
+        """
+        Process agent request using the standardized interface.
+        """
+        try:
+            action = request.action
+            payload = request.payload
+            
+            if action == "process_command":
+                task = payload.get("task", "")
+                context = request.context or {}
+                
+                result = await self.process_command_request(task, context)
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result=result
+                )
+                
+            elif action == "validate_command":
+                command = payload.get("command", "")
+                result = self.validate_command_safety(command)
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result={"is_safe": result, "command": command}
+                )
+                
+            else:
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="error",
+                    result=None,
+                    error=f"Unknown action: {action}"
+                )
+                
+        except Exception as e:
+            logger.error(f"Enhanced system commands agent error: {e}")
+            return AgentResponse(
+                request_id=request.request_id,
+                agent_type=self.agent_type,
+                status="error",
+                result=None,
+                error=str(e)
+            )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities this agent supports."""
+        return self.capabilities.copy()
 
     async def process_command_request(
         self, request: str, context: Optional[Dict[str, Any]] = None

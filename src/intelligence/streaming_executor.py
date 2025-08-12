@@ -454,7 +454,8 @@ class StreamingCommandExecutor:
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
-        return datetime.now().isoformat()
+        from src.utils.command_utils import get_timestamp
+        return get_timestamp()
 
     def get_active_processes(self) -> List[Dict[str, Any]]:
         """Get information about active processes."""

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.types import TaskComplexity
+from src.autobot_types import TaskComplexity
 
 
 class TemplateCategory(Enum):

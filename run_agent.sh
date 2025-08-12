@@ -92,19 +92,17 @@ if ! id -nG "$USER" | grep -qw "docker"; then
     exit 1 # Exit to prompt user to re-login
 fi
 
-# Start Redis Stack Docker container
+# Start Redis Stack Docker container (from docker-compose)
 echo "Starting Redis Stack Docker container..."
-if docker ps -a --format '{{.Names}}' | grep -q '^redis-stack$'; then
-    if docker inspect -f '{{.State.Running}}' redis-stack | grep -q 'true'; then
-        echo "✅ 'redis-stack' container is already running."
-    else
-        echo "🔄 'redis-stack' container found but not running. Starting it..."
-        docker start redis-stack || { echo "❌ Failed to start 'redis-stack' container."; exit 1; }
-        echo "✅ 'redis-stack' container started."
-    fi
+if docker ps --format '{{.Names}}' | grep -q '^autobot-redis$'; then
+    echo "✅ 'autobot-redis' container is already running."
 else
-    echo "❌ 'redis-stack' container not found. Please run setup_agent.sh to deploy it."
-    exit 1
+    echo "🔄 Starting Redis Stack via docker-compose..."
+    docker-compose -f docker-compose.hybrid.yml up -d autobot-redis || {
+        echo "❌ Failed to start Redis Stack container via docker-compose."
+        exit 1
+    }
+    echo "✅ 'autobot-redis' container started."
 fi
 
 # Start Playwright Service Docker container
