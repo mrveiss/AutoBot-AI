@@ -5,50 +5,185 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 🚀 QUICK REFERENCE FOR CLAUDE CODE
 
 ### Critical Rules for Autonomous Operations
-1. **ALWAYS** run flake8 checks before committing: `flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503`
-2. **NEVER** hardcode values - use `src/config.py` for all configuration
-3. **ALWAYS** test changes with: `./run_agent.sh --test-mode` before full deployment
-4. **REQUIRED**: Update docstrings following Google style for any function changes
-5. **CRITICAL**: Backup `data/` before schema changes to knowledge_base.db
+1. **ALWAYS** test and document before committing - NO EXCEPTIONS
+2. **ALWAYS** run flake8 checks before committing: `flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503`
+3. **NEVER** hardcode values - use `src/config.py` for all configuration
+4. **ALWAYS** test changes with: `./run_agent.sh --test-mode` before full deployment
+5. **REQUIRED**: Update docstrings following Google style for any function changes
+6. **CRITICAL**: Backup `data/` before schema changes to knowledge_base.db or memory_system.db
+7. **MANDATORY**: Test Phase 9 components with `python test_phase9_ai.py` after multi-modal changes
+8. **MANDATORY**: Verify NPU worker with `python test_npu_worker.py` after OpenVINO modifications
 
 ### Immediate Safety Checks
 ```bash
 # Before any code changes - verify system state
 curl -s "http://localhost:8001/api/system/health" || echo "Backend not running"
-docker ps | grep redis || echo "Redis not running"
-ls data/knowledge_base.db || echo "Database missing"
+docker ps | grep autobot-redis || echo "Redis Stack not running"
+ls data/knowledge_base.db || echo "Knowledge base missing"
+ls data/memory_system.db || echo "Memory system missing"
+
+# Phase-specific health checks
+curl -s "http://localhost:8001/api/memory/health" || echo "Memory system API not accessible"
+curl -s "http://localhost:8001/api/control/status" || echo "Control panel API not accessible" 
+docker ps | grep npu-worker || echo "NPU worker not running (optional)"
 ```
+
+### 📋 MANDATORY PRE-COMMIT WORKFLOW
+
+**Before ANY commit, execute this exact sequence:**
+
+```bash
+# 1. TESTING PHASE - Complete system validation
+./run_agent.sh --test-mode                    # Test basic system startup
+python -m pytest tests/ -v --tb=short         # Run unit tests
+python test_phase9_ai.py                      # Test Phase 9 components (if modified)
+python test_npu_worker.py                     # Test NPU worker (if modified)
+python validate_chat_knowledge.py             # Validate knowledge integration
+
+# 2. CODE QUALITY PHASE - Ensure standards compliance
+flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503
+black src/ backend/ --line-length=88 --check  # Verify formatting
+isort src/ backend/ --check-only               # Verify import sorting
+
+# 2.1. OPTIONAL: Run comprehensive code analysis (see CODE ANALYSIS SUITE section)
+# cd code-analysis-suite && python scripts/analyze_code_quality.py
+
+# 3. DOCUMENTATION PHASE - Update documentation
+# Update relevant docstrings for modified functions (Google style)
+# Update docs/ files if new features added
+# Update README.md if user-facing changes
+# Update CLAUDE.md if development workflow changes
+
+# 4. INTEGRATION TESTING - Verify component integration
+curl -s "http://localhost:8001/api/system/health" || echo "FAIL: Backend"
+curl -s "http://localhost:8001/api/memory/health" || echo "FAIL: Memory system"
+curl -s "http://localhost:8001/api/control/status" || echo "FAIL: Control panel"
+
+# 5. FINAL VERIFICATION - All systems operational
+docker ps | grep autobot                      # Verify containers running
+tail -n 20 logs/autobot.log                   # Check for errors
+```
+
+**⚠️ COMMIT ONLY IF ALL TESTS PASS - NO EXCEPTIONS**
+
+### 📚 DOCUMENTATION REQUIREMENTS
+
+**For ANY code changes, update documentation as follows:**
+
+#### Function/Method Changes:
+```python
+# ✅ REQUIRED: Google-style docstrings for all new/modified functions
+def new_function(param1: str, param2: int = 5) -> Dict[str, Any]:
+    """Brief description of what the function does.
+
+    Args:
+        param1: Description of param1
+        param2: Description of param2 with default value
+
+    Returns:
+        Dict containing the result with keys 'status' and 'data'
+
+    Raises:
+        ValueError: If param1 is empty
+        ConnectionError: If external service unavailable
+
+    Example:
+        >>> result = new_function("test", 10)
+        >>> print(result['status'])
+        'success'
+    """
+```
+
+#### New Features/Components:
+- **Add to main README.md** - Feature description and usage
+- **Create docs/ file** - Detailed documentation in appropriate subfolder
+- **Update CLAUDE.md** - If development workflow changes
+- **Add test file** - Comprehensive test coverage
+
+#### API Endpoint Changes:
+- **Update API documentation** in docs/features/
+- **Add example requests/responses**
+- **Document authentication requirements**
+- **Include error codes and messages**
+
+#### Configuration Changes:
+- **Update docs/deployment/** guides
+- **Document environment variables**
+- **Update docker-compose examples**
+- **Add configuration validation**
 
 ### Emergency Recovery
 ```bash
 # If system breaks during development
-pkill -f uvicorn; docker stop autobot-redis
+pkill -f uvicorn; docker compose -f docker-compose.hybrid.yml down
 ./setup_agent.sh --force-reinstall
 ./run_agent.sh
+
+# NPU worker recovery
+docker compose -f docker-compose.hybrid.yml --profile npu down
+docker compose -f docker-compose.hybrid.yml --profile npu up -d
+
+# Memory system recovery (if corrupted)
+cp data/memory_system.db.backup data/memory_system.db
+python -c "from src.enhanced_memory_manager import EnhancedMemoryManager; EnhancedMemoryManager().initialize_database()"
 ```
 
 ## 📋 PROJECT OVERVIEW
 
 AutoBot is an enterprise-grade autonomous AI platform with Vue 3 frontend and FastAPI backend.
 
-**Status**: Production-ready Phase 4 | **Architecture**: Microservices | **Stack**: Python 3.10.13, Vue 3, Redis
+**Status**: Production-ready Phase 9 Complete | **Architecture**: Hybrid Multi-Agent + NPU | **Stack**: Python 3.10.13, Vue 3, Redis Stack, OpenVINO
 
 ### Key Components for Code Changes
 ```
 src/
-├── orchestrator.py      # ⚠️  CRITICAL - Task planning engine
-├── llm_interface.py     # 🔧 COMMON - LLM integrations
-├── knowledge_base.py    # 📊 DATA - RAG + ChromaDB
-├── worker_node.py       # ⚙️  BACKGROUND - Task execution
-├── gui_controller.py    # 🖥️  GUI - Automation layer
-└── config.py           # ⚙️  CONFIG - All settings
+├── orchestrator.py                      # ⚠️  CRITICAL - Task planning engine
+├── enhanced_orchestrator.py            # 🚀 NEW - Phase 8+ orchestration  
+├── llm_interface.py                     # 🔧 COMMON - LLM integrations
+├── llm_interface_extended.py            # 🔧 NEW - Extended LLM capabilities
+├── knowledge_base.py                    # 📊 DATA - RAG + ChromaDB
+├── enhanced_memory_manager.py           # 🧠 NEW - Phase 7 memory system
+├── task_execution_tracker.py            # 📋 NEW - Automatic task tracking
+├── markdown_reference_system.py         # 📚 NEW - Documentation management
+├── desktop_streaming_manager.py         # 🖥️  NEW - Phase 8 desktop streaming
+├── takeover_manager.py                  # 🎮 NEW - Human-in-the-loop control
+├── multimodal_processor.py              # 🎭 NEW - Phase 9 multi-modal AI
+├── computer_vision_system.py            # 👁️  NEW - Screen analysis & UI understanding
+├── voice_processing_system.py           # 🎤 NEW - Voice commands & speech
+├── context_aware_decision_system.py     # 🧠 NEW - Intelligent decision making
+├── modern_ai_integration.py             # 🤖 NEW - GPT-4V, Claude-3, Gemini
+├── config.py                           # ⚙️  CONFIG - All settings
+└── agents/                             # 🤖 SUB-AGENTS
+    ├── agent_orchestrator.py           #    Multi-agent coordination
+    ├── base_agent.py                   #    Agent interface & deployment
+    ├── chat_agent.py                   #    Conversational agent (1B)
+    ├── enhanced_system_commands_agent.py #  System operations (1B)
+    ├── rag_agent.py                    #    Document synthesis (3B)
+    └── research_agent.py               #    Web research (3B + Playwright)
 
 backend/api/
-├── chat.py             # 💬 API - Chat endpoints
-├── workflow.py         # 🔄 API - Multi-agent workflow orchestration
-├── goal.py            # 🎯 API - Task planning
-├── websockets.py      # 📡 API - Real-time workflow updates
-└── knowledge_base.py  # 🔍 API - KB operations
+├── chat.py                             # 💬 API - Chat endpoints
+├── workflow.py                         # 🔄 API - Multi-agent workflow orchestration  
+├── enhanced_memory.py                   # 🧠 NEW - Phase 7 memory API
+├── advanced_control.py                  # 🎮 NEW - Phase 8 streaming & control API
+├── advanced_workflow_orchestrator.py   # 🚀 NEW - Advanced orchestration
+├── elevation.py                        # 🔐 NEW - Privilege management
+├── security.py                         # 🛡️  NEW - Security layer
+└── secure_terminal_websocket.py        # 🔒 NEW - Secure terminal access
+
+docker/
+├── npu-worker/                         # 🔥 NEW - Intel NPU acceleration
+│   ├── Dockerfile                      #    OpenVINO + Intel Graphics
+│   ├── npu_model_manager.py            #    NPU hardware detection
+│   └── npu_inference_server.py         #    FastAPI inference server
+└── ai-stack/                          # 🤖 AI Services Container
+    └── requirements-ai.txt             #    Enhanced with Redis Stack support
+
+docs/                                   # 📚 NEW - Organized documentation
+├── deployment/                         #    Deployment guides
+├── features/                          #    Feature documentation  
+├── security/                          #    Security guidelines
+└── workflow/                          #    Workflow documentation
 ```
 
 ## 🛠️ DEVELOPMENT COMMANDS
@@ -88,6 +223,79 @@ npm run test:playwright:headed    # Run GUI tests with browser UI
 npm run test:playwright:ui        # Run GUI tests with Playwright UI
 npm run test:playwright:report    # View test results report
 ```
+
+### NPU Worker Development
+```bash
+# NPU worker operations (Intel hardware acceleration)
+docker compose -f docker-compose.hybrid.yml --profile npu up -d  # Start NPU worker
+./start_npu_worker.sh                                            # Manual NPU startup
+python test_npu_worker.py                                        # Test NPU functionality
+
+# NPU model management
+docker exec autobot-npu-worker python npu_model_manager.py list  # List available models
+docker logs autobot-npu-worker                                   # Check NPU worker logs
+```
+
+### Phase Testing Commands  
+```bash
+# Phase 7: Enhanced Memory & Knowledge Base
+python test_enhanced_memory.py                    # Test memory system
+python validate_chat_knowledge.py                 # Validate knowledge integration
+
+# Phase 8: Enhanced Interface & Web Control  
+python test_desktop_streaming.py                  # Test desktop streaming
+python test_session_takeover_system.py            # Test takeover system
+
+# Phase 9: Advanced AI Integration & Multi-Modal
+python test_phase9_ai.py                          # Test all Phase 9 components
+python test_multimodal_processor.py               # Test multi-modal processing
+python test_computer_vision.py                    # Test computer vision
+python test_voice_processing.py                   # Test voice commands
+```
+
+## 🚀 PROJECT STATUS - PHASE 9 COMPLETE
+
+### ✅ **Completed Phases:**
+
+**Phase 7: Enhanced Memory & Knowledge Base** *(Completed)*
+- SQLite-based comprehensive memory system with task execution tracking
+- Automatic context management with embedding storage  
+- Markdown reference system for documentation cross-referencing
+- Enhanced memory API endpoints with statistics and health monitoring
+
+**Phase 8: Enhanced Interface & Web Control Panel** *(Completed)*  
+- Desktop streaming with NoVNC integration and WebSocket support
+- Human-in-the-loop takeover system with interrupt capabilities
+- Advanced control panel API for monitoring and session management
+- Secure terminal access with privilege elevation
+
+**Phase 9: Advanced AI Integration & Multi-Modal Capabilities** *(Completed)*
+- Multi-modal input processing (text, image, audio, combined)
+- Computer vision system for screen analysis and UI understanding
+- Voice processing with speech recognition and natural language commands
+- Context-aware decision making with comprehensive context collection  
+- Modern AI model integration framework (GPT-4V, Claude-3, Gemini)
+
+### 🔥 **Key New Capabilities:**
+
+**NPU Hardware Acceleration:**
+- Intel OpenVINO integration for NPU model optimization
+- Automatic hardware detection with CPU/GPU/NPU fallback
+- Dockerized NPU worker with FastAPI inference server
+- Model management with dynamic loading and optimization
+
+**Sub-Agent Architecture:**
+- Hybrid local/container agent deployment
+- Intelligent routing with LLM-powered decision making  
+- Multi-agent coordination with result synthesis
+- Performance monitoring and health checks
+- Base agent interface supporting local and remote deployment
+
+**Advanced Multi-Modal AI:**
+- Vision: Screenshot analysis, UI element detection, automation opportunities
+- Audio: Speech recognition, command parsing, text-to-speech synthesis
+- Combined: Multi-modal input processing with confidence scoring
+- Context: Comprehensive context collection for decision making
 
 ## 🔄 MULTI-AGENT WORKFLOW ORCHESTRATION
 
@@ -542,20 +750,142 @@ curl -X POST "http://localhost:8001/api/knowledge_base/search" \
   python3 -c "import sys,json; data=json.load(sys.stdin); exit(0 if data['success'] else 1)"
 ```
 
+## 🔍 CODE ANALYSIS SUITE
+
+AutoBot includes a comprehensive code analysis suite in the `code-analysis-suite/` directory for enterprise-grade code quality monitoring.
+
+### 🚀 Quick Start with Analysis Suite
+
+```bash
+# Install the analysis suite
+cd code-analysis-suite
+./install.sh
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Run comprehensive analysis
+python scripts/analyze_code_quality.py
+
+# Run specific analyzers
+python scripts/analyze_security.py      # Security vulnerabilities
+python scripts/analyze_performance.py  # Performance issues
+python scripts/analyze_duplicates.py   # Code duplication
+python scripts/analyze_architecture.py # Architectural patterns
+
+# Generate automated fixes
+python scripts/generate_automated_fixes.py
+```
+
+### 📊 Analysis Suite Components
+
+**Core Analyzers:**
+1. **Security Analyzer** - OWASP vulnerabilities, CWE classifications
+2. **Performance Analyzer** - Memory leaks, blocking calls, inefficiencies
+3. **Code Duplication Analyzer** - AST-based similarity detection
+4. **Environment Analyzer** - Hardcoded configurations
+5. **API Consistency Analyzer** - Endpoint design patterns
+6. **Testing Coverage Analyzer** - Test gap identification
+7. **Architectural Analyzer** - Design patterns, SOLID principles
+8. **Automated Fix Generator** - Specific code fixes with patches
+
+### 🎯 When to Use Analysis Suite
+
+**During Development:**
+```bash
+# Before major commits
+cd code-analysis-suite
+python scripts/analyze_code_quality.py --quick
+
+# Security-focused review
+python scripts/analyze_security.py
+
+# Performance optimization
+python scripts/analyze_performance.py
+```
+
+**Quality Gates:**
+```bash
+# Pre-commit hook integration
+cd code-analysis-suite
+python scripts/analyze_code_quality.py
+# Fail if overall score < 80
+```
+
+**Continuous Integration:**
+```yaml
+# .github/workflows/quality.yml
+- name: Code Quality Analysis
+  run: |
+    cd code-analysis-suite
+    python scripts/analyze_code_quality.py
+    # Parse results and set quality gates
+```
+
+### 🛡️ Security Analysis Integration
+
+**Critical Security Checks:**
+```bash
+# Run before any deployment
+cd code-analysis-suite
+python scripts/analyze_security.py
+
+# Check for specific vulnerabilities
+grep -i "critical" security_analysis_report.json
+
+# Apply security fixes automatically
+python scripts/generate_automated_fixes.py --security-only
+```
+
+### ⚡ Performance Analysis Integration
+
+**Performance Monitoring:**
+```bash
+# Detect memory leaks and blocking calls
+cd code-analysis-suite
+python scripts/analyze_performance.py
+
+# Apply performance fixes
+python scripts/generate_automated_fixes.py --performance-only
+```
+
+### 📋 Analysis Reports Location
+
+All analysis reports are generated in:
+- `code-analysis-suite/comprehensive_quality_report.json` - Full analysis
+- `code-analysis-suite/security_analysis_report.json` - Security findings
+- `code-analysis-suite/performance_analysis_report.json` - Performance issues
+- `code-analysis-suite/automated_fixes_report.json` - Generated fixes
+- `code-analysis-suite/generated_patches.patch` - Ready-to-apply patches
+
+### 🔧 Configuration for AutoBot
+
+**Redis Integration:**
+The analysis suite uses the same Redis instance as AutoBot for caching.
+
+**Custom Patterns:**
+Add AutoBot-specific patterns in `code-analysis-suite/src/` analyzers.
+
+**CI/CD Integration:**
+Include analysis suite checks in AutoBot's deployment pipeline.
+
 ## 🎯 CLAUDE CODE SPECIFIC GUIDANCE
 
 ### Pre-Change Checklist
+- [ ] **MANDATORY**: Review MANDATORY PRE-COMMIT WORKFLOW above
 - [ ] Verify system is running: `curl -s http://localhost:8001/api/system/health`
 - [ ] Check current git status: `git status --porcelain`
 - [ ] Run existing tests: `python -m pytest tests/ --tb=short -q`
 - [ ] Backup critical data if changing schemas
 
 ### Post-Change Validation
-- [ ] Run flake8: `flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503`
-- [ ] Run type checking: `mypy src/ backend/ --ignore-missing-imports`
-- [ ] Test API endpoints affected by changes
-- [ ] Verify frontend compilation: `cd autobot-vue && npm run build`
+- [ ] **MANDATORY**: Execute complete PRE-COMMIT WORKFLOW above - NO SHORTCUTS
+- [ ] **MANDATORY**: Update documentation per DOCUMENTATION REQUIREMENTS above  
+- [ ] **MANDATORY**: All tests MUST pass before commit
+- [ ] Verify API endpoints affected by changes work correctly
 - [ ] Test full system restart: `./run_agent.sh --test-mode`
+- [ ] Verify frontend compilation: `cd autobot-vue && npm run build`
+- [ ] Check logs for new errors: `tail -n 50 logs/autobot.log`
 
 ### Safe Change Patterns
 1. **Add new functionality** without modifying existing working code
