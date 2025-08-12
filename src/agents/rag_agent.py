@@ -11,20 +11,99 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
+from .base_agent import LocalAgent, AgentRequest, AgentResponse
 
 logger = logging.getLogger(__name__)
 
 
-class RAGAgent:
+class RAGAgent(LocalAgent):
     """RAG agent for document synthesis and knowledge integration."""
 
     def __init__(self):
         """Initialize the RAG Agent with 3B model for complex reasoning."""
+        super().__init__("rag")
         self.llm_interface = LLMInterface()
         self.model_name = global_config_manager.get_task_specific_model("rag")
-        self.agent_type = "rag"
+        self.capabilities = [
+            "document_synthesis",
+            "query_reformulation", 
+            "context_ranking",
+            "document_analysis",
+            "knowledge_integration"
+        ]
 
         logger.info(f"RAG Agent initialized with model: {self.model_name}")
+
+    async def process_request(self, request: AgentRequest) -> AgentResponse:
+        """
+        Process agent request using the standardized interface.
+        """
+        try:
+            action = request.action
+            payload = request.payload
+            
+            if action == "document_query":
+                query = payload.get("query", "")
+                documents = payload.get("documents", [])
+                context = request.context
+                
+                result = await self.process_document_query(query, documents, context)
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result=result
+                )
+                
+            elif action == "reformulate_query":
+                query = payload.get("query", "")
+                context = request.context
+                
+                result = await self.reformulate_query(query, context)
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result=result
+                )
+                
+            elif action == "rank_documents":
+                query = payload.get("query", "")
+                documents = payload.get("documents", [])
+                
+                result = await self.rank_documents(query, documents)
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result=result
+                )
+                
+            else:
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="error",
+                    result=None,
+                    error=f"Unknown action: {action}"
+                )
+                
+        except Exception as e:
+            logger.error(f"RAG agent error: {e}")
+            return AgentResponse(
+                request_id=request.request_id,
+                agent_type=self.agent_type,
+                status="error",
+                result=None,
+                error=str(e)
+            )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities this agent supports."""
+        return self.capabilities.copy()
 
     async def process_document_query(
         self,

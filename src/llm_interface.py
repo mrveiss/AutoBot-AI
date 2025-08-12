@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
 from src.prompt_manager import prompt_manager
+from src.retry_mechanism import retry_async, retry_network_operation, RetryStrategy
+from src.circuit_breaker import circuit_breaker_async, protected_llm_call
 
 load_dotenv()
 
@@ -211,9 +213,14 @@ class LLMInterface:
         logger.info(f"Attempting to connect to Ollama at {self.ollama_host}...")
         try:
             health_check_url = f"{self.ollama_host}/api/tags"
-            response = await asyncio.to_thread(
-                requests.get, health_check_url, timeout=5
-            )
+            
+            # Use retry mechanism for network connection
+            async def make_request():
+                return await asyncio.to_thread(
+                    requests.get, health_check_url, timeout=5
+                )
+            
+            response = await retry_network_operation(make_request)
             response.raise_for_status()
 
             models_info = response.json()
@@ -415,7 +422,7 @@ class LLMInterface:
                 model_name, messages, **llm_params
             )
         else:
-            # Default to Ollama for models without prefix (like artifish/llama3.2-uncensored:latest)
+            # Default to Ollama for models without prefix (like dolphin-llama3:8b)
             logger.info(
                 f"Model '{model_alias}' has no prefix, defaulting to Ollama provider"
             )
@@ -423,6 +430,7 @@ class LLMInterface:
                 model_name, messages, **llm_params
             )
 
+    @circuit_breaker_async("ollama_service", failure_threshold=3, recovery_timeout=30.0, timeout=120.0)
     async def _ollama_chat_completion(
         self,
         model: str,
@@ -465,9 +473,13 @@ class LLMInterface:
         logger.debug(f"Ollama Request Data: {json.dumps(data, indent=2)}")
 
         try:
-            response = await asyncio.to_thread(
-                requests.post, url, headers=headers, json=data, timeout=600
-            )
+            # Use retry mechanism for LLM API calls
+            async def make_llm_request():
+                return await asyncio.to_thread(
+                    requests.post, url, headers=headers, json=data, timeout=600
+                )
+            
+            response = await retry_network_operation(make_llm_request)
 
             print(f"Ollama Raw Response Status: {response.status_code}")
             print(f"Ollama Raw Response Headers: {response.headers}")
@@ -504,6 +516,7 @@ class LLMInterface:
             )
             return None
 
+    @circuit_breaker_async("openai_service", failure_threshold=2, recovery_timeout=60.0, timeout=120.0)
     async def _openai_chat_completion(
         self,
         model: str,
@@ -532,9 +545,13 @@ class LLMInterface:
             **kwargs,
         }
         try:
-            response = await asyncio.to_thread(
-                requests.post, url, headers=headers, json=data, timeout=600
-            )
+            # Use retry mechanism for OpenAI API calls
+            async def make_openai_request():
+                return await asyncio.to_thread(
+                    requests.post, url, headers=headers, json=data, timeout=600
+                )
+            
+            response = await retry_network_operation(make_openai_request)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:

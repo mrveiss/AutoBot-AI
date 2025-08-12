@@ -11,20 +11,68 @@ from typing import Any, Dict, List, Optional
 
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
+from .base_agent import LocalAgent, AgentRequest, AgentResponse
 
 logger = logging.getLogger(__name__)
 
 
-class ChatAgent:
+class ChatAgent(LocalAgent):
     """Lightweight chat agent for quick conversational responses."""
 
     def __init__(self):
         """Initialize the Chat Agent with 1B model for efficiency."""
+        super().__init__("chat")
         self.llm_interface = LLMInterface()
         self.model_name = global_config_manager.get_task_specific_model("chat")
-        self.agent_type = "chat"
+        self.capabilities = [
+            "conversational_chat",
+            "simple_questions",
+            "greetings",
+            "basic_explanations"
+        ]
 
         logger.info(f"Chat Agent initialized with model: {self.model_name}")
+
+    async def process_request(self, request: AgentRequest) -> AgentResponse:
+        """
+        Process agent request using the standardized interface.
+        """
+        try:
+            if request.action == "chat":
+                message = request.payload.get("message", "")
+                context = request.context or {}
+                chat_history = request.payload.get("chat_history", [])
+                
+                result = await self.process_chat_message(message, context, chat_history)
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result=result
+                )
+            else:
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="error",
+                    result=None,
+                    error=f"Unknown action: {request.action}"
+                )
+                
+        except Exception as e:
+            logger.error(f"Chat agent error: {e}")
+            return AgentResponse(
+                request_id=request.request_id,
+                agent_type=self.agent_type,
+                status="error",
+                result=None,
+                error=str(e)
+            )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities this agent supports."""
+        return self.capabilities.copy()
 
     async def process_chat_message(
         self,

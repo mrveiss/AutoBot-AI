@@ -1,6 +1,6 @@
 """
 Simplified Terminal WebSocket Handler for AutoBot
-A working alternative to the complex PTY-based system
+A working alternative to the complex PTY-based system with enhanced security
 """
 
 import asyncio
@@ -13,14 +13,24 @@ import threading
 from typing import Dict, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
+from .base_terminal import BaseTerminalWebSocket
+
+# Import workflow automation for integration
+try:
+    from backend.api.workflow_automation import workflow_manager
+    WORKFLOW_AUTOMATION_AVAILABLE = True
+except ImportError:
+    workflow_manager = None
+    WORKFLOW_AUTOMATION_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
 
-class SimpleTerminalSession:
+class SimpleTerminalSession(BaseTerminalWebSocket):
     """Full-featured terminal session with PTY support for sudo commands"""
 
     def __init__(self, session_id: str):
+        super().__init__()
         self.session_id = session_id
         self.websocket: Optional[WebSocket] = None
         self.current_dir = "/home/kali"
@@ -29,6 +39,11 @@ class SimpleTerminalSession:
         self.pty_fd = None
         self.process = None
         self.reader_thread = None
+    
+    @property
+    def terminal_type(self) -> str:
+        """Get terminal type for logging"""
+        return "Terminal"
 
     async def connect(self, websocket: WebSocket):
         """Connect WebSocket to this session and start PTY shell"""
@@ -144,24 +159,125 @@ class SimpleTerminalSession:
             except Exception as e:
                 logger.error(f"Error writing to PTY: {e}")
 
-    async def execute_command(self, command: str) -> bool:
-        """Send command to PTY shell (now supports all commands including sudo)"""
-        if not command.strip():
-            return False
 
-        logger.info(f"Sending to PTY: {command}")
+    async def handle_workflow_control(self, data: Dict):
+        """Handle workflow automation control messages"""
+        if not WORKFLOW_AUTOMATION_AVAILABLE or not workflow_manager:
+            await self.send_message({
+                "type": "error",
+                "message": "Workflow automation not available"
+            })
+            return
 
         try:
-            # Send command to PTY shell
-            await self.send_input(command + "\n")
-            return True
+            action = data.get("action", "")
+            workflow_id = data.get("workflow_id", "")
+            
+            logger.info(f"Handling workflow control: {action} for {workflow_id}")
+
+            if action == "pause":
+                # Pause any running automation
+                await self.send_message({
+                    "type": "workflow_paused",
+                    "message": "🛑 Automation paused by user request"
+                })
+            
+            elif action == "resume":
+                # Resume automation
+                await self.send_message({
+                    "type": "workflow_resumed", 
+                    "message": "▶️ Automation resumed"
+                })
+                
+            elif action == "approve_step":
+                step_id = data.get("step_id", "")
+                if workflow_id and step_id:
+                    # Approve and execute the step
+                    await self.send_message({
+                        "type": "step_approved",
+                        "workflow_id": workflow_id,
+                        "step_id": step_id,
+                        "message": f"✅ Step {step_id} approved for execution"
+                    })
+            
+            elif action == "skip_step":
+                step_id = data.get("step_id", "")
+                if workflow_id and step_id:
+                    await self.send_message({
+                        "type": "step_skipped",
+                        "workflow_id": workflow_id, 
+                        "step_id": step_id,
+                        "message": f"⏭️ Step {step_id} skipped by user"
+                    })
 
         except Exception as e:
-            logger.error(f"PTY command error: {e}")
-            await self.send_message(
-                {"type": "error", "message": f"Terminal error: {str(e)}"}
-            )
-            return False
+            logger.error(f"Error handling workflow control: {e}")
+            await self.send_message({
+                "type": "error",
+                "message": f"Workflow control error: {str(e)}"
+            })
+
+    async def handle_workflow_message(self, data: Dict):
+        """Handle workflow step execution messages"""
+        if not WORKFLOW_AUTOMATION_AVAILABLE or not workflow_manager:
+            return
+
+        try:
+            msg_subtype = data.get("subtype", "")
+            
+            if msg_subtype == "start_workflow":
+                # Workflow starting notification
+                workflow_data = data.get("workflow", {})
+                workflow_name = workflow_data.get("name", "Unknown Workflow")
+                
+                await self.send_message({
+                    "type": "system_message",
+                    "message": f"🚀 Starting automated workflow: {workflow_name}"
+                })
+                
+                # Forward workflow data to frontend terminal
+                await self.send_message({
+                    "type": "start_workflow",
+                    "workflow": workflow_data
+                })
+            
+            elif msg_subtype == "step_confirmation_required":
+                # Forward step confirmation request to frontend
+                await self.send_message({
+                    "type": "step_confirmation_required",
+                    "workflow_id": data.get("workflow_id"),
+                    "step_id": data.get("step_id"),
+                    "step_data": data.get("step_data")
+                })
+                
+            elif msg_subtype == "execute_automated_command":
+                # Execute automated command through terminal
+                command = data.get("command", "")
+                if command:
+                    await self.send_message({
+                        "type": "automated_output",
+                        "message": f"🤖 Executing: {command}"
+                    })
+                    
+                    # Execute the command
+                    success = await self.execute_command(command)
+                    
+                    # Send result back to workflow system
+                    result = {
+                        "type": "command_result",
+                        "workflow_id": data.get("workflow_id"),
+                        "step_id": data.get("step_id"),
+                        "command": command,
+                        "success": success
+                    }
+                    await self.send_message(result)
+
+        except Exception as e:
+            logger.error(f"Error handling workflow message: {e}")
+            await self.send_message({
+                "type": "error",
+                "message": f"Workflow message error: {str(e)}"
+            })
 
     def disconnect(self):
         """Disconnect session and clean up PTY"""
@@ -231,6 +347,14 @@ class SimpleTerminalHandler:
 
                     elif msg_type == "ping":
                         await session.send_message({"type": "pong"})
+
+                    elif msg_type == "automation_control" and WORKFLOW_AUTOMATION_AVAILABLE:
+                        # Handle workflow automation control messages
+                        await session.handle_workflow_control(data)
+
+                    elif msg_type == "workflow_message" and WORKFLOW_AUTOMATION_AVAILABLE:
+                        # Handle workflow step messages
+                        await session.handle_workflow_message(data)
 
                 except WebSocketDisconnect:
                     break
