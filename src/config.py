@@ -286,8 +286,8 @@ class ConfigManager:
         except Exception as e:
             logger.warning(f"Could not auto-detect available models: {e}")
 
-        # Fallback to hardcoded default - use smaller, faster model for hardware constraints
-        return "artifish/llama3.2-uncensored:latest"
+        # Fallback to hardcoded default - use available model 
+        return "llama3.2:3b"
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key"""
@@ -464,24 +464,24 @@ class ConfigManager:
         """
         # Multi-agent model configuration with available uncensored models for unrestricted capabilities
         agent_models = {
-            # Core Orchestration - use uncensored model for flexible reasoning
-            "orchestrator": "artifish/llama3.2-uncensored:latest",  # Main coordinator - uncensored 2.2GB
-            "default": "artifish/llama3.2-uncensored:latest",  # Fallback to orchestrator model
+            # Core Orchestration - use available model for flexible reasoning
+            "orchestrator": "llama3.2:3b",  # Main coordinator - 3B model
+            "default": "llama3.2:3b",  # Fallback to orchestrator model
             # Specialized Agents - optimized for task complexity
-            "chat": "llama3.2:1b-instruct-q4_K_M",  # 1B for fast conversations (807MB)
-            "system_commands": "llama3.2:1b-instruct-q4_K_M",  # 1B for command generation (807MB)
-            "rag": "artifish/llama3.2-uncensored:latest",  # Uncensored for document synthesis (2.2GB)
-            "knowledge_retrieval": "llama3.2:1b-instruct-q4_K_M",  # 1B for fast fact lookup (807MB)
-            "research": "artifish/llama3.2-uncensored:latest",  # Uncensored for web research (2.2GB)
+            "chat": "llama3.2:1b",  # 1B for fast conversations
+            "system_commands": "llama3.2:1b",  # 1B for command generation
+            "rag": "dolphin-llama3:8b",  # Uncensored for document synthesis
+            "knowledge_retrieval": "llama3.2:1b",  # 1B for fast fact lookup
+            "research": "dolphin-llama3:8b",  # Uncensored for web research
             # Legacy compatibility - use available models
-            "search": "llama3.2:1b-instruct-q4_K_M",  # Fast search queries (807MB)
-            "code": "llama3.2:1b-instruct-q4_K_M",  # Code understanding (807MB)
-            "analysis": "artifish/llama3.2-uncensored:latest",  # Analysis tasks (2.2GB)
-            "planning": "artifish/llama3.2-uncensored:latest",  # Task planning (2.2GB)
+            "search": "llama3.2:1b",  # Fast search queries
+            "code": "llama3.2:1b",  # Code understanding
+            "analysis": "dolphin-llama3:8b",  # Analysis tasks - uncensored
+            "planning": "dolphin-llama3:8b",  # Task planning - uncensored
             # Fallback models for when uncensored is not needed
-            "orchestrator_fallback": "llama3.2:3b-instruct-q4_K_M",  # Standard 3B (2.0GB)
-            "chat_fallback": "llama3.2:1b-instruct-q4_K_M",  # Standard 1B (807MB)
-            "fallback": "artifish/llama3.2-uncensored:latest",  # General fallback (2.2GB)
+            "orchestrator_fallback": "llama3.2:3b",  # Standard 3B
+            "chat_fallback": "llama3.2:1b",  # Standard 1B
+            "fallback": "dolphin-llama3:8b",  # General fallback - uncensored
         }
 
         # Allow environment override for specific tasks

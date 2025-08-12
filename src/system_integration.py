@@ -184,8 +184,34 @@ class SystemIntegration:
                 }
             return result
         elif self.os_type == "Linux":
-            cmd = ["sudo", "systemctl", action, service_name]
+            # Use systemctl without sudo - elevation will be handled if needed
+            cmd = ["systemctl", action, service_name]
             result = self._run_command(cmd)
+            
+            # Check if permission denied
+            if result.get("status") == "error" and "permission denied" in result.get("error", "").lower():
+                # Try with elevation wrapper
+                from src.elevation_wrapper import execute_with_elevation
+                import asyncio
+                
+                elevation_result = asyncio.run(execute_with_elevation(
+                    f"systemctl {action} {service_name}",
+                    operation=f"Manage service: {service_name}",
+                    reason=f"Need administrator privileges to {action} the {service_name} service",
+                    risk_level="MEDIUM"
+                ))
+                
+                if elevation_result.get("success"):
+                    return {
+                        "status": "success",
+                        "message": f"Service '{service_name}' {action}ed successfully.",
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "message": elevation_result.get("error", "Failed to manage service with elevation")
+                    }
+            
             if result["status"] == "success":
                 return {
                     "status": "success",

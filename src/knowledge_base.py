@@ -18,6 +18,9 @@ from pypdf import PdfReader
 from src.config import config as global_config_manager
 # Import centralized Redis client utility
 from src.utils.redis_client import get_redis_client
+# Import retry mechanism and circuit breaker
+from src.retry_mechanism import retry_async, retry_database_operation, RetryStrategy
+from src.circuit_breaker import circuit_breaker_async, protected_database_call
 
 
 class KnowledgeBase:
@@ -57,7 +60,7 @@ class KnowledgeBase:
         # Use memory.redis configuration for consistency
         memory_config = global_config_manager.get("memory", {})
         redis_config = memory_config.get("redis", {})
-        self.redis_host = redis_config.get("host", "localhost")
+        self.redis_host = redis_config.get("host", os.getenv("REDIS_HOST", "localhost"))
         self.redis_port = redis_config.get("port", 6379)
         self.redis_password = redis_config.get("password", os.getenv("REDIS_PASSWORD"))
         # Use a separate Redis database (2) for knowledge base to avoid conflicts
@@ -117,8 +120,8 @@ class KnowledgeBase:
                 )
                 # Try fallback models in order of preference
                 fallback_models = [
-                    "deepseek-r1:14b",
-                    "artifish/llama3.2-uncensored:latest",
+                    "dolphin-llama3:8b",
+                    "llama3.2:3b",
                     "nomic-embed-text:latest",
                 ]
                 model_initialized = False
@@ -322,6 +325,8 @@ class KnowledgeBase:
                 "message": f"Error adding file to KB: {str(e)}",
             }
 
+    @circuit_breaker_async("knowledge_base_service", failure_threshold=5, recovery_timeout=15.0, timeout=30.0)
+    @retry_async(max_attempts=3, base_delay=0.5, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
     async def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         if self.query_engine is None:
             logging.warning(

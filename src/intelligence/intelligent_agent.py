@@ -673,7 +673,8 @@ OS-specific commands.
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
-        return datetime.now().isoformat()
+        from src.utils.command_utils import get_timestamp
+        return get_timestamp()
 
     async def get_system_status(self) -> Dict[str, Any]:
         """
