@@ -6,7 +6,7 @@
         Workflow Notifications
         <span class="notification-count">{{ notifications.length }}</span>
       </h4>
-      <button @click="clearAllNotifications" class="btn-clear">
+      <button @click="clearAllNotifications" class="btn-clear" aria-label="No">
         <i class="fas fa-times"></i>
         Clear All
       </button>
@@ -34,11 +34,11 @@
             v-if="notification.actionRequired"
             @click="handleNotificationAction(notification)"
             class="btn-action"
-          >
+           aria-label="{{ notification.actiontext }}">
             {{ notification.actionText }}
           </button>
 
-          <button @click="dismissNotification(notification.id)" class="btn-dismiss">
+          <button @click="dismissNotification(notification.id)" class="btn-dismiss" aria-label="No">
             <i class="fas fa-times"></i>
           </button>
         </div>

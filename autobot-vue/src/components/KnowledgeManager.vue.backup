@@ -29,7 +29,7 @@
 
       <div v-if="searchResults.length > 0" class="search-results">
         <h4>Search Results ({{ searchResults.length }})</h4>
-        <div v-for="(result, index) in searchResults" :key="result.id || `result-${index}`" class="search-result">
+        <div v-for="(result, index) in searchResults" :key="index" class="search-result">
           <div class="result-score">Score: {{ result.score?.toFixed(3) || 'N/A' }}</div>
           <div class="result-content">{{ result.content || result.text || 'No content' }}</div>
           <div class="result-metadata" v-if="result.metadata">
@@ -454,7 +454,7 @@
                 </div>
 
                 <div class="links-list" v-if="currentEntry.links && currentEntry.links.length > 0">
-                  <div v-for="(link, index) in currentEntry.links" :key="link.url || link.href || `link-${index}`" class="link-item">
+                  <div v-for="(link, index) in currentEntry.links" :key="index" class="link-item">
                     <a :href="link.url" target="_blank" class="link-url">
                       {{ link.title || link.url }}
                     </a>

@@ -1,6 +1,6 @@
 <template>
   <div class="workflow-progress-widget" v-if="activeWorkflow">
-    <div class="widget-header" @click="toggleExpanded">
+    <div class="widget-header" @click="toggleExpanded" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
       <div class="workflow-info">
         <div class="workflow-title">
           <i class="fas fa-cogs"></i>
@@ -20,11 +20,11 @@
       </div>
 
       <div class="widget-controls">
-        <button v-if="hasApprovalPending" @click.stop="openApprovals" class="btn-approval">
+        <button v-if="hasApprovalPending" @click.stop="openApprovals" class="btn-approval" aria-label="Warning">
           <i class="fas fa-exclamation-circle"></i>
           Approval Required
         </button>
-        <button @click.stop="toggleExpanded" class="btn-toggle">
+        <button @click.stop="toggleExpanded" class="btn-toggle" aria-label="Expand">
           <i :class="expanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
         </button>
       </div>
@@ -62,11 +62,11 @@
       </div>
 
       <div class="widget-actions">
-        <button @click="openFullWorkflowView" class="btn-view">
+        <button @click="openFullWorkflowView" class="btn-view" aria-label="Button">
           <i class="fas fa-external-link-alt"></i>
           View Full Workflow
         </button>
-        <button @click="cancelWorkflow" class="btn-cancel">
+        <button @click="cancelWorkflow" class="btn-cancel" aria-label="Cancel">
           <i class="fas fa-stop"></i>
           Cancel
         </button>

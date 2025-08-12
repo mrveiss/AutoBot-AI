@@ -122,7 +122,7 @@
           <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col h-full">
             <!-- Chat Messages -->
             <div class="flex-1 overflow-y-auto p-6 space-y-4" ref="chatMessages" role="log" style="max-height: calc(100vh - 350px); min-height: 400px;">
-            <div v-for="(message, index) in filteredMessages" :key="message.id || message.timestamp || `msg-${index}`" class="flex" :class="message.sender === 'user' ? 'justify-end' : 'justify-start'">
+            <div v-for="(message, index) in filteredMessages" :key="index" class="flex" :class="message.sender === 'user' ? 'justify-end' : 'justify-start'">
               <div class="max-w-3xl rounded-lg p-4 shadow-sm" :class="message.sender === 'user' ? 'bg-indigo-500 text-white' : 'bg-white border border-blueGray-200 text-blueGray-700'">
                 <div class="message-content" :data-type="message.type" v-html="formatMessage(message.text, message.type)"></div>
                 <div class="text-xs mt-2 opacity-70">{{ message.timestamp }}</div>
@@ -134,7 +134,7 @@
             <div class="border-t border-blueGray-200 p-4 bg-white flex-shrink-0">
               <!-- Attached Files Display -->
               <div v-if="attachedFiles.length > 0" class="mb-3 flex flex-wrap gap-2">
-                <div v-for="(file, index) in attachedFiles" :key="file.name || file.id || `file-${index}`" class="attached-file-chip">
+                <div v-for="(file, index) in attachedFiles" :key="index" class="attached-file-chip">
                   <span class="file-icon">{{ getFileIcon(file) }}</span>
                   <span class="file-name">{{ file.name }}</span>
                   <button @click="removeAttachment(index)" class="remove-btn" aria-label="&times;">&times;</button>
