@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
-from src.types import TaskComplexity
+from src.autobot_types import TaskComplexity
 
 
 class WorkflowPriority(Enum):

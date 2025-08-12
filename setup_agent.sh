@@ -164,27 +164,9 @@ fi
 echo "Assuming Redis Stack is ready and accessible via localhost:6379 from within WSL2."
 echo "Please ensure the 'redis-stack' Docker container is running and healthy."
 
-# --- 3.5. Install Browser Dependencies for GUI Testing ---
-echo "🌐 Installing browser dependencies for GUI testing..."
-sudo apt update
-sudo apt install -y \
-    libicu66 libicu-dev \
-    libjpeg8 libjpeg8-dev \
-    libwebp6 libwebpdemux2 libwebpmux3 \
-    libffi7 libffi-dev \
-    libglib2.0-0 libgtk-3-0 libgconf-2-4 \
-    libasound2 libxss1 libatk-bridge2.0-0 \
-    libdrm2 libxcomposite1 libxdamage1 libxrandr2 \
-    libgbm1 libxkbcommon0 libatspi2.0-0 \
-    libx11-xcb1 libxcb-dri3-0 libxcb1 libxcursor1 \
-    libxfixes3 libxi6 libxrender1 libxext6 \
-    fonts-liberation libappindicator3-1 libnss3 \
-    lsb-release xdg-utils || {
-    echo "⚠️ Failed to install some browser dependencies. GUI testing may be limited."
-    echo "   This is common on some systems and may not affect basic functionality."
-    echo "✅ Continuing with setup..."
-}
-echo "✅ Browser dependencies installation completed."
+# --- 3.5. GUI Testing Setup ---
+echo "🌐 GUI testing will use npm-installed Playwright (no additional system dependencies needed)"
+echo "✅ GUI testing ready - Playwright will download browsers automatically when needed"
 
 # --- 4. Deploy/Start Playwright Service Docker Container ---
 echo "🔍 Checking for existing 'autobot-playwright' Docker container..."
@@ -472,8 +454,12 @@ install_ollama_model() {
 echo "🎯 Installing uncensored models for unrestricted multi-agent capabilities..."
 
 # Primary uncensored models for the architecture
-install_ollama_model "artifish/llama3.2-uncensored:1b" "Chat Agent & System Commands Agent (Llama 3.2 1B Uncensored)"
-install_ollama_model "artifish/llama3.2-uncensored:3b" "Orchestrator & RAG Agent (Llama 3.2 3B Uncensored)"
+# Try known uncensored models that actually exist
+install_ollama_model "dolphin-llama3:8b" "Uncensored Chat & System Commands Agent (Dolphin Llama3 8B)"
+install_ollama_model "wizard-vicuna-uncensored:13b" "Uncensored Orchestrator Agent (Wizard Vicuna 13B)"
+# Fallback to standard models if uncensored not available
+install_ollama_model "llama3.2:1b" "Fallback Chat Agent (Llama 3.2 1B)"
+install_ollama_model "llama3.2:3b" "Fallback Orchestrator Agent (Llama 3.2 3B)"
 
 # Embedding model for knowledge base (no uncensored variant needed)
 install_ollama_model "nomic-embed-text:latest" "Knowledge Base Embeddings"

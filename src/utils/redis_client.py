@@ -58,7 +58,7 @@ def get_redis_client(
             return None
 
         # Extract connection parameters with defaults
-        host = redis_config.get("host", "localhost")
+        host = redis_config.get("host", os.getenv("REDIS_HOST", "localhost"))
         port = redis_config.get("port", 6379)
         password = redis_config.get("password", os.getenv("REDIS_PASSWORD"))
         db = redis_config.get("db", 0)
@@ -149,7 +149,7 @@ def test_redis_connection() -> bool:
         if not redis_config:
             return False
 
-        host = redis_config.get("host", "localhost")
+        host = redis_config.get("host", os.getenv("REDIS_HOST", "localhost"))
         port = redis_config.get("port", 6379)
         password = redis_config.get("password", os.getenv("REDIS_PASSWORD"))
 

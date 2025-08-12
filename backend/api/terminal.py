@@ -18,6 +18,10 @@ from backend.api.simple_terminal_websocket import (
     simple_terminal_handler,
     simple_terminal_websocket_endpoint,
 )
+from backend.api.secure_terminal_websocket import (
+    handle_secure_terminal_websocket,
+    get_secure_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,14 @@ async def websocket_terminal(websocket: WebSocket, chat_id: str):
 async def websocket_simple_terminal(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for simple terminal sessions"""
     await simple_terminal_websocket_endpoint(websocket, session_id)
+
+
+@router.websocket("/ws/secure/{session_id}")
+async def websocket_secure_terminal(websocket: WebSocket, session_id: str):
+    """WebSocket endpoint for secure terminal sessions with auditing"""
+    # Get security layer from app state (available via websocket.app.state)
+    security_layer = getattr(websocket.app.state, 'enhanced_security_layer', None)
+    await handle_secure_terminal_websocket(websocket, session_id, security_layer)
 
 
 @router.post("/sessions")

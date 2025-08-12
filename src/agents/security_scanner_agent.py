@@ -10,6 +10,8 @@ import subprocess
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from src.utils.command_utils import execute_shell_command
+
 logger = logging.getLogger(__name__)
 
 
@@ -342,31 +344,22 @@ class SecurityScannerAgent:
             return {"status": "error", "message": f"Web scan failed: {str(e)}"}
 
     async def _run_command(self, cmd: List[str], timeout: int = 60) -> Dict[str, Any]:
-        """Run a command with timeout"""
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
-
-            if process.returncode == 0:
-                return {"status": "success", "output": stdout.decode()}
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Command failed: {stderr.decode()}",
-                }
-
-        except asyncio.TimeoutError:
+        """Run a command with timeout - wrapper around common utility"""
+        result = await execute_shell_command(cmd, timeout=timeout)
+        
+        # Convert to expected format for this agent
+        if result["status"] == "success":
+            return {"status": "success", "output": result["stdout"]}
+        else:
+            # Combine stderr and error info for backward compatibility
+            error_msg = result["stderr"] or f"Command failed with return code {result['return_code']}"
+            if result["status"] == "timeout":
+                error_msg = f"Command timed out after {timeout} seconds"
+            
             return {
                 "status": "error",
-                "message": f"Command timed out after {timeout} seconds",
+                "message": error_msg,
             }
-        except Exception as e:
-            return {"status": "error", "message": f"Command execution failed: {str(e)}"}
 
     def _parse_nmap_output(self, output: str) -> List[Dict[str, Any]]:
         """Parse nmap XML output for open ports"""

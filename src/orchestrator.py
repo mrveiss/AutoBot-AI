@@ -19,7 +19,7 @@ from src.prompt_manager import prompt_manager
 from src.system_info_collector import get_os_info
 from src.tool_discovery import discover_tools
 from src.tools import ToolRegistry
-from src.types import TaskComplexity
+from src.autobot_types import TaskComplexity
 from src.utils.redis_client import get_redis_client
 from src.worker_node import GUI_AUTOMATION_SUPPORTED, WorkerNode
 
