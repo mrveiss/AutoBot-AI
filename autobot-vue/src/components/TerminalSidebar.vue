@@ -1,6 +1,6 @@
 <template>
   <div class="terminal-sidebar" :class="{ 'collapsed': collapsed }">
-    <button class="toggle-sidebar" @click="toggleSidebar">
+    <button class="toggle-sidebar" @click="toggleSidebar" aria-label="{{ collapsed ? '◀' : '▶' }}">
       {{ collapsed ? '◀' : '▶' }}
     </button>
     <div class="sidebar-content" v-if="!collapsed">
@@ -40,12 +40,12 @@
           class="session-tab"
           :class="{ 'active': activeSessionId === session.id }"
           @click="switchSession(session.id)"
-        >
+         tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
           <span class="tab-title">{{ session.title }}</span>
           <button
             class="close-tab"
             @click.stop="closeSession(session.id)"
-          >
+           aria-label="Action button">
             ×
           </button>
         </div>
@@ -57,7 +57,7 @@
           class="no-session-message"
         >
           <p>No active terminal session</p>
-          <button class="start-button" @click="newTerminalSession">
+          <button class="start-button" @click="newTerminalSession" aria-label="Start terminal">
             Start Terminal
           </button>
         </div>
@@ -97,7 +97,7 @@
             class="terminal-output"
             ref="terminalOutput"
             @click="focusInput"
-          >
+           tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
             <div
               v-for="(line, index) in activeSession?.output || []"
               :key="index"

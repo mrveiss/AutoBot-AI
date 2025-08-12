@@ -7,7 +7,7 @@
         :key="tab.id"
         :class="{ active: activeTab === tab.id }"
         @click="activeTab = tab.id"
-      >
+       aria-label="{{ tab.label }}">
         {{ tab.label }}
       </button>
     </div>
@@ -35,25 +35,25 @@
           <button
             :class="{ active: activeBackendSubTab === 'general' }"
             @click="activeBackendSubTab = 'general'"
-          >
+           aria-label="General">
             General
           </button>
           <button
             :class="{ active: activeBackendSubTab === 'llm' }"
             @click="activeBackendSubTab = 'llm'"
-          >
+           aria-label="Llm">
             LLM
           </button>
           <button
             :class="{ active: activeBackendSubTab === 'embedding' }"
             @click="activeBackendSubTab = 'embedding'"
-          >
+           aria-label="Embedding">
             Embedding
           </button>
           <button
             :class="{ active: activeBackendSubTab === 'memory' }"
             @click="activeBackendSubTab = 'memory'"
-          >
+           aria-label="Memory">
             Memory
           </button>
         </div>
@@ -211,7 +211,7 @@
             <input type="checkbox" v-model="settings.backend.streaming" @change="notifyBackendOfProviderChange" />
           </div>
           <div class="settings-actions">
-            <button @click="loadModels">Refresh Models</button>
+            <button @click="loadModels" aria-label="Refresh models">Refresh Models</button>
           </div>
         </div>
         <div v-if="activeBackendSubTab === 'embedding'" class="sub-tab-content">
@@ -271,7 +271,7 @@
             </div>
           </div>
           <div class="settings-actions">
-            <button @click="loadEmbeddingModels">Refresh Embedding Models</button>
+            <button @click="loadEmbeddingModels" aria-label="Refresh embedding models">Refresh Embedding Models</button>
           </div>
         </div>
         <div v-if="activeBackendSubTab === 'memory'" class="sub-tab-content">
@@ -464,8 +464,8 @@
               <strong>Active Routers:</strong> {{ (developerInfo.available_routers || []).join(', ') }}
             </div>
             <div class="settings-actions">
-              <button @click="loadDeveloperInfo">Refresh System Info</button>
-              <button @click="showApiEndpoints">View API Endpoints</button>
+              <button @click="loadDeveloperInfo" aria-label="Refresh system info">Refresh System Info</button>
+              <button @click="showApiEndpoints" aria-label="View api endpoints">View API Endpoints</button>
             </div>
           </div>
         </div>
@@ -476,7 +476,7 @@
         <h3>System Prompts</h3>
         <div class="prompts-container">
           <div class="prompts-list">
-            <div v-for="prompt in settings.prompts.list" :key="prompt.id" class="prompt-item" :class="{ 'active': settings.prompts.selectedPrompt && settings.prompts.selectedPrompt.id === prompt.id }" @click="selectPrompt(prompt)">
+            <div v-for="prompt in settings.prompts.list" :key="prompt.id" class="prompt-item" :class="{ 'active': settings.prompts.selectedPrompt && settings.prompts.selectedPrompt.id === prompt.id }" @click="selectPrompt(prompt)" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
               <div class="prompt-name">{{ prompt.name || prompt.id }}</div>
               <div class="prompt-type">{{ prompt.type || 'Unknown Type' }}</div>
             </div>
@@ -486,19 +486,19 @@
             <h4>Editing: {{ settings.prompts.selectedPrompt.name || settings.prompts.selectedPrompt.id }}</h4>
             <textarea v-model="settings.prompts.editedContent" rows="10" placeholder="Edit prompt content here..."></textarea>
             <div class="editor-actions">
-              <button @click="savePrompt">Save Changes</button>
-              <button @click="revertPromptToDefault(settings.prompts.selectedPrompt.id)">Revert to Default</button>
-              <button @click="settings.prompts.selectedPrompt = null">Cancel</button>
+              <button @click="savePrompt" aria-label="Save changes">Save Changes</button>
+              <button @click="revertPromptToDefault(settings.prompts.selectedPrompt.id)" aria-label="Revert to default">Revert to Default</button>
+              <button @click="settings.prompts.selectedPrompt = null" aria-label="Cancel">Cancel</button>
             </div>
           </div>
         </div>
         <div class="setting-item">
-          <button class="control-button small" @click="loadPrompts">Load Prompts</button>
+          <button class="control-button small" @click="loadPrompts" aria-label="Load prompts">Load Prompts</button>
         </div>
       </div>
     </div>
     <div class="settings-actions">
-      <button @click="saveSettings" :disabled="isSaving" class="save-button">
+      <button @click="saveSettings" :disabled="isSaving" class="save-button" aria-label="{{ issaving ? 'saving...' : 'save settings' }}">
         {{ isSaving ? 'Saving...' : 'Save Settings' }}
       </button>
       <div v-if="saveMessage" :class="['save-message', saveMessageType]">
@@ -767,7 +767,6 @@ export default {
       try {
         const response = await apiClient.get('/api/settings/config');
         const configSettings = await response.json();
-        console.log('Loaded settings from config.yaml:', configSettings);
         settings.value = deepMerge(defaultSettings(), configSettings);
         // Save to local storage as well
         localStorage.setItem('chat_settings', JSON.stringify(settings.value));
@@ -804,7 +803,6 @@ export default {
 
         const response = await apiClient.post('/api/settings/config', settingsToSave);
         const result = await response.json();
-        console.log('Settings saved successfully to config.yaml:', result);
 
         // Reload settings from backend after successful save
         await loadSettingsFromBackend();
@@ -879,16 +877,8 @@ export default {
     // Function to dynamically load models from the selected provider
     const loadModels = async () => {
       try {
-        console.log('Loading models from backend...');
         const response = await fetch('http://localhost:8001/api/llm/models');
         const data = await response.json();
-        console.log('Model data received:', data);
-        console.log('Response structure:', {
-          hasModels: !!data.models,
-          modelsIsArray: Array.isArray(data.models),
-          modelsLength: data.models?.length,
-          firstModel: data.models?.[0]
-        });
 
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
@@ -919,7 +909,6 @@ export default {
             }
 
             settings.value.backend.llm.local.providers.ollama.models = availableModels;
-            console.log(`Loaded ${availableModels.length} Ollama models:`, availableModels);
 
             if (availableModels.length === 0) {
               console.warn('No Ollama models found. Raw API response:', data);
@@ -932,13 +921,11 @@ export default {
             // Auto-select first model if none selected
             if (!settings.value.backend.llm.local.providers.ollama.selected_model && availableModels.length > 0) {
               settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0];
-              console.log('Auto-selected model:', availableModels[0]);
             }
 
             // Validate current selection is still available
             const currentModel = settings.value.backend.llm.local.providers.ollama.selected_model;
             if (currentModel && !availableModels.includes(currentModel)) {
-              console.log(`Current model ${currentModel} no longer available, switching to ${availableModels[0]}`);
               settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0] || '';
             }
 
@@ -956,14 +943,12 @@ export default {
             }
 
             settings.value.backend.llm.local.providers.lmstudio.models = lmStudioModels;
-            console.log(`Loaded ${lmStudioModels.length} LM Studio models:`, lmStudioModels);
 
             if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && lmStudioModels.length > 0) {
               settings.value.backend.llm.local.providers.lmstudio.selected_model = lmStudioModels[0];
             }
           }
         }
-        console.log('Models loaded successfully');
       } catch (error) {
         console.error('Error loading models:', error);
         if (settings.value.backend.llm.provider_type === 'local') {
@@ -1034,10 +1019,8 @@ export default {
           providerData.cloud_endpoint = providerSettings.endpoint;
         }
 
-        console.log('Notifying backend of provider change:', providerData);
         const response = await apiClient.post('/api/llm/provider', providerData);
         const result = await response.json();
-        console.log('Backend notified of provider change successfully:', result);
 
         // Update health status after provider change
         await checkHealthStatus();
@@ -1078,7 +1061,6 @@ export default {
     const updateDeveloperConfig = async () => {
       try {
         await settingsService.updateDeveloperConfig(settings.value.developer);
-        console.log('Developer configuration updated');
         if (settings.value.developer.enabled) {
           await loadDeveloperInfo();
         }
@@ -1104,7 +1086,6 @@ export default {
     const showApiEndpoints = async () => {
       try {
         const endpoints = await settingsService.getApiEndpoints();
-        console.log('Available API Endpoints:', endpoints);
         alert(`Found ${endpoints.total_endpoints} API endpoints across ${endpoints.routers?.length || 0} routers. Check console for details.`);
       } catch (error) {
         console.error('Error showing API endpoints:', error);
@@ -1149,10 +1130,8 @@ export default {
           embeddingData.api_key = providerSettings.api_key;
         }
 
-        console.log('Notifying backend of embedding change:', embeddingData);
         const response = await apiClient.post('/api/llm/embedding', embeddingData);
         const result = await response.json();
-        console.log('Backend notified of embedding change successfully:', result);
 
         // Update health status after embedding change
         await checkHealthStatus();
@@ -1164,7 +1143,6 @@ export default {
     // Function to load embedding models
     const loadEmbeddingModels = async () => {
       try {
-        console.log('Loading embedding models from backend...');
         const provider = settings.value.backend.llm.embedding.provider;
 
         if (provider === 'ollama') {
@@ -1174,7 +1152,6 @@ export default {
 
           if (data.models && Array.isArray(data.models)) {
             settings.value.backend.llm.embedding.providers.ollama.models = data.models;
-            console.log(`Loaded ${data.models.length} Ollama embedding models:`, data.models);
 
             // Auto-select first model if none selected
             if (!settings.value.backend.llm.embedding.providers.ollama.selected_model && data.models.length > 0) {
@@ -1183,7 +1160,6 @@ export default {
           }
         }
         // OpenAI models are predefined, no need to load them
-        console.log('Embedding models loaded successfully');
       } catch (error) {
         console.error('Error loading embedding models:', error);
         if (settings.value.backend.llm.embedding.provider === 'ollama') {
