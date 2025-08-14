@@ -195,19 +195,27 @@ if [ ! -f "/home/kali/Desktop/AutoBot/playwright-server.js" ]; then
     fi
 fi
 
-if docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright$'; then
-    if docker inspect -f '{{.State.Running}}' autobot-playwright | grep -q 'true'; then
-        echo "✅ 'autobot-playwright' container is already running."
+# Check for Playwright container (either name)
+PLAYWRIGHT_CONTAINER=""
+if docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright-vnc$'; then
+    PLAYWRIGHT_CONTAINER="autobot-playwright-vnc"
+elif docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright$'; then
+    PLAYWRIGHT_CONTAINER="autobot-playwright"
+fi
+
+if [ -n "$PLAYWRIGHT_CONTAINER" ]; then
+    if docker inspect -f '{{.State.Running}}' "$PLAYWRIGHT_CONTAINER" | grep -q 'true'; then
+        echo "✅ '$PLAYWRIGHT_CONTAINER' container is already running."
     else
-        echo "🔄 'autobot-playwright' container found but not running. Starting it..."
-        docker start autobot-playwright || {
-            echo "❌ Failed to start 'autobot-playwright' container."
+        echo "🔄 '$PLAYWRIGHT_CONTAINER' container found but not running. Starting it..."
+        docker start "$PLAYWRIGHT_CONTAINER" || {
+            echo "❌ Failed to start '$PLAYWRIGHT_CONTAINER' container."
             echo "   This may be due to mount issues. Try removing and recreating the container:"
-            echo "   docker rm autobot-playwright"
+            echo "   docker rm $PLAYWRIGHT_CONTAINER"
             echo "   Then run setup_agent.sh again to recreate it."
             exit 1
         }
-        echo "✅ 'autobot-playwright' container started."
+        echo "✅ '$PLAYWRIGHT_CONTAINER' container started."
 
         # Wait for service to be ready
         echo "⏳ Waiting for Playwright service to be ready..."
@@ -221,7 +229,9 @@ if docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright$'; then
         done
     fi
 else
-    echo "❌ 'autobot-playwright' container not found. Please run setup_agent.sh to deploy it."
+    echo "❌ Playwright container not found. Please run setup_agent.sh to deploy it."
+    echo "   Or manually start the VNC-enabled container with:"
+    echo "   docker-compose -f docker-compose.playwright-vnc.yml up -d"
     exit 1
 fi
 
