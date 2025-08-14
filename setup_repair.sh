@@ -428,7 +428,7 @@ run_repairs() {
             log_info "Copying playwright-server.js to root..."
             cp tests/playwright-server.js ./playwright-server.js
         fi
-        repair_container "autobot-playwright" "playwright" "docker-compose.playwright.yml"
+        repair_container "autobot-playwright" "playwright-service" "docker-compose.playwright.yml"
     fi
 
     # Fix Python environment
@@ -513,7 +513,7 @@ force_recreate_containers() {
     # Recreate using docker-compose
     log_info "Recreating containers..."
     $COMPOSE_CMD -f docker-compose.hybrid.yml up -d autobot-redis autobot-npu-worker
-    $COMPOSE_CMD -f docker-compose.playwright.yml up -d
+    $COMPOSE_CMD -f docker-compose.playwright.yml up -d playwright-service
 
     # Wait for containers to be ready
     sleep 10
