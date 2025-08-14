@@ -10,7 +10,9 @@ This document lists all port mappings used by AutoBot services.
 | autobot-redis | 8002 | 8002 | RedisInsight Web UI |
 | autobot-npu-worker | 8081 | 8081 | NPU inference API |
 | autobot-ai-stack | 8080 | 8080 | AI services API |
-| autobot-playwright | 3000 | 3000 | Playwright service |
+| autobot-playwright | 3000 | 3000 | Playwright service API |
+| autobot-playwright | 5900 | 5999 | VNC server (for remote viewing) |
+| autobot-playwright | 6080 | 6080 | noVNC web interface |
 
 ## Local Services
 
@@ -33,4 +35,5 @@ This document lists all port mappings used by AutoBot services.
 - **RedisInsight**: http://localhost:8002
 - **NPU Worker**: http://localhost:8081
 - **AI Stack**: http://localhost:8080
-- **Playwright**: http://localhost:3000
+- **Playwright API**: http://localhost:3000
+- **Playwright Browser (noVNC)**: http://localhost:6080/vnc.html
