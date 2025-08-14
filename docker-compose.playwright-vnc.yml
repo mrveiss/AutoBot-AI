@@ -14,7 +14,6 @@ services:
       - SCREEN_DEPTH=24
     volumes:
       - ./playwright-server.js:/app/server.js
-      - ./novnc:/usr/share/novnc:ro
     ports:
       - "3000:3000"    # Playwright API
       - "5901:5901"    # VNC port (avoiding Kali's default 5900)
