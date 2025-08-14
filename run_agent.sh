@@ -2,6 +2,29 @@
 
 # Script to run the AutoBot application with backend and frontend components
 
+# Parse command line arguments
+TEST_MODE=false
+START_ALL_CONTAINERS=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --test-mode)
+            TEST_MODE=true
+            shift
+            ;;
+        --all-containers)
+            START_ALL_CONTAINERS=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--test-mode] [--all-containers]"
+            echo "  --test-mode       Run in test mode with additional checks"
+            echo "  --all-containers  Start all containers (Redis, NPU, AI Stack, Playwright)"
+            exit 1
+            ;;
+    esac
+done
+
 echo "Starting AutoBot application..."
 
 # Enhanced cleanup function with better signal handling
@@ -92,12 +115,25 @@ if ! id -nG "$USER" | grep -qw "docker"; then
     exit 1 # Exit to prompt user to re-login
 fi
 
-# Start Redis Stack Docker container (from docker-compose)
-echo "Starting Redis Stack Docker container..."
+# Start all required Docker containers (from docker-compose)
+echo "Starting all required Docker containers..."
+
+# If --all-containers flag is set, use the comprehensive startup script
+if [ "$START_ALL_CONTAINERS" = true ]; then
+    echo "🚀 Starting ALL containers (Redis, NPU, AI Stack, Playwright)..."
+    ./start_all_containers.sh || {
+        echo "❌ Failed to start all containers."
+        exit 1
+    }
+else
+    echo "📦 Starting essential containers only (Redis, NPU, Playwright)..."
+fi
+
+# Start Redis Stack
+echo "🔄 Starting Redis Stack..."
 if docker ps --format '{{.Names}}' | grep -q '^autobot-redis$'; then
     echo "✅ 'autobot-redis' container is already running."
 else
-    echo "🔄 Starting Redis Stack via docker-compose..."
     docker-compose -f docker-compose.hybrid.yml up -d autobot-redis || {
         echo "❌ Failed to start Redis Stack container via docker-compose."
         exit 1
@@ -105,14 +141,72 @@ else
     echo "✅ 'autobot-redis' container started."
 fi
 
+# Start NPU Worker (optional but recommended for performance)
+echo "🔄 Starting NPU Worker..."
+if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
+    echo "✅ 'autobot-npu-worker' container is already running."
+else
+    docker-compose -f docker-compose.hybrid.yml up -d autobot-npu-worker || {
+        echo "⚠️  Warning: Failed to start NPU Worker container. Continuing without NPU acceleration."
+        # Don't exit - NPU worker is optional
+    }
+fi
+
+# Wait for containers to be ready
+echo "⏳ Waiting for containers to be ready..."
+sleep 5
+
+# Check Redis health
+echo "🔍 Checking Redis health..."
+for i in {1..10}; do
+    if docker exec autobot-redis redis-cli ping >/dev/null 2>&1; then
+        echo "✅ Redis is ready."
+        break
+    fi
+    echo "⏳ Waiting for Redis... (attempt $i/10)"
+    sleep 2
+done
+
+# Check NPU Worker health (if running)
+if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
+    echo "🔍 Checking NPU Worker health..."
+    for i in {1..10}; do
+        if curl -sf http://localhost:8081/health >/dev/null 2>&1; then
+            echo "✅ NPU Worker is ready."
+            break
+        fi
+        echo "⏳ Waiting for NPU Worker... (attempt $i/10)"
+        sleep 2
+    done
+fi
+
 # Start Playwright Service Docker container
 echo "Starting Playwright Service Docker container..."
+
+# Ensure playwright-server.js exists and is a file
+if [ ! -f "/home/kali/Desktop/AutoBot/playwright-server.js" ]; then
+    echo "⚠️  playwright-server.js not found in project root. Checking for it..."
+    if [ -f "/home/kali/Desktop/AutoBot/tests/playwright-server.js" ]; then
+        echo "📋 Copying playwright-server.js from tests directory..."
+        cp "/home/kali/Desktop/AutoBot/tests/playwright-server.js" "/home/kali/Desktop/AutoBot/playwright-server.js"
+    else
+        echo "❌ playwright-server.js not found. Playwright container cannot start."
+        echo "   Please ensure playwright-server.js exists in the project root."
+    fi
+fi
+
 if docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright$'; then
     if docker inspect -f '{{.State.Running}}' autobot-playwright | grep -q 'true'; then
         echo "✅ 'autobot-playwright' container is already running."
     else
         echo "🔄 'autobot-playwright' container found but not running. Starting it..."
-        docker start autobot-playwright || { echo "❌ Failed to start 'autobot-playwright' container."; exit 1; }
+        docker start autobot-playwright || {
+            echo "❌ Failed to start 'autobot-playwright' container."
+            echo "   This may be due to mount issues. Try removing and recreating the container:"
+            echo "   docker rm autobot-playwright"
+            echo "   Then run setup_agent.sh again to recreate it."
+            exit 1
+        }
         echo "✅ 'autobot-playwright' container started."
 
         # Wait for service to be ready
