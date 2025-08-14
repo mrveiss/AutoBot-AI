@@ -17,7 +17,7 @@ services:
       - ./novnc:/usr/share/novnc:ro
     ports:
       - "3000:3000"    # Playwright API
-      - "5999:5900"    # VNC port (5900 inside, 5999 outside to avoid conflicts)
+      - "5900:5900"    # VNC port
       - "6080:6080"    # noVNC web interface
     command: >
       sh -c "
