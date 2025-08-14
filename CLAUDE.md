@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 6. **CRITICAL**: Backup `data/` before schema changes to knowledge_base.db or memory_system.db
 7. **MANDATORY**: Test Phase 9 components with `python test_phase9_ai.py` after multi-modal changes
 8. **MANDATORY**: Verify NPU worker with `python test_npu_worker.py` after OpenVINO modifications
+9. **CRITICAL**: All test-related files MUST be stored in `tests/` folder or subfolders - NO EXCEPTIONS
 
 ### Immediate Safety Checks
 ```bash
@@ -24,7 +25,7 @@ ls data/memory_system.db || echo "Memory system missing"
 
 # Phase-specific health checks
 curl -s "http://localhost:8001/api/memory/health" || echo "Memory system API not accessible"
-curl -s "http://localhost:8001/api/control/status" || echo "Control panel API not accessible" 
+curl -s "http://localhost:8001/api/control/status" || echo "Control panel API not accessible"
 docker ps | grep npu-worker || echo "NPU worker not running (optional)"
 ```
 
@@ -33,9 +34,11 @@ docker ps | grep npu-worker || echo "NPU worker not running (optional)"
 **Before ANY commit, execute this exact sequence:**
 
 ```bash
-# 1. TESTING PHASE - Complete system validation
+# 1. TESTING PHASE - Complete system validation (see TESTING ORGANIZATION section)
 ./run_agent.sh --test-mode                    # Test basic system startup
-python -m pytest tests/ -v --tb=short         # Run unit tests
+python -m pytest tests/unit/ -v --tb=short    # Run unit tests
+python -m pytest tests/integration/ -v        # Run integration tests
+python -m pytest tests/security/ -v           # Run security tests
 python test_phase9_ai.py                      # Test Phase 9 components (if modified)
 python test_npu_worker.py                     # Test NPU worker (if modified)
 python validate_chat_knowledge.py             # Validate knowledge integration
@@ -116,7 +119,7 @@ def new_function(param1: str, param2: int = 5) -> Dict[str, Any]:
 ```bash
 # If system breaks during development
 pkill -f uvicorn; docker compose -f docker-compose.hybrid.yml down
-./setup_agent.sh --force-reinstall
+./scripts/setup/setup_agent.sh --force-reinstall
 ./run_agent.sh
 
 # NPU worker recovery
@@ -138,7 +141,7 @@ AutoBot is an enterprise-grade autonomous AI platform with Vue 3 frontend and Fa
 ```
 src/
 ├── orchestrator.py                      # ⚠️  CRITICAL - Task planning engine
-├── enhanced_orchestrator.py            # 🚀 NEW - Phase 8+ orchestration  
+├── enhanced_orchestrator.py            # 🚀 NEW - Phase 8+ orchestration
 ├── llm_interface.py                     # 🔧 COMMON - LLM integrations
 ├── llm_interface_extended.py            # 🔧 NEW - Extended LLM capabilities
 ├── knowledge_base.py                    # 📊 DATA - RAG + ChromaDB
@@ -163,7 +166,7 @@ src/
 
 backend/api/
 ├── chat.py                             # 💬 API - Chat endpoints
-├── workflow.py                         # 🔄 API - Multi-agent workflow orchestration  
+├── workflow.py                         # 🔄 API - Multi-agent workflow orchestration
 ├── enhanced_memory.py                   # 🧠 NEW - Phase 7 memory API
 ├── advanced_control.py                  # 🎮 NEW - Phase 8 streaming & control API
 ├── advanced_workflow_orchestrator.py   # 🚀 NEW - Advanced orchestration
@@ -181,7 +184,7 @@ docker/
 
 docs/                                   # 📚 NEW - Organized documentation
 ├── deployment/                         #    Deployment guides
-├── features/                          #    Feature documentation  
+├── features/                          #    Feature documentation
 ├── security/                          #    Security guidelines
 └── workflow/                          #    Workflow documentation
 ```
@@ -191,7 +194,7 @@ docs/                                   # 📚 NEW - Organized documentation
 ### Essential Operations
 ```bash
 # Complete setup (run once)
-./setup_agent.sh
+./scripts/setup/setup_agent.sh
 
 # Start full system
 ./run_agent.sh
@@ -204,9 +207,115 @@ flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503
 black src/ backend/ --line-length=88
 isort src/ backend/
 
-# Quick tests
-python -m pytest tests/ -v --tb=short
+# Quick tests (see TESTING ORGANIZATION section for details)
+python -m pytest tests/unit/ -v --tb=short
+python -m pytest tests/integration/ -v
+python -m pytest tests/e2e/ -v
 ```
+
+## 🧪 TESTING ORGANIZATION
+
+### **CRITICAL RULE: All test-related files MUST be stored in `tests/` folder structure**
+
+```
+tests/
+├── unit/                    # Unit tests (isolated component testing)
+│   ├── test_*.py           # Python unit tests
+│   ├── *.test.js           # JavaScript unit tests
+│   └── testing_coverage_analyzer.py
+├── integration/            # Integration tests (component interaction)
+│   ├── test_phase*.py      # Phase integration tests
+│   ├── test_system_integration.py
+│   ├── debug-frontend-*.js # Frontend integration debugging
+│   └── playwright-server.js
+├── e2e/                    # End-to-end tests (full user workflows)
+│   ├── comprehensive-user-flow-test.js
+│   ├── enhanced-user-flow-test.js
+│   ├── fixed-comprehensive-test.js
+│   ├── parallel-dual-browser-test.js
+│   └── frontend-*.spec.js  # Playwright E2E specs
+├── security/               # Security-focused tests
+│   ├── test_security_*.py  # Security validation tests
+│   ├── test_enhanced_security_layer.py
+│   └── security_port_audit.py
+├── performance/            # Performance and load tests
+│   ├── distributed-testing-pipeline.js
+│   └── load-test-*.js
+├── api/                    # API-specific tests
+│   ├── frontend-test-via-playwright-api.js
+│   └── test_workflow_api_fix.js
+├── gui/                    # GUI automation tests
+│   ├── comprehensive_gui_test.js
+│   ├── simple_gui_test.js
+│   └── quick_frontend_test.js
+└── external/               # External library tests (noVNC, etc.)
+    └── novnc-tests/
+```
+
+### **TEST-GENERATED FILES DIRECTIVE**
+
+**MANDATORY**: Any test-generated files (reports, outputs, temporary files, logs, screenshots, recordings, etc.) MUST be stored in the `test_results/` folder, which is automatically added to `.gitignore`.
+
+**GENERAL GITIGNORE RULE**: If a file can be regenerated, it MUST be in `.gitignore`. This includes:
+- Test output files and reports
+- Build artifacts and compiled code
+- Generated documentation
+- Log files and temporary data
+- Cache files and directories
+- Database files created during testing
+- Screenshots and recordings from automated tests
+- Any files produced by scripts or automation tools
+
+### Test Execution Commands
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run by category
+python -m pytest tests/unit/ -v --tb=short      # Unit tests only
+python -m pytest tests/integration/ -v          # Integration tests only
+python -m pytest tests/security/ -v             # Security tests only
+python -m pytest tests/e2e/ -v                  # E2E tests only
+
+# Frontend tests (from autobot-vue/)
+npm run test:unit                                # Vue component tests
+npm run test:playwright                          # Playwright E2E tests
+
+# Manual test execution
+node tests/e2e/comprehensive-user-flow-test.js  # Manual E2E testing
+node tests/gui/simple_gui_test.js               # GUI automation testing
+```
+
+### Test File Naming Conventions
+
+- **Python tests**: `test_*.py` (pytest compatible)
+- **JavaScript tests**: `*.test.js` or `test-*.js`
+- **E2E specs**: `*.spec.js` (Playwright compatible)
+- **Integration**: Prefix with component name (e.g., `debug-frontend-*.js`)
+- **Performance**: Include "performance" or "load" in filename
+
+### When Creating New Tests
+
+1. **ALWAYS place in appropriate `tests/` subfolder**
+2. **Use descriptive filenames** indicating test purpose
+3. **Follow naming conventions** for your test framework
+4. **Include test documentation** in file header comments
+5. **Update this section** if adding new test categories
+
+### Test Categories Explained
+
+- **Unit Tests**: Test individual functions/classes in isolation
+- **Integration Tests**: Test component interaction and API integration
+- **E2E Tests**: Test complete user workflows from frontend to backend
+- **Security Tests**: Test security measures and vulnerability detection
+- **Performance Tests**: Test system performance, load, and scalability
+- **API Tests**: Test API endpoints and data flow
+- **GUI Tests**: Test frontend user interface and interactions
+- **External Tests**: Tests for third-party libraries and dependencies
+
+**❌ NEVER CREATE TEST FILES OUTSIDE `tests/` FOLDER**
+**✅ ALWAYS ORGANIZE BY TEST TYPE AND PURPOSE**
 
 ### Frontend Development
 ```bash
@@ -236,13 +345,13 @@ docker exec autobot-npu-worker python npu_model_manager.py list  # List availabl
 docker logs autobot-npu-worker                                   # Check NPU worker logs
 ```
 
-### Phase Testing Commands  
+### Phase Testing Commands
 ```bash
 # Phase 7: Enhanced Memory & Knowledge Base
 python test_enhanced_memory.py                    # Test memory system
 python validate_chat_knowledge.py                 # Validate knowledge integration
 
-# Phase 8: Enhanced Interface & Web Control  
+# Phase 8: Enhanced Interface & Web Control
 python test_desktop_streaming.py                  # Test desktop streaming
 python test_session_takeover_system.py            # Test takeover system
 
@@ -259,11 +368,11 @@ python test_voice_processing.py                   # Test voice commands
 
 **Phase 7: Enhanced Memory & Knowledge Base** *(Completed)*
 - SQLite-based comprehensive memory system with task execution tracking
-- Automatic context management with embedding storage  
+- Automatic context management with embedding storage
 - Markdown reference system for documentation cross-referencing
 - Enhanced memory API endpoints with statistics and health monitoring
 
-**Phase 8: Enhanced Interface & Web Control Panel** *(Completed)*  
+**Phase 8: Enhanced Interface & Web Control Panel** *(Completed)*
 - Desktop streaming with NoVNC integration and WebSocket support
 - Human-in-the-loop takeover system with interrupt capabilities
 - Advanced control panel API for monitoring and session management
@@ -273,7 +382,7 @@ python test_voice_processing.py                   # Test voice commands
 - Multi-modal input processing (text, image, audio, combined)
 - Computer vision system for screen analysis and UI understanding
 - Voice processing with speech recognition and natural language commands
-- Context-aware decision making with comprehensive context collection  
+- Context-aware decision making with comprehensive context collection
 - Modern AI model integration framework (GPT-4V, Claude-3, Gemini)
 
 ### 🔥 **Key New Capabilities:**
@@ -286,7 +395,7 @@ python test_voice_processing.py                   # Test voice commands
 
 **Sub-Agent Architecture:**
 - Hybrid local/container agent deployment
-- Intelligent routing with LLM-powered decision making  
+- Intelligent routing with LLM-powered decision making
 - Multi-agent coordination with result synthesis
 - Performance monitoring and health checks
 - Base agent interface supporting local and remote deployment
@@ -880,7 +989,7 @@ Include analysis suite checks in AutoBot's deployment pipeline.
 
 ### Post-Change Validation
 - [ ] **MANDATORY**: Execute complete PRE-COMMIT WORKFLOW above - NO SHORTCUTS
-- [ ] **MANDATORY**: Update documentation per DOCUMENTATION REQUIREMENTS above  
+- [ ] **MANDATORY**: Update documentation per DOCUMENTATION REQUIREMENTS above
 - [ ] **MANDATORY**: All tests MUST pass before commit
 - [ ] Verify API endpoints affected by changes work correctly
 - [ ] Test full system restart: `./run_agent.sh --test-mode`
