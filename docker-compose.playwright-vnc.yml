@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  playwright-vnc:
+    image: mcr.microsoft.com/playwright:v1.54.0-jammy
+    container_name: autobot-playwright-vnc
+    restart: unless-stopped
+    environment:
+      - DISPLAY=:99
+      - HEADLESS=false
+      - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-autobot123}
+      - SCREEN_WIDTH=1920
+      - SCREEN_HEIGHT=1080
+      - SCREEN_DEPTH=24
+    volumes:
+      - ./playwright-server.js:/app/server.js
+      - ./novnc:/usr/share/novnc:ro
+    ports:
+      - "3000:3000"    # Playwright API
+      - "5999:5900"    # VNC port (5900 inside, 5999 outside to avoid conflicts)
+      - "6080:6080"    # noVNC web interface
+    command: >
+      sh -c "
+        echo '🚀 Setting up VNC environment...' &&
+        # Install required packages
+        apt-get update && apt-get install -y x11vnc xvfb novnc websockify supervisor &&
+
+        # Create supervisor config
+        mkdir -p /etc/supervisor/conf.d &&
+        cat > /etc/supervisor/conf.d/autobot.conf << 'EOF'
+        [supervisord]
+        nodaemon=true
+
+        [program:xvfb]
+        command=/usr/bin/Xvfb :99 -screen 0 1920x1080x24
+        autostart=true
+        autorestart=true
+        stdout_logfile=/var/log/xvfb.log
+        stderr_logfile=/var/log/xvfb.err
+
+        [program:x11vnc]
+        command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -ncache 10 -forever -shared
+        autostart=true
+        autorestart=true
+        stdout_logfile=/var/log/x11vnc.log
+        stderr_logfile=/var/log/x11vnc.err
+
+        [program:novnc]
+        command=/usr/share/novnc/utils/launch.sh --vnc localhost:5900 --listen 6080
+        autostart=true
+        autorestart=true
+        stdout_logfile=/var/log/novnc.log
+        stderr_logfile=/var/log/novnc.err
+
+        [program:playwright]
+        command=bash -c 'cd /app && npm init -y && npm install playwright express && node server.js'
+        autostart=true
+        autorestart=true
+        environment=DISPLAY=:99,HEADLESS=false
+        stdout_logfile=/var/log/playwright.log
+        stderr_logfile=/var/log/playwright.err
+        EOF
+
+        echo '🚀 Starting all services with supervisor...' &&
+        /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health && curl -f http://localhost:6080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+networks:
+  default:
+    name: autobot-network
+    external: true
