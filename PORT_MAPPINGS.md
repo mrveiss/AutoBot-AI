@@ -1,0 +1,36 @@
+# AutoBot Port Mappings
+
+This document lists all port mappings used by AutoBot services.
+
+## Container Services
+
+| Service | Container Port | Host Port | Description |
+|---------|---------------|-----------|-------------|
+| autobot-redis | 6379 | 6379 | Redis database |
+| autobot-redis | 8002 | 8002 | RedisInsight Web UI |
+| autobot-npu-worker | 8081 | 8081 | NPU inference API |
+| autobot-ai-stack | 8080 | 8080 | AI services API |
+| autobot-playwright | 3000 | 3000 | Playwright service |
+
+## Local Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Backend (FastAPI) | 8001 | Main AutoBot API |
+| Frontend (Vite) | 5173 | Vue.js development server |
+| Ollama | 11434 | Local LLM service |
+
+## Important Notes
+
+- RedisInsight runs on port 8002 both inside the container and on the host (8002:8002)
+- The backend API on port 8001 is completely separate from RedisInsight
+- All ports are configurable through environment variables or config files
+
+## Quick Access URLs
+
+- **Backend API**: http://localhost:8001
+- **Frontend**: http://localhost:5173
+- **RedisInsight**: http://localhost:8002
+- **NPU Worker**: http://localhost:8081
+- **AI Stack**: http://localhost:8080
+- **Playwright**: http://localhost:3000
