@@ -76,8 +76,13 @@ backend/config/settings.json
 .env.production.local
 
 # === LOG FILES ===
+# All log files should go in logs/ directory
 logs/
 *.log
+# Prevent root directory log files (they belong in logs/)
+/backend*.log
+/frontend*.log
+/autobot*.log
 
 # === DATABASE FILES ===
 *.db
@@ -149,6 +154,46 @@ coverage/
 htmlcov/
 .coverage
 .coverage.*
+
+# === TEST GENERATED FILES ===
+# All test-generated files must be in test_results folder
+test_results/
+tests/**/output/
+tests/**/*.generated
+tests/**/*.report
+tests/**/*.result
+tests/**/*.tmp
+tests/**/*.log
+
+# === REPORTS AND ANALYSIS (GENERATED) ===
+# Generated reports that can be recreated
+docs/reports/*.json
+docs/reports/*-report.json
+docs/reports/*-report.md
+docs/reports/*analysis*.json
+docs/reports/code-quality-*.json
+docs/reports/security-*.json
+docs/reports/performance-*.json
+docs/reports/accessibility-*.json
+docs/reports/console-*.json
+docs/reports/frontend-*.json
+docs/reports/backend-*.json
+
+# Code analysis outputs
+*_analysis_report.json
+*-analysis-report.json
+code_analysis_report.json
+architectural_analysis_report.json
+env_analysis_report.json
+frontend_analysis_report.json
+gpu_model_recommendations.json
+
+# Test and QA reports
+TESTING_FRAMEWORK_SUMMARY.md
+TEST_RESULTS_SUMMARY.md
+FRONTEND_FIXES_COMPLETION_SUMMARY.md
+accessibility-fix-report.*
+console-cleanup-report.*
 
 # === CHROME/CHROMADB ===
 chromadb/
