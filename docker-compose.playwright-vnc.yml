@@ -17,7 +17,7 @@ services:
       - ./novnc:/usr/share/novnc:ro
     ports:
       - "3000:3000"    # Playwright API
-      - "5900:5900"    # VNC port
+      - "5901:5901"    # VNC port (avoiding Kali's default 5900)
       - "6080:6080"    # noVNC web interface
     command: >
       sh -c "
@@ -39,14 +39,14 @@ services:
         stderr_logfile=/var/log/xvfb.err
 
         [program:x11vnc]
-        command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -ncache 10 -forever -shared
+        command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -ncache 10 -forever -shared -rfbport 5901
         autostart=true
         autorestart=true
         stdout_logfile=/var/log/x11vnc.log
         stderr_logfile=/var/log/x11vnc.err
 
         [program:novnc]
-        command=/usr/share/novnc/utils/launch.sh --vnc localhost:5900 --listen 6080
+        command=/usr/share/novnc/utils/launch.sh --vnc localhost:5901 --listen 6080
         autostart=true
         autorestart=true
         stdout_logfile=/var/log/novnc.log
