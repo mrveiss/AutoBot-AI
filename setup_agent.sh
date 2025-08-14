@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# Parse command line arguments
+REPAIR_MODE=false
+CHECK_ONLY=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --repair|--check|--force-recreate|--update-deps|--fix-permissions|--verbose|--help)
+            # Delegate to the new repair script
+            exec ./setup_repair.sh "$@"
+            ;;
+        *)
+            # Continue with normal setup
+            break
+            ;;
+    esac
+done
+
 PATH="$(bash --norc -ec 'IFS=:; paths=($PATH);
 for i in ${!paths[@]}; do
 if [[ ${paths[i]} == "''${HOME}/.pyenv/shims''" ]]; then unset '\''paths[i]'\'';
@@ -144,20 +160,30 @@ else
 fi
 
 # --- 3. Deploy/Start Redis Stack Docker Container (using local Docker) ---
-echo "🔍 Checking for existing 'redis-stack' Docker container (local to WSL2)..."
-if docker ps -a --format '{{.Names}}' | grep -q '^redis-stack$'; then
-    echo "✅ 'redis-stack' container found."
-    if docker inspect -f '{{.State.Running}}' redis-stack | grep -q 'true'; then
-        echo "✅ 'redis-stack' container is already running."
+echo "🔍 Checking for existing Redis Stack Docker container..."
+# Check for either 'redis-stack' or 'autobot-redis' containers
+if docker ps -a --format '{{.Names}}' | grep -qE '^(redis-stack|autobot-redis)$'; then
+    # Find which container exists
+    REDIS_CONTAINER=$(docker ps -a --format '{{.Names}}' | grep -E '^(redis-stack|autobot-redis)$' | head -1)
+    echo "✅ Redis container '$REDIS_CONTAINER' found."
+    if docker inspect -f '{{.State.Running}}' "$REDIS_CONTAINER" | grep -q 'true'; then
+        echo "✅ Redis container '$REDIS_CONTAINER' is already running."
     else
-        echo "🔄 'redis-stack' container found but not running. Starting it..."
-        docker start redis-stack || { echo "❌ Failed to start 'redis-stack' container."; exit 1; }
-        echo "✅ 'redis-stack' container started."
+        echo "🔄 Redis container '$REDIS_CONTAINER' found but not running. Starting it..."
+        docker start "$REDIS_CONTAINER" || { echo "❌ Failed to start Redis container."; exit 1; }
+        echo "✅ Redis container '$REDIS_CONTAINER' started."
     fi
 else
-    echo "📦 'redis-stack' container not found. Deploying a new one..."
-    docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server:latest || { echo "❌ Failed to deploy 'redis-stack' container."; exit 1; }
-    echo "✅ 'redis-stack' container deployed and started."
+    echo "📦 No Redis container found. Using docker-compose to deploy..."
+    docker-compose -f docker-compose.hybrid.yml up -d autobot-redis || {
+        echo "❌ Failed to deploy Redis container via docker-compose."
+        echo "   Trying direct docker run as fallback..."
+        docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server:latest || {
+            echo "❌ Failed to deploy Redis container.";
+            exit 1;
+        }
+    }
+    echo "✅ Redis container deployed and started."
 fi
 
 # Assume Redis Stack is ready if Docker command succeeded
@@ -420,20 +446,20 @@ install_ollama_model() {
     local model=$1
     local description=$2
     echo "📥 Installing $description ($model)..."
-    
+
     # Check if model is already installed
     if ollama list | grep -q "$model"; then
         echo "✅ $description ($model) already installed."
         return 0
     fi
-    
+
     # Install with timeout and retry
     local max_attempts=3
     local attempt=1
-    
+
     while [ $attempt -le $max_attempts ]; do
         echo "⏳ Attempt $attempt/$max_attempts: Installing $model..."
-        
+
         if timeout 600s ollama pull "$model"; then
             echo "✅ Successfully installed $description ($model)"
             return 0
