@@ -9,6 +9,20 @@
       @decisions-applied="onKnowledgeDecisionsApplied"
       @chat-compiled="onChatCompiled"
     />
+
+    <!-- Command Permission Dialog -->
+    <CommandPermissionDialog
+      :show="showCommandDialog"
+      :command="pendingCommand.command"
+      :purpose="pendingCommand.purpose"
+      :risk-level="pendingCommand.riskLevel"
+      :chat-id="currentChatId"
+      :original-message="pendingCommand.originalMessage"
+      @approved="onCommandApproved"
+      @denied="onCommandDenied"
+      @commented="onCommandCommented"
+      @close="showCommandDialog = false"
+    />
     <!-- Sidebar -->
     <div class="w-80 bg-blueGray-100 border-r border-blueGray-200 flex flex-col h-full overflow-hidden transition-all duration-300 flex-shrink-0" :class="{ 'w-12': sidebarCollapsed }">
         <button class="p-3 border-b border-blueGray-200 text-blueGray-600 hover:bg-blueGray-200 transition-colors flex-shrink-0" @click="sidebarCollapsed = !sidebarCollapsed" aria-label="Collapse">
@@ -100,21 +114,35 @@
     <div class="flex-1 flex h-full overflow-hidden">
       <!-- Chat Content Area -->
       <div class="flex-1 flex flex-col h-full">
-          <!-- Chat/Terminal Tabs -->
+          <!-- Chat/Terminal/Desktop Tabs -->
           <div class="flex border-b border-blueGray-200 bg-white flex-shrink-0">
-            <button 
-              @click="activeTab = 'chat'" 
+            <button
+              @click="activeTab = 'chat'"
               :class="['px-6 py-3 text-sm font-medium transition-colors', activeTab === 'chat' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-blueGray-600 hover:text-blueGray-800 hover:bg-blueGray-50']"
              aria-label="Action button">
               <i class="fas fa-comments mr-2"></i>
               Chat
             </button>
-            <button 
-              @click="activeTab = 'terminal'" 
+            <button
+              @click="activeTab = 'terminal'"
               :class="['px-6 py-3 text-sm font-medium transition-colors', activeTab === 'terminal' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-blueGray-600 hover:text-blueGray-800 hover:bg-blueGray-50']"
              aria-label="Action button">
               <i class="fas fa-terminal mr-2"></i>
               Terminal
+            </button>
+            <button
+              @click="activeTab = 'computer'"
+              :class="['px-6 py-3 text-sm font-medium transition-colors', activeTab === 'computer' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-blueGray-600 hover:text-blueGray-800 hover:bg-blueGray-50']"
+             aria-label="Computer desktop viewer">
+              <i class="fas fa-desktop mr-2"></i>
+              Computer
+            </button>
+            <button
+              @click="activeTab = 'browser'"
+              :class="['px-6 py-3 text-sm font-medium transition-colors', activeTab === 'browser' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-blueGray-600 hover:text-blueGray-800 hover:bg-blueGray-50']"
+             aria-label="Browser automation viewer">
+              <i class="fas fa-globe mr-2"></i>
+              Browser
             </button>
           </div>
 
@@ -180,12 +208,52 @@
 
           <!-- Terminal Tab Content -->
           <div v-else-if="activeTab === 'terminal'" class="flex-1 flex flex-col h-full">
-            <TerminalWindow 
+            <TerminalWindow
               :key="currentChatId"
               :session-id="currentChatId"
               :chat-context="true"
               class="flex-1"
             />
+          </div>
+
+          <!-- Computer Desktop Tab Content -->
+          <div v-else-if="activeTab === 'computer'" class="flex-1 flex flex-col h-full">
+            <div class="p-4 bg-blue-50 border-b border-blue-200">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                  <i class="fas fa-desktop text-blue-600"></i>
+                  <div>
+                    <h3 class="text-lg font-semibold text-blue-800">AutoBot Computer View</h3>
+                    <p class="text-sm text-blue-600">Live Kali Linux desktop streaming for system automation</p>
+                  </div>
+                </div>
+                <div class="text-sm text-blue-600">
+                  <i class="fas fa-broadcast-tower mr-1"></i>
+                  System Desktop Access
+                </div>
+              </div>
+            </div>
+            <ComputerDesktopViewer class="flex-1" />
+          </div>
+
+          <!-- Browser Automation Tab Content -->
+          <div v-else-if="activeTab === 'browser'" class="flex-1 flex flex-col h-full">
+            <div class="p-4 bg-green-50 border-b border-green-200">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                  <i class="fas fa-globe text-green-600"></i>
+                  <div>
+                    <h3 class="text-lg font-semibold text-green-800">AutoBot Browser View</h3>
+                    <p class="text-sm text-green-600">Live Playwright browser automation and web scraping</p>
+                  </div>
+                </div>
+                <div class="text-sm text-green-600">
+                  <i class="fas fa-broadcast-tower mr-1"></i>
+                  Live Browser Streaming Active
+                </div>
+              </div>
+            </div>
+            <PlaywrightDesktopViewer class="flex-1" />
           </div>
       </div>
     </div>
@@ -230,6 +298,9 @@ import TerminalWindow from './TerminalWindow.vue';
 import WorkflowApproval from './WorkflowApproval.vue';
 import WorkflowProgressWidget from './WorkflowProgressWidget.vue';
 import KnowledgePersistenceDialog from './KnowledgePersistenceDialog.vue';
+import CommandPermissionDialog from './CommandPermissionDialog.vue';
+import PlaywrightDesktopViewer from './PlaywrightDesktopViewer.vue';
+import ComputerDesktopViewer from './ComputerDesktopViewer.vue';
 import apiClient from '../utils/ApiClient.js';
 import { apiService } from '@/services/api.js';
 
@@ -240,7 +311,10 @@ export default {
     TerminalWindow,
     WorkflowApproval,
     WorkflowProgressWidget,
-    KnowledgePersistenceDialog
+    KnowledgePersistenceDialog,
+    CommandPermissionDialog,
+    PlaywrightDesktopViewer,
+    ComputerDesktopViewer
   },
   setup() {
     // Reactive state
@@ -262,11 +336,20 @@ export default {
     const activeWorkflowId = ref(null);
     const showWorkflowApproval = ref(false);
     const websocket = ref(null);
-    
+
     // Knowledge management state
     const showKnowledgeDialog = ref(false);
     const currentChatContext = ref(null);
     const chatFileAssociations = ref({});
+
+    // Command permission state
+    const showCommandDialog = ref(false);
+    const pendingCommand = ref({
+      command: '',
+      purpose: '',
+      riskLevel: 'LOW',
+      originalMessage: ''
+    });
 
     // Settings
     const settings = ref({
@@ -552,10 +635,14 @@ export default {
     // Knowledge management methods
     const loadChatContext = async (chatId) => {
       try {
-        const response = await apiService.get(`/api/chat_knowledge/context/${chatId}`);
-        if (response.success) {
-          currentChatContext.value = response.context;
-        }
+        // Chat context loading temporarily disabled - using basic chat functionality
+        // const response = await apiService.get(`/api/chat_knowledge/context/${chatId}`);
+        // if (response.success) {
+        //   currentChatContext.value = response.context;
+        // }
+
+        // For now, use basic context
+        currentChatContext.value = { chatId };
       } catch (error) {
         console.error('Failed to load chat context:', error);
       }
@@ -599,6 +686,72 @@ export default {
       // Show success message or notification
     };
 
+    const onCommandApproved = (result) => {
+      console.log('Command approved:', result);
+      // The dialog already sent "yes" to the backend
+      showCommandDialog.value = false;
+
+      // Add approval message to chat
+      messages.value.push({
+        sender: 'user',
+        content: '✅ Command approved and executed',
+        timestamp: new Date().toISOString(),
+        messageType: 'approval'
+      });
+
+      // Add the result to messages if provided
+      if (result.result) {
+        messages.value.push(result.result);
+      }
+    };
+
+    const onCommandDenied = (reason) => {
+      console.log('Command denied:', reason);
+      showCommandDialog.value = false;
+
+      // Add denial message to chat
+      messages.value.push({
+        sender: 'user',
+        content: '❌ Command denied by user',
+        timestamp: new Date().toISOString(),
+        messageType: 'denial'
+      });
+
+      // Add agent acknowledgment
+      messages.value.push({
+        sender: 'assistant',
+        content: 'Understood. I won\'t execute that command. Is there anything else I can help you with?',
+        timestamp: new Date().toISOString(),
+        messageType: 'response'
+      });
+    };
+
+    const onCommandCommented = (data) => {
+      console.log('Command commented:', data);
+      showCommandDialog.value = false;
+
+      // Add the user's feedback to chat
+      messages.value.push({
+        sender: 'user',
+        content: `💬 **Command Feedback**: ${data.comment}`,
+        timestamp: new Date().toISOString(),
+        messageType: 'comment'
+      });
+
+      // Add the agent's response to the feedback
+      if (data.response) {
+        messages.value.push(data.response);
+      } else {
+        // Fallback response if no backend response
+        messages.value.push({
+          sender: 'assistant',
+          content: `Thank you for the feedback! I'll take your suggestion into account. The original command was: \`${data.command}\`\n\nWould you like me to try a different approach or modify the command based on your suggestion?`,
+          timestamp: new Date().toISOString(),
+          messageType: 'response'
+        });
+      }
+    };
+
     const sendMessage = async () => {
       if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return;
 
@@ -637,7 +790,7 @@ export default {
             if (uploadResponse.ok) {
               const result = await uploadResponse.json();
               uploadedFilePaths.push(result.path || file.name);
-              
+
               // Associate file with current chat
               await associateFileWithChat(result.path || file.name, file.name);
             }
@@ -732,22 +885,95 @@ export default {
           } else {
             // Direct execution
             const responseText = workflowResult.result?.response || workflowResult.result?.response_text || 'No response received';
-            const messageType = determineMessageType(responseText);
+            const responseType = workflowResult.result?.messageType;
 
-            messages.value.push({
-              sender: 'bot',
-              text: responseText,
-              timestamp: new Date().toLocaleTimeString(),
-              type: messageType
-            });
+            // Check if this is a command permission request
+            if (responseType === 'command_permission_request' && workflowResult.result?.commandData) {
+              // Set up the command dialog data
+              pendingCommand.value = {
+                command: workflowResult.result.commandData.command,
+                purpose: workflowResult.result.commandData.purpose,
+                riskLevel: workflowResult.result.commandData.riskLevel || 'LOW',
+                originalMessage: workflowResult.result.commandData.originalMessage
+              };
+
+              // Show the permission dialog
+              showCommandDialog.value = true;
+
+              // Also add a message to chat history for reference
+              messages.value.push({
+                sender: 'bot',
+                text: responseText,
+                timestamp: new Date().toLocaleTimeString(),
+                type: 'command_request'
+              });
+            } else {
+              // Normal message processing
+              const messageType = determineMessageType(responseText);
+
+              messages.value.push({
+                sender: 'bot',
+                text: responseText,
+                timestamp: new Date().toLocaleTimeString(),
+                type: messageType
+              });
+            }
           }
         } else {
-          messages.value.push({
-            sender: 'bot',
-            text: 'Error: Could not get response from server',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'error'
-          });
+          // Workflow failed, try fallback to regular chat
+          console.log('Workflow failed, falling back to regular chat endpoint');
+          try {
+            const chatResponse = await apiClient.sendChatMessage(userInput, {
+              chatId: currentChatId.value || 'default'
+            });
+
+            if (chatResponse.type === 'json' && chatResponse.data) {
+              const responseText = chatResponse.data.content || chatResponse.data.response || 'No response received';
+              const responseType = chatResponse.data.messageType;
+
+              // Check if this is a command permission request
+              if (responseType === 'command_permission_request' && chatResponse.data.commandData) {
+                // Set up the command dialog data
+                pendingCommand.value = {
+                  command: chatResponse.data.commandData.command,
+                  purpose: chatResponse.data.commandData.purpose,
+                  riskLevel: chatResponse.data.commandData.riskLevel || 'LOW',
+                  originalMessage: chatResponse.data.commandData.originalMessage
+                };
+
+                // Show the permission dialog
+                showCommandDialog.value = true;
+
+                // Also add a message to chat history for reference
+                messages.value.push({
+                  sender: 'bot',
+                  text: responseText,
+                  timestamp: new Date().toLocaleTimeString(),
+                  type: 'command_request'
+                });
+              } else {
+                // Normal message processing
+                const messageType = determineMessageType(responseText);
+
+                messages.value.push({
+                  sender: 'bot',
+                  text: responseText,
+                  timestamp: new Date().toLocaleTimeString(),
+                  type: messageType
+                });
+              }
+            } else {
+              throw new Error('Invalid response from chat endpoint');
+            }
+          } catch (fallbackError) {
+            console.error('Fallback chat also failed:', fallbackError);
+            messages.value.push({
+              sender: 'bot',
+              text: 'Error: Could not get response from server (both workflow and chat endpoints failed)',
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'error'
+            });
+          }
         }
       } catch (error) {
         // Enhanced Edge browser compatibility error handling
@@ -892,7 +1118,7 @@ export default {
 
       // Load messages for this chat from backend
       await loadChatMessages(chatId);
-      
+
       // Load chat context for knowledge management
       await loadChatContext(chatId);
     };
@@ -936,7 +1162,13 @@ export default {
       try {
         const data = await apiClient.getChatMessages(chatId);
         // Backend returns 'history' field, not 'messages'
-        messages.value = data.history || [];
+        const history = data.history || [];
+
+        // Map messageType to type for frontend filtering compatibility
+        messages.value = history.map(message => ({
+          ...message,
+          type: message.messageType || message.type || 'default'
+        }));
 
         // Scroll to bottom after loading
         await nextTick();
@@ -1225,7 +1457,13 @@ export default {
       chatFileAssociations,
       showKnowledgeManagement,
       onKnowledgeDecisionsApplied,
-      onChatCompiled
+      onChatCompiled,
+      // Command permission
+      showCommandDialog,
+      pendingCommand,
+      onCommandApproved,
+      onCommandDenied,
+      onCommandCommented
     };
   }
 };
