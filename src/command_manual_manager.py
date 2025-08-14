@@ -1,0 +1,576 @@
+"""
+Command Manual Manager for AutoBot
+
+This module handles the ingestion, storage, and retrieval of command manuals
+from the system's man pages into the knowledge base for enhanced command assistance.
+"""
+
+import json
+import logging
+import re
+import subprocess
+import sqlite3
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CommandManual:
+    """Data class for storing command manual information."""
+    
+    command_name: str
+    description: str
+    syntax: str
+    common_options: List[str]
+    examples: List[str]
+    related_commands: List[str]
+    risk_level: str  # LOW, MEDIUM, HIGH
+    category: str  # file_operations, network, system, etc.
+    manual_text: str  # Full manual text for reference
+    section: int  # Manual section (1-8)
+
+
+class CommandManualManager:
+    """Manages command manuals in the knowledge base."""
+
+    def __init__(self, db_path: str = "data/knowledge_base.db"):
+        """Initialize the Command Manual Manager.
+        
+        Args:
+            db_path: Path to the SQLite database
+        """
+        self.db_path = db_path
+        self.risk_patterns = self._load_risk_patterns()
+        self.category_patterns = self._load_category_patterns()
+        self._initialize_database()
+
+    def _initialize_database(self):
+        """Initialize the command_manuals table in the database."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS command_manuals (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        command_name TEXT UNIQUE NOT NULL,
+                        description TEXT,
+                        syntax TEXT,
+                        common_options TEXT,  -- JSON array
+                        examples TEXT,        -- JSON array
+                        related_commands TEXT, -- JSON array
+                        risk_level TEXT,
+                        category TEXT,
+                        manual_text TEXT,
+                        section INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Create index for faster searches
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_command_name 
+                    ON command_manuals(command_name)
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_category 
+                    ON command_manuals(category)
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_risk_level 
+                    ON command_manuals(risk_level)
+                """)
+                
+                conn.commit()
+                logger.info("Command manuals database initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize command manuals database: {e}")
+            raise
+
+    def _load_risk_patterns(self) -> Dict[str, List[str]]:
+        """Load patterns for determining command risk levels."""
+        return {
+            "HIGH": [
+                "rm", "rmdir", "dd", "mkfs", "fdisk", "parted",
+                "sudo", "su", "chmod", "chown", "kill", "killall",
+                "halt", "shutdown", "reboot", "init", "systemctl",
+                "service", "mount", "umount", "crontab", "at"
+            ],
+            "MEDIUM": [
+                "mv", "cp", "tar", "gzip", "gunzip", "zip", "unzip",
+                "wget", "curl", "ssh", "scp", "rsync", "netstat",
+                "ss", "iptables", "ufw", "systemd", "docker",
+                "git", "npm", "pip", "apt", "yum", "dnf"
+            ],
+            "LOW": [
+                "ls", "cd", "pwd", "cat", "less", "more", "head",
+                "tail", "grep", "find", "locate", "which", "whereis",
+                "man", "info", "help", "ps", "top", "htop", "free",
+                "df", "du", "uptime", "whoami", "id", "groups",
+                "date", "cal", "echo", "printf", "wc", "sort",
+                "uniq", "cut", "awk", "sed", "tr", "basename",
+                "dirname", "realpath", "ifconfig", "ip", "ping",
+                "traceroute", "nslookup", "dig", "history"
+            ]
+        }
+
+    def _load_category_patterns(self) -> Dict[str, List[str]]:
+        """Load patterns for categorizing commands."""
+        return {
+            "file_operations": [
+                "ls", "cd", "pwd", "mkdir", "rmdir", "rm", "cp", "mv",
+                "cat", "less", "more", "head", "tail", "touch", "ln",
+                "find", "locate", "which", "whereis", "file", "stat",
+                "chmod", "chown", "chgrp", "umask", "tar", "gzip",
+                "gunzip", "zip", "unzip", "basename", "dirname"
+            ],
+            "text_processing": [
+                "grep", "awk", "sed", "tr", "cut", "sort", "uniq",
+                "wc", "diff", "comm", "join", "paste", "fmt",
+                "fold", "expand", "unexpand", "split", "csplit"
+            ],
+            "network": [
+                "ping", "traceroute", "netstat", "ss", "ifconfig",
+                "ip", "route", "arp", "wget", "curl", "ssh", "scp",
+                "rsync", "ftp", "sftp", "nc", "nmap", "tcpdump",
+                "wireshark", "iptables", "ufw", "nslookup", "dig"
+            ],
+            "process_management": [
+                "ps", "top", "htop", "jobs", "bg", "fg", "nohup",
+                "kill", "killall", "pgrep", "pkill", "pidof",
+                "nice", "renice", "screen", "tmux"
+            ],
+            "system_info": [
+                "uname", "whoami", "id", "groups", "w", "who",
+                "uptime", "free", "df", "du", "lscpu", "lsmem",
+                "lsblk", "lsusb", "lspci", "dmidecode", "lshw"
+            ],
+            "system_control": [
+                "sudo", "su", "systemctl", "service", "mount",
+                "umount", "halt", "shutdown", "reboot", "init",
+                "crontab", "at", "chkconfig", "update-rc.d"
+            ],
+            "package_management": [
+                "apt", "apt-get", "dpkg", "yum", "dnf", "rpm",
+                "zypper", "pacman", "brew", "snap", "flatpak",
+                "pip", "npm", "yarn", "gem", "cargo"
+            ],
+            "development": [
+                "git", "svn", "make", "cmake", "gcc", "g++",
+                "clang", "python", "node", "java", "javac",
+                "ruby", "go", "rust", "docker", "kubectl"
+            ]
+        }
+
+    def _determine_risk_level(self, command_name: str, manual_text: str) -> str:
+        """Determine the risk level of a command.
+        
+        Args:
+            command_name: Name of the command
+            manual_text: Full manual text
+            
+        Returns:
+            Risk level: HIGH, MEDIUM, or LOW
+        """
+        command_base = command_name.split()[0] if command_name else ""
+        
+        # Check explicit risk patterns
+        for risk_level, patterns in self.risk_patterns.items():
+            if command_base in patterns:
+                return risk_level
+        
+        # Analyze manual text for risk indicators
+        high_risk_indicators = [
+            "delete", "remove", "destroy", "format", "partition",
+            "overwrite", "irreversible", "permanent", "dangerous",
+            "root", "administrator", "privilege", "system file"
+        ]
+        
+        medium_risk_indicators = [
+            "modify", "change", "update", "install", "network",
+            "connection", "download", "upload", "transfer"
+        ]
+        
+        manual_lower = manual_text.lower()
+        
+        high_count = sum(1 for indicator in high_risk_indicators 
+                        if indicator in manual_lower)
+        medium_count = sum(1 for indicator in medium_risk_indicators 
+                          if indicator in manual_lower)
+        
+        if high_count >= 2:
+            return "HIGH"
+        elif medium_count >= 2 or high_count >= 1:
+            return "MEDIUM"
+        else:
+            return "LOW"
+
+    def _determine_category(self, command_name: str, manual_text: str) -> str:
+        """Determine the category of a command.
+        
+        Args:
+            command_name: Name of the command
+            manual_text: Full manual text
+            
+        Returns:
+            Category name
+        """
+        command_base = command_name.split()[0] if command_name else ""
+        
+        # Check explicit category patterns
+        for category, patterns in self.category_patterns.items():
+            if command_base in patterns:
+                return category
+        
+        # Analyze manual text for category indicators
+        manual_lower = manual_text.lower()
+        
+        category_keywords = {
+            "file_operations": ["file", "directory", "folder", "path"],
+            "text_processing": ["text", "string", "pattern", "search"],
+            "network": ["network", "internet", "connection", "protocol"],
+            "process_management": ["process", "job", "task", "signal"],
+            "system_info": ["system", "information", "status", "display"],
+            "system_control": ["control", "manage", "configure", "admin"],
+            "package_management": ["package", "install", "repository"],
+            "development": ["development", "programming", "code", "build"]
+        }
+        
+        best_category = "general"
+        best_score = 0
+        
+        for category, keywords in category_keywords.items():
+            score = sum(1 for keyword in keywords if keyword in manual_lower)
+            if score > best_score:
+                best_score = score
+                best_category = category
+        
+        return best_category
+
+    def _parse_manual_text(self, command_name: str, manual_text: str) -> CommandManual:
+        """Parse manual text and extract structured information.
+        
+        Args:
+            command_name: Name of the command
+            manual_text: Raw manual text
+            
+        Returns:
+            CommandManual object with parsed information
+        """
+        lines = manual_text.split('\n')
+        
+        # Extract description (usually in NAME section)
+        description = ""
+        syntax = ""
+        examples = []
+        common_options = []
+        related_commands = []
+        section = 1
+        
+        # Parse NAME section for description
+        in_name_section = False
+        in_synopsis_section = False
+        in_examples_section = False
+        in_see_also_section = False
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Section headers
+            if re.match(r'^[A-Z][A-Z\s]+$', line):
+                in_name_section = line.startswith('NAME')
+                in_synopsis_section = line.startswith('SYNOPSIS')
+                in_examples_section = line.startswith('EXAMPLES')
+                in_see_also_section = line.startswith('SEE ALSO')
+                continue
+            
+            # Extract description from NAME section
+            if in_name_section and line and not description:
+                # Remove command name and dash, keep description
+                desc_match = re.search(rf'{re.escape(command_name)}\s*[-–]\s*(.+)', line)
+                if desc_match:
+                    description = desc_match.group(1)
+                elif ' - ' in line:
+                    description = line.split(' - ', 1)[1]
+                elif line:
+                    description = line
+            
+            # Extract syntax from SYNOPSIS section
+            if in_synopsis_section and line and not syntax:
+                # Clean up the syntax line
+                if command_name in line:
+                    syntax = line
+            
+            # Extract examples
+            if in_examples_section and line:
+                if line.startswith(command_name) or line.startswith('$'):
+                    examples.append(line)
+            
+            # Extract related commands from SEE ALSO section
+            if in_see_also_section and line:
+                # Extract command names (usually in format: command(1), command(8), etc.)
+                related_matches = re.findall(r'\b(\w+)\(\d+\)', line)
+                related_commands.extend(related_matches)
+        
+        # Extract common options by looking for option patterns
+        option_pattern = r'^\s*(-\w|--\w+)'
+        for line in lines:
+            if re.match(option_pattern, line):
+                option_match = re.match(r'^\s*((?:-\w|--\w+)(?:\s*,\s*(?:-\w|--\w+))*)', line)
+                if option_match:
+                    common_options.append(option_match.group(1))
+        
+        # Extract section number from header
+        section_match = re.search(r'\((\d+)\)', manual_text[:200])
+        if section_match:
+            section = int(section_match.group(1))
+        
+        # Determine risk level and category
+        risk_level = self._determine_risk_level(command_name, manual_text)
+        category = self._determine_category(command_name, manual_text)
+        
+        return CommandManual(
+            command_name=command_name,
+            description=description or f"System command: {command_name}",
+            syntax=syntax or f"{command_name} [options]",
+            common_options=common_options[:10],  # Limit to top 10 options
+            examples=examples[:5],  # Limit to 5 examples
+            related_commands=list(set(related_commands))[:10],  # Unique, limit 10
+            risk_level=risk_level,
+            category=category,
+            manual_text=manual_text,
+            section=section
+        )
+
+    def get_manual_text(self, command_name: str) -> Optional[str]:
+        """Get manual text for a command using the man command.
+        
+        Args:
+            command_name: Name of the command
+            
+        Returns:
+            Manual text or None if not found
+        """
+        try:
+            result = subprocess.run(
+                ['man', command_name],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                return result.stdout
+            else:
+                logger.warning(f"No manual found for command: {command_name}")
+                return None
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"Timeout getting manual for command: {command_name}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting manual for command {command_name}: {e}")
+            return None
+
+    def store_manual(self, command_manual: CommandManual) -> bool:
+        """Store a command manual in the database.
+        
+        Args:
+            command_manual: CommandManual object to store
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO command_manuals (
+                        command_name, description, syntax, common_options,
+                        examples, related_commands, risk_level, category,
+                        manual_text, section, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    command_manual.command_name,
+                    command_manual.description,
+                    command_manual.syntax,
+                    json.dumps(command_manual.common_options),
+                    json.dumps(command_manual.examples),
+                    json.dumps(command_manual.related_commands),
+                    command_manual.risk_level,
+                    command_manual.category,
+                    command_manual.manual_text,
+                    command_manual.section
+                ))
+                conn.commit()
+                logger.info(f"Stored manual for command: {command_manual.command_name}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to store manual for {command_manual.command_name}: {e}")
+            return False
+
+    def get_manual(self, command_name: str) -> Optional[CommandManual]:
+        """Retrieve a command manual from the database.
+        
+        Args:
+            command_name: Name of the command
+            
+        Returns:
+            CommandManual object or None if not found
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT command_name, description, syntax, common_options,
+                           examples, related_commands, risk_level, category,
+                           manual_text, section
+                    FROM command_manuals 
+                    WHERE command_name = ?
+                """, (command_name,))
+                
+                row = cursor.fetchone()
+                if row:
+                    return CommandManual(
+                        command_name=row[0],
+                        description=row[1],
+                        syntax=row[2],
+                        common_options=json.loads(row[3]) if row[3] else [],
+                        examples=json.loads(row[4]) if row[4] else [],
+                        related_commands=json.loads(row[5]) if row[5] else [],
+                        risk_level=row[6],
+                        category=row[7],
+                        manual_text=row[8],
+                        section=row[9]
+                    )
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to retrieve manual for {command_name}: {e}")
+            return None
+
+    def search_manuals(self, query: str, category: Optional[str] = None) -> List[CommandManual]:
+        """Search command manuals by query and optional category.
+        
+        Args:
+            query: Search query
+            category: Optional category filter
+            
+        Returns:
+            List of matching CommandManual objects
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                sql = """
+                    SELECT command_name, description, syntax, common_options,
+                           examples, related_commands, risk_level, category,
+                           manual_text, section
+                    FROM command_manuals 
+                    WHERE (command_name LIKE ? OR description LIKE ? OR manual_text LIKE ?)
+                """
+                params = [f'%{query}%', f'%{query}%', f'%{query}%']
+                
+                if category:
+                    sql += " AND category = ?"
+                    params.append(category)
+                
+                sql += " ORDER BY command_name"
+                
+                cursor.execute(sql, params)
+                rows = cursor.fetchall()
+                
+                manuals = []
+                for row in rows:
+                    manuals.append(CommandManual(
+                        command_name=row[0],
+                        description=row[1],
+                        syntax=row[2],
+                        common_options=json.loads(row[3]) if row[3] else [],
+                        examples=json.loads(row[4]) if row[4] else [],
+                        related_commands=json.loads(row[5]) if row[5] else [],
+                        risk_level=row[6],
+                        category=row[7],
+                        manual_text=row[8],
+                        section=row[9]
+                    ))
+                
+                return manuals
+                
+        except Exception as e:
+            logger.error(f"Failed to search manuals for query '{query}': {e}")
+            return []
+
+    def ingest_command(self, command_name: str) -> bool:
+        """Ingest a single command manual into the knowledge base.
+        
+        Args:
+            command_name: Name of the command to ingest
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        manual_text = self.get_manual_text(command_name)
+        if not manual_text:
+            logger.warning(f"No manual text found for command: {command_name}")
+            return False
+        
+        try:
+            command_manual = self._parse_manual_text(command_name, manual_text)
+            return self.store_manual(command_manual)
+        except Exception as e:
+            logger.error(f"Failed to ingest command {command_name}: {e}")
+            return False
+
+    def get_command_suggestions(self, user_intent: str) -> List[Tuple[str, str, str]]:
+        """Get command suggestions based on user intent.
+        
+        Args:
+            user_intent: User's intent or question
+            
+        Returns:
+            List of tuples: (command_name, description, risk_level)
+        """
+        # Search for relevant commands
+        manuals = self.search_manuals(user_intent)
+        
+        suggestions = []
+        for manual in manuals[:5]:  # Limit to top 5 suggestions
+            suggestions.append((
+                manual.command_name,
+                manual.description,
+                manual.risk_level
+            ))
+        
+        return suggestions
+
+
+def main():
+    """Main function for testing the CommandManualManager."""
+    manager = CommandManualManager()
+    
+    # Test ingesting a simple command
+    success = manager.ingest_command("ls")
+    print(f"Ingested 'ls' command: {success}")
+    
+    # Test retrieving the command
+    manual = manager.get_manual("ls")
+    if manual:
+        print(f"Retrieved manual for 'ls':")
+        print(f"  Description: {manual.description}")
+        print(f"  Risk Level: {manual.risk_level}")
+        print(f"  Category: {manual.category}")
+        print(f"  Common Options: {manual.common_options[:3]}")
+    
+    # Test searching
+    results = manager.search_manuals("list files")
+    print(f"Search results for 'list files': {len(results)} commands found")
+
+
+if __name__ == "__main__":
+    main()

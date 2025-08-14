@@ -233,7 +233,10 @@
                 </div>
               </div>
             </div>
-            <ComputerDesktopViewer class="flex-1" />
+            <!-- TODO: Implement ComputerDesktopViewer component -->
+            <div class="flex-1 p-8 text-center text-gray-500">
+              <p>Computer Desktop Viewer - Coming Soon</p>
+            </div>
           </div>
 
           <!-- Browser Automation Tab Content -->
@@ -253,7 +256,10 @@
                 </div>
               </div>
             </div>
-            <PlaywrightDesktopViewer class="flex-1" />
+            <!-- TODO: Implement PlaywrightDesktopViewer component -->
+            <div class="flex-1 p-8 text-center text-gray-500">
+              <p>Playwright Desktop Viewer - Coming Soon</p>
+            </div>
           </div>
       </div>
     </div>
@@ -299,8 +305,9 @@ import WorkflowApproval from './WorkflowApproval.vue';
 import WorkflowProgressWidget from './WorkflowProgressWidget.vue';
 import KnowledgePersistenceDialog from './KnowledgePersistenceDialog.vue';
 import CommandPermissionDialog from './CommandPermissionDialog.vue';
-import PlaywrightDesktopViewer from './PlaywrightDesktopViewer.vue';
-import ComputerDesktopViewer from './ComputerDesktopViewer.vue';
+// TODO: Implement desktop viewer components
+// import PlaywrightDesktopViewer from './PlaywrightDesktopViewer.vue';
+// import ComputerDesktopViewer from './ComputerDesktopViewer.vue';
 import apiClient from '../utils/ApiClient.js';
 import { apiService } from '@/services/api.js';
 
@@ -313,8 +320,9 @@ export default {
     WorkflowProgressWidget,
     KnowledgePersistenceDialog,
     CommandPermissionDialog,
-    PlaywrightDesktopViewer,
-    ComputerDesktopViewer
+    // TODO: Add desktop viewer components
+    // PlaywrightDesktopViewer,
+    // ComputerDesktopViewer
   },
   setup() {
     // Reactive state
