@@ -82,7 +82,9 @@ case "${1:-help}" in
 
         # Check containers
         echo "Docker Containers:"
-        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "(autobot-|NAMES)" || echo "No AutoBot containers running"
+        # Show header and all autobot containers (including autobot-redis, autobot-playwright, etc.)
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -1
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep "^autobot-" || echo "No AutoBot containers running"
         echo ""
 
         # Check backend
