@@ -11,7 +11,7 @@ This document lists all port mappings used by AutoBot services.
 | autobot-npu-worker | 8081 | 8081 | NPU inference API |
 | autobot-ai-stack | 8080 | 8080 | AI services API |
 | autobot-playwright | 3000 | 3000 | Playwright service API |
-| autobot-playwright | 5900 | 5999 | VNC server (for remote viewing) |
+| autobot-playwright | 5900 | 5900 | VNC server (for remote viewing) |
 | autobot-playwright | 6080 | 6080 | noVNC web interface |
 
 ## Local Services
