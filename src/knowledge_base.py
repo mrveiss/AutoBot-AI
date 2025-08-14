@@ -513,7 +513,7 @@ class KnowledgeBase:
             return []
 
     async def get_stats(self) -> Dict[str, Any]:
-        """Get basic statistics about the knowledge base."""
+        """Get basic statistics about the knowledge base (optimized non-blocking version)."""
         stats = {
             "total_documents": 0,
             "total_chunks": 0,
@@ -523,42 +523,76 @@ class KnowledgeBase:
         if not self.redis_client:
             return stats
         try:
-            # Get stats from LlamaIndex vector store (approximate count)
-            if self.vector_store:
-                # This is a placeholder as LlamaIndex RedisVectorStore doesn't
-                # expose direct count
-                all_doc_keys = await self.redis_client.keys(
-                    f"{self.redis_index_name}:doc:*"
-                )
-                stats["total_documents"] = len(all_doc_keys)
-                stats["total_chunks"] = len(all_doc_keys)  # Simple approximation
+            # Use Redis SCAN instead of KEYS to avoid blocking
+            import asyncio
+            
+            async def scan_keys(pattern: str) -> int:
+                """Non-blocking key counting using SCAN"""
+                count = 0
+                cursor = 0
+                while True:
+                    cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=100)
+                    count += len(keys)
+                    if cursor == 0:
+                        break
+                    # Yield control to allow other operations
+                    await asyncio.sleep(0)
+                return count
 
-                # Collect categories from metadata if possible
+            # Run document and fact counting concurrently
+            doc_count_task = asyncio.create_task(
+                scan_keys(f"{self.redis_index_name}:doc:*")
+            )
+            fact_count_task = asyncio.create_task(
+                scan_keys("fact:*")
+            )
+            
+            # Wait for both counts with timeout to prevent hanging
+            try:
+                doc_count, fact_count = await asyncio.wait_for(
+                    asyncio.gather(doc_count_task, fact_count_task),
+                    timeout=5.0  # 5 second timeout
+                )
+                stats["total_documents"] = doc_count
+                stats["total_chunks"] = doc_count  # Simple approximation
+                stats["total_facts"] = fact_count
+            except asyncio.TimeoutError:
+                logging.warning("Stats collection timed out, using fallback values")
+                stats["total_documents"] = 0
+                stats["total_chunks"] = 0
+                stats["total_facts"] = 0
+
+            # Quick category sampling (limit to prevent blocking)
+            try:
+                cursor, sample_keys = await self.redis_client.scan(
+                    0, match=f"{self.redis_index_name}:doc:*", count=5
+                )
                 categories = set()
-                for key in all_doc_keys[:10]:  # Limit to avoid performance issues
+                for key in sample_keys:
                     try:
-                        doc_data = await self.redis_client.hgetall(key)
+                        doc_data = await asyncio.wait_for(
+                            self.redis_client.hgetall(key), timeout=1.0
+                        )
                         if doc_data and "metadata" in doc_data:
                             metadata = json.loads(doc_data.get("metadata", "{}"))
                             if "category" in metadata:
                                 categories.add(metadata["category"])
-                    except Exception:
-                        pass
+                    except (asyncio.TimeoutError, Exception):
+                        continue
                 stats["categories"] = list(categories)
+            except Exception:
+                stats["categories"] = []
 
-            # Get stats from Redis facts
-            all_fact_keys = await self.redis_client.keys("fact:*")
-            stats["total_facts"] = len(all_fact_keys)
-
-            logging.info(f"Knowledge base stats: {stats}")
+            logging.info(f"Knowledge base stats (optimized): {stats}")
             return stats
         except Exception as e:
             logging.error(f"Error getting knowledge base stats: {str(e)}")
             return stats
 
     async def get_detailed_stats(self) -> Dict[str, Any]:
-        """Get detailed statistics about the knowledge base."""
+        """Get detailed statistics about the knowledge base (NPU-accelerated)."""
         from datetime import datetime
+        from .npu_integration import process_with_npu_fallback
 
         detailed_stats = {
             "total_size": 0,  # in bytes

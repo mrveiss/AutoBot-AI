@@ -151,7 +151,8 @@ export default {
     },
     chatId: {
       type: String,
-      required: true
+      required: false,
+      default: null
     },
     originalMessage: {
       type: String,
