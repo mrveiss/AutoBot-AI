@@ -115,7 +115,7 @@ echo -e "${GREEN}✅ All containers have been started!${NC}"
 echo ""
 echo "🌐 Service Endpoints:"
 echo "  • Redis:        localhost:6379"
-echo "  • RedisInsight: http://localhost:8002"
+echo "  • RedisInsight: http://localhost:8002"  # Now on port 8002 internally too
 echo "  • NPU Worker:   http://localhost:8081"
 echo "  • Playwright:   http://localhost:3000"
 if docker ps --format '{{.Names}}' | grep -q '^autobot-ai-stack$'; then
