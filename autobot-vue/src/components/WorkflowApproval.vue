@@ -24,7 +24,7 @@
           class="workflow-card"
           :class="{ 'selected': selectedWorkflowId === workflow.workflow_id }"
           @click="selectWorkflow(workflow.workflow_id)"
-         tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
+         tabindex="0" @keyup.enter="($event.target as HTMLElement)?.click()" @keyup.space="($event.target as HTMLElement)?.click()">
           <div class="workflow-header">
             <div class="workflow-title">
               <i class="fas fa-cogs"></i>

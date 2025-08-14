@@ -5,20 +5,20 @@ Exposes project development phase information and validation status
 """
 
 import logging
+import os
+import sys
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 
-# Import project state manager
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
-
+# Add project root to path and import project state manager
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.project_state_manager import get_project_state_manager, DevelopmentPhase
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/project", tags=["project_state"])
+router = APIRouter(prefix="/project", tags=["project_state"])
 
 # Pydantic models for API responses
 class PhaseStatus(BaseModel):

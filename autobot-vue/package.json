@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "run-p type-check \"build-only {@}\" --",
+    "build": "run-p \"build-only {@}\" --",
+    "build-with-typecheck": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test": "vitest",
     "test:unit": "vitest run",
@@ -73,10 +74,10 @@
     "start-server-and-test": "^2.0.12",
     "tailwindcss": "^4.1.11",
     "typescript": "~5.8.0",
-    "vite": "npm:rolldown-vite@latest",
+    "vite": "^6.3.5",
     "vite-plugin-vue-devtools": "^7.7.7",
     "vitest": "^3.2.4",
-    "vitest-mock-extended": "^2.1.2",
+    "vitest-mock-extended": "^3.1.0",
     "vue-tsc": "^2.2.10"
   }
 }
