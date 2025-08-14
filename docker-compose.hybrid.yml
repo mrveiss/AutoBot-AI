@@ -11,11 +11,12 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
-      - "8002:8001"  # RedisInsight web UI (mapped to port 8002 to avoid conflict)
+      - "8002:8002"  # RedisInsight web UI on port 8002
     volumes:
       - autobot_redis_data:/data
     environment:
       - REDIS_ARGS=--appendonly yes --save 60 1
+      - REDISINSIGHT_PORT=8002  # Configure RedisInsight to use port 8002
     networks:
       - autobot-network
     healthcheck:
@@ -61,7 +62,7 @@ services:
       retries: 3
       start_period: 60s
 
-  # NPU Worker (Intel NPU Accelerated Inference) 
+  # NPU Worker (Intel NPU Accelerated Inference)
   autobot-npu-worker:
     build:
       context: .
