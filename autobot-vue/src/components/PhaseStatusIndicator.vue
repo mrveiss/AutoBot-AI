@@ -176,9 +176,10 @@ export default {
       isLoading.value = true;
       try {
         const response = await apiService.get('/api/project/status');
-        if (response.data.success !== false) {
-          projectStatus.value = response.data;
-          allPhases.value = response.data.phases;
+        // API response doesn't have a 'data' wrapper, it's the direct response
+        if (response && response.current_phase) {
+          projectStatus.value = response;
+          allPhases.value = response.phases;
           lastValidated.value = new Date();
         }
       } catch (error) {
