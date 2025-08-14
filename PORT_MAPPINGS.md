@@ -11,7 +11,7 @@ This document lists all port mappings used by AutoBot services.
 | autobot-npu-worker | 8081 | 8081 | NPU inference API |
 | autobot-ai-stack | 8080 | 8080 | AI services API |
 | autobot-playwright | 3000 | 3000 | Playwright service API |
-| autobot-playwright | 5900 | 5900 | VNC server (for remote viewing) |
+| autobot-playwright | 5901 | 5901 | VNC server (avoids Kali's default 5900) |
 | autobot-playwright | 6080 | 6080 | noVNC web interface |
 
 ## Local Services
@@ -26,6 +26,7 @@ This document lists all port mappings used by AutoBot services.
 
 - RedisInsight runs on port 8002 both inside the container and on the host (8002:8002)
 - The backend API on port 8001 is completely separate from RedisInsight
+- VNC port 5901 is used to avoid conflict with Kali Linux's default TigerVNC on port 5900
 - All ports are configurable through environment variables or config files
 
 ## Quick Access URLs
