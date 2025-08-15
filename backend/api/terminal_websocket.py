@@ -41,7 +41,6 @@ class TerminalWebSocketHandler:
         logger.info(f"Terminal WebSocket connected for chat {chat_id}")
 
         # Initialize terminal session for this chat if it doesn't exist
-        session_initialized = False
         try:
             # Start an interactive bash shell for this chat session
             # Try the full path first
@@ -52,7 +51,6 @@ class TerminalWebSocketHandler:
                 description="Initialize interactive terminal session",
                 require_confirmation=False,
             )
-            session_initialized = True
             logger.info(f"Successfully initialized terminal session for chat {chat_id}")
         except Exception as e:
             logger.error(f"Failed to initialize terminal session for {chat_id}: {e}")
@@ -62,8 +60,8 @@ class TerminalWebSocketHandler:
                 {
                     "type": "error",
                     "message": f"Failed to initialize terminal session: {str(e)}",
-                    "details": str(e)
-                }
+                    "details": str(e),
+                },
             )
 
         # Send initial connection success message
@@ -94,12 +92,21 @@ class TerminalWebSocketHandler:
         try:
             await self.connect(websocket, chat_id)
 
-            while True:
-                # Receive message from client
+            while websocket.client_state == WebSocketState.CONNECTED:
+                # Receive message from client with timeout
                 try:
-                    message = await websocket.receive_text()
-                    data = json.loads(message)
+                    message = await asyncio.wait_for(
+                        websocket.receive_text(), timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    # Send ping to keep connection alive
+                    await websocket.send_text(json.dumps({"type": "ping"}))
+                    continue
+                except Exception:
+                    break
 
+                try:
+                    data = json.loads(message)
                     # Process different message types
                     await self._process_client_message(chat_id, data)
 

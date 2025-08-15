@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, cast
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from docx import Document as DocxDocument
@@ -14,15 +16,16 @@ from llama_index.vector_stores.redis import RedisVectorStore
 from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
 from pypdf import PdfReader
 
+from src.circuit_breaker import circuit_breaker_async
+
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
 
+# Import retry mechanism and circuit breaker
+from src.retry_mechanism import RetryStrategy, retry_async
+
 # Import centralized Redis client utility
 from src.utils.redis_client import get_redis_client
-
-# Import retry mechanism and circuit breaker
-from src.retry_mechanism import retry_async, RetryStrategy
-from src.circuit_breaker import circuit_breaker_async
 
 
 class KnowledgeBase:
@@ -260,6 +263,27 @@ class KnowledgeBase:
             self.query_engine = self.index.as_query_engine(llm=self.llm)
             logging.info("In-memory VectorStoreIndex and QueryEngine initialized.")
 
+    async def _scan_redis_keys(self, pattern: str) -> List[str]:
+        """Non-blocking Redis key scanning to replace KEYS operations.
+
+        Args:
+            pattern: Redis key pattern to match
+
+        Returns:
+            List of matching keys
+        """
+        all_keys: List[str] = []
+        cursor = 0
+        while True:
+            cursor, batch = await self.redis_client.scan(
+                cursor, match=pattern, count=100
+            )
+            all_keys.extend(batch)
+            if cursor == 0:
+                break
+            await asyncio.sleep(0)  # Yield control to prevent blocking
+        return all_keys
+
     async def add_file(
         self,
         file_path: str,
@@ -467,9 +491,9 @@ class KnowledgeBase:
                         }
                     )
             elif query:
-                all_keys: List[str] = cast(
-                    List[str], await self.redis_client.keys("fact:*")
-                )
+                # Use non-blocking SCAN instead of blocking KEYS operation
+                all_keys = await self._scan_redis_keys("fact:*")
+
                 if all_keys:
                     # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
                     pipe = self.redis_client.pipeline()
@@ -499,9 +523,8 @@ class KnowledgeBase:
                                     }
                                 )
             else:
-                all_keys: List[str] = cast(
-                    List[str], await self.redis_client.keys("fact:*")
-                )
+                # Use non-blocking SCAN instead of blocking KEYS operation
+                all_keys = await self._scan_redis_keys("fact:*")
                 if all_keys:
                     # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
                     pipe = self.redis_client.pipeline()
@@ -608,7 +631,6 @@ class KnowledgeBase:
 
     async def get_detailed_stats(self) -> Dict[str, Any]:
         """Get detailed statistics about the knowledge base (NPU-accelerated)."""
-        from datetime import datetime
 
         detailed_stats = {
             "total_size": 0,  # in bytes
@@ -622,7 +644,7 @@ class KnowledgeBase:
             return detailed_stats
         try:
             # Total size and average chunk size calculation for facts
-            all_fact_keys = await self.redis_client.keys("fact:*")
+            all_fact_keys = await self._scan_redis_keys("fact:*")
             total_content_length = 0
             fact_type_counts = {}
             latest_timestamp = 0
@@ -678,7 +700,7 @@ class KnowledgeBase:
         exported_data = []
         try:
             # Export facts from Redis
-            all_fact_keys = await self.redis_client.keys("fact:*")
+            all_fact_keys = await self._scan_redis_keys("fact:*")
             for key in all_fact_keys:
                 fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
                 if fact_data:
@@ -695,7 +717,7 @@ class KnowledgeBase:
             # Export data from LlamaIndex (more complex, usually involves
             # iterating nodes)
             if self.index:
-                all_doc_keys = await self.redis_client.keys(
+                all_doc_keys = await self._scan_redis_keys(
                     f"{self.redis_index_name}:doc:*"
                 )
                 for key in all_doc_keys:
@@ -722,9 +744,8 @@ class KnowledgeBase:
             return []
         facts = []
         try:
-            all_keys: List[str] = cast(
-                List[str], await self.redis_client.keys("fact:*")
-            )
+            # Use non-blocking SCAN instead of blocking KEYS operation
+            all_keys = await self._scan_redis_keys("fact:*")
             if all_keys:
                 # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
                 pipe = self.redis_client.pipeline()
@@ -806,14 +827,12 @@ class KnowledgeBase:
     async def cleanup_old_entries(self, days_to_keep: int) -> Dict[str, Any]:
         """Remove knowledge base entries (facts) older than a specified
         number of days."""
-        from datetime import datetime
-
         removed_count = 0
         try:
             cutoff_timestamp = int(datetime.now().timestamp()) - (
                 days_to_keep * 24 * 3600
             )
-            all_fact_keys = await self.redis_client.keys("fact:*")
+            all_fact_keys = await self._scan_redis_keys("fact:*")
 
             for key in all_fact_keys:
                 fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
