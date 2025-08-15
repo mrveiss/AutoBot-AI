@@ -121,7 +121,7 @@ echo "Starting all required Docker containers..."
 # If --all-containers flag is set, use the comprehensive startup script
 if [ "$START_ALL_CONTAINERS" = true ]; then
     echo "🚀 Starting ALL containers (Redis, NPU, AI Stack, Playwright)..."
-    ./start_all_containers.sh || {
+    ./scripts/deployment/start_all_containers.sh || {
         echo "❌ Failed to start all containers."
         exit 1
     }
@@ -134,7 +134,7 @@ echo "🔄 Starting Redis Stack..."
 if docker ps --format '{{.Names}}' | grep -q '^autobot-redis$'; then
     echo "✅ 'autobot-redis' container is already running."
 else
-    docker-compose -f docker-compose.hybrid.yml up -d autobot-redis || {
+    docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-redis || {
         echo "❌ Failed to start Redis Stack container via docker-compose."
         exit 1
     }
@@ -146,7 +146,7 @@ echo "🔄 Starting NPU Worker..."
 if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
     echo "✅ 'autobot-npu-worker' container is already running."
 else
-    docker-compose -f docker-compose.hybrid.yml up -d autobot-npu-worker || {
+    docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-npu-worker || {
         echo "⚠️  Warning: Failed to start NPU Worker container. Continuing without NPU acceleration."
         # Don't exit - NPU worker is optional
     }
@@ -231,7 +231,7 @@ if [ -n "$PLAYWRIGHT_CONTAINER" ]; then
 else
     echo "❌ Playwright container not found. Please run setup_agent.sh to deploy it."
     echo "   Or manually start the VNC-enabled container with:"
-    echo "   docker-compose -f docker-compose.playwright-vnc.yml up -d"
+    echo "   docker-compose -f docker/compose/docker-compose.playwright-vnc.yml up -d"
     exit 1
 fi
 
