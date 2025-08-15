@@ -283,6 +283,7 @@ click>=8.1.0
 python-dotenv>=1.0.0
 jsonschema>=4.20.0
 validators>=0.22.0
+cryptography>=45.0.0
 EOF
     pip install -r requirements_group_1.txt || { echo "❌ Failed to install Group 1 requirements."; deactivate; exit 1; }
     echo "✅ Group 1 dependencies installed."

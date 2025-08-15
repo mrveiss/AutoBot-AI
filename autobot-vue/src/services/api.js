@@ -86,11 +86,11 @@ class ApiService {
 
   // Settings API
   async getSettings() {
-    return this.get('/api/settings')
+    return this.get('/api/settings/')
   }
 
   async updateSettings(settings) {
-    return this.post('/api/settings', settings)
+    return this.post('/api/settings/', settings)
   }
 
   // System API
