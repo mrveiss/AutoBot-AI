@@ -6,6 +6,12 @@ from typing import Any, Dict, List, Optional
 
 # Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
+from src.encryption_service import (
+    decrypt_data,
+    encrypt_data,
+    get_encryption_service,
+    is_encryption_enabled,
+)
 from src.utils.redis_client import get_redis_client
 
 
@@ -39,11 +45,28 @@ class ChatHistoryManager:
         self.use_redis = (
             use_redis if use_redis is not None else redis_config.get("enabled", False)
         )
-        self.redis_host = redis_host or redis_config.get("host", os.getenv("REDIS_HOST", "localhost"))
+        self.redis_host = redis_host or redis_config.get(
+            "host", os.getenv("REDIS_HOST", "localhost")
+        )
         self.redis_port = redis_port or redis_config.get("port", 6379)
 
         self.history: List[Dict[str, Any]] = []
         self.redis_client = None
+        self.encryption_enabled = is_encryption_enabled()
+
+        # Log encryption status
+        if self.encryption_enabled:
+            logging.info("Chat history encryption is ENABLED")
+            try:
+                # Verify encryption service is available
+                encryption_service = get_encryption_service()
+                key_info = encryption_service.get_key_info()
+                logging.info(f"Encryption service initialized: {key_info['algorithm']}")
+            except Exception as e:
+                logging.error(f"Failed to initialize encryption service: {e}")
+                self.encryption_enabled = False
+        else:
+            logging.info("Chat history encryption is DISABLED")
 
         if self.use_redis:
             # Use centralized Redis client utility
@@ -68,6 +91,46 @@ class ChatHistoryManager:
         data_dir = os.path.dirname(self.history_file)
         if data_dir and not os.path.exists(data_dir):
             os.makedirs(data_dir, exist_ok=True)
+
+    def _encrypt_data(self, data: Dict[str, Any]) -> str:
+        """Encrypt chat data if encryption is enabled."""
+        if not self.encryption_enabled:
+            return json.dumps(data, indent=2)
+
+        try:
+            return encrypt_data(data)
+        except Exception as e:
+            logging.error(f"Failed to encrypt chat data: {e}")
+            # Fall back to unencrypted storage with warning
+            logging.warning(
+                "Falling back to unencrypted storage due to encryption failure"
+            )
+            return json.dumps(data, indent=2)
+
+    def _decrypt_data(self, data_str: str) -> Dict[str, Any]:
+        """Decrypt chat data if it's encrypted."""
+        if not self.encryption_enabled:
+            return json.loads(data_str)
+
+        try:
+            # Check if data is encrypted (base64-like format)
+            encryption_service = get_encryption_service()
+            if encryption_service.is_encrypted(data_str):
+                return decrypt_data(data_str, as_json=True)
+            else:
+                # Legacy unencrypted data
+                logging.debug("Loading legacy unencrypted chat data")
+                return json.loads(data_str)
+        except Exception as e:
+            logging.error(f"Failed to decrypt chat data: {e}")
+            # Try as unencrypted JSON as fallback
+            try:
+                return json.loads(data_str)
+            except json.JSONDecodeError:
+                logging.error("Data is neither valid encrypted nor JSON format")
+                raise ValueError(
+                    "Cannot decode chat data - corrupted or invalid format"
+                )
 
     def _get_chats_directory(self) -> str:
         """Get the chats directory path from configuration."""
@@ -211,7 +274,8 @@ class ChatHistoryManager:
 
                     try:
                         with open(chat_path, "r") as f:
-                            chat_data = json.load(f)
+                            file_content = f.read()
+                        chat_data = self._decrypt_data(file_content)
 
                         # Get chat metadata
                         chat_name = chat_data.get("name", "")
@@ -251,7 +315,10 @@ class ChatHistoryManager:
                 return []
 
             with open(chat_file, "r") as f:
-                chat_data = json.load(f)
+                file_content = f.read()
+
+            # Decrypt data if encryption is enabled
+            chat_data = self._decrypt_data(file_content)
 
             return chat_data.get("messages", [])
 
@@ -291,7 +358,8 @@ class ChatHistoryManager:
             if os.path.exists(chat_file):
                 try:
                     with open(chat_file, "r") as f:
-                        chat_data = json.load(f)
+                        file_content = f.read()
+                    chat_data = self._decrypt_data(file_content)
                 except Exception as e:
                     logging.warning(
                         f"Could not load existing chat data for "
@@ -309,9 +377,10 @@ class ChatHistoryManager:
                 }
             )
 
-            # Save to file
+            # Save to file with encryption if enabled
+            encrypted_data = self._encrypt_data(chat_data)
             with open(chat_file, "w") as f:
-                json.dump(chat_data, f, indent=2)
+                f.write(encrypted_data)
 
             logging.info(f"Chat session '{session_id}' saved successfully")
 
