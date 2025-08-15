@@ -9,17 +9,32 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from src.autobot_types import TaskComplexity
+
 # Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
 from src.diagnostics import Diagnostics
+from src.error_handler import log_error, retry, with_error_handling
 from src.event_manager import event_manager
+from src.exceptions import (
+    AutoBotError,
+    IntegrationError,
+    InternalError,
+    LLMConnectionError,
+    LLMError,
+    LLMResponseError,
+    LLMTimeoutError,
+    ValidationError,
+    WorkflowError,
+    WorkflowExecutionError,
+    WorkflowValidationError,
+)
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.prompt_manager import prompt_manager
 from src.system_info_collector import get_os_info
 from src.tool_discovery import discover_tools
 from src.tools import ToolRegistry
-from src.autobot_types import TaskComplexity
 from src.utils.redis_client import get_redis_client
 from src.worker_node import GUI_AUTOMATION_SUPPORTED, WorkerNode
 
@@ -771,20 +786,41 @@ class Orchestrator:
                 )
                 print("Using LangChain Agent for goal execution")
                 return await self.langchain_agent.execute_goal(goal, messages)
-            except Exception as e:
+            except LLMConnectionError as e:
+                log_error(e, context="langchain_execution", include_traceback=False)
                 await event_manager.publish(
                     "log_message",
                     {
                         "level": "ERROR",
-                        "message": (
-                            "LangChain Agent failed, falling back to "
-                            f"standard orchestrator: {e}"
-                        ),
+                        "message": "LangChain Agent connection failed, falling back to standard orchestrator",
                     },
                 )
-                print(
-                    "LangChain Agent failed, falling back to "
-                    f"standard orchestrator: {e}"
+            except LLMTimeoutError as e:
+                log_error(e, context="langchain_execution", include_traceback=False)
+                await event_manager.publish(
+                    "log_message",
+                    {
+                        "level": "ERROR",
+                        "message": "LangChain Agent timed out, falling back to standard orchestrator",
+                    },
+                )
+            except LLMResponseError as e:
+                log_error(e, context="langchain_execution", include_traceback=False)
+                await event_manager.publish(
+                    "log_message",
+                    {
+                        "level": "ERROR",
+                        "message": "LangChain Agent returned invalid response, falling back to standard orchestrator",
+                    },
+                )
+            except Exception as e:
+                log_error(e, context="langchain_execution")
+                await event_manager.publish(
+                    "log_message",
+                    {
+                        "level": "ERROR",
+                        "message": "LangChain Agent encountered unexpected error, falling back to standard orchestrator",
+                    },
                 )
         return None
 
@@ -927,12 +963,23 @@ class Orchestrator:
 
             return await self._process_tool_result(result, tool_name, messages)
 
-        except Exception as e:
-            error_msg = f"Exception during tool execution: {str(e)}"
+        except ValidationError as e:
+            log_error(e, context=f"tool_execution:{tool_name}", include_traceback=False)
+            error_msg = f"Tool validation failed: {e.safe_message}"
             messages.append({"role": "user", "content": error_msg})
             await event_manager.publish("error", {"message": error_msg})
-            print(error_msg)
-            traceback.print_exc()
+            return {"completed": False}
+        except IntegrationError as e:
+            log_error(e, context=f"tool_execution:{tool_name}", include_traceback=False)
+            error_msg = f"Tool integration failed: {e.safe_message}"
+            messages.append({"role": "user", "content": error_msg})
+            await event_manager.publish("error", {"message": error_msg})
+            return {"completed": False}
+        except Exception as e:
+            log_error(e, context=f"tool_execution:{tool_name}")
+            error_msg = f"Tool execution encountered an unexpected error"
+            messages.append({"role": "user", "content": error_msg})
+            await event_manager.publish("error", {"message": error_msg})
             return {"completed": False}
 
     async def _process_tool_result(
@@ -1202,19 +1249,70 @@ class Orchestrator:
             self._classification_cache[cache_key] = result.complexity
 
             return result.complexity
-        except Exception as e:
+        except LLMConnectionError as e:
+            log_error(e, context="request_classification", include_traceback=False)
+            print("LLM connection failed for classification, using Redis fallback")
             # Fallback to Redis-based classifier
-            print(f"LLM classification error, using Redis fallback: {e}")
             try:
                 from src.workflow_classifier import WorkflowClassifier
 
                 classifier = WorkflowClassifier(self.redis_client)
                 fallback_result = classifier.classify_request(user_message)
-                # Cache the fallback result too
                 self._classification_cache[cache_key] = fallback_result
                 return fallback_result
             except Exception as e2:
-                print(f"Redis classification error, falling back to simple: {e2}")
+                log_error(e2, context="redis_classification")
+                print("Redis classification error, falling back to simple")
+                simple_result = TaskComplexity.SIMPLE
+                self._classification_cache[cache_key] = simple_result
+                return simple_result
+        except LLMTimeoutError as e:
+            log_error(e, context="request_classification", include_traceback=False)
+            print("LLM timeout for classification, using Redis fallback")
+            try:
+                from src.workflow_classifier import WorkflowClassifier
+
+                classifier = WorkflowClassifier(self.redis_client)
+                fallback_result = classifier.classify_request(user_message)
+                self._classification_cache[cache_key] = fallback_result
+                return fallback_result
+            except Exception as e2:
+                log_error(e2, context="redis_classification")
+                print("Redis classification error, falling back to simple")
+                simple_result = TaskComplexity.SIMPLE
+                self._classification_cache[cache_key] = simple_result
+                return simple_result
+        except LLMResponseError as e:
+            log_error(e, context="request_classification", include_traceback=False)
+            print(
+                "LLM returned invalid response for classification, using Redis fallback"
+            )
+            try:
+                from src.workflow_classifier import WorkflowClassifier
+
+                classifier = WorkflowClassifier(self.redis_client)
+                fallback_result = classifier.classify_request(user_message)
+                self._classification_cache[cache_key] = fallback_result
+                return fallback_result
+            except Exception as e2:
+                log_error(e2, context="redis_classification")
+                print("Redis classification error, falling back to simple")
+                simple_result = TaskComplexity.SIMPLE
+                self._classification_cache[cache_key] = simple_result
+                return simple_result
+        except Exception as e:
+            log_error(e, context="request_classification")
+            print("Classification encountered unexpected error, using Redis fallback")
+            try:
+                from src.workflow_classifier import WorkflowClassifier
+
+                classifier = WorkflowClassifier(self.redis_client)
+                fallback_result = classifier.classify_request(user_message)
+                self._classification_cache[cache_key] = fallback_result
+                return fallback_result
+            except Exception as e2:
+                log_error(e2, context="redis_classification")
+                print("Redis classification error, falling back to simple")
                 simple_result = TaskComplexity.SIMPLE
                 self._classification_cache[cache_key] = simple_result
                 return simple_result
@@ -1659,17 +1757,49 @@ class Orchestrator:
                 "classification": classification,
             }
 
-        except Exception as e:
-            error_msg = f"Workflow execution failed: {str(e)}"
+        except WorkflowExecutionError as e:
+            log_error(e, context="workflow_execution", include_traceback=False)
             await event_manager.publish(
                 "log_message",
-                {"level": "ERROR", "message": error_msg},
+                {
+                    "level": "ERROR",
+                    "message": f"Workflow execution failed: {e.safe_message}",
+                },
             )
-
             return {
                 "execution_status": "failed",
-                "error": error_msg,
-                "response_text": f"I encountered an error while coordinating the workflow: {str(e)}. Let me try a different approach.",
+                "error": e.safe_message,
+                "response_text": "I encountered an error while coordinating the workflow. Let me try a different approach.",
+                "fallback_needed": True,
+            }
+        except WorkflowValidationError as e:
+            log_error(e, context="workflow_execution", include_traceback=False)
+            await event_manager.publish(
+                "log_message",
+                {
+                    "level": "ERROR",
+                    "message": f"Workflow validation failed: {e.safe_message}",
+                },
+            )
+            return {
+                "execution_status": "failed",
+                "error": e.safe_message,
+                "response_text": "The workflow plan is invalid. Let me try a different approach.",
+                "fallback_needed": True,
+            }
+        except Exception as e:
+            log_error(e, context="workflow_execution")
+            await event_manager.publish(
+                "log_message",
+                {
+                    "level": "ERROR",
+                    "message": "Workflow execution encountered an unexpected error",
+                },
+            )
+            return {
+                "execution_status": "failed",
+                "error": "Workflow execution failed",
+                "response_text": "I encountered an unexpected error while coordinating the workflow. Let me try a different approach.",
                 "fallback_needed": True,
             }
 
