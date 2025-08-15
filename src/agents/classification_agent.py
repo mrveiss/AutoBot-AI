@@ -9,11 +9,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.llm_interface import LLMInterface
 from src.autobot_types import TaskComplexity
+from src.llm_interface import LLMInterface
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
-from .base_agent import LocalAgent, AgentRequest, AgentResponse
+
+from .base_agent import AgentRequest, AgentResponse, LocalAgent
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +42,12 @@ class ClassificationAgent(LocalAgent):
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
         self.capabilities = [
             "intent_classification",
-            "complexity_analysis", 
+            "complexity_analysis",
             "workflow_routing",
             "request_classification",
-            "agent_selection"
+            "agent_selection",
         ]
-        
+
         # Initialize classification prompt
         self._initialize_classification_prompt()
 
@@ -57,11 +58,11 @@ class ClassificationAgent(LocalAgent):
         try:
             action = request.action
             payload = request.payload
-            
+
             if action == "classify_request":
                 user_message = payload.get("message", "")
                 result = await self.classify_request(user_message)
-                
+
                 # Convert ClassificationResult to dict for serialization
                 result_dict = {
                     "complexity": result.complexity.value,
@@ -70,25 +71,25 @@ class ClassificationAgent(LocalAgent):
                     "suggested_agents": result.suggested_agents,
                     "estimated_steps": result.estimated_steps,
                     "user_approval_needed": result.user_approval_needed,
-                    "context_analysis": result.context_analysis
+                    "context_analysis": result.context_analysis,
                 }
-                
+
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="success",
-                    result=result_dict
+                    result=result_dict,
                 )
-                
+
             else:
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="error",
                     result=None,
-                    error=f"Unknown action: {action}"
+                    error=f"Unknown action: {action}",
                 )
-                
+
         except Exception as e:
             logger.error(f"Classification agent error: {e}")
             return AgentResponse(
@@ -96,7 +97,7 @@ class ClassificationAgent(LocalAgent):
                 agent_type=self.agent_type,
                 status="error",
                 result=None,
-                error=str(e)
+                error=str(e),
             )
 
     def get_capabilities(self) -> List[str]:
@@ -238,7 +239,7 @@ Be thorough in your analysis and reasoning. Consider the implications and requir
                                     parsed = json.loads(cleaned_json)
                                     if parsed.get("complexity"):
                                         return parsed
-                                except:
+                                except Exception:
                                     pass
                             return {}
                 return content if isinstance(content, dict) else {}
