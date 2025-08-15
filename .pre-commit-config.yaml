@@ -30,3 +30,13 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-merge-conflict
+
+  # Security scanning
+  - repo: local
+    hooks:
+      - id: safety-check
+        name: safety-check
+        entry: bash -c 'pip install safety && safety check -r requirements.txt --no-prompt'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
