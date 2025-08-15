@@ -13,7 +13,7 @@
     </div>
     <div class="settings-content">
       <!-- Chat Settings -->
-      <div v-if="activeTab === 'chat'" class="settings-section">
+      <div v-if="activeTab === 'chat' && settings.chat" class="settings-section">
         <h3>Chat Settings</h3>
         <div class="setting-item">
           <label>Auto Scroll to Bottom</label>
@@ -532,8 +532,150 @@ export default {
     const activeTab = ref('backend');
     const activeBackendSubTab = ref('memory');
 
+    // Default settings structure if backend or local storage fails
+    const defaultSettings = () => ({
+      message_display: {
+        show_thoughts: true,
+        show_json: false,
+        show_utility: false,
+        show_planning: true,
+        show_debug: false
+      },
+      chat: {
+        auto_scroll: true,
+        max_messages: 100,
+        message_retention_days: 30
+      },
+      backend: {
+        api_endpoint: 'http://localhost:8001',
+        server_host: '0.0.0.0',
+        server_port: 8001,
+        chat_data_dir: '',
+        chat_history_file: '',
+        knowledge_base_db: '',
+        reliability_stats_file: '',
+        audit_log_file: '',
+        cors_origins: [],
+        timeout: 60,
+        max_retries: 3,
+        streaming: false,
+        llm: {
+          provider_type: 'local',
+          local: {
+            provider: 'ollama',
+            providers: {
+              ollama: {
+                endpoint: 'http://localhost:11434/api/generate',
+                models: [],
+                selected_model: ''
+              },
+              lmstudio: {
+                endpoint: 'http://localhost:1234/v1/chat/completions',
+                models: [],
+                selected_model: ''
+              }
+            }
+          },
+          cloud: {
+            provider: 'openai',
+            providers: {
+              openai: {
+                api_key: '',
+                endpoint: '',
+                models: [],
+                selected_model: ''
+              },
+              anthropic: {
+                api_key: '',
+                endpoint: '',
+                models: [],
+                selected_model: ''
+              }
+            }
+          },
+          embedding: {
+            provider: 'ollama',
+            providers: {
+              ollama: {
+                endpoint: 'http://localhost:11434/api/embeddings',
+                models: [],
+                selected_model: 'nomic-embed-text'
+              },
+              openai: {
+                api_key: '',
+                endpoint: 'https://api.openai.com/v1/embeddings',
+                models: ['text-embedding-ada-002', 'text-embedding-3-small', 'text-embedding-3-large'],
+                selected_model: 'text-embedding-ada-002'
+              }
+            }
+          }
+        }
+      },
+      ui: {
+        theme: 'light',
+        font_size: 'medium',
+        language: 'en',
+        animations: true,
+        developer_mode: false
+      },
+      security: {
+        enable_encryption: false,
+        session_timeout_minutes: 30
+      },
+      logging: {
+        log_level: 'info',
+        log_to_file: false,
+        log_file_path: ''
+      },
+      knowledge_base: {
+        enabled: true,
+        update_frequency_days: 7
+      },
+      voice_interface: {
+        enabled: false,
+        voice: 'default',
+        speech_rate: 1.0
+      },
+      memory: {
+        long_term: {
+          enabled: true,
+          retention_days: 30
+        },
+        short_term: {
+          enabled: true,
+          duration_minutes: 30
+        },
+        vector_storage: {
+          enabled: true,
+          update_frequency_days: 7
+        },
+        chromadb: {
+          enabled: true,
+          path: '',
+          collection_name: ''
+        },
+        redis: {
+          enabled: false,
+          host: 'localhost',
+          port: 6379
+        }
+      },
+      prompts: {
+        list: [],
+        selectedPrompt: null,
+        editedContent: '',
+        defaults: {}
+      },
+      developer: {
+        enabled: false,
+        enhanced_errors: true,
+        endpoint_suggestions: true,
+        debug_logging: false
+      }
+    });
+
     // Settings structure will be populated from backend or local storage
-    const settings = ref({});
+    const settings = ref(defaultSettings());
     const isSettingsLoaded = ref(false);
     const developerInfo = ref(null);
     const healthStatus = ref({
@@ -619,148 +761,6 @@ export default {
       }
       return output;
     };
-
-    // Default settings structure if backend or local storage fails
-    const defaultSettings = () => ({
-      message_display: {
-        show_thoughts: true,
-        show_json: false,
-        show_utility: false,
-        show_planning: true,
-        show_debug: false
-      },
-      chat: {
-        auto_scroll: true,
-        max_messages: 100,
-        message_retention_days: 30
-      },
-      backend: {
-        api_endpoint: 'http://localhost:8001',
-        server_host: '0.0.0.0',
-        server_port: 8001,
-        chat_data_dir: '',
-        chat_history_file: '',
-        knowledge_base_db: '',
-        reliability_stats_file: '',
-        audit_log_file: '',
-        cors_origins: [],
-        timeout: 60,
-        max_retries: 3,
-        streaming: false,
-        llm: {
-          provider_type: 'local', // 'local' or 'cloud'
-          local: {
-            provider: 'ollama', // Default local provider
-            providers: {
-              ollama: {
-                endpoint: 'http://localhost:11434/api/generate',
-                models: [],
-                selected_model: ''
-              },
-              lmstudio: {
-                endpoint: 'http://localhost:1234/v1/chat/completions',
-                models: [],
-                selected_model: ''
-              }
-            }
-          },
-          cloud: {
-            provider: 'openai', // Default cloud provider
-            providers: {
-              openai: {
-                api_key: '',
-                endpoint: '',
-                models: [],
-                selected_model: ''
-              },
-              anthropic: {
-                api_key: '',
-                endpoint: '',
-                models: [],
-                selected_model: ''
-              }
-            }
-          },
-          embedding: {
-            provider: 'ollama', // Default embedding provider
-            providers: {
-              ollama: {
-                endpoint: 'http://localhost:11434/api/embeddings',
-                models: [],
-                selected_model: 'nomic-embed-text'
-              },
-              openai: {
-                api_key: '',
-                endpoint: 'https://api.openai.com/v1/embeddings',
-                models: ['text-embedding-ada-002', 'text-embedding-3-small', 'text-embedding-3-large'],
-                selected_model: 'text-embedding-ada-002'
-              }
-            }
-          }
-        }
-      },
-      ui: {
-        theme: 'light',
-        font_size: 'medium',
-        language: 'en',
-        animations: true,
-        developer_mode: false
-      },
-      security: {
-        enable_encryption: false,
-        session_timeout_minutes: 30
-      },
-      logging: {
-        log_level: 'info',
-        log_to_file: false,
-        log_file_path: ''
-      },
-      knowledge_base: {
-        enabled: true,
-        update_frequency_days: 7
-      },
-      voice_interface: {
-        enabled: false,
-        voice: 'default',
-        speech_rate: 1.0
-      },
-      memory: {
-        long_term: {
-          enabled: true,
-          retention_days: 30
-        },
-        short_term: {
-          enabled: true,
-          duration_minutes: 30
-        },
-        vector_storage: {
-          enabled: true,
-          update_frequency_days: 7
-        },
-        chromadb: {
-          enabled: true,
-          path: '',
-          collection_name: ''
-        },
-        redis: {
-          enabled: false,
-          host: 'localhost',
-          port: 6379
-        }
-      },
-      prompts: {
-        list: [],
-        selectedPrompt: null,
-        editedContent: '',
-        defaults: {}
-      },
-      developer: {
-        enabled: false,
-        enhanced_errors: true,
-        endpoint_suggestions: true,
-        debug_logging: false
-      }
-    });
 
     // Function to load settings from backend config.yaml
     const loadSettingsFromBackend = async () => {

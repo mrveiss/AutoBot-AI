@@ -462,7 +462,7 @@ class ApiClient {
     const endpoints = [
       '/api/health',
       '/api/chats',
-      '/api/settings',
+      '/api/settings/',
       '/api/prompts'
     ];
 
