@@ -52,6 +52,7 @@ class ScheduledWorkflow:
     priority: WorkflowPriority
     status: WorkflowStatus
     created_at: datetime
+    complexity: TaskComplexity = TaskComplexity.SIMPLE
     user_id: Optional[str] = None
     variables: Dict[str, Any] = None
     auto_approve: bool = False
@@ -290,6 +291,7 @@ class WorkflowScheduler:
         user_message: str,
         scheduled_time: Union[datetime, str],
         priority: Union[WorkflowPriority, str] = WorkflowPriority.NORMAL,
+        complexity: Union[TaskComplexity, str] = TaskComplexity.SIMPLE,
         template_id: Optional[str] = None,
         variables: Optional[Dict[str, Any]] = None,
         auto_approve: bool = False,
@@ -312,6 +314,10 @@ class WorkflowScheduler:
         if isinstance(priority, str):
             priority = WorkflowPriority[priority.upper()]
 
+        # Parse complexity
+        if isinstance(complexity, str):
+            complexity = TaskComplexity(complexity.lower())
+
         # Generate workflow ID
         workflow_id = str(uuid4())
 
@@ -325,6 +331,7 @@ class WorkflowScheduler:
             priority=priority,
             status=WorkflowStatus.SCHEDULED,
             created_at=datetime.now(),
+            complexity=complexity,
             user_id=user_id,
             variables=variables or {},
             auto_approve=auto_approve,
