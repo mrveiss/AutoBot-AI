@@ -1,8 +1,8 @@
 # ===== CORE FRAMEWORK DEPENDENCIES =====
 fastapi>=0.115.0
 uvicorn>=0.30.0
-requests==2.31.0
-aiohttp>=3.9.0
+requests==2.32.4
+aiohttp==3.12.15
 beautifulsoup4>=4.12.0
 pyyaml==6.0.1
 pydantic>=2.8.0
@@ -13,7 +13,7 @@ websockets>=11.0.0
 openai>=1.0.0                    # OpenAI API support for future cloud models
 anthropic>=0.7.0                 # Claude API support for future integration
 tiktoken>=0.5.0                  # Token counting for different models
-transformers>=4.36.0             # HuggingFace transformers for model utils
+transformers==4.52.4             # HuggingFace transformers for model utils - pinned
 sentence-transformers>=2.2.0     # Embedding models support
 torch>=2.0.0                     # PyTorch for model operations
 
@@ -64,7 +64,7 @@ opencv-python>=4.8.0             # Computer vision for GUI automation
 pygetwindow>=0.0.9               # Window management
 
 # ===== EXISTING INTEGRATIONS =====
-markdownify==0.11.6
+markdownify==1.2.0
 langchain
 langchain-community
 langchain-experimental             # For advanced LangChain features
@@ -84,13 +84,13 @@ gtts==2.3.1
 pre-commit>=3.6.0
 detect-secrets>=1.4.0
 pycryptodome>=3.19.0              # Encryption for secure agent communication
-cryptography>=41.0.0             # Additional crypto support
+cryptography==45.0.4             # Additional crypto support - pinned for security
 
 # ===== MONITORING & OBSERVABILITY =====
 prometheus-client>=0.19.0         # Metrics collection
 structlog>=23.2.0                # Structured logging
 rich>=13.7.0                     # Enhanced console output
-tqdm>=4.66.0                     # Progress bars for long operations
+tqdm==4.67.1                     # Progress bars for long operations - pinned
 
 # ===== CONFIGURATION & UTILITIES =====
 python-dotenv>=1.0.0             # Environment variable management
