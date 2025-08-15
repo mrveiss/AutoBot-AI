@@ -1,8 +1,6 @@
 # Docker Compose for AutoBot Hybrid Deployment
 # Local orchestrator + containerized AI stack
 
-version: '3.8'
-
 services:
   # Redis Stack (with search, JSON, and vector capabilities)
   autobot-redis:
@@ -76,8 +74,11 @@ services:
       - autobot_npu_logs:/app/logs
       - ./src:/app/src:ro  # Read-only source code mount
       - ./config:/app/config:ro  # Read-only config mount
-      # Mount NPU devices (if available)
+      # Mount NPU devices and firmware (if available)
       - /dev:/dev:ro
+      - /lib/firmware:/lib/firmware:ro
+      # Mount NPU driver libraries from host
+      - /usr/local/lib:/usr/local/lib:ro
     environment:
       - NPU_WORKER_HOST=0.0.0.0
       - NPU_WORKER_PORT=8081
@@ -88,6 +89,10 @@ services:
       - REDIS_HOST=autobot-redis
       - REDIS_PORT=6379
       - PYTHONPATH=/app:/app/src
+      # Intel NPU driver environment variables
+      - LD_LIBRARY_PATH=/usr/local/lib
+      - ZE_INTEL_NPU_LOGLEVEL=1
+      - ZE_ENABLE_VALIDATION_LAYER=0
     depends_on:
       autobot-redis:
         condition: service_healthy
