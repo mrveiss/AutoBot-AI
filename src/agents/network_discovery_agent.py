@@ -299,7 +299,7 @@ class NetworkDiscoveryAgent:
 
                     hostname = socket.gethostbyaddr(host["ip"])[0]
                     asset["hostname"] = hostname
-                except:
+                except Exception:
                     pass
 
                 # Quick port scan for common ports
@@ -370,16 +370,19 @@ class NetworkDiscoveryAgent:
     async def _run_command(self, cmd: List[str], timeout: int = 60) -> Dict[str, Any]:
         """Run a command with timeout - wrapper around common utility"""
         result = await execute_shell_command(cmd, timeout=timeout)
-        
+
         # Convert to expected format for this agent
         if result["status"] == "success":
             return {"status": "success", "output": result["stdout"]}
         else:
             # Combine stderr and error info for backward compatibility
-            error_msg = result["stderr"] or f"Command failed with return code {result['return_code']}"
+            error_msg = (
+                result["stderr"]
+                or f"Command failed with return code {result['return_code']}"
+            )
             if result["status"] == "timeout":
                 error_msg = f"Command timed out after {timeout} seconds"
-            
+
             return {
                 "status": "error",
                 "message": error_msg,
@@ -431,7 +434,7 @@ class NetworkDiscoveryAgent:
                         "vendor": " ".join(parts[2:]) if len(parts) > 2 else "unknown",
                     }
                     hosts.append(host)
-                except:
+                except Exception:
                     continue
 
         return hosts

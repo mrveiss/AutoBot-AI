@@ -94,7 +94,7 @@ class HardwareMonitor:
                             gpu_data["memory_clock_mhz"] = (
                                 int(parts[7].strip()) if parts[7].strip() else 0
                             )
-                        except:
+                        except Exception:
                             pass
 
                     return gpu_data
@@ -128,7 +128,7 @@ class HardwareMonitor:
                             if "Intel(R) Core(TM) Ultra" in cpu_model:
                                 npu_status["hardware_detected"] = True
                                 break
-            except:
+            except Exception:
                 pass
 
             # Check WSL limitation
@@ -137,10 +137,10 @@ class HardwareMonitor:
                     version_info = f.read()
                     if "WSL" in version_info or "Microsoft" in version_info:
                         npu_status["wsl_limitation"] = True
-                        npu_status["recommendation"] = (
-                            "NPU requires native Windows or Linux for hardware access"
-                        )
-            except:
+                        npu_status[
+                            "recommendation"
+                        ] = "NPU requires native Windows or Linux for hardware access"
+            except Exception:
                 pass
 
             # Check OpenVINO NPU support
@@ -169,7 +169,7 @@ class HardwareMonitor:
                 )
                 if result.returncode == 0:
                     npu_status["intel_gpu_top_available"] = True
-            except:
+            except Exception:
                 npu_status["intel_gpu_top_available"] = False
 
             return npu_status

@@ -3,10 +3,10 @@
 Simple script to populate KB with docs, bypassing Redis issues.
 """
 
-import os
-import sys
 import glob
 import json
+import os
+import sys
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,7 +22,7 @@ import requests
 try:
     resp = requests.get("http://localhost:8001/api/system/health", timeout=2)
     print(f"✓ Backend is running: {resp.status_code}")
-except:
+except Exception:
     print("❌ Backend not running, starting with direct KB access")
 
 # Find all documentation files
