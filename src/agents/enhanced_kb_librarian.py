@@ -111,7 +111,7 @@ class EnhancedKBLibrarian:
         tool_name = tool_info.get("name", "unknown")
 
         # Create comprehensive structured document for the tool
-        document_content = f"""
+        document_content = """
 TOOL DOCUMENTATION: {tool_name}
 ==================================================
 
@@ -347,7 +347,7 @@ METADATA:
             "network": ["nmap", "netcat", "wireshark", "tcpdump"],
             "forensics": ["volatility", "rekall", "autopsy", "sleuthkit"],
             "security": ["metasploit", "burpsuite", "sqlmap", "nikto"],
-            "system": ["htop", "iftop", "lsof", "strace"],
+            "system": ["htop", "iftop", "lso", "strace"],
             "development": ["git", "gcc", "make", "docker"],
         }
 
@@ -710,8 +710,8 @@ METADATA:
             "port scan": ["nmap", "masscan", "netcat", "nc", "telnet"],
             "web scraping": ["wget", "curl", "httrack", "scrapy", "beautifulsoup"],
             "file search": ["find", "locate", "grep", "ag", "ripgrep", "fd"],
-            "process monitor": ["htop", "top", "ps", "pstree", "lsof"],
-            "disk usage": ["df", "du", "ncdu", "baobab", "qdirstat"],
+            "process monitor": ["htop", "top", "ps", "pstree", "lso"],
+            "disk usage": ["d", "du", "ncdu", "baobab", "qdirstat"],
             "network monitor": ["iftop", "nethogs", "vnstat", "bmon", "nload"],
         }
 
@@ -812,7 +812,7 @@ METADATA:
             return
 
         # Create a summary document
-        summary_content = f"""
+        summary_content = """
 Tool Research Results: {tool_type}
 Date: {datetime.now().isoformat()}
 
@@ -820,7 +820,7 @@ Found {len(tools)} tools for {tool_type}:
 
 """
         for i, tool in enumerate(tools, 1):
-            summary_content += f"""
+            summary_content += """
 {i}. {tool['name']}
    Purpose: {tool.get('purpose', 'N/A')}
    Installation: {tool.get('installation', 'N/A')[:200]}...
@@ -940,7 +940,7 @@ Found {len(tools)} tools for {tool_type}:
         doc_type = doc_info.get("type", "general")
         doc_title = doc_info.get("title", "System Documentation")
 
-        document_content = f"""
+        document_content = """
 SYSTEM DOCUMENTATION: {doc_title}
 ==================================================
 
@@ -1082,7 +1082,7 @@ METADATA:
         """Store complete workflow documentation for complex procedures"""
         workflow_name = workflow_info.get("name", "Unknown Workflow")
 
-        document_content = f"""
+        document_content = """
 WORKFLOW DOCUMENTATION: {workflow_name}
 ==================================================
 

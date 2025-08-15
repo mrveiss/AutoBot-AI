@@ -5,7 +5,6 @@ Manages classification rules and keywords in Redis for dynamic updates
 
 import json
 import logging
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import redis
@@ -207,30 +206,45 @@ class WorkflowClassifier:
     def _fallback_classification(self, message_lower: str) -> TaskComplexity:
         """Simple fallback classification without Redis."""
         # Simple keyword-based classification
-        complex_keywords = ["install", "setup", "configure", "guide", "tutorial", "how to"]
+        complex_keywords = [
+            "install",
+            "setup",
+            "configure",
+            "guide",
+            "tutorial",
+            "how to",
+        ]
         research_keywords = ["find", "search", "tools", "best", "recommend", "compare"]
-        security_network_keywords = ["scan", "security", "network", "port", "vulnerabilities"]
-        
+        security_keywords = [
+            "scan",
+            "security",
+            "network",
+            "port",
+            "vulnerabilities",
+        ]
+
         # Check for security/network combined
-        has_security = any(kw in message_lower for kw in ["scan", "security", "vulnerabilities"])
+        has_security = any(
+            kw in message_lower for kw in ["scan", "security", "vulnerabilities"]
+        )
         has_network = any(kw in message_lower for kw in ["network", "port", "firewall"])
         if has_security and has_network:
             return TaskComplexity.COMPLEX
-        
+
         # Check for complex tasks
         complex_count = sum(1 for kw in complex_keywords if kw in message_lower)
         if complex_count >= 2:
             return TaskComplexity.COMPLEX
-        
+
         # Check for installation tasks
         if any(kw in message_lower for kw in ["install", "setup", "configure"]):
             return TaskComplexity.INSTALL
-        
+
         # Check for research tasks
         research_count = sum(1 for kw in research_keywords if kw in message_lower)
         if research_count >= 1:
             return TaskComplexity.RESEARCH
-        
+
         return TaskComplexity.SIMPLE
 
     def _evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:

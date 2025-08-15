@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
-from .base_agent import LocalAgent, AgentRequest, AgentResponse
+
+from .base_agent import AgentRequest, AgentResponse, LocalAgent
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class EnhancedSystemCommandsAgent(LocalAgent):
             "security_validation",
             "shell_operations",
             "system_administration",
-            "command_explanation"
+            "command_explanation",
         ]
 
         # Security: Define allowed commands and dangerous patterns
@@ -50,7 +51,7 @@ class EnhancedSystemCommandsAgent(LocalAgent):
             "ps",
             "top",
             "htop",
-            "df",
+            "d",
             "du",
             "free",
             "lscpu",
@@ -125,40 +126,40 @@ class EnhancedSystemCommandsAgent(LocalAgent):
         try:
             action = request.action
             payload = request.payload
-            
+
             if action == "process_command":
                 task = payload.get("task", "")
                 context = request.context or {}
-                
+
                 result = await self.process_command_request(task, context)
-                
+
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="success",
-                    result=result
+                    result=result,
                 )
-                
+
             elif action == "validate_command":
                 command = payload.get("command", "")
                 result = self.validate_command_safety(command)
-                
+
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="success",
-                    result={"is_safe": result, "command": command}
+                    result={"is_safe": result, "command": command},
                 )
-                
+
             else:
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="error",
                     result=None,
-                    error=f"Unknown action: {action}"
+                    error=f"Unknown action: {action}",
                 )
-                
+
         except Exception as e:
             logger.error(f"Enhanced system commands agent error: {e}")
             return AgentResponse(
@@ -166,7 +167,7 @@ class EnhancedSystemCommandsAgent(LocalAgent):
                 agent_type=self.agent_type,
                 status="error",
                 result=None,
-                error=str(e)
+                error=str(e),
             )
 
     def get_capabilities(self) -> List[str]:
@@ -398,7 +399,7 @@ If asked to do something potentially harmful, explain why it's risky and suggest
 
             # Additional checks for specific commands
             if main_command == "rm" and any(
-                flag in parts for flag in ["-rf", "-r", "-f"]
+                flag in parts for flag in ["-r", "-r", "-f"]
             ):
                 return {
                     "is_safe": False,
@@ -472,7 +473,7 @@ If asked to do something potentially harmful, explain why it's risky and suggest
             "ifconfig",
             "ps",
             "ls",
-            "df",
+            "d",
             "free",
             "top",
             "netstat",

@@ -5,7 +5,6 @@ Provides web research capabilities for multi-agent workflows
 """
 
 import asyncio
-import json
 import logging
 import time
 from dataclasses import dataclass
@@ -288,9 +287,9 @@ class ResearchAgent:
         if "network scan" in query.lower():
             return (
                 f"Found {len(results)} relevant resources about network scanning tools. "
-                f"Key tools identified include Nmap (most popular), Masscan (fastest), and Zmap (Internet-scale). "
-                f"All tools have detailed installation guides and usage examples available. "
-                f"Nmap is recommended for beginners due to its comprehensive documentation and versatility."
+                "Key tools identified include Nmap (most popular), Masscan (fastest), and Zmap (Internet-scale). "
+                "All tools have detailed installation guides and usage examples available. "
+                "Nmap is recommended for beginners due to its comprehensive documentation and versatility."
             )
 
         return (

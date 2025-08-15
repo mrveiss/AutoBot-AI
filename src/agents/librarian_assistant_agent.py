@@ -200,7 +200,7 @@ class LibrarianAssistantAgent:
                     title_element = await element.query_selector("h2 a, h3 a")
                     if title_element:
                         title = await title_element.inner_text()
-                        url = await title_element.get_attribute("href")
+                        url = await title_element.get_attribute("hre")
 
                         # Get snippet
                         snippet_element = await element.query_selector(
@@ -243,7 +243,7 @@ class LibrarianAssistantAgent:
                     title_element = await element.query_selector("h2 a")
                     if title_element:
                         title = await title_element.inner_text()
-                        url = await title_element.get_attribute("href")
+                        url = await title_element.get_attribute("hre")
 
                         snippet_element = await element.query_selector(".b_caption p")
                         snippet = (
@@ -285,7 +285,7 @@ class LibrarianAssistantAgent:
 
                     if title_element and link_element:
                         title = await title_element.inner_text()
-                        url = await link_element.get_attribute("href")
+                        url = await link_element.get_attribute("hre")
 
                         snippet_elements = await element.query_selector_all(
                             ".VwiC3b, .s3v9rd"
@@ -462,7 +462,7 @@ class LibrarianAssistantAgent:
             Quality assessment with score and reasoning
         """
         try:
-            prompt = f"""
+            prompt = """
 Please assess the quality and reliability of this web content for "
 "inclusion in a knowledge base:
 
@@ -486,7 +486,7 @@ Respond in JSON format:
     "score": 0.0-1.0,
     "reasoning": "Brief explanation of the assessment",
     "recommendation": "store|review|reject",
-    "key_topics": ["list", "of", "main", "topics"],
+    "key_topics": ["list", "o", "main", "topics"],
     "reliability_factors": {{
         "trusted_domain": true/false,
         "content_quality": "high/medium/low",
@@ -551,7 +551,7 @@ Respond in JSON format:
         """
         try:
             # Prepare document for storage
-            document_content = f"""
+            document_content = """
 Title: {content_data.get('title', 'Untitled')}
 Source: {content_data.get('url', 'Unknown')}
 Domain: {content_data.get('domain', 'Unknown')}
@@ -710,7 +710,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
 
             combined_content = "\n---\n".join(source_contents)
 
-            prompt = f"""
+            prompt = """
 Based on the following web research results for the query \"{query}\", "
 "please provide a comprehensive summary that:
 

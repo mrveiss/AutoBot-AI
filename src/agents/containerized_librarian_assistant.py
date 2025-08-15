@@ -190,7 +190,7 @@ class ContainerizedLibrarianAssistant:
                     return content_data
                 else:
                     logger.error(
-                        f"Content extraction failed: "
+                        "Content extraction failed: "
                         f"{result.get('error', 'Unknown error')}"
                     )
                     return None
@@ -211,7 +211,7 @@ class ContainerizedLibrarianAssistant:
             Quality assessment with score and reasoning
         """
         try:
-            prompt = f"""
+            prompt = """
 Please assess the quality and reliability of this web content for "
 "inclusion in a knowledge base:
 
@@ -235,7 +235,7 @@ Respond in JSON format:
     "score": 0.0-1.0,
     "reasoning": "Brief explanation of the assessment",
     "recommendation": "store|review|reject",
-    "key_topics": ["list", "of", "main", "topics"],
+    "key_topics": ["list", "o", "main", "topics"],
     "reliability_factors": {{
         "trusted_domain": true/false,
         "content_quality": "high/medium/low",
@@ -300,7 +300,7 @@ Respond in JSON format:
         """
         try:
             # Prepare document for storage
-            document_content = f"""
+            document_content = """
 Title: {content_data.get('title', 'Untitled')}
 Source: {content_data.get('url', 'Unknown')}
 Domain: {content_data.get('domain', 'Unknown')}
@@ -467,7 +467,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
 
             combined_content = "\n---\n".join(source_contents)
 
-            prompt = f"""
+            prompt = """
 Based on the following web research results for the query \"{query}\", "
 "please provide a comprehensive summary that:
 

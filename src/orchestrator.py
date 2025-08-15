@@ -3,7 +3,6 @@ import asyncio
 import json
 import re
 import time
-import traceback
 import uuid
 from dataclasses import dataclass
 from enum import Enum
@@ -226,7 +225,7 @@ class Orchestrator:
                             {
                                 "level": "ERROR",
                                 "message": (
-                                    f"Failed to parse worker capabilities "
+                                    "Failed to parse worker capabilities "
                                     f"message: {e}"
                                 ),
                             },
@@ -238,7 +237,7 @@ class Orchestrator:
                             {
                                 "level": "ERROR",
                                 "message": (
-                                    f"Error processing worker capabilities "
+                                    "Error processing worker capabilities "
                                     f"message: {e}"
                                 ),
                             },
@@ -300,7 +299,7 @@ class Orchestrator:
                             )
                         else:
                             print(
-                                f"Received unhandled approval message for task "
+                                "Received unhandled approval message for task "
                                 f"{task_id}: {data}"
                             )
                     except Exception as e:
@@ -356,7 +355,7 @@ class Orchestrator:
             {
                 "level": "INFO",
                 "message": (
-                    f"System information collected: "
+                    "System information collected: "
                     f"{json.dumps(self.system_info, indent=2)}"
                 ),
             },
@@ -369,7 +368,7 @@ class Orchestrator:
             {
                 "level": "INFO",
                 "message": (
-                    f"Available tools collected: "
+                    "Available tools collected: "
                     f"{json.dumps(self.available_tools, indent=2)}"
                 ),
             },
@@ -539,16 +538,16 @@ class Orchestrator:
                 # Add the dynamic parts that weren't in the legacy prompt
                 if context_str:
                     system_prompt += (
-                        f"\n\nUse the following context to inform your plan:\n"
+                        "\n\nUse the following context to inform your plan:\n"
                         f"{context_str}"
                     )
 
                 system_prompt += (
-                    f"\n\nOperating System Information:\n"
+                    "\n\nOperating System Information:\n"
                     f"{json.dumps(self.system_info, indent=2)}\n"
                 )
                 system_prompt += (
-                    f"\n\nAvailable System Tools:\n"
+                    "\n\nAvailable System Tools:\n"
                     f"{json.dumps(self.available_tools, indent=2)}\n"
                 )
             except KeyError:
@@ -565,15 +564,15 @@ class Orchestrator:
                 system_prompt = "\n".join(system_prompt_parts)
                 if context_str:
                     system_prompt += (
-                        f"\n\nUse the following context to inform your plan:\n"
+                        "\n\nUse the following context to inform your plan:\n"
                         f"{context_str}"
                     )
                 system_prompt += (
-                    f"\n\nOperating System Information:\n"
+                    "\n\nOperating System Information:\n"
                     f"{json.dumps(self.system_info, indent=2)}\n"
                 )
                 system_prompt += (
-                    f"\n\nAvailable System Tools:\n"
+                    "\n\nAvailable System Tools:\n"
                     f"{json.dumps(self.available_tools, indent=2)}\n"
                 )
 
@@ -666,7 +665,7 @@ class Orchestrator:
                     }
             except json.JSONDecodeError:
                 print(
-                    f"LLM response is plain text. "
+                    "LLM response is plain text. "
                     f"Treating as conversational: {llm_raw_content}"
                 )
                 return {
@@ -977,7 +976,7 @@ class Orchestrator:
             return {"completed": False}
         except Exception as e:
             log_error(e, context=f"tool_execution:{tool_name}")
-            error_msg = f"Tool execution encountered an unexpected error"
+            error_msg = "Tool execution encountered an unexpected error"
             messages.append({"role": "user", "content": error_msg})
             await event_manager.publish("error", {"message": error_msg})
             return {"completed": False}
@@ -1154,7 +1153,7 @@ class Orchestrator:
                 }
 
             print(
-                f"DEBUG: _execute_simple_command could not determine a direct "
+                "DEBUG: _execute_simple_command could not determine a direct "
                 f"command for '{goal}'. Falling back to generate_task_plan."
             )
         return await self.generate_task_plan(goal, [{"role": "user", "content": goal}])
@@ -1864,7 +1863,7 @@ class Orchestrator:
                 context_info = f"Workflow execution for: {original_goal}"
                 if previous_results:
                     # Summarize what we learned to store
-                    return f"Stored workflow findings and tool information for future reference"
+                    return "Stored workflow findings and tool information for future reference"
                 else:
                     return "Prepared to store workflow results"
 

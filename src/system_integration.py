@@ -5,8 +5,8 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 import requests  # Import requests for web fetching
-from markdownify import (  # Import markdownify for HTML to Markdown conversion
-    markdownify as md,
+from markdownify import (
+    markdownify as md,  # Import markdownify for HTML to Markdown conversion
 )
 
 
@@ -187,20 +187,26 @@ class SystemIntegration:
             # Use systemctl without sudo - elevation will be handled if needed
             cmd = ["systemctl", action, service_name]
             result = self._run_command(cmd)
-            
+
             # Check if permission denied
-            if result.get("status") == "error" and "permission denied" in result.get("error", "").lower():
+            if (
+                result.get("status") == "error"
+                and "permission denied" in result.get("error", "").lower()
+            ):
                 # Try with elevation wrapper
-                from src.elevation_wrapper import execute_with_elevation
                 import asyncio
-                
-                elevation_result = asyncio.run(execute_with_elevation(
-                    f"systemctl {action} {service_name}",
-                    operation=f"Manage service: {service_name}",
-                    reason=f"Need administrator privileges to {action} the {service_name} service",
-                    risk_level="MEDIUM"
-                ))
-                
+
+                from src.elevation_wrapper import execute_with_elevation
+
+                elevation_result = asyncio.run(
+                    execute_with_elevation(
+                        f"systemctl {action} {service_name}",
+                        operation=f"Manage service: {service_name}",
+                        reason=f"Need administrator privileges to {action} the {service_name} service",
+                        risk_level="MEDIUM",
+                    )
+                )
+
                 if elevation_result.get("success"):
                     return {
                         "status": "success",
@@ -209,9 +215,11 @@ class SystemIntegration:
                 else:
                     return {
                         "status": "error",
-                        "message": elevation_result.get("error", "Failed to manage service with elevation")
+                        "message": elevation_result.get(
+                            "error", "Failed to manage service with elevation"
+                        ),
                     }
-            
+
             if result["status"] == "success":
                 return {
                     "status": "success",
@@ -351,7 +359,7 @@ class SystemIntegration:
         except psutil.AccessDenied:
             return {
                 "status": "error",
-                "message": f"Access denied to terminate process with PID "
+                "message": "Access denied to terminate process with PID "
                 f"{pid}. Requires elevated privileges.",
             }
         except Exception as e:
@@ -394,7 +402,7 @@ class SystemIntegration:
                 # For other content types, return a message indicating it's not text
                 return {
                     "status": "error",
-                    "message": f"Unsupported content type for direct text "
+                    "message": "Unsupported content type for direct text "
                     f"extraction: {content_type}",
                     "url": url,
                 }
@@ -408,7 +416,7 @@ class SystemIntegration:
         except Exception as e:
             return {
                 "status": "error",
-                "message": f"An unexpected error occurred during " f"web fetch: {e}",
+                "message": "An unexpected error occurred during " f"web fetch: {e}",
                 "url": url,
             }
 

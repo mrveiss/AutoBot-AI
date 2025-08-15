@@ -115,8 +115,8 @@ class Diagnostics:
 
         if self.use_llm_for_analysis:
             llm_prompt = (
-                f"Analyze the following error from a task execution. "
-                f"Suggest possible causes and potential solutions. "
+                "Analyze the following error from a task execution. "
+                "Suggest possible causes and potential solutions. "
                 f"Error: {error_message}\nTraceback:\n{tb}\n"
                 f"Task Info: {json.dumps(task_info)}"
             )
@@ -136,7 +136,7 @@ class Diagnostics:
             )
             if llm_response and llm_response.get("choices"):
                 analysis_report["suggested_causes"].append(
-                    f"LLM Analysis: "
+                    "LLM Analysis: "
                     f"{llm_response['choices'][0]['message']['content']}"
                 )
             else:
@@ -166,7 +166,7 @@ class Diagnostics:
 
         await event_manager.publish("diagnostics_report", analysis_report)
         print(
-            f"Diagnostics report generated: " f"{json.dumps(analysis_report, indent=2)}"
+            "Diagnostics report generated: " f"{json.dumps(analysis_report, indent=2)}"
         )
         return analysis_report
 
@@ -209,7 +209,7 @@ class Diagnostics:
                     "level": "WARNING",
                     "message": (
                         f"User permission for task {task_id} timed out. "
-                        f"Fixes not applied."
+                        "Fixes not applied."
                     ),
                 },
             )

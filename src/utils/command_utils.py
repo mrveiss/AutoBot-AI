@@ -3,15 +3,17 @@ import re
 from datetime import datetime
 from typing import Any, Dict
 
+
 def strip_ansi_codes(text: str) -> str:
     """Removes ANSI escape codes from a string."""
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
 
 
 def get_timestamp() -> str:
     """Get current timestamp in ISO format."""
     return datetime.now().isoformat()
+
 
 async def execute_shell_command(command: str) -> Dict[str, Any]:
     """

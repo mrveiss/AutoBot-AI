@@ -3,10 +3,7 @@ Security Scanner Agent for AutoBot
 Provides defensive security scanning and analysis capabilities
 """
 
-import asyncio
-import json
 import logging
-import subprocess
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -326,7 +323,7 @@ class SecurityScannerAgent:
                                         "type": "warning",
                                         "path": path,
                                         "status": response.status,
-                                        "message": f"Potentially sensitive path accessible",
+                                        "message": "Potentially sensitive path accessible",
                                     }
                                 )
                     except Exception:
@@ -473,7 +470,7 @@ class SecurityScannerAgent:
                 "scan_type": scan_type,
                 "recommended_tools": self._get_fallback_tools(scan_type),
                 "installation_info": f"Please install {scan_type} tools manually",
-                "research_summary": f"Research failed, using fallback recommendations",
+                "research_summary": "Research failed, using fallback recommendations",
                 "confidence": 0.5,
                 "sources": [],
             }
@@ -551,7 +548,7 @@ class SecurityScannerAgent:
                 "installation_guide": f"Try: sudo apt install {tool_name}",
                 "package_manager": "apt",
                 "install_commands": [
-                    f"sudo apt update",
+                    "sudo apt update",
                     f"sudo apt install {tool_name}",
                 ],
                 "confidence": 0.3,
@@ -567,7 +564,7 @@ class SecurityScannerAgent:
         elif "yum install" in guide_lower:
             return "yum"
         elif "dnf install" in guide_lower:
-            return "dnf"
+            return "dn"
         elif "pacman -S" in guide_lower:
             return "pacman"
         elif "brew install" in guide_lower:
@@ -586,7 +583,7 @@ class SecurityScannerAgent:
                 line.startswith("sudo apt")
                 or line.startswith("apt install")
                 or line.startswith("sudo yum")
-                or line.startswith("sudo dnf")
+                or line.startswith("sudo dn")
                 or line.startswith("sudo pacman")
             ):
                 commands.append(line)

@@ -12,7 +12,7 @@ ESSENTIAL_TOOLS = [
     "docker",
     "apt",
     "yum",
-    "dnf",
+    "dn",
     "pacman",
     "pip",
     "systemctl",

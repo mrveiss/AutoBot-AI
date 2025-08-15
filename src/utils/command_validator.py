@@ -48,8 +48,8 @@ class CommandValidator:
             # System information commands
             "ps": CommandPattern(
                 command="ps",
-                allowed_args=["aux", "ef", "-ef", "-aux", "axf"],
-                arg_patterns={"aux": r"^aux$", "ef": r"^-?ef$", "axf": r"^axf$"},
+                allowed_args=["aux", "e", "-e", "-aux", "axf"],
+                arg_patterns={"aux": r"^aux$", "e": r"^-?ef$", "ax": r"^axf$"},
                 max_args=1,
                 description="Process status listing",
             ),
@@ -118,8 +118,8 @@ class CommandValidator:
                 max_args=0,
                 description="Current date and time",
             ),
-            "df": CommandPattern(
-                command="df",
+            "d": CommandPattern(
+                command="d",
                 allowed_args=["-h", "--human-readable"],
                 arg_patterns={
                     "-h": r"^-h$",
@@ -197,7 +197,7 @@ class CommandValidator:
 
         # Dangerous command patterns to explicitly block
         self.dangerous_patterns = [
-            r"rm\s+-rf",  # rm -rf (dangerous deletion)
+            r"rm\s+-r",  # rm -rf (dangerous deletion)
             r"rm\s.*/",  # rm with paths
             r";\s*rm",  # Command chaining with rm
             r"&&\s*rm",  # Command chaining with rm
@@ -242,7 +242,7 @@ class CommandValidator:
                 return {
                     "valid": False,
                     "reason": (
-                        f"Dangerous pattern detected: " f"{dangerous_check['pattern']}"
+                        "Dangerous pattern detected: " f"{dangerous_check['pattern']}"
                     ),
                     "parsed_command": [],
                     "use_shell": False,
@@ -366,7 +366,7 @@ class CommandValidator:
                     return {
                         "valid": False,
                         "reason": (
-                            f"Potential injection character "
+                            "Potential injection character "
                             f"'{injection_char}' "
                             f"in argument '{arg}'"
                         ),

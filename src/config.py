@@ -286,7 +286,7 @@ class ConfigManager:
         except Exception as e:
             logger.warning(f"Could not auto-detect available models: {e}")
 
-        # Fallback to hardcoded default - use available model 
+        # Fallback to hardcoded default - use available model
         return "llama3.2:3b"
 
     def get(self, key: str, default: Any = None) -> Any:

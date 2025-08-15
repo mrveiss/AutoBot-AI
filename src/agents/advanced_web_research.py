@@ -514,7 +514,7 @@ class AdvancedWebResearcher:
 
                             if title_el and link_el:
                                 title = await title_el.inner_text()
-                                url = await link_el.get_attribute("href")
+                                url = await link_el.get_attribute("hre")
                                 snippet = (
                                     await snippet_el.inner_text() if snippet_el else ""
                                 )
@@ -583,7 +583,7 @@ class AdvancedWebResearcher:
                 if solution:
                     # Inject solution
                     await page.evaluate(
-                        f'document.getElementById("g-recaptcha-response")'
+                        "document.getElementById('g-recaptcha-response')"
                         f'.innerHTML="{solution}";'
                     )
                     await page.evaluate(

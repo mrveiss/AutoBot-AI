@@ -46,7 +46,7 @@ class EnhancedCommandDetector:
                     "space",
                     "storage",
                     "filesystem",
-                    "df",
+                    "d",
                     "free space",
                 ],
                 "questions": ["disk space", "how much space", "storage usage"],
@@ -365,15 +365,15 @@ class EnhancedCommandDetector:
         explanations = {
             "LOW": (
                 f"The command '{command}' is considered safe - it only reads "
-                f"information and doesn't modify your system."
+                "information and doesn't modify your system."
             ),
             "MEDIUM": (
                 f"The command '{command}' may modify files or system settings. "
-                f"Please review what it will do before approving."
+                "Please review what it will do before approving."
             ),
             "HIGH": (
                 f"⚠️ The command '{command}' can make significant system changes "
-                f"or delete data. Use with extreme caution!"
+                "or delete data. Use with extreme caution!"
             ),
         }
 

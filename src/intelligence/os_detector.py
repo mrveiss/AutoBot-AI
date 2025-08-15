@@ -200,7 +200,7 @@ class OSDetector:
             if distro in [LinuxDistro.UBUNTU, LinuxDistro.DEBIAN, LinuxDistro.KALI]:
                 return "apt"
             elif distro == LinuxDistro.FEDORA:
-                return "dnf"
+                return "dn"
             elif distro in [LinuxDistro.CENTOS, LinuxDistro.RHEL]:
                 return "yum"
             elif distro == LinuxDistro.ARCH:
@@ -209,7 +209,7 @@ class OSDetector:
                 return "zypper"
             else:
                 # Auto-detect common package managers
-                for pm in ["apt", "dnf", "yum", "pacman", "zypper"]:
+                for pm in ["apt", "dn", "yum", "pacman", "zypper"]:
                     if shutil.which(pm):
                         return pm
         elif os_type == OSType.MACOS:
@@ -253,7 +253,7 @@ class OSDetector:
             "ps",
             "top",
             "htop",
-            "df",
+            "d",
             "du",
             "free",
             "uname",
@@ -333,7 +333,7 @@ class OSDetector:
             return False, f"Package manager {self._os_info.package_manager} not found"
 
         # Check permissions for common package managers that need root
-        root_required_managers = ["apt", "yum", "dnf", "pacman", "zypper"]
+        root_required_managers = ["apt", "yum", "dn", "pacman", "zypper"]
 
         if (
             self._os_info.package_manager in root_required_managers
@@ -343,7 +343,7 @@ class OSDetector:
             return (
                 False,
                 f"Package manager {self._os_info.package_manager} "
-                f"requires root access",
+                "requires root access",
             )
 
         return True, f"Can install using {self._os_info.package_manager}"
@@ -389,7 +389,7 @@ class OSDetector:
                 "ps",
                 "top",
                 "htop",
-                "df",
+                "d",
                 "du",
                 "free",
                 "uname",
@@ -501,7 +501,7 @@ class OSDetector:
 
         if package_manager == "apt":
             return f"sudo apt update && sudo apt install -y {tool_name}"
-        elif package_manager == "dnf":
+        elif package_manager == "dn":
             return f"sudo dnf install -y {tool_name}"
         elif package_manager == "yum":
             return f"sudo yum install -y {tool_name}"

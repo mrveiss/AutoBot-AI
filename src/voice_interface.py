@@ -41,7 +41,7 @@ class VoiceInterface:
             availability_status.append("Text-to-Speech unavailable")
 
         status_msg = (
-            f"VoiceInterface initialized. Continuous listening: "
+            "VoiceInterface initialized. Continuous listening: "
             f"{self.continuous_listening}"
         )
         if availability_status:
@@ -116,13 +116,13 @@ class VoiceInterface:
             except sr.RequestError as e:
                 return {
                     "status": "error",
-                    "message": f"Could not request results from Google "
+                    "message": "Could not request results from Google "
                     f"Speech Recognition service; {e}",
                 }
             except Exception as e:
                 return {
                     "status": "error",
-                    "message": f"An unexpected error occurred during "
+                    "message": "An unexpected error occurred during "
                     f"speech recognition: {e}",
                 }
 
@@ -255,7 +255,7 @@ if __name__ == "__main__":
         #             print("No speech detected, continuing to listen...")
         #         else:
         #             print(
-        #                 f"Error in continuous listening: "
+        #                 "Error in continuous listening: "
         #                 f"{text_result['message']}"
         #             )
         #         await asyncio.sleep(0.1)  # Small delay to prevent

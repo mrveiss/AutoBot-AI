@@ -5,7 +5,6 @@ Routes requests to appropriate agents based on request type and context.
 Uses Llama 3.2 3B model for complex routing decisions and coordination.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
