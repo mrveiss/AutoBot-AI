@@ -1,0 +1,18 @@
+{
+  "gpu_memory_mb": 8188,
+  "parallel_capacity": "2-3 concurrent models",
+  "recommended_models": {
+    "orchestrator": "artifish/llama3.2-uncensored:latest",
+    "rag": "artifish/llama3.2-uncensored:latest",
+    "research": "artifish/llama3.2-uncensored:latest",
+    "chat": "llama3.2:3b-instruct-q4_K_M",
+    "analysis": "artifish/llama3.2-uncensored:latest",
+    "planning": "artifish/llama3.2-uncensored:latest"
+  },
+  "optimization_tips": [
+    "Use quantized models (q4_K_M) for memory efficiency",
+    "Monitor GPU memory usage with nvidia-smi",
+    "Consider model swapping for peak memory usage",
+    "Use FP16 precision when possible"
+  ]
+}

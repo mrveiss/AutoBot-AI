@@ -179,21 +179,27 @@ docs/reports/console-*.json
 docs/reports/frontend-*.json
 docs/reports/backend-*.json
 
-# Code analysis outputs
-*_analysis_report.json
-*-analysis-report.json
-code_analysis_report.json
-architectural_analysis_report.json
-env_analysis_report.json
-frontend_analysis_report.json
-gpu_model_recommendations.json
+# === REPORTS (NOW ORGANIZED IN reports/ FOLDER) ===
+# All reports now stored in reports/ subdirectories by type
+# Maximum 2 reports per type for comparison purposes
+# Use scripts/utilities/report_manager.py for management
 
-# Test and QA reports
-TESTING_FRAMEWORK_SUMMARY.md
-TEST_RESULTS_SUMMARY.md
-FRONTEND_FIXES_COMPLETION_SUMMARY.md
-accessibility-fix-report.*
-console-cleanup-report.*
+# Legacy report patterns (prevent in root)
+/*_analysis_report.json
+/*-analysis-report.json
+/code_analysis_report.json
+/architectural_analysis_report.json
+/env_analysis_report.json
+/frontend_analysis_report.json
+/gpu_model_recommendations.json
+/security_audit_results.json
+
+# Legacy test and QA reports (prevent in root)
+/TESTING_FRAMEWORK_SUMMARY.md
+/TEST_RESULTS_SUMMARY.md
+/FRONTEND_FIXES_COMPLETION_SUMMARY.md
+/accessibility-fix-report.*
+/console-cleanup-report.*
 
 # === CHROME/CHROMADB ===
 chromadb/
