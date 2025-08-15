@@ -12,20 +12,20 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11"]
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y redis-server
-    
+
     - name: Cache pip dependencies
       uses: actions/cache@v3
       with:
@@ -33,51 +33,51 @@ jobs:
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-    
+
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
-    
+
     - name: Create necessary directories
       run: |
         mkdir -p data logs static
         touch data/.gitkeep logs/.gitkeep static/.gitkeep
-    
+
     - name: Start Redis server
       run: |
         sudo systemctl start redis-server
         sudo systemctl enable redis-server
         redis-cli ping
-    
+
     - name: Run code quality checks
       run: |
         echo "🔍 Running code quality checks..."
-        
+
         # Code formatting check
         echo "Checking code formatting with black..."
         black --check src/ backend/ --line-length=88 || echo "⚠️ Code formatting issues found"
-        
-        # Import sorting check  
+
+        # Import sorting check
         echo "Checking import sorting with isort..."
         isort --check-only src/ backend/ || echo "⚠️ Import sorting issues found"
-        
+
         # Linting
         echo "Running flake8 linter..."
         flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️ Linting issues found"
-    
+
     - name: Run security analysis
       run: |
         echo "🔒 Running security analysis..."
-        
+
         # Security vulnerability scan
         bandit -r src/ backend/ -f json -o bandit-report.json || echo "⚠️ Security issues found"
         if [ -f bandit-report.json ]; then
           echo "Security report generated"
           cat bandit-report.json | python -m json.tool || echo "No security issues to report"
         fi
-    
+
     - name: Run unit tests for security modules
       run: |
         echo "🧪 Running security unit tests..."
@@ -85,19 +85,19 @@ jobs:
                          tests/test_enhanced_security_layer.py \
                          tests/test_security_api.py \
                          -v --tb=short --cov=src --cov-report=xml --cov-report=term
-    
+
     - name: Run integration tests
       run: |
         echo "🔄 Running integration tests..."
         python -m pytest tests/test_security_integration.py \
                          tests/test_system_integration.py \
                          -v --tb=short --maxfail=5
-    
+
     - name: Test security endpoints
       run: |
         echo "🌐 Testing security API endpoints..."
         python test_security_endpoints.py || echo "⚠️ Some endpoints may not be fully functional in CI"
-    
+
     - name: Upload coverage reports
       uses: codecov/codecov-action@v3
       if: matrix.python-version == '3.10'
@@ -111,21 +111,21 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-tests
     if: github.ref == 'refs/heads/main'
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    
+
     - name: Build sandbox Docker image
       run: |
         echo "🐳 Building Docker sandbox image..."
         docker build -f docker/sandbox.Dockerfile -t autobot-sandbox:latest .
-        
+
         # Test sandbox image
         docker run --rm autobot-sandbox:latest echo "Sandbox test successful"
-    
+
     - name: Test Docker sandbox integration
       run: |
         echo "🧪 Testing Docker sandbox integration..."
@@ -141,34 +141,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
         cache-dependency-path: autobot-vue/package-lock.json
-    
+
     - name: Install frontend dependencies
       run: |
         cd autobot-vue
         npm ci
-    
+
     - name: Run frontend linting
       run: |
         cd autobot-vue
         npm run lint || echo "⚠️ Frontend linting issues found"
-    
+
     - name: Run frontend type checking
       run: |
         cd autobot-vue
         npm run type-check || echo "⚠️ Frontend type checking issues found"
-    
+
     - name: Build frontend
       run: |
         cd autobot-vue
         npm run build
-    
+
     - name: Run frontend unit tests
       run: |
         cd autobot-vue
@@ -178,37 +178,37 @@ jobs:
     runs-on: ubuntu-latest
     needs: [security-tests, docker-build, frontend-tests]
     if: github.ref == 'refs/heads/main'
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
         python-version: "3.10"
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    
+
     - name: Test production configuration
       run: |
         echo "🚀 Testing production readiness..."
-        
+
         # Check that all required files exist
         echo "Checking required files..."
         test -f main.py || (echo "❌ main.py missing" && exit 1)
         test -f requirements.txt || (echo "❌ requirements.txt missing" && exit 1)
         test -f setup_agent.sh || (echo "❌ setup_agent.sh missing" && exit 1)
         echo "✅ All required files present"
-        
+
         # Test configuration loading
         python -c "
         from src.config import config
         print('✅ Configuration system working')
         "
-        
+
         # Test core imports
         python -c "
         from src.enhanced_security_layer import EnhancedSecurityLayer
@@ -216,7 +216,7 @@ jobs:
         from backend.app_factory import create_app
         print('✅ Core imports working')
         "
-    
+
     - name: Generate deployment artifact
       run: |
         echo "📦 Generating deployment summary..."
@@ -237,9 +237,9 @@ jobs:
         echo "- Audit logging ✅" >> DEPLOYMENT_SUMMARY.md
         echo "- Role-based access control ✅" >> DEPLOYMENT_SUMMARY.md
         echo "- API security endpoints ✅" >> DEPLOYMENT_SUMMARY.md
-        
+
         cat DEPLOYMENT_SUMMARY.md
-    
+
     - name: Upload deployment artifact
       uses: actions/upload-artifact@v3
       with:
@@ -250,39 +250,39 @@ jobs:
     runs-on: ubuntu-latest
     needs: [security-tests, docker-build, frontend-tests, deployment-check]
     if: always()
-    
+
     steps:
     - name: Notify results
       run: |
         echo "🎯 CI/CD Pipeline Results:"
         echo "=========================="
-        
+
         if [ "${{ needs.security-tests.result }}" == "success" ]; then
           echo "✅ Security tests: PASSED"
         else
           echo "❌ Security tests: FAILED"
         fi
-        
+
         if [ "${{ needs.docker-build.result }}" == "success" ]; then
           echo "✅ Docker build: PASSED"
         else
           echo "❌ Docker build: FAILED"
         fi
-        
+
         if [ "${{ needs.frontend-tests.result }}" == "success" ]; then
           echo "✅ Frontend tests: PASSED"
         else
           echo "❌ Frontend tests: FAILED"
         fi
-        
+
         if [ "${{ needs.deployment-check.result }}" == "success" ]; then
           echo "✅ Deployment check: PASSED"
         else
           echo "❌ Deployment check: FAILED"
         fi
-        
+
         echo ""
-        if [ "${{ needs.security-tests.result }}" == "success" ] && 
+        if [ "${{ needs.security-tests.result }}" == "success" ] &&
            [ "${{ needs.docker-build.result }}" == "success" ] &&
            [ "${{ needs.frontend-tests.result }}" == "success" ] &&
            [ "${{ needs.deployment-check.result }}" == "success" ]; then
