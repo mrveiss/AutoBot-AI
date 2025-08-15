@@ -120,7 +120,7 @@ message_display:
 
 # Security Configuration
 security:
-  enable_encryption: false
+  enable_encryption: true  # Changed to true for better security by default
   session_timeout_minutes: 30
 
 # UI Configuration
