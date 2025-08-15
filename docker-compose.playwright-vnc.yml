@@ -12,6 +12,8 @@ services:
       - SCREEN_WIDTH=1920
       - SCREEN_HEIGHT=1080
       - SCREEN_DEPTH=24
+      - DEBIAN_FRONTEND=noninteractive
+      - TZ=UTC
     volumes:
       - ./playwright-server.js:/app/server.js
     ports:
@@ -19,49 +21,57 @@ services:
       - "5901:5901"    # VNC port (avoiding Kali's default 5900)
       - "6080:6080"    # noVNC web interface
     command: >
-      sh -c "
-        echo '🚀 Setting up VNC environment...' &&
-        # Install required packages
-        apt-get update && apt-get install -y x11vnc xvfb novnc websockify supervisor &&
+      bash -c "
+        set -e
+        echo '🚀 Setting up VNC environment...'
 
-        # Create supervisor config
-        mkdir -p /etc/supervisor/conf.d &&
-        cat > /etc/supervisor/conf.d/autobot.conf << 'EOF'
-        [supervisord]
-        nodaemon=true
+        # Install required packages only if not present
+        export DEBIAN_FRONTEND=noninteractive
+        if ! command -v supervisord &> /dev/null; then
+          apt-get update -qq
+          apt-get install -y --no-install-recommends x11vnc xvfb novnc websockify supervisor
+          apt-get clean && rm -rf /var/lib/apt/lists/*
+        fi
 
-        [program:xvfb]
-        command=/usr/bin/Xvfb :99 -screen 0 1920x1080x24
-        autostart=true
-        autorestart=true
-        stdout_logfile=/var/log/xvfb.log
-        stderr_logfile=/var/log/xvfb.err
+        # Create supervisor config directory
+        mkdir -p /etc/supervisor/conf.d
 
-        [program:x11vnc]
-        command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -ncache 10 -forever -shared -rfbport 5901
-        autostart=true
-        autorestart=true
-        stdout_logfile=/var/log/x11vnc.log
-        stderr_logfile=/var/log/x11vnc.err
+        # Create supervisor config file
+        echo '[supervisord]' > /etc/supervisor/conf.d/autobot.conf
+        echo 'nodaemon=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'logfile=/var/log/supervisor/supervisord.log' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'pidfile=/tmp/supervisord.pid' >> /etc/supervisor/conf.d/autobot.conf
+        echo '' >> /etc/supervisor/conf.d/autobot.conf
+        echo '[program:xvfb]' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -ac -nolisten tcp' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'priority=100' >> /etc/supervisor/conf.d/autobot.conf
+        echo '' >> /etc/supervisor/conf.d/autobot.conf
+        echo '[program:x11vnc]' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -ncache 10 -forever -shared -rfbport 5901' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'priority=200' >> /etc/supervisor/conf.d/autobot.conf
+        echo '' >> /etc/supervisor/conf.d/autobot.conf
+        echo '[program:novnc]' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/share/novnc/utils/launch.sh --vnc localhost:5901 --listen 6080' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'priority=300' >> /etc/supervisor/conf.d/autobot.conf
+        echo '' >> /etc/supervisor/conf.d/autobot.conf
+        echo '[program:playwright]' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=bash -c \"cd /app && if [ ! -f package.json ]; then npm init -y; fi && npm install express playwright && node server.js\"' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'priority=400' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'environment=DISPLAY=\":99\",HEADLESS=\"false\"' >> /etc/supervisor/conf.d/autobot.conf
 
-        [program:novnc]
-        command=/usr/share/novnc/utils/launch.sh --vnc localhost:5901 --listen 6080
-        autostart=true
-        autorestart=true
-        stdout_logfile=/var/log/novnc.log
-        stderr_logfile=/var/log/novnc.err
+        # Create log directory for supervisor
+        mkdir -p /var/log/supervisor /var/log
 
-        [program:playwright]
-        command=bash -c 'cd /app && npm init -y && npm install playwright express && node server.js'
-        autostart=true
-        autorestart=true
-        environment=DISPLAY=:99,HEADLESS=false
-        stdout_logfile=/var/log/playwright.log
-        stderr_logfile=/var/log/playwright.err
-        EOF
-
-        echo '🚀 Starting all services with supervisor...' &&
-        /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+        echo '🚀 Starting all services with supervisor...'
+        exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
       "
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/health && curl -f http://localhost:6080/ || exit 1"]
