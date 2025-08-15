@@ -13,6 +13,7 @@ from src.circuit_breaker import circuit_breaker_async, protected_llm_call
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
 from src.prompt_manager import prompt_manager
+from src.retry_mechanism import retry_network_operation
 
 load_dotenv()
 

@@ -18,6 +18,7 @@ class ScheduleWorkflowRequest(BaseModel):
     user_message: str
     scheduled_time: Union[str, datetime]
     priority: str = "normal"
+    complexity: str = "simple"
     template_id: Optional[str] = None
     variables: Optional[Dict[str, Any]] = None
     auto_approve: bool = False
@@ -56,6 +57,7 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
             user_message=request.user_message,
             scheduled_time=request.scheduled_time,
             priority=priority,
+            complexity=request.complexity,
             template_id=request.template_id,
             variables=request.variables,
             auto_approve=request.auto_approve,
@@ -80,6 +82,7 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
                 "scheduled_time": workflow.scheduled_time.isoformat(),
                 "priority": workflow.priority.name,
                 "status": workflow.status.name,
+                "complexity": workflow.complexity.value,
                 "template_id": workflow.template_id,
                 "estimated_duration_minutes": workflow.estimated_duration_minutes,
             },
@@ -127,6 +130,7 @@ async def list_scheduled_workflows(
                     "scheduled_time": workflow.scheduled_time.isoformat(),
                     "priority": workflow.priority.name,
                     "status": workflow.status.name,
+                    "complexity": workflow.complexity.value,
                     "created_at": workflow.created_at.isoformat(),
                     "template_id": workflow.template_id,
                     "user_id": workflow.user_id,
@@ -167,6 +171,7 @@ async def get_workflow_details(workflow_id: str):
                 "scheduled_time": workflow.scheduled_time.isoformat(),
                 "priority": workflow.priority.name,
                 "status": workflow.status.name,
+                "complexity": workflow.complexity.value,
                 "created_at": workflow.created_at.isoformat(),
                 "template_id": workflow.template_id,
                 "variables": workflow.variables,
@@ -220,6 +225,7 @@ async def reschedule_workflow(workflow_id: str, request: RescheduleRequest):
                 "scheduled_time": workflow.scheduled_time.isoformat(),
                 "priority": workflow.priority.name,
                 "status": workflow.status.name,
+                "complexity": workflow.complexity.value,
             },
         }
 
@@ -282,6 +288,7 @@ async def get_queue_status():
                     "id": workflow.id,
                     "name": workflow.name,
                     "priority": workflow.priority.name,
+                    "complexity": workflow.complexity.value,
                     "estimated_duration_minutes": workflow.estimated_duration_minutes,
                 }
             )
@@ -293,6 +300,7 @@ async def get_queue_status():
                     "id": workflow.id,
                     "name": workflow.name,
                     "priority": workflow.priority.name,
+                    "complexity": workflow.complexity.value,
                     "estimated_duration_minutes": workflow.estimated_duration_minutes,
                 }
             )
@@ -419,6 +427,7 @@ async def schedule_template_workflow(
             user_message=user_message,
             scheduled_time=scheduled_time,
             priority=priority,
+            complexity=template.complexity.value if hasattr(template, 'complexity') else "simple",
             template_id=template_id,
             variables=template_variables,
             auto_approve=auto_approve,
@@ -444,6 +453,7 @@ async def schedule_template_workflow(
                 "scheduled_time": workflow.scheduled_time.isoformat(),
                 "priority": workflow.priority.name,
                 "status": workflow.status.name,
+                "complexity": workflow.complexity.value,
             },
         }
 
@@ -526,6 +536,7 @@ async def batch_schedule_workflows(workflows: List[ScheduleWorkflowRequest]):
                     user_message=request.user_message,
                     scheduled_time=request.scheduled_time,
                     priority=priority,
+                    complexity=request.complexity,
                     template_id=request.template_id,
                     variables=request.variables,
                     auto_approve=request.auto_approve,
