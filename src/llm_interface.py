@@ -8,11 +8,11 @@ import requests
 import torch
 from dotenv import load_dotenv
 
+from src.circuit_breaker import circuit_breaker_async, protected_llm_call
+
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
 from src.prompt_manager import prompt_manager
-from src.retry_mechanism import retry_async, retry_network_operation, RetryStrategy
-from src.circuit_breaker import circuit_breaker_async, protected_llm_call
 
 load_dotenv()
 
@@ -213,13 +213,13 @@ class LLMInterface:
         logger.info(f"Attempting to connect to Ollama at {self.ollama_host}...")
         try:
             health_check_url = f"{self.ollama_host}/api/tags"
-            
+
             # Use retry mechanism for network connection
             async def make_request():
                 return await asyncio.to_thread(
                     requests.get, health_check_url, timeout=5
                 )
-            
+
             response = await retry_network_operation(make_request)
             response.raise_for_status()
 
@@ -248,7 +248,7 @@ class LLMInterface:
 
             if not missing_models:
                 logger.info(
-                    f"✅ Ollama server is reachable and all configured models "
+                    "✅ Ollama server is reachable and all configured models "
                     f"({', '.join(all_configured_ollama_models)}) are available."
                 )
                 return True
@@ -256,7 +256,7 @@ class LLMInterface:
                 models_missing = ", ".join(missing_models)
                 models_available = ", ".join(available_ollama_models)
                 logger.warning(
-                    f"⚠️ Ollama server is reachable, but the following "
+                    "⚠️ Ollama server is reachable, but the following "
                     f"configured models are not found: {models_missing}. "
                     f"Available models: {models_available}"
                 )
@@ -275,7 +275,7 @@ class LLMInterface:
             return False
         except requests.exceptions.RequestException as e:
             logger.error(
-                f"❌ An unexpected error occurred while checking "
+                "❌ An unexpected error occurred while checking "
                 f"Ollama connection: {e}"
             )
             return False
@@ -430,7 +430,9 @@ class LLMInterface:
                 model_name, messages, **llm_params
             )
 
-    @circuit_breaker_async("ollama_service", failure_threshold=3, recovery_timeout=30.0, timeout=120.0)
+    @circuit_breaker_async(
+        "ollama_service", failure_threshold=3, recovery_timeout=30.0, timeout=120.0
+    )
     async def _ollama_chat_completion(
         self,
         model: str,
@@ -478,7 +480,7 @@ class LLMInterface:
                 return await asyncio.to_thread(
                     requests.post, url, headers=headers, json=data, timeout=600
                 )
-            
+
             response = await retry_network_operation(make_llm_request)
 
             print(f"Ollama Raw Response Status: {response.status_code}")
@@ -516,7 +518,9 @@ class LLMInterface:
             )
             return None
 
-    @circuit_breaker_async("openai_service", failure_threshold=2, recovery_timeout=60.0, timeout=120.0)
+    @circuit_breaker_async(
+        "openai_service", failure_threshold=2, recovery_timeout=60.0, timeout=120.0
+    )
     async def _openai_chat_completion(
         self,
         model: str,
@@ -550,7 +554,7 @@ class LLMInterface:
                 return await asyncio.to_thread(
                     requests.post, url, headers=headers, json=data, timeout=600
                 )
-            
+
             response = await retry_network_operation(make_openai_request)
             response.raise_for_status()
             return response.json()

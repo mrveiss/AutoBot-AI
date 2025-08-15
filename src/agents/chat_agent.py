@@ -5,13 +5,13 @@ Handles simple conversational responses with lightweight Llama 3.2 1B model.
 Focuses on quick, natural interactions without complex reasoning.
 """
 
-import json
 import logging
 from typing import Any, Dict, List, Optional
 
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
-from .base_agent import LocalAgent, AgentRequest, AgentResponse
+
+from .base_agent import AgentRequest, AgentResponse, LocalAgent
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class ChatAgent(LocalAgent):
             "conversational_chat",
             "simple_questions",
             "greetings",
-            "basic_explanations"
+            "basic_explanations",
         ]
 
         logger.info(f"Chat Agent initialized with model: {self.model_name}")
@@ -42,14 +42,14 @@ class ChatAgent(LocalAgent):
                 message = request.payload.get("message", "")
                 context = request.context or {}
                 chat_history = request.payload.get("chat_history", [])
-                
+
                 result = await self.process_chat_message(message, context, chat_history)
-                
+
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="success",
-                    result=result
+                    result=result,
                 )
             else:
                 return AgentResponse(
@@ -57,9 +57,9 @@ class ChatAgent(LocalAgent):
                     agent_type=self.agent_type,
                     status="error",
                     result=None,
-                    error=f"Unknown action: {request.action}"
+                    error=f"Unknown action: {request.action}",
                 )
-                
+
         except Exception as e:
             logger.error(f"Chat agent error: {e}")
             return AgentResponse(
@@ -67,7 +67,7 @@ class ChatAgent(LocalAgent):
                 agent_type=self.agent_type,
                 status="error",
                 result=None,
-                error=str(e)
+                error=str(e),
             )
 
     def get_capabilities(self) -> List[str]:

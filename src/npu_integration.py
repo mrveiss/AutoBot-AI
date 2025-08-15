@@ -5,11 +5,12 @@ Provides high-performance processing using NPU worker for heavy computational ta
 """
 
 import asyncio
-import logging
 import json
-from typing import Dict, Any
-import aiohttp
+import logging
 from dataclasses import dataclass
+from typing import Any, Dict
+
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ class NPUWorkerClient:
             # For now, use standard inference endpoint with task-specific prompts
             if task_type == "text_analysis":
                 prompt = (
-                    f"Analyze the following text and extract key insights:\n\n"
+                    "Analyze the following text and extract key insights:\n\n"
                     f"{data.get('text', '')}"
                 )
                 return await self.run_inference(
@@ -150,7 +151,7 @@ class NPUWorkerClient:
 
             elif task_type == "knowledge_processing":
                 prompt = (
-                    f"Process and summarize this knowledge data:\n\n"
+                    "Process and summarize this knowledge data:\n\n"
                     f"{json.dumps(data.get('knowledge_data', {}))}"
                 )
                 return await self.run_inference(

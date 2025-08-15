@@ -11,7 +11,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
-from .base_agent import LocalAgent, AgentRequest, AgentResponse
+
+from .base_agent import AgentRequest, AgentResponse, LocalAgent
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,10 @@ class RAGAgent(LocalAgent):
         self.model_name = global_config_manager.get_task_specific_model("rag")
         self.capabilities = [
             "document_synthesis",
-            "query_reformulation", 
+            "query_reformulation",
             "context_ranking",
             "document_analysis",
-            "knowledge_integration"
+            "knowledge_integration",
         ]
 
         logger.info(f"RAG Agent initialized with model: {self.model_name}")
@@ -41,56 +42,56 @@ class RAGAgent(LocalAgent):
         try:
             action = request.action
             payload = request.payload
-            
+
             if action == "document_query":
                 query = payload.get("query", "")
                 documents = payload.get("documents", [])
                 context = request.context
-                
+
                 result = await self.process_document_query(query, documents, context)
-                
+
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="success",
-                    result=result
+                    result=result,
                 )
-                
+
             elif action == "reformulate_query":
                 query = payload.get("query", "")
                 context = request.context
-                
+
                 result = await self.reformulate_query(query, context)
-                
+
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="success",
-                    result=result
+                    result=result,
                 )
-                
+
             elif action == "rank_documents":
                 query = payload.get("query", "")
                 documents = payload.get("documents", [])
-                
+
                 result = await self.rank_documents(query, documents)
-                
+
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="success",
-                    result=result
+                    result=result,
                 )
-                
+
             else:
                 return AgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="error",
                     result=None,
-                    error=f"Unknown action: {action}"
+                    error=f"Unknown action: {action}",
                 )
-                
+
         except Exception as e:
             logger.error(f"RAG agent error: {e}")
             return AgentResponse(
@@ -98,7 +99,7 @@ class RAGAgent(LocalAgent):
                 agent_type=self.agent_type,
                 status="error",
                 result=None,
-                error=str(e)
+                error=str(e),
             )
 
     def get_capabilities(self) -> List[str]:

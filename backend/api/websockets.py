@@ -54,7 +54,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Map event types to human-readable chat messages
             if message_type == "goal_received":
-                text = f"Goal received: \"{raw_data.get('goal', 'N/A')}\""
+                text = "Goal received: \"{raw_data.get('goal', 'N/A')}\""
             elif message_type == "plan_ready":
                 plan_text = raw_data.get("llm_response", "No plan text available.")
                 text = f"Here is the plan:\n{plan_text}"

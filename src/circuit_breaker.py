@@ -357,9 +357,11 @@ class CircuitBreaker:
             "state": self.state.value,
             "failure_count": self.failure_count,
             "success_count": self.success_count,
-            "time_since_last_failure": current_time - self.last_failure_time
-            if self.last_failure_time
-            else None,
+            "time_since_last_failure": (
+                current_time - self.last_failure_time
+                if self.last_failure_time
+                else None
+            ),
             "time_in_current_state": current_time - self.state_change_time,
             "can_execute": self._can_execute(),
             "config": {

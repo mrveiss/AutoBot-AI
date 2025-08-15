@@ -6,7 +6,6 @@ Uses LLM reasoning to understand user intent and classify workflow complexity
 import json
 import logging
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from src.autobot_types import TaskComplexity
@@ -151,7 +150,7 @@ Please provide your analysis in the following JSON format:
     "intent": "What the user wants to accomplish",
     "scope": "single|multi-step",
     "risk_level": "low|medium|high",
-    "suggested_agents": ["list", "of", "relevant", "agents"],
+    "suggested_agents": ["list", "o", "relevant", "agents"],
     "estimated_steps": 1-10,
     "user_approval_needed": true/false,
     "system_changes": true/false,

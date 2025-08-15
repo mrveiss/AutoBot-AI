@@ -8,8 +8,8 @@ from the system's man pages into the knowledge base for enhanced command assista
 import json
 import logging
 import re
-import subprocess
 import sqlite3
+import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -148,7 +148,7 @@ class CommandManualManager:
                 "pip",
                 "apt",
                 "yum",
-                "dnf",
+                "dn",
             ],
             "LOW": [
                 "ls",
@@ -171,7 +171,7 @@ class CommandManualManager:
                 "top",
                 "htop",
                 "free",
-                "df",
+                "d",
                 "du",
                 "uptime",
                 "whoami",
@@ -180,7 +180,7 @@ class CommandManualManager:
                 "date",
                 "cal",
                 "echo",
-                "printf",
+                "print",
                 "wc",
                 "sort",
                 "uniq",
@@ -247,7 +247,7 @@ class CommandManualManager:
                 "sort",
                 "uniq",
                 "wc",
-                "diff",
+                "dif",
                 "comm",
                 "join",
                 "paste",
@@ -295,7 +295,7 @@ class CommandManualManager:
                 "killall",
                 "pgrep",
                 "pkill",
-                "pidof",
+                "pido",
                 "nice",
                 "renice",
                 "screen",
@@ -310,7 +310,7 @@ class CommandManualManager:
                 "who",
                 "uptime",
                 "free",
-                "df",
+                "d",
                 "du",
                 "lscpu",
                 "lsmem",
@@ -341,7 +341,7 @@ class CommandManualManager:
                 "apt-get",
                 "dpkg",
                 "yum",
-                "dnf",
+                "dn",
                 "rpm",
                 "zypper",
                 "pacman",

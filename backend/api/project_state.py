@@ -7,18 +7,19 @@ Exposes project development phase information and validation status
 import logging
 import os
 import sys
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, List, Optional
 
 # Add project root to path and import project state manager
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.project_state_manager import get_project_state_manager, DevelopmentPhase
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
+from src.project_state_manager import DevelopmentPhase, get_project_state_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/project", tags=["project_state"])
+
 
 # Pydantic models for API responses
 class PhaseStatus(BaseModel):
@@ -29,6 +30,7 @@ class PhaseStatus(BaseModel):
     capabilities: int
     implemented_capabilities: int
 
+
 class ProjectStatus(BaseModel):
     current_phase: str
     total_phases: int
@@ -38,12 +40,14 @@ class ProjectStatus(BaseModel):
     next_suggested_phase: Optional[str]
     phases: Dict[str, PhaseStatus]
 
+
 class ValidationResultModel(BaseModel):
     check_name: str
     status: str
     score: float
     details: str
     timestamp: str
+
 
 class PhaseValidationModel(BaseModel):
     phase_name: str
@@ -59,22 +63,26 @@ async def get_project_status():
     try:
         manager = get_project_state_manager()
         status = manager.get_project_status()
-        
+
         # Convert to Pydantic models
         phases = {}
         for phase_id, phase_data in status["phases"].items():
             phases[phase_id] = PhaseStatus(**phase_data)
-        
+
         return ProjectStatus(
             current_phase=status["current_phase"],
             total_phases=status["total_phases"],
             completed_phases=status["completed_phases"],
             active_phases=status["active_phases"],
             overall_completion=status["overall_completion"],
-            next_suggested_phase=str(status["next_suggested_phase"]) if status["next_suggested_phase"] else None,
-            phases=phases
+            next_suggested_phase=(
+                str(status["next_suggested_phase"])
+                if status["next_suggested_phase"]
+                else None
+            ),
+            phases=phases,
         )
-        
+
     except Exception as e:
         logger.error(f"Error getting project status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -86,12 +94,12 @@ async def run_validation():
     try:
         manager = get_project_state_manager()
         validation_results = manager.validate_all_phases()
-        
+
         # Convert results to API format
         results = {}
         for phase, validations in validation_results.items():
             phase_info = manager.phases[phase]
-            
+
             results[phase.value] = PhaseValidationModel(
                 phase_name=phase_info.name,
                 completion_percentage=phase_info.completion_percentage,
@@ -103,18 +111,14 @@ async def run_validation():
                         status=result.status.value,
                         score=result.score,
                         details=result.details,
-                        timestamp=result.timestamp.isoformat()
+                        timestamp=result.timestamp.isoformat(),
                     )
                     for result in validations
-                ]
+                ],
             )
-        
-        return {
-            "success": True,
-            "message": "Validation completed",
-            "results": results
-        }
-        
+
+        return {"success": True, "message": "Validation completed", "results": results}
+
     except Exception as e:
         logger.error(f"Error running validation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -126,13 +130,17 @@ async def get_validation_report():
     try:
         manager = get_project_state_manager()
         report = manager.generate_validation_report()
-        
+
         return {
             "success": True,
             "report": report,
-            "generated_at": manager.phases[manager.current_phase].last_validated.isoformat() if manager.phases[manager.current_phase].last_validated else None
+            "generated_at": (
+                manager.phases[manager.current_phase].last_validated.isoformat()
+                if manager.phases[manager.current_phase].last_validated
+                else None
+            ),
         }
-        
+
     except Exception as e:
         logger.error(f"Error generating validation report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -143,39 +151,47 @@ async def get_all_phases():
     """Get detailed information about all development phases"""
     try:
         manager = get_project_state_manager()
-        
+
         phases_data = {}
         for phase, info in manager.phases.items():
             capabilities = []
             for cap in info.capabilities:
-                capabilities.append({
-                    "name": cap.name,
-                    "description": cap.description,
-                    "validation_method": cap.validation_method,
-                    "validation_target": cap.validation_target,
-                    "required": cap.required,
-                    "implemented": cap.implemented,
-                    "last_validated": cap.last_validated.isoformat() if cap.last_validated else None,
-                    "validation_details": cap.validation_details
-                })
-            
+                capabilities.append(
+                    {
+                        "name": cap.name,
+                        "description": cap.description,
+                        "validation_method": cap.validation_method,
+                        "validation_target": cap.validation_target,
+                        "required": cap.required,
+                        "implemented": cap.implemented,
+                        "last_validated": (
+                            cap.last_validated.isoformat()
+                            if cap.last_validated
+                            else None
+                        ),
+                        "validation_details": cap.validation_details,
+                    }
+                )
+
             phases_data[phase.value] = {
                 "name": info.name,
                 "description": info.description,
                 "completion_percentage": info.completion_percentage,
                 "is_active": info.is_active,
                 "is_completed": info.is_completed,
-                "last_validated": info.last_validated.isoformat() if info.last_validated else None,
+                "last_validated": (
+                    info.last_validated.isoformat() if info.last_validated else None
+                ),
                 "prerequisites": [p.value for p in info.prerequisites],
-                "capabilities": capabilities
+                "capabilities": capabilities,
             }
-        
+
         return {
             "success": True,
             "current_phase": manager.current_phase.value,
-            "phases": phases_data
+            "phases": phases_data,
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting phases: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -186,30 +202,30 @@ async def activate_phase(phase_id: str):
     """Activate a specific development phase"""
     try:
         manager = get_project_state_manager()
-        
+
         # Validate phase exists
         try:
             phase = DevelopmentPhase(phase_id)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid phase: {phase_id}")
-        
+
         if phase not in manager.phases:
             raise HTTPException(status_code=404, detail=f"Phase not found: {phase_id}")
-        
+
         # Deactivate all other phases
         for p, info in manager.phases.items():
-            info.is_active = (p == phase)
-        
+            info.is_active = p == phase
+
         # Update current phase
         manager.current_phase = phase
         manager.save_state()
-        
+
         return {
             "success": True,
             "message": f"Phase {phase_id} activated",
-            "current_phase": manager.current_phase.value
+            "current_phase": manager.current_phase.value,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -223,13 +239,13 @@ async def auto_progress_phases():
     try:
         manager = get_project_state_manager()
         result = manager.auto_progress_phases()
-        
+
         return {
             "success": True,
             "message": "Auto progression completed",
-            "progression_result": result
+            "progression_result": result,
         }
-        
+
     except Exception as e:
         logger.error(f"Error during auto progression: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -241,14 +257,18 @@ async def health_check():
     try:
         manager = get_project_state_manager()
         status = manager.get_project_status()
-        
+
         return {
             "status": "healthy",
             "current_phase": status["current_phase"],
             "overall_completion": status["overall_completion"],
-            "timestamp": manager.phases[manager.current_phase].last_validated.isoformat() if manager.phases[manager.current_phase].last_validated else None
+            "timestamp": (
+                manager.phases[manager.current_phase].last_validated.isoformat()
+                if manager.phases[manager.current_phase].last_validated
+                else None
+            ),
         }
-        
+
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

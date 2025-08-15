@@ -5,7 +5,6 @@ Manages hardware acceleration with priority: NPU > GPU > CPU
 Optimizes model execution across different hardware targets.
 """
 
-import json
 import logging
 import os
 import platform
@@ -46,7 +45,7 @@ class HardwareAccelerationManager:
         self._detect_available_hardware()
         self._configure_device_priorities()
 
-        logger.info(f"Hardware Acceleration Manager initialized")
+        logger.info("Hardware Acceleration Manager initialized")
         logger.info(f"Available devices: {list(self.available_devices.keys())}")
 
     def _detect_available_hardware(self):

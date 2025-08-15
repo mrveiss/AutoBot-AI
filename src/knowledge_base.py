@@ -140,7 +140,7 @@ class KnowledgeBase:
                             model=fallback_model, base_url=llm_base_url
                         )
                         logging.info(
-                            f"KnowledgeBase: Successfully initialized with "
+                            "KnowledgeBase: Successfully initialized with "
                             f"fallback model '{fallback_model}'"
                         )
                         model_initialized = True
@@ -158,7 +158,7 @@ class KnowledgeBase:
                         "KnowledgeBase will be disabled."
                     )
                     raise Exception(
-                        f"No available Ollama models found. "
+                        "No available Ollama models found. "
                         f"Original error with '{llm_model}': {e}"
                     )
 
@@ -167,7 +167,7 @@ class KnowledgeBase:
                     model_name=self.embedding_model_name, base_url=llm_base_url
                 )
                 logging.info(
-                    f"KnowledgeBase: Successfully initialized embedding model "
+                    "KnowledgeBase: Successfully initialized embedding model "
                     f"'{self.embedding_model_name}'"
                 )
             except Exception as e:
@@ -208,7 +208,7 @@ class KnowledgeBase:
                 logging.info(f"Detected embedding dimension: {embedding_dim}")
             except Exception as e:
                 logging.warning(
-                    f"Could not detect embedding dimension, using default "
+                    "Could not detect embedding dimension, using default "
                     f"{embedding_dim}: {e}"
                 )
 
@@ -226,7 +226,7 @@ class KnowledgeBase:
                 redis_kwargs={"db": self.redis_db},
             )
             logging.info(
-                f"LlamaIndex RedisVectorStore initialized with index: "
+                "LlamaIndex RedisVectorStore initialized with index: "
                 f"{self.redis_index_name}"
             )
         except ImportError as e:
@@ -316,7 +316,7 @@ class KnowledgeBase:
             if file_type == "txt":
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
-            elif file_type == "pdf":
+            elif file_type == "pd":
                 reader = PdfReader(file_path)
                 for page in reader.pages:
                     content += page.extract_text() + "\n"
@@ -329,7 +329,7 @@ class KnowledgeBase:
                     content += para.text + "\n"
             else:
                 logging.warning(
-                    f"Unsupported file type for direct loading by LlamaIndex: "
+                    "Unsupported file type for direct loading by LlamaIndex: "
                     f"{file_type}. Attempting as generic text."
                 )
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:

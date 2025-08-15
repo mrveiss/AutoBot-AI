@@ -24,7 +24,7 @@ class SecurityLayer:
 
         os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
         print(
-            f"SecurityLayer initialized. Authentication enabled: " f"{self.enable_auth}"
+            "SecurityLayer initialized. Authentication enabled: " f"{self.enable_auth}"
         )
         print(f"Audit log file: {self.audit_log_file}")
 
@@ -146,7 +146,7 @@ class SecurityLayer:
             print(f"Audit log: {action} by {user} - {outcome}")
         except Exception as e:
             print(
-                f"ERROR: Failed to write to audit log file "
+                "ERROR: Failed to write to audit log file "
                 f"{self.audit_log_file}: {e}"
             )
 
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     print("\n--- Testing with Authentication DISABLED ---")
     security = SecurityLayer()
     print(
-        f"Can 'user' execute shell command? "
+        "Can 'user' execute shell command? "
         f"{security.check_permission('user', 'allow_shell_execute')}"
     )
     security.audit_log(
@@ -212,25 +212,25 @@ if __name__ == "__main__":
 
     # Test authentication
     print(
-        f"Authenticate 'testuser': "
+        "Authenticate 'testuser': "
         f"{security_enabled.authenticate_user('testuser', 'password123')}"
     )
     print(
-        f"Authenticate 'baduser': "
+        "Authenticate 'baduser': "
         f"{security_enabled.authenticate_user('baduser', 'wrongpass')}"
     )
 
     # Test permissions
     print(
-        f"Can 'admin' execute shell command? "
+        "Can 'admin' execute shell command? "
         f"{security_enabled.check_permission('admin', 'allow_shell_execute')}"
     )
     print(
-        f"Can 'testuser_role' execute shell command? "
+        "Can 'testuser_role' execute shell command? "
         f"{security_enabled.check_permission('testuser_role', 'allow_shell_execute')}"
     )
     print(
-        f"Can 'testuser_role' submit goal? "
+        "Can 'testuser_role' submit goal? "
         f"{security_enabled.check_permission('testuser_role', 'allow_goal_submission')}"
     )
 

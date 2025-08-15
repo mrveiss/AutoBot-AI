@@ -294,10 +294,8 @@ async def execute_template_workflow(
         # Execute the workflow using the workflow API
         from fastapi import BackgroundTasks
 
-        from backend.api.workflow import (
-            WorkflowExecutionRequest as WorkflowExecRequest,
-            execute_workflow,
-        )
+        from backend.api.workflow import WorkflowExecutionRequest as WorkflowExecRequest
+        from backend.api.workflow import execute_workflow
 
         # Create execution request
         execution_request = WorkflowExecRequest(

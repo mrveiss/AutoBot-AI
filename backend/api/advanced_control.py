@@ -4,10 +4,7 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 """
 
 import asyncio
-import json
 import logging
-import os
-import subprocess
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -324,9 +321,9 @@ async def get_system_status():
             "memory_percent": psutil.virtual_memory().percent,
             "disk_usage": psutil.disk_usage("/").percent,
             "process_count": len(psutil.pids()),
-            "load_average": psutil.getloadavg()
-            if hasattr(psutil, "getloadavg")
-            else None,
+            "load_average": (
+                psutil.getloadavg() if hasattr(psutil, "getloadavg") else None
+            ),
         }
 
         # Get streaming sessions
@@ -335,8 +332,6 @@ async def get_system_status():
         # Get takeover data
         pending_takeovers = takeover_manager.get_pending_requests()
         active_takeovers = takeover_manager.get_active_sessions()
-        takeover_status = takeover_manager.get_system_status()
-
         system_status = {
             "status": "healthy",
             "timestamp": psutil.boot_time(),

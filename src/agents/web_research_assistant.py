@@ -208,7 +208,7 @@ class WebResearchAssistant:
                     ),
                     "domain": "example.com",
                     "content": f"This is general content about {query}. "
-                    f"It includes basic information and common use cases.",
+                    "It includes basic information and common use cases.",
                 }
             ]
 
@@ -458,7 +458,7 @@ security auditing tool.
         content = source["content"]
         url = source["url"]
 
-        formatted_content = f"""
+        formatted_content = """
 Title: {title}
 Source: {url}
 Query Context: {query}
