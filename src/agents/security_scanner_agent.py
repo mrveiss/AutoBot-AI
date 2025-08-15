@@ -312,7 +312,7 @@ class SecurityScannerAgent:
                                     "message": "Robots.txt file found",
                                 }
                             )
-                except:
+                except Exception:
                     pass
 
                 # Check common admin paths
@@ -329,7 +329,7 @@ class SecurityScannerAgent:
                                         "message": f"Potentially sensitive path accessible",
                                     }
                                 )
-                    except:
+                    except Exception:
                         pass
 
             return {
@@ -346,16 +346,19 @@ class SecurityScannerAgent:
     async def _run_command(self, cmd: List[str], timeout: int = 60) -> Dict[str, Any]:
         """Run a command with timeout - wrapper around common utility"""
         result = await execute_shell_command(cmd, timeout=timeout)
-        
+
         # Convert to expected format for this agent
         if result["status"] == "success":
             return {"status": "success", "output": result["stdout"]}
         else:
             # Combine stderr and error info for backward compatibility
-            error_msg = result["stderr"] or f"Command failed with return code {result['return_code']}"
+            error_msg = (
+                result["stderr"]
+                or f"Command failed with return code {result['return_code']}"
+            )
             if result["status"] == "timeout":
                 error_msg = f"Command timed out after {timeout} seconds"
-            
+
             return {
                 "status": "error",
                 "message": error_msg,

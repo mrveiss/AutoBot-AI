@@ -5,13 +5,14 @@ AutoBot System Monitor - Real-time monitoring of optimized system performance.
 
 import asyncio
 import json
-import time
 import subprocess
 import sys
+import time
 from datetime import datetime
-from typing import Dict, Any
-import requests
+from typing import Any, Dict
+
 import psutil
+import requests
 
 
 class AutoBotMonitor:
@@ -78,7 +79,7 @@ class AutoBotMonitor:
                     cpuinfo = f.read()
                     if "Intel(R) Core(TM) Ultra" in cpuinfo:
                         npu_status["hardware_detected"] = True
-            except:
+            except Exception:
                 pass
 
             # Check if running in WSL
@@ -87,7 +88,7 @@ class AutoBotMonitor:
                     version_info = f.read()
                     if "WSL" in version_info or "Microsoft" in version_info:
                         npu_status["wsl_limitation"] = True
-            except:
+            except Exception:
                 pass
 
             # Check OpenVINO NPU support
@@ -116,7 +117,7 @@ class AutoBotMonitor:
                         if "intel_npu" in device or "npu" in device.lower():
                             npu_devices.append(device)
                             npu_status["driver_available"] = True
-            except:
+            except Exception:
                 pass
 
             # Try to get NPU utilization from Intel GPU Top (if available)
@@ -133,7 +134,7 @@ class AutoBotMonitor:
                     if "NPU" in output or "Neural" in output:
                         npu_status["driver_available"] = True
                         # Parse utilization if available
-            except:
+            except Exception:
                 pass
 
             return npu_status
@@ -210,7 +211,7 @@ class AutoBotMonitor:
                             timeout=10,
                         )
                         model_info["accessible"] = test_response.status_code == 200
-                    except:
+                    except Exception:
                         model_info["accessible"] = False
 
                     models.append(model_info)
@@ -292,7 +293,7 @@ class AutoBotMonitor:
                     timeout=5,
                 )
                 services["playwright"]["browsers_available"] = result.returncode == 0
-            except:
+            except Exception:
                 services["playwright"]["browsers_available"] = False
         except ImportError:
             services["playwright"] = {

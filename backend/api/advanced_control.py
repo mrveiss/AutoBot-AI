@@ -10,12 +10,12 @@ import os
 import subprocess
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Request
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from src.desktop_streaming_manager import desktop_streaming
-from src.takeover_manager import takeover_manager, TakeoverTrigger
 from src.enhanced_memory_manager import TaskPriority
+from src.takeover_manager import TakeoverTrigger, takeover_manager
 from src.task_execution_tracker import task_tracker
 
 logger = logging.getLogger(__name__)
@@ -77,25 +77,20 @@ async def create_streaming_session(request: StreamingSessionRequest):
             f"Creating streaming session for user {request.user_id}",
             agent_type="advanced_control",
             priority=TaskPriority.HIGH,
-            inputs={"user_id": request.user_id, "resolution": request.resolution}
+            inputs={"user_id": request.user_id, "resolution": request.resolution},
         ) as task_context:
-            
-            session_config = {
-                "resolution": request.resolution,
-                "depth": request.depth
-            }
-            
+            session_config = {"resolution": request.resolution, "depth": request.depth}
+
             result = await desktop_streaming.create_streaming_session(
-                user_id=request.user_id,
-                session_config=session_config
+                user_id=request.user_id, session_config=session_config
             )
-            
+
             response = StreamingSessionResponse(**result)
             task_context.set_outputs({"session_id": response.session_id})
-            
+
             logger.info(f"Desktop streaming session created: {response.session_id}")
             return response
-            
+
     except Exception as e:
         logger.error(f"Failed to create streaming session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -151,23 +146,25 @@ async def request_takeover(request: TakeoverRequest):
             "USER_INTERVENTION_REQUIRED": TakeoverTrigger.USER_INTERVENTION_REQUIRED,
             "SYSTEM_OVERLOAD": TakeoverTrigger.SYSTEM_OVERLOAD,
             "APPROVAL_REQUIRED": TakeoverTrigger.APPROVAL_REQUIRED,
-            "TIMEOUT_EXCEEDED": TakeoverTrigger.TIMEOUT_EXCEEDED
+            "TIMEOUT_EXCEEDED": TakeoverTrigger.TIMEOUT_EXCEEDED,
         }
-        
+
         trigger = trigger_mapping.get(request.trigger.upper())
         if not trigger:
-            raise HTTPException(status_code=400, detail=f"Invalid trigger: {request.trigger}")
-        
+            raise HTTPException(
+                status_code=400, detail=f"Invalid trigger: {request.trigger}"
+            )
+
         # Convert priority string to TaskPriority
         priority_mapping = {
             "LOW": TaskPriority.LOW,
             "MEDIUM": TaskPriority.MEDIUM,
             "HIGH": TaskPriority.HIGH,
-            "CRITICAL": TaskPriority.CRITICAL
+            "CRITICAL": TaskPriority.CRITICAL,
         }
-        
+
         priority = priority_mapping.get(request.priority.upper(), TaskPriority.HIGH)
-        
+
         request_id = await takeover_manager.request_takeover(
             trigger=trigger,
             reason=request.reason,
@@ -175,12 +172,12 @@ async def request_takeover(request: TakeoverRequest):
             affected_tasks=request.affected_tasks,
             priority=priority,
             timeout_minutes=request.timeout_minutes,
-            auto_approve=request.auto_approve
+            auto_approve=request.auto_approve,
         )
-        
+
         logger.info(f"Takeover requested: {request_id}")
         return {"success": True, "request_id": request_id}
-        
+
     except Exception as e:
         logger.error(f"Failed to request takeover: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -193,12 +190,12 @@ async def approve_takeover(request_id: str, approval: TakeoverApprovalRequest):
         session_id = await takeover_manager.approve_takeover(
             request_id=request_id,
             human_operator=approval.human_operator,
-            takeover_scope=approval.takeover_scope
+            takeover_scope=approval.takeover_scope,
         )
-        
+
         logger.info(f"Takeover approved: {request_id} -> {session_id}")
         return {"success": True, "session_id": session_id}
-        
+
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
@@ -215,12 +212,14 @@ async def execute_takeover_action(session_id: str, action: TakeoverActionRequest
         result = await takeover_manager.execute_takeover_action(
             session_id=session_id,
             action_type=action.action_type,
-            action_data=action.action_data
+            action_data=action.action_data,
         )
-        
-        logger.info(f"Takeover action executed: {action.action_type} in session {session_id}")
+
+        logger.info(
+            f"Takeover action executed: {action.action_type} in session {session_id}"
+        )
         return {"success": True, "result": result}
-        
+
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -236,7 +235,9 @@ async def pause_takeover_session(session_id: str):
         if success:
             return {"success": True, "session_id": session_id, "status": "paused"}
         else:
-            raise HTTPException(status_code=404, detail="Session not found or not pausable")
+            raise HTTPException(
+                status_code=404, detail="Session not found or not pausable"
+            )
     except Exception as e:
         logger.error(f"Failed to pause takeover session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -250,25 +251,24 @@ async def resume_takeover_session(session_id: str):
         if success:
             return {"success": True, "session_id": session_id, "status": "active"}
         else:
-            raise HTTPException(status_code=404, detail="Session not found or not resumable")
+            raise HTTPException(
+                status_code=404, detail="Session not found or not resumable"
+            )
     except Exception as e:
         logger.error(f"Failed to resume takeover session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/takeover/sessions/{session_id}/complete")
-async def complete_takeover_session(
-    session_id: str, 
-    completion_data: Dict[str, Any]
-):
+async def complete_takeover_session(session_id: str, completion_data: Dict[str, Any]):
     """Complete a takeover session and return control"""
     try:
         success = await takeover_manager.complete_takeover_session(
             session_id=session_id,
             resolution=completion_data.get("resolution", "Session completed"),
-            handback_notes=completion_data.get("handback_notes")
+            handback_notes=completion_data.get("handback_notes"),
         )
-        
+
         if success:
             return {"success": True, "session_id": session_id, "status": "completed"}
         else:
@@ -318,40 +318,42 @@ async def get_system_status():
     try:
         # Get resource usage
         import psutil
-        
+
         resource_usage = {
             "cpu_percent": psutil.cpu_percent(),
             "memory_percent": psutil.virtual_memory().percent,
-            "disk_usage": psutil.disk_usage('/').percent,
+            "disk_usage": psutil.disk_usage("/").percent,
             "process_count": len(psutil.pids()),
-            "load_average": psutil.getloadavg() if hasattr(psutil, 'getloadavg') else None
+            "load_average": psutil.getloadavg()
+            if hasattr(psutil, "getloadavg")
+            else None,
         }
-        
+
         # Get streaming sessions
         streaming_sessions = desktop_streaming.vnc_manager.list_active_sessions()
-        
+
         # Get takeover data
         pending_takeovers = takeover_manager.get_pending_requests()
         active_takeovers = takeover_manager.get_active_sessions()
         takeover_status = takeover_manager.get_system_status()
-        
+
         system_status = {
             "status": "healthy",
             "timestamp": psutil.boot_time(),
             "uptime_seconds": psutil.boot_time(),
-            "streaming_capabilities": desktop_streaming.get_system_capabilities()
+            "streaming_capabilities": desktop_streaming.get_system_capabilities(),
         }
-        
+
         response = SystemMonitoringResponse(
             system_status=system_status,
             active_sessions=streaming_sessions,
             pending_takeovers=pending_takeovers,
             active_takeovers=active_takeovers,
-            resource_usage=resource_usage
+            resource_usage=resource_usage,
         )
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Failed to get system status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -367,16 +369,16 @@ async def emergency_system_stop():
             reason="Emergency stop activated",
             requesting_agent="emergency_system",
             priority=TaskPriority.CRITICAL,
-            auto_approve=True
+            auto_approve=True,
         )
-        
+
         logger.warning(f"Emergency stop activated: {request_id}")
         return {
-            "success": True, 
+            "success": True,
             "message": "Emergency stop activated",
-            "takeover_request_id": request_id
+            "takeover_request_id": request_id,
         }
-        
+
     except Exception as e:
         logger.error(f"Emergency stop failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -390,20 +392,19 @@ async def get_system_health():
             "status": "healthy",
             "desktop_streaming_available": desktop_streaming.vnc_manager.vnc_available,
             "novnc_available": desktop_streaming.vnc_manager.novnc_available,
-            "active_streaming_sessions": len(desktop_streaming.vnc_manager.active_sessions),
+            "active_streaming_sessions": len(
+                desktop_streaming.vnc_manager.active_sessions
+            ),
             "pending_takeovers": len(takeover_manager.pending_requests),
             "active_takeovers": len(takeover_manager.active_sessions),
-            "paused_tasks": len(takeover_manager.paused_tasks)
+            "paused_tasks": len(takeover_manager.paused_tasks),
         }
-        
+
         return health_status
-        
+
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+        return {"status": "unhealthy", "error": str(e)}
 
 
 # WebSocket endpoint for real-time monitoring
@@ -412,30 +413,26 @@ async def monitoring_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time system monitoring"""
     await websocket.accept()
     logger.info("Monitoring WebSocket client connected")
-    
+
     try:
         while True:
             # Send periodic system updates
             try:
                 health_data = await get_system_health()
-                await websocket.send_json({
-                    "type": "system_health",
-                    "data": health_data
-                })
-                
+                await websocket.send_json(
+                    {"type": "system_health", "data": health_data}
+                )
+
                 # Wait for next update cycle
                 await asyncio.sleep(5)
-                
+
             except WebSocketDisconnect:
                 break
             except Exception as e:
                 logger.error(f"Error in monitoring WebSocket: {e}")
-                await websocket.send_json({
-                    "type": "error",
-                    "message": str(e)
-                })
+                await websocket.send_json({"type": "error", "message": str(e)})
                 break
-                
+
     except WebSocketDisconnect:
         logger.info("Monitoring WebSocket client disconnected")
     except Exception as e:
@@ -443,7 +440,7 @@ async def monitoring_websocket(websocket: WebSocket):
     finally:
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
 
 
@@ -452,12 +449,11 @@ async def monitoring_websocket(websocket: WebSocket):
 async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for desktop streaming control"""
     await websocket.accept()
-    
+
     try:
         # Use the desktop streaming manager's WebSocket handler
         await desktop_streaming.handle_websocket_client(
-            websocket, 
-            f"/ws/desktop/{session_id}"
+            websocket, f"/ws/desktop/{session_id}"
         )
     except WebSocketDisconnect:
         logger.info(f"Desktop streaming WebSocket client disconnected: {session_id}")
@@ -473,10 +469,10 @@ async def advanced_control_info():
         "version": "1.0.0",
         "features": [
             "Desktop streaming with NoVNC",
-            "Human-in-the-loop takeover management", 
+            "Human-in-the-loop takeover management",
             "Real-time system monitoring",
             "WebSocket-based control interfaces",
-            "Emergency stop capabilities"
+            "Emergency stop capabilities",
         ],
         "endpoints": {
             "streaming": "/api/control/streaming/",
@@ -484,7 +480,7 @@ async def advanced_control_info():
             "system": "/api/control/system/",
             "websockets": {
                 "monitoring": "/api/control/ws/monitoring",
-                "desktop": "/api/control/ws/desktop/{session_id}"
-            }
-        }
+                "desktop": "/api/control/ws/desktop/{session_id}",
+            },
+        },
     }
