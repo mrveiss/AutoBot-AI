@@ -3,13 +3,6 @@ Integration tests for complete AutoBot system workflows
 Tests how different system components work together end-to-end
 """
 
-import asyncio
-import json
-import os
-import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 from fastapi.testclient import TestClient
 
 # Import system components
@@ -48,7 +41,7 @@ class TestAutoBootSystemIntegration:
         # Note: Some may not be initialized until lifespan events
 
         expected_components = [
-            "enhanced_security_layer",  # Should always be present (updated from security_layer)
+            "enhanced_security_layer",  # Should always be present
         ]
 
         for component in expected_components:
@@ -102,8 +95,6 @@ class TestWorkflowIntegration:
         status_response = self.client.get("/api/security/status")
         assert status_response.status_code == 200
         status_data = status_response.json()
-
-        initial_enabled = status_data.get("security_enabled", False)
 
         # 2. Check command history (should be empty initially)
         history_response = self.client.get("/api/security/command-history")
@@ -232,7 +223,6 @@ class TestSystemResilience:
     def test_concurrent_request_handling(self):
         """Test system handles concurrent requests properly"""
         import threading
-        import time
 
         results = []
         errors = []
