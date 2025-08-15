@@ -23,7 +23,19 @@ RUN apt-get update && apt-get install -y \
     ocl-icd-libopencl1 \
     opencl-headers \
     clinfo \
+    # Intel NPU driver dependencies
+    git-lfs \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Intel NPU driver in container
+RUN git clone https://github.com/intel/linux-npu-driver.git /tmp/npu-driver && \
+    cd /tmp/npu-driver && \
+    git submodule update --init --recursive && \
+    cmake -B build -S . && \
+    cmake --build build --parallel $(nproc) && \
+    cmake --install build && \
+    ldconfig && \
+    rm -rf /tmp/npu-driver
 
 # Create app directories
 RUN mkdir -p /app/src /app/data /app/models /app/logs
