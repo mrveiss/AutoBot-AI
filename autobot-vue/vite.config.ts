@@ -30,6 +30,13 @@ export default defineConfig({
     headers: {
       'X-Content-Type-Options': 'nosniff'
       // Removed Content-Security-Policy to avoid unneeded headers
+    },
+    proxy: {
+      '/vnc-proxy': {
+        target: 'http://localhost:6080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/vnc-proxy/, '')
+      }
     }
   },
   build: {
