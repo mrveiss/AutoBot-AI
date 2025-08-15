@@ -14,10 +14,10 @@ AutoBot is a production-ready autonomous AI platform featuring multi-agent orche
 # Clone and setup
 git clone <repository-url>
 cd AutoBot
-./setup_agent.sh
+./scripts/setup/setup_agent.sh
 
-# Start hybrid deployment
-./run_hybrid.sh
+# Start full system
+./run_agent.sh
 
 # Access AutoBot
 open http://localhost:5173
@@ -28,6 +28,38 @@ open http://localhost:5173
 - [📁 Documentation Structure](#-documentation-structure)
 - [🏗️ Architecture Overview](#️-architecture-overview)
 - [🛠️ Installation & Setup](#️-installation--setup)
+- [📚 Additional Documentation](#-additional-documentation)
+
+## 📚 Additional Documentation
+
+For comprehensive documentation, explore the organized `docs/` folder:
+
+### 🎯 Quick Links
+- **🚀 Getting Started**: [Installation Guide](docs/user_guide/01-installation.md) | [Quick Start](docs/user_guide/02-quickstart.md)
+- **🏗️ Architecture**: [System Design](docs/architecture/NPU_WORKER_ARCHITECTURE.json) | [Development Guide](docs/developer/01-architecture.md)
+- **🛠️ Configuration**: [Setup Guide](docs/user_guide/03-configuration.md) | [Port Mappings](docs/guides/PORT_MAPPINGS.md)
+- **🔄 Migration**: [Error Handling Migration](docs/migration/ERROR_HANDLING_MIGRATION_GUIDE.md)
+- **📖 Full Documentation**: [Complete Index](docs/INDEX.md)
+- **📊 Reports**: [Testing Reports](docs/testing/) | [Legacy Analysis](docs/reports/legacy/)
+
+## 📁 Documentation Structure
+
+AutoBot documentation is organized in the `docs/` folder:
+
+```
+docs/
+├── user_guide/           # User installation and setup guides
+├── deployment/           # Docker and deployment configurations
+├── features/            # Feature-specific documentation
+├── security/            # Security implementation guides
+├── workflow/            # Workflow orchestration documentation
+├── testing/             # Testing frameworks and reports
+├── migration/           # Migration guides and procedures
+├── architecture/        # System architecture and design
+├── guides/              # Configuration templates and guides
+├── reports/legacy/      # Historical analysis reports
+└── logs/legacy/         # Legacy log files
+```
 - [🔧 Configuration](#-configuration)
 - [🐳 Deployment](#-deployment)
 - [🧪 Development](#-development)
@@ -139,13 +171,13 @@ docker-compose -f docker-compose.hybrid.yml --profile npu up -d
 
 ### Core Configuration Files
 - [`config/config.yaml`](config/config.yaml) - Main system configuration
-- [`config/settings.json`](config/settings.json) - User-specific settings  
+- [`config/settings.json`](config/settings.json) - User-specific settings
 - [`CLAUDE.md`](CLAUDE.md) - Claude Code integration settings
 - [`.env`](.env) - Environment variables
 
 ### Key Configuration Areas
 - **🤖 LLM Providers**: OpenAI, Ollama, Anthropic integration
-- **🗄️ Knowledge Base**: Vector store and embedding configuration  
+- **🗄️ Knowledge Base**: Vector store and embedding configuration
 - **🔐 Security**: Authentication and authorization settings
 - **🌐 Network**: API endpoints and service discovery
 - **📊 Monitoring**: Logging and metrics collection
@@ -169,7 +201,7 @@ See [Configuration Guide](docs/user_guide/03-configuration.md) for detailed setu
 
 ### Deployment Options
 - [🐳 Hybrid Deployment](docs/deployment/HYBRID_DEPLOYMENT_GUIDE.md) - Recommended production setup
-- [📦 Docker Architecture](docs/deployment/DOCKER_ARCHITECTURE.md) - Container orchestration  
+- [📦 Docker Architecture](docs/deployment/DOCKER_ARCHITECTURE.md) - Container orchestration
 - [🏗️ CI/CD Pipeline](docs/deployment/CI_PIPELINE_SETUP.md) - Automated deployment
 - [☁️ Docker Migration](docs/deployment/DOCKER_MIGRATION_NOTES.md) - Migration strategies
 
@@ -182,15 +214,15 @@ See [Configuration Guide](docs/user_guide/03-configuration.md) for detailed setu
 ## 🧪 Development
 
 ### Development Workflow
-1. **Clone repository** and run setup
-2. **Start development services** with `./run_hybrid.sh`
+1. **Clone repository** and run setup with `./scripts/setup/setup_agent.sh`
+2. **Start development services** with `./run_agent.sh`
 3. **Make changes** to source code
 4. **Run tests** with `npm run test` and `pytest`
 5. **Submit pull request** with comprehensive testing
 
 ### Key Development Areas
 - [🏗️ Architecture Guide](docs/developer/01-architecture.md) - System design principles
-- [🔄 Process Flow](docs/developer/02-process-flow.md) - Request handling flow  
+- [🔄 Process Flow](docs/developer/02-process-flow.md) - Request handling flow
 - [📡 API Reference](docs/developer/03-api-reference.md) - Complete API documentation
 - [🤖 Agent Development](docs/agents/multi-agent-architecture.md) - Building new agents
 
@@ -224,7 +256,7 @@ AutoBot implements enterprise-grade security features:
 ### Security Components
 - **🔐 Authentication**: Multi-provider auth integration
 - **🛡️ Authorization**: Role-based access control
-- **🚨 Audit Logging**: Comprehensive security event logging  
+- **🚨 Audit Logging**: Comprehensive security event logging
 - **🔒 Data Protection**: Encryption and secure storage
 - **🛡️ Input Validation**: XSS and injection protection
 
@@ -346,7 +378,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **📖 Documentation**: Comprehensive guides in [`docs/`](docs/)
 - **🐛 Issues**: Report bugs via GitHub Issues
-- **💬 Discussions**: Join community discussions  
+- **💬 Discussions**: Join community discussions
 - **📧 Email**: Contact the development team
 
 ---
@@ -354,7 +386,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🌟 Status Overview
 
 **Current Status**: ✅ ENTERPRISE-READY - All core features operational with advanced capabilities implemented
-**Latest Version**: Phase 4 Complete - Advanced Features Development (100% implemented)  
+**Latest Version**: Phase 4 Complete - Advanced Features Development (100% implemented)
 **System Health**: All components operational with real-time monitoring and comprehensive testing validation
 
 ### Recent Achievements

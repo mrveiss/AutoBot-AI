@@ -14,6 +14,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 7. **MANDATORY**: Test Phase 9 components with `python test_phase9_ai.py` after multi-modal changes
 8. **MANDATORY**: Verify NPU worker with `python test_npu_worker.py` after OpenVINO modifications
 9. **CRITICAL**: All test-related files MUST be stored in `tests/` folder or subfolders - NO EXCEPTIONS
+10. **CRITICAL**: Only `run_agent.sh` allowed in project root - all other scripts in `scripts/` subdirectories
+11. **CRITICAL**: All reports in `reports/` subdirectories by type - maximum 2 per type for comparison
+12. **CRITICAL**: All docker-compose files in `docker/compose/` - update all references when moving
+13. **CRITICAL**: All documentation in `docs/` with proper linking - no orphaned documents
 
 ### Immediate Safety Checks
 ```bash
@@ -115,16 +119,82 @@ def new_function(param1: str, param2: int = 5) -> Dict[str, Any]:
 - **Update docker-compose examples**
 - **Add configuration validation**
 
+### 🔧 PROJECT ORGANIZATION RULES
+
+**CRITICAL: All auxiliary files must be properly organized**
+
+#### Shell Script Organization
+- **ONLY `run_agent.sh` allowed in project root**
+- All other `*.sh` scripts organized in appropriate folders:
+  - `scripts/setup/` - Setup and installation scripts (setup_agent.sh, setup_repair.sh, etc.)
+  - `scripts/deployment/` - Deployment and container management (start_all_containers.sh, etc.)
+  - `scripts/environment/` - Environment configuration scripts (set-env-*.sh, *_env_config.sh)
+  - `scripts/testing/` - Testing and validation scripts (run-playwright-tests.sh, etc.)
+  - `scripts/utilities/` - General utility scripts and tools
+
+#### Docker Compose Organization
+- **ALL docker-compose files in `docker/compose/` directory**:
+  - `docker/compose/docker-compose.hybrid.yml` - Main hybrid deployment
+  - `docker/compose/docker-compose.playwright-vnc.yml` - Playwright with VNC
+  - `docker/compose/docker-compose.playwright.yml` - Standard Playwright
+  - `docker/compose/docker-compose.yml` - Base configuration
+- **ALWAYS update references** when moving docker-compose files
+- **Reference pattern**: `docker-compose -f docker/compose/docker-compose.hybrid.yml`
+
+#### Report Organization
+- **NO reports in project root** - use `reports/` folder structure:
+  - `reports/security/` - Security audits and vulnerability reports
+  - `reports/dependency/` - Dependency and package analysis
+  - `reports/performance/` - Performance analysis and benchmarks
+  - `reports/code-quality/` - Code quality and analysis reports
+- **Maximum 2 reports per type** for comparison purposes
+- **Use `scripts/utilities/report_manager.py`** for automated report management:
+```bash
+# Organize existing reports from project root
+python scripts/utilities/report_manager.py --cleanup
+
+# Add new report with automatic classification
+python scripts/utilities/report_manager.py --add security_audit_results.json
+
+# List all organized reports
+python scripts/utilities/report_manager.py --list
+```
+
+#### Documentation Organization
+- **ALL documentation in `docs/` with proper linking**:
+  - `docs/INDEX.md` - Comprehensive navigation index
+  - `docs/user_guide/` - Installation and setup guides
+  - `docs/deployment/` - Docker and deployment configurations
+  - `docs/features/` - Feature-specific documentation
+  - `docs/security/` - Security implementation guides
+  - `docs/workflow/` - Workflow orchestration documentation
+  - `docs/testing/` - Testing frameworks and reports
+  - `docs/migration/` - Migration guides and procedures
+  - `docs/architecture/` - System architecture and design
+  - `docs/guides/` - Configuration templates and guides
+  - `docs/reports/legacy/` - Historical analysis reports
+- **NO orphaned documents** - all files must be linked from `docs/INDEX.md` or `README.md`
+- **Cross-reference related documentation** for better navigation
+
+#### File Organization Rules
+1. **Only essential files in project root**: `run_agent.sh`, `README.md`, `CLAUDE.md`, `requirements.txt`, core config files
+2. **All scripts in `scripts/` subdirectories by purpose**
+3. **All reports in `reports/` subdirectories by type**
+4. **All tests in `tests/` subdirectories by category**
+5. **All docker-compose files in `docker/compose/` directory**
+6. **All documentation in `docs/` with comprehensive linking**
+7. **All generated files in appropriate subdirectories or `.gitignore`**
+
 ### Emergency Recovery
 ```bash
 # If system breaks during development
-pkill -f uvicorn; docker compose -f docker-compose.hybrid.yml down
+pkill -f uvicorn; docker compose -f docker/compose/docker-compose.hybrid.yml down
 ./scripts/setup/setup_agent.sh --force-reinstall
 ./run_agent.sh
 
 # NPU worker recovery
-docker compose -f docker-compose.hybrid.yml --profile npu down
-docker compose -f docker-compose.hybrid.yml --profile npu up -d
+docker compose -f docker/compose/docker-compose.hybrid.yml --profile npu down
+docker compose -f docker/compose/docker-compose.hybrid.yml --profile npu up -d
 
 # Memory system recovery (if corrupted)
 cp data/memory_system.db.backup data/memory_system.db
