@@ -15,6 +15,14 @@ from pydantic import BaseModel
 
 from src.agents import get_kb_librarian, get_librarian_assistant
 from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
+from src.error_handler import log_error, safe_api_error, with_error_handling
+from src.exceptions import (
+    AutoBotError,
+    InternalError,
+    ResourceNotFoundError,
+    ValidationError,
+    get_error_code,
+)
 
 # Import workflow automation for terminal integration
 try:
@@ -28,6 +36,11 @@ except ImportError:
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+def generate_request_id() -> str:
+    """Generate a unique request ID for tracking."""
+    return str(uuid.uuid4())
 
 
 def _should_research_web(message: str) -> bool:
@@ -545,88 +558,182 @@ async def create_new_chat(request: Request):
 
 @router.get("/chats")
 async def list_chats(request: Request):
-    """List all available chat sessions."""
+    """List all available chat sessions with improved error handling."""
+    request_id = generate_request_id()
+
     try:
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
         if chat_history_manager is None:
-            logging.error("chat_history_manager not found in app.state")
-            return JSONResponse(
-                status_code=500,
-                content={"error": "Chat history manager not initialized"},
+            raise InternalError(
+                "Chat history manager not initialized",
+                details={"component": "chat_history_manager"},
             )
 
-        sessions = chat_history_manager.list_sessions()
-        return JSONResponse(status_code=200, content={"chats": sessions})
+        try:
+            sessions = chat_history_manager.list_sessions()
+            return JSONResponse(status_code=200, content={"chats": sessions})
+        except AttributeError as e:
+            raise InternalError(
+                "Chat history manager is misconfigured",
+                details={"missing_method": "list_sessions"},
+            ) from e
+        except Exception as e:
+            logger.critical(
+                f"Unexpected error listing chat sessions: {type(e).__name__}",
+                exc_info=True,
+                extra={"request_id": request_id},
+            )
+            raise InternalError("Failed to retrieve chat sessions") from e
+
+    except AutoBotError as e:
+        log_error(e, context="list_chats", include_traceback=False)
+        return JSONResponse(
+            status_code=get_error_code(e), content=safe_api_error(e, request_id)
+        )
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        log_error(e, context="list_chats")
+        return JSONResponse(
+            status_code=500,
+            content=safe_api_error(
+                InternalError("An unexpected error occurred"), request_id
+            ),
+        )
 
 
 @router.get("/chats/{chat_id}")
 async def get_chat(chat_id: str, request: Request):
-    """Get a specific chat session."""
+    """Get a specific chat session with improved error handling."""
+    request_id = generate_request_id()
+
     try:
-        chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
-        if chat_history_manager is None:
-            logging.error("chat_history_manager not found in app.state")
-            return JSONResponse(
-                status_code=500,
-                content={"error": "Chat history manager not initialized"},
+        # Validate chat_id format
+        if not chat_id or len(chat_id) > 100:
+            raise ValidationError(
+                "Invalid chat ID format",
+                field="chat_id",
+                value=chat_id[:50] if chat_id else None,  # Truncate for safety
             )
 
-        history = chat_history_manager.load_session(chat_id)
-        if history is not None:
+        chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
+        if chat_history_manager is None:
+            raise InternalError("Chat history manager not initialized")
+
+        try:
+            history = chat_history_manager.load_session(chat_id)
+
+            if history is None:
+                raise ResourceNotFoundError(
+                    "Chat session not found", resource_type="chat", resource_id=chat_id
+                )
+
             return JSONResponse(
                 status_code=200, content={"chat_id": chat_id, "history": history}
             )
-        else:
-            return JSONResponse(status_code=404, content={"error": "Chat not found"})
+
+        except FileNotFoundError:
+            raise ResourceNotFoundError(
+                "Chat session file not found", resource_type="chat", resource_id=chat_id
+            )
+        except PermissionError as e:
+            logger.error(f"Permission denied accessing chat {chat_id}: {e}")
+            raise InternalError("Unable to access chat session")
+        except ValueError as e:
+            logger.error(f"Corrupted chat data for {chat_id}: {e}")
+            raise InternalError("Chat session data is corrupted")
+
+    except AutoBotError as e:
+        log_error(e, context=f"get_chat:{chat_id}", include_traceback=False)
+        return JSONResponse(
+            status_code=get_error_code(e), content=safe_api_error(e, request_id)
+        )
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        log_error(e, context=f"get_chat:{chat_id}")
+        return JSONResponse(
+            status_code=500,
+            content=safe_api_error(
+                InternalError("An unexpected error occurred"), request_id
+            ),
+        )
 
 
 @router.delete("/chats/{chat_id}")
 async def delete_chat(chat_id: str, request: Request):
-    """Delete a specific chat session."""
-    chat_history_manager = request.app.state.chat_history_manager
+    """Delete a specific chat session with improved error handling."""
+    request_id = generate_request_id()
+
     try:
-        # Try to delete the session
-        if chat_history_manager.delete_session(chat_id):
-            return JSONResponse(
-                status_code=200, content={"message": "Chat deleted successfully"}
-            )
+        # Validate input
+        if not chat_id:
+            raise ValidationError("Chat ID is required", field="chat_id")
 
-        # If direct deletion failed, try to find chat with partial matching for legacy formats
-        # Get all sessions and try to find a match
+        chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
+        if chat_history_manager is None:
+            raise InternalError("Chat history manager not initialized")
+
+        # Attempt deletion with specific error handling
         try:
-            all_sessions = chat_history_manager.list_sessions()
-            # Look for exact match first, then partial match
-            matching_session = None
+            success = chat_history_manager.delete_session(chat_id)
 
-            for session in all_sessions:
-                session_id = session.get("chatId", session.get("sessionId", ""))
-                if session_id == chat_id:
-                    matching_session = session_id
-                    break
-                elif chat_id in session_id or session_id in chat_id:
-                    matching_session = session_id
-                    break
+            if not success:
+                # Try legacy format matching before giving up
+                try:
+                    all_sessions = chat_history_manager.list_sessions()
+                    matching_session = None
 
-            if matching_session:
-                if chat_history_manager.delete_session(matching_session):
-                    return JSONResponse(
-                        status_code=200,
-                        content={"message": "Chat deleted successfully"},
+                    for session in all_sessions:
+                        session_id = session.get("chatId", session.get("sessionId", ""))
+                        if session_id == chat_id or (
+                            chat_id in session_id or session_id in chat_id
+                        ):
+                            matching_session = session_id
+                            break
+
+                    if matching_session and chat_history_manager.delete_session(
+                        matching_session
+                    ):
+                        success = True
+                    else:
+                        # Session not found
+                        raise ResourceNotFoundError(
+                            "Chat session not found",
+                            resource_type="chat",
+                            resource_id=chat_id,
+                        )
+                except Exception as lookup_error:
+                    logger.warning(
+                        f"Error during chat lookup for {chat_id}: {lookup_error}"
+                    )
+                    raise ResourceNotFoundError(
+                        "Chat session not found",
+                        resource_type="chat",
+                        resource_id=chat_id,
                     )
 
-        except Exception as lookup_error:
-            logging.warning(f"Error during chat lookup: {lookup_error}")
+            return JSONResponse(
+                status_code=200,
+                content={"success": True, "message": "Chat deleted successfully"},
+            )
 
-        # If still not found, return 404
-        return JSONResponse(status_code=404, content={"error": "Chat not found"})
+        except PermissionError:
+            logger.error(f"Permission denied deleting chat {chat_id}")
+            raise InternalError("Insufficient permissions to delete chat")
+        except OSError as e:
+            logger.error(f"OS error deleting chat {chat_id}: {e}")
+            raise InternalError("System error while deleting chat")
 
+    except AutoBotError as e:
+        log_error(e, context=f"delete_chat:{chat_id}", include_traceback=False)
+        return JSONResponse(
+            status_code=get_error_code(e), content=safe_api_error(e, request_id)
+        )
     except Exception as e:
-        logging.error(f"Error deleting chat {chat_id}: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        log_error(e, context=f"delete_chat:{chat_id}")
+        return JSONResponse(
+            status_code=500,
+            content=safe_api_error(
+                InternalError("An unexpected error occurred"), request_id
+            ),
+        )
 
 
 @router.post("/chats/{chat_id}")
@@ -812,9 +919,10 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                         try:
                             # Execute the approved command via chat terminal
                             # Import the terminal execution function
-                            from backend.api.terminal import execute_single_command
                             from fastapi import Request
                             from pydantic import BaseModel
+
+                            from backend.api.terminal import execute_single_command
 
                             class CommandRequest(BaseModel):
                                 command: str
