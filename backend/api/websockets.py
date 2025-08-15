@@ -5,10 +5,12 @@ This module handles WebSocket connections for real-time event streaming
 between the backend and frontend clients.
 """
 
+import asyncio
 import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 
 from src.event_manager import event_manager
 
@@ -113,7 +115,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 workflow_id = raw_data.get("workflow_id", "N/A")[:8]
                 step_desc = raw_data.get("description", "N/A")
                 result = raw_data.get("result", "Completed")
-                text = f"✅ Workflow {workflow_id}: Completed step - {step_desc}. Result: {result}"
+                text = (
+                    f"✅ Workflow {workflow_id}: Completed step - {step_desc}. "
+                    f"Result: {result}"
+                )
                 sender = "workflow"
             elif message_type == "workflow_approval_required":
                 workflow_id = raw_data.get("workflow_id", "N/A")[:8]
@@ -123,7 +128,10 @@ async def websocket_endpoint(websocket: WebSocket):
             elif message_type == "workflow_completed":
                 workflow_id = raw_data.get("workflow_id", "N/A")[:8]
                 total_steps = raw_data.get("total_steps", 0)
-                text = f"🎉 Workflow {workflow_id}: Completed successfully with {total_steps} steps"
+                text = (
+                    f"🎉 Workflow {workflow_id}: Completed successfully with "
+                    f"{total_steps} steps"
+                )
                 sender = "workflow"
             elif message_type == "workflow_failed":
                 workflow_id = raw_data.get("workflow_id", "N/A")[:8]
@@ -148,8 +156,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         # Keep connection alive and handle incoming messages
-        while True:
-            message = await websocket.receive_text()
+        while websocket.client_state == WebSocketState.CONNECTED:
+            try:
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+            except asyncio.TimeoutError:
+                # Send ping to keep connection alive
+                await websocket.send_text(json.dumps({"type": "ping"}))
+                continue
             try:
                 data = json.loads(message)
                 if data.get("type") == "user_message":
