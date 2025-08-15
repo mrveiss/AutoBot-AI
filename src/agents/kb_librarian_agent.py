@@ -124,11 +124,11 @@ class KBLibrarianAgent:
 
         # Create a prompt for summarization
         prompt = (
-            f"As a helpful librarian, I found the following information in our "
+            "As a helpful librarian, I found the following information in our "
             f'knowledge base related to the question: "{query}"\n\n'
             f"{context}\n\n"
-            f"Please provide a concise and helpful summary of the relevant "
-            f"information found."
+            "Please provide a concise and helpful summary of the relevant "
+            "information found."
         )
 
         try:

@@ -41,7 +41,7 @@ class GUIController:
         self, x: int, y: int, width: int, height: int
     ) -> Dict[str, Any]:
         print(
-            f"Dummy GUIController: read_text_from_region("
+            "Dummy GUIController: read_text_from_region("
             f"{x}, {y}, {width}, {height}) skipped."
         )
         await asyncio.sleep(0)
@@ -68,7 +68,7 @@ class GUIController:
         }
 
     async def bring_window_to_front(self, app_title: str) -> Dict[str, Any]:
-        print(f"Dummy GUIController: bring_window_to_front('{app_title}') " f"skipped.")
+        print(f"Dummy GUIController: bring_window_to_front('{app_title}') " "skipped.")
         await asyncio.sleep(0)
         return {
             "status": "success",

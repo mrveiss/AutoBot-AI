@@ -7,7 +7,7 @@ import shutil
 import time
 import traceback
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import JSONResponse
@@ -331,7 +331,7 @@ async def _check_if_command_needed(message: str, llm_interface) -> dict:
             "risk_level": "LOW",
         },
         "disk": {
-            "keywords": ["disk", "space", "storage", "filesystem", "df"],
+            "keywords": ["disk", "space", "storage", "filesystem", "d"],
             "commands": ["df -h"],
             "explanation": "To check disk space usage",
             "purpose": "Show filesystem disk space usage in human-readable format",
@@ -380,9 +380,9 @@ async def _check_if_command_needed(message: str, llm_interface) -> dict:
                 "command": command,
                 "explanation": config["explanation"],
                 "purpose": config["purpose"],
-                "alternatives": config["commands"][1:]
-                if len(config["commands"]) > 1
-                else [],
+                "alternatives": (
+                    config["commands"][1:] if len(config["commands"]) > 1 else []
+                ),
             }
 
     # Check for direct command requests
@@ -868,8 +868,6 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
 
         # Check if user is responding to source approval request
         is_approval_response = False
-        pending_approval_data = None
-
         if existing_history:
             last_message = existing_history[-1] if existing_history else {}
             if last_message.get("messageType") == "source_approval":
@@ -1394,7 +1392,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                             for item in chat_context[:3]  # Top 3 relevant contexts
                         ]
                     )
-                    enhanced_message = f"""Based on our previous conversation context:
+                    enhanced_message = """Based on our previous conversation context:
 {context_summary}
 
 Current question: {message}"""
@@ -1537,7 +1535,7 @@ Current question: {message}"""
             response_text = tool_args.get("response_text", "No response text provided.")
             result_response_text = result_dict.get("response_text")
             logging.info(
-                f"🔍 DEBUG respond_conversationally: "
+                "🔍 DEBUG respond_conversationally: "
                 f"response_text={response_text}, "
                 f"result_response_text={result_response_text}"
             )
@@ -1572,7 +1570,7 @@ Current question: {message}"""
                         else:
                             # If no text field found, log structure and return raw JSON
                             logging.info(
-                                f"JSON response without recognizable text field: "
+                                "JSON response without recognizable text field: "
                                 f"{parsed_response}"
                             )
                             # Return JSON as-is to see structure
@@ -1617,7 +1615,7 @@ Current question: {message}"""
                     "Could you please rephrase your question?"
                 )
             logging.info(
-                f"🔍 DEBUG respond_conversationally final "
+                "🔍 DEBUG respond_conversationally final "
                 f"response_message: {response_message}"
             )
         # Send KB findings as separate utility message if available
@@ -1721,7 +1719,7 @@ Current question: {message}"""
             tool_args = result_dict.get("tool_args", {})
 
             # Send planning message
-            planning_info = f"""Classification: {tool_args.get('message_classification', 'unknown')}
+            planning_info = """Classification: {tool_args.get('message_classification', 'unknown')}
 Agents Involved: {', '.join(tool_args.get('agents_involved', []))}
 Planned Steps: {tool_args.get('planned_steps', 0)}
 Estimated Duration: {tool_args.get('estimated_duration', 'unknown')}
@@ -1998,7 +1996,7 @@ async def cleanup_messages():
                                     freed_space += file_size
                                     folder_cleaned = True
                                     logging.info(
-                                        f"Removed specific leftover file: "
+                                        "Removed specific leftover file: "
                                         f"{specific_filepath}"
                                     )
                                 elif os.path.isdir(specific_filepath):
@@ -2012,18 +2010,18 @@ async def cleanup_messages():
                                     )
                                     shutil.rmtree(specific_filepath)
                                     cleaned_files.append(
-                                        f"Removed leftover directory: "
+                                        "Removed leftover directory: "
                                         f"{specific_filepath}"
                                     )
                                     freed_space += dir_size
                                     folder_cleaned = True
                                     logging.info(
-                                        f"Removed leftover directory: "
+                                        "Removed leftover directory: "
                                         f"{specific_filepath}"
                                     )
                             except Exception as e:
                                 logging.error(
-                                    f"Error removing specific leftover file/dir "
+                                    "Error removing specific leftover file/dir "
                                     f"{specific_filepath}: {str(e)}"
                                 )
 
@@ -2044,7 +2042,7 @@ async def cleanup_messages():
                                     )
                                 except Exception as e:
                                     logging.error(
-                                        f"Error removing specific pattern file "
+                                        "Error removing specific pattern file "
                                         f"{filepath}: {str(e)}"
                                     )
 
@@ -2060,7 +2058,7 @@ async def cleanup_messages():
                             )
                         elif folder_cleaned:
                             logging.info(
-                                f"Cleaned files from chat folder: "
+                                "Cleaned files from chat folder: "
                                 f"{chat_folder_path}, remaining files: "
                                 f"{remaining_files}"
                             )

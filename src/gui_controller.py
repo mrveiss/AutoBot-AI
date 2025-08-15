@@ -35,7 +35,9 @@ class GUIController:
         try:
             # Check if Xvfb is installed
             if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:
-                print("Error: Xvfb is not installed. Please install it to use the virtual display.")
+                print(
+                    "Error: Xvfb is not installed. Please install it to use the virtual display."
+                )
                 return
 
             # Start Xvfb
@@ -142,7 +144,9 @@ async def main():
     # Test the GUIController
     controller = GUIController()
     if controller.virtual_display:
-        print("Running in virtual display. GUI operations will be performed in the background.")
+        print(
+            "Running in virtual display. GUI operations will be performed in the background."
+        )
         # Give Xvfb a moment to start
         await asyncio.sleep(2)
 

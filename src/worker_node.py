@@ -73,7 +73,9 @@ class WorkerNode:
             },
             "ram": {
                 "total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-                "available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
+                "available_gb": round(
+                    psutil.virtual_memory().available / (1024**3), 2
+                ),
                 "usage_percent": psutil.virtual_memory().percent,
             },
             "gpu": {"cuda_available": torch.cuda.is_available(), "cuda_devices": []},
@@ -303,7 +305,7 @@ class WorkerNode:
                     result = {
                         "status": "error",
                         "message": (
-                            f"Command blocked for security: "
+                            "Command blocked for security: "
                             f"{validation_result['reason']}"
                         ),
                     }
@@ -319,7 +321,7 @@ class WorkerNode:
                         },
                     )
                     print(
-                        f"🚨 SECURITY: Blocked potentially dangerous command: "
+                        "🚨 SECURITY: Blocked potentially dangerous command: "
                         f"{command}"
                     )
                 else:
@@ -569,7 +571,7 @@ class WorkerNode:
                 result = {
                     "status": "pending_approval",
                     "message": (
-                        f"Requested user approval for command: " f"{command_to_approve}"
+                        "Requested user approval for command: " f"{command_to_approve}"
                     ),
                 }
                 self.security_layer.audit_log(

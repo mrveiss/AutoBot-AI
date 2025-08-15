@@ -159,13 +159,13 @@ class ChatHistoryManager:
                     return
                 elif history_data is not None:
                     logging.warning(
-                        f"Received non-string data from Redis for chat "
+                        "Received non-string data from Redis for chat "
                         f"history: type={type(history_data)}"
                     )
             except Exception as e:
                 logging.error(
                     f"Error loading history from Redis: {str(e)}. "
-                    f"Falling back to file storage."
+                    "Falling back to file storage."
                 )
 
         # Default to file storage
@@ -189,7 +189,7 @@ class ChatHistoryManager:
             self.history = []
             logging.info(
                 f"No history file found at {self.history_file}. "
-                f"Starting with empty history."
+                "Starting with empty history."
             )
 
     def _save_history(self):
@@ -362,7 +362,7 @@ class ChatHistoryManager:
                     chat_data = self._decrypt_data(file_content)
                 except Exception as e:
                     logging.warning(
-                        f"Could not load existing chat data for "
+                        "Could not load existing chat data for "
                         f"{session_id}: {str(e)}"
                     )
 

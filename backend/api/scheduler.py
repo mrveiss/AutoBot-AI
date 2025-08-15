@@ -9,11 +9,7 @@ from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.workflow_scheduler import (
-    WorkflowPriority,
-    WorkflowStatus,
-    workflow_scheduler,
-)
+from src.workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
 
 router = APIRouter()
 

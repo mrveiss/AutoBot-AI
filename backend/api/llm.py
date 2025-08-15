@@ -234,7 +234,7 @@ async def update_embedding_model(embedding_data: dict):
         logger.info(f"UNIFIED CONFIG: Updating embedding model to: {provider}/{model}")
 
         # Update embedding configuration in unified config
-        global_config_manager.set_nested(f"backend.llm.embedding.provider", provider)
+        global_config_manager.set_nested("backend.llm.embedding.provider", provider)
         global_config_manager.set_nested(
             f"backend.llm.embedding.providers.{provider}.selected_model", model
         )

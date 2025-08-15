@@ -90,7 +90,7 @@ class ConnectionTester:
                     return {
                         "status": "connected",
                         "message": (
-                            f"Successfully connected to Ollama with model "
+                            "Successfully connected to Ollama with model "
                             f"'{ollama_model}'"
                         ),
                         "endpoint": ollama_endpoint,

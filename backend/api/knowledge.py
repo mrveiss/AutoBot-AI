@@ -238,7 +238,7 @@ async def add_file_to_knowledge(file: UploadFile = File(...)):
 
         # Get file extension
         file_ext = os_module.path.splitext(file.filename)[1].lower()
-        supported_extensions = [".txt", ".pdf", ".csv", ".docx", ".md"]
+        supported_extensions = [".txt", ".pd", ".csv", ".docx", ".md"]
 
         if file_ext not in supported_extensions:
             raise HTTPException(

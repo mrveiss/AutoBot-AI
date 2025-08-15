@@ -213,7 +213,7 @@ class GoalProcessor:
         """Build risk assessment patterns."""
         return {
             # Critical risk patterns
-            r"rm.{0,5}-rf": RiskLevel.CRITICAL,
+            r"rm.{0,5}-r": RiskLevel.CRITICAL,
             r"format.{0,10}disk": RiskLevel.CRITICAL,
             r"delete.{0,10}all": RiskLevel.CRITICAL,
             r"destroy.{0,10}data": RiskLevel.CRITICAL,
