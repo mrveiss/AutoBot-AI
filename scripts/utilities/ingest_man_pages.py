@@ -15,12 +15,11 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.command_manual_manager import CommandManualManager
+from src.command_manual_manager import CommandManualManager  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -30,149 +29,293 @@ class ManPageIngester:
 
     def __init__(self, db_path: str = "data/knowledge_base.db"):
         """Initialize the ingester.
-        
+
         Args:
             db_path: Path to the knowledge base database
         """
         self.manager = CommandManualManager(db_path)
-        self.stats = {
-            'attempted': 0,
-            'successful': 0,
-            'failed': 0,
-            'skipped': 0
-        }
+        self.stats = {"attempted": 0, "successful": 0, "failed": 0, "skipped": 0}
 
     def get_essential_commands(self) -> list:
         """Get list of essential commands to ingest.
-        
+
         Returns:
             List of essential command names
         """
         return [
             # File Operations
-            'ls', 'cd', 'pwd', 'mkdir', 'rmdir', 'rm', 'cp', 'mv',
-            'cat', 'less', 'more', 'head', 'tail', 'touch', 'ln',
-            'find', 'locate', 'which', 'whereis', 'file', 'stat',
-            'chmod', 'chown', 'chgrp', 'umask',
-            
+            "ls",
+            "cd",
+            "pwd",
+            "mkdir",
+            "rmdir",
+            "rm",
+            "cp",
+            "mv",
+            "cat",
+            "less",
+            "more",
+            "head",
+            "tail",
+            "touch",
+            "ln",
+            "find",
+            "locate",
+            "which",
+            "whereis",
+            "file",
+            "stat",
+            "chmod",
+            "chown",
+            "chgrp",
+            "umask",
             # Archives and Compression
-            'tar', 'gzip', 'gunzip', 'zip', 'unzip', 'bzip2', 'bunzip2',
-            
+            "tar",
+            "gzip",
+            "gunzip",
+            "zip",
+            "unzip",
+            "bzip2",
+            "bunzip2",
             # Text Processing
-            'grep', 'awk', 'sed', 'tr', 'cut', 'sort', 'uniq', 'wc',
-            'diff', 'comm', 'join', 'paste', 'fmt', 'fold',
-            
+            "grep",
+            "awk",
+            "sed",
+            "tr",
+            "cut",
+            "sort",
+            "uniq",
+            "wc",
+            "diff",
+            "comm",
+            "join",
+            "paste",
+            "fmt",
+            "fold",
             # Network Commands
-            'ping', 'traceroute', 'netstat', 'ss', 'ifconfig', 'ip',
-            'route', 'arp', 'wget', 'curl', 'ssh', 'scp', 'rsync',
-            'nc', 'nmap', 'nslookup', 'dig',
-            
+            "ping",
+            "traceroute",
+            "netstat",
+            "ss",
+            "ifconfig",
+            "ip",
+            "route",
+            "arp",
+            "wget",
+            "curl",
+            "ssh",
+            "scp",
+            "rsync",
+            "nc",
+            "nmap",
+            "nslookup",
+            "dig",
             # Process Management
-            'ps', 'top', 'htop', 'jobs', 'bg', 'fg', 'nohup',
-            'kill', 'killall', 'pgrep', 'pkill', 'pidof',
-            'nice', 'renice', 'screen', 'tmux',
-            
+            "ps",
+            "top",
+            "htop",
+            "jobs",
+            "bg",
+            "fg",
+            "nohup",
+            "kill",
+            "killall",
+            "pgrep",
+            "pkill",
+            "pidof",
+            "nice",
+            "renice",
+            "screen",
+            "tmux",
             # System Information
-            'uname', 'whoami', 'id', 'groups', 'w', 'who', 'uptime',
-            'free', 'df', 'du', 'lscpu', 'lsmem', 'lsblk', 'lsusb',
-            'lspci', 'dmidecode', 'lshw',
-            
+            "uname",
+            "whoami",
+            "id",
+            "groups",
+            "w",
+            "who",
+            "uptime",
+            "free",
+            "df",
+            "du",
+            "lscpu",
+            "lsmem",
+            "lsblk",
+            "lsusb",
+            "lspci",
+            "dmidecode",
+            "lshw",
             # System Control
-            'sudo', 'su', 'systemctl', 'service', 'mount', 'umount',
-            'halt', 'shutdown', 'reboot', 'crontab', 'at',
-            
+            "sudo",
+            "su",
+            "systemctl",
+            "service",
+            "mount",
+            "umount",
+            "halt",
+            "shutdown",
+            "reboot",
+            "crontab",
+            "at",
             # Package Management (common ones)
-            'apt', 'apt-get', 'dpkg', 'yum', 'dnf', 'rpm',
-            'pip', 'npm', 'git',
-            
+            "apt",
+            "apt-get",
+            "dpkg",
+            "yum",
+            "dnf",
+            "rpm",
+            "pip",
+            "npm",
+            "git",
             # Development Tools
-            'make', 'gcc', 'g++', 'python', 'python3', 'node',
-            'java', 'javac', 'docker',
-            
+            "make",
+            "gcc",
+            "g++",
+            "python",
+            "python3",
+            "node",
+            "java",
+            "javac",
+            "docker",
             # Text Editors and Utilities
-            'vi', 'vim', 'nano', 'emacs', 'man', 'info', 'help',
-            'history', 'alias', 'which', 'type',
-            
+            "vi",
+            "vim",
+            "nano",
+            "emacs",
+            "man",
+            "info",
+            "help",
+            "history",
+            "alias",
+            "which",
+            "type",
             # Disk and Filesystem
-            'fdisk', 'parted', 'mkfs', 'fsck', 'lsof', 'fuser',
-            
+            "fdisk",
+            "parted",
+            "mkfs",
+            "fsck",
+            "lsof",
+            "fuser",
             # Security and Permissions
-            'gpg', 'openssl', 'ssh-keygen', 'passwd', 'chage'
+            "gpg",
+            "openssl",
+            "ssh-keygen",
+            "passwd",
+            "chage",
         ]
 
     def get_advanced_commands(self) -> list:
         """Get list of advanced/specialized commands.
-        
+
         Returns:
             List of advanced command names
         """
         return [
             # Advanced Network Tools
-            'tcpdump', 'wireshark', 'iptables', 'ufw', 'firewall-cmd',
-            'ethtool', 'iwconfig', 'nmcli', 'hostnamectl',
-            
+            "tcpdump",
+            "wireshark",
+            "iptables",
+            "ufw",
+            "firewall-cmd",
+            "ethtool",
+            "iwconfig",
+            "nmcli",
+            "hostnamectl",
             # Advanced System Tools
-            'strace', 'ltrace', 'gdb', 'valgrind', 'perf',
-            'sysctl', 'dmesg', 'journalctl', 'systemd-analyze',
-            
+            "strace",
+            "ltrace",
+            "gdb",
+            "valgrind",
+            "perf",
+            "sysctl",
+            "dmesg",
+            "journalctl",
+            "systemd-analyze",
             # Advanced File Operations
-            'rsnapshot', 'rdiff-backup', 'duplicity', 'borgbackup',
-            'rclone', 'syncthing',
-            
+            "rsnapshot",
+            "rdiff-backup",
+            "duplicity",
+            "borgbackup",
+            "rclone",
+            "syncthing",
             # Container and Virtualization
-            'podman', 'kubectl', 'helm', 'vagrant', 'qemu',
-            'virt-manager', 'virsh',
-            
+            "podman",
+            "kubectl",
+            "helm",
+            "vagrant",
+            "qemu",
+            "virt-manager",
+            "virsh",
             # Database Tools
-            'mysql', 'psql', 'sqlite3', 'redis-cli', 'mongo',
-            
+            "mysql",
+            "psql",
+            "sqlite3",
+            "redis-cli",
+            "mongo",
             # Web Development
-            'apache2ctl', 'nginx', 'certbot', 'ab', 'siege',
-            
+            "apache2ctl",
+            "nginx",
+            "certbot",
+            "ab",
+            "siege",
             # Advanced Text Processing
-            'jq', 'yq', 'xmllint', 'csvkit', 'pandoc',
-            
+            "jq",
+            "yq",
+            "xmllint",
+            "csvkit",
+            "pandoc",
             # Performance Monitoring
-            'iotop', 'nethogs', 'vnstat', 'sar', 'iostat',
-            'vmstat', 'mpstat', 'pidstat',
-            
+            "iotop",
+            "nethogs",
+            "vnstat",
+            "sar",
+            "iostat",
+            "vmstat",
+            "mpstat",
+            "pidstat",
             # Security Tools
-            'nessus', 'openvas', 'nikto', 'sqlmap', 'john',
-            'hashcat', 'aircrack-ng', 'metasploit'
+            "nessus",
+            "openvas",
+            "nikto",
+            "sqlmap",
+            "john",
+            "hashcat",
+            "aircrack-ng",
+            "metasploit",
         ]
 
     def ingest_command_list(self, commands: list, category: str = "essential") -> None:
         """Ingest a list of commands.
-        
+
         Args:
             commands: List of command names to ingest
             category: Category label for logging
         """
         logger.info(f"Starting ingestion of {len(commands)} {category} commands")
-        
+
         for command in commands:
-            self.stats['attempted'] += 1
-            
+            self.stats["attempted"] += 1
+
             try:
                 # Check if already exists
                 existing = self.manager.get_manual(command)
                 if existing:
                     logger.info(f"Command '{command}' already exists, skipping")
-                    self.stats['skipped'] += 1
+                    self.stats["skipped"] += 1
                     continue
-                
+
                 # Attempt to ingest
                 success = self.manager.ingest_command(command)
                 if success:
                     logger.info(f"Successfully ingested: {command}")
-                    self.stats['successful'] += 1
+                    self.stats["successful"] += 1
                 else:
                     logger.warning(f"Failed to ingest: {command}")
-                    self.stats['failed'] += 1
-                    
+                    self.stats["failed"] += 1
+
             except Exception as e:
                 logger.error(f"Error ingesting command '{command}': {e}")
-                self.stats['failed'] += 1
+                self.stats["failed"] += 1
 
     def ingest_all_essential(self) -> None:
         """Ingest all essential commands."""
@@ -186,45 +329,49 @@ class ManPageIngester:
 
     def ingest_custom_list(self, command_file: str) -> None:
         """Ingest commands from a custom file.
-        
+
         Args:
             command_file: Path to file containing command names (one per line)
         """
         try:
-            with open(command_file, 'r') as f:
-                commands = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-            
+            with open(command_file, "r") as f:
+                commands = [
+                    line.strip()
+                    for line in f
+                    if line.strip() and not line.startswith("#")
+                ]
+
             logger.info(f"Loaded {len(commands)} commands from {command_file}")
             self.ingest_command_list(commands, "custom")
-            
+
         except Exception as e:
             logger.error(f"Failed to load commands from {command_file}: {e}")
 
     def print_statistics(self) -> None:
         """Print ingestion statistics."""
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("COMMAND MANUAL INGESTION STATISTICS")
-        print("="*50)
+        print("=" * 50)
         print(f"Commands attempted: {self.stats['attempted']}")
         print(f"Successfully ingested: {self.stats['successful']}")
         print(f"Failed to ingest: {self.stats['failed']}")
         print(f"Skipped (already exists): {self.stats['skipped']}")
-        
-        if self.stats['attempted'] > 0:
-            success_rate = (self.stats['successful'] / self.stats['attempted']) * 100
+
+        if self.stats["attempted"] > 0:
+            success_rate = (self.stats["successful"] / self.stats["attempted"]) * 100
             print(f"Success rate: {success_rate:.1f}%")
-        
-        print("="*50)
+
+        print("=" * 50)
 
     def verify_ingestion(self, sample_commands: list = None) -> None:
         """Verify that ingested commands are properly stored.
-        
+
         Args:
             sample_commands: Optional list of commands to verify
         """
         if sample_commands is None:
-            sample_commands = ['ls', 'cat', 'grep', 'ps', 'ifconfig']
-        
+            sample_commands = ["ls", "cat", "grep", "ps", "ifconfig"]
+
         print("\nVerifying ingestion...")
         for command in sample_commands:
             manual = self.manager.get_manual(command)
@@ -240,61 +387,56 @@ def main():
         description="Ingest command manuals into AutoBot knowledge base"
     )
     parser.add_argument(
-        '--mode', 
-        choices=['essential', 'advanced', 'all', 'custom'],
-        default='essential',
-        help='Ingestion mode (default: essential)'
+        "--mode",
+        choices=["essential", "advanced", "all", "custom"],
+        default="essential",
+        help="Ingestion mode (default: essential)",
     )
     parser.add_argument(
-        '--custom-file',
-        help='Path to custom command list file (for custom mode)'
+        "--custom-file", help="Path to custom command list file (for custom mode)"
     )
     parser.add_argument(
-        '--db-path',
-        default='data/knowledge_base.db',
-        help='Path to knowledge base database'
+        "--db-path",
+        default="data/knowledge_base.db",
+        help="Path to knowledge base database",
     )
     parser.add_argument(
-        '--verify',
-        action='store_true',
-        help='Verify ingestion after completion'
+        "--verify", action="store_true", help="Verify ingestion after completion"
     )
     parser.add_argument(
-        '--force',
-        action='store_true',
-        help='Force re-ingestion of existing commands'
+        "--force", action="store_true", help="Force re-ingestion of existing commands"
     )
-    
+
     args = parser.parse_args()
-    
+
     # Ensure data directory exists
     db_path = Path(args.db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Initialize ingester
     ingester = ManPageIngester(args.db_path)
-    
+
     # Perform ingestion based on mode
-    if args.mode == 'essential':
+    if args.mode == "essential":
         ingester.ingest_all_essential()
-    elif args.mode == 'advanced':
+    elif args.mode == "advanced":
         ingester.ingest_all_advanced()
-    elif args.mode == 'all':
+    elif args.mode == "all":
         ingester.ingest_all_essential()
         ingester.ingest_all_advanced()
-    elif args.mode == 'custom':
+    elif args.mode == "custom":
         if not args.custom_file:
             print("Error: --custom-file required for custom mode")
             sys.exit(1)
         ingester.ingest_custom_list(args.custom_file)
-    
+
     # Print statistics
     ingester.print_statistics()
-    
+
     # Verify if requested
     if args.verify:
         ingester.verify_ingestion()
-    
+
     print("\nIngestion complete!")
 
 
