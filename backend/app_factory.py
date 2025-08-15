@@ -49,6 +49,7 @@ from backend.api.workflow import router as workflow_router
 # Import workflow automation router
 try:
     from backend.api.workflow_automation import router as workflow_automation_router
+
     WORKFLOW_AUTOMATION_AVAILABLE = True
 except ImportError:
     workflow_automation_router = None
@@ -158,7 +159,7 @@ async def _initialize_core_components(app: FastAPI) -> None:
 
         app.state.security_layer = SecurityLayer()
         logger.info("SecurityLayer initialized and stored in app.state")
-        
+
         # Initialize Enhanced Security Layer with command execution controls
         app.state.enhanced_security_layer = EnhancedSecurityLayer()
         logger.info("EnhancedSecurityLayer initialized and stored in app.state")
@@ -426,14 +427,27 @@ def add_api_routes(app: FastAPI) -> None:
     # Add workflow automation router if available
     if WORKFLOW_AUTOMATION_AVAILABLE and workflow_automation_router:
         routers_config.append(
-            (workflow_automation_router, "/workflow_automation", ["workflow_automation"], "workflow_automation")
+            (
+                workflow_automation_router,
+                "/workflow_automation",
+                ["workflow_automation"],
+                "workflow_automation",
+            )
         )
 
     # Add advanced workflow orchestrator router if available
     try:
-        from backend.api.advanced_workflow_orchestrator import router as advanced_workflow_router
+        from backend.api.advanced_workflow_orchestrator import (
+            router as advanced_workflow_router,
+        )
+
         routers_config.append(
-            (advanced_workflow_router, "/advanced_workflow", ["advanced_workflow"], "advanced_workflow")
+            (
+                advanced_workflow_router,
+                "/advanced_workflow",
+                ["advanced_workflow"],
+                "advanced_workflow",
+            )
         )
         logger.info("Advanced workflow orchestrator router registered")
     except ImportError:
@@ -442,8 +456,14 @@ def add_api_routes(app: FastAPI) -> None:
     # Add chat knowledge router if available
     try:
         from backend.api.chat_knowledge import router as chat_knowledge_router
+
         routers_config.append(
-            (chat_knowledge_router, "/chat_knowledge", ["chat_knowledge"], "chat_knowledge")
+            (
+                chat_knowledge_router,
+                "/chat_knowledge",
+                ["chat_knowledge"],
+                "chat_knowledge",
+            )
         )
         logger.info("Chat knowledge router registered")
     except ImportError:
@@ -452,38 +472,47 @@ def add_api_routes(app: FastAPI) -> None:
     # Add project state router if available
     try:
         from backend.api.project_state import router as project_state_router
+
         routers_config.append(
-            (project_state_router, "/project", ["project_state"], "project_state")
+            (project_state_router, "", ["project_state"], "project_state")
         )
         logger.info("Project state router registered")
     except ImportError as e:
         logger.info(f"Project state router not available - skipping router: {e}")
-    
+
     # Add elevation router for privilege escalation
     try:
         from backend.api.elevation import router as elevation_router
+
         routers_config.append(
             (elevation_router, "/system/elevation", ["elevation"], "elevation")
         )
         logger.info("Elevation router registered")
     except ImportError as e:
         logger.info(f"Elevation router not available - skipping router: {e}")
-    
+
     # Add enhanced memory router for Phase 7 features
     try:
         from backend.api.enhanced_memory import router as enhanced_memory_router
+
         routers_config.append(
             (enhanced_memory_router, "/memory", ["enhanced_memory"], "enhanced_memory")
         )
         logger.info("Enhanced memory router registered")
     except ImportError as e:
         logger.info(f"Enhanced memory router not available - skipping router: {e}")
-    
+
     # Add advanced control router for Phase 8 features
     try:
         from backend.api.advanced_control import router as advanced_control_router
+
         routers_config.append(
-            (advanced_control_router, "/control", ["advanced_control"], "advanced_control")
+            (
+                advanced_control_router,
+                "/control",
+                ["advanced_control"],
+                "advanced_control",
+            )
         )
         logger.info("Advanced control router registered")
     except ImportError as e:
