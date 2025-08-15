@@ -228,3 +228,56 @@ Relevant Knowledge:
 """
     mock_tokens = len(mock_context.split())
     return {"content": mock_context, "tokens": mock_tokens}
+
+
+@router.get("/playwright/health")
+async def check_playwright_health():
+    """Check Playwright container health status"""
+    try:
+        import requests
+
+        # Check if Playwright service is accessible
+        try:
+            response = requests.get("http://localhost:3000/health", timeout=5)
+            if response.status_code == 200:
+                playwright_data = response.json()
+                return {
+                    "status": "healthy",
+                    "playwright_available": True,
+                    "browser_connected": playwright_data.get(
+                        "browser_connected", False
+                    ),
+                    "timestamp": playwright_data.get("timestamp"),
+                    "vnc_url": "http://localhost:6080/vnc.html",
+                    "api_url": "http://localhost:3000",
+                }
+            else:
+                return {
+                    "status": "unhealthy",
+                    "playwright_available": False,
+                    "error": f"HTTP {response.status_code}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+        except requests.exceptions.ConnectionError:
+            return {
+                "status": "unhealthy",
+                "playwright_available": False,
+                "error": "Connection refused - container may be down",
+                "timestamp": datetime.now().isoformat(),
+            }
+        except requests.exceptions.Timeout:
+            return {
+                "status": "unhealthy",
+                "playwright_available": False,
+                "error": "Request timeout - service not responding",
+                "timestamp": datetime.now().isoformat(),
+            }
+
+    except Exception as e:
+        logger.error(f"Error checking Playwright health: {str(e)}")
+        return {
+            "status": "error",
+            "playwright_available": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+        }
