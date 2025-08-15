@@ -6,8 +6,8 @@
         <span class="phase-name">{{ currentPhase?.name || 'Loading...' }}</span>
         <div class="phase-progress">
           <div class="progress-bar">
-            <div 
-              class="progress-fill" 
+            <div
+              class="progress-fill"
               :style="{ width: `${(projectStatus?.overall_completion || 0) * 100}%` }"
             ></div>
           </div>
@@ -40,8 +40,8 @@
       <div v-if="currentPhaseDetails" class="current-phase">
         <h4>{{ currentPhaseDetails.name }} Progress</h4>
         <div class="capabilities-grid">
-          <div 
-            v-for="capability in currentPhaseCapabilities" 
+          <div
+            v-for="capability in currentPhaseCapabilities"
             :key="capability.name"
             class="capability-item"
             :class="getCapabilityStatus(capability)"
@@ -57,8 +57,8 @@
       <div class="phases-overview">
         <h4>All Phases</h4>
         <div class="phases-grid">
-          <div 
-            v-for="(phase, phaseId) in allPhases" 
+          <div
+            v-for="(phase, phaseId) in allPhases"
             :key="phaseId"
             class="phase-card"
             :class="getPhaseStatus(phase)"
@@ -69,8 +69,8 @@
             </div>
             <div class="phase-card-progress">
               <div class="mini-progress-bar">
-                <div 
-                  class="mini-progress-fill" 
+                <div
+                  class="mini-progress-fill"
                   :style="{ width: `${phase.completion * 100}%` }"
                 ></div>
               </div>
@@ -147,11 +147,11 @@ export default {
       // This would need to be fetched from the detailed phases API
       // For now, return mock data based on phase completion
       if (!currentPhaseDetails.value) return [];
-      
+
       const totalCaps = currentPhaseDetails.value.capabilities;
       const implementedCaps = currentPhaseDetails.value.implemented_capabilities;
       const mockCapabilities = [];
-      
+
       for (let i = 0; i < totalCaps; i++) {
         mockCapabilities.push({
           name: `capability_${i + 1}`,
@@ -159,7 +159,7 @@ export default {
           implemented: i < implementedCaps
         });
       }
-      
+
       return mockCapabilities;
     });
 
@@ -669,19 +669,19 @@ export default {
     flex-direction: column;
     gap: 12px;
   }
-  
+
   .capabilities-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .phases-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .phase-actions {
     flex-direction: column;
   }
-  
+
   .btn {
     width: 100%;
     justify-content: center;
