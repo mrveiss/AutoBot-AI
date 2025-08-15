@@ -32,7 +32,7 @@ sqlalchemy>=2.0.0                # Database ORM for advanced storage
 # System Commands Agent
 psutil>=5.9.0                    # System information and process management
 sh>=2.0.0                        # Shell command execution wrapper
-subprocess32>=3.5.4              # Enhanced subprocess for command execution
+# subprocess32>=3.5.4              # Not needed in Python 3.3+, subprocess is built-in
 
 # Research Agent & Web Integration
 selenium>=4.15.0                 # Web automation (backup to Playwright)
