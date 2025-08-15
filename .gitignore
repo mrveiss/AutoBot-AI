@@ -230,3 +230,12 @@ parts/
 sdist/
 var/
 share/python-wheels/
+
+# noVNC vendor files
+novnc/
+
+# External test files
+tests/external/
+
+# Environment templates with example secrets
+examples/env_template.txt
