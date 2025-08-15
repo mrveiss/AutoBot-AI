@@ -22,13 +22,12 @@ from backend.api.agent import router as agent_router
 
 # Import API routers
 from backend.api.chat import router as chat_router
-from backend.api.security import router as security_router
 from backend.api.developer import (
     api_registry,
     enhanced_404_handler,
     enhanced_405_handler,
-    router as developer_router,
 )
+from backend.api.developer import router as developer_router
 from backend.api.files import router as files_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.kb_librarian import router as kb_librarian_router
@@ -38,6 +37,7 @@ from backend.api.metrics import router as metrics_router
 from backend.api.prompts import router as prompts_router
 from backend.api.redis import router as redis_router
 from backend.api.scheduler import router as scheduler_router
+from backend.api.security import router as security_router
 from backend.api.settings import router as settings_router
 from backend.api.system import router as system_router
 from backend.api.templates import router as templates_router
@@ -59,12 +59,12 @@ from src.chat_history_manager import ChatHistoryManager
 # Import centralized configuration
 from src.config import config as global_config_manager
 from src.diagnostics import Diagnostics
+from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.knowledge_base import KnowledgeBase
 
 # Import core components
 from src.orchestrator import Orchestrator
 from src.security_layer import SecurityLayer
-from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.utils.redis_client import get_redis_client
 from src.voice_interface import VoiceInterface
 
@@ -342,10 +342,75 @@ async def create_lifespan_manager(app: FastAPI):
         logger.error(f"Failed to initialize application: {e}", exc_info=True)
         raise
 
+    # System monitoring and scheduler startup
+    try:
+        from src.metrics.system_monitor import system_monitor
+
+        await system_monitor.start_monitoring()
+        logger.info("System monitoring started")
+    except Exception as e:
+        logger.error(f"Failed to start system monitoring: {e}")
+
+    try:
+        from src.workflow_scheduler import workflow_scheduler
+
+        # Set up workflow executor integration
+        async def execute_scheduled_workflow(scheduled_workflow):
+            """Execute a scheduled workflow using the workflow API"""
+            try:
+                from fastapi import BackgroundTasks
+
+                from backend.api.workflow import (
+                    WorkflowExecutionRequest,
+                    execute_workflow,
+                )
+
+                # Create execution request
+                execution_request = WorkflowExecutionRequest(
+                    user_message=scheduled_workflow.user_message,
+                    workflow_id=scheduled_workflow.id,
+                    auto_approve=scheduled_workflow.auto_approve,
+                )
+
+                # Execute workflow
+                background_tasks = BackgroundTasks()
+                result = await execute_workflow(execution_request, background_tasks)
+
+                return result
+
+            except Exception as e:
+                logger.error(f"Scheduled workflow execution failed: {e}")
+                return {"success": False, "error": str(e)}
+
+        workflow_scheduler.set_workflow_executor(execute_scheduled_workflow)
+        await workflow_scheduler.start()
+        logger.info("Workflow scheduler started")
+    except Exception as e:
+        logger.error(f"Failed to start workflow scheduler: {e}")
+
     yield
 
     # Shutdown events
     logger.info("Application lifespan shutdown initiated")
+
+    # System monitoring and scheduler shutdown
+    try:
+        from src.metrics.system_monitor import system_monitor
+
+        await system_monitor.stop_monitoring()
+        logger.info("System monitoring stopped")
+    except Exception as e:
+        logger.error(f"Failed to stop system monitoring: {e}")
+
+    try:
+        from src.workflow_scheduler import workflow_scheduler
+
+        await workflow_scheduler.stop()
+        logger.info("Workflow scheduler stopped")
+    except Exception as e:
+        logger.error(f"Failed to stop workflow scheduler: {e}")
+
+    logger.info("Application lifespan shutdown completed")
 
 
 def add_middleware(app: FastAPI) -> None:
@@ -554,74 +619,6 @@ def add_api_routes(app: FastAPI) -> None:
     app.include_router(websocket_router)
 
     logger.info("API routes configured")
-
-    # Initialize system monitoring and scheduler
-    @app.on_event("startup")
-    async def startup_event():
-        """Initialize monitoring and scheduler on startup"""
-        try:
-            from src.metrics.system_monitor import system_monitor
-
-            await system_monitor.start_monitoring()
-            logger.info("System monitoring started")
-        except Exception as e:
-            logger.error(f"Failed to start system monitoring: {e}")
-
-        try:
-            from src.workflow_scheduler import workflow_scheduler
-
-            # Set up workflow executor integration
-            async def execute_scheduled_workflow(scheduled_workflow):
-                """Execute a scheduled workflow using the workflow API"""
-                try:
-                    from fastapi import BackgroundTasks
-
-                    from backend.api.workflow import (
-                        WorkflowExecutionRequest,
-                        execute_workflow,
-                    )
-
-                    # Create execution request
-                    execution_request = WorkflowExecutionRequest(
-                        user_message=scheduled_workflow.user_message,
-                        workflow_id=scheduled_workflow.id,
-                        auto_approve=scheduled_workflow.auto_approve,
-                    )
-
-                    # Execute workflow
-                    background_tasks = BackgroundTasks()
-                    result = await execute_workflow(execution_request, background_tasks)
-
-                    return result
-
-                except Exception as e:
-                    logger.error(f"Scheduled workflow execution failed: {e}")
-                    return {"success": False, "error": str(e)}
-
-            workflow_scheduler.set_workflow_executor(execute_scheduled_workflow)
-            await workflow_scheduler.start()
-            logger.info("Workflow scheduler started")
-        except Exception as e:
-            logger.error(f"Failed to start workflow scheduler: {e}")
-
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        """Cleanup monitoring and scheduler on shutdown"""
-        try:
-            from src.metrics.system_monitor import system_monitor
-
-            await system_monitor.stop_monitoring()
-            logger.info("System monitoring stopped")
-        except Exception as e:
-            logger.error(f"Failed to stop system monitoring: {e}")
-
-        try:
-            from src.workflow_scheduler import workflow_scheduler
-
-            await workflow_scheduler.stop()
-            logger.info("Workflow scheduler stopped")
-        except Exception as e:
-            logger.error(f"Failed to stop workflow scheduler: {e}")
 
 
 def add_static_files(app: FastAPI) -> None:
