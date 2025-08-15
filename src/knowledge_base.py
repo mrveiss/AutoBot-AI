@@ -16,11 +16,13 @@ from pypdf import PdfReader
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
+
 # Import centralized Redis client utility
 from src.utils.redis_client import get_redis_client
+
 # Import retry mechanism and circuit breaker
-from src.retry_mechanism import retry_async, retry_database_operation, RetryStrategy
-from src.circuit_breaker import circuit_breaker_async, protected_database_call
+from src.retry_mechanism import retry_async, RetryStrategy
+from src.circuit_breaker import circuit_breaker_async
 
 
 class KnowledgeBase:
@@ -135,22 +137,26 @@ class KnowledgeBase:
                             model=fallback_model, base_url=llm_base_url
                         )
                         logging.info(
-                            f"KnowledgeBase: Successfully initialized with fallback model '{fallback_model}'"
+                            f"KnowledgeBase: Successfully initialized with "
+                            f"fallback model '{fallback_model}'"
                         )
                         model_initialized = True
                         break
                     except Exception as fallback_error:
                         logging.warning(
-                            f"KnowledgeBase: Fallback model '{fallback_model}' also failed: {fallback_error}"
+                            f"KnowledgeBase: Fallback model '{fallback_model}' "
+                            f"also failed: {fallback_error}"
                         )
                         continue
 
                 if not model_initialized:
                     logging.error(
-                        "KnowledgeBase: All LLM models failed to initialize. KnowledgeBase will be disabled."
+                        "KnowledgeBase: All LLM models failed to initialize. "
+                        "KnowledgeBase will be disabled."
                     )
                     raise Exception(
-                        f"No available Ollama models found. Original error with '{llm_model}': {e}"
+                        f"No available Ollama models found. "
+                        f"Original error with '{llm_model}': {e}"
                     )
 
             try:
@@ -158,14 +164,17 @@ class KnowledgeBase:
                     model_name=self.embedding_model_name, base_url=llm_base_url
                 )
                 logging.info(
-                    f"KnowledgeBase: Successfully initialized embedding model '{self.embedding_model_name}'"
+                    f"KnowledgeBase: Successfully initialized embedding model "
+                    f"'{self.embedding_model_name}'"
                 )
             except Exception as e:
                 logging.error(
-                    f"KnowledgeBase: Embedding model '{self.embedding_model_name}' failed to initialize: {e}"
+                    f"KnowledgeBase: Embedding model '{self.embedding_model_name}' "
+                    f"failed to initialize: {e}"
                 )
                 raise Exception(
-                    f"Embedding model '{self.embedding_model_name}' not available. Error: {e}"
+                    f"Embedding model '{self.embedding_model_name}' "
+                    f"not available. Error: {e}"
                 )
         else:
             logging.warning(
@@ -196,7 +205,8 @@ class KnowledgeBase:
                 logging.info(f"Detected embedding dimension: {embedding_dim}")
             except Exception as e:
                 logging.warning(
-                    f"Could not detect embedding dimension, using default {embedding_dim}: {e}"
+                    f"Could not detect embedding dimension, using default "
+                    f"{embedding_dim}: {e}"
                 )
 
             schema = RedisVectorStoreSchema(
@@ -325,8 +335,15 @@ class KnowledgeBase:
                 "message": f"Error adding file to KB: {str(e)}",
             }
 
-    @circuit_breaker_async("knowledge_base_service", failure_threshold=5, recovery_timeout=15.0, timeout=30.0)
-    @retry_async(max_attempts=3, base_delay=0.5, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
+    @circuit_breaker_async(
+        "knowledge_base_service",
+        failure_threshold=5,
+        recovery_timeout=15.0,
+        timeout=30.0,
+    )
+    @retry_async(
+        max_attempts=3, base_delay=0.5, strategy=RetryStrategy.EXPONENTIAL_BACKOFF
+    )
     async def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         if self.query_engine is None:
             logging.warning(
@@ -513,7 +530,7 @@ class KnowledgeBase:
             return []
 
     async def get_stats(self) -> Dict[str, Any]:
-        """Get basic statistics about the knowledge base (optimized non-blocking version)."""
+        """Get basic statistics about the knowledge base (optimized)."""
         stats = {
             "total_documents": 0,
             "total_chunks": 0,
@@ -525,13 +542,15 @@ class KnowledgeBase:
         try:
             # Use Redis SCAN instead of KEYS to avoid blocking
             import asyncio
-            
+
             async def scan_keys(pattern: str) -> int:
                 """Non-blocking key counting using SCAN"""
                 count = 0
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=100)
+                    cursor, keys = await self.redis_client.scan(
+                        cursor, match=pattern, count=100
+                    )
                     count += len(keys)
                     if cursor == 0:
                         break
@@ -543,15 +562,13 @@ class KnowledgeBase:
             doc_count_task = asyncio.create_task(
                 scan_keys(f"{self.redis_index_name}:doc:*")
             )
-            fact_count_task = asyncio.create_task(
-                scan_keys("fact:*")
-            )
-            
+            fact_count_task = asyncio.create_task(scan_keys("fact:*"))
+
             # Wait for both counts with timeout to prevent hanging
             try:
                 doc_count, fact_count = await asyncio.wait_for(
                     asyncio.gather(doc_count_task, fact_count_task),
-                    timeout=5.0  # 5 second timeout
+                    timeout=5.0,  # 5 second timeout
                 )
                 stats["total_documents"] = doc_count
                 stats["total_chunks"] = doc_count  # Simple approximation
@@ -592,7 +609,6 @@ class KnowledgeBase:
     async def get_detailed_stats(self) -> Dict[str, Any]:
         """Get detailed statistics about the knowledge base (NPU-accelerated)."""
         from datetime import datetime
-        from .npu_integration import process_with_npu_fallback
 
         detailed_stats = {
             "total_size": 0,  # in bytes
