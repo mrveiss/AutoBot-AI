@@ -33,13 +33,36 @@ curl -s "http://localhost:8001/api/control/status" || echo "Control panel API no
 docker ps | grep npu-worker || echo "NPU worker not running (optional)"
 ```
 
+### ⚠️ IMPORTANT: USER INTERACTION REQUIRED
+
+**CRITICAL**: The `run_agent.sh` script requires root password entry for certain operations and CANNOT be executed autonomously by Claude Code. When testing or starting the application is needed:
+
+```bash
+# ❌ CLAUDE CODE CANNOT RUN THESE COMMANDS - USER MUST EXECUTE:
+./run_agent.sh                     # Requires root password for Docker/system operations  
+./run_agent.sh --test-mode         # Requires root password for container management
+
+# ✅ CLAUDE CODE CAN RUN THESE ALTERNATIVES:
+python main.py                     # Direct Python startup (no Docker containers)
+python -m pytest tests/           # Test execution
+flake8 src/ backend/              # Code quality checks
+curl http://localhost:8001/api/system/health  # Health checks (if app running)
+```
+
+**When you need to test the application:**
+1. **Ask the user to run**: `./run_agent.sh --test-mode`
+2. **Wait for user confirmation** that the app started successfully
+3. **Then proceed** with API health checks and other validation
+
+**Never attempt to run `run_agent.sh` directly - it will fail due to password requirements.**
+
 ### 📋 MANDATORY PRE-COMMIT WORKFLOW
 
 **Before ANY commit, execute this exact sequence:**
 
 ```bash
 # 1. TESTING PHASE - Complete system validation (see TESTING ORGANIZATION section)
-./run_agent.sh --test-mode                    # Test basic system startup
+# NOTE: Ask user to run: ./run_agent.sh --test-mode    # Test basic system startup (requires root password)
 python -m pytest tests/unit/ -v --tb=short    # Run unit tests
 python -m pytest tests/integration/ -v        # Run integration tests
 python -m pytest tests/security/ -v           # Run security tests
@@ -187,10 +210,10 @@ python scripts/utilities/report_manager.py --list
 
 ### Emergency Recovery
 ```bash
-# If system breaks during development
+# If system breaks during development (USER MUST RUN final command)
 pkill -f uvicorn; docker compose -f docker/compose/docker-compose.hybrid.yml down
 ./scripts/setup/setup_agent.sh --force-reinstall
-./run_agent.sh
+# ./run_agent.sh    # USER MUST RUN - requires root password
 
 # NPU worker recovery
 docker compose -f docker/compose/docker-compose.hybrid.yml --profile npu down
@@ -266,8 +289,8 @@ docs/                                   # 📚 NEW - Organized documentation
 # Complete setup (run once)
 ./scripts/setup/setup_agent.sh
 
-# Start full system
-./run_agent.sh
+# Start full system (USER MUST RUN - requires root password)
+# ./run_agent.sh
 
 # Development mode (auto-reload)
 source venv/bin/activate && python main.py --dev
