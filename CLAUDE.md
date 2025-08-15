@@ -226,9 +226,68 @@ python -c "from src.enhanced_memory_manager import EnhancedMemoryManager; Enhanc
 
 ## 📋 PROJECT OVERVIEW
 
-AutoBot is an enterprise-grade autonomous AI platform with Vue 3 frontend and FastAPI backend.
+AutoBot is a revolutionary autonomous AI platform representing a paradigm shift toward artificial general intelligence (AGI). Built with Vue 3 frontend and FastAPI backend, it features sophisticated multi-modal processing, advanced multi-agent orchestration, and cutting-edge AI model integration.
 
 **Status**: Production-ready Phase 9 Complete | **Architecture**: Hybrid Multi-Agent + NPU | **Stack**: Python 3.10.13, Vue 3, Redis Stack, OpenVINO
+
+## 🤖 AGENT SYSTEM ARCHITECTURE
+
+AutoBot's revolutionary multi-agent system features intelligent orchestration with 20+ specialized agents:
+
+### Agent Development Rules
+1. **ALWAYS** extend `BaseAgent` class for standardized interface
+2. **ALWAYS** implement `process_request()` and `get_capabilities()` methods
+3. **ALWAYS** use `AgentRequest`/`AgentResponse` for communication
+4. **NEVER** access system resources directly - use security validation
+5. **ALWAYS** implement health checks and performance tracking
+6. **REQUIRED**: Add new agents to agent registry in `src/agents/__init__.py`
+7. **CRITICAL**: Test agent with `python test_agent_[name].py` before deployment
+
+### Agent Tier Classification
+
+#### **Tier 1: Core Agents (Always Available)**
+- `chat_agent.py` - Conversational AI (Llama 3.2 1B)
+- `kb_librarian_agent.py` - Knowledge retrieval (always-on search)
+- `enhanced_system_commands_agent.py` - System operations with security
+
+#### **Tier 2: Processing Agents (On-Demand)**  
+- `rag_agent.py` - Document synthesis (Llama 3.2 3B)
+- `research_agent.py` - Web research coordination (Playwright)
+- `containerized_librarian_assistant.py` - Advanced web research pipeline
+
+#### **Tier 3: Specialized Agents (Task-Specific)**
+- `security_scanner_agent.py` - Vulnerability assessment  
+- `network_discovery_agent.py` - Network reconnaissance
+- `interactive_terminal_agent.py` - Full terminal access with PTY
+- `classification_agent.py` - Request type classification
+
+#### **Tier 4: Advanced Multi-Modal Agents**
+- `advanced_web_research.py` - Playwright automation with CAPTCHA solving
+- `multimodal_processor.py` - Vision + Voice + Text processing
+- `computer_vision_system.py` - Screenshot analysis & UI understanding
+- `voice_processing_system.py` - Speech recognition & command parsing
+
+### Agent Security Classifications
+- **🟢 Low Risk**: Chat, KB Librarian, RAG (read-only operations)
+- **🟡 Medium Risk**: System Commands, Research, Classification (controlled access)
+- **🔴 High Risk**: Security Scanner, Network Discovery (active reconnaissance)
+- **⚫ Critical Risk**: Interactive Terminal, Advanced Web Research (system access)
+
+### Agent Communication Patterns
+```python
+# Standard Agent Request Flow
+AgentRequest → Agent.process_request() → AgentResponse
+    ↓
+Health Monitoring → Circuit Breaker → Performance Tracking
+```
+
+### Multi-Agent Orchestration
+```python
+# Complex Workflow Example:
+Classification Agent → Complexity Analysis → Agent Selection
+    ↓
+Research Agent → Knowledge Manager → RAG Agent → User Approval → System Commands
+```
 
 ### Key Components for Code Changes
 ```
