@@ -10,17 +10,18 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from backend.api.secure_terminal_websocket import (
+    get_secure_session,
+    handle_secure_terminal_websocket,
+)
+from backend.api.simple_terminal_websocket import (
+    get_simple_terminal_session,
+    get_simple_terminal_sessions,
+    handle_simple_terminal_websocket,
+)
 from backend.api.terminal_websocket import (
     system_command_agent,
     terminal_websocket_endpoint,
-)
-from backend.api.simple_terminal_websocket import (
-    simple_terminal_handler,
-    simple_terminal_websocket_endpoint,
-)
-from backend.api.secure_terminal_websocket import (
-    handle_secure_terminal_websocket,
-    get_secure_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,14 +64,14 @@ async def websocket_terminal(websocket: WebSocket, chat_id: str):
 @router.websocket("/ws/simple/{session_id}")
 async def websocket_simple_terminal(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for simple terminal sessions"""
-    await simple_terminal_websocket_endpoint(websocket, session_id)
+    await handle_simple_terminal_websocket(websocket, session_id)
 
 
 @router.websocket("/ws/secure/{session_id}")
 async def websocket_secure_terminal(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for secure terminal sessions with auditing"""
     # Get security layer from app state (available via websocket.app.state)
-    security_layer = getattr(websocket.app.state, 'enhanced_security_layer', None)
+    security_layer = getattr(websocket.app.state, "enhanced_security_layer", None)
     await handle_secure_terminal_websocket(websocket, session_id, security_layer)
 
 
@@ -276,7 +277,7 @@ async def get_active_sessions():
 async def get_simple_sessions():
     """Get list of active simple terminal sessions"""
     try:
-        sessions = simple_terminal_handler.get_active_sessions()
+        sessions = get_simple_terminal_sessions()
         return JSONResponse(content={"sessions": sessions})
 
     except Exception as e:
