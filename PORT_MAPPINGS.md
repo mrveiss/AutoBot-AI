@@ -10,9 +10,9 @@ This document lists all port mappings used by AutoBot services.
 | autobot-redis | 8002 | 8002 | RedisInsight Web UI |
 | autobot-npu-worker | 8081 | 8081 | NPU inference API |
 | autobot-ai-stack | 8080 | 8080 | AI services API |
-| autobot-playwright | 3000 | 3000 | Playwright service API |
-| autobot-playwright | 5901 | 5901 | VNC server (avoids Kali's default 5900) |
-| autobot-playwright | 6080 | 6080 | noVNC web interface |
+| autobot-playwright-vnc | 3000 | 3000 | Playwright service API ✅ |
+| autobot-playwright-vnc | 5901 | 5901 | VNC server (avoids Kali's default 5900) ✅ |
+| autobot-playwright-vnc | 6080 | 6080 | noVNC web interface ✅ |
 
 ## Local Services
 
