@@ -114,7 +114,7 @@ class SecureTerminalSession(BaseTerminalWebSocket):
 
             # Check for risky commands (optional enhancement)
             risky_patterns = [
-                "rm -rf",
+                "rm -r",
                 "sudo rm",
                 "dd if=",
                 "mkfs",

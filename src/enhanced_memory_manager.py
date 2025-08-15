@@ -3,23 +3,24 @@ Enhanced Memory Manager for AutoBot Phase 7
 Comprehensive task logging and execution history with SQLite and markdown references
 """
 
+import base64
+import hashlib
 import json
 import logging
 import pickle
 import sqlite3
-import base64
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-from dataclasses import dataclass, asdict
-from enum import Enum
-import hashlib
 
 logger = logging.getLogger(__name__)
 
 
 class TaskStatus(Enum):
     """Task execution status enumeration"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -30,6 +31,7 @@ class TaskStatus(Enum):
 
 class TaskPriority(Enum):
     """Task priority levels"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -39,6 +41,7 @@ class TaskPriority(Enum):
 @dataclass
 class TaskExecutionRecord:
     """Comprehensive task execution record"""
+
     task_id: str
     task_name: str
     description: str
@@ -64,17 +67,20 @@ class EnhancedMemoryManager:
     Enhanced Memory Manager with SQLite backend for comprehensive task logging
     and execution history tracking with markdown reference system
     """
-    
+
     def __init__(self, db_path: str = "data/enhanced_memory.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
-        logger.info(f"Enhanced Memory Manager initialized with database: {self.db_path}")
-    
+        logger.info(
+            f"Enhanced Memory Manager initialized with database: {self.db_path}"
+        )
+
     def _init_database(self):
         """Initialize SQLite database with comprehensive schema"""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS task_execution_history (
                     task_id TEXT PRIMARY KEY,
                     task_name TEXT NOT NULL,
@@ -94,9 +100,11 @@ class EnhancedMemoryManager:
                     metadata_json TEXT,
                     FOREIGN KEY (parent_task_id) REFERENCES task_execution_history(task_id)
                 )
-            """)
-            
-            conn.execute("""
+            """
+            )
+
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS markdown_references (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id TEXT NOT NULL,
@@ -106,9 +114,11 @@ class EnhancedMemoryManager:
                     created_at TIMESTAMP NOT NULL,
                     FOREIGN KEY (task_id) REFERENCES task_execution_history(task_id)
                 )
-            """)
-            
-            conn.execute("""
+            """
+            )
+
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS embedding_cache (
                     content_hash TEXT PRIMARY KEY,
                     content_type TEXT NOT NULL,
@@ -117,9 +127,11 @@ class EnhancedMemoryManager:
                     created_at TIMESTAMP NOT NULL,
                     last_accessed TIMESTAMP NOT NULL
                 )
-            """)
-            
-            conn.execute("""
+            """
+            )
+
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS subtask_relationships (
                     parent_task_id TEXT NOT NULL,
                     subtask_id TEXT NOT NULL,
@@ -128,76 +140,103 @@ class EnhancedMemoryManager:
                     FOREIGN KEY (parent_task_id) REFERENCES task_execution_history(task_id),
                     FOREIGN KEY (subtask_id) REFERENCES task_execution_history(task_id)
                 )
-            """)
-            
+            """
+            )
+
             # Create indexes for performance
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_task_status ON task_execution_history(status)
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_task_created_at ON task_execution_history(created_at)
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_task_agent_type ON task_execution_history(agent_type)
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_markdown_task_id ON markdown_references(task_id)
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_embedding_model ON embedding_cache(embedding_model)
-            """)
-            
+            """
+            )
+
             conn.commit()
-    
-    def create_task_record(self, 
-                          task_name: str,
-                          description: str,
-                          priority: TaskPriority = TaskPriority.MEDIUM,
-                          agent_type: Optional[str] = None,
-                          inputs: Optional[Dict[str, Any]] = None,
-                          parent_task_id: Optional[str] = None,
-                          metadata: Optional[Dict[str, Any]] = None) -> str:
+
+    def create_task_record(
+        self,
+        task_name: str,
+        description: str,
+        priority: TaskPriority = TaskPriority.MEDIUM,
+        agent_type: Optional[str] = None,
+        inputs: Optional[Dict[str, Any]] = None,
+        parent_task_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """Create a new task execution record"""
         task_id = self._generate_task_id(task_name)
         created_at = datetime.now()
-        
+
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO task_execution_history 
-                (task_id, task_name, description, status, priority, created_at, 
+            conn.execute(
+                """
+                INSERT INTO task_execution_history
+                (task_id, task_name, description, status, priority, created_at,
                  agent_type, inputs_json, parent_task_id, metadata_json)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                task_id, task_name, description, TaskStatus.PENDING.value,
-                priority.value, created_at, agent_type,
-                json.dumps(inputs) if inputs else None,
-                parent_task_id,
-                json.dumps(metadata) if metadata else None
-            ))
-            
+            """,
+                (
+                    task_id,
+                    task_name,
+                    description,
+                    TaskStatus.PENDING.value,
+                    priority.value,
+                    created_at,
+                    agent_type,
+                    json.dumps(inputs) if inputs else None,
+                    parent_task_id,
+                    json.dumps(metadata) if metadata else None,
+                ),
+            )
+
             # Add subtask relationship if this is a subtask
             if parent_task_id:
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT INTO subtask_relationships (parent_task_id, subtask_id, created_at)
                     VALUES (?, ?, ?)
-                """, (parent_task_id, task_id, created_at))
-            
+                """,
+                    (parent_task_id, task_id, created_at),
+                )
+
             conn.commit()
-        
+
         logger.info(f"Created task record: {task_id} - {task_name}")
         return task_id
-    
+
     def start_task(self, task_id: str) -> bool:
         """Mark task as started"""
         started_at = datetime.now()
-        
+
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("""
-                UPDATE task_execution_history 
+            cursor = conn.execute(
+                """
+                UPDATE task_execution_history
                 SET status = ?, started_at = ?
                 WHERE task_id = ?
-            """, (TaskStatus.IN_PROGRESS.value, started_at, task_id))
-            
+            """,
+                (TaskStatus.IN_PROGRESS.value, started_at, task_id),
+            )
+
             if cursor.rowcount > 0:
                 conn.commit()
                 logger.info(f"Started task: {task_id}")
@@ -205,155 +244,204 @@ class EnhancedMemoryManager:
             else:
                 logger.warning(f"Task not found for start: {task_id}")
                 return False
-    
-    def complete_task(self, 
-                     task_id: str,
-                     outputs: Optional[Dict[str, Any]] = None,
-                     status: TaskStatus = TaskStatus.COMPLETED) -> bool:
+
+    def complete_task(
+        self,
+        task_id: str,
+        outputs: Optional[Dict[str, Any]] = None,
+        status: TaskStatus = TaskStatus.COMPLETED,
+    ) -> bool:
         """Mark task as completed with optional outputs"""
         completed_at = datetime.now()
-        
+
         with sqlite3.connect(self.db_path) as conn:
             # Get task start time to calculate duration
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT started_at FROM task_execution_history WHERE task_id = ?
-            """, (task_id,))
-            
+            """,
+                (task_id,),
+            )
+
             row = cursor.fetchone()
             if not row:
                 logger.warning(f"Task not found for completion: {task_id}")
                 return False
-            
+
             started_at = row[0]
             duration = None
             if started_at:
                 started_dt = datetime.fromisoformat(started_at)
                 duration = (completed_at - started_dt).total_seconds()
-            
-            cursor = conn.execute("""
-                UPDATE task_execution_history 
+
+            cursor = conn.execute(
+                """
+                UPDATE task_execution_history
                 SET status = ?, completed_at = ?, duration_seconds = ?, outputs_json = ?
                 WHERE task_id = ?
-            """, (
-                status.value, completed_at, duration,
-                json.dumps(outputs) if outputs else None,
-                task_id
-            ))
-            
+            """,
+                (
+                    status.value,
+                    completed_at,
+                    duration,
+                    json.dumps(outputs) if outputs else None,
+                    task_id,
+                ),
+            )
+
             if cursor.rowcount > 0:
                 conn.commit()
                 logger.info(f"Completed task: {task_id} (duration: {duration}s)")
                 return True
             else:
                 return False
-    
+
     def fail_task(self, task_id: str, error_message: str, retry_count: int = 0) -> bool:
         """Mark task as failed with error information"""
         completed_at = datetime.now()
-        
+
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("""
-                UPDATE task_execution_history 
+            cursor = conn.execute(
+                """
+                UPDATE task_execution_history
                 SET status = ?, completed_at = ?, error_message = ?, retry_count = ?
                 WHERE task_id = ?
-            """, (TaskStatus.FAILED.value, completed_at, error_message, retry_count, task_id))
-            
+            """,
+                (
+                    TaskStatus.FAILED.value,
+                    completed_at,
+                    error_message,
+                    retry_count,
+                    task_id,
+                ),
+            )
+
             if cursor.rowcount > 0:
                 conn.commit()
                 logger.error(f"Failed task: {task_id} - {error_message}")
                 return True
             else:
                 return False
-    
-    def add_markdown_reference(self, 
-                              task_id: str,
-                              markdown_file_path: str,
-                              reference_type: str = "documentation") -> bool:
+
+    def add_markdown_reference(
+        self,
+        task_id: str,
+        markdown_file_path: str,
+        reference_type: str = "documentation",
+    ) -> bool:
         """Add markdown file reference to task"""
         if not Path(markdown_file_path).exists():
             logger.warning(f"Markdown file not found: {markdown_file_path}")
             return False
-        
+
         # Calculate content hash for tracking changes
-        with open(markdown_file_path, 'r', encoding='utf-8') as f:
+        with open(markdown_file_path, "r", encoding="utf-8") as f:
             content = f.read()
         content_hash = hashlib.sha256(content.encode()).hexdigest()
-        
+
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO markdown_references 
+            conn.execute(
+                """
+                INSERT INTO markdown_references
                 (task_id, markdown_file_path, content_hash, reference_type, created_at)
                 VALUES (?, ?, ?, ?, ?)
-            """, (task_id, markdown_file_path, content_hash, reference_type, datetime.now()))
-            
+            """,
+                (
+                    task_id,
+                    markdown_file_path,
+                    content_hash,
+                    reference_type,
+                    datetime.now(),
+                ),
+            )
+
             conn.commit()
-        
+
         logger.info(f"Added markdown reference: {task_id} -> {markdown_file_path}")
         return True
-    
-    def store_embedding(self, 
-                       content: str,
-                       content_type: str,
-                       embedding_model: str,
-                       embedding_vector: List[float]) -> bool:
+
+    def store_embedding(
+        self,
+        content: str,
+        content_type: str,
+        embedding_model: str,
+        embedding_vector: List[float],
+    ) -> bool:
         """Store embedding vector as pickled blob in SQLite"""
         content_hash = hashlib.sha256(content.encode()).hexdigest()
-        
+
         # Serialize embedding vector using pickle and base64 encode
         embedding_data = base64.b64encode(pickle.dumps(embedding_vector))
-        
+
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO embedding_cache 
-                (content_hash, content_type, embedding_model, embedding_data, 
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO embedding_cache
+                (content_hash, content_type, embedding_model, embedding_data,
                  created_at, last_accessed)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                content_hash, content_type, embedding_model, embedding_data,
-                datetime.now(), datetime.now()
-            ))
-            
+            """,
+                (
+                    content_hash,
+                    content_type,
+                    embedding_model,
+                    embedding_data,
+                    datetime.now(),
+                    datetime.now(),
+                ),
+            )
+
             conn.commit()
-        
+
         logger.debug(f"Stored embedding for content hash: {content_hash[:16]}...")
         return True
-    
-    def get_embedding(self, content: str, embedding_model: str) -> Optional[List[float]]:
+
+    def get_embedding(
+        self, content: str, embedding_model: str
+    ) -> Optional[List[float]]:
         """Retrieve cached embedding vector"""
         content_hash = hashlib.sha256(content.encode()).hexdigest()
-        
+
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("""
-                SELECT embedding_data FROM embedding_cache 
+            cursor = conn.execute(
+                """
+                SELECT embedding_data FROM embedding_cache
                 WHERE content_hash = ? AND embedding_model = ?
-            """, (content_hash, embedding_model))
-            
+            """,
+                (content_hash, embedding_model),
+            )
+
             row = cursor.fetchone()
             if row:
                 # Update last accessed time
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE embedding_cache SET last_accessed = ?
                     WHERE content_hash = ? AND embedding_model = ?
-                """, (datetime.now(), content_hash, embedding_model))
+                """,
+                    (datetime.now(), content_hash, embedding_model),
+                )
                 conn.commit()
-                
+
                 # Deserialize embedding vector
                 embedding_data = base64.b64decode(row[0])
                 embedding_vector = pickle.loads(embedding_data)
-                
+
                 logger.debug(f"Retrieved cached embedding for: {content_hash[:16]}...")
                 return embedding_vector
-        
+
         return None
-    
-    def get_task_history(self, 
-                        agent_type: Optional[str] = None,
-                        status: Optional[TaskStatus] = None,
-                        limit: int = 100,
-                        days_back: int = 30) -> List[TaskExecutionRecord]:
+
+    def get_task_history(
+        self,
+        agent_type: Optional[str] = None,
+        status: Optional[TaskStatus] = None,
+        limit: int = 100,
+        days_back: int = 30,
+    ) -> List[TaskExecutionRecord]:
         """Get task execution history with optional filtering"""
         cutoff_date = datetime.now() - timedelta(days=days_back)
-        
+
         query = """
             SELECT task_id, task_name, description, status, priority,
                    created_at, started_at, completed_at, duration_seconds,
@@ -363,37 +451,43 @@ class EnhancedMemoryManager:
             WHERE created_at > ?
         """
         params = [cutoff_date]
-        
+
         if agent_type:
             query += " AND agent_type = ?"
             params.append(agent_type)
-        
+
         if status:
             query += " AND status = ?"
             params.append(status.value)
-        
+
         query += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
-        
+
         tasks = []
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(query, params)
-            
+
             for row in cursor.fetchall():
                 # Get markdown references for this task
-                ref_cursor = conn.execute("""
-                    SELECT markdown_file_path FROM markdown_references 
+                ref_cursor = conn.execute(
+                    """
+                    SELECT markdown_file_path FROM markdown_references
                     WHERE task_id = ?
-                """, (row[0],))
+                """,
+                    (row[0],),
+                )
                 markdown_refs = [ref[0] for ref in ref_cursor.fetchall()]
-                
+
                 # Get subtask IDs
-                subtask_cursor = conn.execute("""
-                    SELECT subtask_id FROM subtask_relationships 
+                subtask_cursor = conn.execute(
+                    """
+                    SELECT subtask_id FROM subtask_relationships
                     WHERE parent_task_id = ?
-                """, (row[0],))
+                """,
+                    (row[0],),
+                )
                 subtask_ids = [subtask[0] for subtask in subtask_cursor.fetchall()]
-                
+
                 task = TaskExecutionRecord(
                     task_id=row[0],
                     task_name=row[1],
@@ -412,58 +506,66 @@ class EnhancedMemoryManager:
                     parent_task_id=row[14],
                     markdown_references=markdown_refs,
                     subtask_ids=subtask_ids,
-                    metadata=json.loads(row[15]) if row[15] else None
+                    metadata=json.loads(row[15]) if row[15] else None,
                 )
                 tasks.append(task)
-        
+
         return tasks
-    
+
     def get_task_statistics(self, days_back: int = 30) -> Dict[str, Any]:
         """Get comprehensive task execution statistics"""
         cutoff_date = datetime.now() - timedelta(days=days_back)
-        
+
         with sqlite3.connect(self.db_path) as conn:
             # Overall statistics
-            cursor = conn.execute("""
-                SELECT status, COUNT(*) 
-                FROM task_execution_history 
+            cursor = conn.execute(
+                """
+                SELECT status, COUNT(*)
+                FROM task_execution_history
                 WHERE created_at > ?
                 GROUP BY status
-            """, (cutoff_date,))
-            
+            """,
+                (cutoff_date,),
+            )
+
             status_counts = {row[0]: row[1] for row in cursor.fetchall()}
-            
+
             # Agent type statistics
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT agent_type, COUNT(*), AVG(duration_seconds)
-                FROM task_execution_history 
+                FROM task_execution_history
                 WHERE created_at > ? AND agent_type IS NOT NULL
                 GROUP BY agent_type
-            """, (cutoff_date,))
-            
+            """,
+                (cutoff_date,),
+            )
+
             agent_stats = {}
             for row in cursor.fetchall():
-                agent_stats[row[0]] = {
-                    "count": row[1],
-                    "avg_duration": row[2]
-                }
-            
+                agent_stats[row[0]] = {"count": row[1], "avg_duration": row[2]}
+
             # Success rate and performance metrics
-            cursor = conn.execute("""
-                SELECT 
+            cursor = conn.execute(
+                """
+                SELECT
                     COUNT(*) as total_tasks,
                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_tasks,
                     AVG(duration_seconds) as avg_duration,
                     AVG(retry_count) as avg_retries
-                FROM task_execution_history 
+                FROM task_execution_history
                 WHERE created_at > ?
-            """, (cutoff_date,))
-            
+            """,
+                (cutoff_date,),
+            )
+
             row = cursor.fetchone()
             total_tasks = row[0] if row[0] else 0
             completed_tasks = row[1] if row[1] else 0
-            success_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-            
+            success_rate = (
+                (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+            )
+
             return {
                 "period_days": days_back,
                 "total_tasks": total_tasks,
@@ -472,39 +574,50 @@ class EnhancedMemoryManager:
                 "avg_duration_seconds": row[2],
                 "avg_retry_count": row[3],
                 "agent_statistics": agent_stats,
-                "embedding_cache_size": self._get_embedding_cache_size()
+                "embedding_cache_size": self._get_embedding_cache_size(),
             }
-    
+
     def cleanup_old_data(self, days_to_keep: int = 90):
         """Clean up old task records and embeddings"""
         cutoff_date = datetime.now() - timedelta(days=days_to_keep)
-        
+
         with sqlite3.connect(self.db_path) as conn:
             # Clean up old task records
-            cursor = conn.execute("""
-                DELETE FROM task_execution_history 
+            cursor = conn.execute(
+                """
+                DELETE FROM task_execution_history
                 WHERE created_at < ?
-            """, (cutoff_date,))
+            """,
+                (cutoff_date,),
+            )
             tasks_deleted = cursor.rowcount
-            
+
             # Clean up old embeddings (keep frequently accessed ones)
-            cursor = conn.execute("""
-                DELETE FROM embedding_cache 
+            cursor = conn.execute(
+                """
+                DELETE FROM embedding_cache
                 WHERE last_accessed < ?
-            """, (cutoff_date,))
+            """,
+                (cutoff_date,),
+            )
             embeddings_deleted = cursor.rowcount
-            
+
             conn.commit()
-        
-        logger.info(f"Cleanup completed: {tasks_deleted} tasks, {embeddings_deleted} embeddings deleted")
-        return {"tasks_deleted": tasks_deleted, "embeddings_deleted": embeddings_deleted}
-    
+
+        logger.info(
+            f"Cleanup completed: {tasks_deleted} tasks, {embeddings_deleted} embeddings deleted"
+        )
+        return {
+            "tasks_deleted": tasks_deleted,
+            "embeddings_deleted": embeddings_deleted,
+        }
+
     def _generate_task_id(self, task_name: str) -> str:
         """Generate unique task ID"""
         timestamp = datetime.now().isoformat()
         content = f"{task_name}_{timestamp}"
         return hashlib.sha256(content.encode()).hexdigest()[:16]
-    
+
     def _get_embedding_cache_size(self) -> int:
         """Get current embedding cache size"""
         with sqlite3.connect(self.db_path) as conn:

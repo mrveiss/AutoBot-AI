@@ -9,10 +9,10 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from src.intelligence.goal_processor import GoalProcessor, ProcessedGoal
+
 # Import our new intelligent agent components
 from src.intelligence.os_detector import OSDetector, OSInfo, get_os_detector
 from src.intelligence.streaming_executor import (
@@ -22,6 +22,7 @@ from src.intelligence.streaming_executor import (
 )
 from src.intelligence.tool_selector import OSAwareToolSelector
 from src.knowledge_base import KnowledgeBase
+
 # Import existing AutoBot components
 from src.llm_interface import LLMInterface
 from src.utils.command_validator import CommandValidator
@@ -460,9 +461,7 @@ class IntelligentAgent:
                         # Validate command safety
                         if self.command_validator.is_command_safe(command):
                             # Execute the command
-                            async for (
-                                chunk
-                            ) in self.streaming_executor.execute_with_streaming(
+                            async for chunk in self.streaming_executor.execute_with_streaming(
                                 command, user_input, timeout=300
                             ):
                                 yield chunk
@@ -522,8 +521,7 @@ class IntelligentAgent:
         if not self.state.os_info.is_root and "sudo" not in install_command:
             # Add sudo if needed for common package managers
             if any(
-                pm in install_command
-                for pm in ["apt", "yum", "dnf", "pacman", "zypper"]
+                pm in install_command for pm in ["apt", "yum", "dn", "pacman", "zypper"]
             ):
                 install_command = f"sudo {install_command}"
 
@@ -566,7 +564,7 @@ class IntelligentAgent:
         """
         os_info = self.state.os_info
 
-        system_prompt = f"""You are an intelligent system administrator assistant.
+        system_prompt = """You are an intelligent system administrator assistant.
 
 SYSTEM INFORMATION:
 - OS: {os_info.os_type.value}
@@ -637,7 +635,7 @@ suggest alternatives.
 
     async def _update_system_context(self):
         """Update LLM and knowledge base with current system context."""
-        context = f"""System Information for Intelligent Agent:
+        context = """System Information for Intelligent Agent:
 - OS: {self.state.os_info.os_type.value}
 - Distribution: {
             self.state.os_info.distro.value if self.state.os_info.distro else 'N/A'
@@ -674,6 +672,7 @@ OS-specific commands.
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
         from src.utils.command_utils import get_timestamp
+
         return get_timestamp()
 
     async def get_system_status(self) -> Dict[str, Any]:

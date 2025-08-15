@@ -412,7 +412,7 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
             # Extract search query from action
             search_query = action.replace("Search Knowledge Base", "").strip()
             if not search_query:
-                search_query = f"network security scanning tools"  # Default based on workflow context
+                search_query = "network security scanning tools"  # Default based on workflow context
 
             result = await kb_agent.process_query(search_query)
             step[

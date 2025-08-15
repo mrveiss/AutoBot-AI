@@ -148,7 +148,7 @@ class OSAwareToolSelector:
                 "performance_check": {
                     OSType.LINUX: ["top -n 1", "iotop", "nethogs"],
                     OSType.MACOS: ["top -l 1", "fs_usage"],
-                    OSType.WINDOWS: ["Get-Counter", "typeperf"],
+                    OSType.WINDOWS: ["Get-Counter", "typeper"],
                 },
             },
         }

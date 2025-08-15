@@ -450,7 +450,7 @@ def add_middleware(app: FastAPI) -> None:
                 del response.headers[header]
 
         # Add security headers
-        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Content-Type-Options"] = "nosnif"
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
 
         return response

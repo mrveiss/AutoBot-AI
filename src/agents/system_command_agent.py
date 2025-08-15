@@ -38,7 +38,7 @@ class SystemCommandAgent:
             "info": "yum info {package}",
         },
         "dnf": {
-            "check": "which dnf",
+            "check": "which dn",
             "update": "sudo dnf check-update",
             "install": "sudo dnf install -y {package}",
             "search": "dnf search {package}",

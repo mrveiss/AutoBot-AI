@@ -45,17 +45,17 @@ ALLOWED_EXTENSIONS = {
     ".xml",
     ".csv",
     ".log",
-    ".conf",
+    ".con",
     ".cfg",
     ".ini",
     ".sh",
     ".bat",
     ".sql",
-    ".pdf",
+    ".pd",
     ".png",
     ".jpg",
     ".jpeg",
-    ".gif",
+    ".gi",
     ".svg",
     ".ico",
 }
@@ -347,8 +347,7 @@ async def upload_file(
             raise HTTPException(
                 status_code=413,
                 detail=(
-                    f"File too large. Maximum size: "
-                    f"{MAX_FILE_SIZE // (1024*1024)}MB"
+                    "File too large. Maximum size: " f"{MAX_FILE_SIZE // (1024*1024)}MB"
                 ),
             )
 

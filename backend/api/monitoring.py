@@ -3,7 +3,6 @@ Real-time system monitoring API endpoints for AutoBot.
 Integrates hardware monitoring into the web interface.
 """
 
-import asyncio
 import subprocess
 import time
 from datetime import datetime

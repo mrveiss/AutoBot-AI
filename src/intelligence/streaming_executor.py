@@ -12,7 +12,6 @@ import subprocess
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
@@ -124,7 +123,7 @@ class StreamingCommandExecutor:
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.ERROR,
                 content=(
-                    f"❌ Maximum number of concurrent processes "
+                    "❌ Maximum number of concurrent processes "
                     f"({self._max_processes}) reached"
                 ),
                 metadata={"process_limit_reached": True},
@@ -191,7 +190,7 @@ class StreamingCommandExecutor:
                         timestamp=self._get_timestamp(),
                         chunk_type=ChunkType.COMPLETE,
                         content=(
-                            f"✅ Command completed successfully in "
+                            "✅ Command completed successfully in "
                             f"{execution_time:.2f}s"
                         ),
                         metadata={
@@ -390,16 +389,16 @@ class StreamingCommandExecutor:
 
             # Create context-aware prompt
             prompt = (
-                f"Analyze this command output and provide a brief, helpful "
-                f"comment about the progress:\n\n"
+                "Analyze this command output and provide a brief, helpful "
+                "comment about the progress:\n\n"
                 f"User Goal: {user_goal}\n"
                 f"Recent Output: {recent_output[-150:]}\n\n"
-                f"Provide a single, concise comment (max 100 characters) "
-                f"about what's happening.\n"
-                f"Be helpful and informative, but don't repeat the obvious.\n"
-                f"Use emojis when appropriate.\n"
-                f"If the output is just routine/boring, respond with "
-                f'"SKIP" to avoid spam.'
+                "Provide a single, concise comment (max 100 characters) "
+                "about what's happening.\n"
+                "Be helpful and informative, but don't repeat the obvious.\n"
+                "Use emojis when appropriate.\n"
+                "If the output is just routine/boring, respond with "
+                "SKIP to avoid spam."
             )
 
             # Get LLM commentary
@@ -427,15 +426,15 @@ class StreamingCommandExecutor:
         """Provide intelligent commentary on command completion."""
         try:
             prompt = (
-                f"A command just completed successfully. "
-                f"Provide a brief, helpful summary:\n\n"
+                "A command just completed successfully. "
+                "Provide a brief, helpful summary:\n\n"
                 f"User Goal: {user_goal}\n"
                 f"Command: {command}\n"
                 f"Execution Time: {execution_time:.2f}s\n\n"
-                f"Provide a single, concise comment (max 150 characters) "
-                f"summarizing what was accomplished.\n"
-                f"Be helpful and celebrate the success when appropriate.\n"
-                f"Use emojis when appropriate."
+                "Provide a single, concise comment (max 150 characters) "
+                "summarizing what was accomplished.\n"
+                "Be helpful and celebrate the success when appropriate.\n"
+                "Use emojis when appropriate."
             )
 
             response = await self.llm_interface.generate_response(
@@ -455,6 +454,7 @@ class StreamingCommandExecutor:
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
         from src.utils.command_utils import get_timestamp
+
         return get_timestamp()
 
     def get_active_processes(self) -> List[Dict[str, Any]]:
@@ -556,7 +556,7 @@ if __name__ == "__main__":
     class MockCommandValidator:
         def is_command_safe(self, command):
             # Block obviously dangerous commands
-            dangerous = ["rm -rf", "format", "del /s"]
+            dangerous = ["rm -r", "format", "del /s"]
             return not any(danger in command.lower() for danger in dangerous)
 
     async def test_executor():
