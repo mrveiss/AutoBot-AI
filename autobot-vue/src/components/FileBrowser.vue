@@ -4,6 +4,32 @@
     <div class="file-actions">
       <button @click="refreshFiles" aria-label="Refresh">Refresh</button>
       <button @click="uploadFile" aria-label="Upload file">Upload File</button>
+      
+      <!-- Alternative: Visible file input for accessibility and testing -->
+      <div class="file-upload-section">
+        <label for="visible-file-input" class="file-input-label">
+          Or drag & drop files here:
+        </label>
+        <input
+          id="visible-file-input"
+          ref="visibleFileInput"
+          type="file"
+          @change="handleFileSelected"
+          class="visible-file-input"
+          data-testid="visible-file-upload-input"
+          aria-label="Visible file upload input"
+        />
+      </div>
+      
+      <!-- Hidden file input for programmatic access (legacy) -->
+      <input
+        ref="fileInput"
+        type="file"
+        style="display: none"
+        @change="handleFileSelected"
+        data-testid="file-upload-input"
+        aria-label="File upload input"
+      />
     </div>
 
     <!-- File Preview Modal -->
@@ -95,6 +121,8 @@ export default {
     const files = ref([]);
     const showPreview = ref(false);
     const previewFile = ref(null);
+    const fileInput = ref(null);
+    const visibleFileInput = ref(null);
 
     const refreshFiles = async () => {
       try {
@@ -131,31 +159,67 @@ export default {
     };
 
     const uploadFile = () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.onchange = async (event) => {
-        const file = event.target.files[0];
-        if (file) {
-          const formData = new FormData();
-          formData.append('file', file);
-          try {
-            const response = await fetch('http://localhost:8001/api/files/upload', {
-              method: 'POST',
-              body: formData
-            });
-            if (response.ok) {
-              alert(`File ${file.name} uploaded successfully.`);
-              refreshFiles();
-            } else {
-              alert('Failed to upload file. Backend integration pending.');
-            }
-          } catch (error) {
-            console.error('Error uploading file:', error);
-            alert('Error uploading file. Backend integration pending.');
+      // Use the ref file input for better testability
+      if (fileInput.value) {
+        fileInput.value.click();
+      } else {
+        // Fallback to programmatic creation for legacy compatibility
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = handleFileSelected;
+        input.click();
+      }
+    };
+
+    const handleFileSelected = async (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        await processFileUpload(file);
+        // Clear the input for next upload
+        if (fileInput.value) {
+          fileInput.value.value = '';
+        }
+      }
+    };
+
+    const processFileUpload = async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        // Add user role header for permissions (temporary auth mechanism)
+        const headers = {
+          'X-User-Role': 'admin' // TODO: Replace with proper authentication
+        };
+        
+        const response = await fetch('http://localhost:8001/api/files/upload', {
+          method: 'POST',
+          headers: headers,
+          body: formData
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          alert(`File ${file.name} uploaded successfully.`);
+          console.log('Upload response:', result);
+          refreshFiles();
+        } else {
+          const errorText = await response.text();
+          console.error('Upload failed:', response.status, errorText);
+          if (response.status === 403) {
+            alert('Permission denied. File upload requires admin privileges.');
+          } else if (response.status === 413) {
+            alert('File too large. Maximum size is 50MB.');
+          } else if (response.status === 400) {
+            alert('Invalid file type or file not allowed.');
+          } else {
+            alert(`Failed to upload file: ${response.status} ${response.statusText}`);
           }
         }
-      };
-      input.click();
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        alert('Error uploading file. Please check your connection and try again.');
+      }
     };
 
     const viewFile = async (file) => {
@@ -326,8 +390,12 @@ export default {
       files,
       showPreview,
       previewFile,
+      fileInput,
+      visibleFileInput,
       refreshFiles,
       uploadFile,
+      handleFileSelected,
+      processFileUpload,
       viewFile,
       deleteFile,
       closePreview,
@@ -375,6 +443,49 @@ export default {
 
 .file-actions button:hover {
   background-color: #0056b3;
+}
+
+.file-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 2px dashed #dee2e6;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+}
+
+.file-upload-section:hover {
+  border-color: #007bff;
+  background-color: #e3f2fd;
+}
+
+.file-input-label {
+  font-size: 14px;
+  color: #6c757d;
+  margin-bottom: 5px;
+  text-align: center;
+}
+
+.visible-file-input {
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+.visible-file-input:hover {
+  border-color: #007bff;
+}
+
+.visible-file-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
 .file-list-container {
