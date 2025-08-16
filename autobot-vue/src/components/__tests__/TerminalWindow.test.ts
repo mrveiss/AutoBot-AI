@@ -34,13 +34,13 @@ describe('TerminalWindow', () => {
 
   describe('Rendering', () => {
     it('renders the terminal window with header', () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       expect(screen.getByText(/Terminal -/)).toBeInTheDocument()
       expect(screen.getByText('🛑 KILL')).toBeInTheDocument()
       expect(screen.getByText('⚡ INT')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /reconnect/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /clear/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '🔄' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '🗑️' })).toBeInTheDocument()
     })
 
     it('renders with proper session title', () => {
@@ -48,7 +48,7 @@ describe('TerminalWindow', () => {
         title: 'My Custom Terminal Session'
       })
 
-      renderComponent(TerminalWindow, {
+      renderComponent(TerminalWindow, { router: true,
         props: { sessionData }
       })
 
@@ -63,7 +63,7 @@ describe('TerminalWindow', () => {
         automationPaused: false,
       })
 
-      renderComponent(TerminalWindow, {
+      renderComponent(TerminalWindow, { router: true,
         props: { sessionData }
       })
 
@@ -83,7 +83,7 @@ describe('TerminalWindow', () => {
         hasAutomatedWorkflow: false,
       })
 
-      renderComponent(TerminalWindow, {
+      renderComponent(TerminalWindow, { router: true,
         props: { sessionData }
       })
 
@@ -99,7 +99,7 @@ describe('TerminalWindow', () => {
 
   describe('WebSocket Connection', () => {
     it('establishes WebSocket connection on mount', () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.getConnection()
       expect(ws).toBeDefined()
@@ -107,12 +107,12 @@ describe('TerminalWindow', () => {
     })
 
     it('handles WebSocket connection status', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Initially should show connecting state
-      expect(screen.getByRole('button', { name: /reconnect/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: "🔄" })).toBeInTheDocument()
 
       // Simulate connection established
       await waitFor(() => {
@@ -121,10 +121,10 @@ describe('TerminalWindow', () => {
     })
 
     it('handles incoming terminal output', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Simulate terminal output
       webSocketTestUtil.simulateTerminalOutput('$ ls -la\ntotal 48\ndrwxr-xr-x  6 user user 4096 Jan 1 12:00 .\n', 'ls -la')
 
@@ -134,7 +134,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles WebSocket disconnection', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
       webSocketTestUtil.simulateClose(1000, 'Normal closure')
@@ -145,14 +145,14 @@ describe('TerminalWindow', () => {
     })
 
     it('handles WebSocket errors', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
       webSocketTestUtil.simulateError('Connection failed')
 
       // Should handle error gracefully - check for error indication
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /reconnect/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: "🔄" })).toBeInTheDocument()
       })
     })
   })
@@ -163,7 +163,7 @@ describe('TerminalWindow', () => {
         hasRunningProcesses: true,
       })
 
-      renderComponent(TerminalWindow, {
+      renderComponent(TerminalWindow, { router: true,
         props: { sessionData }
       })
 
@@ -180,7 +180,7 @@ describe('TerminalWindow', () => {
         hasActiveProcess: true,
       })
 
-      renderComponent(TerminalWindow, {
+      renderComponent(TerminalWindow, { router: true,
         props: { sessionData }
       })
 
@@ -198,7 +198,7 @@ describe('TerminalWindow', () => {
         automationPaused: false,
       })
 
-      renderComponent(TerminalWindow, {
+      renderComponent(TerminalWindow, { router: true,
         props: { sessionData }
       })
 
@@ -214,9 +214,9 @@ describe('TerminalWindow', () => {
     })
 
     it('handles reconnect action', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
-      const reconnectButton = screen.getByRole('button', { name: /reconnect/i })
+      const reconnectButton = screen.getByRole('button', { name: "🔄" })
       await user.click(reconnectButton)
 
       // Should attempt to reconnect WebSocket
@@ -227,7 +227,7 @@ describe('TerminalWindow', () => {
     })
 
     it('clears terminal output', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       // First add some output
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
@@ -249,10 +249,10 @@ describe('TerminalWindow', () => {
 
   describe('Command Input', () => {
     it('sends command through WebSocket', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       const commandInput = screen.getByPlaceholderText(/enter command/i) as HTMLInputElement
       const sendButton = screen.getByRole('button', { name: /send/i })
 
@@ -271,12 +271,12 @@ describe('TerminalWindow', () => {
     })
 
     it('sends command with Enter key', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       const commandInput = screen.getByPlaceholderText(/enter command/i)
-      
+
       await user.type(commandInput, 'pwd')
       await user.keyboard('{Enter}')
 
@@ -289,10 +289,10 @@ describe('TerminalWindow', () => {
     })
 
     it('prevents sending empty commands', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       const sendButton = screen.getByRole('button', { name: /send/i })
       await user.click(sendButton)
 
@@ -301,7 +301,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles command history navigation', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
       const commandInput = screen.getByPlaceholderText(/enter command/i) as HTMLInputElement
@@ -309,7 +309,7 @@ describe('TerminalWindow', () => {
       // Send a few commands to build history
       await user.type(commandInput, 'command1')
       await user.keyboard('{Enter}')
-      
+
       await user.type(commandInput, 'command2')
       await user.keyboard('{Enter}')
 
@@ -327,10 +327,10 @@ describe('TerminalWindow', () => {
 
   describe('Terminal Output Display', () => {
     it('displays command output correctly', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Simulate command and its output
       webSocketTestUtil.simulateTerminalOutput(
         '$ ls -la\ntotal 48\ndrwxr-xr-x  6 user user 4096 Jan 1 12:00 .\ndrwxr-xr-x  3 user user 4096 Jan 1 12:00 ..',
@@ -344,10 +344,10 @@ describe('TerminalWindow', () => {
     })
 
     it('handles colored terminal output', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Simulate colored output with ANSI codes
       webSocketTestUtil.simulateTerminalOutput(
         '\x1b[32mSuccess:\x1b[0m Command executed successfully',
@@ -360,10 +360,10 @@ describe('TerminalWindow', () => {
     })
 
     it('auto-scrolls to bottom on new output', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Add multiple lines of output
       for (let i = 0; i < 10; i++) {
         webSocketTestUtil.simulateTerminalOutput(`Line ${i}`)
@@ -377,10 +377,10 @@ describe('TerminalWindow', () => {
     })
 
     it('handles large output efficiently', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Simulate large output
       const largeOutput = Array.from({ length: 1000 }, (_, i) => `Line ${i}`).join('\n')
       webSocketTestUtil.simulateTerminalOutput(largeOutput)
@@ -394,10 +394,10 @@ describe('TerminalWindow', () => {
 
   describe('Session Management', () => {
     it('updates session status from props', async () => {
-      const { rerender } = renderComponent(TerminalWindow, {
-        props: { 
-          sessionData: createMockTerminalSession({ 
-            hasRunningProcesses: false 
+      const { rerender } = renderComponent(TerminalWindow, { router: true,
+        props: {
+          sessionData: createMockTerminalSession({
+            hasRunningProcesses: false
           })
         }
       })
@@ -407,8 +407,8 @@ describe('TerminalWindow', () => {
 
       // Update props
       await rerender({
-        sessionData: createMockTerminalSession({ 
-          hasRunningProcesses: true 
+        sessionData: createMockTerminalSession({
+          hasRunningProcesses: true
         })
       })
 
@@ -416,14 +416,14 @@ describe('TerminalWindow', () => {
     })
 
     it('handles session reconnection', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       // Simulate disconnect
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
       webSocketTestUtil.simulateClose(1006, 'Abnormal closure')
 
       // Click reconnect
-      const reconnectButton = screen.getByRole('button', { name: /reconnect/i })
+      const reconnectButton = screen.getByRole('button', { name: "🔄" })
       await user.click(reconnectButton)
 
       // Should establish new connection
@@ -442,7 +442,7 @@ describe('TerminalWindow', () => {
         hasRunningProcesses: true,
       })
 
-      renderComponent(TerminalWindow, {
+      renderComponent(TerminalWindow, { router: true,
         props: { sessionData }
       })
 
@@ -456,10 +456,10 @@ describe('TerminalWindow', () => {
     })
 
     it('handles malformed WebSocket messages', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Send malformed message
       ws.simulateMessage('invalid json')
 
@@ -476,7 +476,7 @@ describe('TerminalWindow', () => {
         hasAutomatedWorkflow: true,
       })
 
-      renderComponent(TerminalWindow, {
+      renderComponent(TerminalWindow, { router: true,
         props: { sessionData }
       })
 
@@ -486,10 +486,10 @@ describe('TerminalWindow', () => {
     })
 
     it('supports keyboard navigation', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       const commandInput = screen.getByPlaceholderText(/enter command/i)
-      
+
       commandInput.focus()
       expect(document.activeElement).toBe(commandInput)
 
@@ -501,10 +501,10 @@ describe('TerminalWindow', () => {
 
   describe('Integration', () => {
     it('integrates with chat workflow notifications', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Simulate workflow notification that affects terminal
       webSocketTestUtil.simulateMessage(WebSocketMessageType.WORKFLOW_UPDATE, {
         workflowId: 'test-workflow',
@@ -522,13 +522,13 @@ describe('TerminalWindow', () => {
 
   describe('Performance', () => {
     it('handles high-frequency output efficiently', async () => {
-      renderComponent(TerminalWindow)
+      renderComponent(TerminalWindow, { router: true })
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
-      
+
       // Simulate rapid output
       const startTime = performance.now()
-      
+
       for (let i = 0; i < 100; i++) {
         webSocketTestUtil.simulateTerminalOutput(`Rapid output line ${i}`)
       }
@@ -539,7 +539,7 @@ describe('TerminalWindow', () => {
 
       const endTime = performance.now()
       const duration = endTime - startTime
-      
+
       // Should handle rapid updates efficiently (less than 1 second for 100 messages)
       expect(duration).toBeLessThan(1000)
     })

@@ -1,6 +1,6 @@
 import { render, type RenderOptions } from '@testing-library/vue'
 import { createTestingPinia } from '@pinia/testing'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { vi, type Mock } from 'vitest'
 import type { Component } from 'vue'
 
@@ -9,14 +9,22 @@ const testRoutes = [
   { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
   { path: '/about', name: 'about', component: { template: '<div>About</div>' } },
   { path: '/settings', name: 'settings', component: { template: '<div>Settings</div>' } },
+  { path: '/terminal/:sessionId?', name: 'terminal', component: { template: '<div>Terminal</div>' } },
 ]
 
 // Create test router
-export const createTestRouter = (routes = testRoutes) => {
-  return createRouter({
-    history: createWebHistory(),
+export const createTestRouter = (routes = testRoutes, initialEntries = ['/']) => {
+  const router = createRouter({
+    history: createMemoryHistory(initialEntries),
     routes,
   })
+
+  // For tests that need specific routes, push to the route first
+  if (initialEntries.length > 0) {
+    router.push(initialEntries[0])
+  }
+
+  return router
 }
 
 // Enhanced render function with common setup
@@ -36,7 +44,7 @@ export const renderComponent = (
     ...global,
     plugins: [
       ...(global.plugins || []),
-      ...(router ? [createTestRouter()] : []),
+      ...(router ? [createTestRouter(undefined, ['/terminal/test-session'])] : []),
       ...(pinia ? [createTestingPinia({ createSpy: vi.fn })] : []),
     ],
   }
@@ -171,22 +179,22 @@ export const waitForElement = async (
 ): Promise<HTMLElement> => {
   return new Promise((resolve, reject) => {
     const startTime = Date.now()
-    
+
     const checkElement = () => {
       const element = container.querySelector(selector) as HTMLElement
       if (element) {
         resolve(element)
         return
       }
-      
+
       if (Date.now() - startTime > timeout) {
         reject(new Error(`Element with selector "${selector}" not found within ${timeout}ms`))
         return
       }
-      
+
       setTimeout(checkElement, 100)
     }
-    
+
     checkElement()
   })
 }
@@ -199,21 +207,21 @@ export const waitForCondition = async (
 ): Promise<void> => {
   return new Promise((resolve, reject) => {
     const startTime = Date.now()
-    
+
     const checkCondition = () => {
       if (condition()) {
         resolve()
         return
       }
-      
+
       if (Date.now() - startTime > timeout) {
         reject(new Error(`Condition not met within ${timeout}ms`))
         return
       }
-      
+
       setTimeout(checkCondition, interval)
     }
-    
+
     checkCondition()
   })
 }
