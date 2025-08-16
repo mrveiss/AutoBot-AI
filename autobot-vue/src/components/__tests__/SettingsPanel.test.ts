@@ -55,7 +55,7 @@ describe('SettingsPanel', () => {
   beforeEach(() => {
     user = userEvent.setup()
     mockApi = createMockApiService()
-    
+
     // Mock settings API response
     mockApi.client.mockGet('/api/settings', {
       success: true,
@@ -87,7 +87,7 @@ describe('SettingsPanel', () => {
 
     it('shows loading state while fetching settings', () => {
       // Mock delayed response
-      mockApi.client.get.mockImplementation(() => 
+      mockApi.client.get.mockImplementation(() =>
         new Promise(resolve => setTimeout(resolve, 1000))
       )
 
@@ -242,7 +242,7 @@ describe('SettingsPanel', () => {
   describe('Backend Settings', () => {
     beforeEach(async () => {
       renderComponent(SettingsPanel)
-      
+
       await waitFor(() => {
         const backendTab = screen.getByRole('button', { name: /backend/i })
         return user.click(backendTab)
@@ -412,7 +412,7 @@ describe('SettingsPanel', () => {
   describe('UI Settings', () => {
     beforeEach(async () => {
       renderComponent(SettingsPanel)
-      
+
       const uiTab = screen.getByRole('button', { name: /ui/i })
       await user.click(uiTab)
 
@@ -502,7 +502,7 @@ describe('SettingsPanel', () => {
       // Mock settings with auto_save disabled
       mockApi.client.mockGet('/api/settings', {
         success: true,
-        data: { 
+        data: {
           settings: {
             ...mockSettings,
             ui: { ...mockSettings.ui, auto_save: false }
@@ -556,12 +556,12 @@ describe('SettingsPanel', () => {
     it('validates numeric inputs', async () => {
       renderComponent(SettingsPanel)
 
-      await waitFor(() => {
+      await waitFor(async () => {
         const maxMessagesInput = screen.getByLabelText(/max messages/i) as HTMLInputElement
-        
+
         await user.clear(maxMessagesInput)
         await user.type(maxMessagesInput, 'abc')
-        
+
         // Should not accept non-numeric input
         expect(maxMessagesInput.validity.valid).toBe(false)
       })
@@ -573,9 +573,9 @@ describe('SettingsPanel', () => {
       const backendTab = screen.getByRole('button', { name: /backend/i })
       await user.click(backendTab)
 
-      await waitFor(() => {
+      await waitFor(async () => {
         const hostInput = screen.getByLabelText(/host/i) as HTMLInputElement
-        
+
         await user.clear(hostInput)
         await user.tab() // Trigger validation
 
@@ -625,7 +625,7 @@ describe('SettingsPanel', () => {
     it('adapts to different screen sizes', () => {
       // Mock different viewport sizes
       Object.defineProperty(window, 'innerWidth', { value: 768 })
-      
+
       renderComponent(SettingsPanel)
 
       // Should render appropriately for tablet/mobile
@@ -640,7 +640,7 @@ describe('SettingsPanel', () => {
       const uiTab = screen.getByRole('button', { name: /ui/i })
       await user.click(uiTab)
 
-      await waitFor(() => {
+      await waitFor(async () => {
         const themeSelect = screen.getByLabelText(/theme/i) as HTMLSelectElement
         await user.selectOptions(themeSelect, 'dark')
       })
