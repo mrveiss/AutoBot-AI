@@ -18,6 +18,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 11. **CRITICAL**: All reports in `reports/` subdirectories by type - maximum 2 per type for comparison
 12. **CRITICAL**: All docker-compose files in `docker/compose/` - update all references when moving
 13. **CRITICAL**: All documentation in `docs/` with proper linking - no orphaned documents
+14. **CRITICAL**: NO error left unfixed, NO warning left unfixed - ZERO TOLERANCE for any linting or compilation errors
+15. **CRITICAL**: ALWAYS continue working on started tasks - NO task abandonment without completion
+16. **CRITICAL**: Group all tasks by priority in TodoWrite - errors/warnings ALWAYS take precedence over features
 
 ### Immediate Safety Checks
 ```bash
@@ -1150,8 +1153,68 @@ Include analysis suite checks in AutoBot's deployment pipeline.
 
 ## 🎯 CLAUDE CODE SPECIFIC GUIDANCE
 
+### 🚨 MANDATORY TASK WORKFLOW AND PRIORITY SYSTEM
+
+**CRITICAL WORKFLOW RULE**: All task management MUST follow this strict hierarchy:
+
+#### Task Priority Hierarchy (NEVER DEVIATE):
+1. **🔴 HIGH PRIORITY** (IMMEDIATE ACTION REQUIRED):
+   - **Errors** - Any compilation, runtime, or linting errors
+   - **Warnings** - Any linting warnings or deprecation notices
+   - **Security Issues** - Any security vulnerabilities or unsafe code patterns
+
+2. **🟡 MEDIUM PRIORITY** (AFTER ALL HIGH PRIORITY RESOLVED):
+   - **Bug Fixes** - Functional issues in existing features
+   - **Performance Issues** - Memory leaks, slow queries, inefficient code
+
+3. **🟢 LOW PRIORITY** (ONLY AFTER MEDIUM PRIORITY COMPLETED):
+   - **New Features** - Adding new functionality
+   - **Enhancements** - Improving existing features
+   - **Documentation** - Non-critical documentation updates
+
+#### Mandatory TodoWrite Workflow:
+```markdown
+**REQUIRED WHENEVER USER PROVIDES NEW TASKS DURING ACTIVE WORK:**
+
+1. **IMMEDIATELY** update TodoWrite with new tasks using proper priority classification
+2. **ALWAYS** group tasks by priority level in TodoWrite
+3. **NEVER** start work on lower priority tasks while higher priority tasks exist
+4. **ALWAYS** complete current in_progress task before switching (unless emergency)
+5. **IMMEDIATELY** switch to HIGH priority tasks if errors/warnings are discovered
+
+**Example TodoWrite Structure:**
+🔴 HIGH PRIORITY:
+- Fix TypeScript compilation error in ChatInterface.vue
+- Resolve flake8 warning in orchestrator.py line 245
+- Fix security vulnerability in API authentication
+
+🟡 MEDIUM PRIORITY:
+- Fix memory leak in knowledge base queries
+- Optimize slow database connection pooling
+
+🟢 LOW PRIORITY:
+- Add new user preferences feature
+- Enhance UI with dark mode toggle
+- Update documentation for new API endpoints
+```
+
+#### Workflow Interruption Protocol:
+**IF USER PROVIDES NEW TASKS WHILE WORKING ON FEATURE:**
+1. **IMMEDIATELY** pause current work (mark as in_progress but note interruption)
+2. **IMMEDIATELY** add new tasks to TodoWrite with proper priority
+3. **IF** new tasks are HIGH priority (errors/warnings): switch immediately
+4. **IF** new tasks are MEDIUM/LOW priority: finish current high-priority task first
+5. **ALWAYS** return to interrupted tasks after higher priorities resolved
+
+#### Task Continuation Rules:
+- **NEVER abandon started tasks** - always return to complete them
+- **ALWAYS mark interrupted tasks** with clear status in TodoWrite
+- **ALWAYS complete error/warning fixes** before continuing feature work
+- **ALWAYS update TodoWrite status** in real-time as work progresses
+
 ### Pre-Change Checklist
 - [ ] **MANDATORY**: Review MANDATORY PRE-COMMIT WORKFLOW above
+- [ ] **MANDATORY**: Check TodoWrite for any HIGH priority tasks - fix ALL before proceeding
 - [ ] Verify system is running: `curl -s http://localhost:8001/api/system/health`
 - [ ] Check current git status: `git status --porcelain`
 - [ ] Run existing tests: `python -m pytest tests/ --tb=short -q`
@@ -1161,6 +1224,8 @@ Include analysis suite checks in AutoBot's deployment pipeline.
 - [ ] **MANDATORY**: Execute complete PRE-COMMIT WORKFLOW above - NO SHORTCUTS
 - [ ] **MANDATORY**: Update documentation per DOCUMENTATION REQUIREMENTS above
 - [ ] **MANDATORY**: All tests MUST pass before commit
+- [ ] **MANDATORY**: Verify NO errors/warnings remain - run flake8, TypeScript checks
+- [ ] **MANDATORY**: Update TodoWrite to mark completed tasks as completed
 - [ ] Verify API endpoints affected by changes work correctly
 - [ ] Test full system restart: `./run_agent.sh --test-mode`
 - [ ] Verify frontend compilation: `cd autobot-vue && npm run build`
@@ -1172,6 +1237,7 @@ Include analysis suite checks in AutoBot's deployment pipeline.
 3. **Implement gradual rollouts** with configuration switches
 4. **Always provide rollback paths** for database changes
 5. **Log all significant operations** for debugging
+6. **ALWAYS prioritize error/warning fixes** over feature development
 
 ### File Priority for Changes
 **🔴 HIGH RISK** (require extra testing):

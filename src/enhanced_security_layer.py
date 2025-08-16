@@ -7,7 +7,7 @@ import asyncio
 import datetime
 import json
 import os
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
@@ -216,7 +216,8 @@ class EnhancedSecurityLayer:
             return True
 
         print(
-            f"Permission DENIED for role '{user_role}' to perform action '{action_type}'"
+            f"Permission DENIED for role '{user_role}' to perform "
+            f"action '{action_type}'"
         )
         return False
 
@@ -274,7 +275,9 @@ class EnhancedSecurityLayer:
             )
             return {
                 "stdout": "",
-                "stderr": "Permission denied: You do not have shell execution privileges",
+                "stderr": (
+                    "Permission denied: You do not have shell execution privileges"
+                ),
                 "return_code": 1,
                 "status": "error",
                 "security": {"blocked": True, "reason": "no_permission"},
@@ -282,10 +285,25 @@ class EnhancedSecurityLayer:
 
         # Check if only safe commands are allowed for this role
         force_approval = False
-        if "allow_shell_execute_safe" in self._get_default_role_permissions(user_role):
-            # User can only execute safe commands without approval
+        role_permissions = self.roles.get(user_role, {}).get("permissions", [])
+        if not role_permissions:
+            # Fall back to default permissions if no configured role
+            role_permissions = self._get_default_role_permissions(user_role)
+
+        if "allow_all" not in role_permissions:
+            # Check if user has limited shell execution permissions
             risk, _ = self.command_executor.assess_command_risk(command)
-            if risk != CommandRisk.SAFE:
+            if (
+                "allow_shell_execute_safe" in role_permissions
+                and risk != CommandRisk.SAFE
+            ):
+                # User can only execute safe commands without approval
+                force_approval = True
+            elif "allow_shell_execute" in role_permissions and risk in [
+                CommandRisk.HIGH,
+                CommandRisk.MODERATE,
+            ]:
+                # User has shell execute permission but high-risk commands need approval
                 force_approval = True
 
         # Log command attempt
@@ -372,11 +390,11 @@ class EnhancedSecurityLayer:
                 for line in f:
                     try:
                         entry = json.loads(line)
-                        if entry["action"] in [
+                        if "action" in entry and entry["action"] in [
                             "command_execution_attempt",
                             "command_execution_complete",
                         ]:
-                            if user is None or entry["user"] == user:
+                            if user is None or entry.get("user") == user:
                                 command_history.append(entry)
                     except json.JSONDecodeError:
                         continue
@@ -447,7 +465,8 @@ if __name__ == "__main__":
         history = security.get_command_history(limit=10)
         for entry in history:
             print(
-                f"- {entry['timestamp']}: {entry['user']} - {entry['action']} - {entry['outcome']}"
+                f"- {entry['timestamp']}: {entry['user']} - "
+                f"{entry['action']} - {entry['outcome']}"
             )
             if "command" in entry.get("details", {}):
                 print(f"  Command: {entry['details']['command']}")
