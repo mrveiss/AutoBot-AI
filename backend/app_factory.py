@@ -75,6 +75,10 @@ async def _check_redis_modules(redis_host: str, redis_port: int) -> bool:
     """Checks if RediSearch module is loaded in Redis."""
     try:
         resolved_host = redis_host
+        # Docker Desktop specific networking: host.docker.internal allows containers
+        # to connect to services running on the host machine. This is a special DNS name
+        # that Docker Desktop provides for container-to-host communication.
+        # We resolve it to an actual IP address for better connection reliability.
         if redis_host == "host.docker.internal":
             try:
                 resolved_host = socket.gethostbyname(redis_host)
