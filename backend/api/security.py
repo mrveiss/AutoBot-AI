@@ -8,6 +8,8 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from src.enhanced_security_layer import EnhancedSecurityLayer
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -55,8 +57,6 @@ async def get_security_status(request: Request):
             )
         else:
             # No security layer found - initialize enhanced security layer on demand
-            from src.enhanced_security_layer import EnhancedSecurityLayer
-
             enhanced_security = EnhancedSecurityLayer()
             request.app.state.enhanced_security_layer = enhanced_security
 
@@ -79,8 +79,6 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         # Get or initialize enhanced security layer
         security_layer = getattr(request.app.state, "enhanced_security_layer", None)
         if not security_layer:
-            from src.enhanced_security_layer import EnhancedSecurityLayer
-
             security_layer = EnhancedSecurityLayer()
             request.app.state.enhanced_security_layer = security_layer
 
@@ -105,8 +103,6 @@ async def get_pending_approvals(request: Request):
         # Get or initialize enhanced security layer
         security_layer = getattr(request.app.state, "enhanced_security_layer", None)
         if not security_layer:
-            from src.enhanced_security_layer import EnhancedSecurityLayer
-
             security_layer = EnhancedSecurityLayer()
             request.app.state.enhanced_security_layer = security_layer
         pending = security_layer.get_pending_approvals()
@@ -124,8 +120,6 @@ async def get_command_history(request: Request, user: str = None, limit: int = 5
         # Get or initialize enhanced security layer
         security_layer = getattr(request.app.state, "enhanced_security_layer", None)
         if not security_layer:
-            from src.enhanced_security_layer import EnhancedSecurityLayer
-
             security_layer = EnhancedSecurityLayer()
             request.app.state.enhanced_security_layer = security_layer
         history = security_layer.get_command_history(user=user, limit=limit)
@@ -143,8 +137,6 @@ async def get_audit_log(request: Request, limit: int = 100):
         # Get or initialize enhanced security layer
         security_layer = getattr(request.app.state, "enhanced_security_layer", None)
         if not security_layer:
-            from src.enhanced_security_layer import EnhancedSecurityLayer
-
             security_layer = EnhancedSecurityLayer()
             request.app.state.enhanced_security_layer = security_layer
 
