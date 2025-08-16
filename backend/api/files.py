@@ -15,7 +15,7 @@ from typing import List, Optional
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 
 from src.security_layer import SecurityLayer
 
@@ -99,7 +99,8 @@ class FileOperation(BaseModel):
 
     path: str
 
-    @validator("path")
+    @field_validator("path")
+    @classmethod
     def validate_path(cls, v):
         if not v or ".." in v or v.startswith("/"):
             raise ValueError("Invalid path")
