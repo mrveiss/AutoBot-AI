@@ -29,41 +29,48 @@ from src.utils.redis_client import get_redis_client
 
 
 class KnowledgeBase:
-    def __init__(self):
-        # Remove config_path and direct config loading
+    def __init__(self, config_manager=None):
+        """
+        Initialize KnowledgeBase with dependency injection support.
+        
+        Args:
+            config_manager: Configuration manager instance (optional, uses global if None)
+        """
+        # Use provided dependency or fall back to default for backward compatibility
+        self.config_manager = config_manager or global_config_manager
 
         # Network share path (if applicable)
-        self.network_share_path = global_config_manager.get_nested("network_share.path")
-        self.network_username = global_config_manager.get_nested(
+        self.network_share_path = self.config_manager.get_nested("network_share.path")
+        self.network_username = self.config_manager.get_nested(
             "network_share.username", os.getenv("NETWORK_SHARE_USERNAME")
         )
-        self.network_password = global_config_manager.get_nested(
+        self.network_password = self.config_manager.get_nested(
             "network_share.password", os.getenv("NETWORK_SHARE_PASSWORD")
         )
 
         # LlamaIndex specific settings from config
-        self.vector_store_type = global_config_manager.get_nested(
+        self.vector_store_type = self.config_manager.get_nested(
             "llama_index.vector_store.type", "redis"
         )
         # Get embedding model from unified configuration
-        unified_llm_config = global_config_manager.get_llm_config()
+        unified_llm_config = self.config_manager.get_llm_config()
         self.embedding_model_name = unified_llm_config.get("unified", {}).get(
             "embedding", {}
         ).get("providers", {}).get("ollama", {}).get(
             "selected_model"
-        ) or global_config_manager.get_nested(
+        ) or self.config_manager.get_nested(
             "llama_index.embedding.model", "nomic-embed-text:latest"
         )
-        self.chunk_size = global_config_manager.get_nested(
+        self.chunk_size = self.config_manager.get_nested(
             "llama_index.chunk_size", 512
         )
-        self.chunk_overlap = global_config_manager.get_nested(
+        self.chunk_overlap = self.config_manager.get_nested(
             "llama_index.chunk_overlap", 20
         )
 
         # Redis configuration for LlamaIndex vector store
         # Use memory.redis configuration for consistency
-        memory_config = global_config_manager.get("memory", {})
+        memory_config = self.config_manager.get("memory", {})
         redis_config = memory_config.get("redis", {})
         self.redis_host = redis_config.get("host", os.getenv("REDIS_HOST", "localhost"))
         self.redis_port = redis_config.get("port", 6379)
@@ -103,8 +110,8 @@ class KnowledgeBase:
         Embedding model, and Vector Store.
         """
         llm_config_data = (
-            global_config_manager.get_llm_config()
-        )  # Get LLM config from global manager
+            self.config_manager.get_llm_config()
+        )  # Get LLM config from config manager
         llm_provider = llm_config_data.get("provider", "ollama")
         # Use unified config to get the actual selected model
         llm_model = llm_config_data.get("ollama", {}).get("model", "tinyllama:latest")

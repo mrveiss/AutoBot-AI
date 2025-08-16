@@ -76,16 +76,23 @@ except ImportError:
 
 
 class Orchestrator:
-    def __init__(self):
-        # Remove config_path and direct config loading
-        # Will update LLMInterface to use global_config_manager
-        self.llm_interface = LLMInterface()
-        # Will update KnowledgeBase to use global_config_manager
-        self.knowledge_base = KnowledgeBase()
-        # Will update Diagnostics to use global_config_manager
-        self.diagnostics = Diagnostics()
+    def __init__(self, config_manager=None, llm_interface=None, knowledge_base=None, diagnostics=None):
+        """
+        Initialize Orchestrator with dependency injection support.
+        
+        Args:
+            config_manager: Configuration manager instance (optional, uses global if None)
+            llm_interface: LLM interface instance (optional, creates new if None)
+            knowledge_base: Knowledge base instance (optional, creates new if None)
+            diagnostics: Diagnostics instance (optional, creates new if None)
+        """
+        # Use provided dependencies or fall back to defaults for backward compatibility
+        self.config_manager = config_manager or global_config_manager
+        self.llm_interface = llm_interface or LLMInterface()
+        self.knowledge_base = knowledge_base or KnowledgeBase()
+        self.diagnostics = diagnostics or Diagnostics()
 
-        llm_config = global_config_manager.get_llm_config()
+        llm_config = self.config_manager.get_llm_config()
         self.orchestrator_llm_model = llm_config.get(
             "orchestrator_llm",
             llm_config.get("ollama", {}).get("model", "tinyllama:latest"),
@@ -94,7 +101,7 @@ class Orchestrator:
         self.ollama_models = llm_config.get("ollama", {}).get("models", {})
         self.phi2_enabled = False  # This will be driven by config if needed
 
-        self.task_transport_type = global_config_manager.get_nested(
+        self.task_transport_type = self.config_manager.get_nested(
             "task_transport.type", "local"
         )
         self.redis_client = None
@@ -123,7 +130,7 @@ class Orchestrator:
         }
 
         self.langchain_agent = None
-        self.use_langchain = global_config_manager.get_nested(
+        self.use_langchain = self.config_manager.get_nested(
             "orchestrator.use_langchain", False
         )
 
@@ -386,7 +393,7 @@ class Orchestrator:
             and LangChainAgentOrchestrator is not None
         ):
             try:
-                kb_config = global_config_manager.get("knowledge_base", {})
+                kb_config = self.config_manager.get("knowledge_base", {})
                 if kb_config.get("provider") == "disabled":
                     print(
                         "Knowledge Base disabled in configuration. "
@@ -398,7 +405,7 @@ class Orchestrator:
 
                 self.langchain_agent = LangChainAgentOrchestrator(
                     # Pass the full config dict
-                    config=global_config_manager.to_dict(),
+                    config=self.config_manager.to_dict(),
                     worker_node=(
                         self.local_worker if hasattr(self, "local_worker") else None
                     ),
@@ -430,7 +437,7 @@ class Orchestrator:
                 self.langchain_agent = None
                 self.use_langchain = False
         else:
-            kb_config = global_config_manager.get("knowledge_base", {})
+            kb_config = self.config_manager.get("knowledge_base", {})
             if kb_config.get("provider") == "disabled":
                 print(
                     "Knowledge Base disabled in configuration. "
@@ -484,7 +491,7 @@ class Orchestrator:
         if self.knowledge_base is not None:
             retrieved_context = await self.knowledge_base.search(
                 goal,
-                n_results=global_config_manager.get_nested(
+                n_results=self.config_manager.get_nested(
                     "knowledge_base.search_results_limit", 3
                 ),
             )  # Use config for n_results
@@ -832,7 +839,7 @@ class Orchestrator:
         This method handles the main execution loop for complex goals that require
         multiple planning and execution iterations.
         """
-        max_iterations = global_config_manager.get_nested(
+        max_iterations = self.config_manager.get_nested(
             "orchestrator.max_iterations", 10
         )
         iteration = 0
