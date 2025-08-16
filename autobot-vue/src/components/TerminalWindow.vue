@@ -1033,6 +1033,12 @@ export default {
     const focusInput = () => {
       if (terminalInput.value && canInput.value) {
         terminalInput.value.focus();
+        // Ensure input is properly focused for automated testing
+        nextTick(() => {
+          if (terminalInput.value && document.activeElement !== terminalInput.value) {
+            terminalInput.value.focus();
+          }
+        });
       }
     };
 
@@ -1106,7 +1112,16 @@ export default {
     const handleStatusChange = (status) => {
       connectionStatus.value = status;
 
-      if (status === 'disconnected' && !connecting.value) {
+      if (status === 'connected') {
+        // Ensure input is focused and interactive when connection is established
+        nextTick(() => {
+          focusInput();
+          // Add a small delay to ensure DOM is fully ready for automated testing
+          setTimeout(() => {
+            focusInput();
+          }, 100);
+        });
+      } else if (status === 'disconnected' && !connecting.value) {
         showReconnectModal.value = true;
       }
     };
@@ -1204,9 +1219,31 @@ export default {
       window.addEventListener('resize', handleResize);
       window.addEventListener('beforeunload', handleBeforeUnload);
 
-      // Focus input
+      // Enhanced focus handling for automated testing
       nextTick(() => {
         focusInput();
+        
+        // Add additional focus recovery mechanisms for automated testing
+        document.addEventListener('click', (event) => {
+          // If click is inside terminal area but not on input, restore focus
+          const terminalArea = document.querySelector('.terminal-window-standalone');
+          if (terminalArea && terminalArea.contains(event.target) && 
+              event.target !== terminalInput.value && canInput.value) {
+            nextTick(() => focusInput());
+          }
+        });
+        
+        // Periodic focus check for automation scenarios (clean up on unmount)
+        const focusInterval = setInterval(() => {
+          if (canInput.value && terminalInput.value && 
+              document.activeElement !== terminalInput.value &&
+              document.querySelector('.terminal-window-standalone')) {
+            focusInput();
+          }
+        }, 1000);
+        
+        // Store interval for cleanup
+        window.terminalFocusInterval = focusInterval;
       });
     });
 
@@ -1219,6 +1256,12 @@ export default {
       // Remove event listeners
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      
+      // Clean up focus interval for automated testing
+      if (window.terminalFocusInterval) {
+        clearInterval(window.terminalFocusInterval);
+        window.terminalFocusInterval = null;
+      }
     });
 
     // Watch for route changes (if session ID changes)
@@ -1360,7 +1403,16 @@ export default {
       shareSession,
       hideReconnectModal,
       formatTerminalLine,
-      getLineClass
+      getLineClass,
+      // Testing utilities for automated tests
+      isTerminalReady: () => canInput.value && terminalInput.value && !terminalInput.value.disabled,
+      ensureInputFocus: () => {
+        if (canInput.value && terminalInput.value) {
+          terminalInput.value.focus();
+          return document.activeElement === terminalInput.value;
+        }
+        return false;
+      }
     };
   }
 };
