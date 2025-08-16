@@ -1067,6 +1067,25 @@ class Orchestrator:
         return {"completed": False}
 
     def _is_simple_command(self, goal: str) -> bool:
+        """
+        Performance optimization to bypass LLM processing for simple, known commands.
+
+        This function acts as a fast-path filter to identify straightforward system commands
+        that don't require complex reasoning or planning. By recognizing these patterns,
+        we can execute them directly without the overhead of LLM analysis, significantly
+        improving response time for common operations.
+
+        Args:
+            goal (str): The user's goal/command to analyze
+
+        Returns:
+            bool: True if the goal matches a simple command pattern, False otherwise
+
+        Examples:
+            - "get ip address" -> True (network info command)
+            - "list processes" -> True (system status command)
+            - "Plan a complex multi-step workflow" -> False (requires LLM reasoning)
+        """
         command_patterns = [
             r"use\s+(\w+)\s+to\s+get",
             r"run\s+(\w+)",
