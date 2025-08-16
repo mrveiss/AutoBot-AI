@@ -264,6 +264,44 @@ jobs:
         # Use CI-safe requirements for deployment test
         pip install -r requirements-ci.txt --prefer-binary
 
+    - name: Create necessary directories and config files
+      run: |
+        mkdir -p data logs static config
+        touch data/.gitkeep logs/.gitkeep static/.gitkeep
+
+        # Create minimal config.yaml for CI testing
+        cat > config/config.yaml << 'EOF'
+        # CI Testing Configuration
+        llm:
+          orchestrator_llm: "mock"
+          task_llm: "mock"
+          ollama:
+            model: "mock-model"
+            models: {}
+          unified:
+            embedding:
+              providers:
+                ollama:
+                  selected_model: "mock-embed"
+
+        deployment:
+          mode: "local"
+
+        data:
+          reliability_stats_file: "data/reliability_stats.json"
+
+        diagnostics:
+          enabled: false
+          use_llm_for_analysis: false
+          use_web_search_for_analysis: false
+          auto_apply_fixes: false
+
+        redis:
+          host: "localhost"
+          port: 6379
+          db: 0
+        EOF
+
     - name: Test production configuration
       run: |
         echo "🚀 Testing production readiness..."
