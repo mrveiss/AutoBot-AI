@@ -69,10 +69,43 @@ jobs:
         echo "Installing testing dependencies..."
         pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
 
-    - name: Create necessary directories
+    - name: Create necessary directories and config files
       run: |
-        mkdir -p data logs static
+        mkdir -p data logs static config
         touch data/.gitkeep logs/.gitkeep static/.gitkeep
+
+        # Create minimal config.yaml for CI testing
+        cat > config/config.yaml << 'EOF'
+        # CI Testing Configuration
+        llm:
+          orchestrator_llm: "mock"
+          task_llm: "mock"
+          ollama:
+            model: "mock-model"
+            models: {}
+          unified:
+            embedding:
+              providers:
+                ollama:
+                  selected_model: "mock-embed"
+
+        deployment:
+          mode: "local"
+
+        data:
+          reliability_stats_file: "data/reliability_stats.json"
+
+        diagnostics:
+          enabled: false
+          use_llm_for_analysis: false
+          use_web_search_for_analysis: false
+          auto_apply_fixes: false
+
+        redis:
+          host: "localhost"
+          port: 6379
+          db: 0
+        EOF
 
     - name: Start Redis server
       run: |
@@ -191,7 +224,11 @@ jobs:
     - name: Run frontend type checking
       run: |
         cd autobot-vue
-        npm run type-check || echo "⚠️ Frontend type checking issues found"
+        # Type check application code
+        npx vue-tsc --noEmit -p tsconfig.app.json || echo "⚠️ App type checking issues found"
+        # Type check tests separately with proper configuration
+        npx tsc --noEmit -p tsconfig.vitest.json || echo "⚠️ Test type checking issues found"
+        npx tsc --noEmit -p tsconfig.playwright.json || echo "⚠️ Playwright type checking issues found"
 
     - name: Build frontend
       run: |
