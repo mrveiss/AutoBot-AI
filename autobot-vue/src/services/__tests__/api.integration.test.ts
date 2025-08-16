@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
-import ApiService from '../api.js'
+import { apiService } from '../api.js'
 import {
   createMockApiResponse,
   createMockChatMessage,
@@ -16,8 +16,6 @@ const server = setupServer()
 const API_BASE = 'http://localhost:8001'
 
 describe('API Service Integration Tests', () => {
-  let apiService: any
-
   beforeAll(() => {
     server.listen({ onUnhandledRequest: 'warn' })
   })
@@ -28,7 +26,6 @@ describe('API Service Integration Tests', () => {
 
   beforeEach(() => {
     server.resetHandlers()
-    apiService = new (ApiService as any)()
   })
 
   describe('Chat API Integration', () => {
@@ -269,7 +266,7 @@ describe('API Service Integration Tests', () => {
     it('handles settings validation errors', async () => {
       server.use(
         http.post(`${API_BASE}/api/settings`, () => {
-          return new HttpResponse(null, { 
+          return new HttpResponse(null, {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
           })
@@ -507,7 +504,7 @@ describe('API Service Integration Tests', () => {
 
     it('handles partial API failures gracefully', async () => {
       let callCount = 0
-      
+
       server.use(
         http.get(`${API_BASE}/api/system/health`, () => {
           callCount++
@@ -522,7 +519,7 @@ describe('API Service Integration Tests', () => {
 
       // First call should fail
       await expect(apiService.getSystemHealth()).rejects.toThrow()
-      
+
       // Second call should succeed (simulating recovery)
       const result = await apiService.getSystemHealth()
       expect(result.success).toBe(true)
@@ -531,7 +528,7 @@ describe('API Service Integration Tests', () => {
     it('handles rate limiting', async () => {
       server.use(
         http.post(`${API_BASE}/api/chat`, () => {
-          return new HttpResponse(null, { 
+          return new HttpResponse(null, {
             status: 429,
             headers: { 'Retry-After': '60' }
           })
@@ -554,7 +551,7 @@ describe('API Service Integration Tests', () => {
         })
       )
 
-      const promises = Array.from({ length: 10 }, () => 
+      const promises = Array.from({ length: 10 }, () =>
         apiService.getSystemHealth()
       )
 
