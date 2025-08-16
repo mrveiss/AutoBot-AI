@@ -553,7 +553,18 @@ class KnowledgeBase:
             return []
 
     async def get_stats(self) -> Dict[str, Any]:
-        """Get basic statistics about the knowledge base (optimized)."""
+        """
+        Get basic, high-level statistics about the knowledge base.
+
+        This method provides a quick overview with minimal computational overhead,
+        suitable for dashboard displays and health checks. Returns core metrics
+        like document counts and available categories.
+
+        Returns:
+            Dict containing basic stats: total_documents, total_chunks, categories, total_facts
+
+        Performance: Fast (< 100ms) - uses optimized counting methods
+        """
         stats = {
             "total_documents": 0,
             "total_chunks": 0,
@@ -630,7 +641,20 @@ class KnowledgeBase:
             return stats
 
     async def get_detailed_stats(self) -> Dict[str, Any]:
-        """Get detailed statistics about the knowledge base (NPU-accelerated)."""
+        """
+        Get comprehensive, in-depth statistics about the knowledge base.
+
+        This method performs detailed analysis of the knowledge base content,
+        including size calculations, usage patterns, and content distribution.
+        Suitable for analytics, performance monitoring, and detailed reporting.
+
+        Returns:
+            Dict containing detailed stats: total_size, avg_chunk_size, last_updated,
+            searches_24h, top_category, fact_types
+
+        Performance: Slower (1-5s) - performs comprehensive content analysis
+        Note: Uses NPU acceleration when available for faster processing
+        """
 
         detailed_stats = {
             "total_size": 0,  # in bytes
