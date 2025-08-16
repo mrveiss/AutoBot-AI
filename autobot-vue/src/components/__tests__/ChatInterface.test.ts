@@ -13,22 +13,40 @@ import { webSocketTestUtil, WebSocketMessageType } from '../../test/mocks/websoc
 
 // Mock dependencies
 vi.mock('@/utils/ApiClient', () => ({
-  default: createMockApiService().client,
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
 }))
 
-vi.mock('@/services/api.js', () => createMockApiService())
+vi.mock('@/services/api.js', () => ({
+  default: {
+    sendMessage: vi.fn(),
+    getChatHistory: vi.fn(),
+    getChatMessages: vi.fn(),
+    deleteChatHistory: vi.fn(),
+  },
+  apiService: {
+    sendMessage: vi.fn(),
+    getChatHistory: vi.fn(),
+    getChatMessages: vi.fn(),
+    deleteChatHistory: vi.fn(),
+  },
+}))
 
 const mockChatSessions = [
-  createMockChatSession({ 
-    chatId: 'chat-1', 
+  createMockChatSession({
+    chatId: 'chat-1',
     name: 'Test Chat 1',
     messages: [
       createMockChatMessage({ content: 'Hello', sender: 'user' }),
       createMockChatMessage({ content: 'Hi there!', sender: 'assistant' }),
     ]
   }),
-  createMockChatSession({ 
-    chatId: 'chat-2', 
+  createMockChatSession({
+    chatId: 'chat-2',
     name: 'Test Chat 2',
     messages: []
   }),
@@ -40,7 +58,7 @@ describe('ChatInterface', () => {
   beforeEach(() => {
     user = userEvent.setup()
     webSocketTestUtil.setup()
-    
+
     // Reset localStorage
     localStorage.clear()
   })
@@ -63,7 +81,7 @@ describe('ChatInterface', () => {
 
     it('renders with collapsed sidebar when sidebarCollapsed is true', async () => {
       const { container } = renderComponent(ChatInterface)
-      
+
       const collapseButton = screen.getByLabelText('Collapse')
       await user.click(collapseButton)
 
@@ -74,9 +92,9 @@ describe('ChatInterface', () => {
     it('displays chat history when available', async () => {
       // Mock API to return chat sessions
       const mockApi = createMockApiService()
-      mockApi.client.mockGet('/api/chat/history', { 
-        success: true, 
-        data: { sessions: mockChatSessions } 
+      mockApi.client.mockGet('/api/chat/history', {
+        success: true,
+        data: { sessions: mockChatSessions }
       })
 
       renderComponent(ChatInterface)
@@ -90,7 +108,7 @@ describe('ChatInterface', () => {
     it('shows loading state while fetching chat history', () => {
       // Mock API to delay response
       const mockApi = createMockApiService()
-      mockApi.client.get.mockImplementation(() => 
+      mockApi.client.get.mockImplementation(() =>
         new Promise(resolve => setTimeout(resolve, 1000))
       )
 
@@ -117,9 +135,9 @@ describe('ChatInterface', () => {
 
     it('switches between chat sessions', async () => {
       const mockApi = createMockApiService()
-      mockApi.client.mockGet('/api/chat/history', { 
-        success: true, 
-        data: { sessions: mockChatSessions } 
+      mockApi.client.mockGet('/api/chat/history', {
+        success: true,
+        data: { sessions: mockChatSessions }
       })
 
       renderComponent(ChatInterface)
@@ -139,9 +157,9 @@ describe('ChatInterface', () => {
 
     it('deletes a chat session', async () => {
       const mockApi = createMockApiService()
-      mockApi.client.mockGet('/api/chat/history', { 
-        success: true, 
-        data: { sessions: mockChatSessions } 
+      mockApi.client.mockGet('/api/chat/history', {
+        success: true,
+        data: { sessions: mockChatSessions }
       })
 
       renderComponent(ChatInterface)
@@ -195,7 +213,7 @@ describe('ChatInterface', () => {
       await user.click(sendButton)
 
       await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith('/api/chat', 
+        expect(mockApi.client.post).toHaveBeenCalledWith('/api/chat',
           expect.objectContaining({
             message: 'Hello, AutoBot!'
           })
@@ -217,7 +235,7 @@ describe('ChatInterface', () => {
       await user.keyboard('{Enter}')
 
       await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith('/api/chat', 
+        expect(mockApi.client.post).toHaveBeenCalledWith('/api/chat',
           expect.objectContaining({
             message: 'Test message'
           })
@@ -254,7 +272,7 @@ describe('ChatInterface', () => {
       // Simulate selecting a chat
       const { container } = renderComponent(ChatInterface)
       const component = container.querySelector('div') as any
-      
+
       // Trigger message loading
       await waitFor(() => {
         expect(mockApi.client.get).toHaveBeenCalled()
@@ -306,7 +324,7 @@ describe('ChatInterface', () => {
       // This would typically be triggered by some chat action
       // Simulate the condition that opens the dialog
       const { container } = renderComponent(ChatInterface)
-      
+
       // Check if dialog can be opened (implementation depends on your logic)
       expect(container).toBeInTheDocument()
     })
@@ -333,9 +351,9 @@ describe('ChatInterface', () => {
 
     it('handles empty chat history response', async () => {
       const mockApi = createMockApiService()
-      mockApi.client.mockGet('/api/chat/history', { 
-        success: true, 
-        data: { sessions: [] } 
+      mockApi.client.mockGet('/api/chat/history', {
+        success: true,
+        data: { sessions: [] }
       })
 
       renderComponent(ChatInterface)
@@ -360,9 +378,9 @@ describe('ChatInterface', () => {
 
     it('supports keyboard navigation', async () => {
       const mockApi = createMockApiService()
-      mockApi.client.mockGet('/api/chat/history', { 
-        success: true, 
-        data: { sessions: mockChatSessions } 
+      mockApi.client.mockGet('/api/chat/history', {
+        success: true,
+        data: { sessions: mockChatSessions }
       })
 
       renderComponent(ChatInterface)
@@ -387,9 +405,9 @@ describe('ChatInterface', () => {
   describe('Performance', () => {
     it('handles large message lists efficiently', async () => {
       const manyMessages = Array.from({ length: 100 }, (_, i) =>
-        createMockChatMessage({ 
-          content: `Message ${i}`, 
-          sender: i % 2 === 0 ? 'user' : 'assistant' 
+        createMockChatMessage({
+          content: `Message ${i}`,
+          sender: i % 2 === 0 ? 'user' : 'assistant'
         })
       )
 
