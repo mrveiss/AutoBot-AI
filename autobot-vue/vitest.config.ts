@@ -13,7 +13,14 @@ export default mergeConfig(
 
       // File patterns
       include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-      exclude: [...configDefaults.exclude, 'e2e/**', 'tests/**'],
+      exclude: [
+        ...configDefaults.exclude,
+        'e2e/**',
+        'tests/**',
+        'src/test/e2e/**',
+        '**/*.e2e.test.ts',
+        '**/*.playwright.spec.ts'
+      ],
 
       // Coverage configuration
       coverage: {
