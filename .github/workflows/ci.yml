@@ -172,7 +172,7 @@ jobs:
   docker-build:
     runs-on: ubuntu-latest
     needs: security-tests
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
     steps:
     - uses: actions/checkout@v4
@@ -240,7 +240,7 @@ jobs:
   deployment-check:
     runs-on: ubuntu-latest
     needs: [security-tests, docker-build, frontend-tests]
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
     steps:
     - uses: actions/checkout@v4
@@ -272,7 +272,7 @@ jobs:
         echo "Checking required files..."
         test -f main.py || (echo "❌ main.py missing" && exit 1)
         test -f requirements.txt || (echo "❌ requirements.txt missing" && exit 1)
-        test -f setup_agent.sh || (echo "❌ setup_agent.sh missing" && exit 1)
+        test -f scripts/setup/setup_agent.sh || (echo "❌ scripts/setup/setup_agent.sh missing" && exit 1)
         echo "✅ All required files present"
 
         # Test configuration loading
