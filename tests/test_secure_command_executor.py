@@ -332,9 +332,10 @@ class TestSecureCommandExecutor:
     @pytest.mark.asyncio
     async def test_run_shell_command_timeout(self):
         """Test command execution timeout"""
-        with patch("src.utils.command_utils.execute_shell_command") as mock_execute:
+        with patch("src.secure_command_executor.execute_shell_command") as mock_execute:
             mock_execute.side_effect = asyncio.TimeoutError()
 
+            # Use safe command that doesn't need approval
             result = await self.executor.run_shell_command("echo hello")
 
             assert result["status"] == "error"
@@ -345,9 +346,10 @@ class TestSecureCommandExecutor:
     @pytest.mark.asyncio
     async def test_run_shell_command_execution_error(self):
         """Test command execution error handling"""
-        with patch("src.utils.command_utils.execute_shell_command") as mock_execute:
+        with patch("src.secure_command_executor.execute_shell_command") as mock_execute:
             mock_execute.side_effect = Exception("Execution failed")
 
+            # Use safe command that doesn't need approval
             result = await self.executor.run_shell_command("echo hello")
 
             assert result["status"] == "error"
@@ -361,12 +363,10 @@ class TestSecureCommandExecutor:
         executor = SecureCommandExecutor(use_docker_sandbox=True)
 
         # Set up approval callback to allow the command
-        async def approve_callback(approval_data):
-            return True
-
+        approve_callback = AsyncMock(return_value=True)
         executor.require_approval_callback = approve_callback
 
-        with patch("src.utils.command_utils.execute_shell_command") as mock_execute:
+        with patch("src.secure_command_executor.execute_shell_command") as mock_execute:
             mock_execute.return_value = {
                 "stdout": "sandboxed output",
                 "stderr": "",
@@ -375,9 +375,10 @@ class TestSecureCommandExecutor:
             }
 
             # High risk command should use sandbox
-            result = await executor.run_shell_command("rm file.txt")
+            result = await executor.run_shell_command("sudo apt list")
 
             # Check that Docker command was passed to execute_shell_command
+            assert mock_execute.called
             call_args = mock_execute.call_args[0][0]
             assert "docker run" in call_args
             assert result["security"]["sandboxed"] is True
