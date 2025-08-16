@@ -11,10 +11,24 @@ import { createMockApiService } from '../../test/mocks/api-client-mock'
 
 // Mock dependencies
 vi.mock('@/utils/ApiClient', () => ({
-  default: createMockApiService().client,
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
 }))
 
-vi.mock('@/services/api.js', () => createMockApiService())
+vi.mock('@/services/api.js', () => ({
+  default: {
+    getSettings: vi.fn(),
+    saveSettings: vi.fn(),
+  },
+  apiService: {
+    getSettings: vi.fn(),
+    saveSettings: vi.fn(),
+  },
+}))
 
 const mockSettings = createMockSettings({
   chat: {
