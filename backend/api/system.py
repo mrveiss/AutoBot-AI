@@ -1,11 +1,13 @@
-from fastapi import APIRouter, HTTPException, Request, Form
-from fastapi.responses import JSONResponse
+import importlib
 import logging
+import sys
 from datetime import datetime
 
-from backend.utils.connection_utils import ConnectionTester, ModelManager
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import JSONResponse
+
 from backend.services.config_service import ConfigService
-from src.config import global_config_manager
+from backend.utils.connection_utils import ConnectionTester, ModelManager
 
 router = APIRouter()
 
@@ -29,9 +31,10 @@ async def health_check():
                 "redis_status": "unknown",
                 "redis_search_module_loaded": False,
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
+                "timestamp": datetime.now().isoformat(),
+            },
         )
+
 
 @router.post("/restart")
 async def restart():
@@ -40,7 +43,82 @@ async def restart():
         return {"status": "success", "message": "Restart initiated."}
     except Exception as e:
         logger.error(f"Error processing restart request: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing restart request: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing restart request: {str(e)}"
+        )
+
+
+@router.post("/reload")
+async def reload_system(request: Request):
+    """Reload system modules and configuration"""
+    try:
+        logger.info("System reload request received")
+        reload_results = []
+
+        # List of modules to reload
+        modules_to_reload = [
+            "src.llm_interface",
+            "src.config",
+            "src.orchestrator",
+            "backend.services.config_service",
+            "backend.utils.connection_utils",
+        ]
+
+        reloaded_modules = []
+        failed_modules = []
+
+        for module_name in modules_to_reload:
+            try:
+                if module_name in sys.modules:
+                    importlib.reload(sys.modules[module_name])
+                    reloaded_modules.append(module_name)
+                    logger.info(f"Successfully reloaded module: {module_name}")
+                else:
+                    logger.info(f"Module {module_name} not loaded, skipping")
+            except Exception as e:
+                failed_modules.append({"module": module_name, "error": str(e)})
+                logger.error(f"Failed to reload module {module_name}: {str(e)}")
+
+        # Reinitialize app state if available
+        if hasattr(request.app.state, "llm_interface"):
+            try:
+                # Reinitialize LLM interface
+                from src.llm_interface import LLMInterface
+
+                request.app.state.llm_interface = LLMInterface()
+                logger.info("Reinitialized LLM interface")
+                reload_results.append("LLM interface reinitialized")
+            except Exception as e:
+                logger.error(f"Failed to reinitialize LLM interface: {str(e)}")
+                failed_modules.append({"component": "LLM interface", "error": str(e)})
+
+        # Reinitialize orchestrator if available
+        if hasattr(request.app.state, "orchestrator"):
+            try:
+                from src.orchestrator import Orchestrator
+
+                request.app.state.orchestrator = Orchestrator()
+                logger.info("Reinitialized orchestrator")
+                reload_results.append("Orchestrator reinitialized")
+            except Exception as e:
+                logger.error(f"Failed to reinitialize orchestrator: {str(e)}")
+                failed_modules.append({"component": "Orchestrator", "error": str(e)})
+
+        return {
+            "status": "success",
+            "message": "System reload completed",
+            "reloaded_modules": reloaded_modules,
+            "failed_modules": failed_modules,
+            "reload_results": reload_results,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Error processing reload request: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing reload request: {str(e)}"
+        )
+
 
 @router.get("/models")
 async def get_models():
@@ -49,27 +127,36 @@ async def get_models():
         result = await ModelManager.get_available_models()
         if result["status"] == "error":
             return JSONResponse(status_code=500, content={"error": result["error"]})
-        
+
         # Format for backward compatibility
-        available_models = [model['name'] for model in result['models'] if model.get('available', False)]
-        configured_models = {model['name']: model['name'] for model in result['models'] if model.get('configured', False)}
-        
+        available_models = [
+            model["name"] for model in result["models"] if model.get("available", False)
+        ]
+        configured_models = {
+            model["name"]: model["name"]
+            for model in result["models"]
+            if model.get("configured", False)
+        }
+
         return {
             "status": "success",
             "models": available_models,
             "configured_models": configured_models,
-            "detailed_models": result['models']
+            "detailed_models": result["models"],
         }
     except Exception as e:
         logger.error(f"Error getting models: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Error getting models: {str(e)}"})
+        return JSONResponse(
+            status_code=500, content={"error": f"Error getting models: {str(e)}"}
+        )
+
 
 @router.get("/status")
-async def get_system_status():
+async def get_system_status(request: Request):
     """Get current system status including LLM configuration"""
     try:
         llm_config = ConfigService.get_llm_config()
-        
+
         # Resolve actual model names for display
         default_llm = llm_config["default_llm"]
         current_llm_display = default_llm
@@ -79,18 +166,33 @@ async def get_system_status():
             current_llm_display = f"Ollama: {actual_model}"
         elif default_llm.startswith("openai_"):
             current_llm_display = f"OpenAI: {default_llm.replace('openai_', '')}"
-        
+
+        # Check for background tasks status
+        background_tasks_status = "disabled"
+        background_tasks_count = 0
+
+        if hasattr(request.app.state, "background_tasks"):
+            background_tasks_count = len(request.app.state.background_tasks)
+            if background_tasks_count > 0:
+                background_tasks_status = "active"
+
         return {
             "status": "success",
             "current_llm": current_llm_display,
             "default_llm": llm_config["default_llm"],
             "task_llm": llm_config["task_llm"],
             "ollama_models": llm_config["ollama"]["models"],
-            "timestamp": datetime.now().isoformat()
+            "background_tasks": {
+                "status": background_tasks_status,
+                "count": background_tasks_count,
+            },
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Error getting system status: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Error getting system status: {str(e)}"})
+        return JSONResponse(
+            status_code=500, content={"error": f"Error getting system status: {str(e)}"}
+        )
 
 
 @router.post("/login")
@@ -102,8 +204,11 @@ async def login(request: Request, username: str = Form(...), password: str = For
         security_layer.audit_log("login", username, "success", {"ip": "N/A"})
         return {"message": "Login successful", "role": user_role}
     else:
-        security_layer.audit_log("login", username, "failure", {"reason": "invalid_credentials"})
+        security_layer.audit_log(
+            "login", username, "failure", {"reason": "invalid_credentials"}
+        )
         return JSONResponse(status_code=401, content={"message": "Invalid credentials"})
+
 
 @router.get("/ctx_window")
 async def get_context_window():
@@ -123,3 +228,56 @@ Relevant Knowledge:
 """
     mock_tokens = len(mock_context.split())
     return {"content": mock_context, "tokens": mock_tokens}
+
+
+@router.get("/playwright/health")
+async def check_playwright_health():
+    """Check Playwright container health status"""
+    try:
+        import requests
+
+        # Check if Playwright service is accessible
+        try:
+            response = requests.get("http://localhost:3000/health", timeout=5)
+            if response.status_code == 200:
+                playwright_data = response.json()
+                return {
+                    "status": "healthy",
+                    "playwright_available": True,
+                    "browser_connected": playwright_data.get(
+                        "browser_connected", False
+                    ),
+                    "timestamp": playwright_data.get("timestamp"),
+                    "vnc_url": "http://localhost:6080/vnc.html",
+                    "api_url": "http://localhost:3000",
+                }
+            else:
+                return {
+                    "status": "unhealthy",
+                    "playwright_available": False,
+                    "error": f"HTTP {response.status_code}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+        except requests.exceptions.ConnectionError:
+            return {
+                "status": "unhealthy",
+                "playwright_available": False,
+                "error": "Connection refused - container may be down",
+                "timestamp": datetime.now().isoformat(),
+            }
+        except requests.exceptions.Timeout:
+            return {
+                "status": "unhealthy",
+                "playwright_available": False,
+                "error": "Request timeout - service not responding",
+                "timestamp": datetime.now().isoformat(),
+            }
+
+    except Exception as e:
+        logger.error(f"Error checking Playwright health: {str(e)}")
+        return {
+            "status": "error",
+            "playwright_available": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+        }

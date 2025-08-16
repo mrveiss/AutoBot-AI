@@ -1,6 +1,6 @@
 /**
  * Shared Chat History Service
- * 
+ *
  * Centralizes all chat history management logic to eliminate duplication
  * between ChatInterface.vue and HistoryView.vue components.
  */
@@ -20,13 +20,12 @@ export class ChatHistoryService {
       // Try backend first
       const data = await apiClient.getChatList();
       this.chatList = data.chats || [];
-      console.log(`Loaded ${this.chatList.length} chats from backend`);
     } catch (error) {
       console.error('Error loading chat list from backend:', error);
       // Fallback to localStorage
       this.loadChatListFromLocalStorage();
     }
-    
+
     // Load custom chat names if available
     await this.loadCustomChatNames();
     return this.chatList;
@@ -45,7 +44,6 @@ export class ChatHistoryService {
       }
     }
     this.chatList = localChats;
-    console.log(`Loaded ${localChats.length} chats from localStorage`);
   }
 
   /**
@@ -95,15 +93,28 @@ export class ChatHistoryService {
   async loadChatMessages(chatId) {
     try {
       const data = await apiClient.getChatMessages(chatId);
-      console.log(`Loaded chat messages from backend for chat ${chatId}`);
-      return data.history || [];
+
+      // Normalize message format - backend uses 'messageType', frontend expects 'type'
+      const normalizedMessages = (data.history || []).map(msg => ({
+        ...msg,
+        type: msg.messageType || msg.type || 'response', // Ensure type field exists
+        messageType: undefined // Remove to avoid confusion
+      }));
+
+      return normalizedMessages;
     } catch (error) {
       console.error('Error loading chat messages from backend:', error);
       // Fallback to localStorage
       const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
       if (persistedMessages) {
-        console.log(`Loaded chat messages from localStorage for chat ${chatId}`);
-        return JSON.parse(persistedMessages);
+        const localMessages = JSON.parse(persistedMessages);
+
+        // Also normalize localStorage messages in case they have messageType
+        return localMessages.map(msg => ({
+          ...msg,
+          type: msg.messageType || msg.type || 'response',
+          messageType: undefined
+        }));
       }
       return [];
     }
@@ -124,7 +135,6 @@ export class ChatHistoryService {
     // Save to backend
     try {
       await apiClient.saveChatMessages(chatId, messages);
-      console.log('Chat messages saved to backend successfully');
     } catch (error) {
       console.error('Error saving chat messages to backend:', error);
     }
@@ -137,11 +147,10 @@ export class ChatHistoryService {
     try {
       const newChatData = await apiClient.createNewChat();
       const newChatId = newChatData.chat_id;
-      
+
       // Add to chat list
       this.chatList.push({ chatId: newChatId, name: '' });
-      
-      console.log('New chat created:', newChatId);
+
       return newChatId;
     } catch (error) {
       console.error('Failed to create new chat:', error);
@@ -159,14 +168,13 @@ export class ChatHistoryService {
 
     try {
       await apiClient.deleteChat(chatId);
-      
+
       // Remove from localStorage
       localStorage.removeItem(`chat_${chatId}_messages`);
-      
+
       // Remove from chat list
       this.chatList = this.chatList.filter(chat => chat.chatId !== chatId);
-      
-      console.log(`Chat ${chatId} deleted successfully`);
+
       return true;
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -181,10 +189,9 @@ export class ChatHistoryService {
     const chatIndex = this.chatList.findIndex(chat => chat.chatId === chatId);
     if (chatIndex !== -1) {
       this.chatList[chatIndex].name = newName;
-      
+
       // Save updated chat list to localStorage
       localStorage.setItem('chat_list', JSON.stringify(this.chatList));
-      console.log(`Updated name for chat ${chatId} to "${newName}"`);
       return true;
     }
     return false;
@@ -195,16 +202,16 @@ export class ChatHistoryService {
    */
   async getHistoryEntries() {
     await this.loadChatList();
-    
+
     const historyEntries = await Promise.all(
       this.chatList.map(async (chat) => {
         try {
           const messages = await this.loadChatMessages(chat.chatId);
           const userMessage = messages.find(msg => msg.sender === 'user');
-          const preview = userMessage 
+          const preview = userMessage
             ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '')
             : 'No subject';
-          
+
           return {
             id: chat.chatId,
             date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
@@ -232,7 +239,6 @@ export class ChatHistoryService {
   async resetChat(chatId) {
     try {
       await apiClient.resetChat(chatId);
-      console.log(`Chat ${chatId} reset successfully`);
       return true;
     } catch (error) {
       console.error('Error resetting chat:', error);

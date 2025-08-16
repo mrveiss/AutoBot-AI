@@ -1,0 +1,579 @@
+"""
+System Knowledge Manager for AutoBot
+Manages immutable system knowledge templates and their runtime copies
+"""
+
+import json
+import logging
+import shutil
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+import yaml
+
+from src.agents.enhanced_kb_librarian import EnhancedKBLibrarian
+from src.knowledge_base import KnowledgeBase
+
+logger = logging.getLogger(__name__)
+
+
+class SystemKnowledgeManager:
+    """Manages system knowledge templates and runtime knowledge base integration"""
+
+    def __init__(self, knowledge_base: KnowledgeBase):
+        self.knowledge_base = knowledge_base
+        self.librarian = EnhancedKBLibrarian(knowledge_base)
+
+        # Paths
+        self.system_knowledge_dir = Path("system_knowledge")
+        self.runtime_knowledge_dir = Path("data/system_knowledge")
+        self.backup_dir = Path("data/system_knowledge_backups")
+
+        # Ensure directories exist
+        self.runtime_knowledge_dir.mkdir(parents=True, exist_ok=True)
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+
+    async def initialize_system_knowledge(self, force_reinstall: bool = False):
+        """Initialize system knowledge from templates"""
+        logger.info("Initializing system knowledge...")
+
+        if force_reinstall:
+            await self._backup_current_knowledge()
+            await self._clear_system_knowledge()
+
+        # Check if system knowledge is already imported
+        if not force_reinstall and await self._is_system_knowledge_imported():
+            logger.info("System knowledge already imported, skipping initialization")
+            return
+
+        # Import all system knowledge
+        await self._import_system_knowledge()
+
+        # Mark as imported
+        await self._mark_system_knowledge_imported()
+
+        logger.info("System knowledge initialization completed")
+
+    async def _is_system_knowledge_imported(self) -> bool:
+        """Check if system knowledge has been imported"""
+        marker_file = self.runtime_knowledge_dir / ".imported"
+        return marker_file.exists()
+
+    async def _mark_system_knowledge_imported(self):
+        """Mark system knowledge as imported"""
+        marker_file = self.runtime_knowledge_dir / ".imported"
+        with open(marker_file, "w") as f:
+            json.dump(
+                {"imported_at": datetime.now().isoformat(), "version": "1.0.0"},
+                f,
+                indent=2,
+            )
+
+    async def _backup_current_knowledge(self):
+        """Backup current system knowledge"""
+        if not self.runtime_knowledge_dir.exists():
+            return
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = self.backup_dir / f"backup_{timestamp}"
+
+        if self.runtime_knowledge_dir.exists():
+            shutil.copytree(self.runtime_knowledge_dir, backup_path)
+            logger.info(f"Backed up system knowledge to {backup_path}")
+
+    async def _clear_system_knowledge(self):
+        """Clear current system knowledge"""
+        if self.runtime_knowledge_dir.exists():
+            shutil.rmtree(self.runtime_knowledge_dir)
+        self.runtime_knowledge_dir.mkdir(parents=True, exist_ok=True)
+
+        # Clear from knowledge base
+        await self._clear_system_knowledge_from_kb()
+
+    async def _clear_system_knowledge_from_kb(self):
+        """Clear system knowledge entries from knowledge base"""
+        # This would need to be implemented based on your KB's delete functionality
+        logger.info("Clearing system knowledge from knowledge base")
+
+    async def _import_system_knowledge(self):
+        """Import all system knowledge from templates"""
+        if not self.system_knowledge_dir.exists():
+            logger.warning(
+                f"System knowledge directory not found: {self.system_knowledge_dir}"
+            )
+            await self._create_default_system_knowledge()
+
+        # Import tools knowledge
+        await self._import_tools_knowledge()
+
+        # Import workflows
+        await self._import_workflows_knowledge()
+
+        # Import procedures
+        await self._import_procedures_knowledge()
+
+    async def _create_default_system_knowledge(self):
+        """Create default system knowledge templates"""
+        logger.info("Creating default system knowledge templates...")
+
+        # Create directory structure
+        (self.system_knowledge_dir / "tools").mkdir(parents=True, exist_ok=True)
+        (self.system_knowledge_dir / "workflows").mkdir(parents=True, exist_ok=True)
+        (self.system_knowledge_dir / "procedures").mkdir(parents=True, exist_ok=True)
+
+        # Create default steganography tools knowledge
+        steganography_tools = {
+            "metadata": {
+                "category": "steganography",
+                "description": "Tools for steganography analysis and detection",
+                "last_updated": datetime.now().isoformat(),
+                "version": "1.0.0",
+            },
+            "tools": [
+                {
+                    "name": "steghide",
+                    "type": "steganography",
+                    "purpose": "Extract and embed hidden data in image and audio files",
+                    "installation": {
+                        "apt": "sudo apt-get install steghide",
+                        "yum": "sudo yum install steghide",
+                        "pacman": "sudo pacman -S steghide",
+                    },
+                    "usage": {
+                        "extract": "steghide extract -sf {image_file}",
+                        "info": "steghide info {image_file}",
+                        "embed": "steghide embed -cf {cover_file} -ef {data_file}",
+                    },
+                    "common_examples": [
+                        {
+                            "description": "Extract hidden data from image",
+                            "command": "steghide extract -sf suspicious.jpg",
+                            "expected_output": (
+                                "Enter passphrase: (if password protected)"
+                            ),
+                        },
+                        {
+                            "description": "Check image capacity for hidden data",
+                            "command": "steghide info suspicious.jpg",
+                            "expected_output": ("capacity: 57.8% (can hide data)"),
+                        },
+                    ],
+                    "troubleshooting": [
+                        {
+                            "problem": (
+                                "could not extract any data with that passphrase"
+                            ),
+                            "solution": "Try empty passphrase or common passwords",
+                        },
+                        {
+                            "problem": "file format is not supported",
+                            "solution": "Convert to JPEG or BMP format first",
+                        },
+                    ],
+                    "security_notes": [
+                        "Use strong passphrases for embedding",
+                        "Steganography can be detected by analysis tools",
+                        "Consider using multiple tools to avoid detection",
+                    ],
+                    "related_tools": ["binwalk", "outguess", "jsteg", "zsteg"],
+                    "output_formats": ["original file format", "text output for info"],
+                    "limitations": [
+                        "Only supports JPEG, BMP, WAV, AU formats",
+                        "Cannot process encrypted or corrupted images",
+                    ],
+                },
+                {
+                    "name": "binwalk",
+                    "type": "file_analysis",
+                    "purpose": "Analyze and extract files from binary images",
+                    "installation": {
+                        "apt": "sudo apt-get install binwalk",
+                        "yum": "sudo yum install binwalk",
+                        "pacman": "sudo pacman -S binwalk",
+                    },
+                    "usage": {
+                        "analyze": "binwalk {file}",
+                        "extract": "binwalk -e {file}",
+                        "signature": "binwalk --signature {file}",
+                    },
+                    "common_examples": [
+                        {
+                            "description": "Scan for embedded files",
+                            "command": "binwalk suspicious.jpg",
+                            "expected_output": (
+                                "List of detected file signatures and offsets"
+                            ),
+                        },
+                        {
+                            "description": "Extract all found files",
+                            "command": "binwalk -e suspicious.jpg",
+                            "expected_output": (
+                                "Creates _suspicious.jpg.extracted/ directory"
+                            ),
+                        },
+                    ],
+                    "related_tools": ["foremost", "scalpel", "photorec"],
+                    "output_formats": ["extracted files", "signature analysis text"],
+                },
+            ],
+        }
+
+        # Save steganography tools
+        with open(self.system_knowledge_dir / "tools" / "steganography.yaml", "w") as f:
+            yaml.dump(steganography_tools, f, default_flow_style=False, indent=2)
+
+        # Create default image forensics workflow
+        image_forensics_workflow = {
+            "metadata": {
+                "name": "Image Steganography Analysis",
+                "category": "forensics",
+                "complexity": "medium",
+                "estimated_time": "10-30 minutes",
+                "version": "1.0.0",
+            },
+            "objective": (
+                "Analyze images for hidden files, steganographic content, "
+                "and embedded data"
+            ),
+            "prerequisites": [
+                "Target image file(s)",
+                "Basic understanding of steganography techniques",
+                "Sufficient disk space for extracted files",
+            ],
+            "required_tools": [
+                {
+                    "name": "steghide",
+                    "purpose": "Extract hidden data from images",
+                    "optional": False,
+                },
+                {
+                    "name": "binwalk",
+                    "purpose": "Detect and extract embedded files",
+                    "optional": False,
+                },
+                {
+                    "name": "exiftool",
+                    "purpose": "Analyze image metadata",
+                    "optional": True,
+                },
+            ],
+            "workflow_steps": [
+                {
+                    "step": 1,
+                    "action": "Initial image analysis",
+                    "details": "Gather basic information about the target image",
+                    "commands": [
+                        "file {image_file}",
+                        "ls -la {image_file}",
+                        "identify {image_file}",
+                    ],
+                    "expected_output": "Image format, size, and basic properties",
+                },
+                {
+                    "step": 2,
+                    "action": "Metadata examination",
+                    "details": "Check for hidden information in image metadata",
+                    "commands": [
+                        "exiftool {image_file}",
+                        "strings {image_file} | head -20",
+                    ],
+                    "expected_output": ("EXIF data, embedded comments, text strings"),
+                },
+                {
+                    "step": 3,
+                    "action": "Steganography detection",
+                    "details": "Check for steganographic content using steghide",
+                    "commands": ["steghide info {image_file}"],
+                    "expected_output": (
+                        "Capacity information or error if no hidden data"
+                    ),
+                },
+                {
+                    "step": 4,
+                    "action": "File signature analysis",
+                    "details": "Look for embedded files using binwalk",
+                    "commands": ["binwalk {image_file}", "binwalk -e {image_file}"],
+                    "expected_output": "List of detected files and extraction results",
+                },
+            ],
+            "decision_points": [
+                {
+                    "condition": "steghide reports capacity > 0",
+                    "if_true": "Attempt extraction with common passwords",
+                    "if_false": "Move to alternative steganography tools",
+                },
+                {
+                    "condition": "binwalk finds embedded files",
+                    "if_true": "Extract and analyze each file",
+                    "if_false": "Check for other steganography methods",
+                },
+            ],
+            "quality_checks": [
+                "Verify extracted files are not corrupted",
+                "Check that original image wasn't modified during analysis",
+                "Confirm all potential hiding methods were tested",
+            ],
+            "common_pitfalls": [
+                {
+                    "issue": "Assuming empty passphrase when extraction fails",
+                    "prevention": "Try common passwords and dictionary attacks",
+                },
+                {
+                    "issue": "Missing hidden data due to format limitations",
+                    "prevention": "Test with multiple steganography tools",
+                },
+            ],
+        }
+
+        # Save workflow
+        with open(
+            self.system_knowledge_dir / "workflows" / "image_forensics.yaml", "w"
+        ) as f:
+            yaml.dump(image_forensics_workflow, f, default_flow_style=False, indent=2)
+
+        logger.info("Default system knowledge templates created")
+
+    async def _import_tools_knowledge(self):
+        """Import tools knowledge from YAML templates"""
+        tools_dir = self.system_knowledge_dir / "tools"
+        if not tools_dir.exists():
+            return
+
+        for yaml_file in tools_dir.glob("*.yaml"):
+            logger.info(f"Importing tools from {yaml_file}")
+
+            with open(yaml_file, "r") as f:
+                tools_data = yaml.safe_load(f)
+
+            # Copy to runtime directory
+            runtime_file = self.runtime_knowledge_dir / "tools" / yaml_file.name
+            runtime_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(yaml_file, runtime_file)
+
+            # Import tools into knowledge base
+            for tool_data in tools_data.get("tools", []):
+                await self._import_single_tool(tool_data)
+
+    async def _import_single_tool(self, tool_data: Dict[str, Any]):
+        """Import a single tool into the knowledge base"""
+        tool_name = tool_data.get("name", "unknown")
+
+        # Convert YAML structure to librarian format
+        tool_info = {
+            "name": tool_name,
+            "type": tool_data.get("type", "command-line tool"),
+            "purpose": tool_data.get("purpose", ""),
+            "category": tool_data.get("type", "general"),
+            "platform": "linux",
+            "installation": self._format_installation(
+                tool_data.get("installation", {})
+            ),
+            "usage": self._format_usage(tool_data.get("usage", {})),
+            "command_examples": tool_data.get("common_examples", []),
+            "troubleshooting": self._format_troubleshooting(
+                tool_data.get("troubleshooting", [])
+            ),
+            "security_notes": "\n".join(tool_data.get("security_notes", [])),
+            "related_tools": tool_data.get("related_tools", []),
+            "output_formats": "\n".join(tool_data.get("output_formats", [])),
+            "limitations": "\n".join(tool_data.get("limitations", [])),
+            "verified": "system_knowledge",
+        }
+
+        await self.librarian.store_tool_knowledge(tool_info)
+        logger.info(f"Imported tool: {tool_name}")
+
+    def _format_installation(self, install_data: Dict[str, str]) -> str:
+        """Format installation commands from YAML"""
+        if not install_data:
+            return "Installation information not available"
+
+        formatted = []
+        for package_manager, command in install_data.items():
+            formatted.append(f"{package_manager}: {command}")
+
+        return "\n".join(formatted)
+
+    def _format_usage(self, usage_data: Dict[str, str]) -> str:
+        """Format usage information from YAML"""
+        if not usage_data:
+            return "Usage information not available"
+
+        formatted = []
+        for action, command in usage_data.items():
+            formatted.append(f"{action}: {command}")
+
+        return "\n".join(formatted)
+
+    def _format_troubleshooting(self, trouble_data: List[Dict[str, str]]) -> str:
+        """Format troubleshooting information from YAML"""
+        if not trouble_data:
+            return "No troubleshooting information available"
+
+        formatted = []
+        for item in trouble_data:
+            problem = item.get("problem", "Unknown problem")
+            solution = item.get("solution", "No solution provided")
+            formatted.append(f"Problem: {problem}")
+            formatted.append(f"Solution: {solution}")
+            formatted.append("")
+
+        return "\n".join(formatted)
+
+    async def _import_workflows_knowledge(self):
+        """Import workflow knowledge from YAML templates"""
+        workflows_dir = self.system_knowledge_dir / "workflows"
+        if not workflows_dir.exists():
+            return
+
+        for yaml_file in workflows_dir.glob("*.yaml"):
+            logger.info(f"Importing workflow from {yaml_file}")
+
+            with open(yaml_file, "r") as f:
+                workflow_data = yaml.safe_load(f)
+
+            # Copy to runtime directory
+            runtime_file = self.runtime_knowledge_dir / "workflows" / yaml_file.name
+            runtime_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(yaml_file, runtime_file)
+
+            # Import workflow into knowledge base
+            await self._import_single_workflow(workflow_data)
+
+    async def _import_single_workflow(self, workflow_data: Dict[str, Any]):
+        """Import a single workflow into knowledge base"""
+        metadata = workflow_data.get("metadata", {})
+        workflow_name = metadata.get("name", "Unknown Workflow")
+
+        # Convert to librarian format
+        workflow_info = {
+            "name": workflow_name,
+            "type": metadata.get("category", "general"),
+            "complexity": metadata.get("complexity", "medium"),
+            "estimated_time": metadata.get("estimated_time", "varies"),
+            "objective": workflow_data.get("objective", ""),
+            "prerequisites": workflow_data.get("prerequisites", []),
+            "required_tools": workflow_data.get("required_tools", []),
+            "workflow_steps": workflow_data.get("workflow_steps", []),
+            "decision_points": workflow_data.get("decision_points", []),
+            "quality_checks": workflow_data.get("quality_checks", []),
+            "pitfalls": self._format_pitfalls(workflow_data.get("common_pitfalls", [])),
+            "category": "workflows",
+        }
+
+        await self.librarian.store_workflow_knowledge(workflow_info)
+        logger.info(f"Imported workflow: {workflow_name}")
+
+    def _format_pitfalls(
+        self, pitfalls_data: List[Dict[str, str]]
+    ) -> List[Dict[str, str]]:
+        """Format pitfalls data for librarian"""
+        formatted = []
+        for pitfall in pitfalls_data:
+            formatted.append(
+                {
+                    "issue": pitfall.get("issue", "Unknown issue"),
+                    "prevention": pitfall.get("prevention", "No prevention method"),
+                }
+            )
+        return formatted
+
+    async def _import_procedures_knowledge(self):
+        """Import procedures knowledge from YAML templates"""
+        procedures_dir = self.system_knowledge_dir / "procedures"
+        if not procedures_dir.exists():
+            return
+
+        for yaml_file in procedures_dir.glob("*.yaml"):
+            logger.info(f"Importing procedure from {yaml_file}")
+
+            with open(yaml_file, "r") as f:
+                procedure_data = yaml.safe_load(f)
+
+            # Copy to runtime directory
+            runtime_file = self.runtime_knowledge_dir / "procedures" / yaml_file.name
+            runtime_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(yaml_file, runtime_file)
+
+            # Import procedure into knowledge base
+            await self._import_single_procedure(procedure_data)
+
+    async def _import_single_procedure(self, procedure_data: Dict[str, Any]):
+        """Import a single procedure into knowledge base"""
+        title = procedure_data.get("title", "System Procedure")
+
+        # Convert to librarian format
+        doc_info = {
+            "title": title,
+            "type": procedure_data.get("type", "procedure"),
+            "category": procedure_data.get("category", "system"),
+            "overview": procedure_data.get("overview", ""),
+            "procedures": procedure_data.get("procedures", []),
+            "steps": procedure_data.get("steps", []),
+            "common_issues": self._format_procedure_issues(
+                procedure_data.get("common_issues", [])
+            ),
+            "best_practices": procedure_data.get("best_practices", []),
+            "examples": procedure_data.get("examples", []),
+            "verification": procedure_data.get("verification", []),
+        }
+
+        await self.librarian.store_system_documentation(doc_info)
+        logger.info(f"Imported procedure: {title}")
+
+    def _format_procedure_issues(
+        self, issues_data: List[Dict[str, str]]
+    ) -> List[Dict[str, str]]:
+        """Format procedure issues for librarian"""
+        formatted = []
+        for issue in issues_data:
+            formatted.append(
+                {
+                    "problem": issue.get("problem", "Unknown problem"),
+                    "solution": issue.get("solution", "No solution provided"),
+                }
+            )
+        return formatted
+
+    async def reload_system_knowledge(self):
+        """Reload system knowledge from runtime files"""
+        logger.info("Reloading system knowledge from runtime files...")
+
+        # Clear current system knowledge from KB
+        await self._clear_system_knowledge_from_kb()
+
+        # Reimport from runtime files
+        await self._import_from_runtime_files()
+
+        logger.info("System knowledge reloaded successfully")
+
+    async def _import_from_runtime_files(self):
+        """Import system knowledge from runtime files"""
+        # Import tools
+        tools_dir = self.runtime_knowledge_dir / "tools"
+        if tools_dir.exists():
+            for yaml_file in tools_dir.glob("*.yaml"):
+                with open(yaml_file, "r") as f:
+                    tools_data = yaml.safe_load(f)
+
+                for tool_data in tools_data.get("tools", []):
+                    await self._import_single_tool(tool_data)
+
+        # Import workflows
+        workflows_dir = self.runtime_knowledge_dir / "workflows"
+        if workflows_dir.exists():
+            for yaml_file in workflows_dir.glob("*.yaml"):
+                with open(yaml_file, "r") as f:
+                    workflow_data = yaml.safe_load(f)
+
+                await self._import_single_workflow(workflow_data)
+
+        # Import procedures
+        procedures_dir = self.runtime_knowledge_dir / "procedures"
+        if procedures_dir.exists():
+            for yaml_file in procedures_dir.glob("*.yaml"):
+                with open(yaml_file, "r") as f:
+                    procedure_data = yaml.safe_load(f)
+
+                await self._import_single_procedure(procedure_data)

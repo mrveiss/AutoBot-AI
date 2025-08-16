@@ -22,10 +22,10 @@ export function useChatHistory() {
             const messages = JSON.parse(messagesStr);
             // Look for the first user message to use as a preview
             const userMessage = messages.find(msg => msg.sender === 'user');
-            const subject = userMessage ? 
-              userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 
+            const subject = userMessage ?
+              userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') :
               'No subject';
-            
+
             localChats.push({
               chatId,
               id: chatId, // For HistoryView compatibility
@@ -40,7 +40,6 @@ export function useChatHistory() {
       }
     }
     chatList.value = localChats;
-    console.log(`Chat history loaded from local storage: ${localChats.length} chats`);
     return localChats;
   };
 
@@ -49,16 +48,16 @@ export function useChatHistory() {
     try {
       const response = await apiClient.get('/api/chats');
       const chats = response.chats || [];
-      
+
       const processedChats = await Promise.all(chats.map(async (chat) => {
         try {
           const messagesResponse = await apiClient.getChatMessages(chat.chatId);
           const messages = messagesResponse.history || [];
           const userMessage = messages.find(msg => msg.sender === 'user');
-          const subject = userMessage ? 
-            userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 
+          const subject = userMessage ?
+            userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') :
             'No subject';
-          
+
           return {
             chatId: chat.chatId,
             id: chat.chatId, // For HistoryView compatibility
@@ -77,9 +76,8 @@ export function useChatHistory() {
           };
         }
       }));
-      
+
       chatList.value = processedChats;
-      console.log(`Chat history loaded from backend: ${processedChats.length} chats`);
     } catch (error) {
       console.error('Error loading chat list from backend:', error);
       // Fallback to local storage
@@ -115,20 +113,19 @@ export function useChatHistory() {
 
     try {
       await apiClient.deleteChat(chatId);
-      
+
       // Remove from local storage
       localStorage.removeItem(`chat_${chatId}_messages`);
-      
+
       // Remove from chat list
       chatList.value = chatList.value.filter(chat => chat.chatId !== chatId && chat.id !== chatId);
-      
+
       // If the deleted chat was active, clear current chat ID
       if (chatId === currentChatId.value) {
         currentChatId.value = null;
         window.location.hash = '';
       }
-      
-      console.log(`Chat ${chatId} deleted successfully`);
+
       return { success: true, message: 'Chat deleted successfully' };
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -141,22 +138,21 @@ export function useChatHistory() {
     try {
       const newChatData = await apiClient.createNewChat();
       const newChatId = newChatData.chat_id;
-      
+
       // Add to chat list
-      const newChat = { 
-        chatId: newChatId, 
+      const newChat = {
+        chatId: newChatId,
         id: newChatId,  // For HistoryView compatibility
         name: '',
         preview: '',
         date: new Date().toLocaleTimeString()
       };
       chatList.value.push(newChat);
-      
+
       // Set as current chat
       currentChatId.value = newChatId;
       window.location.hash = `chatId=${newChatId}`;
-      
-      console.log('New Chat created:', newChatId);
+
       return { success: true, chatId: newChatId };
     } catch (error) {
       console.error('Failed to create new chat:', error);
@@ -167,28 +163,26 @@ export function useChatHistory() {
   // Function to switch to a different chat
   const switchToChat = (chatId) => {
     if (chatId === currentChatId.value) return;
-    
+
     window.location.hash = `chatId=${chatId}`;
     currentChatId.value = chatId;
-    console.log('Switched to chat:', chatId);
   };
 
   // Function to edit chat name
   const editChatName = (chatId, newName) => {
-    const chatIndex = chatList.value.findIndex(chat => 
+    const chatIndex = chatList.value.findIndex(chat =>
       chat.chatId === chatId || chat.id === chatId
     );
     if (chatIndex !== -1) {
       chatList.value[chatIndex].name = newName;
-      
+
       // Save updated chat list to local storage
       const customChatList = chatList.value.map(chat => ({
         chatId: chat.chatId || chat.id,
         name: chat.name
       }));
       localStorage.setItem('chat_list', JSON.stringify(customChatList));
-      
-      console.log(`Updated name for chat ${chatId} to "${newName}"`);
+
       return true;
     }
     return false;

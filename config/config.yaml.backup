@@ -1,0 +1,98 @@
+backend:
+  api_endpoint: http://localhost:8001
+  audit_log_file: ''
+  chat_data_dir: ''
+  chat_history_file: ''
+  cors_origins: []
+  knowledge_base_db: ''
+  llm:
+    cloud:
+      provider: openai
+      providers:
+        anthropic:
+          api_key: ''
+          endpoint: ''
+          models: []
+          selected_model: ''
+        openai:
+          api_key: ''
+          endpoint: ''
+          models: []
+          selected_model: ''
+    local:
+      provider: ollama
+      providers:
+        lmstudio:
+          endpoint: ''
+          models: []
+          selected_model: ''
+        ollama:
+          endpoint: http://localhost:11434/api/generate
+          host: http://localhost:11434
+          models: []
+          selected_model: ''
+    provider_type: local
+  max_retries: 3
+  ollama_endpoint: http://localhost:11434
+  ollama_model: tinyllama:latest
+  reliability_stats_file: ''
+  server_host: 0.0.0.0
+  server_port: 8001
+  streaming: true
+  timeout: 60
+  use_phi2: false
+chat:
+  auto_scroll: true
+  default_welcome_message: Hello! How can I assist you today?
+  max_messages: 100
+  message_retention_days: 30
+developer:
+  debug_logging: true
+  enabled: true
+  endpoint_suggestions: true
+  enhanced_errors: true
+knowledge_base:
+  enabled: true
+  update_frequency_days: 7
+llm_config: {}
+logging:
+  log_file_path: ''
+  log_level: info
+  log_to_file: false
+memory:
+  chromadb:
+    collection_name: ''
+    enabled: true
+    path: ''
+  long_term:
+    enabled: true
+    retention_days: 30
+  redis:
+    enabled: true
+    host: localhost
+    port: 6379
+  short_term:
+    duration_minutes: 30
+    enabled: true
+  vector_storage:
+    enabled: true
+    update_frequency_days: 7
+message_display:
+  show_debug: false
+  show_json: false
+  show_planning: true
+  show_thoughts: true
+  show_utility: false
+security:
+  enable_encryption: false
+  session_timeout_minutes: 30
+ui:
+  animations: true
+  developer_mode: true
+  font_size: medium
+  language: en
+  theme: light
+voice_interface:
+  enabled: false
+  speech_rate: 1
+  voice: default

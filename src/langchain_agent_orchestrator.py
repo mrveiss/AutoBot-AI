@@ -1,13 +1,9 @@
 import asyncio
-import json
 import logging
-from typing import Dict, Any, List, Optional, Callable
-import uuid
-import time
+from typing import Any, Dict, List, Optional
 
-from langchain.agents import initialize_agent, Tool
+from langchain.agents import Tool, initialize_agent
 from langchain.agents.agent_types import AgentType
-from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
 try:
     from langchain_community.llms import Ollama  # type: ignore
@@ -20,63 +16,93 @@ except ImportError:
         except ImportError:
             # Fallback - will cause runtime error if used
             Ollama = None
-            logging.warning("Ollama integration not available. Install 'langchain-community' package for Ollama support.")
+            logging.warning(
+                "Ollama integration not available. Install 'langchain-community' "
+                "package for Ollama support."
+            )
 
-from src.worker_node import WorkerNode
-from src.knowledge_base import KnowledgeBase
 from src.event_manager import event_manager
-from src.config import config
+from src.knowledge_base import KnowledgeBase
 from src.tools import ToolRegistry
+from src.worker_node import WorkerNode
 
 
 class LangChainAgentOrchestrator:
-    def __init__(self, config: Dict[str, Any], worker_node: Optional[WorkerNode], knowledge_base: Optional[KnowledgeBase]):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        worker_node: Optional[WorkerNode],
+        knowledge_base: Optional[KnowledgeBase],
+    ):
         self.config = config
         self.worker_node = worker_node
         self.knowledge_base = knowledge_base
         self.available = worker_node is not None
-        
+
         if not self.available:
-            logging.warning("LangChain Agent Orchestrator disabled due to missing worker node")
+            logging.warning(
+                "LangChain Agent Orchestrator disabled due to missing worker node"
+            )
             return
-        
+
         if Ollama is None:
-            logging.warning("LangChain Agent Orchestrator disabled due to missing Ollama import")
+            logging.warning(
+                "LangChain Agent Orchestrator disabled due to missing Ollama import"
+            )
             self.available = False
             return
-        
+
         # Initialize LLM for LangChain using centralized config
         from src.config import config as global_config
+
         llm_config = global_config.get_llm_config()
         # Temporarily hardcode model to rule out config parsing issues
-        llm_model = 'phi:2.7b' 
-        llm_base_url = llm_config.get('ollama', {}).get('base_url', 'http://localhost:11434')
-        
-        logging.info(f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}")
-        print(f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}")
-        
+        llm_model = "phi:2.7b"
+        llm_base_url = llm_config.get("ollama", {}).get(
+            "base_url", "http://localhost:11434"
+        )
+
+        logging.info(
+            f"LangChain Agent initializing with model: {llm_model}, "
+            f"base_url: {llm_base_url}"
+        )
+        print(
+            f"LangChain Agent initializing with model: {llm_model}, "
+            f"base_url: {llm_base_url}"
+        )
+
         try:
-            print(f"DEBUG: Passing model='{llm_model}' and base_url='{llm_base_url}' to Ollama constructor.")
-            self.llm = Ollama(
-                model=llm_model, # Explicitly set model here
-                base_url=llm_base_url,
-                temperature=0.7
+            print(
+                f"DEBUG: Passing model='{llm_model}' and "
+                f"base_url='{llm_base_url}' to Ollama constructor."
             )
-            logging.info(f"LangChain Agent LLM initialized successfully with model: {llm_model}")
+            self.llm = Ollama(
+                model=llm_model,  # Explicitly set model here
+                base_url=llm_base_url,
+                temperature=0.7,
+            )
+            logging.info(
+                f"LangChain Agent LLM initialized successfully with model: {llm_model}"
+            )
         except Exception as e:
-            logging.error(f"Failed to initialize LangChain Agent: {e}", exc_info=True) # Log full traceback
+            logging.error(
+                f"Failed to initialize LangChain Agent: {e}", exc_info=True
+            )  # Log full traceback
             print(f"Failed to initialize LangChain Agent: {e}")
             import traceback
-            traceback.print_exc() # Print traceback to console
+
+            traceback.print_exc()  # Print traceback to console
             self.available = False
             return
-        
+
         # Initialize unified tool registry to eliminate code duplication
-        self.tool_registry = ToolRegistry(worker_node=worker_node, knowledge_base=knowledge_base)
-        
+        self.tool_registry = ToolRegistry(
+            worker_node=worker_node, knowledge_base=knowledge_base
+        )
+
         # Initialize tools
         self.tools = self._create_tools()
-        
+
         # Initialize agent
         self.agent = initialize_agent(
             tools=self.tools,
@@ -84,126 +110,213 @@ class LangChainAgentOrchestrator:
             agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
             verbose=True,
             max_iterations=10,
-            handle_parsing_errors=True
+            handle_parsing_errors=True,
         )
-        
+
         logging.info("LangChain Agent Orchestrator initialized")
 
     def _create_tools(self) -> List[Tool]:
         """Create LangChain Tools that wrap existing AutoBot functionality."""
         tools = []
-        
+
         # System Integration Tools
-        tools.append(Tool(
-            name="execute_system_command",
-            description="Execute a system command. Use this for running shell commands, checking system status, or performing system operations. Input should be the command to execute.",
-            func=self._execute_system_command
-        ))
-        
-        tools.append(Tool(
-            name="query_system_information",
-            description="Get system information including OS details, hardware specs, and system status. No input required.",
-            func=self._query_system_information
-        ))
-        
-        tools.append(Tool(
-            name="list_system_services",
-            description="List all system services and their status. No input required.",
-            func=self._list_system_services
-        ))
-        
-        tools.append(Tool(
-            name="manage_service",
-            description="Manage a system service (start, stop, restart, enable, disable). Input should be 'service_name action' where action is one of: start, stop, restart, enable, disable.",
-            func=self._manage_service
-        ))
-        
-        tools.append(Tool(
-            name="get_process_info",
-            description="Get information about running processes. Input can be a process name or PID.",
-            func=self._get_process_info
-        ))
-        
-        tools.append(Tool(
-            name="terminate_process",
-            description="Terminate a process by PID. Input should be the process ID (PID).",
-            func=self._terminate_process
-        ))
-        
-        tools.append(Tool(
-            name="web_fetch",
-            description="Fetch content from a web URL. Input should be the URL to fetch.",
-            func=self._web_fetch
-        ))
-        
+        tools.append(
+            Tool(
+                name="execute_system_command",
+                description=(
+                    "Execute a system command. Use this for running shell commands, "
+                    "checking system status, or performing system operations. "
+                    "Input should be the command to execute."
+                ),
+                func=self._execute_system_command,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="query_system_information",
+                description=(
+                    "Get system information including OS details, hardware specs, "
+                    "and system status. No input required."
+                ),
+                func=self._query_system_information,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="list_system_services",
+                description=(
+                    "List all system services and their status. No input required."
+                ),
+                func=self._list_system_services,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="manage_service",
+                description=(
+                    "Manage a system service (start, stop, restart, enable, disable). "
+                    "Input should be 'service_name action' where action is one of: "
+                    "start, stop, restart, enable, disable."
+                ),
+                func=self._manage_service,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="get_process_info",
+                description=(
+                    "Get information about running processes. Input can be "
+                    "a process name or PID."
+                ),
+                func=self._get_process_info,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="terminate_process",
+                description=(
+                    "Terminate a process by PID. Input should be "
+                    "the process ID (PID)."
+                ),
+                func=self._terminate_process,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="web_fetch",
+                description=(
+                    "Fetch content from a web URL. Input should be the URL to fetch."
+                ),
+                func=self._web_fetch,
+            )
+        )
+
         # Knowledge Base Tools
-        tools.append(Tool(
-            name="search_knowledge_base",
-            description="Search the knowledge base for relevant information. Input should be the search query.",
-            func=self._search_knowledge_base
-        ))
-        
-        tools.append(Tool(
-            name="add_file_to_knowledge_base",
-            description="Add a file to the knowledge base. Input should be 'file_path file_type' where file_type is one of: txt, pdf, csv, docx.",
-            func=self._add_file_to_knowledge_base
-        ))
-        
-        tools.append(Tool(
-            name="store_fact",
-            description="Store a fact in the knowledge base. Input should be the fact content to store.",
-            func=self._store_fact
-        ))
-        
-        tools.append(Tool(
-            name="get_fact",
-            description="Get facts from the knowledge base. Input can be a fact ID or search query.",
-            func=self._get_fact
-        ))
-        
+        tools.append(
+            Tool(
+                name="search_knowledge_base",
+                description=(
+                    "Search the knowledge base for relevant information. "
+                    "Input should be the search query."
+                ),
+                func=self._search_knowledge_base,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="add_file_to_knowledge_base",
+                description=(
+                    "Add a file to the knowledge base. Input should be "
+                    "'file_path file_type' where file_type is one of: "
+                    "txt, pdf, csv, docx."
+                ),
+                func=self._add_file_to_knowledge_base,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="store_fact",
+                description=(
+                    "Store a fact in the knowledge base. Input should be "
+                    "the fact content to store."
+                ),
+                func=self._store_fact,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="get_fact",
+                description=(
+                    "Get facts from the knowledge base. Input can be "
+                    "a fact ID or search query."
+                ),
+                func=self._get_fact,
+            )
+        )
+
         # GUI Automation Tools (if available)
-        if self.worker_node and hasattr(self.worker_node, 'gui_controller') and self.worker_node.gui_controller:
-            tools.append(Tool(
-                name="type_text",
-                description="Type text into the currently active window. Input should be the text to type.",
-                func=self._type_text
-            ))
-            
-            tools.append(Tool(
-                name="click_element",
-                description="Click on a GUI element by image path. Input should be the path to the image template.",
-                func=self._click_element
-            ))
-            
-            tools.append(Tool(
-                name="bring_window_to_front",
-                description="Bring a window to the front by application title. Input should be the window title.",
-                func=self._bring_window_to_front
-            ))
-        
+        if (
+            self.worker_node
+            and hasattr(self.worker_node, "gui_controller")
+            and self.worker_node.gui_controller
+        ):
+            tools.append(
+                Tool(
+                    name="type_text",
+                    description=(
+                        "Type text into the currently active window. "
+                        "Input should be the text to type."
+                    ),
+                    func=self._type_text,
+                )
+            )
+
+            tools.append(
+                Tool(
+                    name="click_element",
+                    description=(
+                        "Click on a GUI element by image path. "
+                        "Input should be the path to the image template."
+                    ),
+                    func=self._click_element,
+                )
+            )
+
+            tools.append(
+                Tool(
+                    name="bring_window_to_front",
+                    description=(
+                        "Bring a window to the front by application title. "
+                        "Input should be the window title."
+                    ),
+                    func=self._bring_window_to_front,
+                )
+            )
+
         # User Interaction Tools
-        tools.append(Tool(
-            name="ask_user_for_manual",
-            description="Ask the user for a manual or help information about a specific program. Input should be 'program_name question_text'.",
-            func=self._ask_user_for_manual
-        ))
-        
-        tools.append(Tool(
-            name="respond_conversationally",
-            description="Respond to the user conversationally when no other tools are needed. Input should be the response text.",
-            func=self._respond_conversationally
-        ))
-        
+        tools.append(
+            Tool(
+                name="ask_user_for_manual",
+                description=(
+                    "Ask the user for a manual or help information about "
+                    "a specific program. Input should be 'program_name question_text'."
+                ),
+                func=self._ask_user_for_manual,
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="respond_conversationally",
+                description=(
+                    "Respond to the user conversationally when no other tools are "
+                    "needed. Input should be the response text."
+                ),
+                func=self._respond_conversationally,
+            )
+        )
+
         return tools
 
     # All tool methods now use the unified ToolRegistry to eliminate code duplication
-    
+
     def _execute_system_command(self, command: str) -> str:
         """Execute a system command using unified tool registry."""
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.execute_system_command(command))
+            result = loop.run_until_complete(
+                self.tool_registry.execute_system_command(command)
+            )
             loop.close()
             return result.get("result", "Command executed")
         except Exception as e:
@@ -214,7 +327,9 @@ class LangChainAgentOrchestrator:
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.query_system_information())
+            result = loop.run_until_complete(
+                self.tool_registry.query_system_information()
+            )
             loop.close()
             return result.get("result", "System info retrieved")
         except Exception as e:
@@ -237,13 +352,15 @@ class LangChainAgentOrchestrator:
             parts = service_action.split()
             if len(parts) < 2:
                 return "Invalid input. Expected 'service_name action'"
-            
+
             service_name = parts[0]
             action = parts[1]
-            
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.manage_service(service_name, action))
+            result = loop.run_until_complete(
+                self.tool_registry.manage_service(service_name, action)
+            )
             loop.close()
             return result.get("result", "Service managed")
         except Exception as e:
@@ -254,10 +371,12 @@ class LangChainAgentOrchestrator:
         try:
             process_name = process_input if not process_input.isdigit() else None
             pid = process_input if process_input.isdigit() else None
-            
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.get_process_info(process_name, pid))
+            result = loop.run_until_complete(
+                self.tool_registry.get_process_info(process_name, pid)
+            )
             loop.close()
             return result.get("result", "Process info retrieved")
         except Exception as e:
@@ -290,7 +409,9 @@ class LangChainAgentOrchestrator:
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.search_knowledge_base(query, n_results=5))
+            result = loop.run_until_complete(
+                self.tool_registry.search_knowledge_base(query, n_results=5)
+            )
             loop.close()
             return result.get("result", "Knowledge base searched")
         except Exception as e:
@@ -302,13 +423,15 @@ class LangChainAgentOrchestrator:
             parts = file_info.split()
             if len(parts) < 2:
                 return "Invalid input. Expected 'file_path file_type'"
-            
+
             file_path = parts[0]
             file_type = parts[1]
-            
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.add_file_to_knowledge_base(file_path, file_type))
+            result = loop.run_until_complete(
+                self.tool_registry.add_file_to_knowledge_base(file_path, file_type)
+            )
             loop.close()
             return result.get("result", "File added to knowledge base")
         except Exception as e:
@@ -319,7 +442,9 @@ class LangChainAgentOrchestrator:
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.store_fact(fact_content))
+            result = loop.run_until_complete(
+                self.tool_registry.store_fact(fact_content)
+            )
             loop.close()
             return result.get("result", "Fact stored")
         except Exception as e:
@@ -330,12 +455,16 @@ class LangChainAgentOrchestrator:
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            
+
             if fact_query.isdigit():
-                result = loop.run_until_complete(self.tool_registry.get_fact(fact_id=int(fact_query)))
+                result = loop.run_until_complete(
+                    self.tool_registry.get_fact(fact_id=int(fact_query))
+                )
             else:
-                result = loop.run_until_complete(self.tool_registry.get_fact(query=fact_query))
-            
+                result = loop.run_until_complete(
+                    self.tool_registry.get_fact(query=fact_query)
+                )
+
             loop.close()
             return result.get("result", "Facts retrieved")
         except Exception as e:
@@ -357,7 +486,9 @@ class LangChainAgentOrchestrator:
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.click_element(image_path))
+            result = loop.run_until_complete(
+                self.tool_registry.click_element(image_path)
+            )
             loop.close()
             return result.get("result", "Element clicked")
         except Exception as e:
@@ -368,7 +499,9 @@ class LangChainAgentOrchestrator:
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.bring_window_to_front(window_title))
+            result = loop.run_until_complete(
+                self.tool_registry.bring_window_to_front(window_title)
+            )
             loop.close()
             return result.get("result", "Window brought to front")
         except Exception as e:
@@ -377,16 +510,18 @@ class LangChainAgentOrchestrator:
     def _ask_user_for_manual(self, program_question: str) -> str:
         """Ask user for manual using unified tool registry."""
         try:
-            parts = program_question.split(' ', 1)
+            parts = program_question.split(" ", 1)
             if len(parts) < 2:
                 return "Invalid input. Expected 'program_name question_text'"
-            
+
             program_name = parts[0]
             question_text = parts[1]
-            
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.ask_user_for_manual(program_name, question_text))
+            result = loop.run_until_complete(
+                self.tool_registry.ask_user_for_manual(program_name, question_text)
+            )
             loop.close()
             return result.get("result", "User manual request sent")
         except Exception as e:
@@ -397,63 +532,77 @@ class LangChainAgentOrchestrator:
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.tool_registry.respond_conversationally(response_text))
+            result = loop.run_until_complete(
+                self.tool_registry.respond_conversationally(response_text)
+            )
             loop.close()
             return result.get("result", response_text)
         except Exception as e:
             return f"Error: {e}"
 
-    async def execute_goal(self, goal: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    async def execute_goal(
+        self, goal: str, conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> Dict[str, Any]:
         """Execute a goal using the LangChain agent."""
         try:
-            await event_manager.publish("log_message", {
-                "level": "INFO", 
-                "message": f"LangChain Agent executing goal: {goal}"
-            })
-            
+            await event_manager.publish(
+                "log_message",
+                {"level": "INFO", "message": f"LangChain Agent executing goal: {goal}"},
+            )
+
             # Build context from conversation history
             context = ""
             if conversation_history:
-                context = "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history[-5:]])
+                context = "\n".join(
+                    [
+                        f"{msg['role']}: {msg['content']}"
+                        for msg in conversation_history[-5:]
+                    ]
+                )
                 context = f"Recent conversation:\n{context}\n\n"
-            
+
             # Add knowledge base context
-            if self.knowledge_base: # Guard against None
+            if self.knowledge_base:  # Guard against None
                 try:
                     kb_results = await self.knowledge_base.search(goal, n_results=3)
                     if kb_results:
-                        kb_context = "\n".join([f"KB: {result['content'][:200]}..." for result in kb_results])
+                        kb_context = "\n".join(
+                            [
+                                f"KB: {result['content'][:200]}..."
+                                for result in kb_results
+                            ]
+                        )
                         context += f"Relevant knowledge:\n{kb_context}\n\n"
                 except Exception as e:
                     logging.warning(f"Failed to search knowledge base: {e}")
-            
+
             # Execute the goal using LangChain agent
             full_goal = f"{context}Current goal: {goal}"
-            
+
             # Run the agent in a thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, self.agent.run, full_goal)
-            
-            await event_manager.publish("log_message", {
-                "level": "INFO", 
-                "message": f"LangChain Agent result: {result}"
-            })
-            
+
+            await event_manager.publish(
+                "log_message",
+                {"level": "INFO", "message": f"LangChain Agent result: {result}"},
+            )
+
             return {
                 "status": "success",
                 "tool_name": "respond_conversationally",
-                "tool_args": {"response_text": result}
+                "tool_args": {"response_text": result},
             }
-            
+
         except Exception as e:
             error_msg = f"LangChain Agent error: {str(e)}"
             await event_manager.publish("error", {"message": error_msg})
             logging.error(error_msg)
-            
+
             return {
                 "status": "error",
                 "tool_name": "respond_conversationally",
-                "tool_args": {"response_text": error_msg}
+                "tool_args": {"response_text": error_msg},
             }
 
     def get_available_tools(self) -> List[str]:

@@ -1,0 +1,135 @@
+#!/bin/bash
+
+# AutoBot CLI - Main entry point for all AutoBot operations
+
+# Colors
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+PURPLE='\033[0;35m'
+NC='\033[0m'
+
+print_banner() {
+    echo -e "${PURPLE}"
+    echo "    _         _        ____        _   "
+    echo "   / \  _   _| |_ ___ | __ )  ___ | |_ "
+    echo "  / _ \| | | | __/ _ \|  _ \ / _ \| __|"
+    echo " / ___ \ |_| | || (_) | |_) | (_) | |_ "
+    echo "/_/   \_\__,_|\__\___/|____/ \___/ \__|"
+    echo -e "${NC}"
+    echo "AutoBot CLI v1.0"
+    echo ""
+}
+
+print_help() {
+    print_banner
+
+    echo -e "${GREEN}Usage:${NC} ./autobot [COMMAND] [OPTIONS]"
+    echo ""
+    echo -e "${GREEN}Commands:${NC}"
+    echo "  start              Start AutoBot application"
+    echo "  stop               Stop all AutoBot services"
+    echo "  setup              Run initial setup"
+    echo "  repair             Diagnose and fix issues"
+    echo "  status             Show service status"
+    echo "  logs               View logs"
+    echo "  help               Show this help message"
+    echo ""
+    echo -e "${GREEN}Start Options:${NC}"
+    echo "  --all-containers   Start all containers (Redis, NPU, AI Stack)"
+    echo "  --test-mode        Run in test mode with additional checks"
+    echo ""
+    echo -e "${GREEN}Setup/Repair Options:${NC}"
+    echo "  --check            Check system health without making changes"
+    echo "  --repair           Automatically fix detected issues"
+    echo "  --force-recreate   Force recreate all containers"
+    echo "  --update-deps      Update all dependencies"
+    echo "  --fix-permissions  Fix file and Docker permissions"
+    echo ""
+    echo -e "${GREEN}Examples:${NC}"
+    echo "  ./autobot start                    # Start AutoBot normally"
+    echo "  ./autobot start --all-containers   # Start with all services"
+    echo "  ./autobot repair --check           # Check for issues"
+    echo "  ./autobot repair --repair          # Fix issues automatically"
+    echo "  ./autobot status                   # Show current status"
+    echo ""
+}
+
+# Main command handling
+case "${1:-help}" in
+    start)
+        shift
+        exec ./run_agent.sh "$@"
+        ;;
+    stop)
+        echo "Stopping all AutoBot services..."
+        docker-compose -f docker-compose.hybrid.yml down
+        pkill -f "uvicorn main:app"
+        pkill -f "npm run dev"
+        echo "All services stopped."
+        ;;
+    setup)
+        shift
+        exec ./setup_agent.sh "$@"
+        ;;
+    repair)
+        shift
+        exec ./setup_repair.sh "$@"
+        ;;
+    status)
+        echo -e "${BLUE}=== AutoBot Service Status ===${NC}"
+        echo ""
+
+        # Check containers
+        echo "Docker Containers:"
+        # Show header and all autobot containers (including autobot-redis, autobot-playwright, etc.)
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -1
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep "^autobot-" || echo "No AutoBot containers running"
+        echo ""
+
+        # Check backend
+        echo "Backend Status:"
+        if pgrep -f "uvicorn main:app" > /dev/null; then
+            echo -e "${GREEN}✓${NC} Backend is running"
+            curl -s http://localhost:8001/api/system/health > /dev/null 2>&1 && echo -e "${GREEN}✓${NC} Backend API is responding" || echo -e "${YELLOW}!${NC} Backend API not responding"
+        else
+            echo -e "${YELLOW}✗${NC} Backend is not running"
+        fi
+        echo ""
+
+        # Check frontend
+        echo "Frontend Status:"
+        if pgrep -f "npm run dev" > /dev/null; then
+            echo -e "${GREEN}✓${NC} Frontend is running"
+        else
+            echo -e "${YELLOW}✗${NC} Frontend is not running"
+        fi
+        ;;
+    logs)
+        shift
+        case "${1:-all}" in
+            backend)
+                echo "Backend logs (recent):"
+                tail -n 50 logs/autobot.log 2>/dev/null || echo "No backend logs found"
+                ;;
+            docker)
+                echo "Docker container logs:"
+                docker logs --tail 50 autobot-redis 2>/dev/null
+                echo "---"
+                docker logs --tail 50 autobot-npu-worker 2>/dev/null
+                ;;
+            *)
+                echo "Use: ./autobot logs [backend|docker]"
+                ;;
+        esac
+        ;;
+    help|--help|-h|"")
+        print_help
+        ;;
+    *)
+        echo -e "${YELLOW}Unknown command: $1${NC}"
+        echo ""
+        print_help
+        exit 1
+        ;;
+esac

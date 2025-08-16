@@ -2,18 +2,18 @@
   <div class="settings-panel">
     <h2>Settings</h2>
     <div class="settings-tabs">
-      <button 
-        v-for="tab in tabs" 
+      <button
+        v-for="tab in tabs"
         :key="tab.id"
         :class="{ active: activeTab === tab.id }"
         @click="activeTab = tab.id"
-      >
+       aria-label="{{ tab.label }}">
         {{ tab.label }}
       </button>
     </div>
     <div class="settings-content">
       <!-- Chat Settings -->
-      <div v-if="activeTab === 'chat'" class="settings-section">
+      <div v-if="activeTab === 'chat' && settings.chat" class="settings-section">
         <h3>Chat Settings</h3>
         <div class="setting-item">
           <label>Auto Scroll to Bottom</label>
@@ -32,22 +32,28 @@
       <!-- Backend Settings -->
       <div v-if="activeTab === 'backend' && isSettingsLoaded" class="settings-section">
         <div class="sub-tabs">
-          <button 
+          <button
             :class="{ active: activeBackendSubTab === 'general' }"
             @click="activeBackendSubTab = 'general'"
-          >
+           aria-label="General">
             General
           </button>
-          <button 
+          <button
             :class="{ active: activeBackendSubTab === 'llm' }"
             @click="activeBackendSubTab = 'llm'"
-          >
+           aria-label="Llm">
             LLM
           </button>
-          <button 
+          <button
+            :class="{ active: activeBackendSubTab === 'embedding' }"
+            @click="activeBackendSubTab = 'embedding'"
+           aria-label="Embedding">
+            Embedding
+          </button>
+          <button
             :class="{ active: activeBackendSubTab === 'memory' }"
             @click="activeBackendSubTab = 'memory'"
-          >
+           aria-label="Memory">
             Memory
           </button>
         </div>
@@ -93,14 +99,23 @@
         <div v-if="activeBackendSubTab === 'llm'" class="sub-tab-content">
           <h3>LLM Settings</h3>
           <div class="setting-item">
-            <label>Current LLM in Use</label>
-            <span style="font-weight: bold;">
-              {{ settings.backend.llm.provider_type === 'local' ? 
-                settings.backend.llm.local.provider.charAt(0).toUpperCase() + settings.backend.llm.local.provider.slice(1) + ' - ' + 
-                (settings.backend.llm.local.providers[settings.backend.llm.local.provider].selected_model || 'Not selected') : 
-                settings.backend.llm.cloud.provider.charAt(0).toUpperCase() + settings.backend.llm.cloud.provider.slice(1) + ' - ' + 
-                (settings.backend.llm.cloud.providers[settings.backend.llm.cloud.provider].selected_model || 'Not selected') }}
-            </span>
+            <label>Current LLM Status</label>
+            <div class="llm-status-display">
+              <div class="status-line">
+                <span class="status-label">Connection:</span>
+                <span :class="['status-value', healthStatus.llm.connected ? 'connected' : 'disconnected']">
+                  {{ healthStatus.llm.connected ? 'Connected' : 'Disconnected' }}
+                </span>
+              </div>
+              <div class="status-line" v-if="healthStatus.llm.connected && healthStatus.llm.current_model">
+                <span class="status-label">Active Model:</span>
+                <span class="status-value">{{ healthStatus.llm.current_model }}</span>
+              </div>
+              <div class="status-line">
+                <span class="status-label">Configured:</span>
+                <span class="status-value">{{ getCurrentLLMConfig() }}</span>
+              </div>
+            </div>
           </div>
           <div class="setting-item">
             <label>Provider Type</label>
@@ -124,7 +139,7 @@
               </div>
               <div class="setting-item">
                 <label>Model</label>
-                <select v-model="settings.backend.llm.local.providers.ollama.selected_model">
+                <select v-model="settings.backend.llm.local.providers.ollama.selected_model" @change="notifyBackendOfProviderChange">
                   <option v-for="model in settings.backend.llm.local.providers.ollama.models" :key="model" :value="model">{{ model }}</option>
                 </select>
               </div>
@@ -136,7 +151,7 @@
               </div>
               <div class="setting-item">
                 <label>Model</label>
-                <select v-model="settings.backend.llm.local.providers.lmstudio.selected_model">
+                <select v-model="settings.backend.llm.local.providers.lmstudio.selected_model" @change="notifyBackendOfProviderChange">
                   <option v-for="model in settings.backend.llm.local.providers.lmstudio.models" :key="model" :value="model">{{ model }}</option>
                 </select>
               </div>
@@ -161,7 +176,7 @@
               </div>
               <div class="setting-item">
                 <label>Model</label>
-                <select v-model="settings.backend.llm.cloud.providers.openai.selected_model">
+                <select v-model="settings.backend.llm.cloud.providers.openai.selected_model" @change="notifyBackendOfProviderChange">
                   <option v-for="model in settings.backend.llm.cloud.providers.openai.models" :key="model" :value="model">{{ model }}</option>
                 </select>
               </div>
@@ -177,7 +192,7 @@
               </div>
               <div class="setting-item">
                 <label>Model</label>
-                <select v-model="settings.backend.llm.cloud.providers.anthropic.selected_model">
+                <select v-model="settings.backend.llm.cloud.providers.anthropic.selected_model" @change="notifyBackendOfProviderChange">
                   <option v-for="model in settings.backend.llm.cloud.providers.anthropic.models" :key="model" :value="model">{{ model }}</option>
                 </select>
               </div>
@@ -193,10 +208,70 @@
           </div>
           <div class="setting-item">
             <label>Enable Streaming</label>
-            <input type="checkbox" v-model="settings.backend.streaming" />
+            <input type="checkbox" v-model="settings.backend.streaming" @change="notifyBackendOfProviderChange" />
           </div>
           <div class="settings-actions">
-            <button @click="loadModels">Refresh Models</button>
+            <button @click="loadModels" aria-label="Refresh models">Refresh Models</button>
+          </div>
+        </div>
+        <div v-if="activeBackendSubTab === 'embedding'" class="sub-tab-content">
+          <h3>Embedding Model Settings</h3>
+          <div class="setting-item">
+            <label>Current Embedding Model Status</label>
+            <div class="embedding-status-display">
+              <div class="status-line">
+                <span class="status-label">Connection:</span>
+                <span :class="['status-value', healthStatus.embedding?.connected ? 'connected' : 'disconnected']">
+                  {{ healthStatus.embedding?.connected ? 'Connected' : 'Disconnected' }}
+                </span>
+              </div>
+              <div class="status-line" v-if="healthStatus.embedding?.connected && healthStatus.embedding?.current_model">
+                <span class="status-label">Active Model:</span>
+                <span class="status-value">{{ healthStatus.embedding.current_model }}</span>
+              </div>
+              <div class="status-line">
+                <span class="status-label">Configured:</span>
+                <span class="status-value">{{ getCurrentEmbeddingConfig() }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>Embedding Provider</label>
+            <select v-model="settings.backend.llm.embedding.provider" @change="onEmbeddingProviderChange">
+              <option value="ollama">Ollama</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+          <div v-if="settings.backend.llm.embedding.provider === 'ollama'">
+            <div class="setting-item">
+              <label>Ollama Endpoint</label>
+              <input type="text" v-model="settings.backend.llm.embedding.providers.ollama.endpoint" />
+            </div>
+            <div class="setting-item">
+              <label>Embedding Model</label>
+              <select v-model="settings.backend.llm.embedding.providers.ollama.selected_model" @change="notifyBackendOfEmbeddingChange">
+                <option v-for="model in settings.backend.llm.embedding.providers.ollama.models" :key="model" :value="model">{{ model }}</option>
+              </select>
+            </div>
+          </div>
+          <div v-else-if="settings.backend.llm.embedding.provider === 'openai'">
+            <div class="setting-item">
+              <label>API Key</label>
+              <input type="password" v-model="settings.backend.llm.embedding.providers.openai.api_key" placeholder="Enter API Key" />
+            </div>
+            <div class="setting-item">
+              <label>Endpoint</label>
+              <input type="text" v-model="settings.backend.llm.embedding.providers.openai.endpoint" />
+            </div>
+            <div class="setting-item">
+              <label>Embedding Model</label>
+              <select v-model="settings.backend.llm.embedding.providers.openai.selected_model" @change="notifyBackendOfEmbeddingChange">
+                <option v-for="model in settings.backend.llm.embedding.providers.openai.models" :key="model" :value="model">{{ model }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button @click="loadEmbeddingModels" aria-label="Refresh embedding models">Refresh Embedding Models</button>
           </div>
         </div>
         <div v-if="activeBackendSubTab === 'memory'" class="sub-tab-content">
@@ -389,8 +464,8 @@
               <strong>Active Routers:</strong> {{ (developerInfo.available_routers || []).join(', ') }}
             </div>
             <div class="settings-actions">
-              <button @click="loadDeveloperInfo">Refresh System Info</button>
-              <button @click="showApiEndpoints">View API Endpoints</button>
+              <button @click="loadDeveloperInfo" aria-label="Refresh system info">Refresh System Info</button>
+              <button @click="showApiEndpoints" aria-label="View api endpoints">View API Endpoints</button>
             </div>
           </div>
         </div>
@@ -401,7 +476,7 @@
         <h3>System Prompts</h3>
         <div class="prompts-container">
           <div class="prompts-list">
-            <div v-for="prompt in settings.prompts.list" :key="prompt.id" class="prompt-item" :class="{ 'active': settings.prompts.selectedPrompt && settings.prompts.selectedPrompt.id === prompt.id }" @click="selectPrompt(prompt)">
+            <div v-for="prompt in settings.prompts.list" :key="prompt.id" class="prompt-item" :class="{ 'active': settings.prompts.selectedPrompt && settings.prompts.selectedPrompt.id === prompt.id }" @click="selectPrompt(prompt)" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
               <div class="prompt-name">{{ prompt.name || prompt.id }}</div>
               <div class="prompt-type">{{ prompt.type || 'Unknown Type' }}</div>
             </div>
@@ -411,27 +486,33 @@
             <h4>Editing: {{ settings.prompts.selectedPrompt.name || settings.prompts.selectedPrompt.id }}</h4>
             <textarea v-model="settings.prompts.editedContent" rows="10" placeholder="Edit prompt content here..."></textarea>
             <div class="editor-actions">
-              <button @click="savePrompt">Save Changes</button>
-              <button @click="revertPromptToDefault(settings.prompts.selectedPrompt.id)">Revert to Default</button>
-              <button @click="settings.prompts.selectedPrompt = null">Cancel</button>
+              <button @click="savePrompt" aria-label="Save changes">Save Changes</button>
+              <button @click="revertPromptToDefault(settings.prompts.selectedPrompt.id)" aria-label="Revert to default">Revert to Default</button>
+              <button @click="settings.prompts.selectedPrompt = null" aria-label="Cancel">Cancel</button>
             </div>
           </div>
         </div>
         <div class="setting-item">
-          <button class="control-button small" @click="loadPrompts">Load Prompts</button>
+          <button class="control-button small" @click="loadPrompts" aria-label="Load prompts">Load Prompts</button>
         </div>
       </div>
     </div>
     <div class="settings-actions">
-      <button @click="saveSettings">Save Settings</button>
+      <button @click="saveSettings" :disabled="isSaving" class="save-button" aria-label="{{ issaving ? 'saving...' : 'save settings' }}">
+        {{ isSaving ? 'Saving...' : 'Save Settings' }}
+      </button>
+      <div v-if="saveMessage" :class="['save-message', saveMessageType]">
+        {{ saveMessage }}
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, onMounted, watch, computed, onUnmounted } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 import { settingsService } from '../services/SettingsService.js';
+import { healthService } from '../services/HealthService.js';
 
 export default {
   name: 'SettingsPanel',
@@ -450,44 +531,6 @@ export default {
     ];
     const activeTab = ref('backend');
     const activeBackendSubTab = ref('memory');
-
-    // Settings structure will be populated from backend or local storage
-    const settings = ref({});
-    const isSettingsLoaded = ref(false);
-    const developerInfo = ref(null);
-
-    // Computed property for CORS origins as a string for input field
-    const corsOriginsString = computed({
-      get() {
-        return settings.value.backend.cors_origins.join(', ');
-      },
-      set(value) {
-        settings.value.backend.cors_origins = value.split(',').map(origin => origin.trim()).filter(origin => origin);
-      }
-    });
-
-    onMounted(async () => {
-      // Load settings from backend
-      await loadSettingsFromBackend();
-      isSettingsLoaded.value = true;
-      // Load models after settings are loaded
-      await loadModels();
-    });
-
-    // Function to deep merge objects
-    const deepMerge = (target, source) => {
-      const output = { ...target };
-      for (const key in source) {
-        if (source.hasOwnProperty(key)) {
-          if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
-            output[key] = deepMerge(target[key] || {}, source[key]);
-          } else {
-            output[key] = source[key];
-          }
-        }
-      }
-      return output;
-    };
 
     // Default settings structure if backend or local storage fails
     const defaultSettings = () => ({
@@ -517,24 +560,24 @@ export default {
         max_retries: 3,
         streaming: false,
         llm: {
-          provider_type: 'local', // 'local' or 'cloud'
+          provider_type: 'local',
           local: {
-            provider: 'ollama', // Default local provider
+            provider: 'ollama',
             providers: {
               ollama: {
-                endpoint: '',
+                endpoint: 'http://localhost:11434/api/generate',
                 models: [],
                 selected_model: ''
               },
               lmstudio: {
-                endpoint: '',
+                endpoint: 'http://localhost:1234/v1/chat/completions',
                 models: [],
                 selected_model: ''
               }
             }
           },
           cloud: {
-            provider: 'openai', // Default cloud provider
+            provider: 'openai',
             providers: {
               openai: {
                 api_key: '',
@@ -547,6 +590,22 @@ export default {
                 endpoint: '',
                 models: [],
                 selected_model: ''
+              }
+            }
+          },
+          embedding: {
+            provider: 'ollama',
+            providers: {
+              ollama: {
+                endpoint: 'http://localhost:11434/api/embeddings',
+                models: [],
+                selected_model: 'nomic-embed-text'
+              },
+              openai: {
+                api_key: '',
+                endpoint: 'https://api.openai.com/v1/embeddings',
+                models: ['text-embedding-ada-002', 'text-embedding-3-small', 'text-embedding-3-large'],
+                selected_model: 'text-embedding-ada-002'
               }
             }
           }
@@ -615,11 +674,99 @@ export default {
       }
     });
 
+    // Settings structure will be populated from backend or local storage
+    const settings = ref(defaultSettings());
+    const isSettingsLoaded = ref(false);
+    const developerInfo = ref(null);
+    const healthStatus = ref({
+      llm: {
+        connected: false,
+        current_model: null
+      },
+      embedding: {
+        connected: false,
+        current_model: null
+      }
+    });
+
+    // Save state management
+    const isSaving = ref(false);
+    const saveMessage = ref('');
+    const saveMessageType = ref(''); // 'success' or 'error'
+
+    // Computed property for CORS origins as a string for input field
+    const corsOriginsString = computed({
+      get() {
+        return settings.value.backend.cors_origins.join(', ');
+      },
+      set(value) {
+        settings.value.backend.cors_origins = value.split(',').map(origin => origin.trim()).filter(origin => origin);
+      }
+    });
+
+    // Function to check health status
+    const checkHealthStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/system/health');
+        if (response.ok) {
+          const data = await response.json();
+          healthStatus.value = {
+            llm: {
+              connected: data.llm_status || false,
+              current_model: data.current_model || null
+            },
+            embedding: {
+              connected: data.embedding_status || false,
+              current_model: data.current_embedding_model || null
+            }
+          };
+        }
+      } catch (error) {
+        console.error('Error checking health status:', error);
+      }
+    };
+
+    let healthCheckInterval;
+
+    onMounted(async () => {
+      // Load settings from backend
+      await loadSettingsFromBackend();
+      isSettingsLoaded.value = true;
+      // Load models after settings are loaded
+      await loadModels();
+      await loadEmbeddingModels();
+      // Check health status
+      await checkHealthStatus();
+      // Set up periodic health checks
+      healthCheckInterval = setInterval(checkHealthStatus, 10000); // Check every 10 seconds
+    });
+
+    onUnmounted(() => {
+      if (healthCheckInterval) {
+        clearInterval(healthCheckInterval);
+      }
+    });
+
+    // Function to deep merge objects
+    const deepMerge = (target, source) => {
+      const output = { ...target };
+      for (const key in source) {
+        if (source.hasOwnProperty(key)) {
+          if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
+            output[key] = deepMerge(target[key] || {}, source[key]);
+          } else {
+            output[key] = source[key];
+          }
+        }
+      }
+      return output;
+    };
+
     // Function to load settings from backend config.yaml
     const loadSettingsFromBackend = async () => {
       try {
-        const configSettings = await apiClient.get('/api/settings/config');
-        console.log('Loaded settings from config.yaml:', configSettings);
+        const response = await apiClient.get('/api/settings/config');
+        const configSettings = await response.json();
         settings.value = deepMerge(defaultSettings(), configSettings);
         // Save to local storage as well
         localStorage.setItem('chat_settings', JSON.stringify(settings.value));
@@ -643,19 +790,53 @@ export default {
       await loadPrompts();
     };
 
-    // Function to save settings to local storage and backend
+    // Function to save settings to config.yaml via backend
     const saveSettings = async () => {
+      isSaving.value = true;
+      saveMessage.value = '';
+      saveMessageType.value = '';
+
       try {
-        await apiClient.saveSettings(settings.value);
-        console.log('Settings, including memory configurations, saved successfully to backend.');
+        // Create a deep copy of settings without prompts data (prompts shouldn't be saved to config.yaml)
+        const settingsToSave = JSON.parse(JSON.stringify(settings.value));
+        delete settingsToSave.prompts;
+
+        const response = await apiClient.post('/api/settings/config', settingsToSave);
+        const result = await response.json();
+
+        // Reload settings from backend after successful save
+        await loadSettingsFromBackend();
+
+        // Show success message
+        saveMessage.value = 'Settings saved successfully!';
+        saveMessageType.value = 'success';
+
+        // Clear message after 3 seconds
+        setTimeout(() => {
+          saveMessage.value = '';
+          saveMessageType.value = '';
+        }, 3000);
       } catch (error) {
         console.error('Error saving settings to backend:', error);
+        saveMessage.value = `Error saving settings: ${error.message}`;
+        saveMessageType.value = 'error';
+
+        // Clear error message after 5 seconds
+        setTimeout(() => {
+          saveMessage.value = '';
+          saveMessageType.value = '';
+        }, 5000);
+      } finally {
+        isSaving.value = false;
       }
     };
 
-    // Watch for changes in settings and save them to local storage
+    // Watch for changes in settings and save them to local storage only
+    // Don't auto-save to backend - only save to localStorage for persistence
     watch(settings, () => {
-      localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+      if (isSettingsLoaded.value) {
+        localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+      }
     }, { deep: true });
 
     // Function to load prompts from backend
@@ -693,37 +874,83 @@ export default {
       }
     };
 
-    // Function to load models from the selected provider
+    // Function to dynamically load models from the selected provider
     const loadModels = async () => {
       try {
-        const data = await apiClient.get('/api/llm/models');
-        console.log('Model data received:', data);
+        const response = await fetch('http://localhost:8001/api/llm/models');
+        const data = await response.json();
+
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
-          if (provider === 'ollama' && data.models) {
-            settings.value.backend.llm.local.providers.ollama.models = data.models.map(model => model.name);
-            if (!settings.value.backend.llm.local.providers.ollama.selected_model && data.models.length > 0) {
-              settings.value.backend.llm.local.providers.ollama.selected_model = data.models[0].name;
-            }
-          } else if (provider === 'lmstudio' && data.data) {
-            settings.value.backend.llm.local.providers.lmstudio.models = data.data.map(model => model.id);
-            if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.data.length > 0) {
-              settings.value.backend.llm.local.providers.lmstudio.selected_model = data.data[0].id;
-            }
-          } else if (provider === 'lmstudio') {
-            // Handle case where endpoint might return different structure
-            console.log('LM Studio response:', data);
-            if (Array.isArray(data)) {
-              settings.value.backend.llm.local.providers.lmstudio.models = data.map(model => model.id || model.name);
-              if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && data.length > 0) {
-                settings.value.backend.llm.local.providers.lmstudio.selected_model = data[0].id || data[0].name;
+
+          if (provider === 'ollama') {
+            // Handle the new API response format with model objects
+            let availableModels = [];
+
+            // Try different response structures
+            if (data.models && Array.isArray(data.models)) {
+              // If models have a structure with 'available' and 'type' fields
+              if (data.models.length > 0 && typeof data.models[0] === 'object') {
+                availableModels = data.models
+                  .filter(model => {
+                    // Include models that are available and either have no type or are ollama type
+                    return model.available !== false && (!model.type || model.type === 'ollama');
+                  })
+                  .map(model => model.name || model.id || model);
+              } else {
+                // If models are just strings
+                availableModels = data.models;
               }
+            } else if (Array.isArray(data)) {
+              // If the response is directly an array
+              availableModels = data.map(model =>
+                typeof model === 'string' ? model : (model.name || model.id || model)
+              );
+            }
+
+            settings.value.backend.llm.local.providers.ollama.models = availableModels;
+
+            if (availableModels.length === 0) {
+              console.warn('No Ollama models found. Raw API response:', data);
+              // Try to provide helpful feedback
+              if (data.error) {
+                console.error('API Error:', data.error);
+              }
+            }
+
+            // Auto-select first model if none selected
+            if (!settings.value.backend.llm.local.providers.ollama.selected_model && availableModels.length > 0) {
+              settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0];
+            }
+
+            // Validate current selection is still available
+            const currentModel = settings.value.backend.llm.local.providers.ollama.selected_model;
+            if (currentModel && !availableModels.includes(currentModel)) {
+              settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0] || '';
+            }
+
+          } else if (provider === 'lmstudio') {
+            // Handle LM Studio models - try different response formats
+            let lmStudioModels = [];
+            if (data.models && Array.isArray(data.models)) {
+              lmStudioModels = data.models
+                .filter(model => model.available && model.type === 'lmstudio')
+                .map(model => model.name || model.id);
+            } else if (data.data && Array.isArray(data.data)) {
+              lmStudioModels = data.data.map(model => model.id || model.name);
+            } else if (Array.isArray(data)) {
+              lmStudioModels = data.map(model => model.id || model.name);
+            }
+
+            settings.value.backend.llm.local.providers.lmstudio.models = lmStudioModels;
+
+            if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && lmStudioModels.length > 0) {
+              settings.value.backend.llm.local.providers.lmstudio.selected_model = lmStudioModels[0];
             }
           }
         }
       } catch (error) {
         console.error('Error loading models:', error);
-        // Don't let fetch errors break the UI
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
           if (provider === 'ollama') {
@@ -755,35 +982,78 @@ export default {
 
     const onProviderTypeChange = async () => {
       await loadModels();
-      await saveSettings();
       await notifyBackendOfProviderChange();
     };
 
     const onLocalProviderChange = async () => {
       await loadModels();
-      await saveSettings();
       await notifyBackendOfProviderChange();
     };
 
     const onCloudProviderChange = async () => {
-      await saveSettings();
       await notifyBackendOfProviderChange();
     };
 
     const notifyBackendOfProviderChange = async () => {
       try {
+        const providerType = settings.value.backend.llm.provider_type;
         const providerData = {
-          provider_type: settings.value.backend.llm.provider_type,
-          local_provider: settings.value.backend.llm.provider_type === 'local' ? settings.value.backend.llm.local.provider : '',
-          local_model: settings.value.backend.llm.provider_type === 'local' ? settings.value.backend.llm.local.providers[settings.value.backend.llm.local.provider].selected_model : '',
-          cloud_provider: settings.value.backend.llm.provider_type === 'cloud' ? settings.value.backend.llm.cloud.provider : '',
-          cloud_model: settings.value.backend.llm.provider_type === 'cloud' ? settings.value.backend.llm.cloud.providers[settings.value.backend.llm.cloud.provider].selected_model : ''
+          provider_type: providerType,
+          streaming: settings.value.backend.streaming
         };
-        console.log('Notifying backend of provider change:', providerData);
-        await apiClient.post('/api/llm/provider', providerData);
-        console.log('Backend notified of provider change successfully');
+
+        if (providerType === 'local') {
+          const provider = settings.value.backend.llm.local.provider;
+          const providerSettings = settings.value.backend.llm.local.providers[provider];
+
+          providerData.local_provider = provider;
+          providerData.local_model = providerSettings.selected_model;
+          providerData.local_endpoint = providerSettings.endpoint;
+        } else {
+          const provider = settings.value.backend.llm.cloud.provider;
+          const providerSettings = settings.value.backend.llm.cloud.providers[provider];
+
+          providerData.cloud_provider = provider;
+          providerData.cloud_model = providerSettings.selected_model;
+          providerData.cloud_api_key = providerSettings.api_key;
+          providerData.cloud_endpoint = providerSettings.endpoint;
+        }
+
+        const response = await apiClient.post('/api/llm/provider', providerData);
+        const result = await response.json();
+
+        // Update health status after provider change
+        await checkHealthStatus();
       } catch (error) {
         console.error('Error notifying backend of provider change:', error);
+      }
+    };
+
+    const getCurrentLLMDisplay = () => {
+      if (!settings.value.backend?.llm) return 'Not configured';
+
+      const providerType = settings.value.backend.llm.provider_type || 'local';
+
+      if (providerType === 'local') {
+        const provider = settings.value.backend.llm.local?.provider || 'ollama';
+        const selectedModel = settings.value.backend.llm.local?.providers?.[provider]?.selected_model;
+        const endpoint = settings.value.backend.llm.local?.providers?.[provider]?.endpoint;
+
+        if (selectedModel) {
+          const endpointInfo = endpoint ? ` @ ${endpoint}` : '';
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}${endpointInfo}`;
+        } else {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+        }
+      } else {
+        const provider = settings.value.backend.llm.cloud?.provider || 'openai';
+        const selectedModel = settings.value.backend.llm.cloud?.providers?.[provider]?.selected_model;
+
+        if (selectedModel) {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}`;
+        } else {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+        }
       }
     };
 
@@ -791,7 +1061,6 @@ export default {
     const updateDeveloperConfig = async () => {
       try {
         await settingsService.updateDeveloperConfig(settings.value.developer);
-        console.log('Developer configuration updated');
         if (settings.value.developer.enabled) {
           await loadDeveloperInfo();
         }
@@ -817,10 +1086,85 @@ export default {
     const showApiEndpoints = async () => {
       try {
         const endpoints = await settingsService.getApiEndpoints();
-        console.log('Available API Endpoints:', endpoints);
         alert(`Found ${endpoints.total_endpoints} API endpoints across ${endpoints.routers?.length || 0} routers. Check console for details.`);
       } catch (error) {
         console.error('Error showing API endpoints:', error);
+      }
+    };
+
+    // Function to get current embedding configuration display
+    const getCurrentEmbeddingConfig = () => {
+      if (!settings.value.backend?.llm?.embedding) return 'Not configured';
+
+      const provider = settings.value.backend.llm.embedding.provider || 'ollama';
+      const providerSettings = settings.value.backend.llm.embedding.providers?.[provider];
+      const selectedModel = providerSettings?.selected_model;
+
+      if (selectedModel) {
+        const endpointInfo = providerSettings?.endpoint ? ` @ ${providerSettings.endpoint}` : '';
+        return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}${endpointInfo}`;
+      } else {
+        return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+      }
+    };
+
+    // Function to handle embedding provider change
+    const onEmbeddingProviderChange = async () => {
+      await loadEmbeddingModels();
+      await notifyBackendOfEmbeddingChange();
+    };
+
+    // Function to notify backend of embedding configuration change
+    const notifyBackendOfEmbeddingChange = async () => {
+      try {
+        const provider = settings.value.backend.llm.embedding.provider;
+        const providerSettings = settings.value.backend.llm.embedding.providers[provider];
+
+        const embeddingData = {
+          provider: provider,
+          model: providerSettings.selected_model,
+          endpoint: providerSettings.endpoint
+        };
+
+        if (provider === 'openai') {
+          embeddingData.api_key = providerSettings.api_key;
+        }
+
+        const response = await apiClient.post('/api/llm/embedding', embeddingData);
+        const result = await response.json();
+
+        // Update health status after embedding change
+        await checkHealthStatus();
+      } catch (error) {
+        console.error('Error notifying backend of embedding change:', error);
+      }
+    };
+
+    // Function to load embedding models
+    const loadEmbeddingModels = async () => {
+      try {
+        const provider = settings.value.backend.llm.embedding.provider;
+
+        if (provider === 'ollama') {
+          // Load Ollama embedding models
+          const response = await fetch('http://localhost:8001/api/llm/embedding/models');
+          const data = await response.json();
+
+          if (data.models && Array.isArray(data.models)) {
+            settings.value.backend.llm.embedding.providers.ollama.models = data.models;
+
+            // Auto-select first model if none selected
+            if (!settings.value.backend.llm.embedding.providers.ollama.selected_model && data.models.length > 0) {
+              settings.value.backend.llm.embedding.providers.ollama.selected_model = data.models[0];
+            }
+          }
+        }
+        // OpenAI models are predefined, no need to load them
+      } catch (error) {
+        console.error('Error loading embedding models:', error);
+        if (settings.value.backend.llm.embedding.provider === 'ollama') {
+          settings.value.backend.llm.embedding.providers.ollama.models = [];
+        }
       }
     };
 
@@ -841,10 +1185,21 @@ export default {
       onLocalProviderChange,
       onCloudProviderChange,
       notifyBackendOfProviderChange,
+      getCurrentLLMDisplay,
+      getCurrentLLMConfig: getCurrentLLMDisplay,
+      getCurrentEmbeddingConfig,
+      onEmbeddingProviderChange,
+      notifyBackendOfEmbeddingChange,
+      loadEmbeddingModels,
+      healthStatus,
+      checkHealthStatus,
       developerInfo,
       updateDeveloperConfig,
       loadDeveloperInfo,
-      showApiEndpoints
+      showApiEndpoints,
+      isSaving,
+      saveMessage,
+      saveMessageType
     };
   }
 };
@@ -1154,6 +1509,134 @@ export default {
 }
 
 .info-item strong {
-  color: #343a40;
+  color: #495057;
+}
+
+@media (max-width: 768px) {
+  .settings-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-title {
+    font-size: 24px;
+  }
+
+  .tab-btn {
+    padding: 12px;
+  }
+
+  .settings-actions {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .action-buttons {
+    justify-content: center;
+  }
+
+  .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .setting-item label {
+    margin-right: 0;
+  }
+
+  .setting-item input[type="text"],
+  .setting-item input[type="number"],
+  .setting-item input[type="password"],
+  .setting-item select {
+    max-width: none;
+  }
+}
+
+/* Save button and message styles */
+.save-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.save-button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.save-message {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.save-message.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.save-message.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.settings-actions {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* LLM and Embedding status display styles */
+.llm-status-display,
+.embedding-status-display {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 5px 0;
+}
+
+.status-line {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.status-line:last-child {
+  margin-bottom: 0;
+}
+
+.status-label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.status-value {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+}
+
+.status-value.connected {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.status-value.disconnected {
+  color: #dc3545;
+  font-weight: 500;
 }
 </style>

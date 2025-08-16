@@ -1,0 +1,335 @@
+"""
+Task Execution History Tracker for AutoBot Phase 7
+Integrates with orchestrator and agents to provide comprehensive execution tracking
+"""
+
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
+
+from src.enhanced_memory_manager import (
+    EnhancedMemoryManager,
+    TaskExecutionRecord,
+    TaskPriority,
+    TaskStatus,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class TaskExecutionTracker:
+    """
+    Comprehensive task execution tracker that integrates with the enhanced memory manager
+    to provide automatic task logging, performance monitoring, and execution analytics
+    """
+
+    def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+        self.memory_manager = memory_manager or EnhancedMemoryManager()
+        self.active_tasks: Dict[str, Dict[str, Any]] = {}
+        self.task_callbacks: Dict[str, List[Callable]] = {}
+
+        logger.info("Task Execution Tracker initialized")
+
+    @asynccontextmanager
+    async def track_task(
+        self,
+        task_name: str,
+        description: str,
+        agent_type: Optional[str] = None,
+        priority: TaskPriority = TaskPriority.MEDIUM,
+        inputs: Optional[Dict[str, Any]] = None,
+        parent_task_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Context manager for automatic task tracking with proper cleanup
+
+        Usage:
+            async with tracker.track_task("Agent Communication", "Chat with user") as task_id:
+                # Task execution code here
+                result = await some_agent_operation()
+                return result
+        """
+        # Create task record
+        task_id = self.memory_manager.create_task_record(
+            task_name=task_name,
+            description=description,
+            priority=priority,
+            agent_type=agent_type,
+            inputs=inputs,
+            parent_task_id=parent_task_id,
+            metadata=metadata,
+        )
+
+        # Mark task as started
+        self.memory_manager.start_task(task_id)
+
+        # Track active task
+        self.active_tasks[task_id] = {
+            "task_name": task_name,
+            "agent_type": agent_type,
+            "started_at": datetime.now(),
+            "inputs": inputs,
+        }
+
+        task_context = TaskExecutionContext(self, task_id)
+
+        try:
+            yield task_context
+
+            # Mark as completed if not already marked
+            if task_id in self.active_tasks:
+                self.memory_manager.complete_task(task_id, outputs=task_context.outputs)
+
+        except Exception as e:
+            # Mark as failed
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            self.memory_manager.fail_task(task_id, error_msg)
+            logger.error(f"Task {task_id} failed: {error_msg}")
+            raise
+
+        finally:
+            # Cleanup active task tracking
+            self.active_tasks.pop(task_id, None)
+
+            # Execute callbacks
+            await self._execute_task_callbacks(task_id, "completed")
+
+    def create_subtask(
+        self,
+        parent_task_id: str,
+        task_name: str,
+        description: str,
+        agent_type: Optional[str] = None,
+        priority: TaskPriority = TaskPriority.MEDIUM,
+        inputs: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Create a subtask linked to a parent task"""
+        return self.memory_manager.create_task_record(
+            task_name=task_name,
+            description=description,
+            priority=priority,
+            agent_type=agent_type,
+            inputs=inputs,
+            parent_task_id=parent_task_id,
+            metadata=metadata,
+        )
+
+    def add_task_callback(
+        self, task_id: str, callback: Callable, event_type: str = "completed"
+    ):
+        """Add callback to be executed when task reaches specific state"""
+        if task_id not in self.task_callbacks:
+            self.task_callbacks[task_id] = []
+
+        self.task_callbacks[task_id].append(
+            {"callback": callback, "event_type": event_type}
+        )
+
+    async def _execute_task_callbacks(self, task_id: str, event_type: str):
+        """Execute registered callbacks for task events"""
+        if task_id not in self.task_callbacks:
+            return
+
+        callbacks = [
+            cb for cb in self.task_callbacks[task_id] if cb["event_type"] == event_type
+        ]
+
+        for callback_info in callbacks:
+            try:
+                callback = callback_info["callback"]
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(task_id)
+                else:
+                    callback(task_id)
+            except Exception as e:
+                logger.error(f"Task callback error for {task_id}: {e}")
+
+        # Clean up callbacks after execution
+        self.task_callbacks.pop(task_id, None)
+
+    def get_active_tasks(self) -> Dict[str, Dict[str, Any]]:
+        """Get currently active tasks"""
+        return self.active_tasks.copy()
+
+    def get_task_history(
+        self,
+        agent_type: Optional[str] = None,
+        status: Optional[TaskStatus] = None,
+        limit: int = 100,
+        days_back: int = 30,
+    ) -> List[TaskExecutionRecord]:
+        """Get task execution history"""
+        return self.memory_manager.get_task_history(
+            agent_type=agent_type, status=status, limit=limit, days_back=days_back
+        )
+
+    def get_performance_metrics(self, days_back: int = 30) -> Dict[str, Any]:
+        """Get comprehensive performance metrics"""
+        stats = self.memory_manager.get_task_statistics(days_back)
+
+        # Add active task information
+        stats["active_tasks"] = {
+            "count": len(self.active_tasks),
+            "by_agent_type": self._group_active_tasks_by_agent(),
+        }
+
+        return stats
+
+    def _group_active_tasks_by_agent(self) -> Dict[str, int]:
+        """Group active tasks by agent type"""
+        agent_counts = {}
+        for task_info in self.active_tasks.values():
+            agent_type = task_info.get("agent_type", "unknown")
+            agent_counts[agent_type] = agent_counts.get(agent_type, 0) + 1
+        return agent_counts
+
+    def add_markdown_reference(
+        self, task_id: str, markdown_file: str, ref_type: str = "documentation"
+    ):
+        """Add markdown reference to a task"""
+        return self.memory_manager.add_markdown_reference(
+            task_id, markdown_file, ref_type
+        )
+
+    def store_task_embedding(
+        self,
+        task_id: str,
+        content: str,
+        embedding_model: str,
+        embedding_vector: List[float],
+    ):
+        """Store embedding for task-related content"""
+        return self.memory_manager.store_embedding(
+            content=content,
+            content_type=f"task_{task_id}",
+            embedding_model=embedding_model,
+            embedding_vector=embedding_vector,
+        )
+
+    async def analyze_task_patterns(self, days_back: int = 30) -> Dict[str, Any]:
+        """Analyze task execution patterns and provide insights"""
+        history = self.get_task_history(days_back=days_back, limit=1000)
+
+        if not history:
+            return {"message": "No task history available for analysis"}
+
+        # Analyze success patterns
+        success_by_agent = {}
+        duration_by_agent = {}
+        retry_patterns = {}
+
+        for task in history:
+            agent = task.agent_type or "unknown"
+
+            # Success rates
+            if agent not in success_by_agent:
+                success_by_agent[agent] = {"total": 0, "successful": 0}
+
+            success_by_agent[agent]["total"] += 1
+            if task.status == TaskStatus.COMPLETED:
+                success_by_agent[agent]["successful"] += 1
+
+            # Duration patterns
+            if task.duration_seconds:
+                if agent not in duration_by_agent:
+                    duration_by_agent[agent] = []
+                duration_by_agent[agent].append(task.duration_seconds)
+
+            # Retry patterns
+            if task.retry_count > 0:
+                if agent not in retry_patterns:
+                    retry_patterns[agent] = []
+                retry_patterns[agent].append(task.retry_count)
+
+        # Calculate insights
+        insights = {
+            "analysis_period_days": days_back,
+            "total_tasks_analyzed": len(history),
+            "agent_performance": {},
+        }
+
+        for agent in success_by_agent:
+            agent_data = success_by_agent[agent]
+            success_rate = (agent_data["successful"] / agent_data["total"]) * 100
+
+            avg_duration = None
+            if agent in duration_by_agent and duration_by_agent[agent]:
+                avg_duration = sum(duration_by_agent[agent]) / len(
+                    duration_by_agent[agent]
+                )
+
+            avg_retries = None
+            if agent in retry_patterns and retry_patterns[agent]:
+                avg_retries = sum(retry_patterns[agent]) / len(retry_patterns[agent])
+
+            insights["agent_performance"][agent] = {
+                "success_rate_percent": round(success_rate, 2),
+                "total_tasks": agent_data["total"],
+                "avg_duration_seconds": (
+                    round(avg_duration, 2) if avg_duration else None
+                ),
+                "avg_retry_count": round(avg_retries, 2) if avg_retries else 0,
+            }
+
+        return insights
+
+
+class TaskExecutionContext:
+    """Context object provided during task execution for additional operations"""
+
+    def __init__(self, tracker: TaskExecutionTracker, task_id: str):
+        self.tracker = tracker
+        self.task_id = task_id
+        self.outputs: Optional[Dict[str, Any]] = None
+        self.metadata: Dict[str, Any] = {}
+
+    def set_outputs(self, outputs: Dict[str, Any]):
+        """Set task outputs that will be stored in memory"""
+        self.outputs = outputs
+
+    def add_metadata(self, key: str, value: Any):
+        """Add metadata to the task execution"""
+        self.metadata[key] = value
+
+    def create_subtask(
+        self,
+        task_name: str,
+        description: str,
+        agent_type: Optional[str] = None,
+        priority: TaskPriority = TaskPriority.MEDIUM,
+        inputs: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Create a subtask of the current task"""
+        return self.tracker.create_subtask(
+            parent_task_id=self.task_id,
+            task_name=task_name,
+            description=description,
+            agent_type=agent_type,
+            priority=priority,
+            inputs=inputs,
+            metadata=self.metadata.copy(),
+        )
+
+    def add_markdown_reference(
+        self, markdown_file: str, ref_type: str = "documentation"
+    ):
+        """Add markdown file reference to current task"""
+        return self.tracker.add_markdown_reference(
+            self.task_id, markdown_file, ref_type
+        )
+
+    def store_embedding(
+        self, content: str, embedding_model: str, embedding_vector: List[float]
+    ):
+        """Store embedding related to current task"""
+        return self.tracker.store_task_embedding(
+            self.task_id, content, embedding_model, embedding_vector
+        )
+
+
+# Global instance for easy access across the application
+task_tracker = TaskExecutionTracker()

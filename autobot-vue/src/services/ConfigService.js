@@ -1,6 +1,6 @@
 /**
  * Centralized Configuration Service
- * 
+ *
  * Eliminates hardcoded values throughout the application by providing
  * a single source of truth for all configuration parameters.
  */
@@ -9,7 +9,7 @@ export class ConfigService {
   constructor() {
     // Initialize with empty config - all values loaded from external sources
     this.config = {};
-    
+
     // Load configuration from all sources
     this.loadConfiguration();
   }
@@ -38,7 +38,7 @@ export class ConfigService {
       },
       defaults: {
         welcome_message: "Hello! How can I assist you today?",
-        model_name: 'tinyllama:latest',
+        model_name: 'deepseek-r1:14b',
         max_chat_messages: 100,
         connection_check_interval: 10000
       },
@@ -78,11 +78,10 @@ export class ConfigService {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
-      
+
       if (response.ok) {
         const externalConfig = await response.json();
         this.config = this.mergeDeep(this.config, externalConfig);
-        console.log('External configuration loaded from backend');
       }
     } catch (error) {
       console.warn('Could not load external configuration from backend:', error.message);
@@ -137,7 +136,7 @@ export class ConfigService {
    */
   filterUndefined(obj) {
     const filtered = {};
-    
+
     for (const key in obj) {
       if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
         const nested = this.filterUndefined(obj[key]);
@@ -148,7 +147,7 @@ export class ConfigService {
         filtered[key] = obj[key];
       }
     }
-    
+
     return filtered;
   }
 
@@ -258,7 +257,7 @@ export class ConfigService {
    */
   mergeDeep(target, source) {
     const result = { ...target };
-    
+
     for (const key in source) {
       if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
         result[key] = this.mergeDeep(target[key] || {}, source[key]);
@@ -266,7 +265,7 @@ export class ConfigService {
         result[key] = source[key];
       }
     }
-    
+
     return result;
   }
 
@@ -283,14 +282,14 @@ export class ConfigService {
   setNestedProperty(obj, path, value) {
     const keys = path.split('.');
     let current = obj;
-    
+
     for (let i = 0; i < keys.length - 1; i++) {
       if (!(keys[i] in current)) {
         current[keys[i]] = {};
       }
       current = current[keys[i]];
     }
-    
+
     current[keys[keys.length - 1]] = value;
   }
 

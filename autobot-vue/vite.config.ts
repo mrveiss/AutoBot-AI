@@ -12,6 +12,14 @@ export default defineConfig({
     vueJsx(),
     vueDevTools(),
   ],
+  css: {
+    devSourcemap: true,
+    transformer: 'postcss',
+    lightningcss: {
+      // Disable lightningcss minification that's causing issues with Tailwind
+      minify: false,
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
@@ -22,12 +30,20 @@ export default defineConfig({
     headers: {
       'X-Content-Type-Options': 'nosniff'
       // Removed Content-Security-Policy to avoid unneeded headers
+    },
+    proxy: {
+      '/vnc-proxy': {
+        target: 'http://localhost:6080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/vnc-proxy/, '')
+      }
     }
   },
   build: {
     outDir: 'dist',
     assetsDir: '.',
     emptyOutDir: true,
+    cssMinify: 'esbuild', // Use esbuild instead of lightningcss
     rollupOptions: {
       output: {
         manualChunks(id) {

@@ -11,7 +11,7 @@
 - no text before or after
 - no conversation, you are a tool agent, not a conversational agent
 
-# Optimized query 
+# Optimized query
 - optimized query is consise, short and to the point
 - contains only keywords and phrases, no full sentences
 - include alternatives and variations for better coverage

@@ -8,11 +8,11 @@
         <slot name="actions"></slot>
       </div>
     </div>
-    
+
     <div class="panel-content" :class="contentClasses">
       <slot></slot>
     </div>
-    
+
     <div class="panel-footer" v-if="$slots.footer">
       <slot name="footer"></slot>
     </div>
@@ -72,73 +72,95 @@ const toggleCollapse = () => {
 
 <style scoped>
 .base-panel {
-  @apply bg-white dark:bg-gray-800 transition-all duration-200;
+  background-color: white;
+  transition: all 0.2s ease;
 }
 
 .panel-default {
-  @apply border border-gray-200 dark:border-gray-700 rounded-lg;
+  border: 1px solid var(--blue-gray-200);
+  border-radius: 0.5rem;
 }
 
 .panel-bordered {
-  @apply border-2 border-gray-300 dark:border-gray-600 rounded-lg;
+  border: 2px solid var(--blue-gray-300);
+  border-radius: 0.5rem;
 }
 
 .panel-elevated {
-  @apply shadow-lg rounded-lg border border-gray-100 dark:border-gray-700;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border-radius: 0.5rem;
+  border: 1px solid var(--blue-gray-100);
 }
 
 .panel-flat {
-  @apply bg-gray-50 dark:bg-gray-900;
+  background-color: var(--blue-gray-50);
 }
 
 .panel-small {
-  @apply text-sm;
+  font-size: 0.875rem;
 }
 
 .panel-medium {
-  @apply text-base;
+  font-size: 1rem;
 }
 
 .panel-large {
-  @apply text-lg;
+  font-size: 1.125rem;
 }
 
 .panel-header {
-  @apply flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--blue-gray-200);
 }
 
 .panel-title {
-  @apply text-lg font-semibold text-gray-900 dark:text-gray-100 m-0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--blue-gray-900);
+  margin: 0;
 }
 
 .panel-actions {
-  @apply flex items-center gap-2;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .panel-content {
-  @apply p-4;
+  padding: 1rem;
   max-height: v-bind('props.maxHeight || "none"');
 }
 
 .content-scrollable {
-  @apply overflow-y-auto;
+  overflow-y: auto;
 }
 
 .content-collapsed {
-  @apply hidden;
+  display: none;
 }
 
 .panel-footer {
-  @apply p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750;
+  padding: 1rem;
+  border-top: 1px solid var(--blue-gray-200);
+  background-color: var(--blue-gray-50);
 }
 
 .panel-loading {
-  @apply opacity-75 pointer-events-none;
+  opacity: 0.75;
+  pointer-events: none;
 }
 
 .panel-loading::after {
   content: '';
-  @apply absolute inset-0 bg-white bg-opacity-50 dark:bg-gray-800 dark:bg-opacity-50;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-color: rgba(255, 255, 255, 0.5);
   background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg transform='translate(1 1)' stroke='%23666' stroke-width='2'%3E%3Ccircle stroke-opacity='.25' cx='18' cy='18' r='18'/%3E%3Cpath d='m36 18c0-9.94-8.06-18-18-18'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 18 18' to='360 18 18' dur='1s' repeatCount='indefinite'/%3E%3C/path%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
@@ -148,19 +170,19 @@ const toggleCollapse = () => {
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .panel-header {
-    @apply p-3;
+    padding: 0.75rem;
   }
-  
+
   .panel-content {
-    @apply p-3;
+    padding: 0.75rem;
   }
-  
+
   .panel-footer {
-    @apply p-3;
+    padding: 0.75rem;
   }
-  
+
   .panel-title {
-    @apply text-base;
+    font-size: 1rem;
   }
 }
 </style>

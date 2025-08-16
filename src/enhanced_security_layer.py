@@ -1,0 +1,474 @@
+"""
+Enhanced Security Layer with Command Execution Controls
+Integrates secure command execution with role-based permissions
+"""
+
+import asyncio
+import datetime
+import json
+import os
+from typing import Any, Dict, List, Optional
+
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
+from src.secure_command_executor import (
+    CommandRisk,
+    SecureCommandExecutor,
+    SecurityPolicy,
+)
+
+
+class EnhancedSecurityLayer:
+    """
+    Enhanced security layer that integrates command execution security
+    with role-based access control and audit logging
+    """
+
+    def __init__(self):
+        # Use centralized config manager
+        self.security_config = global_config_manager.get("security_config", {})
+        self.enable_auth = self.security_config.get("enable_auth", False)
+        self.enable_command_security = self.security_config.get(
+            "enable_command_security", True
+        )
+        self.audit_log_file = self.security_config.get(
+            "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
+        )
+        self.roles = self.security_config.get("roles", {})
+        self.allowed_users = self.security_config.get("allowed_users", {})
+
+        # Command security settings
+        self.command_approval_required = self.security_config.get(
+            "command_approval_required", True
+        )
+        self.use_docker_sandbox = self.security_config.get("use_docker_sandbox", False)
+
+        # Initialize secure command executor
+        self.command_executor = SecureCommandExecutor(
+            policy=self._create_security_policy(),
+            require_approval_callback=self._command_approval_callback,
+            use_docker_sandbox=self.use_docker_sandbox,
+        )
+
+        # Approval queue for async command approvals
+        self.pending_approvals: Dict[str, asyncio.Event] = {}
+        self.approval_results: Dict[str, bool] = {}
+
+        os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
+        print("EnhancedSecurityLayer initialized.")
+        print(f"Authentication enabled: {self.enable_auth}")
+        print(f"Command security enabled: {self.enable_command_security}")
+        print(f"Docker sandbox: {self.use_docker_sandbox}")
+        print(f"Audit log file: {self.audit_log_file}")
+
+    def _create_security_policy(self) -> SecurityPolicy:
+        """Create security policy from configuration"""
+        policy = SecurityPolicy()
+
+        # Load custom policies from config if available
+        custom_policies = self.security_config.get("command_policies", {})
+
+        if "safe_commands" in custom_policies:
+            policy.safe_commands.update(custom_policies["safe_commands"])
+
+        if "forbidden_commands" in custom_policies:
+            policy.forbidden_commands.update(custom_policies["forbidden_commands"])
+
+        if "allowed_paths" in custom_policies:
+            from pathlib import Path
+
+            policy.allowed_paths = [Path(p) for p in custom_policies["allowed_paths"]]
+
+        return policy
+
+    async def _command_approval_callback(self, approval_data: Dict[str, Any]) -> bool:
+        """
+        Callback for command approval requests
+        This can be extended to integrate with UI or notification systems
+        """
+        command_id = f"cmd_{int(approval_data['timestamp'])}"
+
+        # Log the approval request
+        self.audit_log(
+            action="command_approval_request",
+            user="system",
+            outcome="pending",
+            details={
+                "command": approval_data["command"],
+                "risk": approval_data["risk"],
+                "reasons": approval_data["reasons"],
+                "command_id": command_id,
+            },
+        )
+
+        # In a real implementation, this would:
+        # 1. Send notification to UI/admin
+        # 2. Wait for user response
+        # 3. Return approval decision
+
+        # For now, implement automatic approval based on risk level
+        if approval_data["risk"] == CommandRisk.MODERATE.value:
+            # Auto-approve moderate risk commands if configured
+            if self.security_config.get("auto_approve_moderate", False):
+                self.audit_log(
+                    action="command_auto_approved",
+                    user="system",
+                    outcome="approved",
+                    details={"command_id": command_id, "risk": "moderate"},
+                )
+                return True
+
+        # Create approval event
+        approval_event = asyncio.Event()
+        self.pending_approvals[command_id] = approval_event
+
+        # Wait for approval (with timeout)
+        try:
+            await asyncio.wait_for(
+                approval_event.wait(), timeout=300
+            )  # 5 minute timeout
+            approved = self.approval_results.get(command_id, False)
+
+            self.audit_log(
+                action="command_approval_response",
+                user="system",
+                outcome="approved" if approved else "denied",
+                details={"command_id": command_id},
+            )
+
+            return approved
+
+        except asyncio.TimeoutError:
+            self.audit_log(
+                action="command_approval_timeout",
+                user="system",
+                outcome="denied",
+                details={"command_id": command_id},
+            )
+            return False
+
+        finally:
+            # Cleanup
+            self.pending_approvals.pop(command_id, None)
+            self.approval_results.pop(command_id, None)
+
+    def approve_command(self, command_id: str, approved: bool = True):
+        """
+        Approve or deny a pending command
+        This would be called from UI or API endpoint
+        """
+        if command_id in self.pending_approvals:
+            self.approval_results[command_id] = approved
+            self.pending_approvals[command_id].set()
+
+    def check_permission(
+        self, user_role: str, action_type: str, resource: Optional[str] = None
+    ) -> bool:
+        """
+        Enhanced permission checking that includes command execution permissions
+        """
+        if not self.enable_auth:
+            return True
+
+        # GOD MODE: Unrestricted access
+        if user_role.lower() in ["god", "superuser", "root"]:
+            print(f"GOD MODE: Unrestricted access granted for role '{user_role}'")
+            return True
+
+        # Special handling for command execution
+        if action_type == "allow_shell_execute":
+            # Check if role has shell execution permission
+            role_permissions = self.roles.get(user_role, {}).get("permissions", [])
+
+            if "allow_all" in role_permissions:
+                return True
+
+            if "allow_shell_execute" in role_permissions:
+                # Even with permission, command security still applies
+                return True
+
+            # Check for restricted shell execution
+            if "allow_shell_execute_safe" in role_permissions:
+                # User can only execute safe commands
+                return True
+
+            return False
+
+        # Regular permission checking
+        role_permissions = self.roles.get(user_role, {}).get("permissions", [])
+
+        if "allow_all" in role_permissions:
+            return True
+
+        if action_type in role_permissions:
+            return True
+
+        # Check for wildcard permissions
+        for permission in role_permissions:
+            if permission.endswith(".*"):
+                permission_prefix = permission[:-1]
+                if action_type.startswith(permission_prefix):
+                    return True
+
+        # Check default role permissions
+        default_permissions = self._get_default_role_permissions(user_role)
+        if action_type in default_permissions:
+            return True
+
+        print(
+            f"Permission DENIED for role '{user_role}' to perform "
+            f"action '{action_type}'"
+        )
+        return False
+
+    def _get_default_role_permissions(self, user_role: str) -> List[str]:
+        """Get default permissions for common user roles"""
+        default_role_permissions = {
+            "god": ["allow_all"],
+            "superuser": ["allow_all"],
+            "root": ["allow_all"],
+            "admin": ["allow_all"],
+            "developer": [
+                "files.*",
+                "allow_goal_submission",
+                "allow_kb_read",
+                "allow_kb_write",
+                "allow_shell_execute_safe",  # Only safe commands
+            ],
+            "user": [
+                "files.view",
+                "files.download",
+                "allow_goal_submission",
+                "allow_kb_read",
+            ],
+            "readonly": ["files.view", "files.download", "allow_kb_read"],
+            "guest": ["files.view"],
+        }
+
+        return default_role_permissions.get(user_role, [])
+
+    async def execute_command(
+        self, command: str, user: str, user_role: str
+    ) -> Dict[str, Any]:
+        """
+        Execute a command with security checks and audit logging
+
+        Args:
+            command: Command to execute
+            user: Username executing the command
+            user_role: Role of the user
+
+        Returns:
+            Execution result with security information
+        """
+        # Check if user has permission to execute commands
+        if not self.check_permission(user_role, "allow_shell_execute"):
+            self.audit_log(
+                action="command_execution_denied",
+                user=user,
+                outcome="denied",
+                details={
+                    "command": command,
+                    "reason": "no_permission",
+                    "role": user_role,
+                },
+            )
+            return {
+                "stdout": "",
+                "stderr": (
+                    "Permission denied: You do not have shell execution privileges"
+                ),
+                "return_code": 1,
+                "status": "error",
+                "security": {"blocked": True, "reason": "no_permission"},
+            }
+
+        # Check if only safe commands are allowed for this role
+        force_approval = False
+        role_permissions = self.roles.get(user_role, {}).get("permissions", [])
+        if not role_permissions:
+            # Fall back to default permissions if no configured role
+            role_permissions = self._get_default_role_permissions(user_role)
+
+        if "allow_all" not in role_permissions:
+            # Check if user has limited shell execution permissions
+            risk, _ = self.command_executor.assess_command_risk(command)
+            if (
+                "allow_shell_execute_safe" in role_permissions
+                and risk != CommandRisk.SAFE
+            ):
+                # User can only execute safe commands without approval
+                force_approval = True
+            elif "allow_shell_execute" in role_permissions and risk in [
+                CommandRisk.HIGH,
+                CommandRisk.MODERATE,
+            ]:
+                # User has shell execute permission but high-risk commands need approval
+                force_approval = True
+
+        # Log command attempt
+        self.audit_log(
+            action="command_execution_attempt",
+            user=user,
+            outcome="pending",
+            details={
+                "command": command,
+                "role": user_role,
+                "force_approval": force_approval,
+            },
+        )
+
+        # Execute command with security controls
+        if self.enable_command_security:
+            result = await self.command_executor.run_shell_command(
+                command, force_approval=force_approval
+            )
+        else:
+            # Fallback to basic execution if security is disabled
+            import asyncio
+
+            process = await asyncio.create_subprocess_shell(
+                command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            result = {
+                "stdout": stdout.decode().strip(),
+                "stderr": stderr.decode().strip(),
+                "return_code": process.returncode,
+                "status": "success" if process.returncode == 0 else "error",
+                "security": {"enabled": False},
+            }
+
+        # Log execution result
+        self.audit_log(
+            action="command_execution_complete",
+            user=user,
+            outcome=result["status"],
+            details={
+                "command": command,
+                "return_code": result["return_code"],
+                "security": result.get("security", {}),
+            },
+        )
+
+        return result
+
+    def audit_log(self, action: str, user: str, outcome: str, details: Dict[str, Any]):
+        """Enhanced audit logging with command execution tracking"""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "user": user,
+            "action": action,
+            "outcome": outcome,
+            "details": details,
+        }
+
+        try:
+            with open(self.audit_log_file, "a") as f:
+                f.write(json.dumps(log_entry) + "\n")
+            print(f"Audit log: {action} by {user} - {outcome}")
+        except Exception as e:
+            print(f"ERROR: Failed to write to audit log: {e}")
+
+    def get_command_history(
+        self, user: Optional[str] = None, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Get command execution history from audit log
+
+        Args:
+            user: Filter by specific user (optional)
+            limit: Maximum number of entries to return
+
+        Returns:
+            List of command execution entries
+        """
+        command_history = []
+
+        try:
+            with open(self.audit_log_file, "r") as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        if "action" in entry and entry["action"] in [
+                            "command_execution_attempt",
+                            "command_execution_complete",
+                        ]:
+                            if user is None or entry.get("user") == user:
+                                command_history.append(entry)
+                    except json.JSONDecodeError:
+                        continue
+        except FileNotFoundError:
+            return []
+
+        # Return most recent entries
+        return command_history[-limit:]
+
+    def authenticate_user(self, username: str, password: str) -> Optional[str]:
+        """Authenticate user and return their role"""
+        if not self.enable_auth:
+            return "admin"
+
+        if username in self.allowed_users and self.allowed_users[username] == password:
+            # Map users to roles (simplified for demo)
+            user_roles = self.security_config.get("user_roles", {})
+            return user_roles.get(username, "user")
+
+        return None
+
+    def get_pending_approvals(self) -> List[Dict[str, Any]]:
+        """Get list of commands pending approval"""
+        pending = []
+        for cmd_id in self.pending_approvals:
+            pending.append(
+                {
+                    "command_id": cmd_id,
+                    "timestamp": cmd_id.split("_")[1] if "_" in cmd_id else "unknown",
+                }
+            )
+        return pending
+
+
+# Test the enhanced security layer
+if __name__ == "__main__":
+
+    async def test_security():
+        print("Testing Enhanced Security Layer")
+        print("=" * 60)
+
+        # Create enhanced security layer
+        security = EnhancedSecurityLayer()
+
+        # Test command risk assessment
+        test_commands = [
+            ("echo 'Hello World'", "admin"),
+            ("rm -rf /tmp/test", "admin"),
+            ("sudo apt update", "user"),
+            ("ls -la", "developer"),
+            ("cat /etc/passwd", "admin"),
+        ]
+
+        for cmd, role in test_commands:
+            print(f"\nTesting: {cmd} (as {role})")
+            result = await security.execute_command(cmd, f"{role}_user", role)
+            print(f"Result: {result['status']}")
+            if result.get("security"):
+                print(f"Security: {result['security']}")
+            if result["stderr"]:
+                print(f"Error: {result['stderr']}")
+            if result["stdout"]:
+                print(f"Output: {result['stdout'][:100]}...")
+
+        # Show command history
+        print("\n" + "=" * 60)
+        print("Command History:")
+        history = security.get_command_history(limit=10)
+        for entry in history:
+            print(
+                f"- {entry['timestamp']}: {entry['user']} - "
+                f"{entry['action']} - {entry['outcome']}"
+            )
+            if "command" in entry.get("details", {}):
+                print(f"  Command: {entry['details']['command']}")
+
+    asyncio.run(test_security())

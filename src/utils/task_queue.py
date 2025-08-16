@@ -1,0 +1,762 @@
+"""
+Robust task queue system for AutoBot with Redis backend.
+
+This module provides a comprehensive task queue implementation with
+priority handling, retry logic, and distributed task execution.
+"""
+
+import asyncio
+import json
+import logging
+import time
+import traceback
+import uuid
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
+
+try:
+    from src.utils.redis_client import get_redis_client
+except ImportError:
+    get_redis_client = None
+
+# Temporary implementations until proper modules are created
+# try:
+#     from src.utils.error_handler import error_handler, ErrorCategory
+# except ImportError:
+error_handler = None
+ErrorCategory = None
+
+
+# try:
+#     from src.utils.logging_config import log_performance_metric
+# except ImportError:
+def log_performance_metric(*args, **kwargs):
+    """Temporary implementation until logging_config module is created"""
+    pass
+
+
+class TaskStatus(Enum):
+    """Task execution status."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    RETRY = "retry"
+
+
+class TaskPriority(Enum):
+    """Task priority levels."""
+
+    LOW = 1
+    NORMAL = 2
+    HIGH = 3
+    CRITICAL = 4
+
+
+@dataclass
+class TaskResult:
+    """Task execution result."""
+
+    task_id: str
+    status: TaskStatus
+    result: Any = None
+    error: Optional[str] = None
+    error_traceback: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    execution_time: Optional[float] = None
+    retry_count: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        data = asdict(self)
+        data["status"] = self.status.value
+        if self.started_at:
+            data["started_at"] = self.started_at.isoformat()
+        if self.completed_at:
+            data["completed_at"] = self.completed_at.isoformat()
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TaskResult":
+        """Create from dictionary."""
+        if "status" in data:
+            data["status"] = TaskStatus(data["status"])
+        if "started_at" in data and data["started_at"]:
+            data["started_at"] = datetime.fromisoformat(data["started_at"])
+        if "completed_at" in data and data["completed_at"]:
+            data["completed_at"] = datetime.fromisoformat(data["completed_at"])
+        return cls(**data)
+
+
+@dataclass
+class Task:
+    """Task definition for queue execution."""
+
+    id: str
+    function_name: str
+    args: tuple = ()
+    kwargs: Optional[Dict[str, Any]] = None
+    priority: TaskPriority = TaskPriority.NORMAL
+    max_retries: int = 3
+    retry_delay: float = 1.0  # seconds
+    timeout: Optional[float] = None
+    created_at: Optional[datetime] = None
+    scheduled_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self):
+        if self.kwargs is None:
+            self.kwargs = {}
+        if self.created_at is None:
+            self.created_at = datetime.utcnow()
+        if self.metadata is None:
+            self.metadata = {}
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        data = asdict(self)
+        data["priority"] = self.priority.value
+        if self.created_at:
+            data["created_at"] = self.created_at.isoformat()
+        if self.scheduled_at:
+            data["scheduled_at"] = self.scheduled_at.isoformat()
+        if self.expires_at:
+            data["expires_at"] = self.expires_at.isoformat()
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Task":
+        """Create from dictionary."""
+        if "priority" in data:
+            data["priority"] = TaskPriority(data["priority"])
+        if "created_at" in data:
+            data["created_at"] = datetime.fromisoformat(data["created_at"])
+        if "scheduled_at" in data and data["scheduled_at"]:
+            data["scheduled_at"] = datetime.fromisoformat(data["scheduled_at"])
+        if "expires_at" in data and data["expires_at"]:
+            data["expires_at"] = datetime.fromisoformat(data["expires_at"])
+        return cls(**data)
+
+
+class TaskQueue:
+    """Redis-based task queue with priority and retry support."""
+
+    def __init__(
+        self,
+        queue_name: str = "autobot_tasks",
+        redis_client=None,
+        max_workers: int = 5,
+        enable_scheduler: bool = True,
+    ):
+        """
+        Initialize task queue.
+
+        Args:
+            queue_name: Base name for Redis keys
+            redis_client: Redis client instance
+            max_workers: Maximum concurrent workers
+            enable_scheduler: Whether to enable scheduled task processing
+        """
+        self.queue_name = queue_name
+        self.redis = redis_client or (get_redis_client() if get_redis_client else None)
+        self.max_workers = max_workers
+        self.enable_scheduler = enable_scheduler
+
+        # Redis key patterns
+        self.pending_key = f"{queue_name}:pending"
+        self.running_key = f"{queue_name}:running"
+        self.completed_key = f"{queue_name}:completed"
+        self.failed_key = f"{queue_name}:failed"
+        self.scheduled_key = f"{queue_name}:scheduled"
+        self.results_key = f"{queue_name}:results"
+
+        # Task registry for function execution
+        self.task_registry: Dict[str, Callable] = {}
+
+        # Worker management
+        self.workers: List[asyncio.Task] = []
+        self.is_running = False
+        self.logger = logging.getLogger(__name__)
+
+        # Statistics
+        self.stats = {
+            "tasks_processed": 0,
+            "tasks_failed": 0,
+            "total_execution_time": 0.0,
+            "started_at": None,
+        }
+
+    def register_task(self, name: str, func: Callable) -> None:
+        """
+        Register a task function.
+
+        Args:
+            name: Task name identifier
+            func: Function to execute for this task
+        """
+        self.task_registry[name] = func
+        self.logger.info(f"Registered task: {name}")
+
+    def task(self, name: str = None):
+        """
+        Decorator to register task functions.
+
+        Args:
+            name: Optional task name (defaults to function name)
+        """
+
+        def decorator(func: Callable):
+            task_name = name or func.__name__
+            self.register_task(task_name, func)
+            return func
+
+        return decorator
+
+    async def enqueue(
+        self,
+        function_name: str,
+        *args,
+        priority: TaskPriority = TaskPriority.NORMAL,
+        delay: Optional[float] = None,
+        timeout: Optional[float] = None,
+        max_retries: int = 3,
+        expires_in: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ) -> str:
+        """
+        Enqueue a task for execution.
+
+        Args:
+            function_name: Name of registered function to execute
+            *args: Function arguments
+            priority: Task priority
+            delay: Delay before execution (seconds)
+            timeout: Task timeout (seconds)
+            max_retries: Maximum retry attempts
+            expires_in: Task expiration time (seconds)
+            metadata: Additional task metadata
+            **kwargs: Function keyword arguments
+
+        Returns:
+            Task ID
+        """
+        if not self.redis:
+            raise RuntimeError("Redis client not available")
+
+        task_id = str(uuid.uuid4())
+
+        # Calculate timing
+        scheduled_at = None
+        if delay:
+            scheduled_at = datetime.utcnow() + timedelta(seconds=delay)
+
+        expires_at = None
+        if expires_in:
+            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
+        # Create task
+        task = Task(
+            id=task_id,
+            function_name=function_name,
+            args=args,
+            kwargs=kwargs,
+            priority=priority,
+            max_retries=max_retries,
+            timeout=timeout,
+            scheduled_at=scheduled_at,
+            expires_at=expires_at,
+            metadata=metadata or {},
+        )
+
+        # Store task data
+        await self._store_task(task)
+
+        # Add to appropriate queue
+        if scheduled_at and scheduled_at > datetime.utcnow():
+            # Scheduled task
+            score = scheduled_at.timestamp()
+            await self.redis.zadd(self.scheduled_key, {task_id: score})
+        else:
+            # Immediate task
+            priority_score = priority.value * 1000000 + int(time.time())
+            await self.redis.zadd(self.pending_key, {task_id: priority_score})
+
+        self.logger.info(f"Enqueued task {task_id}: {function_name}")
+        return task_id
+
+    async def _store_task(self, task: Task) -> None:
+        """Store task data in Redis."""
+        if not self.redis:
+            return
+        task_data = json.dumps(task.to_dict())
+        self.redis.hset(f"{self.queue_name}:tasks", task.id, task_data)
+
+    async def _get_task(self, task_id: str) -> Optional[Task]:
+        """Retrieve task data from Redis."""
+        if not self.redis:
+            return None
+        task_data = self.redis.hget(f"{self.queue_name}:tasks", task_id)
+        if task_data:
+            return Task.from_dict(json.loads(task_data))
+        return None
+
+    async def start_workers(self) -> None:
+        """Start worker processes."""
+        if self.is_running:
+            return
+
+        self.is_running = True
+        self.stats["started_at"] = datetime.utcnow()
+
+        # Start task workers
+        for i in range(self.max_workers):
+            worker = asyncio.create_task(self._worker_loop(f"worker-{i}"))
+            self.workers.append(worker)
+
+        # Start scheduler if enabled
+        if self.enable_scheduler:
+            scheduler = asyncio.create_task(self._scheduler_loop())
+            self.workers.append(scheduler)
+
+        self.logger.info(f"Started {len(self.workers)} workers")
+
+    async def stop_workers(self) -> None:
+        """Stop all workers."""
+        self.is_running = False
+
+        # Cancel all workers
+        for worker in self.workers:
+            worker.cancel()
+
+        # Wait for workers to finish
+        if self.workers:
+            await asyncio.gather(*self.workers, return_exceptions=True)
+
+        self.workers.clear()
+        self.logger.info("Stopped all workers")
+
+    async def _worker_loop(self, worker_name: str) -> None:
+        """Main worker loop."""
+        self.logger.info(f"Worker {worker_name} started")
+
+        while self.is_running:
+            try:
+                # Get next task
+                task_id = await self._get_next_task()
+                if not task_id:
+                    await asyncio.sleep(1)
+                    continue
+
+                # Process task
+                await self._process_task(task_id, worker_name)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Worker {worker_name} error: {e}")
+                await asyncio.sleep(1)
+
+        self.logger.info(f"Worker {worker_name} stopped")
+
+    async def _scheduler_loop(self) -> None:
+        """Scheduler loop for delayed tasks."""
+        self.logger.info("Scheduler started")
+
+        while self.is_running:
+            try:
+                if not self.redis:
+                    await asyncio.sleep(5)
+                    continue
+
+                current_time = time.time()
+
+                # Get scheduled tasks that are due
+                due_tasks = await self.redis.zrangebyscore(
+                    self.scheduled_key, 0, current_time, withscores=True
+                )
+
+                for task_id, score in due_tasks:
+                    # Move to pending queue
+                    task = await self._get_task(task_id)
+                    if task:
+                        priority_score = task.priority.value * 1000000 + int(
+                            time.time()
+                        )
+                        await self.redis.zadd(
+                            self.pending_key, {task_id: priority_score}
+                        )
+                        await self.redis.zrem(self.scheduled_key, task_id)
+
+                        self.logger.debug(f"Moved scheduled task to pending: {task_id}")
+
+                await asyncio.sleep(5)  # Check every 5 seconds
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Scheduler error: {e}")
+                await asyncio.sleep(5)
+
+        self.logger.info("Scheduler stopped")
+
+    async def _get_next_task(self) -> Optional[str]:
+        """Get next task from pending queue."""
+        if not self.redis:
+            return None
+
+        # Get highest priority task
+        tasks = await self.redis.zrevrange(self.pending_key, 0, 0)
+        if not tasks:
+            return None
+
+        task_id = tasks[0]
+
+        # Move to running queue
+        await self.redis.zrem(self.pending_key, task_id)
+        await self.redis.zadd(self.running_key, {task_id: time.time()})
+
+        return task_id
+
+    async def _process_task(self, task_id: str, worker_name: str) -> None:
+        """Process a single task."""
+        start_time = time.time()
+        task = await self._get_task(task_id)
+
+        if not task:
+            self.logger.error(f"Task {task_id} not found")
+            return
+
+        # Check if task is expired
+        if task.expires_at and datetime.utcnow() > task.expires_at:
+            await self._handle_task_completion(
+                task,
+                TaskResult(
+                    task_id=task_id, status=TaskStatus.CANCELLED, error="Task expired"
+                ),
+            )
+            return
+
+        self.logger.info(
+            f"Worker {worker_name} processing task {task_id}: " f"{task.function_name}"
+        )
+
+        # Create result object
+        result = TaskResult(
+            task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.utcnow()
+        )
+
+        try:
+            # Get task function
+            if task.function_name not in self.task_registry:
+                raise ValueError(f"Task function '{task.function_name}' not registered")
+
+            func = self.task_registry[task.function_name]
+
+            # Execute task with timeout
+            kwargs = task.kwargs or {}
+            if task.timeout:
+                task_result = await asyncio.wait_for(
+                    self._execute_function(func, task.args, kwargs),
+                    timeout=task.timeout,
+                )
+            else:
+                task_result = await self._execute_function(func, task.args, kwargs)
+
+            # Success
+            result.status = TaskStatus.COMPLETED
+            result.result = task_result
+            result.completed_at = datetime.utcnow()
+            result.execution_time = time.time() - start_time
+
+            self.stats["tasks_processed"] += 1
+            self.stats["total_execution_time"] += result.execution_time
+
+            self.logger.info(
+                f"Task {task_id} completed successfully in "
+                f"{result.execution_time:.2f}s"
+            )
+
+        except asyncio.TimeoutError:
+            result.status = TaskStatus.FAILED
+            result.error = f"Task timed out after {task.timeout}s"
+            result.completed_at = datetime.utcnow()
+            result.execution_time = time.time() - start_time
+
+            self.logger.error(f"Task {task_id} timed out")
+
+        except Exception as e:
+            result.status = TaskStatus.FAILED
+            result.error = str(e)
+            result.error_traceback = traceback.format_exc()
+            result.completed_at = datetime.utcnow()
+            result.execution_time = time.time() - start_time
+
+            self.logger.error(f"Task {task_id} failed: {e}")
+
+        await self._handle_task_completion(task, result)
+
+    async def _execute_function(
+        self, func: Callable, args: tuple, kwargs: Dict[str, Any]
+    ) -> Any:
+        """Execute task function (sync or async)."""
+        if asyncio.iscoroutinefunction(func):
+            return await func(*args, **kwargs)
+        else:
+            # Run sync function in thread pool
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
+    async def _handle_task_completion(self, task: Task, result: TaskResult) -> None:
+        """Handle task completion (success or failure)."""
+        if not self.redis:
+            return
+
+        # Remove from running queue
+        await self.redis.zrem(self.running_key, task.id)
+
+        if result.status == TaskStatus.FAILED and result.retry_count < task.max_retries:
+            # Retry task
+            result.retry_count += 1
+            result.status = TaskStatus.RETRY
+
+            # Schedule retry with exponential backoff
+            retry_delay = task.retry_delay * (2**result.retry_count)
+            retry_time = datetime.utcnow() + timedelta(seconds=retry_delay)
+
+            # Update task with retry info
+            if task.metadata:
+                task.metadata["retry_count"] = result.retry_count
+                task.metadata["last_error"] = result.error
+            await self._store_task(task)
+
+            # Schedule retry
+            await self.redis.zadd(self.scheduled_key, {task.id: retry_time.timestamp()})
+
+            self.logger.info(
+                f"Scheduling retry {result.retry_count}/{task.max_retries} "
+                f"for task {task.id} in {retry_delay}s"
+            )
+
+        else:
+            # Task is complete (success or final failure)
+            if result.status == TaskStatus.COMPLETED:
+                await self.redis.zadd(self.completed_key, {task.id: time.time()})
+            else:
+                await self.redis.zadd(self.failed_key, {task.id: time.time()})
+                self.stats["tasks_failed"] += 1
+
+        # Store result
+        result_data = json.dumps(result.to_dict())
+        self.redis.hset(self.results_key, task.id, result_data)
+
+        # Log performance metrics
+        if result.execution_time:
+            log_performance_metric(
+                "task_execution_time",
+                result.execution_time,
+                "seconds",
+                task_id=task.id,
+                function_name=task.function_name,
+                status=result.status.value,
+                retry_count=result.retry_count,
+            )
+
+    async def get_task_result(self, task_id: str) -> Optional[TaskResult]:
+        """Get task execution result."""
+        if not self.redis:
+            return None
+        result_data = self.redis.hget(self.results_key, task_id)
+        if result_data:
+            return TaskResult.from_dict(json.loads(result_data))
+        return None
+
+    async def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
+        """Get current task status."""
+        if not self.redis:
+            return None
+
+        # Check all queues
+        if self.redis.zscore(self.pending_key, task_id) is not None:
+            return TaskStatus.PENDING
+        elif self.redis.zscore(self.scheduled_key, task_id) is not None:
+            return TaskStatus.PENDING
+        elif self.redis.zscore(self.running_key, task_id) is not None:
+            return TaskStatus.RUNNING
+        elif self.redis.zscore(self.completed_key, task_id) is not None:
+            return TaskStatus.COMPLETED
+        elif self.redis.zscore(self.failed_key, task_id) is not None:
+            return TaskStatus.FAILED
+
+        return None
+
+    async def cancel_task(self, task_id: str) -> bool:
+        """Cancel a pending task."""
+        if not self.redis:
+            return False
+
+        # Remove from pending or scheduled queues
+        removed_pending = await self.redis.zrem(self.pending_key, task_id)
+        removed_scheduled = await self.redis.zrem(self.scheduled_key, task_id)
+
+        if removed_pending or removed_scheduled:
+            # Create cancelled result
+            result = TaskResult(
+                task_id=task_id,
+                status=TaskStatus.CANCELLED,
+                completed_at=datetime.utcnow(),
+            )
+
+            result_data = json.dumps(result.to_dict())
+            self.redis.hset(self.results_key, task_id, result_data)
+
+            self.logger.info(f"Cancelled task {task_id}")
+            return True
+
+        return False
+
+    async def get_queue_stats(self) -> Dict[str, Any]:
+        """Get queue statistics."""
+        if not self.redis:
+            return {
+                "queue_name": self.queue_name,
+                "redis_available": False,
+                "error": "Redis client not available",
+            }
+
+        pending_count = self.redis.zcard(self.pending_key)
+        running_count = self.redis.zcard(self.running_key)
+        completed_count = self.redis.zcard(self.completed_key)
+        failed_count = self.redis.zcard(self.failed_key)
+        scheduled_count = self.redis.zcard(self.scheduled_key)
+
+        stats = {
+            "queue_name": self.queue_name,
+            "pending_tasks": pending_count,
+            "running_tasks": running_count,
+            "completed_tasks": completed_count,
+            "failed_tasks": failed_count,
+            "scheduled_tasks": scheduled_count,
+            "total_tasks": pending_count
+            + running_count
+            + completed_count
+            + failed_count,
+            "workers": len(self.workers),
+            "is_running": self.is_running,
+            "registered_functions": list(self.task_registry.keys()),
+            "performance": self.stats.copy(),
+            "redis_available": True,
+        }
+
+        if self.stats["started_at"]:
+            uptime = datetime.utcnow() - self.stats["started_at"]
+            stats["uptime_seconds"] = uptime.total_seconds()
+
+        return stats
+
+    async def cleanup_completed_tasks(self, older_than_hours: int = 24) -> int:
+        """Clean up old completed and failed tasks."""
+        if not self.redis:
+            return 0
+
+        cutoff_time = time.time() - (older_than_hours * 3600)
+
+        # Get old tasks
+        old_completed = self.redis.zrangebyscore(self.completed_key, 0, cutoff_time)
+        old_failed = self.redis.zrangebyscore(self.failed_key, 0, cutoff_time)
+
+        all_old_tasks = list(old_completed) + list(old_failed)
+
+        if all_old_tasks:
+            # Remove from queues
+            if old_completed:
+                self.redis.zremrangebyscore(self.completed_key, 0, cutoff_time)
+            if old_failed:
+                self.redis.zremrangebyscore(self.failed_key, 0, cutoff_time)
+
+            # Remove task data and results
+            if all_old_tasks:
+                self.redis.hdel(f"{self.queue_name}:tasks", *all_old_tasks)
+                self.redis.hdel(self.results_key, *all_old_tasks)
+
+        cleaned_count = len(all_old_tasks)
+        if cleaned_count > 0:
+            self.logger.info(f"Cleaned up {cleaned_count} old tasks")
+
+        return cleaned_count
+
+
+# Global task queue instance
+_task_queue: Optional[TaskQueue] = None
+
+
+def get_task_queue() -> TaskQueue:
+    """Get the global task queue instance."""
+    global _task_queue
+
+    if _task_queue is None:
+        _task_queue = TaskQueue()
+
+    return _task_queue
+
+
+def initialize_task_queue(**kwargs) -> TaskQueue:
+    """Initialize the global task queue."""
+    global _task_queue
+
+    _task_queue = TaskQueue(**kwargs)
+    return _task_queue
+
+
+# Convenience decorators
+def task(name: Optional[str] = None, **task_kwargs):
+    """
+    Decorator to register and configure task functions.
+
+    Args:
+        name: Task name (defaults to function name)
+        **task_kwargs: Default task configuration
+    """
+
+    def decorator(func: Callable):
+        task_queue = get_task_queue()
+        task_name = name or func.__name__
+        task_queue.register_task(task_name, func)
+
+        # Add enqueue method to function
+        async def enqueue_task(*args, **kwargs):
+            # Merge default task config with call-time config
+            enqueue_kwargs = task_kwargs.copy()
+            enqueue_kwargs.update(kwargs)
+
+            return await task_queue.enqueue(task_name, *args, **enqueue_kwargs)
+
+        # Store as attributes with type hints to avoid linter warnings
+        func.__dict__["enqueue"] = enqueue_task
+        func.__dict__["task_name"] = task_name
+
+        return func
+
+    return decorator
+
+
+async def enqueue_task(function_name: str, *args, **kwargs) -> str:
+    """
+    Convenience function to enqueue a task.
+
+    Args:
+        function_name: Name of registered function
+        *args: Function arguments
+        **kwargs: Task configuration and function keyword arguments
+
+    Returns:
+        Task ID
+    """
+    task_queue = get_task_queue()
+    return await task_queue.enqueue(function_name, *args, **kwargs)

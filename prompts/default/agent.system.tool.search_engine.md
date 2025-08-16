@@ -14,3 +14,5 @@ returns list urls titles descriptions
     }
 }
 ~~~
+
+{% include 'default/agent.system.tool.document_query.md' %}

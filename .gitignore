@@ -21,7 +21,7 @@ __pycache__/
 node_modules/
 autobot-vue/node_modules/
 
-# Package manager lock files 
+# Package manager lock files
 # Note: package-lock.json should be committed to ensure consistent dependency versions
 yarn.lock
 pnpm-lock.yaml
@@ -53,6 +53,14 @@ data/audit.log
 data/chat_history.json
 data/reliability_stats.json
 
+# Generated runtime data
+data/*.json
+data/*.db
+data/*.log
+data/session_*
+data/workflow_*
+data/agent_*
+
 # Backend data
 backend/data/chats/*
 
@@ -68,8 +76,13 @@ backend/config/settings.json
 .env.production.local
 
 # === LOG FILES ===
+# All log files should go in logs/ directory
 logs/
 *.log
+# Prevent root directory log files (they belong in logs/)
+/backend*.log
+/frontend*.log
+/autobot*.log
 
 # === DATABASE FILES ===
 *.db
@@ -142,6 +155,52 @@ htmlcov/
 .coverage
 .coverage.*
 
+# === TEST GENERATED FILES ===
+# All test-generated files must be in test_results folder
+test_results/
+tests/**/output/
+tests/**/*.generated
+tests/**/*.report
+tests/**/*.result
+tests/**/*.tmp
+tests/**/*.log
+
+# === REPORTS AND ANALYSIS (GENERATED) ===
+# Generated reports that can be recreated
+docs/reports/*.json
+docs/reports/*-report.json
+docs/reports/*-report.md
+docs/reports/*analysis*.json
+docs/reports/code-quality-*.json
+docs/reports/security-*.json
+docs/reports/performance-*.json
+docs/reports/accessibility-*.json
+docs/reports/console-*.json
+docs/reports/frontend-*.json
+docs/reports/backend-*.json
+
+# === REPORTS (NOW ORGANIZED IN reports/ FOLDER) ===
+# All reports now stored in reports/ subdirectories by type
+# Maximum 2 reports per type for comparison purposes
+# Use scripts/utilities/report_manager.py for management
+
+# Legacy report patterns (prevent in root)
+/*_analysis_report.json
+/*-analysis-report.json
+/code_analysis_report.json
+/architectural_analysis_report.json
+/env_analysis_report.json
+/frontend_analysis_report.json
+/gpu_model_recommendations.json
+/security_audit_results.json
+
+# Legacy test and QA reports (prevent in root)
+/TESTING_FRAMEWORK_SUMMARY.md
+/TEST_RESULTS_SUMMARY.md
+/FRONTEND_FIXES_COMPLETION_SUMMARY.md
+/accessibility-fix-report.*
+/console-cleanup-report.*
+
 # === CHROME/CHROMADB ===
 chromadb/
 *.chromadb
@@ -177,3 +236,13 @@ parts/
 sdist/
 var/
 share/python-wheels/
+
+# noVNC vendor files
+novnc/
+
+# External test files
+tests/external/
+
+# Environment templates with example secrets
+examples/env_template.txt
+data/file_manager_root/Rag_optimization_methods.md

@@ -1,0 +1,368 @@
+name: Frontend Testing Suite
+
+on:
+  push:
+    branches: [main, develop, 'Dev_*']
+    paths:
+      - 'autobot-vue/**'
+      - '.github/workflows/frontend-test.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'autobot-vue/**'
+      - '.github/workflows/frontend-test.yml'
+
+env:
+  NODE_VERSION: '20'
+  CACHE_KEY: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+jobs:
+  # Job 1: Unit and Integration Tests
+  unit-tests:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'autobot-vue/package-lock.json'
+          
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: autobot-vue/node_modules
+          key: ${{ env.CACHE_KEY }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+            
+      - name: Install dependencies
+        working-directory: autobot-vue
+        run: npm ci
+        
+      - name: Run type checking
+        working-directory: autobot-vue
+        run: npm run type-check
+        
+      - name: Run linting
+        working-directory: autobot-vue
+        run: npm run lint
+        
+      - name: Run unit tests
+        working-directory: autobot-vue
+        run: npm run test:unit
+        
+      - name: Run integration tests
+        working-directory: autobot-vue
+        run: npm run test:integration
+        
+      - name: Generate coverage report
+        working-directory: autobot-vue
+        run: npm run test:coverage
+        
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./autobot-vue/coverage/lcov.info
+          directory: ./autobot-vue/coverage
+          flags: frontend
+          name: autobot-vue-coverage
+          fail_ci_if_error: false
+          
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-unit
+          path: |
+            autobot-vue/test-results/
+            autobot-vue/coverage/
+          retention-days: 30
+  
+  # Job 2: E2E Tests with Playwright
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'autobot-vue/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: autobot-vue
+        run: npm ci
+        
+      - name: Install Playwright browsers
+        working-directory: autobot-vue
+        run: npx playwright install ${{ matrix.browser }} --with-deps
+        
+      - name: Build application
+        working-directory: autobot-vue
+        run: npm run build
+        
+      - name: Start development server
+        working-directory: autobot-vue
+        run: |
+          npm run preview &
+          sleep 10
+          curl -f http://localhost:5173 || exit 1
+        
+      - name: Run E2E tests
+        working-directory: autobot-vue
+        run: npx playwright test --project=${{ matrix.browser }}
+        env:
+          CI: true
+          
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-results-${{ matrix.browser }}
+          path: |
+            autobot-vue/playwright-report/
+            autobot-vue/test-results/
+          retention-days: 30
+  
+  # Job 3: Visual Regression Tests (Optional)
+  visual-tests:
+    name: Visual Regression Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'autobot-vue/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: autobot-vue
+        run: npm ci
+        
+      - name: Install Playwright
+        working-directory: autobot-vue
+        run: npx playwright install chromium --with-deps
+        
+      - name: Build application
+        working-directory: autobot-vue
+        run: npm run build
+        
+      - name: Run visual tests
+        working-directory: autobot-vue
+        run: npx playwright test --project=chromium --grep="visual"
+        
+      - name: Upload visual test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-test-results
+          path: |
+            autobot-vue/test-results/
+            autobot-vue/playwright-report/
+          retention-days: 30
+
+  # Job 4: Performance Tests
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'autobot-vue/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: autobot-vue
+        run: npm ci
+        
+      - name: Build application
+        working-directory: autobot-vue
+        run: npm run build
+        
+      - name: Analyze bundle size
+        working-directory: autobot-vue
+        run: |
+          npm run build
+          du -sh dist/
+          find dist/ -name "*.js" -exec du -h {} \; | sort -hr
+          
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli@0.13.x
+        
+      - name: Start development server for Lighthouse
+        working-directory: autobot-vue
+        run: |
+          npm run preview &
+          sleep 10
+        
+      - name: Run Lighthouse CI
+        working-directory: autobot-vue
+        run: |
+          lhci collect --url=http://localhost:5173 --numberOfRuns=3
+          lhci assert --preset=lighthouse:recommended
+        continue-on-error: true
+        
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-results
+          path: .lighthouseci/
+          retention-days: 30
+
+  # Job 5: Security Scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'autobot-vue/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: autobot-vue
+        run: npm ci
+        
+      - name: Run npm audit
+        working-directory: autobot-vue
+        run: |
+          npm audit --audit-level=high || true
+          npm audit --json > audit-results.json || true
+          
+      - name: Run dependency vulnerability scan
+        working-directory: autobot-vue
+        run: |
+          npx auditjs ossi || true
+          
+      - name: Upload security scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: autobot-vue/audit-results.json
+          retention-days: 30
+
+  # Job 6: Test Summary and Reporting
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, e2e-tests, performance-tests, security-scan]
+    if: always()
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: test-artifacts
+          
+      - name: Generate test summary
+        run: |
+          echo "# 🧪 Frontend Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Test Jobs Status:" >> $GITHUB_STEP_SUMMARY
+          echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- E2E Tests: ${{ needs.e2e-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Performance Tests: ${{ needs.performance-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -d "test-artifacts/test-results-unit/coverage" ]; then
+            echo "## Coverage Report Available" >> $GITHUB_STEP_SUMMARY
+            echo "Coverage reports have been uploaded to Codecov." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -d "test-artifacts" ]; then
+            echo "## Available Artifacts:" >> $GITHUB_STEP_SUMMARY
+            find test-artifacts -type d -name "*results*" | while read dir; do
+              echo "- $(basename "$dir")" >> $GITHUB_STEP_SUMMARY
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "## Quick Links:" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Coverage Report](https://app.codecov.io/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Download Test Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+
+  # Job 7: Deploy Test Coverage Badge (on main branch)
+  update-coverage-badge:
+    name: Update Coverage Badge
+    runs-on: ubuntu-latest
+    needs: [unit-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-unit
+          path: coverage-data
+          
+      - name: Generate coverage badge
+        run: |
+          # Extract coverage percentage from coverage report
+          if [ -f "coverage-data/coverage/coverage-summary.json" ]; then
+            COVERAGE=$(node -e "
+              const fs = require('fs');
+              const coverage = JSON.parse(fs.readFileSync('coverage-data/coverage/coverage-summary.json'));
+              console.log(Math.round(coverage.total.lines.pct));
+            ")
+            
+            echo "Coverage: ${COVERAGE}%"
+            
+            # Create badge URL
+            COLOR="red"
+            if [ "$COVERAGE" -gt 80 ]; then COLOR="brightgreen"; fi
+            if [ "$COVERAGE" -gt 60 ] && [ "$COVERAGE" -le 80 ]; then COLOR="yellow"; fi
+            if [ "$COVERAGE" -gt 40 ] && [ "$COVERAGE" -le 60 ]; then COLOR="orange"; fi
+            
+            BADGE_URL="https://img.shields.io/badge/coverage-${COVERAGE}%25-${COLOR}"
+            echo "Badge URL: $BADGE_URL"
+            
+            # Update README if it exists
+            if [ -f "autobot-vue/README.md" ]; then
+              sed -i "s|!\[Coverage\].*|![Coverage]($BADGE_URL)|g" autobot-vue/README.md || true
+            fi
+          fi

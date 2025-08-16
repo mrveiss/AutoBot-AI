@@ -1,6 +1,6 @@
 /**
  * Vue API Client Plugin
- * 
+ *
  * This plugin provides a centralized, pre-configured API client instance
  * that can be injected throughout the Vue application, ensuring consistent
  * configuration and eliminating duplicate API client instantiation.
@@ -26,11 +26,11 @@ function configureApiClient(options: ApiPluginOptions = {}) {
   if (options.baseURL) {
     apiClientInstance.setBaseUrl(options.baseURL)
   }
-  
+
   if (options.timeout) {
     apiClientInstance.setTimeout(options.timeout)
   }
-  
+
   return apiClientInstance
 }
 
@@ -39,10 +39,10 @@ export default {
   install(app: App, options: ApiPluginOptions = {}) {
     // Configure the existing API client instance
     configureApiClient(options)
-    
+
     // Provide the API client globally
     app.provide('apiClient', apiClientInstance)
-    
+
     // Add to global properties for Options API compatibility
     app.config.globalProperties.$api = apiClientInstance
     app.config.globalProperties.$getApiClient = () => apiClientInstance

@@ -1,766 +1,923 @@
 <template>
-  <div id="app" class="app-container">
-    <header class="app-header">
-      <div class="header-left">
-        <h1>AutoBot</h1>
-        <div class="connection-status">
-          <div class="status-indicator" :class="backendStatus.class" :title="backendStatus.message">
-            <span class="status-icon">🔗Backend</span>
-            <span class="status-text">{{ backendStatus.text }}</span>
+  <div class="min-h-screen bg-blueGray-50">
+    <!-- Top Brand Bar -->
+    <nav class="bg-white shadow-lg flex flex-wrap items-center justify-between w-full z-[9998] relative py-4 px-6">
+      <div class="flex flex-row items-center justify-between w-full mx-auto">
+        <!-- Brand -->
+        <div class="flex items-center flex-shrink-0">
+          <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-full flex items-center justify-center shadow-lg">
+            <span class="text-white text-xl font-bold">A</span>
           </div>
-          <div class="status-indicator" :class="llmStatus.class" :title="llmStatus.message">
-            <span class="status-icon">🤖 LLM</span>
-            <span class="status-text">{{ llmStatus.text }}</span>
+          <span class="ml-3 text-xl font-semibold text-blueGray-700">AutoBot Pro</span>
+        </div>
+
+        <!-- Mobile menu button and dropdown container -->
+        <div class="relative" ref="mobileMenuContainer">
+          <button
+            class="cursor-pointer text-black opacity-50 md:hidden px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent"
+            type="button"
+            @click="toggleNavbar"
+           aria-label="No">
+            <i class="fas fa-bars" :class="navbarOpen ? 'fa-times' : 'fa-bars'"></i>
+          </button>
+
+          <!-- Mobile Navigation Menu -->
+          <div
+            v-if="navbarOpen"
+            class="md:hidden fixed top-16 right-4 z-[99999] w-64"
+            @click.stop
+           tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
+            <div class="mt-2 bg-white rounded-lg p-4 shadow-xl border border-blueGray-200" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+              <ul class="flex flex-col space-y-2">
+                <li>
+                  <a
+                    @click="updateRoute('dashboard')"
+                    :class="[activeTab === 'dashboard' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
+                    Dashboard
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="updateRoute('chat')"
+                    :class="[activeTab === 'chat' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-comments mr-2 text-sm"></i>
+                    AI Assistant
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="updateRoute('voice')"
+                    :class="[activeTab === 'voice' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-microphone mr-2 text-sm"></i>
+                    Voice Interface
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="updateRoute('knowledge')"
+                    :class="[activeTab === 'knowledge' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-brain mr-2 text-sm"></i>
+                    Knowledge Base
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="updateRoute('terminal')"
+                    :class="[activeTab === 'terminal' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-terminal mr-2 text-sm"></i>
+                    Terminal
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="updateRoute('files')"
+                    :class="[activeTab === 'files' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-folder mr-2 text-sm"></i>
+                    File Manager
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="updateRoute('monitor')"
+                    :class="[activeTab === 'monitor' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-chart-line mr-2 text-sm"></i>
+                    System Monitor
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="updateRoute('workflows')"
+                    :class="[activeTab === 'workflows' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-project-diagram mr-2 text-sm"></i>
+                    Workflows
+                  </a>
+                </li>
+                <li>
+                  <a
+                    @click="updateRoute('settings')"
+                    :class="[activeTab === 'settings' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                  >
+                    <i class="fas fa-cog mr-2 text-sm"></i>
+                    Settings
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
-          <div class="status-indicator" :class="redisStatus.class" :title="redisStatus.message">
-            <span class="status-icon">💾 Redis</span>
-            <span class="status-text">{{ redisStatus.text }}</span>
+        </div>
+
+        <!-- User menu (Right) -->
+        <div class="flex items-center flex-shrink-0">
+          <a class="text-blueGray-600 hover:text-blueGray-800 px-3 py-2 flex items-center text-xs uppercase font-bold">
+            <i class="fas fa-user-circle text-lg mr-2"></i>
+            Admin User
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main content -->
+    <div class="relative bg-blueGray-50" :class="activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
+
+      <!-- Header gradient with navigation -->
+      <div class="relative bg-gradient-to-br from-indigo-600 to-indigo-800 md:pt-4 pb-4 pt-2 z-40">
+        <div class="px-4 md:px-10 mx-auto w-full">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+            <!-- Page heading removed - tab name already shown in navigation -->
+
+            <!-- Navigation Links -->
+            <div class="flex items-center relative">
+              <!-- Desktop Navigation -->
+              <div class="hidden md:flex">
+                <ul class="flex flex-row list-none space-x-1">
+                  <li>
+                    <a
+                      @click="updateRoute('dashboard')"
+                      :class="[activeTab === 'dashboard' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
+                      Dashboard
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('chat')"
+                      :class="[activeTab === 'chat' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-comments mr-2 text-sm"></i>
+                      AI Assistant
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('voice')"
+                      :class="[activeTab === 'voice' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-microphone mr-2 text-sm"></i>
+                      Voice Interface
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('knowledge')"
+                      :class="[activeTab === 'knowledge' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-brain mr-2 text-sm"></i>
+                      Knowledge Base
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('terminal')"
+                      :class="[activeTab === 'terminal' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-terminal mr-2 text-sm"></i>
+                      Terminal
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('files')"
+                      :class="[activeTab === 'files' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-folder mr-2 text-sm"></i>
+                      File Manager
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('monitor')"
+                      :class="[activeTab === 'monitor' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-chart-line mr-2 text-sm"></i>
+                      System Monitor
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('workflows')"
+                      :class="[activeTab === 'workflows' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-project-diagram mr-2 text-sm"></i>
+                      Workflows
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      @click="updateRoute('settings')"
+                      :class="[activeTab === 'settings' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                    >
+                      <i class="fas fa-cog mr-2 text-sm"></i>
+                      Settings
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+            </div>
           </div>
         </div>
       </div>
-      <nav class="app-nav">
-        <button @click="activeTab = 'chat'" :class="{ active: activeTab === 'chat' }">Chat</button>
-        <button @click="activeTab = 'knowledge'" :class="{ active: activeTab === 'knowledge' }">Knowledge</button>
-        <button @click="activeTab = 'settings'" :class="{ active: activeTab === 'settings' }">Settings</button>
-        <button @click="activeTab = 'files'" :class="{ active: activeTab === 'files' }">Files</button>
-        <button @click="activeTab = 'history'" :class="{ active: activeTab === 'history' }">History</button>
-      </nav>
-    </header>
-    <main class="app-content">
-    <section v-if="activeTab === 'chat'" class="chat-section">
-      <div class="chat-window">
-        <ChatInterface v-if="activeChatId" :key="activeChatId" />
+
+
+      <!-- Content area -->
+      <div class="px-4 md:px-10 mx-auto w-full" :class="activeTab === 'dashboard' ? 'mt-0' : (activeTab === 'chat' ? 'flex-1 flex flex-col' : 'mt-4')">
+        <div class="flex flex-wrap" :class="activeTab === 'chat' ? 'flex-1 h-full' : 'mt-4'">
+          <div class="w-full px-4" :class="activeTab === 'chat' ? 'flex-1 h-full flex flex-col' : 'mb-12'">
+            <!-- Remove Transition for debugging -->
+            <div>
+              <!-- Dashboard View -->
+              <div v-if="activeTab === 'dashboard'" key="dashboard">
+                <!-- Phase Status Indicator -->
+                <div class="w-full mb-6">
+                  <PhaseStatusIndicator />
+                </div>
+
+                <div class="relative flex flex-col min-w-0 break-words w-full mb-6 shadow-lg rounded-lg bg-white">
+                  <div class="rounded-t mb-0 px-6 py-6">
+                    <div class="text-center flex justify-between">
+                      <h6 class="text-blueGray-700 text-xl font-bold">System Overview</h6>
+                      <button class="bg-indigo-500 text-white active:bg-indigo-600 text-xs font-bold uppercase px-3 py-1 rounded outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150" type="button" aria-label="No">
+                        <i class="fas fa-sync mr-1"></i> Refresh
+                      </button>
+                    </div>
+                  </div>
+                  <div class="flex-auto px-6 py-6">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-blueGray-50 rounded-lg p-6">
+                      <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Recent Activity</h3>
+                      <div class="space-y-3">
+                        <div class="flex items-center">
+                          <div class="w-2 h-2 bg-emerald-500 rounded-full mr-3"></div>
+                          <span class="text-sm text-blueGray-600">New knowledge item added</span>
+                          <span class="ml-auto text-xs text-blueGray-400">2 min ago</span>
+                        </div>
+                        <div class="flex items-center">
+                          <div class="w-2 h-2 bg-lightBlue-500 rounded-full mr-3"></div>
+                          <span class="text-sm text-blueGray-600">Voice command processed</span>
+                          <span class="ml-auto text-xs text-blueGray-400">5 min ago</span>
+                        </div>
+                        <div class="flex items-center">
+                          <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                          <span class="text-sm text-blueGray-600">File uploaded successfully</span>
+                          <span class="ml-auto text-xs text-blueGray-400">12 min ago</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="bg-blueGray-50 rounded-lg p-6">
+                      <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Quick Actions</h3>
+                      <div class="grid grid-cols-2 gap-3">
+                        <button @click="updateRoute('chat')" class="btn btn-primary text-sm" aria-label="Button">
+                          <i class="fas fa-comments mr-2"></i>
+                          New Chat
+                        </button>
+                        <button @click="updateRoute('knowledge')" class="btn btn-secondary text-sm" aria-label="No">
+                          <i class="fas fa-plus mr-2"></i>
+                          Add Knowledge
+                        </button>
+                        <button @click="updateRoute('files')" class="btn btn-success text-sm" aria-label="Upload">
+                          <i class="fas fa-upload mr-2"></i>
+                          Upload File
+                        </button>
+                        <button @click="updateRoute('terminal')" class="btn btn-outline text-sm" aria-label="Button">
+                          <i class="fas fa-terminal mr-2"></i>
+                          Terminal
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Stats Cards Section -->
+                  <div class="mt-6">
+                    <h3 class="text-lg font-semibold text-blueGray-700 mb-4 px-6">System Statistics</h3>
+                    <div class="grid grid-cols-2 gap-4 px-8">
+                      <!-- Active Sessions Card -->
+                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
+                        <div class="flex-auto p-3">
+                          <div class="flex flex-wrap">
+                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
+                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Active Sessions</h5>
+                              <span class="font-semibold text-xl text-blueGray-700">{{ activeSessions }}</span>
+                            </div>
+                            <div class="relative w-auto pl-4 flex-initial">
+                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-red-500">
+                                <i class="fas fa-users"></i>
+                              </div>
+                            </div>
+                          </div>
+                          <p class="text-sm text-blueGray-400 mt-4">
+                            <span class="text-emerald-500 mr-2">
+                              <i class="fas fa-arrow-up"></i> 3.48%
+                            </span>
+                            <span class="whitespace-nowrap">Since last month</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Knowledge Items Card -->
+                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
+                        <div class="flex-auto p-3">
+                          <div class="flex flex-wrap">
+                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
+                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Knowledge Items</h5>
+                              <span class="font-semibold text-xl text-blueGray-700">{{ knowledgeItems }}</span>
+                            </div>
+                            <div class="relative w-auto pl-4 flex-initial">
+                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-orange-500">
+                                <i class="fas fa-database"></i>
+                              </div>
+                            </div>
+                          </div>
+                          <p class="text-sm text-blueGray-400 mt-4">
+                            <span class="text-emerald-500 mr-2">
+                              <i class="fas fa-arrow-up"></i> 12%
+                            </span>
+                            <span class="whitespace-nowrap">Since last week</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Tasks Completed Card -->
+                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
+                        <div class="flex-auto p-3">
+                          <div class="flex flex-wrap">
+                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
+                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Tasks Completed</h5>
+                              <span class="font-semibold text-xl text-blueGray-700">{{ tasksCompleted }}</span>
+                            </div>
+                            <div class="relative w-auto pl-4 flex-initial">
+                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-emerald-500">
+                                <i class="fas fa-check-circle"></i>
+                              </div>
+                            </div>
+                          </div>
+                          <p class="text-sm text-blueGray-400 mt-4">
+                            <span class="text-orange-500 mr-2">
+                              <i class="fas fa-arrow-down"></i> 1.10%
+                            </span>
+                            <span class="whitespace-nowrap">Since yesterday</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Performance Card -->
+                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
+                        <div class="flex-auto p-3">
+                          <div class="flex flex-wrap">
+                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
+                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Performance</h5>
+                              <span class="font-semibold text-xl text-blueGray-700">{{ performance }}%</span>
+                            </div>
+                            <div class="relative w-auto pl-4 flex-initial">
+                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-lightBlue-500">
+                                <i class="fas fa-tachometer-alt"></i>
+                              </div>
+                            </div>
+                          </div>
+                          <p class="text-sm text-blueGray-400 mt-4">
+                            <span class="text-emerald-500 mr-2">
+                              <i class="fas fa-arrow-up"></i> 12%
+                            </span>
+                            <span class="whitespace-nowrap">Since last month</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chat View -->
+              <div v-else-if="activeTab === 'chat'" key="chat" class="w-full flex-1 flex justify-start">
+                <div class="w-full flex-1">
+                  <ChatInterface :key="activeChatId" />
+                </div>
+              </div>
+
+              <!-- Voice View -->
+              <section v-else-if="activeTab === 'voice'" key="voice" class="card">
+                <div class="card-body">
+                  <VoiceInterface />
+                </div>
+              </section>
+
+              <!-- Knowledge View -->
+              <section v-else-if="activeTab === 'knowledge'" key="knowledge" class="card">
+                <div class="card-body p-0">
+                  <KnowledgeManager />
+                </div>
+              </section>
+
+              <!-- Terminal View -->
+              <section v-else-if="activeTab === 'terminal'" key="terminal" class="card bg-blueGray-900">
+                <div class="card-body p-0">
+                  <TerminalWindow />
+                </div>
+              </section>
+
+              <!-- Workflows View -->
+              <section v-else-if="activeTab === 'workflows'" key="workflows" class="card">
+                <div class="card-body p-0">
+                  <WorkflowApproval />
+                </div>
+              </section>
+              <!-- Settings View -->
+              <section v-else-if="activeTab === 'settings'" key="settings" class="card">
+                <div class="card-body">
+                  <SettingsPanel />
+                </div>
+              </section>
+
+              <!-- Files View -->
+              <section v-else-if="activeTab === 'files'" key="files" class="card">
+                <div class="card-body p-0">
+                  <FileBrowser />
+                </div>
+              </section>
+
+              <!-- Monitor View -->
+              <section v-else-if="activeTab === 'monitor'" key="monitor" class="card">
+                <div class="card-body p-0">
+                  <div class="mb-4 px-6 pt-6">
+                    <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh">
+                      <i class="fas fa-sync mr-2"></i>
+                      Refresh
+                    </button>
+                  </div>
+                  <SystemMonitor />
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
       </div>
-    </section>
-    <section v-else-if="activeTab === 'knowledge'" class="knowledge-section">
-      <KnowledgeManager />
-    </section>
-    <section v-else-if="activeTab === 'settings'" class="settings-section">
-        <SettingsPanel />
-      </section>
-      <section v-else-if="activeTab === 'files'" class="files-section">
-        <FileBrowser />
-      </section>
-    <section v-else-if="activeTab === 'history'" class="history-section">
-      <div class="chat-window">
-        <HistoryView />
-      </div>
-    </section>
-    </main>
-    <footer class="app-footer" :class="{ 'collapsed': isFooterCollapsed }">
-      <div class="footer-toggle" @click="toggleFooter">
-        <span>{{ isFooterCollapsed ? 'Expand' : 'Collapse' }} System Info</span>
-      </div>
-      <div class="performance-stats" v-if="!isFooterCollapsed">
-        <h4>System Performance</h4>
-        <canvas id="performanceGraph" width="400" height="100"></canvas>
-      </div>
-      <div class="load-stats">
-        <span>Current LLM: {{ getCurrentLLM() }}</span>
-        <span>CPU Load: {{ performanceData.cpuLoad }}%</span>
-        <span>Memory Usage: {{ performanceData.memoryUsage }}%</span>
-        <span>GPU Usage: {{ performanceData.gpuUsage }}%</span>
-      </div>
-    </footer>
+    </div>
+
   </div>
+
+  <!-- Global Elevation Dialog -->
+  <ElevationDialog
+    ref="elevationDialog"
+    :show="showElevationDialog"
+    :operation="elevationOperation"
+    :command="elevationCommand"
+    :reason="elevationReason"
+    :risk-level="elevationRiskLevel"
+    :request-id="elevationRequestId"
+    @approved="onElevationApproved"
+    @cancelled="onElevationCancelled"
+    @close="onElevationClose"
+  />
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
-import apiClient from './utils/ApiClient.js';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import ChatInterface from './components/ChatInterface.vue';
+import VoiceInterface from './components/VoiceInterface.vue';
+import KnowledgeManager from './components/KnowledgeManager.vue';
+import TerminalWindow from './components/TerminalWindow.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import FileBrowser from './components/FileBrowser.vue';
-import HistoryView from './components/HistoryView.vue';
-import KnowledgeManager from './components/KnowledgeManager.vue';
+import SystemMonitor from './components/SystemMonitor.vue';
+import WorkflowApproval from './components/WorkflowApproval.vue';
+import PhaseStatusIndicator from './components/PhaseStatusIndicator.vue';
+import ElevationDialog from './components/ElevationDialog.vue';
+import elevationService from './services/elevationService';
 
 export default {
   name: 'App',
   components: {
     ChatInterface,
+    VoiceInterface,
+    KnowledgeManager,
+    TerminalWindow,
     SettingsPanel,
     FileBrowser,
-    HistoryView,
-    KnowledgeManager,
+    SystemMonitor,
+    WorkflowApproval,
+    PhaseStatusIndicator,
+    ElevationDialog
   },
   setup() {
-    const activeTab = ref('chat');
-    const isAgentPaused = ref(false);
-    const chatSessions = ref([]);
-    const activeChatId = ref(null);
-
-    const handleNewChat = () => {
-      // Create a new chat session and add it to the list
-      const newChatId = Date.now().toString();
-      chatSessions.value.push({
-        id: newChatId,
-        name: `Chat ${chatSessions.value.length + 1}`,
-        messages: []
-      });
-      activeChatId.value = newChatId;
-      console.log('New Chat created:', newChatId);
+    const activeTab = ref('dashboard');
+    const activeChatId = ref(`chat-${Date.now()}`);
+    const navbarOpen = ref(false);
+    const mobileMenuContainer = ref(null);
+    // Simple tab switching without router
+    const updateRoute = (tab) => {
+      activeTab.value = tab;
+      navbarOpen.value = false; // Close mobile menu
     };
 
-    const handleSaveChat = () => {
-      // Placeholder for save chat functionality
-      console.log('Save Chat button clicked');
-      if (activeChatId.value) {
-        const activeChat = chatSessions.value.find(chat => chat.id === activeChatId.value);
-        if (activeChat) {
-          console.log('Saving chat:', activeChat.name);
-          alert(`Chat "${activeChat.name}" saved. Full backend integration pending.`);
-        }
-      } else {
-        alert('No active chat to save.');
-      }
-    };
+    // Dashboard stats
+    const activeSessions = ref(3);
+    const knowledgeItems = ref(1247);
+    const tasksCompleted = ref(89);
+    const performance = ref(92);
 
-    const handleLoadChat = () => {
-      // Placeholder for load chat functionality
-      console.log('Load Chat button clicked');
-      if (chatSessions.value.length > 0) {
-        // For demonstration, switch to the first chat in the list if available
-        activeChatId.value = chatSessions.value[0].id;
-        alert(`Loaded chat "${chatSessions.value[0].name}". Full backend integration pending.`);
-      } else {
-        alert('No chats available to load.');
-      }
-    };
+    // Connection statuses
+    const backendStatus = ref({ text: 'Checking...', class: 'warning', message: 'Connecting to backend...' });
+    const llmStatus = ref({ text: 'Checking...', class: 'warning', message: 'Connecting to LLM...' });
+    const redisStatus = ref({ text: 'Checking...', class: 'warning', message: 'Connecting to Redis...' });
 
-    const handleResetChat = async () => {
-      // Clear messages in the current active chat and ensure they are not reloaded
-      if (activeChatId.value) {
-        const activeChat = chatSessions.value.find(chat => chat.id === activeChatId.value);
-        if (activeChat) {
-          activeChat.messages = [];
-          // Clear any persisted data for this chat
-          localStorage.removeItem(`chat_${activeChat.id}_messages`);
-          console.log('Current chat reset:', activeChat.name);
-          alert(`Chat "${activeChat.name}" reset. Restarting all processes...`);
-          
-          try {
-            // Send a request to restart backend and frontend processes
-            await apiClient.restartBackend();
-            console.log('Restart request sent successfully.');
-            alert('All processes are restarting. Please wait for the application to reload.');
-            // Optionally reload the page after a short delay
-            setTimeout(() => {
-              window.location.reload();
-            }, 2000);
-          } catch (error) {
-            console.error('Error sending restart request:', error);
-            alert('Error occurred while restarting. Please restart manually.');
-          }
-        }
-      } else {
-        alert('No active chat to reset.');
-      }
-    };
-
-    const handlePauseAgent = () => {
-      // Placeholder for pause agent functionality
-      console.log('Pause Agent button clicked');
-      isAgentPaused.value = true;
-      alert('Pause Agent functionality is a placeholder. Full implementation pending.');
-    };
-
-    const handleResumeAgent = () => {
-      // Placeholder for resume agent functionality
-      console.log('Resume Agent button clicked');
-      isAgentPaused.value = false;
-      alert('Resume Agent functionality is a placeholder. Full implementation pending.');
-    };
-
-    const handleToggleAgent = () => {
-      if (isAgentPaused.value) {
-        handleResumeAgent();
-      } else {
-        handlePauseAgent();
-      }
-    };
-
-    // Initialize with a default chat session
-    handleNewChat();
-
-    const performanceData = ref({
-      cpuLoad: 0,
-      memoryUsage: 0,
-      gpuUsage: 0
+    const pageTitle = computed(() => {
+      const titles = {
+        dashboard: 'Dashboard',
+        chat: 'AI Assistant',
+        voice: 'Voice Interface',
+        knowledge: 'Knowledge Base',
+        terminal: 'Terminal',
+        settings: 'Settings',
+        files: 'File Manager',
+        monitor: 'System Monitor'
+      };
+      return titles[activeTab.value] || 'AutoBot';
     });
 
-    // Connection status tracking
-    const backendStatus = ref({
-      connected: false,
-      class: 'disconnected',
-      text: 'Disconnected',
-      message: 'Backend server is not responding'
-    });
-    
-    const llmStatus = ref({
-      connected: false,
-      class: 'disconnected', 
-      text: 'Disconnected',
-      message: 'LLM service is not available'
-    });
+    const toggleNavbar = () => {
+      navbarOpen.value = !navbarOpen.value;
+    };
 
-    const redisStatus = ref({
-      connected: false,
-      class: 'disconnected',
-      text: 'Disconnected',
-      message: 'Redis service is not available or RediSearch module is missing'
-    });
-
-    const checkRedisConnection = async () => {
-      if (!backendStatus.value.connected) {
-        redisStatus.value = {
-          connected: false,
-          class: 'disconnected',
-          text: 'Disconnected',
-          message: 'Redis status unknown because backend is disconnected'
-        };
-        return false;
-      }
-      try {
-        const data = await apiClient.checkHealth();
-        if (data.redis_status === 'connected') {
-          redisStatus.value = {
-            connected: true,
-            class: 'connected',
-            text: 'Connected',
-            message: data.redis_search_module_loaded ? 
-              'Redis with RediSearch available' : 
-              'Redis connected but RediSearch not loaded'
-          };
-          return true;
-        } else if (data.redis_status === 'not_configured') {
-          redisStatus.value = {
-            connected: false,
-            class: 'warning',
-            text: 'Not Configured',
-            message: 'Redis is not configured in the backend'
-          };
-          return false;
-        }
-        throw new Error('Redis status check failed');
-      } catch (error) {
-        redisStatus.value = {
-          connected: false,
-          class: 'disconnected',
-          text: 'Disconnected',
-          message: `Redis connection failed: ${error.message}`
-        };
-        return false;
+    const closeNavbarOnClickOutside = (event) => {
+      if (navbarOpen.value && mobileMenuContainer.value && !mobileMenuContainer.value.contains(event.target)) {
+        navbarOpen.value = false;
       }
     };
 
-    // Connection status checking functions
-    const checkBackendConnection = async () => {
-      try {
-        await apiClient.checkHealth();
-        backendStatus.value = {
-          connected: true,
-          class: 'connected',
-          text: 'Connected',
-          message: 'Backend server is responding'
-        };
-        return true;
-      } catch (error) {
-        backendStatus.value = {
-          connected: false,
-          class: 'disconnected',
-          text: 'Disconnected',
-          message: `Backend connection failed: ${error.message}`
-        };
-        return false;
-      }
+    const newChat = () => {
+      activeChatId.value = `chat-${Date.now()}`;
     };
 
-    const checkLLMConnection = async () => {
-      if (!backendStatus.value.connected) {
-        llmStatus.value = {
-          connected: false,
-          class: 'disconnected',
-          text: 'Disconnected',
-          message: 'LLM status unknown because backend is disconnected'
-        };
-        return false;
-      }
+
+    const refreshStats = () => {
+    };
+
+    // Elevation Dialog state
+    const elevationDialog = ref(null);
+    const showElevationDialog = ref(false);
+    const elevationOperation = ref('');
+    const elevationCommand = ref('');
+    const elevationReason = ref('');
+    const elevationRiskLevel = ref('MEDIUM');
+    const elevationRequestId = ref('');
+
+    // Elevation Dialog handlers
+    const onElevationApproved = (data) => {
+      showElevationDialog.value = false;
+    };
+
+    const onElevationCancelled = (requestId) => {
+      showElevationDialog.value = false;
+    };
+
+    const onElevationClose = () => {
+      showElevationDialog.value = false;
+    };
+
+
+    const checkConnectionStatus = async () => {
       try {
-        const data = await apiClient.checkHealth();
-        if (data.ollama === 'connected') {
-          llmStatus.value = {
-            connected: true,
-            class: 'connected',
-            text: 'Connected',
-            message: 'Ollama LLM service is available'
-          };
-          return true;
+        const response = await fetch('http://localhost:8001/api/system/health');
+        if (response.ok) {
+          const data = await response.json();
+          backendStatus.value = { text: 'Connected', class: 'connected', message: 'Backend is running' };
+          llmStatus.value = data.llm_status ?
+            { text: 'Ready', class: 'connected', message: 'LLM is ready' } :
+            { text: 'Error', class: 'error', message: 'LLM connection failed' };
+          redisStatus.value = data.redis_status ?
+            { text: 'Connected', class: 'connected', message: 'Redis is running' } :
+            { text: 'Error', class: 'error', message: 'Redis connection failed' };
         } else {
-          llmStatus.value = {
-            connected: false,
-            class: 'disconnected',
-            text: 'Disconnected',
-            message: 'Ollama service not available'
-          };
-          return false;
+          backendStatus.value = { text: 'Error', class: 'error', message: 'Backend connection failed' };
         }
       } catch (error) {
-        llmStatus.value = {
-          connected: false,
-          class: 'disconnected',
-          text: 'Disconnected',
-          message: `LLM connection failed: ${error.message}`
-        };
-        return false;
+        backendStatus.value = { text: 'Offline', class: 'error', message: 'Cannot reach backend' };
+        llmStatus.value = { text: 'Unknown', class: 'warning', message: 'Status unknown' };
+        redisStatus.value = { text: 'Unknown', class: 'warning', message: 'Status unknown' };
       }
     };
 
-    const checkConnections = async () => {
-      await checkBackendConnection();
-      await checkLLMConnection();
-      await checkRedisConnection();
-      await fetchCurrentLLM(); // Fetch current LLM info
-    };
+    let statusCheckInterval;
 
-    // Function to update performance data (placeholder for real data)
-    const updatePerformanceData = () => {
-      // Simulate fetching performance data
-      performanceData.value.cpuLoad = Math.floor(Math.random() * 100);
-      performanceData.value.memoryUsage = Math.floor(Math.random() * 100);
-      performanceData.value.gpuUsage = Math.floor(Math.random() * 100);
-      drawPerformanceGraph();
-    };
+    onMounted(() => {
+      checkConnectionStatus();
+      statusCheckInterval = setInterval(checkConnectionStatus, 10000);
 
-    // Function to draw performance graph
-    const drawPerformanceGraph = () => {
-      const canvas = document.getElementById('performanceGraph');
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw grid lines
-        ctx.strokeStyle = '#e9ecef';
-        ctx.lineWidth = 1;
-        for (let i = 0; i <= 100; i += 20) {
-          ctx.beginPath();
-          ctx.moveTo(50 + (i * 3), 20);
-          ctx.lineTo(50 + (i * 3), 80);
-          ctx.stroke();
-        }
-        
-        // CPU Load - Blue
-        ctx.fillStyle = '#007bff';
-        ctx.fillRect(50, 25, performanceData.value.cpuLoad * 3, 15);
-        
-        // Memory Usage - Green
-        ctx.fillStyle = '#28a745';
-        ctx.fillRect(50, 45, performanceData.value.memoryUsage * 3, 15);
-        
-        // GPU Usage - Red
-        ctx.fillStyle = '#dc3545';
-        ctx.fillRect(50, 65, performanceData.value.gpuUsage * 3, 15);
-        
-        // Labels
-        ctx.fillStyle = '#000';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'right';
-        ctx.fillText('CPU', 40, 35);
-        ctx.fillText('Memory', 40, 55);
-        ctx.fillText('GPU', 40, 75);
-        
-        // Percentage labels on bars
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#fff';
-        if (performanceData.value.cpuLoad > 10) {
-          ctx.fillText(`${performanceData.value.cpuLoad}%`, 55, 35);
-        } else {
-          ctx.fillStyle = '#000';
-          ctx.fillText(`${performanceData.value.cpuLoad}%`, 55 + (performanceData.value.cpuLoad * 3), 35);
-        }
-        if (performanceData.value.memoryUsage > 10) {
-          ctx.fillStyle = '#fff';
-          ctx.fillText(`${performanceData.value.memoryUsage}%`, 55, 55);
-        } else {
-          ctx.fillStyle = '#000';
-          ctx.fillText(`${performanceData.value.memoryUsage}%`, 55 + (performanceData.value.memoryUsage * 3), 55);
-        }
-        if (performanceData.value.gpuUsage > 10) {
-          ctx.fillStyle = '#fff';
-          ctx.fillText(`${performanceData.value.gpuUsage}%`, 55, 75);
-        } else {
-          ctx.fillStyle = '#000';
-          ctx.fillText(`${performanceData.value.gpuUsage}%`, 55 + (performanceData.value.gpuUsage * 3), 75);
-        }
-      }
-    };
+      // Add click-outside listener for mobile menu
+      document.addEventListener('click', closeNavbarOnClickOutside);
 
-    // Update performance data initially and periodically
-    // Use a timeout as a workaround if onMounted causes issues
-    setTimeout(() => {
-      updatePerformanceData();
-      setInterval(updatePerformanceData, 5000);
-    }, 100);
+      // Register elevation dialog with service
+      if (elevationDialog.value) {
+        elevationService.registerDialog(elevationDialog.value);
+      }
 
-    // Load settings from local storage or use a default structure
-    const settings = ref({});
-    
-    const loadSettings = () => {
-      const savedSettings = localStorage.getItem('chat_settings');
-      if (savedSettings) {
-        try {
-          settings.value = JSON.parse(savedSettings);
-        } catch (e) {
-          console.error('Error parsing saved settings:', e);
-          settings.value = { backend: { llm: { provider_type: 'local', local: { provider: 'ollama', providers: { ollama: { selected_model: 'Not selected' } } }, cloud: { provider: 'openai', providers: { openai: { selected_model: 'Not selected' } } } } } };
-        }
-      } else {
-        settings.value = { backend: { llm: { provider_type: 'local', local: { provider: 'ollama', providers: { ollama: { selected_model: 'Not selected' } } }, cloud: { provider: 'openai', providers: { openai: { selected_model: 'Not selected' } } } } } };
-      }
-    };
-    
-    const currentLLM = ref('Loading...');
-    
-    const getCurrentLLM = () => {
-      return currentLLM.value;
-    };
-    
-    const fetchCurrentLLM = async () => {
-      if (!backendStatus.value.connected) {
-        currentLLM.value = 'Backend Disconnected';
-        return;
-      }
-      
-      try {
-        const response = await apiClient.get('/api/system/status');
-        const data = await response.json();
-        if (data.current_llm) {
-          currentLLM.value = data.current_llm;
-        } else {
-          currentLLM.value = 'Not configured';
-        }
-      } catch (error) {
-        console.error('Error fetching current LLM:', error);
-        currentLLM.value = 'Connection Error';
-      }
-    };
-    
-    onMounted(async () => {
-      loadSettings();
-      // Set up an interval to check for settings updates
+      // Simulate dashboard updates
       setInterval(() => {
-        loadSettings();
-      }, 5000); // Check every 5 seconds
-      
-      // Initial connection check
-      await checkConnections();
-      
-      // Set up periodic connection checking
-      setInterval(checkConnections, 10000); // Check every 10 seconds
+        activeSessions.value = Math.floor(Math.random() * 5) + 1;
+        performance.value = Math.floor(Math.random() * 20) + 80;
+      }, 5000);
     });
-    
-    const isFooterCollapsed = ref(false);
-    
-    const toggleFooter = () => {
-      isFooterCollapsed.value = !isFooterCollapsed.value;
-    };
-    
+
+    onUnmounted(() => {
+      if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+      }
+      // Remove click-outside listener
+      document.removeEventListener('click', closeNavbarOnClickOutside);
+    });
+
     return {
       activeTab,
-      isAgentPaused,
-      chatSessions,
       activeChatId,
-      handleNewChat,
-      handleSaveChat,
-      handleLoadChat,
-      handleResetChat,
-      handlePauseAgent,
-      handleResumeAgent,
-      handleToggleAgent,
-      performanceData,
-      settings,
-      isFooterCollapsed,
-      toggleFooter,
-      getCurrentLLM,
-      currentLLM,
-      fetchCurrentLLM,
+      navbarOpen,
+      mobileMenuContainer,
       backendStatus,
       llmStatus,
       redisStatus,
-      checkConnections
+      pageTitle,
+      activeSessions,
+      knowledgeItems,
+      tasksCompleted,
+      performance,
+      toggleNavbar,
+      updateRoute,
+      newChat,
+      refreshStats,
+      // Elevation Dialog
+      elevationDialog,
+      showElevationDialog,
+      elevationOperation,
+      elevationCommand,
+      elevationReason,
+      elevationRiskLevel,
+      elevationRequestId,
+      onElevationApproved,
+      onElevationCancelled,
+      onElevationClose
     };
-  },
+  }
 };
 </script>
 
-<style scoped>
-.app-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw; /* Ensure full viewport width */
-  font-family: 'Arial', sans-serif;
-  background-color: #f0f2f5;
-  color: #333;
-  overflow-x: hidden; /* Prevent horizontal scrolling */
-  box-sizing: border-box; /* Include padding and borders in width calculation */
-  -ms-overflow-style: none; /* Hide scrollbar for Edge */
-  scrollbar-width: none; /* Hide scrollbar for Firefox */
+<style>
+@import './assets/vue-notus.css';
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css');
+
+/* Vue Notus Color Mappings for App.vue */
+.bg-blueGray-50 { background-color: var(--blue-gray-50); }
+.bg-blueGray-100 { background-color: var(--blue-gray-100); }
+.bg-blueGray-200 { background-color: var(--blue-gray-200); }
+.bg-blueGray-400 { background-color: var(--blue-gray-400); }
+.bg-blueGray-800 { background-color: var(--blue-gray-800); }
+.bg-blueGray-900 { background-color: var(--blue-gray-900); }
+
+.text-blueGray-200 { color: var(--blue-gray-200); }
+.text-blueGray-400 { color: var(--blue-gray-400); }
+.text-blueGray-600 { color: var(--blue-gray-600); }
+.text-blueGray-700 { color: var(--blue-gray-700); }
+
+.text-indigo-500 { color: var(--indigo-500); }
+.bg-indigo-50 { background-color: var(--indigo-50); }
+.bg-indigo-500 { background-color: var(--indigo-500); }
+.bg-indigo-600 { background-color: var(--indigo-600); }
+.bg-indigo-700 { background-color: var(--indigo-700); }
+.bg-indigo-800 { background-color: var(--indigo-800); }
+
+.text-emerald-500 { color: var(--emerald-500); }
+.bg-emerald-500 { background-color: var(--emerald-500); }
+.text-red-500 { color: var(--red-500); }
+.bg-red-500 { background-color: var(--red-500); }
+.bg-orange-500 { background-color: var(--orange-500); }
+.text-orange-500 { color: var(--orange-500); }
+
+.border-blueGray-200 { border-color: var(--blue-gray-200); }
+
+.hover\\:text-blueGray-500:hover { color: var(--blue-gray-500); }
+.hover\\:text-white:hover { color: white; }
+.active\\:bg-indigo-600:active { background-color: var(--indigo-600); }
+
+/* Gradient backgrounds */
+.from-indigo-500 { --tw-gradient-from: var(--indigo-500); }
+.to-indigo-700 { --tw-gradient-to: var(--indigo-700); }
+.from-indigo-600 { --tw-gradient-from: var(--indigo-600); }
+.to-indigo-800 { --tw-gradient-to: var(--indigo-800); }
+.bg-gradient-to-br {
+  background: linear-gradient(to bottom right, var(--tw-gradient-from, var(--indigo-500)), var(--tw-gradient-to, var(--indigo-700)));
+}
+.bg-gradient-to-r {
+  background: linear-gradient(to right, var(--tw-gradient-from, var(--indigo-500)), var(--tw-gradient-to, var(--indigo-600)));
 }
 
-.app-container::-webkit-scrollbar {
-  display: none; /* Hide scrollbar for Chrome, Safari, and Opera */
+/* Light blue colors for dashboard cards */
+.bg-lightBlue-500 { background-color: #0ea5e9; }
+.text-lightBlue-500 { color: #0ea5e9; }
+
+/* Table styling */
+.divide-y > * + * { border-top-width: 1px; }
+.divide-blueGray-200 > * + * { border-color: var(--blue-gray-200); }
+.min-w-full { min-width: 100%; }
+.overflow-x-auto { overflow-x: auto; }
+.h-8 { height: 2rem; }
+.w-8 { width: 2rem; }
+.-m-12 { margin: -3rem; }
+.-mt-6 { margin-top: -1.5rem; }
+.mt-0 { margin-top: 0; }
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.gap-4 { gap: 1rem; }
+.bg-yellow-100 { background-color: #fef3c7; }
+.text-yellow-800 { color: #92400e; }
+.mb-4 { margin-bottom: 1rem; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.text-indigo-200 { color: #c7d2fe; }
+.bg-opacity-10 { background-color: rgba(255, 255, 255, 0.1); }
+.bg-opacity-20 { background-color: rgba(255, 255, 255, 0.2); }
+.hover\:bg-opacity-10:hover { background-color: rgba(255, 255, 255, 0.1); }
+.h-screen { height: 100vh; }
+.justify-start { justify-content: flex-start; }
+.top-full { top: 100%; }
+.backdrop-blur-sm { backdrop-filter: blur(4px); }
+.bg-opacity-95 { background-color: rgba(255, 255, 255, 0.95); }
+.border-opacity-20 { border-color: rgba(255, 255, 255, 0.2); }
+.mx-4 { margin-left: 1rem; margin-right: 1rem; }
+.mt-2 { margin-top: 0.5rem; }
+.hover\:bg-indigo-50:hover { background-color: var(--indigo-50); }
+.hover\:text-indigo-600:hover { color: var(--indigo-600); }
+.w-64 { width: 16rem; }
+
+/* Essential layout utilities missing from Vue Notus */
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-nowrap { flex-wrap: nowrap; }
+.flex-col { flex-direction: column; }
+.flex-row { flex-direction: row; }
+.min-h-full { min-height: 100%; }
+.min-h-screen { min-height: 100vh; }
+.list-none { list-style: none; }
+.block { display: block; }
+.relative { position: relative; }
+.absolute { position: absolute; }
+.fixed { position: fixed; }
+.z-10 { z-index: 10; }
+.z-40 { z-index: 40; }
+.z-50 { z-index: 50; }
+.z-60 { z-index: 60; }
+.z-70 { z-index: 70; }
+.overflow-hidden { overflow: hidden; }
+.overflow-y-auto { overflow-y: auto; }
+.overflow-x-hidden { overflow-x: hidden; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.mt-auto { margin-top: auto; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mb-12 { margin-bottom: 3rem; }
+.ml-3 { margin-left: 0.75rem; }
+.mr-2 { margin-right: 0.5rem; }
+.pt-6 { padding-top: 1.5rem; }
+.pt-8 { padding-top: 2rem; }
+.pt-12 { padding-top: 3rem; }
+.pb-16 { padding-bottom: 4rem; }
+.pb-32 { padding-bottom: 8rem; }
+.px-0 { padding-left: 0; padding-right: 0; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.w-full { width: 100%; }
+.w-12 { width: 3rem; }
+.h-12 { height: 3rem; }
+.h-auto { height: auto; }
+.max-w-full { max-width: 100%; }
+.flex-grow { flex-grow: 1; }
+.flex-initial { flex: 0 1 auto; }
+.flex-auto { flex: 1 1 auto; }
+.flex-1 { flex: 1 1 0%; }
+.whitespace-nowrap { white-space: nowrap; }
+.cursor-pointer { cursor: pointer; }
+.uppercase { text-transform: uppercase; }
+.font-bold { font-weight: 700; }
+.font-semibold { font-weight: 600; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.tracking-wider { letter-spacing: 0.05em; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.space-y-3 > * + * { margin-top: 0.75rem; }
+.space-x-2 > * + * { margin-left: 0.5rem; }
+.space-x-4 > * + * { margin-left: 1rem; }
+
+.inline-flex { display: inline-flex; }
+.ml-auto { margin-left: auto; }
+.flex-shrink-0 { flex-shrink: 0; }
+.justify-center { justify-content: center; }
+
+/* Medium screen grid utilities */
+@media (min-width: 768px) {
+  .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-.app-header {
-  background-color: #007bff;
-  color: white;
-  padding: 10px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  position: sticky;
-  top: 0;
-  z-index: 1000; /* Ensure header stays on top */
+/* Large screen grid utilities */
+@media (min-width: 1024px) {
+  .lg\\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: clamp(18px, 2.5vw, 24px); /* Responsive font size */
+/* Responsive utilities */
+@media (min-width: 768px) {
+  .md\\:left-0 { left: 0; }
+  .md\\:block { display: block; }
+  .md\\:fixed { position: fixed; }
+  .md\\:top-0 { top: 0; }
+  .md\\:bottom-0 { bottom: 0; }
+  .md\\:w-64 { width: 16rem; }
+  .md\\:flex { display: flex; }
+  .md\\:flex-col { flex-direction: column; }
+  .md\\:flex-row { flex-direction: row; }
+  .md\\:flex-nowrap { flex-wrap: nowrap; }
+  .md\\:items-stretch { align-items: stretch; }
+  .md\\:min-h-full { min-height: 100%; }
+  .md\\:min-w-full { min-width: 100%; }
+  .md\\:opacity-100 { opacity: 1; }
+  .md\\:relative { position: relative; }
+  .md\\:mt-4 { margin-top: 1rem; }
+  .md\\:shadow-none { box-shadow: none; }
+  .md\\:overflow-y-auto { overflow-y: auto; }
+  .md\\:overflow-hidden { overflow: hidden; }
+  .md\\:hidden { display: none; }
+  .md\\:ml-64 { margin-left: 16rem; }
+  .md\\:flex-nowrap { flex-wrap: nowrap; }
+  .md\\:justify-start { justify-content: flex-start; }
+  .md\\:px-10 { padding-left: 2.5rem; padding-right: 2.5rem; }
+  .md\\:pt-16 { padding-top: 4rem; }
+  .md\\:pt-32 { padding-top: 8rem; }
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.connection-status {
-  display: flex;
-  gap: 10px;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: help;
+/* Transitions */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
   transition: all 0.3s ease;
-  border: 1px solid transparent;
 }
 
-.status-indicator.connected {
-  background-color: #d4edda;
-  color: #155724;
-  border-color: #c3e6cb;
+.fade-slide-enter-from {
+  transform: translateY(10px);
+  opacity: 0;
 }
 
-.status-indicator.disconnected {
-  background-color: #f8d7da;
-  color: #721c24;
-  border-color: #f5c6cb;
+.fade-slide-leave-to {
+  transform: translateY(-10px);
+  opacity: 0;
 }
 
-.status-indicator.warning {
-  background-color: #fff3cd;
-  color: #856404;
-  border-color: #ffeaa7;
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.status-icon {
-  font-size: 12px;
-  min-width: 14px;
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
 }
 
-.status-text {
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.status-indicator:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.app-nav {
-  display: flex;
-  gap: clamp(5px, 1vw, 10px); /* Responsive gap */
-}
-
-.app-nav button {
-  background: none;
-  border: none;
-  color: white;
-  font-size: clamp(14px, 1.8vw, 16px); /* Responsive font size */
-  cursor: pointer;
-  padding: clamp(3px, 0.5vw, 5px) clamp(5px, 1vw, 10px);
-  transition: background-color 0.3s;
-}
-
-.app-nav button.active {
-  background-color: rgba(255, 255, 255, 0.2);
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
   border-radius: 4px;
 }
 
-.app-content {
-  flex: 1;
-  padding: clamp(10px, 2vw, 20px);
-  display: flex;
-  flex-direction: column;
-  overflow-y: hidden; /* Prevent scrolling on the main content area */
-  overflow-x: hidden; /* Explicitly prevent horizontal scrolling */
-  width: 100%; /* Ensure content stays within container width */
-  box-sizing: border-box;
-}
-
-.chat-section, .knowledge-section, .settings-section, .files-section, .history-section {
-  display: flex;
-  height: 100%;
-  width: 100%; /* Ensure it fits within parent container */
-  background-color: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  box-sizing: border-box;
-}
-
-.knowledge-section, .settings-section, .files-section, .history-section {
-  overflow-y: auto; /* Allow scrolling for content */
-  padding: 20px;
-}
-
-
-
-.chat-window {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.app-footer {
-  background-color: #e9ecef;
-  padding: clamp(5px, 1vw, 10px) clamp(10px, 2vw, 20px);
-  border-top: 1px solid #dee2e6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: sticky;
-  bottom: 0;
-  z-index: 1000; /* Ensure footer stays on bottom */
-  flex-wrap: wrap;
-  transition: height 0.3s ease;
-}
-
-.app-footer.collapsed {
-  padding: clamp(2px, 0.5vw, 5px) clamp(10px, 2vw, 20px);
-}
-
-.footer-toggle {
-  cursor: pointer;
-  margin-bottom: clamp(5px, 0.5vw, 10px);
-  font-size: clamp(12px, 1.5vw, 14px);
-  color: #007bff;
-  display: flex;
-  justify-content: center;
-  width: 100%;
-}
-
-.footer-toggle:hover {
-  text-decoration: underline;
-}
-
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: clamp(5px, 1vw, 10px);
-  max-width: 600px; /* Limit width on large screens */
-}
-
-.performance-stats {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 600px;
-}
-
-.performance-stats h4 {
-  margin: 0 0 clamp(5px, 0.5vw, 10px) 0;
-  font-size: clamp(12px, 1.5vw, 14px);
-  color: #007bff;
-}
-
-#performanceGraph {
-  background-color: #fff;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-}
-
-.load-stats {
-  display: flex;
-  justify-content: space-around;
-  width: 100%;
-  margin-top: clamp(5px, 0.5vw, 10px);
-  font-size: clamp(10px, 1.2vw, 12px);
-}
-
-button, .control-button, .action-buttons button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: clamp(5px, 0.8vw, 8px) clamp(8px, 1.2vw, 12px);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  font-size: clamp(12px, 1.5vw, 14px);
-  min-width: fit-content; /* Ensure buttons don't shrink too much */
-}
-
-button:hover, .control-button:hover, .action-buttons button:hover {
-  background-color: #0056b3;
-}
-
-button:disabled, .control-button:disabled, .action-buttons button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-
-@media (max-width: 768px) {
-  .action-buttons {
-    flex-wrap: wrap;
-    justify-content: space-around;
-  }
-  
-  .action-buttons button {
-    margin-bottom: 5px; /* Add spacing for wrapped buttons */
-  }
-}
-
-@media (min-width: 1200px) {
-  .app-container {
-    max-width: 100vw; /* Prevent horizontal scrolling on large screens */
-    margin: 0 auto;
-    overflow-x: hidden; /* Reinforce no horizontal scrolling */
-  }
-}
-
-/* Target elements with specific data attribute for overflow handling */
-[data-v-1d553c0c] {
-  max-width: 100%; /* Ensure it doesn't exceed container width */
-  width: 100%; /* Fit within visible screen */
-  box-sizing: border-box; /* Include padding in width calculation */
-  overflow: hidden; /* Prevent scrollbars on the element itself */
-}
-
-/* Allow inner elements to have scrollbars if needed */
-[data-v-1d553c0c] * {
-  overflow-x: auto; /* Inner elements can have scrollbars */
-  box-sizing: border-box;
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 </style>

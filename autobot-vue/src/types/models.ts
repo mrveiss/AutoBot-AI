@@ -1,6 +1,6 @@
 /**
  * Unified Data Models for AutoBot
- * 
+ *
  * These TypeScript interfaces mirror the Pydantic models from the backend,
  * ensuring type safety and consistency between frontend and backend data structures.
  */
@@ -424,7 +424,7 @@ export type IssueSeverity = DiagnosticIssue['severity']
 // ============================================================================
 
 export function isChatMessage(obj: any): obj is ChatMessage {
-  return obj && 
+  return obj &&
     typeof obj.id === 'string' &&
     typeof obj.sender === 'string' &&
     typeof obj.text === 'string' &&
@@ -432,20 +432,20 @@ export function isChatMessage(obj: any): obj is ChatMessage {
 }
 
 export function isWebSocketEvent(obj: any): obj is WebSocketEvent {
-  return obj && 
+  return obj &&
     typeof obj.type === 'string' &&
     obj.payload &&
     typeof obj.payload === 'object'
 }
 
 export function isApiResponse<T>(obj: any): obj is ApiResponse<T> {
-  return obj && 
+  return obj &&
     typeof obj.success === 'boolean' &&
     typeof obj.timestamp === 'string'
 }
 
 export function isApiError(obj: any): obj is ApiError {
-  return obj && 
+  return obj &&
     typeof obj.message === 'string'
 }
 
@@ -466,7 +466,7 @@ export const DEFAULT_AGENT_TASK: Partial<AgentTask> = {
 
 export const SYSTEM_MESSAGE_TYPES = [
   'goal_received',
-  'plan_ready', 
+  'plan_ready',
   'goal_completed',
   'command_execution_start',
   'command_execution_end',

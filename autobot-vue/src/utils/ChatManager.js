@@ -67,7 +67,7 @@ class ChatManager {
   async getChatList() {
     try {
       const response = await fetch(`${this.apiEndpoint}/api/chats`);
-      
+
       if (response.ok) {
         const data = await response.json();
         const chats = data.chats || [];
@@ -104,10 +104,9 @@ class ChatManager {
     try {
       // Try backend first
       const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}`);
-      
+
       if (response.ok) {
         const messages = await response.json();
-        console.log(`Loaded ${messages.length} messages from backend for chat ${chatId}`);
         return messages;
       } else {
         console.warn(`Backend failed for chat ${chatId}, falling back to localStorage`);
@@ -126,7 +125,6 @@ class ChatManager {
       const stored = localStorage.getItem(key);
       if (stored) {
         const messages = JSON.parse(stored);
-        console.log(`Loaded ${messages.length} messages from localStorage for chat ${chatId}`);
         return messages;
       }
     } catch (error) {
@@ -151,7 +149,6 @@ class ChatManager {
       });
 
       if (response.ok) {
-        console.log(`Messages saved to backend for chat ${chatId}`);
         return { status: 'success', location: 'backend' };
       } else {
         console.warn(`Failed to save to backend for chat ${chatId}:`, response.statusText);
@@ -168,7 +165,6 @@ class ChatManager {
     try {
       const key = `chat_${chatId}_messages`;
       localStorage.setItem(key, JSON.stringify(messages));
-      console.log(`Messages saved to localStorage for chat ${chatId}`);
     } catch (error) {
       console.error(`Error saving to localStorage for chat ${chatId}:`, error);
     }
@@ -182,7 +178,6 @@ class ChatManager {
       throw new Error(`Invalid chat ID for deletion: ${chatId}`);
     }
 
-    console.log('ChatManager: Attempting to delete chat with ID:', chatId);
 
     try {
       // Try to delete from backend first
@@ -191,7 +186,6 @@ class ChatManager {
       });
 
       if (response.ok) {
-        console.log(`Chat ${chatId} deleted from backend`);
       } else {
         console.warn(`Failed to delete chat ${chatId} from backend:`, response.statusText);
       }
@@ -201,13 +195,12 @@ class ChatManager {
 
     // Always clean up localStorage
     this.deleteFromLocalStorage(chatId);
-    
+
     // If this was the current chat, clear it
     if (this.currentChatId === chatId) {
       this.currentChatId = null;
     }
 
-    console.log('ChatManager: Chat deletion completed for:', chatId);
     return { status: 'success' };
   }
 
@@ -216,7 +209,6 @@ class ChatManager {
     try {
       const key = `chat_${chatId}_messages`;
       localStorage.removeItem(key);
-      console.log(`Chat ${chatId} deleted from localStorage`);
     } catch (error) {
       console.error(`Error deleting chat ${chatId} from localStorage:`, error);
     }
@@ -233,8 +225,7 @@ class ChatManager {
       });
 
       if (response.ok) {
-        console.log(`Chat ${chatId} reset successfully`);
-        
+
         // Also reset in localStorage
         const initialMessage = [{
           sender: 'bot',
@@ -243,7 +234,7 @@ class ChatManager {
           type: 'response'
         }];
         this.saveMessagesToLocalStorage(chatId, initialMessage);
-        
+
         return { status: 'success' };
       } else {
         throw new Error(`Failed to reset chat: ${response.statusText}`);
@@ -272,7 +263,7 @@ class ChatManager {
 
       if (response.ok) {
         const contentType = response.headers.get('content-type');
-        
+
         if (contentType && contentType.includes('text/event-stream')) {
           // Handle streaming response
           return {
@@ -308,7 +299,7 @@ class ChatManager {
       if (userMessage && userMessage.text) {
         return userMessage.text.substring(0, 50) + (userMessage.text.length > 50 ? '...' : '');
       }
-      
+
       // If no user message, use the first message
       const firstMessage = messages[0];
       if (firstMessage && firstMessage.text) {
@@ -326,7 +317,7 @@ class ChatManager {
         method: 'GET',
         timeout: 5000
       });
-      
+
       return {
         connected: response.ok,
         status: response.status,
@@ -352,7 +343,6 @@ class ChatManager {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Message cleanup completed:', result);
         return result;
       } else {
         throw new Error(`Cleanup failed: ${response.statusText}`);
@@ -376,11 +366,11 @@ class ChatManager {
   // Utility method to format timestamps
   formatTimestamp(timestamp) {
     if (!timestamp) return new Date().toLocaleTimeString();
-    
+
     if (typeof timestamp === 'string') {
       // If it's already formatted, return as is
       if (timestamp.includes(':')) return timestamp;
-      
+
       // If it's an ISO string, format it
       try {
         return new Date(timestamp).toLocaleTimeString();
@@ -388,11 +378,11 @@ class ChatManager {
         return timestamp;
       }
     }
-    
+
     if (timestamp instanceof Date) {
       return timestamp.toLocaleTimeString();
     }
-    
+
     return new Date().toLocaleTimeString();
   }
 

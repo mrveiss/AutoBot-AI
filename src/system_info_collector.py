@@ -1,7 +1,8 @@
-import platform
-import os
 import json
+import os
+import platform
 import subprocess
+
 
 def get_os_info():
     info = {
@@ -12,8 +13,14 @@ def get_os_info():
         "machine": platform.machine(),
         "processor": platform.processor(),
         # Filter out sensitive environment variables
-        "env": {k: ("REDACTED" if any(s in k.lower() for s in ["key", "token", "secret", "password"]) else v)
-                for k, v in os.environ.items()},
+        "env": {
+            k: (
+                "REDACTED"
+                if any(s in k.lower() for s in ["key", "token", "secret", "password"])
+                else v
+            )
+            for k, v in os.environ.items()
+        },
     }
     if platform.system() == "Linux":
         try:
@@ -25,6 +32,7 @@ def get_os_info():
         except FileNotFoundError:
             info["os_release"] = "/etc/os-release not found"
     return info
+
 
 if __name__ == "__main__":
     os_info = get_os_info()

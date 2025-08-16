@@ -2,19 +2,19 @@
   <div class="history-view">
     <h2>Chat History</h2>
     <div class="history-actions">
-      <button @click="refreshHistory">Refresh</button>
-      <button @click="clearHistory">Clear History</button>
+      <button @click="refreshHistory" aria-label="Refresh">Refresh</button>
+      <button @click="clearHistory" aria-label="Clear history">Clear History</button>
     </div>
     <div class="history-list-container">
       <div v-if="history.length === 0" class="no-history">No chat history available.</div>
       <div v-else class="history-entries">
-        <div v-for="(entry, index) in history" :key="index" class="history-entry" @click="viewHistoryEntry(entry)">
+        <div v-for="(entry, index) in history" :key="entry.id || `history-${entry.date}`" class="history-entry" @click="viewHistoryEntry(entry)" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
           <div class="history-summary">
             <span class="history-date">{{ entry.date }}</span>
             <span class="history-preview">{{ entry.preview }}</span>
           </div>
           <div class="history-actions-entry">
-            <button @click.stop="deleteHistoryEntry(entry)">Delete</button>
+            <button @click.stop="deleteHistoryEntry(entry)" aria-label="Delete">Delete</button>
           </div>
         </div>
       </div>
@@ -64,7 +64,6 @@ export default {
               name: chat.name || ''
             };
           }));
-          console.log('Chat history refreshed from backend:', history.value.length, 'chats loaded');
         } else {
           console.error('Failed to load chat history from backend:', response.statusText);
           // Fallback to local storage
@@ -76,7 +75,7 @@ export default {
         loadHistoryFromLocalStorage();
       }
     };
-    
+
     // Function to build chat history from local storage
     const loadHistoryFromLocalStorage = () => {
       const localChats = [];
@@ -105,7 +104,6 @@ export default {
         }
       }
       history.value = localChats;
-      console.log('Chat history loaded from local storage:', history.value.length, 'chats loaded');
     };
 
     const clearHistory = async () => {
@@ -113,7 +111,6 @@ export default {
         // Since clearing all chats might be destructive, we'll just clear the list for now
         // In a real implementation, you might want to delete each chat individually from backend
         history.value = [];
-        console.log('Chat history cleared (local only)');
       } catch (error) {
         console.error('Error clearing chat history:', error);
       }
@@ -122,7 +119,6 @@ export default {
     const viewHistoryEntry = (entry) => {
       // Navigate to the chat in ChatInterface by updating the URL hash
       window.location.hash = `chatId=${entry.id}`;
-      console.log('Viewing history entry:', entry.id);
     };
 
     const deleteHistoryEntry = async (entry) => {
@@ -138,7 +134,6 @@ export default {
           localStorage.removeItem(`chat_${entry.id}_messages`);
           // Remove from history list
           history.value = history.value.filter(e => e.id !== entry.id);
-          console.log('Deleted history entry:', entry.id);
         } else {
           console.error('Failed to delete chat history entry:', response.statusText);
         }
@@ -153,13 +148,13 @@ export default {
         api_endpoint: 'http://localhost:8001'
       }
     });
-    
+
     // Load settings from local storage if available
     const savedSettings = localStorage.getItem('chat_settings');
     if (savedSettings) {
       settings.value = JSON.parse(savedSettings);
     }
-    
+
     // Initial load of history after settings are initialized
     refreshHistory();
 

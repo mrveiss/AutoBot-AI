@@ -1,11 +1,12 @@
 /**
  * Centralized Settings Service
- * 
+ *
  * Eliminates duplication between ChatInterface.vue and SettingsPanel.vue
  * by providing a single source of truth for all application settings.
  */
 
 import apiClient from '@/utils/ApiClient.js';
+import { reactive } from 'vue';
 
 export class SettingsService {
   constructor() {
@@ -27,7 +28,7 @@ export class SettingsService {
         use_phi2: false,
         api_endpoint: 'http://localhost:8001',
         ollama_endpoint: 'http://localhost:11434',
-        ollama_model: 'tinyllama:latest',
+        ollama_model: 'deepseek-r1:14b',
         streaming: false
       },
       ui: {
@@ -35,25 +36,46 @@ export class SettingsService {
         font_size: 'medium'
       }
     };
-    
-    this.settings = { ...this.defaultSettings };
+
+    this.settings = reactive({ ...this.defaultSettings });
+    this.initialized = false;
     this.loadSettings();
   }
 
   /**
-   * Load settings from localStorage with fallback to defaults
+   * Load settings from localStorage and backend with fallback to defaults
    */
-  loadSettings() {
+  async loadSettings() {
     try {
+      // First, try to load from localStorage for immediate UI update
       const savedSettings = localStorage.getItem('chat_settings');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
         // Merge with defaults to ensure all properties exist
-        this.settings = this.mergeDeep(this.defaultSettings, parsed);
+        const mergedSettings = this.mergeDeep(this.defaultSettings, parsed);
+        Object.assign(this.settings, mergedSettings);
       }
+
+      // Then, try to fetch latest settings from backend and merge
+      try {
+        const backendSettings = await apiClient.getSettings();
+        if (backendSettings) {
+          // Merge backend settings with current settings
+          const finalSettings = this.mergeDeep(this.settings, backendSettings);
+          Object.assign(this.settings, finalSettings);
+
+          // Save the merged settings back to localStorage
+          localStorage.setItem('chat_settings', JSON.stringify(this.settings));
+        }
+      } catch (backendError) {
+        console.warn('Could not load settings from backend, using localStorage/defaults:', backendError.message);
+      }
+
+      this.initialized = true;
     } catch (error) {
-      console.error('Error loading settings from localStorage:', error);
-      this.settings = { ...this.defaultSettings };
+      console.error('Error loading settings:', error);
+      Object.assign(this.settings, this.defaultSettings);
+      this.initialized = true;
     }
   }
 
@@ -62,15 +84,27 @@ export class SettingsService {
    */
   async saveSettings() {
     try {
-      // Save to localStorage
+      // Save to localStorage first for immediate persistence
       localStorage.setItem('chat_settings', JSON.stringify(this.settings));
-      
-      // Save to backend
+
+      // Save to backend for server-side persistence
       await apiClient.saveSettings(this.settings);
-      console.log('Settings saved successfully');
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error('❌ Error saving settings:', error);
+      // Even if backend save fails, localStorage save should work
+      // so settings persist across page reloads locally
       throw error;
+    }
+  }
+
+  /**
+   * Save settings to localStorage only (for deep watchers)
+   */
+  saveSettingsToLocalStorage(settings) {
+    try {
+      localStorage.setItem('chat_settings', JSON.stringify(settings));
+    } catch (error) {
+      console.error('Error saving settings to localStorage:', error);
     }
   }
 
@@ -80,7 +114,6 @@ export class SettingsService {
   async saveBackendSettings() {
     try {
       await apiClient.saveBackendSettings(this.settings.backend);
-      console.log('Backend settings saved successfully');
     } catch (error) {
       console.error('Error saving backend settings:', error);
       throw error;
@@ -93,9 +126,8 @@ export class SettingsService {
   async fetchBackendSettings() {
     try {
       const backendSettings = await apiClient.getBackendSettings();
-      this.settings.backend = { ...this.settings.backend, ...backendSettings };
+      Object.assign(this.settings.backend, backendSettings);
       await this.saveSettings(); // Persist the merged settings
-      console.log('Backend settings loaded and merged successfully');
     } catch (error) {
       console.error('Error loading backend settings:', error);
       throw error;
@@ -103,10 +135,22 @@ export class SettingsService {
   }
 
   /**
-   * Get current settings (reactive copy)
+   * Get current settings (reactive reference)
+   * Ensures settings are loaded before returning
    */
-  getSettings() {
-    return { ...this.settings };
+  async getSettings() {
+    if (!this.initialized) {
+      await this.loadSettings();
+    }
+    return this.settings; // Return direct reactive reference
+  }
+
+  /**
+   * Get settings synchronously (for compatibility)
+   * Use this only when you're sure settings are already loaded
+   */
+  getSettingsSync() {
+    return this.settings;
   }
 
   /**
@@ -130,7 +174,7 @@ export class SettingsService {
    */
   mergeDeep(target, source) {
     const result = { ...target };
-    
+
     for (const key in source) {
       if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
         result[key] = this.mergeDeep(target[key] || {}, source[key]);
@@ -138,7 +182,7 @@ export class SettingsService {
         result[key] = source[key];
       }
     }
-    
+
     return result;
   }
 
@@ -148,14 +192,14 @@ export class SettingsService {
   setNestedProperty(obj, path, value) {
     const keys = path.split('.');
     let current = obj;
-    
+
     for (let i = 0; i < keys.length - 1; i++) {
       if (!(keys[i] in current)) {
         current[keys[i]] = {};
       }
       current = current[keys[i]];
     }
-    
+
     current[keys[keys.length - 1]] = value;
   }
 
@@ -193,7 +237,6 @@ export class SettingsService {
   async updateDeveloperConfig(config) {
     try {
       await apiClient.post('/api/developer/config', config);
-      console.log('Developer config updated successfully');
       return true;
     } catch (error) {
       console.error('Failed to update developer config:', error);

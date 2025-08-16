@@ -1,0 +1,130 @@
+# Docker Compose for AutoBot Hybrid Deployment
+# Local orchestrator + containerized AI stack
+
+services:
+  # Redis Stack (with search, JSON, and vector capabilities)
+  autobot-redis:
+    image: redis/redis-stack:7.4.0-v1
+    container_name: autobot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+      - "8002:8002"  # RedisInsight web UI on port 8002
+    volumes:
+      - autobot_redis_data:/data
+    environment:
+      - REDIS_ARGS=--appendonly yes --save 60 1
+      - REDISINSIGHT_PORT=8002  # Configure RedisInsight to use port 8002
+    networks:
+      - autobot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AI Stack Container (LangChain + LlamaIndex)
+  autobot-ai-stack:
+    build:
+      context: .
+      dockerfile: docker/ai-stack/Dockerfile
+    container_name: autobot-ai-stack
+    restart: unless-stopped
+    ports:
+      - "8080:8080"  # AI API port
+    volumes:
+      - autobot_ai_data:/app/data
+      - autobot_ai_models:/app/models
+      - autobot_ai_logs:/app/logs
+      - ./src:/app/src:ro  # Read-only source code mount for development
+      - ./config:/app/config:ro  # Read-only config mount
+    environment:
+      - AI_SERVER_HOST=0.0.0.0
+      - AI_SERVER_PORT=8080
+      - AI_SERVER_WORKERS=1
+      - OLLAMA_HOST=host.docker.internal:11434
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=6379
+      - CHROMA_DB_PATH=/app/data/chroma_db
+      - DISABLE_EXTERNAL_APIS=true
+      - PYTHONPATH=/app:/app/src
+    depends_on:
+      autobot-redis:
+        condition: service_healthy
+    networks:
+      - autobot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # NPU Worker (Intel NPU Accelerated Inference)
+  autobot-npu-worker:
+    build:
+      context: .
+      dockerfile: docker/npu-worker/Dockerfile
+    container_name: autobot-npu-worker
+    restart: unless-stopped
+    ports:
+      - "8081:8081"  # NPU API port
+    volumes:
+      - autobot_npu_models:/app/models
+      - autobot_npu_logs:/app/logs
+      - ./src:/app/src:ro  # Read-only source code mount
+      - ./config:/app/config:ro  # Read-only config mount
+      # Mount NPU devices and firmware (if available)
+      - /dev:/dev:ro
+      - /lib/firmware:/lib/firmware:ro
+      # Mount NPU driver libraries from host
+      - /usr/local/lib:/usr/local/lib:ro
+    environment:
+      - NPU_WORKER_HOST=0.0.0.0
+      - NPU_WORKER_PORT=8081
+      - NPU_WORKER_WORKERS=1
+      - OPENVINO_DEVICE=NPU
+      - OV_LOG_LEVEL=ERROR
+      - NPU_LOG_LEVEL=INFO
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=6379
+      - PYTHONPATH=/app:/app/src
+      # Intel NPU driver environment variables
+      - LD_LIBRARY_PATH=/usr/local/lib
+      - ZE_INTEL_NPU_LOGLEVEL=1
+      - ZE_ENABLE_VALIDATION_LAYER=0
+    depends_on:
+      autobot-redis:
+        condition: service_healthy
+    networks:
+      - autobot-network
+    # NPU requires privileged access for hardware
+    privileged: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # Only start if NPU hardware is available
+    profiles:
+      - npu
+
+networks:
+  autobot-network:
+    driver: bridge
+    name: autobot-network
+
+volumes:
+  autobot_redis_data:
+    name: autobot_redis_data
+  autobot_ai_data:
+    name: autobot_ai_data
+  autobot_ai_models:
+    name: autobot_ai_models
+  autobot_ai_logs:
+    name: autobot_ai_logs
+  autobot_npu_models:
+    name: autobot_npu_models
+  autobot_npu_logs:
+    name: autobot_npu_logs

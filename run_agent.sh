@@ -2,12 +2,35 @@
 
 # Script to run the AutoBot application with backend and frontend components
 
+# Parse command line arguments
+TEST_MODE=false
+START_ALL_CONTAINERS=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --test-mode)
+            TEST_MODE=true
+            shift
+            ;;
+        --all-containers)
+            START_ALL_CONTAINERS=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--test-mode] [--all-containers]"
+            echo "  --test-mode       Run in test mode with additional checks"
+            echo "  --all-containers  Start all containers (Redis, NPU, AI Stack, Playwright)"
+            exit 1
+            ;;
+    esac
+done
+
 echo "Starting AutoBot application..."
 
 # Enhanced cleanup function with better signal handling
 cleanup() {
     echo "Received signal. Terminating all processes..."
-    
+
     # Kill processes by PID if they were started in background
     if [ ! -z "$BACKEND_PID" ]; then
         echo "Terminating backend process (PID: $BACKEND_PID)..."
@@ -15,7 +38,7 @@ cleanup() {
         sleep 1
         kill -9 "$BACKEND_PID" 2>/dev/null
     fi
-    
+
     if [ ! -z "$FRONTEND_PID" ]; then
         echo "Terminating frontend process (PID: $FRONTEND_PID)..."
         kill -TERM "$FRONTEND_PID" 2>/dev/null
@@ -55,7 +78,7 @@ trap cleanup SIGINT SIGTERM SIGQUIT
 cleanup_port() {
     local port=$1
     local service_name=$2
-    
+
     echo "Stopping any existing $service_name processes on port $port..."
     # Use sudo with lsof for more comprehensive process identification
     if sudo lsof -i :$port -t > /dev/null 2>&1; then
@@ -92,18 +115,123 @@ if ! id -nG "$USER" | grep -qw "docker"; then
     exit 1 # Exit to prompt user to re-login
 fi
 
-# Start Redis Stack Docker container
-echo "Starting Redis Stack Docker container..."
-if docker ps -a --format '{{.Names}}' | grep -q '^redis-stack$'; then
-    if docker inspect -f '{{.State.Running}}' redis-stack | grep -q 'true'; then
-        echo "✅ 'redis-stack' container is already running."
+# Start all required Docker containers (from docker-compose)
+echo "Starting all required Docker containers..."
+
+# If --all-containers flag is set, use the comprehensive startup script
+if [ "$START_ALL_CONTAINERS" = true ]; then
+    echo "🚀 Starting ALL containers (Redis, NPU, AI Stack, Playwright)..."
+    ./scripts/deployment/start_all_containers.sh || {
+        echo "❌ Failed to start all containers."
+        exit 1
+    }
+else
+    echo "📦 Starting essential containers only (Redis, NPU, Playwright)..."
+fi
+
+# Start Redis Stack
+echo "🔄 Starting Redis Stack..."
+if docker ps --format '{{.Names}}' | grep -q '^autobot-redis$'; then
+    echo "✅ 'autobot-redis' container is already running."
+else
+    docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-redis || {
+        echo "❌ Failed to start Redis Stack container via docker-compose."
+        exit 1
+    }
+    echo "✅ 'autobot-redis' container started."
+fi
+
+# Start NPU Worker (optional but recommended for performance)
+echo "🔄 Starting NPU Worker..."
+if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
+    echo "✅ 'autobot-npu-worker' container is already running."
+else
+    docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-npu-worker || {
+        echo "⚠️  Warning: Failed to start NPU Worker container. Continuing without NPU acceleration."
+        # Don't exit - NPU worker is optional
+    }
+fi
+
+# Wait for containers to be ready
+echo "⏳ Waiting for containers to be ready..."
+sleep 5
+
+# Check Redis health
+echo "🔍 Checking Redis health..."
+for i in {1..10}; do
+    if docker exec autobot-redis redis-cli ping >/dev/null 2>&1; then
+        echo "✅ Redis is ready."
+        break
+    fi
+    echo "⏳ Waiting for Redis... (attempt $i/10)"
+    sleep 2
+done
+
+# Check NPU Worker health (if running)
+if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
+    echo "🔍 Checking NPU Worker health..."
+    for i in {1..10}; do
+        if curl -sf http://localhost:8081/health >/dev/null 2>&1; then
+            echo "✅ NPU Worker is ready."
+            break
+        fi
+        echo "⏳ Waiting for NPU Worker... (attempt $i/10)"
+        sleep 2
+    done
+fi
+
+# Start Playwright Service Docker container
+echo "Starting Playwright Service Docker container..."
+
+# Ensure playwright-server.js exists and is a file
+if [ ! -f "/home/kali/Desktop/AutoBot/playwright-server.js" ]; then
+    echo "⚠️  playwright-server.js not found in project root. Checking for it..."
+    if [ -f "/home/kali/Desktop/AutoBot/tests/playwright-server.js" ]; then
+        echo "📋 Copying playwright-server.js from tests directory..."
+        cp "/home/kali/Desktop/AutoBot/tests/playwright-server.js" "/home/kali/Desktop/AutoBot/playwright-server.js"
     else
-        echo "🔄 'redis-stack' container found but not running. Starting it..."
-        docker start redis-stack || { echo "❌ Failed to start 'redis-stack' container."; exit 1; }
-        echo "✅ 'redis-stack' container started."
+        echo "❌ playwright-server.js not found. Playwright container cannot start."
+        echo "   Please ensure playwright-server.js exists in the project root."
+    fi
+fi
+
+# Check for Playwright container (either name)
+PLAYWRIGHT_CONTAINER=""
+if docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright-vnc$'; then
+    PLAYWRIGHT_CONTAINER="autobot-playwright-vnc"
+elif docker ps -a --format '{{.Names}}' | grep -q '^autobot-playwright$'; then
+    PLAYWRIGHT_CONTAINER="autobot-playwright"
+fi
+
+if [ -n "$PLAYWRIGHT_CONTAINER" ]; then
+    if docker inspect -f '{{.State.Running}}' "$PLAYWRIGHT_CONTAINER" | grep -q 'true'; then
+        echo "✅ '$PLAYWRIGHT_CONTAINER' container is already running."
+    else
+        echo "🔄 '$PLAYWRIGHT_CONTAINER' container found but not running. Starting it..."
+        docker start "$PLAYWRIGHT_CONTAINER" || {
+            echo "❌ Failed to start '$PLAYWRIGHT_CONTAINER' container."
+            echo "   This may be due to mount issues. Try removing and recreating the container:"
+            echo "   docker rm $PLAYWRIGHT_CONTAINER"
+            echo "   Then run setup_agent.sh again to recreate it."
+            exit 1
+        }
+        echo "✅ '$PLAYWRIGHT_CONTAINER' container started."
+
+        # Wait for service to be ready
+        echo "⏳ Waiting for Playwright service to be ready..."
+        for i in {1..15}; do
+            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+                echo "✅ Playwright service is ready."
+                break
+            fi
+            echo "⏳ Waiting for Playwright service... (attempt $i/15)"
+            sleep 2
+        done
     fi
 else
-    echo "❌ 'redis-stack' container not found. Please run setup_agent.sh to deploy it."
+    echo "❌ Playwright container not found. Please run setup_agent.sh to deploy it."
+    echo "   Or manually start the VNC-enabled container with:"
+    echo "   docker-compose -f docker/compose/docker-compose.playwright-vnc.yml up -d"
     exit 1
 fi
 
@@ -138,7 +266,7 @@ for i in $(seq 1 $TIMEOUT); do
         echo "Backend is listening on port 8001."
         break
     fi
-    
+
     if [ $i -eq $TIMEOUT ]; then
         echo "Error: Backend did not start listening on port 8001 within $TIMEOUT seconds."
         cleanup

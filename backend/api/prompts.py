@@ -1,17 +1,20 @@
-from fastapi import APIRouter, HTTPException
 import logging
 import os
-import json
+
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
+
 @router.get("/")
 async def get_prompts():
     try:
         # Adjust path to look for prompts directory at project root
-        prompts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "prompts"))
+        prompts_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
+        )
         prompts = []
         defaults = {}
 
@@ -22,19 +25,27 @@ async def get_prompts():
                 rel_path = os.path.join(base_path, entry) if base_path else entry
                 if os.path.isdir(full_path):
                     read_prompt_files(full_path, rel_path)
-                elif os.path.isfile(full_path) and (entry.endswith('.txt') or entry.endswith('.md')):
+                elif os.path.isfile(full_path) and (
+                    entry.endswith(".txt") or entry.endswith(".md")
+                ):
                     try:
-                        with open(full_path, 'r', encoding='utf-8') as f:
+                        with open(full_path, "r", encoding="utf-8") as f:
                             content = f.read()
-                        prompt_id = rel_path.replace('/', '_').replace('\\', '_').rsplit('.', 1)[0]
+                        prompt_id = (
+                            rel_path.replace("/", "_")
+                            .replace("\\", "_")
+                            .rsplit(".", 1)[0]
+                        )
                         prompt_type = base_path if base_path else "custom"
-                        prompts.append({
-                            "id": prompt_id,
-                            "name": entry.rsplit('.', 1)[0],
-                            "type": prompt_type,
-                            "path": rel_path,
-                            "content": content
-                        })
+                        prompts.append(
+                            {
+                                "id": prompt_id,
+                                "name": entry.rsplit(".", 1)[0],
+                                "type": prompt_type,
+                                "path": rel_path,
+                                "content": content,
+                            }
+                        )
                         if "default" in directory:
                             defaults[prompt_id] = content
                     except Exception as e:
@@ -52,60 +63,86 @@ async def get_prompts():
         logger.error(f"Error getting prompts: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting prompts: {str(e)}")
 
+
 @router.post("/{prompt_id}")
 async def save_prompt(prompt_id: str, request: dict):
     try:
         content = request.get("content", "")
         # Derive the file path from the prompt_id, relative to project root
-        prompts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "prompts"))
-        file_path = os.path.join(prompts_dir, prompt_id.replace('_', '/'))
+        prompts_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
+        )
+        file_path = os.path.join(prompts_dir, prompt_id.replace("_", "/"))
         # Ensure the directory exists
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         # Write the content to the file
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
         logger.info(f"Saved prompt {prompt_id} to {file_path}")
         # Return the updated prompt data
-        prompt_name = os.path.basename(file_path).rsplit('.', 1)[0]
-        prompt_type = os.path.dirname(file_path).replace(prompts_dir + '/', '') if prompts_dir in file_path else os.path.dirname(file_path)
+        prompt_name = os.path.basename(file_path).rsplit(".", 1)[0]
+        prompt_type = (
+            os.path.dirname(file_path).replace(prompts_dir + "/", "")
+            if prompts_dir in file_path
+            else os.path.dirname(file_path)
+        )
         return {
             "id": prompt_id,
             "name": prompt_name,
             "type": prompt_type if prompt_type else "custom",
-            "path": file_path.replace(prompts_dir + '/', '') if prompts_dir in file_path else file_path,
-            "content": content
+            "path": (
+                file_path.replace(prompts_dir + "/", "")
+                if prompts_dir in file_path
+                else file_path
+            ),
+            "content": content,
         }
     except Exception as e:
         logger.error(f"Error saving prompt {prompt_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error saving prompt: {str(e)}")
 
+
 @router.post("/{prompt_id}/revert")
 async def revert_prompt(prompt_id: str):
     try:
-        prompts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "prompts"))
+        prompts_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
+        )
         # Check if there is a default version of this prompt
-        default_file_path = os.path.join(prompts_dir, "default", prompt_id.replace('_', '/'))
+        default_file_path = os.path.join(
+            prompts_dir, "default", prompt_id.replace("_", "/")
+        )
         if os.path.exists(default_file_path):
-            with open(default_file_path, 'r', encoding='utf-8') as f:
+            with open(default_file_path, "r", encoding="utf-8") as f:
                 default_content = f.read()
             # Save the default content to the custom prompt location
-            custom_file_path = os.path.join(prompts_dir, prompt_id.replace('_', '/'))
+            custom_file_path = os.path.join(prompts_dir, prompt_id.replace("_", "/"))
             os.makedirs(os.path.dirname(custom_file_path), exist_ok=True)
-            with open(custom_file_path, 'w', encoding='utf-8') as f:
+            with open(custom_file_path, "w", encoding="utf-8") as f:
                 f.write(default_content)
             logger.info(f"Reverted prompt {prompt_id} to default")
-            prompt_name = os.path.basename(custom_file_path).rsplit('.', 1)[0]
-            prompt_type = os.path.dirname(custom_file_path).replace(prompts_dir + '/', '') if prompts_dir in custom_file_path else os.path.dirname(custom_file_path)
+            prompt_name = os.path.basename(custom_file_path).rsplit(".", 1)[0]
+            prompt_type = (
+                os.path.dirname(custom_file_path).replace(prompts_dir + "/", "")
+                if prompts_dir in custom_file_path
+                else os.path.dirname(custom_file_path)
+            )
             return {
                 "id": prompt_id,
                 "name": prompt_name,
                 "type": prompt_type if prompt_type else "custom",
-                "path": custom_file_path.replace(prompts_dir + '/', '') if prompts_dir in custom_file_path else custom_file_path,
-                "content": default_content
+                "path": (
+                    custom_file_path.replace(prompts_dir + "/", "")
+                    if prompts_dir in custom_file_path
+                    else custom_file_path
+                ),
+                "content": default_content,
             }
         else:
             logger.warning(f"No default found for prompt {prompt_id}")
-            raise HTTPException(status_code=404, detail=f"No default prompt found for {prompt_id}")
+            raise HTTPException(
+                status_code=404, detail=f"No default prompt found for {prompt_id}"
+            )
     except Exception as e:
         logger.error(f"Error reverting prompt {prompt_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error reverting prompt: {str(e)}")

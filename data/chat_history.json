@@ -1,1 +1,827 @@
-[]
+[
+  {
+    "sender": "error",
+    "text": "Error: Tool registry not initialized",
+    "messageType": "error",
+    "rawData": {
+      "message": "Tool registry not initialized"
+    },
+    "timestamp": "2025-08-10 23:24:19"
+  },
+  {
+    "sender": "bot",
+    "text": "Hello! How can I assist you today?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "Hello! How can I assist you today?"
+    },
+    "timestamp": "2025-08-11 09:50:26"
+  },
+  {
+    "sender": "bot",
+    "text": "Hello! How can I assist you today?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "Hello! How can I assist you today?"
+    },
+    "timestamp": "2025-08-11 09:50:26"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 09:50:31"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 09:50:31"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 8e51846a: Started step - 1. Librarian: Search Knowledge Base",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "8e51846a-7476-4f4a-ac67-dd8975d14450",
+      "step_id": "step_1",
+      "description": "1. Librarian: Search Knowledge Base",
+      "step_index": 0,
+      "total_steps": 8
+    },
+    "timestamp": "2025-08-11 09:50:33"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow 8e51846a: Completed step - 1. Librarian: Search Knowledge Base. Result: Executed by  librarian: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "8e51846a-7476-4f4a-ac67-dd8975d14450",
+      "step_id": "step_1",
+      "description": "1. Librarian: Search Knowledge Base",
+      "result": "Executed by  librarian: Task completed"
+    },
+    "timestamp": "2025-08-11 09:50:34"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 8e51846a: Started step - 2. Research: Research Tools",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "8e51846a-7476-4f4a-ac67-dd8975d14450",
+      "step_id": "step_2",
+      "description": "2. Research: Research Tools",
+      "step_index": 1,
+      "total_steps": 8
+    },
+    "timestamp": "2025-08-11 09:50:34"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow 8e51846a: Completed step - 2. Research: Research Tools. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "8e51846a-7476-4f4a-ac67-dd8975d14450",
+      "step_id": "step_2",
+      "description": "2. Research: Research Tools",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 09:50:34"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 8e51846a: Started step - 3. Orchestrator: Present Tool Options (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "8e51846a-7476-4f4a-ac67-dd8975d14450",
+      "step_id": "step_3",
+      "description": "3. Orchestrator: Present Tool Options (requires your approval)",
+      "step_index": 2,
+      "total_steps": 8
+    },
+    "timestamp": "2025-08-11 09:50:34"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow 8e51846a: Approval required for - 3. Orchestrator: Present Tool Options (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "8e51846a-7476-4f4a-ac67-dd8975d14450",
+      "step_id": "step_3",
+      "description": "3. Orchestrator: Present Tool Options (requires your approval)",
+      "context": {
+        "step_index": 2,
+        "agent_type": "3. orchestrator",
+        "action": "Present Tool Options (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 09:50:34"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow a09412b1: Started step - 1. Research: Research Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "a09412b1-1ba6-433f-9ee6-e955c52e4ba8",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "step_index": 0,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 09:50:39"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow a09412b1: Completed step - 1. Research: Research Installation. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "a09412b1-1ba6-433f-9ee6-e955c52e4ba8",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 09:50:40"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow a09412b1: Started step - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "a09412b1-1ba6-433f-9ee6-e955c52e4ba8",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "step_index": 1,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 09:50:40"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow a09412b1: Approval required for - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "a09412b1-1ba6-433f-9ee6-e955c52e4ba8",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "context": {
+        "step_index": 1,
+        "agent_type": "2. orchestrator",
+        "action": "Create Install Plan (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 09:50:40"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 12267908: Started step - 1. Librarian: Search Knowledge Base",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "12267908-fe4d-4572-837e-269def5246dc",
+      "step_id": "step_1",
+      "description": "1. Librarian: Search Knowledge Base",
+      "step_index": 0,
+      "total_steps": 8
+    },
+    "timestamp": "2025-08-11 09:50:43"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:04:54"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:04:54"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:04:56"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:04:56"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:21:58"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:21:58"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:28:58"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:28:58"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:37:14"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:37:14"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:39:48"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 10:39:48"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 709b720d: Started step - 1. Research: Research Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "step_index": 0,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 10:41:36"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow 709b720d: Completed step - 1. Research: Research Installation. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 10:41:36"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 709b720d: Started step - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "step_index": 1,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 10:41:36"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow 709b720d: Approval required for - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "context": {
+        "step_index": 1,
+        "agent_type": "2. orchestrator",
+        "action": "Create Install Plan (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 10:41:36"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow daa2d6e1: Started step - 1. Research: Research Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "step_index": 0,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 10:42:35"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow daa2d6e1: Completed step - 1. Research: Research Installation. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 10:42:35"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow daa2d6e1: Started step - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "step_index": 1,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 10:42:35"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow daa2d6e1: Approval required for - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "context": {
+        "step_index": 1,
+        "agent_type": "2. orchestrator",
+        "action": "Create Install Plan (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 10:42:35"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow 709b720d: Completed step - 2. Orchestrator: Create Install Plan (requires your approval). Result: Executed by  orchestrator: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "result": "Executed by  orchestrator: Task completed"
+    },
+    "timestamp": "2025-08-11 10:42:56"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 709b720d: Started step - 3. System_Commands: Install Software",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_3",
+      "description": "3. System_Commands: Install Software",
+      "step_index": 2,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 10:42:56"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow 709b720d: Completed step - 3. System_Commands: Install Software. Result: Executed by  system_commands: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_3",
+      "description": "3. System_Commands: Install Software",
+      "result": "Executed by  system_commands: Task completed"
+    },
+    "timestamp": "2025-08-11 10:42:58"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 709b720d: Started step - 4. System_Commands: Verify Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_4",
+      "description": "4. System_Commands: Verify Installation",
+      "step_index": 3,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 10:42:58"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow 709b720d: Completed step - 4. System_Commands: Verify Installation. Result: Executed by  system_commands: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "step_id": "step_4",
+      "description": "4. System_Commands: Verify Installation",
+      "result": "Executed by  system_commands: Task completed"
+    },
+    "timestamp": "2025-08-11 10:43:00"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83c\udf89 Workflow 709b720d: Completed successfully with 4 steps",
+    "messageType": "workflow_completed",
+    "rawData": {
+      "workflow_id": "709b720d-da4d-4f73-bc94-a60dec0ea24a",
+      "user_message": "what network scanning tools do we have available?",
+      "total_steps": 4,
+      "execution_time": "calculated_time_here"
+    },
+    "timestamp": "2025-08-11 10:43:00"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow daa2d6e1: Completed step - 2. Orchestrator: Create Install Plan (requires your approval). Result: Executed by  orchestrator: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "result": "Executed by  orchestrator: Task completed"
+    },
+    "timestamp": "2025-08-11 10:43:32"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow daa2d6e1: Started step - 3. System_Commands: Install Software",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_3",
+      "description": "3. System_Commands: Install Software",
+      "step_index": 2,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 10:43:32"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow daa2d6e1: Completed step - 3. System_Commands: Install Software. Result: Executed by  system_commands: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_3",
+      "description": "3. System_Commands: Install Software",
+      "result": "Executed by  system_commands: Task completed"
+    },
+    "timestamp": "2025-08-11 10:43:35"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow daa2d6e1: Started step - 4. System_Commands: Verify Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_4",
+      "description": "4. System_Commands: Verify Installation",
+      "step_index": 3,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 10:43:35"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow daa2d6e1: Completed step - 4. System_Commands: Verify Installation. Result: Executed by  system_commands: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "step_id": "step_4",
+      "description": "4. System_Commands: Verify Installation",
+      "result": "Executed by  system_commands: Task completed"
+    },
+    "timestamp": "2025-08-11 10:43:35"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83c\udf89 Workflow daa2d6e1: Completed successfully with 4 steps",
+    "messageType": "workflow_completed",
+    "rawData": {
+      "workflow_id": "daa2d6e1-ce44-4d4d-8546-4ee9733ad148",
+      "user_message": "what network scanning tools do we have available?",
+      "total_steps": 4,
+      "execution_time": "calculated_time_here"
+    },
+    "timestamp": "2025-08-11 10:43:35"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"type\": \"absolute\", \"value\": \"I don't have an IP address.\"}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"type\": \"absolute\", \"value\": \"I don't have an IP address.\"}"
+    },
+    "timestamp": "2025-08-11 11:42:26"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"type\": \"absolute\", \"value\": \"I don't have an IP address.\"}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"type\": \"absolute\", \"value\": \"I don't have an IP address.\"}"
+    },
+    "timestamp": "2025-08-11 11:42:26"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 11:42:42"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 11:42:42"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 78f559a2: Started step - 1. Research: Research Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "78f559a2-70ac-487c-833b-2da3db510cb2",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "step_index": 0,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 12:08:42"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow 78f559a2: Completed step - 1. Research: Research Installation. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "78f559a2-70ac-487c-833b-2da3db510cb2",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 12:08:43"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow 78f559a2: Started step - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "78f559a2-70ac-487c-833b-2da3db510cb2",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "step_index": 1,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 12:08:43"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow 78f559a2: Approval required for - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "78f559a2-70ac-487c-833b-2da3db510cb2",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "context": {
+        "step_index": 1,
+        "agent_type": "2. orchestrator",
+        "action": "Create Install Plan (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 12:08:43"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow c7991364: Started step - 1. Research: Research Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "c7991364-13db-456e-85fd-af7839d31b1c",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "step_index": 0,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 12:09:30"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow c7991364: Completed step - 1. Research: Research Installation. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "c7991364-13db-456e-85fd-af7839d31b1c",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 12:09:30"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow c7991364: Started step - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "c7991364-13db-456e-85fd-af7839d31b1c",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "step_index": 1,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 12:09:30"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow c7991364: Approval required for - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "c7991364-13db-456e-85fd-af7839d31b1c",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "context": {
+        "step_index": 1,
+        "agent_type": "2. orchestrator",
+        "action": "Create Install Plan (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 12:09:30"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 12:10:23"
+  },
+  {
+    "sender": "bot",
+    "text": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "I received your message but couldn't generate a proper response. Could you please try rephrasing your question?"
+    },
+    "timestamp": "2025-08-11 12:10:23"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow f947c0c7: Started step - 1. Research: Research Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "f947c0c7-a69d-495f-b713-08194b5ed07d",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "step_index": 0,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 12:37:52"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow f947c0c7: Completed step - 1. Research: Research Installation. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "f947c0c7-a69d-495f-b713-08194b5ed07d",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 12:37:53"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow f947c0c7: Started step - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "f947c0c7-a69d-495f-b713-08194b5ed07d",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "step_index": 1,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 12:37:53"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow f947c0c7: Approval required for - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "f947c0c7-a69d-495f-b713-08194b5ed07d",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "context": {
+        "step_index": 1,
+        "agent_type": "2. orchestrator",
+        "action": "Create Install Plan (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 12:37:53"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow e74fab6d: Started step - 1. Research: Research Installation",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "e74fab6d-4895-4add-8d95-825ca8a7ef84",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "step_index": 0,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 14:22:50"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u2705 Workflow e74fab6d: Completed step - 1. Research: Research Installation. Result: Executed by  research: Task completed",
+    "messageType": "workflow_step_completed",
+    "rawData": {
+      "workflow_id": "e74fab6d-4895-4add-8d95-825ca8a7ef84",
+      "step_id": "step_1",
+      "description": "1. Research: Research Installation",
+      "result": "Executed by  research: Task completed"
+    },
+    "timestamp": "2025-08-11 14:22:51"
+  },
+  {
+    "sender": "workflow",
+    "text": "\ud83d\udd04 Workflow e74fab6d: Started step - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_step_started",
+    "rawData": {
+      "workflow_id": "e74fab6d-4895-4add-8d95-825ca8a7ef84",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "step_index": 1,
+      "total_steps": 4
+    },
+    "timestamp": "2025-08-11 14:22:51"
+  },
+  {
+    "sender": "workflow",
+    "text": "\u23f8\ufe0f Workflow e74fab6d: Approval required for - 2. Orchestrator: Create Install Plan (requires your approval)",
+    "messageType": "workflow_approval_required",
+    "rawData": {
+      "workflow_id": "e74fab6d-4895-4add-8d95-825ca8a7ef84",
+      "step_id": "step_2",
+      "description": "2. Orchestrator: Create Install Plan (requires your approval)",
+      "context": {
+        "step_index": 1,
+        "agent_type": "2. orchestrator",
+        "action": "Create Install Plan (requires your approval)"
+      }
+    },
+    "timestamp": "2025-08-11 14:22:51"
+  }
+]
