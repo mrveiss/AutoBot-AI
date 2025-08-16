@@ -14,26 +14,32 @@ from src.llm_interface import LLMInterface
 
 
 class Diagnostics:
-    def __init__(self):
-        # Remove config_path and direct config loading
-        self.llm_interface = (
-            LLMInterface()
-        )  # LLMInterface now uses global_config_manager
+    def __init__(self, config_manager=None, llm_interface=None):
+        """
+        Initialize Diagnostics with dependency injection support.
+        
+        Args:
+            config_manager: Configuration manager instance (optional, uses global if None)
+            llm_interface: LLM interface instance (optional, creates new if None)
+        """
+        # Use provided dependencies or fall back to defaults for backward compatibility
+        self.config_manager = config_manager or global_config_manager
+        self.llm_interface = llm_interface or LLMInterface()
 
-        self.reliability_stats_file = global_config_manager.get_nested(
+        self.reliability_stats_file = self.config_manager.get_nested(
             "data.reliability_stats_file",
             os.getenv("AUTOBOT_RELIABILITY_STATS_FILE", "data/reliability_stats.json"),
         )
-        self.diagnostics_enabled = global_config_manager.get_nested(
+        self.diagnostics_enabled = self.config_manager.get_nested(
             "diagnostics.enabled", True
         )
-        self.use_llm_for_analysis = global_config_manager.get_nested(
+        self.use_llm_for_analysis = self.config_manager.get_nested(
             "diagnostics.use_llm_for_analysis", True
         )
-        self.use_web_search_for_analysis = global_config_manager.get_nested(
+        self.use_web_search_for_analysis = self.config_manager.get_nested(
             "diagnostics.use_web_search_for_analysis", False
         )
-        self.auto_apply_fixes = global_config_manager.get_nested(
+        self.auto_apply_fixes = self.config_manager.get_nested(
             "diagnostics.auto_apply_fixes", False
         )
 
