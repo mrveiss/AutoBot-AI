@@ -30,7 +30,7 @@ jobs:
           ffmpeg libavcodec-extra
 
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
@@ -161,7 +161,7 @@ jobs:
         python test_security_endpoints.py || echo "⚠️ Some endpoints may not be fully functional in CI"
 
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       if: matrix.python-version == '3.10'
       with:
         file: ./coverage.xml
@@ -313,7 +313,7 @@ jobs:
         cat DEPLOYMENT_SUMMARY.md
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: deployment-summary
         path: DEPLOYMENT_SUMMARY.md
