@@ -35,6 +35,18 @@ class ApiService {
     return this.post('/api/chat', { message, ...options })
   }
 
+  async getChatHistory() {
+    return this.get('/api/chat/history')
+  }
+
+  async getChatMessages(chatId) {
+    return this.get(`/api/chat/history/${chatId}`)
+  }
+
+  async deleteChatHistory(chatId) {
+    return this.delete(`/api/chat/history/${chatId}`)
+  }
+
   // Workflow API methods
   async getWorkflows() {
     return this.get('/api/workflow/workflows')
@@ -93,6 +105,10 @@ class ApiService {
     return this.post('/api/settings/', settings)
   }
 
+  async saveSettings(settings) {
+    return this.updateSettings(settings)
+  }
+
   // System API
   async getSystemStatus() {
     return this.get('/api/system/status')
@@ -102,12 +118,33 @@ class ApiService {
     return this.get('/api/system/health')
   }
 
+  async getSystemInfo() {
+    return this.get('/api/system/info')
+  }
+
+  // Terminal API
+  async executeCommand(command, options = {}) {
+    return this.post('/api/terminal/execute', { command, ...options })
+  }
+
+  async interruptProcess() {
+    return this.post('/api/terminal/interrupt')
+  }
+
+  async killAllProcesses() {
+    return this.post('/api/terminal/kill')
+  }
+
   // Knowledge Base API
   async searchKnowledge(query, limit = 5) {
     return this.post('/api/knowledge_base/search', {
       query,
       n_results: limit
     })
+  }
+
+  async searchKnowledgeBase(query, limit = 5) {
+    return this.searchKnowledge(query, limit)
   }
 
   async addKnowledge(content, metadata = {}) {
