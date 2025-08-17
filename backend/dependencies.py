@@ -8,16 +8,17 @@ removing the need for components to directly import and use global_config_manage
 from typing import Generator, Optional
 
 from fastapi import Depends
+
 from src.config import ConfigManager, global_config_manager
 
 
 def get_config() -> ConfigManager:
     """
     Dependency injection provider for configuration.
-    
+
     This function provides access to the configuration manager
     without requiring direct imports of global_config_manager.
-    
+
     Returns:
         ConfigManager: The global configuration manager instance
     """
@@ -27,84 +28,89 @@ def get_config() -> ConfigManager:
 def get_diagnostics(config: ConfigManager = Depends(get_config)):
     """
     Dependency injection provider for diagnostics.
-    
+
     Args:
         config: Configuration manager instance
-        
+
     Returns:
         Diagnostics: Diagnostics instance configured with the provided config
     """
     from src.diagnostics import Diagnostics
+
     return Diagnostics(config_manager=config)
 
 
 def get_knowledge_base(config: ConfigManager = Depends(get_config)):
     """
     Dependency injection provider for knowledge base.
-    
+
     Args:
         config: Configuration manager instance
-        
+
     Returns:
         KnowledgeBase: Knowledge base instance configured with the provided config
     """
     from src.knowledge_base import KnowledgeBase
+
     return KnowledgeBase(config_manager=config)
 
 
 def get_llm_interface(config: ConfigManager = Depends(get_config)):
     """
     Dependency injection provider for LLM interface.
-    
+
     Args:
         config: Configuration manager instance
-        
+
     Returns:
         LLMInterface: LLM interface instance configured with the provided config
     """
     from src.llm_interface import LLMInterface
+
     return LLMInterface()
 
 
 def get_orchestrator(
     config: ConfigManager = Depends(get_config),
-    llm_interface = Depends(get_llm_interface),
-    knowledge_base = Depends(get_knowledge_base),
-    diagnostics = Depends(get_diagnostics)
+    llm_interface=Depends(get_llm_interface),
+    knowledge_base=Depends(get_knowledge_base),
+    diagnostics=Depends(get_diagnostics),
 ):
     """
     Dependency injection provider for orchestrator.
-    
+
     Args:
         config: Configuration manager instance
         llm_interface: LLM interface instance
         knowledge_base: Knowledge base instance
         diagnostics: Diagnostics instance
-        
+
     Returns:
         Orchestrator: Orchestrator instance configured with all dependencies
     """
     from src.orchestrator import Orchestrator
+
     return Orchestrator(
         config_manager=config,
         llm_interface=llm_interface,
         knowledge_base=knowledge_base,
-        diagnostics=diagnostics
+        diagnostics=diagnostics,
     )
 
 
 def get_security_layer(config: ConfigManager = Depends(get_config)):
     """
     Dependency injection provider for security layer.
-    
+
     Args:
         config: Configuration manager instance
-        
+
     Returns:
         Optional[SecurityLayer]: Security layer instance if enabled, None otherwise
     """
     try:
         from src.security_layer import SecurityLayer
+
         return SecurityLayer()
     except Exception:
         return None
@@ -114,21 +120,21 @@ def get_security_layer(config: ConfigManager = Depends(get_config)):
 class DependencyCache:
     """
     Simple cache for expensive-to-create dependencies.
-    
+
     This can be used to ensure that expensive objects like
     knowledge bases or orchestrators are created only once
     per request context.
     """
-    
+
     def __init__(self):
         self._cache = {}
-    
+
     def get_or_create(self, key: str, factory_fn):
         """Get cached instance or create new one using factory function."""
         if key not in self._cache:
             self._cache[key] = factory_fn()
         return self._cache[key]
-    
+
     def clear(self):
         """Clear the cache."""
         self._cache.clear()
@@ -141,40 +147,40 @@ dependency_cache = DependencyCache()
 def get_cached_knowledge_base(config: ConfigManager = Depends(get_config)):
     """
     Cached version of knowledge base dependency.
-    
+
     This version caches the knowledge base instance to avoid
     repeated initialization costs.
-    
+
     Args:
         config: Configuration manager instance
-        
+
     Returns:
         KnowledgeBase: Cached knowledge base instance
     """
     from src.knowledge_base import KnowledgeBase
+
     return dependency_cache.get_or_create(
-        "knowledge_base",
-        lambda: KnowledgeBase(config_manager=config)
+        "knowledge_base", lambda: KnowledgeBase(config_manager=config)
     )
 
 
 def get_cached_orchestrator(config: ConfigManager = Depends(get_config)):
     """
     Cached version of orchestrator dependency.
-    
+
     This version caches the orchestrator instance to avoid
     repeated initialization costs.
-    
+
     Args:
         config: Configuration manager instance
-        
+
     Returns:
         Orchestrator: Cached orchestrator instance
     """
     from src.orchestrator import Orchestrator
+
     return dependency_cache.get_or_create(
-        "orchestrator",
-        lambda: Orchestrator(config_manager=config)
+        "orchestrator", lambda: Orchestrator(config_manager=config)
     )
 
 

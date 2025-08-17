@@ -549,6 +549,53 @@ def add_api_routes(app: FastAPI) -> None:
     except ImportError as e:
         logger.info(f"Project state router not available - skipping router: {e}")
 
+    # Add enhanced orchestration router
+    try:
+        from backend.api.orchestration import router as orchestration_router
+
+        routers_config.append(
+            (orchestration_router, "/orchestration", ["orchestration"], "orchestration")
+        )
+        logger.info("Enhanced orchestration router registered")
+    except ImportError:
+        logger.info("Enhanced orchestration router not available - skipping router")
+
+    # Add code search router
+    try:
+        from backend.api.code_search import router as code_search_router
+
+        routers_config.append(
+            (code_search_router, "/code_search", ["code_search"], "code_search")
+        )
+        logger.info("Code search router registered")
+    except ImportError:
+        logger.info("Code search router not available - skipping router")
+
+    # Add development speedup router
+    try:
+        from backend.api.development_speedup import router as dev_speedup_router
+
+        routers_config.append(
+            (
+                dev_speedup_router,
+                "/development_speedup",
+                ["development_speedup"],
+                "development_speedup",
+            )
+        )
+        logger.info("Development speedup router registered")
+    except ImportError:
+        logger.info("Development speedup router not available - skipping router")
+
+    # Add secure sandbox router
+    try:
+        from backend.api.sandbox import router as sandbox_router
+
+        routers_config.append((sandbox_router, "/sandbox", ["sandbox"], "sandbox"))
+        logger.info("Secure sandbox router registered")
+    except ImportError:
+        logger.info("Secure sandbox router not available - skipping router")
+
     # Add elevation router for privilege escalation
     try:
         from backend.api.elevation import router as elevation_router

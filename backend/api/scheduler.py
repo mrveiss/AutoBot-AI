@@ -427,7 +427,11 @@ async def schedule_template_workflow(
             user_message=user_message,
             scheduled_time=scheduled_time,
             priority=priority,
-            complexity=template.complexity.value if hasattr(template, 'complexity') else "simple",
+            complexity=(
+                template.complexity.value
+                if hasattr(template, "complexity")
+                else "simple"
+            ),
             template_id=template_id,
             variables=template_variables,
             auto_approve=auto_approve,
