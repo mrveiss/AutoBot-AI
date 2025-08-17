@@ -133,6 +133,17 @@ fi
 echo "🔄 Starting Redis Stack..."
 if docker ps --format '{{.Names}}' | grep -q '^autobot-redis$'; then
     echo "✅ 'autobot-redis' container is already running."
+elif docker ps -a --format '{{.Names}}' | grep -q '^autobot-redis$'; then
+    echo "🔄 Starting existing 'autobot-redis' container..."
+    docker start autobot-redis || {
+        echo "❌ Failed to start existing Redis container. Removing and recreating..."
+        docker rm autobot-redis
+        docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-redis || {
+            echo "❌ Failed to recreate Redis Stack container."
+            exit 1
+        }
+    }
+    echo "✅ 'autobot-redis' container started."
 else
     docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-redis || {
         echo "❌ Failed to start Redis Stack container via docker-compose."
@@ -145,6 +156,12 @@ fi
 echo "🔄 Starting NPU Worker..."
 if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
     echo "✅ 'autobot-npu-worker' container is already running."
+elif docker ps -a --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
+    echo "🔄 Starting existing 'autobot-npu-worker' container..."
+    docker start autobot-npu-worker || {
+        echo "⚠️  Warning: Failed to start existing NPU Worker. Continuing without NPU acceleration."
+        # Don't exit - NPU worker is optional
+    }
 else
     docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-npu-worker || {
         echo "⚠️  Warning: Failed to start NPU Worker container. Continuing without NPU acceleration."
