@@ -1,6 +1,5 @@
 import asyncio
 import glob
-import json
 import logging
 import os
 import shutil
@@ -13,9 +12,10 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.agents import get_kb_librarian, get_librarian_assistant
+from src.agents import get_kb_librarian
 from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
-from src.error_handler import log_error, safe_api_error, with_error_handling
+from src.agents.llm_failsafe_agent import get_llm_system_status, get_robust_llm_response
+from src.error_handler import log_error, safe_api_error
 from src.exceptions import (
     AutoBotError,
     InternalError,
@@ -34,6 +34,20 @@ except ImportError:
     WORKFLOW_AUTOMATION_AVAILABLE = False
 
 router = APIRouter()
+
+
+@router.get("/chat/llm-status")
+async def get_llm_status():
+    """Get the current status of all LLM tiers"""
+    try:
+        status = get_llm_system_status()
+        return JSONResponse(status_code=200, content=status)
+    except Exception as e:
+        logger.error(f"Failed to get LLM status: {e}")
+        return JSONResponse(
+            status_code=500, content={"error": f"Failed to get LLM status: {str(e)}"}
+        )
+
 
 logger = logging.getLogger(__name__)
 
@@ -917,7 +931,6 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                         try:
                             # Execute the approved command via chat terminal
                             # Import the terminal execution function
-                            from fastapi import Request
                             from pydantic import BaseModel
 
                             from backend.api.terminal import execute_single_command
@@ -1161,38 +1174,39 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
 
         # Get a response using LLM interface with hybrid acceleration
         try:
-            logger.info(f"Sending message to LLM with hybrid acceleration: {message}")
+            logger.info(f"Sending message to LLM with failsafe system: {message}")
+
+            # Use the robust failsafe LLM system that guarantees a response
+            context = {
+                "chat_id": chat_id,
+                "message_history": messages,
+                "timestamp": time.time(),
+                "endpoint": "direct_chat",
+            }
+
+            failsafe_response = await get_robust_llm_response(message, context)
 
             logger.info(
-                "About to call llm_interface.chat_completion with hybrid acceleration"
+                f"Got failsafe LLM response using tier: {failsafe_response.tier_used.value}"
             )
+            logger.info(f"Response confidence: {failsafe_response.confidence}")
+            logger.info(f"Model used: {failsafe_response.model_used}")
 
-            # Use task LLM type for direct chat (lighter workload)
-            ollama_response = await llm_interface.chat_completion(
-                messages, llm_type="task", max_tokens=500, temperature=0.7
-            )
+            if failsafe_response.warnings:
+                logger.warning(f"LLM warnings: {failsafe_response.warnings}")
 
-            logger.info("Successfully completed llm_interface.chat_completion call")
+            # The failsafe system always returns content
+            content = failsafe_response.content
+            logger.info(f"Extracted content: {content[:200]}...")
 
-            logger.info(f"Got hybrid LLM response: {ollama_response}")
-            logger.info(f"Response type: {type(ollama_response)}")
-            logger.info(
-                f"Response keys: {ollama_response.keys() if isinstance(ollama_response, dict) else 'Not a dict'}"
-            )
-
-            # Extract content from LLM interface response
-            # The Ollama response structure is: {"message": {"role": "assistant", "content": "..."}}
-            if ollama_response and "message" in ollama_response:
-                message_content = ollama_response["message"]
-                if isinstance(message_content, dict) and "content" in message_content:
-                    content = message_content["content"]
-                    logger.info(f"Extracted content: {content}")
-                else:
-                    content = str(message_content)
-                    logger.info(f"Message content is not dict, using string: {content}")
-            else:
-                logger.error(f"Unexpected response structure: {ollama_response}")
-                content = "No response received from hybrid acceleration system"
+            # Create a compatible response structure for downstream processing
+            ollama_response = {
+                "message": {"role": "assistant", "content": content},
+                "tier_used": failsafe_response.tier_used.value,
+                "model": failsafe_response.model_used,
+                "confidence": failsafe_response.confidence,
+                "warnings": failsafe_response.warnings,
+            }
 
             logger.info(
                 f"About to process chat history saving with content: {content[:100]}..."

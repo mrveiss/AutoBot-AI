@@ -8,6 +8,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from src.agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
+from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
 from src.llm_interface import LLMInterface
 from src.utils.redis_client import get_redis_client
@@ -144,18 +146,18 @@ CONTEXT ANALYSIS:
 Please provide your analysis in the following JSON format:
 {{
     "complexity": "simple|research|install|security_scan|complex",
-    "confidence": 0.0-1.0,
+    "confidence": 0.95,
     "reasoning": "Clear explanation of why you classified it this way",
     "domain": "Primary domain (security, networking, development, etc.)",
     "intent": "What the user wants to accomplish",
     "scope": "single|multi-step",
     "risk_level": "low|medium|high",
-    "suggested_agents": ["list", "o", "relevant", "agents"],
-    "estimated_steps": 1-10,
-    "user_approval_needed": true/false,
-    "system_changes": true/false,
-    "requires_research": true/false,
-    "requires_installation": true/false
+    "suggested_agents": ["list", "of", "relevant", "agents"],
+    "estimated_steps": 1,
+    "user_approval_needed": false,
+    "system_changes": false,
+    "requires_research": false,
+    "requires_installation": false
 }}
 
 Be thorough in your analysis and reasoning. Consider the implications and requirements of the request.
@@ -166,12 +168,12 @@ Be thorough in your analysis and reasoning. Consider the implications and requir
         Intelligently classify a user request using LLM reasoning.
         Falls back to keyword-based classification if LLM fails.
         """
-        try:
-            # First, get LLM analysis
-            llm_result = await self._llm_classify(user_message)
+        # Get keyword-based classification first as fallback
+        keyword_result = self.keyword_classifier.classify_request(user_message)
 
-            # Get keyword-based classification for comparison
-            keyword_result = self.keyword_classifier.classify_request(user_message)
+        try:
+            # Try to get LLM analysis
+            llm_result = await self._llm_classify(user_message)
 
             # Combine results with LLM taking precedence but keyword as fallback
             final_result = self._combine_classifications(
@@ -193,64 +195,54 @@ Be thorough in your analysis and reasoning. Consider the implications and requir
         prompt = self.classification_prompt.format(user_message=user_message)
 
         try:
-            # Get LLM response
-            response = await self.llm.chat_completion(
-                [
-                    {
-                        "role": "system",
-                        "content": "You are an expert classification agent. Respond only with valid JSON.",
-                    },
-                    {"role": "user", "content": prompt},
-                ]
+            # Use failsafe LLM system for guaranteed response
+            system_prompt = (
+                "You are an expert classification agent. Respond only with valid JSON."
+            )
+            full_prompt = f"{system_prompt}\n\n{prompt}"
+
+            # Get robust LLM response with failover
+            failsafe_response = await get_robust_llm_response(
+                full_prompt,
+                context={"task": "classification", "user_message": user_message},
             )
 
-            # Parse JSON response
-            if (
-                isinstance(response, dict)
-                and "message" in response
-                and "content" in response["message"]
-            ):
-                # Extract content from LLM response
-                content = response["message"]["content"]
-                if isinstance(content, str):
-                    # Try to extract JSON from content
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    if start >= 0 and end > start:
-                        json_str = content[start:end]
-                        try:
-                            parsed = json.loads(json_str)
-                            # Check if parsed JSON has required fields
-                            if not parsed.get("complexity"):
-                                logger.warning(
-                                    "LLM returned JSON without complexity field"
-                                )
-                                return {}
-                            return parsed
-                        except json.JSONDecodeError as je:
-                            logger.warning(f"LLM returned malformed JSON: {je}")
-                            # Try to fix the JSON by removing common malformed patterns
-                            cleaned_json = json_str.replace('{"":"",', "{").replace(
-                                '{"":""  }', "{}"
-                            )
-                            if cleaned_json != "{}":
-                                try:
-                                    parsed = json.loads(cleaned_json)
-                                    if parsed.get("complexity"):
-                                        return parsed
-                                except Exception:
-                                    pass
-                            return {}
-                return content if isinstance(content, dict) else {}
-            elif isinstance(response, str):
-                # Try to extract JSON from response string
-                start = response.find("{")
-                end = response.rfind("}") + 1
-                if start >= 0 and end > start:
-                    json_str = response[start:end]
-                    return json.loads(json_str)
+            logger.info(
+                f"Classification LLM response using tier: {failsafe_response.tier_used.value}"
+            )
+            if failsafe_response.warnings:
+                logger.warning(
+                    f"Classification LLM warnings: {failsafe_response.warnings}"
+                )
 
-            return response if isinstance(response, dict) else {}
+            response = failsafe_response.content
+
+            # Parse JSON response - response is now just the content string
+            if isinstance(response, str):
+                # Use the JSON formatter agent to handle parsing
+                parse_result = json_formatter.parse_llm_response(
+                    response, CLASSIFICATION_SCHEMA
+                )
+
+                if parse_result.success:
+                    logger.info(
+                        f"JSON parsed using method: {parse_result.method_used} "
+                        f"(confidence: {parse_result.confidence:.2f})"
+                    )
+                    if parse_result.warnings:
+                        logger.warning(
+                            f"JSON parsing warnings: {parse_result.warnings}"
+                        )
+                    return parse_result.data
+                else:
+                    logger.warning(f"JSON parsing failed: {parse_result.warnings}")
+                    return {}
+            elif isinstance(response, dict):
+                # Response is already a dict
+                return response
+            else:
+                logger.warning(f"Unexpected response type: {type(response)}")
+                return {}
 
         except Exception as e:
             logger.error(f"LLM classification failed: {e}")
