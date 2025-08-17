@@ -1,0 +1,400 @@
+"""
+Enhanced Orchestration API
+
+Advanced multi-agent orchestration endpoints with improved coordination and strategies.
+"""
+
+import logging
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+from src.enhanced_multi_agent_orchestrator import (
+    ExecutionStrategy,
+    create_and_execute_workflow,
+    enhanced_orchestrator,
+)
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+class WorkflowRequest(BaseModel):
+    goal: str
+    strategy: Optional[str] = None  # Let system decide if not specified
+    context: Optional[dict] = None
+    max_parallel_tasks: Optional[int] = 5
+
+
+class AgentRecommendationRequest(BaseModel):
+    task_type: str
+    capabilities_needed: list[str]
+
+
+@router.post("/workflow/execute")
+async def execute_workflow(request: WorkflowRequest):
+    """
+    Execute a workflow with enhanced multi-agent orchestration.
+
+    Features:
+    - Intelligent task distribution based on agent capabilities
+    - Multiple execution strategies (parallel, sequential, pipeline, collaborative, adaptive)
+    - Real-time progress tracking
+    - Automatic failover and retry logic
+    """
+    try:
+        logger.info(f"Executing workflow for goal: {request.goal}")
+
+        # Update max parallel tasks if specified
+        if request.max_parallel_tasks:
+            enhanced_orchestrator.max_parallel_tasks = request.max_parallel_tasks
+
+        # Create and execute workflow
+        result = await create_and_execute_workflow(request.goal, request.context)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success" if result.get("success") else "failed",
+                "workflow_id": result.get("plan_id"),
+                "execution_time": result.get("execution_time"),
+                "strategy_used": result.get("strategy_used"),
+                "results_summary": {
+                    "total_tasks": len(result.get("results", {})),
+                    "completed": sum(
+                        1
+                        for r in result.get("results", {}).values()
+                        if r.get("status") == "completed"
+                    ),
+                    "failed": sum(
+                        1
+                        for r in result.get("results", {}).values()
+                        if r.get("status") == "failed"
+                    ),
+                },
+                "details": result,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Workflow execution error: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Workflow execution failed: {str(e)}"
+        )
+
+
+@router.post("/workflow/plan")
+async def create_workflow_plan(request: WorkflowRequest):
+    """
+    Create a workflow plan without executing it.
+
+    Useful for previewing what actions will be taken before execution.
+    """
+    try:
+        logger.info(f"Creating workflow plan for: {request.goal}")
+
+        # Create plan
+        plan = await enhanced_orchestrator.create_workflow_plan(
+            request.goal, request.context
+        )
+
+        # Convert to serializable format
+        plan_dict = {
+            "plan_id": plan.plan_id,
+            "goal": plan.goal,
+            "strategy": plan.strategy.value,
+            "estimated_duration": plan.estimated_duration,
+            "tasks": [
+                {
+                    "task_id": task.task_id,
+                    "agent_type": task.agent_type,
+                    "action": task.action,
+                    "priority": task.priority,
+                    "dependencies": task.dependencies,
+                    "capabilities_required": [
+                        cap.value for cap in task.capabilities_required
+                    ],
+                }
+                for task in plan.tasks
+            ],
+            "success_criteria": plan.success_criteria,
+            "resource_requirements": plan.resource_requirements,
+        }
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "plan": plan_dict,
+                "task_count": len(plan.tasks),
+                "message": "Workflow plan created successfully",
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Plan creation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Plan creation failed: {str(e)}")
+
+
+@router.get("/agents/performance")
+async def get_agent_performance():
+    """
+    Get performance metrics for all agents.
+
+    Includes success rates, average execution times, and reliability scores.
+    """
+    try:
+        report = enhanced_orchestrator.get_performance_report()
+
+        return JSONResponse(
+            status_code=200, content={"status": "success", "performance_data": report}
+        )
+
+    except Exception as e:
+        logger.error(f"Performance report error: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get performance report: {str(e)}"
+        )
+
+
+@router.post("/agents/recommend")
+async def recommend_agents(request: AgentRecommendationRequest):
+    """
+    Get agent recommendations for a specific task type and capabilities.
+
+    Returns a ranked list of suitable agents based on capabilities and performance.
+    """
+    try:
+        from src.enhanced_multi_agent_orchestrator import AgentCapability
+
+        # Convert capability strings to enums
+        capabilities_needed = set()
+        for cap_str in request.capabilities_needed:
+            try:
+                capabilities_needed.add(AgentCapability(cap_str))
+            except ValueError:
+                logger.warning(f"Unknown capability: {cap_str}")
+
+        if not capabilities_needed:
+            raise HTTPException(
+                status_code=400, detail="No valid capabilities specified"
+            )
+
+        # Get recommendations
+        recommendations = await enhanced_orchestrator.get_agent_recommendations(
+            request.task_type, capabilities_needed
+        )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "task_type": request.task_type,
+                "capabilities_requested": request.capabilities_needed,
+                "recommended_agents": recommendations,
+                "agent_count": len(recommendations),
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Agent recommendation error: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get recommendations: {str(e)}"
+        )
+
+
+@router.get("/workflow/active")
+async def get_active_workflows():
+    """
+    Get list of currently active workflows.
+    """
+    try:
+        active_workflows = []
+
+        for workflow_id, plan in enhanced_orchestrator.active_workflows.items():
+            active_workflows.append(
+                {
+                    "workflow_id": workflow_id,
+                    "goal": plan.goal,
+                    "strategy": plan.strategy.value,
+                    "task_count": len(plan.tasks),
+                    "estimated_duration": plan.estimated_duration,
+                }
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "active_count": len(active_workflows),
+                "workflows": active_workflows,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Active workflows error: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get active workflows: {str(e)}"
+        )
+
+
+@router.get("/strategies")
+async def get_execution_strategies():
+    """
+    Get available execution strategies and their descriptions.
+    """
+    strategies = {
+        "sequential": {
+            "name": "Sequential",
+            "description": "Execute tasks one after another in dependency order",
+            "best_for": "Tasks with strict dependencies or limited resources",
+        },
+        "parallel": {
+            "name": "Parallel",
+            "description": "Execute independent tasks simultaneously",
+            "best_for": "Tasks with no dependencies that can run concurrently",
+        },
+        "pipeline": {
+            "name": "Pipeline",
+            "description": "Output from one stage feeds into the next stage",
+            "best_for": "Data transformation or multi-stage processing tasks",
+        },
+        "collaborative": {
+            "name": "Collaborative",
+            "description": "Agents work together sharing insights in real-time",
+            "best_for": "Complex analysis requiring multiple perspectives",
+        },
+        "adaptive": {
+            "name": "Adaptive",
+            "description": "Strategy changes based on progress and performance",
+            "best_for": "Unpredictable tasks or when optimal strategy is unknown",
+        },
+    }
+
+    return JSONResponse(
+        status_code=200, content={"strategies": strategies, "default": "adaptive"}
+    )
+
+
+@router.get("/capabilities")
+async def get_agent_capabilities():
+    """
+    Get all available agent capabilities and coverage.
+    """
+    try:
+        # Get capability coverage
+        coverage = enhanced_orchestrator._calculate_capability_coverage()
+
+        # Get detailed agent capabilities
+        agent_details = {}
+        for agent, caps in enhanced_orchestrator.agent_capabilities.items():
+            agent_details[agent] = {
+                "capabilities": [cap.value for cap in caps],
+                "performance": {
+                    "reliability": enhanced_orchestrator.agent_performance[
+                        agent
+                    ].reliability_score,
+                    "total_tasks": enhanced_orchestrator.agent_performance[
+                        agent
+                    ].total_tasks,
+                },
+            }
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "capability_coverage": coverage,
+                "agents": agent_details,
+                "total_agents": len(agent_details),
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Capabilities error: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get capabilities: {str(e)}"
+        )
+
+
+@router.get("/status")
+async def get_orchestration_status():
+    """
+    Get overall orchestration system status.
+    """
+    try:
+        performance_report = enhanced_orchestrator.get_performance_report()
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "operational",
+                "active_workflows": performance_report.get("active_workflows", 0),
+                "max_parallel_tasks": enhanced_orchestrator.max_parallel_tasks,
+                "total_agents": len(enhanced_orchestrator.agent_capabilities),
+                "capabilities": {
+                    "execution_strategies": [
+                        "sequential",
+                        "parallel",
+                        "pipeline",
+                        "collaborative",
+                        "adaptive",
+                    ],
+                    "agent_coordination": True,
+                    "performance_tracking": True,
+                    "automatic_failover": True,
+                    "resource_optimization": True,
+                },
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Status error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+
+
+@router.get("/examples")
+async def get_orchestration_examples():
+    """
+    Get example workflows and usage patterns.
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "examples": {
+                "parallel_research": {
+                    "goal": "Research the latest developments in quantum computing and AI",
+                    "strategy": "parallel",
+                    "description": "Multiple research agents work simultaneously on different aspects",
+                },
+                "sequential_installation": {
+                    "goal": "Install Docker, configure it, and deploy a test container",
+                    "strategy": "sequential",
+                    "description": "Installation steps must be performed in order",
+                },
+                "collaborative_analysis": {
+                    "goal": "Analyze this codebase for security vulnerabilities and performance issues",
+                    "strategy": "collaborative",
+                    "description": "Security and performance agents share findings in real-time",
+                },
+                "pipeline_processing": {
+                    "goal": "Extract data from documents, transform it, and generate a report",
+                    "strategy": "pipeline",
+                    "description": "Each stage processes and passes data to the next",
+                },
+                "adaptive_complex": {
+                    "goal": "Help me refactor this legacy application to use microservices",
+                    "strategy": "adaptive",
+                    "description": "Strategy adapts based on codebase complexity and progress",
+                },
+            },
+            "usage_tips": [
+                "Use 'adaptive' strategy when unsure - it automatically adjusts",
+                "Parallel execution speeds up independent tasks significantly",
+                "Collaborative mode is best for complex analysis requiring multiple viewpoints",
+                "Pipeline mode excels at data transformation workflows",
+                "Monitor performance metrics to optimize agent selection over time",
+            ],
+        },
+    )
