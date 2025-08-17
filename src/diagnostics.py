@@ -17,7 +17,7 @@ class Diagnostics:
     def __init__(self, config_manager=None, llm_interface=None):
         """
         Initialize Diagnostics with dependency injection support.
-        
+
         Args:
             config_manager: Configuration manager instance (optional, uses global if None)
             llm_interface: LLM interface instance (optional, creates new if None)

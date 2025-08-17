@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
 
 # Import the centralized ConfigManager and Redis client utility
@@ -36,6 +37,8 @@ from src.tool_discovery import discover_tools
 from src.tools import ToolRegistry
 from src.utils.redis_client import get_redis_client
 from src.worker_node import GUI_AUTOMATION_SUPPORTED, WorkerNode
+
+logger = logging.getLogger(__name__)
 
 # Workflow orchestration enhancements
 
@@ -76,10 +79,16 @@ except ImportError:
 
 
 class Orchestrator:
-    def __init__(self, config_manager=None, llm_interface=None, knowledge_base=None, diagnostics=None):
+    def __init__(
+        self,
+        config_manager=None,
+        llm_interface=None,
+        knowledge_base=None,
+        diagnostics=None,
+    ):
         """
         Initialize Orchestrator with dependency injection support.
-        
+
         Args:
             config_manager: Configuration manager instance (optional, uses global if None)
             llm_interface: LLM interface instance (optional, creates new if None)
@@ -91,6 +100,9 @@ class Orchestrator:
         self.llm_interface = llm_interface or LLMInterface()
         self.knowledge_base = knowledge_base or KnowledgeBase()
         self.diagnostics = diagnostics or Diagnostics()
+
+        # Add logger attribute
+        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         llm_config = self.config_manager.get_llm_config()
         self.orchestrator_llm_model = llm_config.get(
@@ -719,7 +731,58 @@ class Orchestrator:
         should_orchestrate = await self.should_use_workflow_orchestration(goal)
 
         if should_orchestrate:
-            # Use workflow orchestration for complex requests
+            # Check if enhanced orchestration is enabled
+            use_enhanced = self.config_manager.get_nested(
+                "orchestrator.use_enhanced_multi_agent", True
+            )
+
+            if use_enhanced:
+                # Use enhanced multi-agent orchestrator
+                try:
+                    from src.enhanced_multi_agent_orchestrator import (
+                        create_and_execute_workflow,
+                    )
+
+                    self.logger.info("Using enhanced multi-agent orchestration")
+
+                    # Create context from messages
+                    context = {
+                        "messages": messages,
+                        "timestamp": time.time(),
+                        "request_id": str(uuid.uuid4()),
+                    }
+
+                    # Execute with enhanced orchestrator
+                    result = await create_and_execute_workflow(goal, context)
+
+                    # Format response
+                    if result.get("success"):
+                        response_text = self._format_enhanced_results(
+                            result.get("results", {})
+                        )
+                    else:
+                        response_text = f"I encountered an issue: {result.get('error', 'Unknown error')}"
+
+                    return {
+                        "status": "success",
+                        "tool_name": "enhanced_workflow_orchestrator",
+                        "tool_args": {
+                            "plan_id": result.get("plan_id"),
+                            "strategy": result.get("strategy_used"),
+                            "execution_time": result.get("execution_time"),
+                        },
+                        "response_text": response_text,
+                        "workflow_executed": True,
+                        "enhanced_orchestration": True,
+                    }
+
+                except Exception as e:
+                    self.logger.error(
+                        f"Enhanced orchestration failed: {e}, falling back to standard"
+                    )
+                    # Fall back to standard orchestration
+
+            # Standard workflow orchestration
             workflow_response = await self.create_workflow_response(goal)
 
             await event_manager.publish(
@@ -758,6 +821,40 @@ class Orchestrator:
 
         # Execute complex goal using iterative approach
         return await self._execute_complex_goal(goal, messages)
+
+    def _format_enhanced_results(self, results: Dict[str, Any]) -> str:
+        """Format results from enhanced orchestrator into readable response."""
+        if not results:
+            return "The workflow completed but no specific results were returned."
+
+        # Extract meaningful information from results
+        completed_tasks = []
+        outputs = []
+
+        for task_id, result in results.items():
+            if result.get("status") == "completed":
+                completed_tasks.append(result.get("agent", "unknown"))
+                if "output" in result and isinstance(result["output"], dict):
+                    output_result = result["output"].get("result", "")
+                    if output_result:
+                        outputs.append(str(output_result))
+
+        # Build response
+        response_parts = []
+
+        if completed_tasks:
+            response_parts.append(
+                f"I coordinated {len(completed_tasks)} agents to complete your request."
+            )
+
+        if outputs:
+            response_parts.append("\n\nHere's what I found:\n" + "\n".join(outputs))
+
+        return (
+            " ".join(response_parts)
+            if response_parts
+            else "The workflow completed successfully."
+        )
 
     async def _log_goal_start(self, goal: str) -> None:
         """Log the start of goal execution."""

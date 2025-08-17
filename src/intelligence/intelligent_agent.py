@@ -461,7 +461,9 @@ class IntelligentAgent:
                         # Validate command safety
                         if self.command_validator.is_command_safe(command):
                             # Execute the command
-                            async for chunk in self.streaming_executor.execute_with_streaming(
+                            async for (
+                                chunk
+                            ) in self.streaming_executor.execute_with_streaming(
                                 command, user_input, timeout=300
                             ):
                                 yield chunk

@@ -11,11 +11,13 @@ This module provides a unified configuration system that:
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict
 
 import yaml
 
-# GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when writing config files
+# GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when
+# writing config files
 _original_yaml_dump = yaml.dump
 _original_yaml_safe_dump = yaml.safe_dump
 
@@ -59,7 +61,6 @@ def _filtered_yaml_safe_dump(data, stream=None, **kwargs):
 # Apply the monkey patches
 yaml.dump = _filtered_yaml_dump
 yaml.safe_dump = _filtered_yaml_safe_dump
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +263,8 @@ class ConfigManager:
         current[path[-1]] = value
 
     def _get_default_ollama_model(self) -> str:
-        """Get the first available Ollama model or fallback to environment/hardcoded default"""
+        """Get the first available Ollama model or fallback to environment/
+        hardcoded default"""
         # First check environment variable
         env_model = os.getenv("AUTOBOT_OLLAMA_MODEL")
         if env_model:
@@ -278,9 +280,11 @@ class ConfigManager:
             if result.returncode == 0:
                 lines = result.stdout.strip().split("\n")[1:]  # Skip header
                 if lines and lines[0].strip():
-                    first_model = lines[0].split()[0]  # Get first model name
+                    # Get first model name
+                    first_model = lines[0].split()[0]
                     logger.info(
-                        f"UNIFIED CONFIG: Auto-detected first available model: '{first_model}'"
+                        f"UNIFIED CONFIG: Auto-detected first available "
+                        f"model: '{first_model}'"
                     )
                     return first_model
         except Exception as e:
@@ -326,13 +330,15 @@ class ConfigManager:
     def save_settings(self) -> None:
         """Save current configuration to settings.json"""
         try:
-            # Filter out prompts before saving (prompts are managed separately in prompts/ directory)
+            # Filter out prompts before saving (prompts are managed separately
+            # in prompts/ directory)
             import copy
 
             filtered_config = copy.deepcopy(self._config)
             if "prompts" in filtered_config:
                 logger.info(
-                    "GLOBAL CONFIG MANAGER: Removing prompts section from settings save - prompts are managed in prompts/ directory"
+                    "GLOBAL CONFIG MANAGER: Removing prompts section from "
+                    "settings save - prompts are managed in prompts/ directory"
                 )
                 del filtered_config["prompts"]
 
