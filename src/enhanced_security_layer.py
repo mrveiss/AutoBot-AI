@@ -50,6 +50,17 @@ class EnhancedSecurityLayer:
             use_docker_sandbox=self.use_docker_sandbox,
         )
 
+        # Initialize enhanced sandbox executor if Docker is available
+        self.sandbox_executor = None
+        if self.use_docker_sandbox:
+            try:
+                from src.secure_sandbox_executor import secure_sandbox
+
+                self.sandbox_executor = secure_sandbox
+                print("Enhanced Docker sandbox executor initialized")
+            except Exception as e:
+                print(f"Failed to initialize enhanced sandbox executor: {e}")
+
         # Approval queue for async command approvals
         self.pending_approvals: Dict[str, asyncio.Event] = {}
         self.approval_results: Dict[str, bool] = {}

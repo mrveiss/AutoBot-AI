@@ -32,7 +32,7 @@ class KnowledgeBase:
     def __init__(self, config_manager=None):
         """
         Initialize KnowledgeBase with dependency injection support.
-        
+
         Args:
             config_manager: Configuration manager instance (optional, uses global if None)
         """
@@ -61,9 +61,7 @@ class KnowledgeBase:
         ) or self.config_manager.get_nested(
             "llama_index.embedding.model", "nomic-embed-text:latest"
         )
-        self.chunk_size = self.config_manager.get_nested(
-            "llama_index.chunk_size", 512
-        )
+        self.chunk_size = self.config_manager.get_nested("llama_index.chunk_size", 512)
         self.chunk_overlap = self.config_manager.get_nested(
             "llama_index.chunk_overlap", 20
         )
