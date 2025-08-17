@@ -110,7 +110,10 @@ class Orchestrator:
             "orchestrator_llm",
             llm_config.get("ollama", {}).get("model", "tinyllama:latest"),
         )
-        self.task_llm_model = llm_config.get("task_llm", "ollama")
+        self.task_llm_model = llm_config.get(
+            "task_llm",
+            f"ollama_{llm_config.get('ollama', {}).get('model', 'llama3.2:1b-instruct-q4_K_M')}",
+        )
         self.ollama_models = llm_config.get("ollama", {}).get("models", {})
         self.phi2_enabled = False  # This will be driven by config if needed
 
