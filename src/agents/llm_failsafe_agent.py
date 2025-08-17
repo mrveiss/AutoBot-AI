@@ -205,10 +205,12 @@ class LLMFailsafeAgent:
             for model in self.primary_models:
                 try:
                     # Create timeout wrapper
-                    response_task = llm.generate_response(prompt)
-                    response = await asyncio.wait_for(
+                    messages = [{"role": "user", "content": prompt}]
+                    response_task = llm.chat_completion(messages, llm_type="task")
+                    response_data = await asyncio.wait_for(
                         response_task, timeout=self.timeouts[LLMTier.PRIMARY]
                     )
+                    response = response_data.get("response", "")
 
                     if response and len(response.strip()) > 0:
                         response_time = time.time() - start_time
@@ -263,10 +265,12 @@ class LLMFailsafeAgent:
 
             for model in self.secondary_models:
                 try:
-                    response_task = llm.generate_response(simplified_prompt)
-                    response = await asyncio.wait_for(
+                    messages = [{"role": "user", "content": simplified_prompt}]
+                    response_task = llm.chat_completion(messages, llm_type="task")
+                    response_data = await asyncio.wait_for(
                         response_task, timeout=self.timeouts[LLMTier.SECONDARY]
                     )
+                    response = response_data.get("response", "")
 
                     if response and len(response.strip()) > 0:
                         response_time = time.time() - start_time
