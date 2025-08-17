@@ -446,7 +446,10 @@ class ConfigManager:
                 "AUTOBOT_ORCHESTRATOR_LLM",
                 unified_config["local"]["providers"]["ollama"]["selected_model"],
             ),
-            "task_llm": os.getenv("AUTOBOT_TASK_LLM", "ollama"),
+            "task_llm": os.getenv(
+                "AUTOBOT_TASK_LLM",
+                f"ollama_{unified_config['local']['providers']['ollama']['selected_model']}",
+            ),
             "ollama": {
                 "host": unified_config["local"]["providers"]["ollama"]["host"],
                 "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
