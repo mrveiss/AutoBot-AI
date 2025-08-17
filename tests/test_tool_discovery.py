@@ -1,8 +1,8 @@
-import pytest
-import shutil
-import subprocess
 from unittest.mock import patch
-from src.tool_discovery import discover_tools, ESSENTIAL_TOOLS
+
+import pytest
+
+from src.tool_discovery import ESSENTIAL_TOOLS, discover_tools
 
 
 # Mock shutil.which to control tool discovery results
