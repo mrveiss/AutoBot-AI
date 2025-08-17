@@ -415,7 +415,12 @@ export default {
     const terminalInput = ref(null);
 
     // Computed properties
-    const canInput = computed(() => connectionStatus.value === 'connected');
+    const canInput = computed(() => {
+      // Only allow input when connected AND terminal is ready AND not waiting for user input
+      return connectionStatus.value === 'connected' && 
+             !connecting.value && 
+             !waitingForUserConfirmation.value;
+    });
     const hasRunningProcesses = computed(() => runningProcesses.value.length > 0);
     const connectionStatusText = computed(() => {
       switch (connectionStatus.value) {
@@ -1110,19 +1115,34 @@ export default {
     };
 
     const handleStatusChange = (status) => {
+      const oldStatus = connectionStatus.value;
       connectionStatus.value = status;
 
+      console.log(`Terminal status change: ${oldStatus} -> ${status}`);
+
       if (status === 'connected') {
+        // Mark as not connecting anymore
+        connecting.value = false;
+        
         // Ensure input is focused and interactive when connection is established
         nextTick(() => {
-          focusInput();
-          // Add a small delay to ensure DOM is fully ready for automated testing
+          // Wait for canInput computed to update
           setTimeout(() => {
-            focusInput();
-          }, 100);
+            if (canInput.value) {
+              focusInput();
+              // Additional focus attempt for automated testing reliability
+              setTimeout(() => {
+                if (canInput.value && terminalInput.value && document.activeElement !== terminalInput.value) {
+                  focusInput();
+                }
+              }, 200);
+            }
+          }, 50);
         });
       } else if (status === 'disconnected' && !connecting.value) {
         showReconnectModal.value = true;
+      } else if (status === 'connecting') {
+        connecting.value = true;
       }
     };
 
@@ -1405,13 +1425,34 @@ export default {
       formatTerminalLine,
       getLineClass,
       // Testing utilities for automated tests
-      isTerminalReady: () => canInput.value && terminalInput.value && !terminalInput.value.disabled,
+      isTerminalReady: () => {
+        const ready = canInput.value && terminalInput.value && !terminalInput.value.disabled;
+        console.log(`Terminal ready check: canInput=${canInput.value}, hasInput=${!!terminalInput.value}, enabled=${terminalInput.value ? !terminalInput.value.disabled : false}, result=${ready}`);
+        return ready;
+      },
       ensureInputFocus: () => {
         if (canInput.value && terminalInput.value) {
+          console.log('Ensuring terminal input focus...');
           terminalInput.value.focus();
-          return document.activeElement === terminalInput.value;
+          const focused = document.activeElement === terminalInput.value;
+          console.log(`Focus result: ${focused}`);
+          return focused;
         }
+        console.log('Cannot ensure focus: canInput=', canInput.value, 'hasInput=', !!terminalInput.value);
         return false;
+      },
+      // Additional debug utility for automated testing
+      getDebugInfo: () => {
+        return {
+          canInput: canInput.value,
+          connectionStatus: connectionStatus.value,
+          connecting: connecting.value,
+          waitingForUserConfirmation: waitingForUserConfirmation.value,
+          hasTerminalInput: !!terminalInput.value,
+          inputDisabled: terminalInput.value ? terminalInput.value.disabled : null,
+          activeElement: document.activeElement?.className || 'none',
+          isInputFocused: document.activeElement === terminalInput.value
+        };
       }
     };
   }

@@ -39,6 +39,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - Dead code elimination assistance
     - Refactoring opportunity identification
 
+### Secrets Management Requirements
+- **IMPLEMENT COMPREHENSIVE SECRETS MANAGEMENT SYSTEM**
+  - **Dual-scope secrets**: Chat-scoped (conversation-only) vs General-scoped (all chats)
+  - **Multiple input methods**: GUI secrets management tab + chat-based entry
+  - **Secret types**: SSH keys, passwords, API keys for agent resource access
+  - **Transfer capability**: Move chat secrets to general pool when needed
+  - **Cleanup dialogs**: On chat deletion, prompt for secret/file transfer or deletion
+  - **Security isolation**: Chat secrets only accessible within originating conversation
+  - **Agent integration**: Seamless access to appropriate secrets based on scope
+
 ### Development Workflow Memories
 - **ALL COMMITS MUST BE ORGANIZED BY TOPIC AND FUNCTIONALITY**
   - Group related changes together

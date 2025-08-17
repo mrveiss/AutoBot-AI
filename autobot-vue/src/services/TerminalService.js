@@ -5,11 +5,26 @@
 
 import { reactive, ref } from 'vue';
 
+// Connection states for state machine
+const CONNECTION_STATES = {
+  DISCONNECTED: 'disconnected',
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  READY: 'ready',        // Connected AND input ready
+  ERROR: 'error',
+  RECONNECTING: 'reconnecting'
+};
+
 class TerminalService {
   constructor() {
     this.connections = new Map(); // sessionId -> WebSocket connection
     this.callbacks = new Map(); // sessionId -> event callbacks
+    this.connectionStates = new Map(); // sessionId -> connection state
+    this.reconnectAttempts = new Map(); // sessionId -> attempt count
+    this.healthCheckIntervals = new Map(); // sessionId -> interval ID
     this.baseUrl = this.getWebSocketUrl();
+    this.maxReconnectAttempts = 5;
+    this.reconnectDelay = 1000; // Start with 1 second
   }
 
   getWebSocketUrl() {
@@ -17,6 +32,94 @@ class TerminalService {
     const host = import.meta.env.DEV ? 'localhost' : window.location.hostname;
     const port = import.meta.env.DEV ? '8001' : window.location.port;
     return `${protocol}//${host}:${port}/api/terminal/ws/simple`;
+  }
+
+  /**
+   * Set connection state and trigger callbacks
+   * @param {string} sessionId - Session ID
+   * @param {string} state - New connection state
+   */
+  setConnectionState(sessionId, state) {
+    const oldState = this.connectionStates.get(sessionId);
+    this.connectionStates.set(sessionId, state);
+    
+    console.log(`Terminal ${sessionId}: ${oldState} -> ${state}`);
+    
+    // Trigger state change callback
+    this.triggerCallback(sessionId, 'onStatusChange', state);
+    
+    // Handle state-specific logic
+    switch (state) {
+      case CONNECTION_STATES.CONNECTED:
+        // Start health check
+        this.startHealthCheck(sessionId);
+        break;
+        
+      case CONNECTION_STATES.READY:
+        // Reset reconnection attempts on successful ready state
+        this.reconnectAttempts.set(sessionId, 0);
+        break;
+        
+      case CONNECTION_STATES.DISCONNECTED:
+      case CONNECTION_STATES.ERROR:
+        // Stop health check
+        this.stopHealthCheck(sessionId);
+        break;
+    }
+  }
+
+  /**
+   * Get current connection state
+   * @param {string} sessionId - Session ID
+   * @returns {string} Connection state
+   */
+  getConnectionState(sessionId) {
+    return this.connectionStates.get(sessionId) || CONNECTION_STATES.DISCONNECTED;
+  }
+
+  /**
+   * Start health check for session
+   * @param {string} sessionId - Session ID
+   */
+  startHealthCheck(sessionId) {
+    // Clear any existing interval
+    this.stopHealthCheck(sessionId);
+    
+    const interval = setInterval(() => {
+      if (this.isConnected(sessionId)) {
+        this.sendPing(sessionId);
+      }
+    }, 30000); // Every 30 seconds
+    
+    this.healthCheckIntervals.set(sessionId, interval);
+  }
+
+  /**
+   * Stop health check for session
+   * @param {string} sessionId - Session ID
+   */
+  stopHealthCheck(sessionId) {
+    const interval = this.healthCheckIntervals.get(sessionId);
+    if (interval) {
+      clearInterval(interval);
+      this.healthCheckIntervals.delete(sessionId);
+    }
+  }
+
+  /**
+   * Send ping to check connection health
+   * @param {string} sessionId - Session ID
+   */
+  sendPing(sessionId) {
+    const connection = this.connections.get(sessionId);
+    if (connection && connection.readyState === WebSocket.OPEN) {
+      try {
+        connection.send(JSON.stringify({ type: 'ping' }));
+      } catch (error) {
+        console.error('Failed to send ping:', error);
+        this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
+      }
+    }
   }
 
   /**
@@ -51,7 +154,7 @@ class TerminalService {
   }
 
   /**
-   * Connect to a terminal session via WebSocket
+   * Connect to a terminal session via WebSocket with state management
    * @param {string} sessionId - The session ID to connect to
    * @param {Object} callbacks - Event callback functions
    * @param {Function} callbacks.onOutput - Called when terminal produces output
@@ -65,16 +168,26 @@ class TerminalService {
       return;
     }
 
+    this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTING);
+    this.callbacks.set(sessionId, callbacks);
+
     try {
       const wsUrl = `${this.baseUrl}/${sessionId}`;
       const ws = new WebSocket(wsUrl);
 
       this.connections.set(sessionId, ws);
-      this.callbacks.set(sessionId, callbacks);
 
       ws.onopen = () => {
-        // Backend will automatically initialize the terminal session
-        this.triggerCallback(sessionId, 'onStatusChange', 'connected');
+        console.log(`WebSocket opened for session ${sessionId}`);
+        this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTED);
+        
+        // Send initial ready check with improved timing
+        setTimeout(() => {
+          if (this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTED) {
+            console.log(`Terminal ${sessionId}: Auto-setting to READY after connection`);
+            this.setConnectionState(sessionId, CONNECTION_STATES.READY);
+          }
+        }, 300); // Optimized delay for backend readiness
       };
 
       ws.onmessage = (event) => {
@@ -82,21 +195,66 @@ class TerminalService {
       };
 
       ws.onclose = (event) => {
-        this.connections.delete(sessionId);
-        this.callbacks.delete(sessionId);
-        this.triggerCallback(sessionId, 'onStatusChange', 'disconnected');
+        console.log(`WebSocket closed for session ${sessionId}:`, event.code, event.reason);
+        this.cleanupSession(sessionId);
+        
+        // Attempt reconnection if not intentional
+        if (event.code !== 1000 && this.reconnectAttempts.get(sessionId, 0) < this.maxReconnectAttempts) {
+          this.attemptReconnect(sessionId, callbacks);
+        } else {
+          this.setConnectionState(sessionId, CONNECTION_STATES.DISCONNECTED);
+        }
       };
 
       ws.onerror = (error) => {
         console.error(`Terminal session ${sessionId} error:`, error);
+        this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
         this.triggerCallback(sessionId, 'onError', 'WebSocket connection error');
       };
 
     } catch (error) {
       console.error(`Failed to connect to terminal session ${sessionId}:`, error);
+      this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
       this.triggerCallback(sessionId, 'onError', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Attempt automatic reconnection with exponential backoff
+   * @param {string} sessionId - Session ID
+   * @param {Object} callbacks - Original callbacks
+   */
+  async attemptReconnect(sessionId, callbacks) {
+    const attempts = this.reconnectAttempts.get(sessionId) || 0;
+    this.reconnectAttempts.set(sessionId, attempts + 1);
+    
+    const delay = this.reconnectDelay * Math.pow(2, attempts); // Exponential backoff
+    
+    console.log(`Attempting reconnection ${attempts + 1}/${this.maxReconnectAttempts} for session ${sessionId} in ${delay}ms`);
+    
+    this.setConnectionState(sessionId, CONNECTION_STATES.RECONNECTING);
+    
+    setTimeout(async () => {
+      try {
+        await this.connect(sessionId, callbacks);
+      } catch (error) {
+        console.error(`Reconnection attempt ${attempts + 1} failed:`, error);
+        if (attempts + 1 >= this.maxReconnectAttempts) {
+          this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
+        }
+      }
+    }, delay);
+  }
+
+  /**
+   * Clean up session resources
+   * @param {string} sessionId - Session ID
+   */
+  cleanupSession(sessionId) {
+    this.connections.delete(sessionId);
+    this.stopHealthCheck(sessionId);
+    // Keep callbacks for potential reconnection
   }
 
   /**
@@ -111,8 +269,8 @@ class TerminalService {
       switch (message.type) {
         case 'output':
           this.triggerCallback(sessionId, 'onOutput', {
-            content: message.content,
-            stream: message.stream || 'stdout'
+            content: message.content || message.data, // Support both formats
+            stream: message.stream || message.metadata?.stream || 'stdout'
           });
           break;
 
@@ -121,11 +279,16 @@ class TerminalService {
           break;
 
         case 'status':
-          this.triggerCallback(sessionId, 'onStatusChange', message.status);
+          // Update connection state based on status messages
+          const status = message.status;
+          if (status) {
+            this.setConnectionState(sessionId, status);
+          }
           break;
 
         case 'error':
-          this.triggerCallback(sessionId, 'onError', message.error);
+          this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
+          this.triggerCallback(sessionId, 'onError', message.error || message.content);
           break;
 
         case 'exit':
@@ -136,12 +299,32 @@ class TerminalService {
           break;
 
         case 'connection':
-          // Handle connection status messages
-          this.triggerCallback(sessionId, 'onStatusChange', message.status || 'connected');
+          // Handle connection status messages - update state
+          const connectionStatus = message.status || 'connected';
+          if (connectionStatus === 'connected') {
+            this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTED);
+            // Transition to ready after brief delay to ensure backend is ready
+            setTimeout(() => {
+              if (this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTED) {
+                console.log(`Terminal ${sessionId}: Setting to READY state`);
+                this.setConnectionState(sessionId, CONNECTION_STATES.READY);
+              }
+            }, 200); // Increased delay for better reliability
+          } else {
+            this.setConnectionState(sessionId, connectionStatus);
+          }
+          break;
+
+        case 'pong':
+          // Health check response - connection is healthy
+          console.log(`Health check pong received from ${sessionId}`);
+          if (this.getConnectionState(sessionId) !== CONNECTION_STATES.READY) {
+            this.setConnectionState(sessionId, CONNECTION_STATES.READY);
+          }
           break;
 
         default:
-          console.warn(`Unknown message type: ${message.type}`);
+          console.warn(`Unknown message type: ${message.type}`, message);
       }
     } catch (error) {
       console.error('Failed to parse terminal message:', error, data);

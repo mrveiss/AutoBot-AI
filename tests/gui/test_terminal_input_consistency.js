@@ -36,18 +36,39 @@ test.describe('Terminal Input Consistency', () => {
     // Test focus handling
     await terminalInput.click();
     
-    // Use the new testing utility methods if available
-    const isTerminalReady = await page.evaluate(() => {
+    // Enhanced terminal readiness check with debug info
+    const terminalDebugInfo = await page.evaluate(() => {
+      // Try to get the terminal component instance
       const terminalComponent = window.Vue?.devtools?.getInspectorComponentByName?.('TerminalWindow');
-      if (terminalComponent && terminalComponent.isTerminalReady) {
-        return terminalComponent.isTerminalReady();
+      
+      if (terminalComponent) {
+        return {
+          hasComponent: true,
+          isReady: terminalComponent.isTerminalReady ? terminalComponent.isTerminalReady() : false,
+          debugInfo: terminalComponent.getDebugInfo ? terminalComponent.getDebugInfo() : {},
+          ensureFocusResult: terminalComponent.ensureInputFocus ? terminalComponent.ensureInputFocus() : false
+        };
       }
+      
       // Fallback: check DOM state directly
       const input = document.querySelector('.terminal-input');
-      return input && !input.disabled && input.offsetParent !== null;
+      const isReady = input && !input.disabled && input.offsetParent !== null;
+      
+      return {
+        hasComponent: false,
+        isReady: isReady,
+        debugInfo: {
+          hasInput: !!input,
+          inputDisabled: input ? input.disabled : null,
+          inputVisible: input ? input.offsetParent !== null : false,
+          activeElement: document.activeElement?.className || 'none'
+        },
+        ensureFocusResult: false
+      };
     });
     
-    expect(isTerminalReady).toBe(true);
+    console.log('Terminal debug info:', JSON.stringify(terminalDebugInfo, null, 2));
+    expect(terminalDebugInfo.isReady).toBe(true);
     
     // Test input interaction - type a simple command
     await terminalInput.fill('echo "Terminal input test"');
@@ -119,19 +140,41 @@ test.describe('Terminal Input Consistency', () => {
     // Check if focus is automatically restored
     await page.waitForTimeout(500);
     
-    // Use the ensureInputFocus utility if available
-    const focusRestored = await page.evaluate(() => {
+    // Enhanced focus restoration check with debugging
+    const focusInfo = await page.evaluate(() => {
       const terminalComponent = window.Vue?.devtools?.getInspectorComponentByName?.('TerminalWindow');
+      const input = document.querySelector('.terminal-input');
+      
       if (terminalComponent && terminalComponent.ensureInputFocus) {
-        return terminalComponent.ensureInputFocus();
+        const ensureResult = terminalComponent.ensureInputFocus();
+        return {
+          hasComponent: true,
+          ensureResult: ensureResult,
+          debugInfo: terminalComponent.getDebugInfo ? terminalComponent.getDebugInfo() : {},
+          isInputFocused: document.activeElement === input
+        };
       }
+      
       // Fallback: check if input is focused
-      return document.activeElement === document.querySelector('.terminal-input');
+      const isFocused = document.activeElement === input;
+      return {
+        hasComponent: false,
+        ensureResult: false,
+        debugInfo: {
+          hasInput: !!input,
+          isInputFocused: isFocused,
+          activeElement: document.activeElement?.className || 'none'
+        },
+        isInputFocused: isFocused
+      };
     });
     
-    if (!focusRestored) {
-      // Try clicking the terminal input again
+    console.log('Focus restoration info:', JSON.stringify(focusInfo, null, 2));
+    
+    if (!focusInfo.isInputFocused) {
+      console.log('Focus not restored automatically, manually clicking input...');
       await terminalInput.click();
+      await page.waitForTimeout(100); // Small delay after manual click
     }
     
     // Verify we can type after focus restoration
