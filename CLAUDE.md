@@ -21,6 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 14. **CRITICAL**: NO error left unfixed, NO warning left unfixed - ZERO TOLERANCE for any linting or compilation errors
 15. **CRITICAL**: ALWAYS continue working on started tasks - NO task abandonment without completion
 16. **CRITICAL**: Group all tasks by priority in TodoWrite - errors/warnings ALWAYS take precedence over features
+17. **CRITICAL**: Any dependency installed needs to reflect in install scripts AND requirements.txt - SECURITY UPDATES MANDATORY
 
 ### NPU Worker and Redis Code Search Capabilities
 - **YOU ARE AUTHORIZED TO USE NPU WORKER AND REDIS FOR ADVANCED CODE ANALYSIS**
