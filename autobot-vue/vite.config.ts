@@ -14,11 +14,7 @@ export default defineConfig({
   ],
   css: {
     devSourcemap: true,
-    transformer: 'postcss',
-    lightningcss: {
-      // Disable lightningcss minification that's causing issues with Tailwind
-      minify: false,
-    },
+    postcss: './postcss.config.js',
   },
   resolve: {
     alias: {
