@@ -7,7 +7,15 @@ import sys
 from typing import Any, Dict
 
 import psutil
-import torch
+
+# Conditional torch import for environments without CUDA
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    print("Warning: PyTorch not available or CUDA libraries missing")
+    TORCH_AVAILABLE = False
+    torch = None
 
 # Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
@@ -78,7 +86,10 @@ class WorkerNode:
                 ),
                 "usage_percent": psutil.virtual_memory().percent,
             },
-            "gpu": {"cuda_available": torch.cuda.is_available(), "cuda_devices": []},
+            "gpu": {
+                "cuda_available": TORCH_AVAILABLE and torch.cuda.is_available(), 
+                "cuda_devices": []
+            },
             "openvino_available": False,
             "onnxruntime_available": False,
             "llm_backends_supported": [],
@@ -86,7 +97,7 @@ class WorkerNode:
             "gui_automation_supported": GUI_AUTOMATION_SUPPORTED,
         }
 
-        if capabilities["gpu"]["cuda_available"]:
+        if capabilities["gpu"]["cuda_available"] and TORCH_AVAILABLE:
             for i in range(torch.cuda.device_count()):
                 capabilities["gpu"]["cuda_devices"].append(
                     {
