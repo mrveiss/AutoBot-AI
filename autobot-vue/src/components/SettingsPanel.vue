@@ -727,6 +727,7 @@ export default {
     };
 
     let healthCheckInterval;
+    let agentConfigSyncInterval;
 
     onMounted(async () => {
       // Load settings from backend
@@ -739,11 +740,16 @@ export default {
       await checkHealthStatus();
       // Set up periodic health checks
       healthCheckInterval = setInterval(checkHealthStatus, 10000); // Check every 10 seconds
+      // Set up periodic agent config sync to ensure settings always match actual status
+      agentConfigSyncInterval = setInterval(syncSettingsWithAgentConfig, 15000); // Sync every 15 seconds
     });
 
     onUnmounted(() => {
       if (healthCheckInterval) {
         clearInterval(healthCheckInterval);
+      }
+      if (agentConfigSyncInterval) {
+        clearInterval(agentConfigSyncInterval);
       }
     });
 
@@ -768,6 +774,10 @@ export default {
         const response = await apiClient.get('/api/settings/config');
         const configSettings = await response.json();
         settings.value = deepMerge(defaultSettings(), configSettings);
+        
+        // SYNC WITH AGENT CONFIG: Ensure settings match actual agent status
+        await syncSettingsWithAgentConfig();
+        
         // Save to local storage as well
         localStorage.setItem('chat_settings', JSON.stringify(settings.value));
       } catch (error) {
@@ -788,6 +798,65 @@ export default {
       }
       // Load prompts after settings are loaded
       await loadPrompts();
+    };
+
+    // Function to sync settings panel with actual agent configuration
+    const syncSettingsWithAgentConfig = async () => {
+      try {
+        // Get comprehensive LLM status to see what's actually configured
+        const llmStatusResponse = await apiClient.get('/api/llm/status/comprehensive');
+        const llmStatus = await llmStatusResponse.json();
+        
+        // Get agent configuration to see actual agent models
+        const agentConfigResponse = await apiClient.get('/api/agent-config/agents');
+        const agentConfig = await agentConfigResponse.json();
+        
+        console.log('Syncing settings with agent config:', {
+          llmStatus,
+          agentConfig: agentConfig.agents
+        });
+        
+        // Update settings to match actual LLM status
+        if (llmStatus && settings.value.backend && settings.value.backend.llm) {
+          // Sync provider type
+          settings.value.backend.llm.provider_type = llmStatus.provider_type || 'local';
+          
+          // Sync active provider info
+          if (llmStatus.active_provider) {
+            const activeProvider = llmStatus.active_provider;
+            
+            if (activeProvider.type === 'local') {
+              settings.value.backend.llm.local.provider = activeProvider.name || 'ollama';
+              if (activeProvider.model && settings.value.backend.llm.local.providers[activeProvider.name]) {
+                settings.value.backend.llm.local.providers[activeProvider.name].selected_model = activeProvider.model;
+              }
+            } else if (activeProvider.type === 'cloud') {
+              settings.value.backend.llm.cloud.provider = activeProvider.name || 'openai';
+              if (activeProvider.model && settings.value.backend.llm.cloud.providers[activeProvider.name]) {
+                settings.value.backend.llm.cloud.providers[activeProvider.name].selected_model = activeProvider.model;
+              }
+            }
+          }
+          
+          // Sync streaming setting
+          if (llmStatus.settings) {
+            settings.value.backend.streaming = llmStatus.settings.streaming || false;
+            settings.value.backend.timeout = llmStatus.settings.timeout || 60;
+            settings.value.backend.max_retries = llmStatus.settings.max_retries || 3;
+          }
+        }
+        
+        // Log the sync result for debugging
+        console.log('Settings synced with agent config:', {
+          provider_type: settings.value.backend.llm.provider_type,
+          local_provider: settings.value.backend.llm.local.provider,
+          streaming: settings.value.backend.streaming
+        });
+        
+      } catch (error) {
+        console.error('Error syncing settings with agent config:', error);
+        // Don't fail the settings load if sync fails
+      }
     };
 
     // Function to save settings to config.yaml via backend

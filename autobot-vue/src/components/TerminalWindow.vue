@@ -15,7 +15,7 @@
         >
           🛑 KILL
         </button>
-        
+
         <!-- Session Takeover / Pause Automation -->
         <button
           class="control-button takeover"
@@ -26,7 +26,7 @@
         >
           {{ automationPaused ? '▶️ RESUME' : '⏸️ PAUSE' }}
         </button>
-        
+
         <!-- Interrupt Current Process -->
         <button
           class="control-button interrupt"
@@ -36,7 +36,7 @@
         >
           ⚡ INT
         </button>
-        
+
         <button
           class="control-button"
           @click="reconnect"
@@ -168,7 +168,7 @@
             <div class="command-label">Command to execute:</div>
             <div class="command-text">{{ pendingCommand }}</div>
           </div>
-          
+
           <div class="risk-assessment">
             <div class="risk-level" :class="pendingCommandRisk">
               Risk Level: <strong>{{ pendingCommandRisk.toUpperCase() }}</strong>
@@ -191,15 +191,15 @@
             <p><strong>Are you sure you want to proceed?</strong></p>
           </div>
         </div>
-        
+
         <div class="modal-actions">
-          <button 
+          <button
             class="btn btn-danger"
             @click="executeConfirmedCommand"
            aria-label="⚡ execute command">
             ⚡ Execute Command
           </button>
-          <button 
+          <button
             class="btn btn-secondary"
             @click="cancelCommand"
            aria-label="❌ cancel">
@@ -227,15 +227,15 @@
             <p><strong>This action cannot be undone. Continue?</strong></p>
           </div>
         </div>
-        
+
         <div class="modal-actions">
-          <button 
+          <button
             class="btn btn-danger"
             @click="confirmEmergencyKill"
            aria-label="🛑 kill all processes">
             🛑 KILL ALL PROCESSES
           </button>
-          <button 
+          <button
             class="btn btn-secondary"
             @click="showKillConfirmation = false"
            aria-label="❌ cancel">
@@ -272,17 +272,17 @@
             <div class="step-counter">
               Step {{ pendingWorkflowStep.stepNumber }} of {{ pendingWorkflowStep.totalSteps }}
             </div>
-            
+
             <div class="step-description">
               <h4>{{ pendingWorkflowStep.description }}</h4>
               <p>{{ pendingWorkflowStep.explanation || 'The AI wants to execute the following command:' }}</p>
             </div>
-            
+
             <div class="command-preview">
               <div class="command-label">Command to Execute:</div>
               <div class="command-text">{{ pendingWorkflowStep.command }}</div>
             </div>
-            
+
             <div class="workflow-options">
               <div class="option-info">
                 <p><strong>Choose your action:</strong></p>
@@ -295,21 +295,21 @@
             </div>
           </div>
         </div>
-        
+
         <div class="modal-actions workflow-actions">
-          <button 
+          <button
             class="btn btn-success"
             @click="confirmWorkflowStep"
            aria-label="✅ execute & continue">
             ✅ Execute & Continue
           </button>
-          <button 
+          <button
             class="btn btn-warning"
             @click="skipWorkflowStep"
            aria-label="⏭️ skip this step">
             ⏭️ Skip This Step
           </button>
-          <button 
+          <button
             class="btn btn-primary"
             @click="takeManualControl"
            aria-label="👤 take manual control">
@@ -391,7 +391,7 @@ export default {
     const pendingCommandReasons = ref([]);
     const runningProcesses = ref([]);
     const hasActiveProcess = ref(false);
-    
+
     // Automation control state
     const automationPaused = ref(false);
     const hasAutomatedWorkflow = ref(false);
@@ -402,7 +402,7 @@ export default {
     const pendingWorkflowStep = ref(null);
     const automationQueue = ref([]);
     const waitingForUserConfirmation = ref(false);
-    
+
     // Advanced workflow management state
     const isAdvancedMode = ref(true); // Use advanced modal by default
     const workflowTemplates = ref([]);
@@ -417,8 +417,8 @@ export default {
     // Computed properties
     const canInput = computed(() => {
       // Only allow input when connected AND terminal is ready AND not waiting for user input
-      return connectionStatus.value === 'connected' && 
-             !connecting.value && 
+      return connectionStatus.value === 'connected' &&
+             !connecting.value &&
              !waitingForUserConfirmation.value;
     });
     const hasRunningProcesses = computed(() => runningProcesses.value.length > 0);
@@ -481,7 +481,7 @@ export default {
 
       // Check if command is potentially destructive
       const riskAssessment = assessCommandRisk(command);
-      
+
       if (riskAssessment.risk === 'high' || riskAssessment.risk === 'critical') {
         // Show confirmation modal for dangerous commands
         pendingCommand.value = command;
@@ -530,7 +530,7 @@ export default {
     // Command risk assessment
     const assessCommandRisk = (command) => {
       const lowerCmd = command.toLowerCase().trim();
-      
+
       // Critical risk patterns (system destruction)
       const criticalPatterns = [
         /rm\s+-rf\s+\/($|\s)/,  // rm -rf /
@@ -544,7 +544,7 @@ export default {
       const highRiskPatterns = [
         /rm\s+-rf/,  // recursive force delete
         /chmod\s+777.*\/$/,  // chmod 777 on root
-        /chown.*\/$/,  // chown on root  
+        /chown.*\/$/,  // chown on root
         /rm\s+.*\/etc\//,  // delete config files
         /sudo\s+rm/,  // sudo rm
         />\s*\/dev\/null.*&&.*rm/,  // redirect and delete
@@ -558,7 +558,7 @@ export default {
       const moderateRiskPatterns = [
         /sudo\s+(apt|yum|dnf|pacman).*install/,  // package installation
         /sudo\s+(apt|yum|dnf|pacman).*remove/,   // package removal
-        /sudo\s+systemctl/,  // system service control  
+        /sudo\s+systemctl/,  // system service control
         /sudo\s+(service|systemd)/,  // service management
         /sudo\s+mount/,  // mount filesystems
         /chmod.*[4-7][0-7][0-7]/,  // permission changes with setuid
@@ -577,7 +577,7 @@ export default {
         }
       }
 
-      // Check for high risk patterns  
+      // Check for high risk patterns
       if (risk === 'low') {
         for (const pattern of highRiskPatterns) {
           if (pattern.test(lowerCmd)) {
@@ -603,7 +603,7 @@ export default {
       if (lowerCmd.includes('sudo')) {
         reasons.push('Command uses sudo (elevated privileges)');
       }
-      
+
       if (lowerCmd.includes('>>') || lowerCmd.includes('>')) {
         reasons.push('Command redirects output (potential file modification)');
       }
@@ -639,7 +639,7 @@ export default {
       try {
         // Send SIGKILL to all processes in the terminal session
         await sendInput(sessionId.value, '\u0003\u0003\u0003'); // Multiple Ctrl+C
-        
+
         // Force kill all tracked processes
         for (const process of runningProcesses.value) {
           try {
@@ -652,7 +652,7 @@ export default {
         // Clear all process tracking
         runningProcesses.value = [];
         hasActiveProcess.value = false;
-        
+
         // Add emergency kill message to terminal
         addOutputLine({
           content: '🛑 EMERGENCY KILL: All processes terminated by user',
@@ -661,7 +661,7 @@ export default {
         });
 
         showKillConfirmation.value = false;
-        
+
       } catch (error) {
         console.error('Emergency kill failed:', error);
         addOutputLine({
@@ -674,13 +674,13 @@ export default {
 
     const interruptProcess = () => {
       if (!hasActiveProcess.value) return;
-      
+
       // Send Ctrl+C (SIGINT) to interrupt current process
       sendInput(sessionId.value, '\u0003');
-      
+
       addOutputLine({
         content: '^C (Process interrupted by user)',
-        type: 'system_message', 
+        type: 'system_message',
         timestamp: new Date()
       });
     };
@@ -694,7 +694,7 @@ export default {
         /^(ssh|scp|rsync)/,  // network operations
         /^(find|grep|sort).*\|/,  // long-running pipes
       ];
-      
+
       return processStartPatterns.some(pattern => pattern.test(command.toLowerCase()));
     };
 
@@ -704,14 +704,14 @@ export default {
         command: command,
         startTime: new Date()
       };
-      
+
       runningProcesses.value.push(process);
     };
 
     // Automation Control Methods
     const toggleAutomationPause = () => {
       automationPaused.value = !automationPaused.value;
-      
+
       if (automationPaused.value) {
         // Pause automation - user takes control
         addOutputLine({
@@ -719,10 +719,10 @@ export default {
           type: 'system_message',
           timestamp: new Date()
         });
-        
+
         // Notify backend about pause
         sendAutomationControl('pause');
-        
+
       } else {
         // Resume automation
         addOutputLine({
@@ -730,10 +730,10 @@ export default {
           type: 'system_message',
           timestamp: new Date()
         });
-        
+
         // Resume any pending automation steps
         sendAutomationControl('resume');
-        
+
         // Continue with next step if available
         if (automationQueue.value.length > 0) {
           processNextAutomationStep();
@@ -750,9 +750,9 @@ export default {
           sessionId: sessionId.value,
           timestamp: new Date().toISOString()
         };
-        
+
         await sendInput(sessionId.value, JSON.stringify(controlMessage));
-        
+
       } catch (error) {
         console.error('Failed to send automation control:', error);
       }
@@ -762,13 +762,13 @@ export default {
       pendingWorkflowStep.value = stepInfo;
       showManualStepModal.value = true;
       waitingForUserConfirmation.value = true;
-      
+
       addOutputLine({
         content: `🤖 AI WORKFLOW: About to execute "${stepInfo.command}"`,
         type: 'system_message',
         timestamp: new Date()
       });
-      
+
       addOutputLine({
         content: `📋 Step ${stepInfo.stepNumber}/${stepInfo.totalSteps}: ${stepInfo.description}`,
         type: 'workflow_info',
@@ -780,12 +780,12 @@ export default {
       if (pendingWorkflowStep.value) {
         // Execute the pending step
         executeAutomatedCommand(pendingWorkflowStep.value.command);
-        
+
         // Close modal and continue
         showManualStepModal.value = false;
         waitingForUserConfirmation.value = false;
         pendingWorkflowStep.value = null;
-        
+
         // Schedule next step
         scheduleNextAutomationStep();
       }
@@ -798,12 +798,12 @@ export default {
           type: 'system_message',
           timestamp: new Date()
         });
-        
+
         // Close modal
         showManualStepModal.value = false;
         waitingForUserConfirmation.value = false;
         pendingWorkflowStep.value = null;
-        
+
         // Continue with next step
         scheduleNextAutomationStep();
       }
@@ -814,13 +814,13 @@ export default {
       automationPaused.value = true;
       showManualStepModal.value = false;
       waitingForUserConfirmation.value = false;
-      
+
       addOutputLine({
         content: '👤 MANUAL CONTROL TAKEN - Complete your manual steps, then click RESUME to continue workflow.',
         type: 'system_message',
         timestamp: new Date()
       });
-      
+
       // Keep the pending step for later
       if (pendingWorkflowStep.value) {
         automationQueue.value.unshift(pendingWorkflowStep.value);
@@ -835,10 +835,10 @@ export default {
         type: 'automated_command',
         timestamp: new Date()
       });
-      
+
       // Execute the command
       sendInput(sessionId.value, command);
-      
+
       // Track the automated process
       hasActiveProcess.value = true;
       addRunningProcess(`[AUTO] ${command}`);
@@ -847,7 +847,7 @@ export default {
     const processNextAutomationStep = () => {
       if (automationQueue.value.length > 0 && !automationPaused.value) {
         const nextStep = automationQueue.value.shift();
-        
+
         // Small delay between steps for readability
         setTimeout(() => {
           requestManualStepConfirmation(nextStep);
@@ -857,7 +857,7 @@ export default {
 
     const scheduleNextAutomationStep = () => {
       currentWorkflowStep.value++;
-      
+
       // Small delay before next step
       setTimeout(() => {
         processNextAutomationStep();
@@ -874,7 +874,7 @@ export default {
           timestamp: new Date()
         });
       }
-      
+
       // Execute normally
       executeCommand(command);
     };
@@ -885,10 +885,10 @@ export default {
       automationPaused.value = false;
       currentWorkflowStep.value = 0;
       workflowSteps.value = workflowData.steps || [];
-      
+
       // Clear any previous automation queue
       automationQueue.value = [];
-      
+
       // Add all steps to automation queue
       workflowData.steps.forEach((step, index) => {
         automationQueue.value.push({
@@ -900,19 +900,19 @@ export default {
           requiresConfirmation: step.requiresConfirmation !== false // Default to true
         });
       });
-      
+
       addOutputLine({
         content: `🚀 AUTOMATED WORKFLOW STARTED: ${workflowData.name || 'Unnamed Workflow'}`,
         type: 'system_message',
         timestamp: new Date()
       });
-      
+
       addOutputLine({
         content: `📋 ${workflowSteps.value.length} steps planned. Use PAUSE button to take manual control at any time.`,
         type: 'workflow_info',
         timestamp: new Date()
       });
-      
+
       // Start the first step
       setTimeout(() => {
         processNextAutomationStep();
@@ -950,7 +950,7 @@ export default {
           }
         ]
       };
-      
+
       startAutomatedWorkflow(exampleWorkflow);
     };
 
@@ -958,7 +958,7 @@ export default {
     const handleWorkflowMessage = (message) => {
       try {
         const data = JSON.parse(message);
-        
+
         if (data.type === 'start_workflow') {
           startAutomatedWorkflow(data.workflow);
         } else if (data.type === 'pause_workflow') {
@@ -1123,7 +1123,7 @@ export default {
       if (status === 'connected') {
         // Mark as not connecting anymore
         connecting.value = false;
-        
+
         // Ensure input is focused and interactive when connection is established
         nextTick(() => {
           // Wait for canInput computed to update
@@ -1242,26 +1242,26 @@ export default {
       // Enhanced focus handling for automated testing
       nextTick(() => {
         focusInput();
-        
+
         // Add additional focus recovery mechanisms for automated testing
         document.addEventListener('click', (event) => {
           // If click is inside terminal area but not on input, restore focus
           const terminalArea = document.querySelector('.terminal-window-standalone');
-          if (terminalArea && terminalArea.contains(event.target) && 
+          if (terminalArea && terminalArea.contains(event.target) &&
               event.target !== terminalInput.value && canInput.value) {
             nextTick(() => focusInput());
           }
         });
-        
+
         // Periodic focus check for automation scenarios (clean up on unmount)
         const focusInterval = setInterval(() => {
-          if (canInput.value && terminalInput.value && 
+          if (canInput.value && terminalInput.value &&
               document.activeElement !== terminalInput.value &&
               document.querySelector('.terminal-window-standalone')) {
             focusInput();
           }
         }, 1000);
-        
+
         // Store interval for cleanup
         window.terminalFocusInterval = focusInterval;
       });
@@ -1276,7 +1276,7 @@ export default {
       // Remove event listeners
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      
+
       // Clean up focus interval for automated testing
       if (window.terminalFocusInterval) {
         clearInterval(window.terminalFocusInterval);
@@ -1317,7 +1317,7 @@ export default {
       pendingCommandReasons,
       runningProcesses,
       hasActiveProcess,
-      
+
       // Automation Control Data
       automationPaused,
       hasAutomatedWorkflow,
@@ -1328,7 +1328,7 @@ export default {
       pendingWorkflowStep,
       automationQueue,
       waitingForUserConfirmation,
-      
+
       // Advanced workflow state
       isAdvancedMode,
       workflowTemplates,
@@ -1355,7 +1355,7 @@ export default {
       emergencyKillAll,
       confirmEmergencyKill,
       interruptProcess,
-      
+
       // Automation Control Methods
       toggleAutomationPause,
       requestManualStepConfirmation,
@@ -1366,7 +1366,7 @@ export default {
       startAutomatedWorkflow,
       startExampleWorkflow,
       handleWorkflowMessage,
-      
+
       // Advanced Modal Methods
       executeConfirmedStep: (stepData) => {
         addOutputLine({
@@ -1413,7 +1413,7 @@ export default {
         passwordPromptActive.value = true;
         currentPasswordPrompt.value = promptData;
       },
-      
+
       // Other Methods
       handleKeydown,
       clearTerminal,
@@ -1987,10 +1987,10 @@ export default {
 
 /* Enhanced animations */
 @keyframes pulse-danger {
-  0%, 100% { 
+  0%, 100% {
     box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
   }
-  50% { 
+  50% {
     box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
   }
 }
@@ -2112,10 +2112,10 @@ export default {
 
 /* Animation for active automation state */
 @keyframes pulse-success {
-  0%, 100% { 
+  0%, 100% {
     box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
   }
-  50% { 
+  50% {
     box-shadow: 0 0 0 8px rgba(40, 167, 69, 0);
   }
 }

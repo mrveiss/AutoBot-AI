@@ -270,25 +270,9 @@ class ConfigManager:
         if env_model:
             return env_model
 
-        # Try to auto-detect available models
-        try:
-            import subprocess
-
-            result = subprocess.run(
-                ["ollama", "list"], capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0:
-                lines = result.stdout.strip().split("\n")[1:]  # Skip header
-                if lines and lines[0].strip():
-                    # Get first model name
-                    first_model = lines[0].split()[0]
-                    logger.info(
-                        f"UNIFIED CONFIG: Auto-detected first available "
-                        f"model: '{first_model}'"
-                    )
-                    return first_model
-        except Exception as e:
-            logger.warning(f"Could not auto-detect available models: {e}")
+        # URGENT FIX: Skip auto-detection during startup to prevent blocking
+        # Auto-detection will be handled asynchronously after startup
+        logger.info("UNIFIED CONFIG: Skipping Ollama auto-detection during startup to prevent blocking")
 
         # Fallback to hardcoded default - use available model
         return "llama3.2:3b"

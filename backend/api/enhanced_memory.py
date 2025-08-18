@@ -17,9 +17,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["enhanced_memory"])
 
-# Initialize systems
-memory_manager = EnhancedMemoryManager()
-markdown_system = MarkdownReferenceSystem(memory_manager)
+# URGENT FIX: Use lazy initialization to prevent blocking during module import
+memory_manager = None
+markdown_system = None
+
+def get_memory_manager():
+    """Lazy initialization of memory manager to prevent startup blocking"""
+    global memory_manager, markdown_system
+    if memory_manager is None:
+        memory_manager = EnhancedMemoryManager()
+        markdown_system = MarkdownReferenceSystem(memory_manager)
+    return memory_manager, markdown_system
 
 
 class TaskCreateRequest(BaseModel):
@@ -48,7 +56,8 @@ class MarkdownReferenceRequest(BaseModel):
 async def health_check():
     """Health check for enhanced memory system"""
     try:
-        stats = memory_manager.get_task_statistics(days_back=1)
+        memory_mgr, markdown_sys = get_memory_manager()
+        stats = memory_mgr.get_task_statistics(days_back=1)
         return {
             "status": "healthy",
             "memory_manager": "operational",
