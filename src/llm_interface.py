@@ -5,8 +5,16 @@ import os
 import re
 
 import requests
-import torch
 from dotenv import load_dotenv
+
+# Conditional torch import for environments without CUDA
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    print("Warning: PyTorch not available or CUDA libraries missing")
+    TORCH_AVAILABLE = False
+    torch = None
 
 from src.circuit_breaker import circuit_breaker_async, protected_llm_call
 
@@ -286,7 +294,7 @@ class LLMInterface:
 
     def _detect_hardware(self):
         detected_hardware = []
-        if torch.cuda.is_available():
+        if TORCH_AVAILABLE and torch.cuda.is_available():
             detected_hardware.append("cuda")
         try:
             from openvino.runtime import Core

@@ -232,7 +232,7 @@
 <script lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
-import apiClient from '@/utils/ApiClient'
+import apiClient from '@/utils/ApiClient.ts'
 
 interface ConsoleLogEntry {
   timestamp: string
