@@ -251,7 +251,7 @@ def is_safe_file(filename: str) -> bool:
     }
     if filename.lower() in dangerous_names:
         return False
-        
+
     # Check for executable extensions not in allowlist
     dangerous_extensions = {
         ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".vbs", ".js",
@@ -339,11 +339,11 @@ async def list_files(request: Request, path: str = ""):
 def validate_file_content(content: bytes, filename: str) -> bool:
     """
     Validate file content for security threats.
-    
+
     Args:
         content: File content bytes
         filename: Original filename
-        
+
     Returns:
         bool: True if content is safe, False otherwise
     """
@@ -354,7 +354,7 @@ def validate_file_content(content: bytes, filename: str) -> bool:
         binary_formats = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf'}
         if extension not in binary_formats:
             return False
-    
+
     # Check for script tags and other dangerous content
     content_str = content.decode('utf-8', errors='ignore').lower()
     dangerous_patterns = [
@@ -362,12 +362,12 @@ def validate_file_content(content: bytes, filename: str) -> bool:
         'onerror=', 'onclick=', 'eval(', 'document.write', 'innerHTML',
         '<?php', '<%', '<jsp:', 'exec(', 'system(', 'shell_exec('
     ]
-    
+
     for pattern in dangerous_patterns:
         if pattern in content_str:
             logger.warning(f"Dangerous content detected in {filename}: {pattern}")
             return False
-    
+
     return True
 
 
@@ -403,7 +403,7 @@ async def upload_file(
 
         # Read and validate file content
         content = await file.read()
-        
+
         # Check file size
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(
@@ -412,14 +412,14 @@ async def upload_file(
                     "File too large. Maximum size: " f"{MAX_FILE_SIZE // (1024*1024)}MB"
                 ),
             )
-        
+
         # Validate content for security threats
         if not validate_file_content(content, file.filename):
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="File content contains potentially dangerous elements"
             )
-        
+
         # Verify MIME type matches file extension
         detected_mime = mimetypes.guess_type(file.filename)[0]
         if detected_mime and file.content_type and file.content_type != detected_mime:

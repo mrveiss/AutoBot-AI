@@ -140,10 +140,26 @@ class SecureTerminalSession(BaseTerminalWebSocket):
             logger.error(f"Security audit error: {e}")
 
     async def send_message(self, message: dict):
-        """Send message to WebSocket client"""
+        """Send message to WebSocket client with standardized format"""
         if self.websocket and self.active:
             try:
-                await self.websocket.send_text(json.dumps(message))
+                # Ensure standardized format
+                standardized_message = message.copy()
+
+                # Convert "data" field to "content" for consistency
+                if "data" in standardized_message and "content" not in standardized_message:
+                    standardized_message["content"] = standardized_message.pop("data")
+
+                # Add metadata if not present
+                if "metadata" not in standardized_message:
+                    standardized_message["metadata"] = {
+                        "session_id": self.session_id,
+                        "timestamp": time.time(),
+                        "terminal_type": "secure",
+                        "user_role": self.user_role
+                    }
+
+                await self.websocket.send_text(json.dumps(standardized_message))
             except Exception as e:
                 logger.error(f"WebSocket send error: {e}")
 
@@ -203,9 +219,10 @@ async def handle_secure_terminal_websocket(
                 message_type = message.get("type", "")
 
                 if message_type == "input":
-                    # Send input to PTY
-                    text = message.get("data", "")
-                    await session.send_input(text)
+                    # Send input to PTY - support multiple input field formats
+                    text = message.get("content", message.get("text", message.get("data", "")))
+                    if text:
+                        await session.send_input(text)
 
                 elif message_type == "ping":
                     # Respond to ping

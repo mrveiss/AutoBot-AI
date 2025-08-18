@@ -42,24 +42,24 @@ class TerminalService {
   setConnectionState(sessionId, state) {
     const oldState = this.connectionStates.get(sessionId);
     this.connectionStates.set(sessionId, state);
-    
+
     console.log(`Terminal ${sessionId}: ${oldState} -> ${state}`);
-    
+
     // Trigger state change callback
     this.triggerCallback(sessionId, 'onStatusChange', state);
-    
+
     // Handle state-specific logic
     switch (state) {
       case CONNECTION_STATES.CONNECTED:
         // Start health check
         this.startHealthCheck(sessionId);
         break;
-        
+
       case CONNECTION_STATES.READY:
         // Reset reconnection attempts on successful ready state
         this.reconnectAttempts.set(sessionId, 0);
         break;
-        
+
       case CONNECTION_STATES.DISCONNECTED:
       case CONNECTION_STATES.ERROR:
         // Stop health check
@@ -84,13 +84,13 @@ class TerminalService {
   startHealthCheck(sessionId) {
     // Clear any existing interval
     this.stopHealthCheck(sessionId);
-    
+
     const interval = setInterval(() => {
       if (this.isConnected(sessionId)) {
         this.sendPing(sessionId);
       }
     }, 30000); // Every 30 seconds
-    
+
     this.healthCheckIntervals.set(sessionId, interval);
   }
 
@@ -180,7 +180,7 @@ class TerminalService {
       ws.onopen = () => {
         console.log(`WebSocket opened for session ${sessionId}`);
         this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTED);
-        
+
         // Send initial ready check with improved timing
         setTimeout(() => {
           if (this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTED) {
@@ -197,7 +197,7 @@ class TerminalService {
       ws.onclose = (event) => {
         console.log(`WebSocket closed for session ${sessionId}:`, event.code, event.reason);
         this.cleanupSession(sessionId);
-        
+
         // Attempt reconnection if not intentional
         if (event.code !== 1000 && this.reconnectAttempts.get(sessionId, 0) < this.maxReconnectAttempts) {
           this.attemptReconnect(sessionId, callbacks);
@@ -228,13 +228,13 @@ class TerminalService {
   async attemptReconnect(sessionId, callbacks) {
     const attempts = this.reconnectAttempts.get(sessionId) || 0;
     this.reconnectAttempts.set(sessionId, attempts + 1);
-    
+
     const delay = this.reconnectDelay * Math.pow(2, attempts); // Exponential backoff
-    
+
     console.log(`Attempting reconnection ${attempts + 1}/${this.maxReconnectAttempts} for session ${sessionId} in ${delay}ms`);
-    
+
     this.setConnectionState(sessionId, CONNECTION_STATES.RECONNECTING);
-    
+
     setTimeout(async () => {
       try {
         await this.connect(sessionId, callbacks);

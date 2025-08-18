@@ -9,24 +9,19 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
 
 # Import the centralized ConfigManager and Redis client utility
 from src.config import config as global_config_manager
 from src.diagnostics import Diagnostics
-from src.error_handler import log_error, retry, with_error_handling
+from src.error_handler import log_error
 from src.event_manager import event_manager
 from src.exceptions import (
-    AutoBotError,
     IntegrationError,
-    InternalError,
     LLMConnectionError,
-    LLMError,
     LLMResponseError,
     LLMTimeoutError,
     ValidationError,
-    WorkflowError,
     WorkflowExecutionError,
     WorkflowValidationError,
 )
@@ -1176,12 +1171,12 @@ class Orchestrator:
 
     def _is_simple_command(self, goal: str) -> bool:
         """
-        Performance optimization to bypass LLM processing for simple, known commands.
+        Performance optimization to bypass LLM processing for simple, known commands and conversational inputs.
 
         This function acts as a fast-path filter to identify straightforward system commands
-        that don't require complex reasoning or planning. By recognizing these patterns,
-        we can execute them directly without the overhead of LLM analysis, significantly
-        improving response time for common operations.
+        and simple conversational inputs that don't require complex reasoning or planning.
+        By recognizing these patterns, we can execute them directly without the overhead
+        of LLM analysis, significantly improving response time for common operations.
 
         Args:
             goal (str): The user's goal/command to analyze
@@ -1192,6 +1187,7 @@ class Orchestrator:
         Examples:
             - "get ip address" -> True (network info command)
             - "list processes" -> True (system status command)
+            - "hello" -> True (simple greeting)
             - "Plan a complex multi-step workflow" -> False (requires LLM reasoning)
         """
         command_patterns = [
@@ -1205,10 +1201,23 @@ class Orchestrator:
             r"ifconfig",
             r"ip\s+addr",
         ]
-        is_simple = any(
-            re.search(pattern, goal.lower()) for pattern in command_patterns
-        )
-        print(f"DEBUG: _is_simple_command('{goal}') -> {is_simple}")
+
+        # Add conversational patterns for simple interactions
+        conversational_patterns = [
+            r"^(hello|hi|hey|greetings?)!?$",
+            r"^(good\s+(morning|afternoon|evening|day))!?$",
+            r"^(how\s+are\s+you|how\s+are\s+things)[\?!]?$",
+            r"^(thanks?|thank\s+you)!?$",
+            r"^(bye|goodbye|see\s+you)!?$",
+            r"^(yes|no|ok|okay)!?$",
+        ]
+
+        goal_clean = goal.strip().lower()
+        is_command = any(re.search(pattern, goal_clean) for pattern in command_patterns)
+        is_conversational = any(re.search(pattern, goal_clean) for pattern in conversational_patterns)
+        is_simple = is_command or is_conversational
+
+        print(f"DEBUG: _is_simple_command('{goal}') -> {is_simple} (command: {is_command}, conversational: {is_conversational})")
         return is_simple
 
     async def _execute_simple_command(self, goal: str) -> Dict[str, Any]:
@@ -1278,12 +1287,51 @@ class Orchestrator:
                         "status": "error",
                     },
                 }
+        else:
+            # Check if this is a simple conversational input that doesn't need complex orchestration
+            conversational_patterns = [
+                r"^(hello|hi|hey|greetings?)!?$",
+                r"^(good\s+(morning|afternoon|evening|day))!?$",
+                r"^(how\s+are\s+you|how\s+are\s+things)[\?!]?$",
+                r"^(thanks?|thank\s+you)!?$",
+                r"^(bye|goodbye|see\s+you)!?$",
+                r"^(yes|no|ok|okay)!?$",
+            ]
+
+            goal_clean = goal.strip().lower()
+            is_conversational = any(re.search(pattern, goal_clean) for pattern in conversational_patterns)
+
+            if is_conversational:
+                print(f"DEBUG: Detected conversational input: '{goal}', providing direct response")
+
+                # Provide appropriate conversational responses
+                if re.search(r"^(hello|hi|hey|greetings?)!?$", goal_clean):
+                    response_text = "Hello! I'm AutoBot, your AI assistant. I'm here to help you with various tasks including system commands, research, security analysis, and more. What can I help you with today?"
+                elif re.search(r"^(good\s+(morning|afternoon|evening|day))!?$", goal_clean):
+                    response_text = "Good day! I'm AutoBot, ready to assist you with your tasks. How can I help you today?"
+                elif re.search(r"^(how\s+are\s+you|how\s+are\s+things)[\?!]?$", goal_clean):
+                    response_text = "I'm doing well and ready to help! My systems are operational and I'm equipped with various capabilities including system commands, research tools, security scanning, and more. What would you like to work on?"
+                elif re.search(r"^(thanks?|thank\s+you)!?$", goal_clean):
+                    response_text = "You're welcome! I'm always happy to help. Let me know if you need anything else."
+                elif re.search(r"^(bye|goodbye|see\s+you)!?$", goal_clean):
+                    response_text = "Goodbye! Feel free to return anytime you need assistance. Have a great day!"
+                elif re.search(r"^(yes|no|ok|okay)!?$", goal_clean):
+                    response_text = "I understand. Is there anything specific you'd like me to help you with?"
+                else:
+                    response_text = "I'm here to help! What would you like me to assist you with today?"
+
+                return {
+                    "status": "success",
+                    "tool_name": "conversational_response",
+                    "tool_args": {"response_text": response_text},
+                    "response_text": response_text
+                }
 
             print(
                 "DEBUG: _execute_simple_command could not determine a direct "
                 f"command for '{goal}'. Falling back to generate_task_plan."
             )
-        return await self.generate_task_plan(goal, [{"role": "user", "content": goal}])
+            return await self.generate_task_plan(goal, [{"role": "user", "content": goal}])
 
     async def _handle_command_approval(self, result):
         command = result.get("command")
@@ -1811,7 +1859,6 @@ class Orchestrator:
 
             # Initialize result collection
             agent_results = []
-            final_response_parts = []
 
             await event_manager.publish(
                 "log_message",

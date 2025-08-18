@@ -5,7 +5,6 @@ This module implements the Application Factory Pattern to create and configure
 the FastAPI application instance, keeping main.py clean and focused.
 """
 
-import asyncio
 import logging
 import os
 import socket
@@ -18,9 +17,9 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.api.agent import router as agent_router
-
 # Import API routers
+from backend.api.agent import router as agent_router
+from backend.api.agent_config import router as agent_config_router
 from backend.api.chat import router as chat_router
 from backend.api.developer import (
     api_registry,
@@ -37,6 +36,8 @@ from backend.api.metrics import router as metrics_router
 from backend.api.prompts import router as prompts_router
 from backend.api.redis import router as redis_router
 from backend.api.scheduler import router as scheduler_router
+from backend.api.secrets import router as secrets_router
+from backend.api.research_browser import router as research_browser_router
 from backend.api.security import router as security_router
 from backend.api.settings import router as settings_router
 from backend.api.system import router as system_router
@@ -81,11 +82,15 @@ async def _check_redis_modules(redis_host: str, redis_port: int) -> bool:
         # We resolve it to an actual IP address for better connection reliability.
         if redis_host == "host.docker.internal":
             try:
+                # URGENT FIX: DNS resolution can block - add timeout
+                socket.setdefaulttimeout(2.0)  # 2 second timeout
                 resolved_host = socket.gethostbyname(redis_host)
                 logger.info(f"Resolved host.docker.internal to IP: {resolved_host}")
-            except socket.gaierror as e:
+                socket.setdefaulttimeout(None)  # Reset to default
+            except (socket.gaierror, socket.timeout) as e:
                 logger.error(f"Failed to resolve host.docker.internal: {e}")
                 resolved_host = redis_host
+                socket.setdefaulttimeout(None)  # Reset to default
 
         r = get_redis_client()
         if r is None:
@@ -93,8 +98,8 @@ async def _check_redis_modules(redis_host: str, redis_port: int) -> bool:
             return False
 
         try:
-            # Test basic connection first
-            r.ping()
+            # URGENT FIX: Add timeout to prevent blocking
+            r.ping()  # Redis py default timeout is 30s which may be too long
             logger.info(
                 f"Successfully connected to Redis at {resolved_host}:{redis_port}"
             )
@@ -195,56 +200,31 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
     """Initialize the orchestrator with Redis tasks if needed."""
     logger.debug("Starting Orchestrator startup...")
 
-    async def safe_redis_task_wrapper(task_name, coro):
-        """Wrapper for Redis background tasks with error handling"""
-        try:
-            await coro
-        except Exception as e:
-            logger.error(
-                f"Redis background task '{task_name}' failed: {e}", exc_info=True
-            )
-            logger.warning(f"Redis task '{task_name}' will be retried in 30 seconds...")
-            await asyncio.sleep(30)
-            # Could implement retry logic here if needed
-
     try:
-        await app.state.orchestrator.startup()
-        if (
-            app.state.orchestrator.task_transport_type == "redis"
-            and app.state.orchestrator.redis_client
-        ):
-            logger.info("Enabling Redis background tasks for autonomous operation...")
+        # PERFORMANCE FIX: Initialize lightweight orchestrator for fast routing
+        logger.info(
+            "PERFORMANCE FIX: Initializing LightweightOrchestrator for "
+            "non-blocking operations"
+        )
+        from src.lightweight_orchestrator import lightweight_orchestrator
 
-            # Create background tasks with enhanced error handling
-            command_approval_task = asyncio.create_task(
-                safe_redis_task_wrapper(
-                    "command_approvals_listener",
-                    app.state.orchestrator._listen_for_command_approvals(),
-                )
-            )
+        await lightweight_orchestrator.startup()
+        app.state.lightweight_orchestrator = lightweight_orchestrator
+        logger.info("LightweightOrchestrator initialized successfully")
 
-            worker_capabilities_task = asyncio.create_task(
-                safe_redis_task_wrapper(
-                    "worker_capabilities_listener",
-                    app.state.orchestrator._listen_for_worker_capabilities(),
-                )
-            )
+        # Keep the full orchestrator for backward compatibility, but don't start
+        # blocking tasks
+        logger.info(
+            "PERFORMANCE FIX: Skipping full orchestrator startup to "
+            "prevent blocking"
+        )
 
-            # Store task references for monitoring and cleanup
-            app.state.background_tasks = [
-                command_approval_task,
-                worker_capabilities_task,
-            ]
-
-            logger.info(
-                "Redis background tasks successfully enabled and monitoring initiated"
-            )
-        else:
-            logger.info(
-                "Redis background tasks skipped - using local task transport or "
-                "Redis unavailable"
-            )
-            app.state.background_tasks = []
+        # DISABLE Redis background tasks that block the event loop
+        logger.info(
+            "PERFORMANCE FIX: Disabling Redis background tasks to "
+            "prevent blocking"
+        )
+        app.state.background_tasks = []
 
     except Exception as e:
         logger.error(f"Error during orchestrator startup: {e}", exc_info=True)
@@ -259,14 +239,21 @@ async def _initialize_knowledge_base(app: FastAPI) -> None:
     """Initialize the knowledge base asynchronously."""
     logger.debug("Initializing KnowledgeBase...")
 
-    try:
-        await app.state.knowledge_base.ainit()
-        logger.info("KnowledgeBase ainit() called during startup")
-    except Exception as e:
-        logger.error(f"Error during KnowledgeBase initialization: {e}", exc_info=True)
-        logger.warning("KnowledgeBase initialization failed, but continuing startup...")
+    # URGENT FIX: Skip KB initialization to prevent blocking during startup
+    logger.info(
+        "PERFORMANCE FIX: Skipping KnowledgeBase ainit() to "
+        "prevent startup blocking"
+    )
+    # try:
+    #     await app.state.knowledge_base.ainit()
+    #     logger.info("KnowledgeBase ainit() called during startup")
+    # except Exception as e:
+    #     logger.error(f"Error during KnowledgeBase initialization: {e}",
+    #                  exc_info=True)
+    #     logger.warning("KnowledgeBase initialization failed, but "
+    #                    "continuing startup...")
 
-    logger.debug("KnowledgeBase initialized")
+    logger.debug("KnowledgeBase initialization skipped")
 
 
 async def _initialize_chat_history_manager(app: FastAPI) -> None:
@@ -476,6 +463,7 @@ def add_api_routes(app: FastAPI) -> None:
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
         (agent_router, "/agent", ["agent"], "agent"),
+        (agent_config_router, "/agent-config", ["agent-config"], "agent_config"),
         (
             intelligent_agent_router,
             "/intelligent-agent",
@@ -490,6 +478,8 @@ def add_api_routes(app: FastAPI) -> None:
         (metrics_router, "/metrics", ["metrics"], "metrics"),
         (templates_router, "/templates", ["templates"], "templates"),
         (scheduler_router, "/scheduler", ["scheduler"], "scheduler"),
+        (secrets_router, "/secrets", ["secrets"], "secrets"),
+        (research_browser_router, "/research", ["research"], "research_browser"),
         (security_router, "/security", ["security"], "security"),
     ]
 

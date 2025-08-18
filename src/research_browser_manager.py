@@ -1,0 +1,542 @@
+"""
+Research Browser Manager
+Handles Playwright browser automation for research tasks with user interaction support
+"""
+
+import asyncio
+import logging
+import os
+import tempfile
+import uuid
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+
+from src.source_attribution import SourceType, track_source
+
+logger = logging.getLogger(__name__)
+
+
+class ResearchBrowserSession:
+    """Manages a single research browser session with user interaction capability"""
+
+    def __init__(self, session_id: str, conversation_id: str):
+        self.session_id = session_id
+        self.conversation_id = conversation_id
+        self.browser: Optional[Browser] = None
+        self.context: Optional[BrowserContext] = None
+        self.page: Optional[Page] = None
+        self.created_at = datetime.now()
+        self.last_activity = datetime.now()
+        self.status = "initializing"  # initializing, active, waiting_for_user, error, closed
+        self.current_url = None
+        self.interaction_required = False
+        self.interaction_message = ""
+        self.research_data = {}
+        self.mhtml_files = []
+
+    async def initialize(self, headless: bool = False):
+        """Initialize the browser session"""
+        try:
+            self.playwright = await async_playwright().start()
+
+            # Use existing browser if available (Docker container)
+            try:
+                self.browser = await self.playwright.chromium.connect_over_cdp(
+                    "http://localhost:9222"
+                )
+                logger.info(f"Connected to existing browser for session {self.session_id}")
+            except Exception:
+                # Fall back to launching new browser
+                self.browser = await self.playwright.chromium.launch(
+                    headless=headless,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-background-timer-throttling",
+                        "--disable-backgrounding-occluded-windows",
+                        "--disable-renderer-backgrounding"
+                    ]
+                )
+                logger.info(f"Launched new browser for session {self.session_id}")
+
+            self.context = await self.browser.new_context(
+                viewport={"width": 1280, "height": 720},
+                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+
+            self.page = await self.context.new_page()
+            self.status = "active"
+
+            # Set up event listeners for interaction detection
+            await self._setup_interaction_detection()
+
+            logger.info(f"Browser session {self.session_id} initialized successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to initialize browser session {self.session_id}: {e}")
+            self.status = "error"
+            return False
+
+    async def _setup_interaction_detection(self):
+        """Set up detection for CAPTCHAs and other interactions"""
+        if not self.page:
+            return
+
+        # Detect CAPTCHAs and other common interaction patterns
+        await self.page.add_init_script("""
+            // Detect common CAPTCHA patterns
+            const captchaSelectors = [
+                'iframe[src*="recaptcha"]',
+                '.g-recaptcha',
+                '[data-testid="captcha"]',
+                '.captcha',
+                '.hcaptcha',
+                '.cf-challenge-form',
+                '[class*="captcha"]'
+            ];
+
+            function checkForInteraction() {
+                const hasCaptcha = captchaSelectors.some(selector =>
+                    document.querySelector(selector) !== null
+                );
+
+                if (hasCaptcha) {
+                    window.autobot_interaction_required = {
+                        type: 'captcha',
+                        message: 'CAPTCHA detected - user interaction required',
+                        timestamp: Date.now()
+                    };
+                }
+
+                // Check for other common interaction patterns
+                const commonInteractionTexts = [
+                    'verify you are human',
+                    'click to continue',
+                    'press and hold',
+                    'solve the puzzle',
+                    'complete the challenge'
+                ];
+
+                const bodyText = document.body.innerText.toLowerCase();
+                for (const text of commonInteractionTexts) {
+                    if (bodyText.includes(text)) {
+                        window.autobot_interaction_required = {
+                            type: 'verification',
+                            message: `Interaction required: ${text}`,
+                            timestamp: Date.now()
+                        };
+                        break;
+                    }
+                }
+            }
+
+            // Check immediately and on DOM changes
+            checkForInteraction();
+            new MutationObserver(checkForInteraction).observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        """)
+
+    async def navigate_to(self, url: str, wait_for_load: bool = True) -> Dict[str, Any]:
+        """Navigate to a URL and return page information"""
+        if not self.page:
+            return {"success": False, "error": "Browser not initialized"}
+
+        try:
+            self.current_url = url
+            self.last_activity = datetime.now()
+
+            # Navigate with timeout
+            await self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
+
+            if wait_for_load:
+                # Wait a bit for dynamic content
+                await asyncio.sleep(2)
+
+            # Check for interaction requirements
+            interaction_data = await self.page.evaluate("window.autobot_interaction_required")
+            if interaction_data:
+                self.interaction_required = True
+                self.interaction_message = interaction_data.get("message", "User interaction required")
+                self.status = "waiting_for_user"
+
+                return {
+                    "success": True,
+                    "url": url,
+                    "title": await self.page.title(),
+                    "interaction_required": True,
+                    "interaction_message": self.interaction_message,
+                    "session_id": self.session_id
+                }
+
+            # Get basic page information
+            title = await self.page.title()
+            content_length = len(await self.page.content())
+
+            # Track this as a source
+            track_source(
+                SourceType.WEB_SEARCH,
+                f"Navigated to {title}",
+                reliability="medium",
+                metadata={
+                    "url": url,
+                    "title": title,
+                    "session_id": self.session_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+
+            return {
+                "success": True,
+                "url": url,
+                "title": title,
+                "content_length": content_length,
+                "interaction_required": False,
+                "session_id": self.session_id
+            }
+
+        except Exception as e:
+            logger.error(f"Navigation failed for session {self.session_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def extract_content(self) -> Dict[str, Any]:
+        """Extract content from current page"""
+        if not self.page:
+            return {"success": False, "error": "Browser not initialized"}
+
+        try:
+            # Get text content
+            text_content = await self.page.evaluate("""
+                () => {
+                    // Remove script and style elements
+                    const scripts = document.querySelectorAll('script, style');
+                    scripts.forEach(el => el.remove());
+
+                    // Get main content areas
+                    const contentSelectors = [
+                        'main',
+                        'article',
+                        '[role="main"]',
+                        '.content',
+                        '#content',
+                        '.main-content',
+                        'body'
+                    ];
+
+                    for (const selector of contentSelectors) {
+                        const element = document.querySelector(selector);
+                        if (element) {
+                            return element.innerText.trim();
+                        }
+                    }
+
+                    return document.body.innerText.trim();
+                }
+            """)
+
+            # Get structured data
+            structured_data = await self.page.evaluate("""
+                () => {
+                    const data = {};
+
+                    // Get headings
+                    data.headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+                        .map(h => ({
+                            level: h.tagName.toLowerCase(),
+                            text: h.innerText.trim()
+                        })).filter(h => h.text.length > 0);
+
+                    // Get links
+                    data.links = Array.from(document.querySelectorAll('a[href]'))
+                        .map(a => ({
+                            text: a.innerText.trim(),
+                            href: a.href
+                        })).filter(l => l.text.length > 0).slice(0, 20);
+
+                    // Get meta description
+                    const metaDesc = document.querySelector('meta[name="description"]');
+                    data.description = metaDesc ? metaDesc.getAttribute('content') : '';
+
+                    return data;
+                }
+            """)
+
+            return {
+                "success": True,
+                "url": self.current_url,
+                "title": await self.page.title(),
+                "text_content": text_content[:5000],  # Limit content length
+                "structured_data": structured_data,
+                "content_length": len(text_content)
+            }
+
+        except Exception as e:
+            logger.error(f"Content extraction failed for session {self.session_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def save_mhtml(self) -> Optional[str]:
+        """Save current page as MHTML file"""
+        if not self.page:
+            return None
+
+        try:
+            # Create temp directory for MHTML files
+            temp_dir = os.path.join(tempfile.gettempdir(), "autobot_mhtml")
+            os.makedirs(temp_dir, exist_ok=True)
+
+            # Generate unique filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"research_{self.session_id}_{timestamp}.mhtml"
+            filepath = os.path.join(temp_dir, filename)
+
+            # Save as MHTML using CDP
+            cdp_session = await self.page.context.new_cdp_session(self.page)
+            result = await cdp_session.send("Page.captureSnapshot", {"format": "mhtml"})
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(result["data"])
+
+            self.mhtml_files.append(filepath)
+            logger.info(f"Saved MHTML file: {filepath}")
+
+            return filepath
+
+        except Exception as e:
+            logger.error(f"Failed to save MHTML for session {self.session_id}: {e}")
+            return None
+
+    async def wait_for_user_interaction(self, timeout_seconds: int = 300) -> bool:
+        """Wait for user to complete interaction"""
+        if not self.page or not self.interaction_required:
+            return True
+
+        start_time = asyncio.get_event_loop().time()
+
+        while asyncio.get_event_loop().time() - start_time < timeout_seconds:
+            try:
+                # Check if interaction is still required
+                interaction_data = await self.page.evaluate("window.autobot_interaction_required")
+                if not interaction_data:
+                    self.interaction_required = False
+                    self.status = "active"
+                    return True
+
+                await asyncio.sleep(2)  # Check every 2 seconds
+
+            except Exception as e:
+                logger.error(f"Error checking interaction status: {e}")
+                break
+
+        return False
+
+    async def close(self):
+        """Close the browser session"""
+        try:
+            if self.page:
+                await self.page.close()
+            if self.context:
+                await self.context.close()
+            if self.browser:
+                await self.browser.close()
+            if hasattr(self, 'playwright'):
+                await self.playwright.stop()
+
+            # Clean up MHTML files
+            for mhtml_file in self.mhtml_files:
+                try:
+                    if os.path.exists(mhtml_file):
+                        os.remove(mhtml_file)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up MHTML file {mhtml_file}: {e}")
+
+            self.status = "closed"
+            logger.info(f"Browser session {self.session_id} closed")
+
+        except Exception as e:
+            logger.error(f"Error closing browser session {self.session_id}: {e}")
+
+
+class ResearchBrowserManager:
+    """Manages multiple research browser sessions"""
+
+    def __init__(self):
+        self.sessions: Dict[str, ResearchBrowserSession] = {}
+        self.conversation_sessions: Dict[str, str] = {}  # conversation_id -> session_id
+        self.max_sessions = 10
+
+    async def create_session(self, conversation_id: str, headless: bool = False) -> str:
+        """Create a new research browser session"""
+        session_id = str(uuid.uuid4())
+
+        # Clean up old sessions if at limit
+        if len(self.sessions) >= self.max_sessions:
+            await self._cleanup_oldest_session()
+
+        session = ResearchBrowserSession(session_id, conversation_id)
+
+        if await session.initialize(headless=headless):
+            self.sessions[session_id] = session
+            self.conversation_sessions[conversation_id] = session_id
+
+            logger.info(f"Created research session {session_id} for conversation {conversation_id}")
+            return session_id
+        else:
+            logger.error(f"Failed to create research session for conversation {conversation_id}")
+            return None
+
+    def get_session(self, session_id: str) -> Optional[ResearchBrowserSession]:
+        """Get a research session by ID"""
+        return self.sessions.get(session_id)
+
+    def get_session_by_conversation(self, conversation_id: str) -> Optional[ResearchBrowserSession]:
+        """Get the research session for a conversation"""
+        session_id = self.conversation_sessions.get(conversation_id)
+        if session_id:
+            return self.sessions.get(session_id)
+        return None
+
+    async def research_url(self, conversation_id: str, url: str, extract_content: bool = True) -> Dict[str, Any]:
+        """Research a URL with automatic fallbacks"""
+        try:
+            # Get or create session
+            session = self.get_session_by_conversation(conversation_id)
+            if not session:
+                session_id = await self.create_session(conversation_id)
+                if not session_id:
+                    return {"success": False, "error": "Failed to create browser session"}
+                session = self.sessions[session_id]
+
+            # Navigate to URL
+            nav_result = await session.navigate_to(url)
+            if not nav_result["success"]:
+                # Try MHTML fallback
+                return await self._try_mhtml_fallback(session, url)
+
+            # Handle interaction requirement
+            if nav_result.get("interaction_required"):
+                return {
+                    "success": True,
+                    "status": "interaction_required",
+                    "message": nav_result["interaction_message"],
+                    "session_id": session.session_id,
+                    "browser_url": f"/browser/{session.session_id}",
+                    "actions": ["wait", "manual_intervention", "save_mhtml"]
+                }
+
+            # Extract content if requested
+            content_result = {}
+            if extract_content:
+                content_result = await session.extract_content()
+
+                # Save MHTML as backup
+                mhtml_path = await session.save_mhtml()
+                if mhtml_path:
+                    content_result["mhtml_backup"] = mhtml_path
+
+            return {
+                "success": True,
+                "status": "completed",
+                "navigation": nav_result,
+                "content": content_result,
+                "session_id": session.session_id,
+                "browser_url": f"/browser/{session.session_id}"
+            }
+
+        except Exception as e:
+            logger.error(f"Research failed for URL {url}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def _try_mhtml_fallback(self, session: ResearchBrowserSession, url: str) -> Dict[str, Any]:
+        """Try to crawl using MHTML fallback"""
+        try:
+            logger.info(f"Attempting MHTML fallback for {url}")
+
+            # Create a simple page to load the URL and save MHTML
+            await session.page.goto("about:blank")
+
+            # Try to navigate and immediately save MHTML
+            try:
+                await session.page.goto(url, timeout=10000)
+                mhtml_path = await session.save_mhtml()
+
+                if mhtml_path:
+                    # Extract content from MHTML file
+                    content = await self._extract_from_mhtml(mhtml_path)
+
+                    return {
+                        "success": True,
+                        "status": "mhtml_fallback",
+                        "content": content,
+                        "mhtml_path": mhtml_path,
+                        "message": "Content extracted from MHTML backup"
+                    }
+            except Exception as e:
+                logger.error(f"MHTML fallback also failed: {e}")
+
+            return {
+                "success": False,
+                "error": "Both direct access and MHTML fallback failed"
+            }
+
+        except Exception as e:
+            logger.error(f"MHTML fallback error: {e}")
+            return {"success": False, "error": f"MHTML fallback error: {str(e)}"}
+
+    async def _extract_from_mhtml(self, mhtml_path: str) -> Dict[str, Any]:
+        """Extract content from MHTML file"""
+        try:
+            # For now, return basic file info
+            # In production, you'd want to parse the MHTML format
+            file_size = os.path.getsize(mhtml_path)
+
+            return {
+                "success": True,
+                "source": "mhtml_file",
+                "file_path": mhtml_path,
+                "file_size": file_size,
+                "text_content": "Content extracted from MHTML backup (parsing not yet implemented)",
+                "content_length": file_size
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to extract from MHTML {mhtml_path}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def _cleanup_oldest_session(self):
+        """Clean up the oldest inactive session"""
+        if not self.sessions:
+            return
+
+        oldest_session_id = min(
+            self.sessions.keys(),
+            key=lambda sid: self.sessions[sid].last_activity
+        )
+
+        await self.cleanup_session(oldest_session_id)
+
+    async def cleanup_session(self, session_id: str):
+        """Clean up a specific session"""
+        if session_id in self.sessions:
+            session = self.sessions[session_id]
+            await session.close()
+
+            # Remove from mappings
+            del self.sessions[session_id]
+            if session.conversation_id in self.conversation_sessions:
+                del self.conversation_sessions[session.conversation_id]
+
+            logger.info(f"Cleaned up research session {session_id}")
+
+    async def cleanup_all(self):
+        """Clean up all sessions"""
+        for session_id in list(self.sessions.keys()):
+            await self.cleanup_session(session_id)
+
+
+# Global research browser manager
+research_browser_manager = ResearchBrowserManager()

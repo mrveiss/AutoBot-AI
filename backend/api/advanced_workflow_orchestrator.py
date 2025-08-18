@@ -9,19 +9,17 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 
 # Import existing components
 from backend.api.workflow_automation import (
-    ActiveWorkflow,
     AutomationMode,
     WorkflowAutomationManager,
     WorkflowStep,
-    WorkflowStepStatus,
 )
 from src.enhanced_orchestrator import EnhancedOrchestrator
 from src.knowledge_base import KnowledgeBase
@@ -597,7 +595,7 @@ class AdvancedWorkflowOrchestrator:
         """Generate intelligent workflow steps"""
         try:
             # Use enhanced orchestrator for base step generation
-            complexity_mapping = {
+            _ = {
                 "simple": "TaskComplexity.SIMPLE",
                 "moderate": "TaskComplexity.RESEARCH",
                 "complex": "TaskComplexity.COMPLEX",
@@ -1098,7 +1096,8 @@ class WorkflowLearningEngine:
             self.learning_data["user_patterns"][request_hash] = features
 
             logger.info(
-                f"Recorded workflow generation learning data for request: {user_request[:50]}..."
+                f"Recorded workflow generation learning data for request: "
+                f"{user_request[:50]}"
             )
 
         except Exception as e:
@@ -1306,6 +1305,6 @@ if __name__ == "__main__":
         print(f"Estimated time: {intelligence.estimated_completion_time:.1f} seconds")
         print(f"Optimizations: {len(intelligence.optimization_suggestions)}")
 
-    import asyncio
+#     import asyncio
 
     asyncio.run(demo_intelligent_workflow())

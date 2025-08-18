@@ -60,13 +60,26 @@ class SimpleTerminalSession(BaseTerminalWebSocket):
     # PTY shell startup now handled by base class
 
     async def send_message(self, data: dict):
-        """Send message to WebSocket with simple terminal format"""
+        """Send message to WebSocket with standardized format"""
         if self.websocket:
             try:
-                # Convert "data" field to "content" for compatibility
-                if data.get("type") == "output" and "data" in data:
-                    data = {"type": "output", "content": data["data"]}
-                await self.websocket.send_text(json.dumps(data))
+                # Ensure standardized format - convert legacy field names
+                standardized_data = data.copy()
+
+                # Convert "data" field to "content" for consistency
+                if "data" in standardized_data and "content" not in standardized_data:
+                    standardized_data["content"] = standardized_data.pop("data")
+
+                # Add metadata if not present
+                if "metadata" not in standardized_data:
+                    import time
+                    standardized_data["metadata"] = {
+                        "session_id": self.session_id,
+                        "timestamp": time.time(),
+                        "terminal_type": "simple"
+                    }
+
+                await self.websocket.send_text(json.dumps(standardized_data))
             except Exception as e:
                 logger.error(f"Error sending message: {e}")
 
@@ -164,9 +177,10 @@ class SimpleTerminalHandler:
                     message_type = message.get("type", "")
 
                     if message_type == "input":
-                        # Send input to PTY shell
-                        text = message.get("data", "")
-                        await session.send_input(text)
+                        # Send input to PTY shell - support both legacy and new formats
+                        text = message.get("content", message.get("text", message.get("data", "")))
+                        if text:
+                            await session.send_input(text)
 
                     elif message_type == "workflow_control":
                         # Handle workflow automation controls

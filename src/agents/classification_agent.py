@@ -110,54 +110,52 @@ class ClassificationAgent(LocalAgent):
         self.classification_prompt = """
 You are an intelligent classification agent for AutoBot, a multi-agent workflow orchestration system.
 
-Your task is to analyze user requests and determine the appropriate workflow complexity and coordination strategy.
+Your task is to analyze user requests and determine the appropriate workflow complexity.
 
 WORKFLOW COMPLEXITY LEVELS:
 
-1. SIMPLE: Direct questions or requests that can be answered immediately
-   - Examples: "What is 2+2?", "Define machine learning", "What time is it?"
-   - Characteristics: Factual queries, definitions, simple calculations
+1. SIMPLE: Regular conversational requests that can be answered using Knowledge Base + LLM
+   - Examples: "Hello", "What is Docker?", "Tell me about Python", "How does AutoBot work?", "Define machine learning"
+   - Characteristics: Conversations, questions, definitions, explanations, greetings
+   - Processing: Knowledge Base search + LLM response with source attribution
+   - Note: ALL responses should include Knowledge Base context to prevent hallucination
 
-2. RESEARCH: Requests requiring web research or knowledge base searches
-   - Examples: "Latest Python frameworks", "Current trends in AI", "Best practices for Docker"
-   - Characteristics: Need current information, comparisons, recommendations
+2. COMPLEX: Requests requiring external tools, system actions, or research beyond Knowledge Base
+   - Examples: "Install Docker", "Scan network", "Search the web for latest trends", "Configure nginx", "Run system diagnostics", "What's new on tvnet.lv", "Check latest news from CNN.com", "Get current weather from weather.com"
+   - Characteristics: Tool usage, system commands, external research, file operations, security scans, live/current information from websites
+   - Processing: Knowledge Base + Tools + External Research + Multi-agent coordination
+   - **IMPORTANT**: Any request for current/live/latest information from specific websites requires COMPLEX classification for web browsing
 
-3. INSTALL: Requests involving system configuration, software installation, or setup
-   - Examples: "Install Docker", "Configure nginx", "Set up development environment"
-   - Characteristics: System commands, configuration changes, software deployment
-
-4. SECURITY_SCAN: Security scanning and network discovery tasks
-   - Examples: "Scan network for open ports", "Perform vulnerability scan", "Network discovery", "Check SSL certificates"
-   - Characteristics: Security focus, uses scanning tools, generates reports, may require target validation
-
-5. COMPLEX: Multi-step tasks requiring coordination of multiple specialized agents
-   - Examples: "What network scanning tools do we have available?", "Perform full security audit", "Deploy application with monitoring"
-   - Characteristics: Multiple domains, requires approvals, system-level changes, security implications
+IMPORTANT NOTES:
+- Simple conversations can dynamically upgrade to Complex if user requests actions/tools
+- ALWAYS use Knowledge Base first to ground responses and prevent hallucination
+- Source attribution is required for all responses regardless of complexity
 
 USER REQUEST: "{user_message}"
 
 CONTEXT ANALYSIS:
-- Domain: Identify the primary domain(s) involved (security, networking, development, etc.)
 - Intent: What does the user want to accomplish?
-- Scope: Single task or multi-step process?
-- Risk Level: Does this involve system changes, security implications, or require approvals?
-- Dependencies: Does this require multiple tools or agents?
+- Tools Needed: Does this require system commands, external APIs, or file operations?
+- Scope: Conversational or actionable?
+- Knowledge Base Relevance: Can this be answered from existing AutoBot knowledge?
+- **Web Browsing**: Does this request need current/live information from a specific website? (If yes, classify as COMPLEX)
+- **Temporal Context**: Is the user asking for "latest", "new", "current", or "what's happening" information?
 
 Please provide your analysis in the following JSON format:
 {{
-    "complexity": "simple|research|install|security_scan|complex",
+    "complexity": "simple|complex",
     "confidence": 0.95,
     "reasoning": "Clear explanation of why you classified it this way",
-    "domain": "Primary domain (security, networking, development, etc.)",
+    "domain": "Primary domain (conversation, security, networking, development, etc.)",
     "intent": "What the user wants to accomplish",
     "scope": "single|multi-step",
     "risk_level": "low|medium|high",
     "suggested_agents": ["list", "of", "relevant", "agents"],
     "estimated_steps": 1,
     "user_approval_needed": false,
-    "system_changes": false,
-    "requires_research": false,
-    "requires_installation": false
+    "knowledge_base_relevant": true,
+    "tools_required": false,
+    "source_attribution_needed": true
 }}
 
 Be thorough in your analysis and reasoning. Consider the implications and requirements of the request.
@@ -276,8 +274,8 @@ Be thorough in your analysis and reasoning. Consider the implications and requir
                     keyword_result == TaskComplexity.COMPLEX
                     and llm_complexity == TaskComplexity.SIMPLE
                 ):
-                    llm_complexity = TaskComplexity.RESEARCH  # Compromise
-                    confidence = 0.5
+                    llm_complexity = TaskComplexity.COMPLEX  # Use keyword result
+                    confidence = 0.6
 
             # Create comprehensive result
             return ClassificationResult(
@@ -341,8 +339,7 @@ Be thorough in your analysis and reasoning. Consider the implications and requir
             reasoning=f"Keyword-based classification: {keyword_result.value}",
             suggested_agents=self._default_agents_for_complexity(keyword_result),
             estimated_steps=self._default_steps_for_complexity(keyword_result),
-            user_approval_needed=keyword_result
-            in [TaskComplexity.INSTALL, TaskComplexity.COMPLEX],
+            user_approval_needed=keyword_result == TaskComplexity.COMPLEX,
             context_analysis={
                 "domain": "general",
                 "intent": "unknown",
@@ -362,11 +359,7 @@ Be thorough in your analysis and reasoning. Consider the implications and requir
     def _default_agents_for_complexity(self, complexity: TaskComplexity) -> List[str]:
         """Return default agents for each complexity level."""
         if complexity == TaskComplexity.SIMPLE:
-            return ["chat_responder"]
-        elif complexity == TaskComplexity.RESEARCH:
-            return ["kb_librarian", "research_agent"]
-        elif complexity == TaskComplexity.INSTALL:
-            return ["system_commands", "orchestrator"]
+            return ["chat_responder", "kb_librarian"]
         else:  # COMPLEX
             return ["kb_librarian", "research_agent", "system_commands", "orchestrator"]
 
@@ -374,9 +367,7 @@ Be thorough in your analysis and reasoning. Consider the implications and requir
         """Return default step count for each complexity level."""
         return {
             TaskComplexity.SIMPLE: 1,
-            TaskComplexity.RESEARCH: 3,
-            TaskComplexity.INSTALL: 4,
-            TaskComplexity.COMPLEX: 8,
+            TaskComplexity.COMPLEX: 5,
         }.get(complexity, 1)
 
     async def _log_classification(

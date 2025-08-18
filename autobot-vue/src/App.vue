@@ -51,16 +51,6 @@
                 </li>
                 <li>
                   <a
-                    @click="updateRoute('voice')"
-                    :class="[activeTab === 'voice' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-microphone mr-2 text-sm"></i>
-                    Voice Interface
-                  </a>
-                </li>
-                <li>
-                  <a
                     @click="updateRoute('knowledge')"
                     :class="[activeTab === 'knowledge' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
@@ -71,42 +61,32 @@
                 </li>
                 <li>
                   <a
-                    @click="updateRoute('terminal')"
-                    :class="[activeTab === 'terminal' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    @click="updateRoute('tools')"
+                    :class="[activeTab === 'tools' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
-                    <i class="fas fa-terminal mr-2 text-sm"></i>
-                    Terminal
+                    <i class="fas fa-tools mr-2 text-sm"></i>
+                    Tools
                   </a>
                 </li>
                 <li>
                   <a
-                    @click="updateRoute('files')"
-                    :class="[activeTab === 'files' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    @click="updateRoute('monitoring')"
+                    :class="[activeTab === 'monitoring' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
-                    <i class="fas fa-folder mr-2 text-sm"></i>
-                    File Manager
+                    <i class="fas fa-chart-bar mr-2 text-sm"></i>
+                    Monitoring
                   </a>
                 </li>
                 <li>
                   <a
-                    @click="updateRoute('monitor')"
-                    :class="[activeTab === 'monitor' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                    @click="updateRoute('secrets')"
+                    :class="[activeTab === 'secrets' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
                     class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
                   >
-                    <i class="fas fa-chart-line mr-2 text-sm"></i>
-                    System Monitor
-                  </a>
-                </li>
-                <li>
-                  <a
-                    @click="updateRoute('workflows')"
-                    :class="[activeTab === 'workflows' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-project-diagram mr-2 text-sm"></i>
-                    Workflows
+                    <i class="fas fa-key mr-2 text-sm"></i>
+                    Secrets
                   </a>
                 </li>
                 <li>
@@ -170,16 +150,6 @@
                   </li>
                   <li>
                     <a
-                      @click="updateRoute('voice')"
-                      :class="[activeTab === 'voice' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
-                    >
-                      <i class="fas fa-microphone mr-2 text-sm"></i>
-                      Voice Interface
-                    </a>
-                  </li>
-                  <li>
-                    <a
                       @click="updateRoute('knowledge')"
                       :class="[activeTab === 'knowledge' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
@@ -190,42 +160,32 @@
                   </li>
                   <li>
                     <a
-                      @click="updateRoute('terminal')"
-                      :class="[activeTab === 'terminal' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      @click="updateRoute('tools')"
+                      :class="[activeTab === 'tools' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
-                      <i class="fas fa-terminal mr-2 text-sm"></i>
-                      Terminal
+                      <i class="fas fa-tools mr-2 text-sm"></i>
+                      Tools
                     </a>
                   </li>
                   <li>
                     <a
-                      @click="updateRoute('files')"
-                      :class="[activeTab === 'files' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      @click="updateRoute('monitoring')"
+                      :class="[activeTab === 'monitoring' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
-                      <i class="fas fa-folder mr-2 text-sm"></i>
-                      File Manager
+                      <i class="fas fa-chart-bar mr-2 text-sm"></i>
+                      Monitoring
                     </a>
                   </li>
                   <li>
                     <a
-                      @click="updateRoute('monitor')"
-                      :class="[activeTab === 'monitor' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
+                      @click="updateRoute('secrets')"
+                      :class="[activeTab === 'secrets' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
                     >
-                      <i class="fas fa-chart-line mr-2 text-sm"></i>
-                      System Monitor
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      @click="updateRoute('workflows')"
-                      :class="[activeTab === 'workflows' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
-                    >
-                      <i class="fas fa-project-diagram mr-2 text-sm"></i>
-                      Workflows
+                      <i class="fas fa-key mr-2 text-sm"></i>
+                      Secrets
                     </a>
                   </li>
                   <li>
@@ -302,13 +262,13 @@
                           <i class="fas fa-plus mr-2"></i>
                           Add Knowledge
                         </button>
-                        <button @click="updateRoute('files')" class="btn btn-success text-sm" aria-label="Upload">
-                          <i class="fas fa-upload mr-2"></i>
-                          Upload File
+                        <button @click="updateRoute('tools')" class="btn btn-secondary text-sm" aria-label="Tools">
+                          <i class="fas fa-tools mr-2"></i>
+                          Tools
                         </button>
-                        <button @click="updateRoute('terminal')" class="btn btn-outline text-sm" aria-label="Button">
-                          <i class="fas fa-terminal mr-2"></i>
-                          Terminal
+                        <button @click="updateRoute('monitoring')" class="btn btn-outline text-sm" aria-label="Monitoring">
+                          <i class="fas fa-chart-bar mr-2"></i>
+                          Monitoring
                         </button>
                       </div>
                     </div>
@@ -412,6 +372,18 @@
                     </div>
                   </div>
                   </div>
+                  
+                  <!-- System Monitor Section -->
+                  <div class="relative flex flex-col min-w-0 break-words w-full mt-6 mb-6 shadow-lg rounded-lg bg-white">
+                    <div class="rounded-t mb-0 px-6 py-4">
+                      <div class="text-center flex justify-between">
+                        <h6 class="text-blueGray-700 text-xl font-bold">System Monitor</h6>
+                      </div>
+                    </div>
+                    <div class="flex-auto p-0">
+                      <SystemMonitor />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -422,13 +394,6 @@
                 </div>
               </div>
 
-              <!-- Voice View -->
-              <section v-else-if="activeTab === 'voice'" key="voice" class="card">
-                <div class="card-body">
-                  <VoiceInterface />
-                </div>
-              </section>
-
               <!-- Knowledge View -->
               <section v-else-if="activeTab === 'knowledge'" key="knowledge" class="card">
                 <div class="card-body p-0">
@@ -436,10 +401,91 @@
                 </div>
               </section>
 
-              <!-- Terminal View -->
-              <section v-else-if="activeTab === 'terminal'" key="terminal" class="card bg-blueGray-900">
-                <div class="card-body p-0">
-                  <TerminalWindow />
+              <!-- Tools View -->
+              <section v-else-if="activeTab === 'tools'" key="tools" class="card">
+                <div class="card-body">
+                  <div class="mb-6">
+                    <h3 class="text-xl font-semibold text-blueGray-700 mb-4">Tools</h3>
+                    <div class="flex flex-wrap gap-2 mb-6">
+                      <button 
+                        @click="activeToolTab = 'terminal'" 
+                        :class="[activeToolTab === 'terminal' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
+                        class="px-4 py-2 rounded font-medium transition-colors"
+                      >
+                        <i class="fas fa-terminal mr-2"></i>Terminal
+                      </button>
+                      <button 
+                        @click="activeToolTab = 'files'" 
+                        :class="[activeToolTab === 'files' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
+                        class="px-4 py-2 rounded font-medium transition-colors"
+                      >
+                        <i class="fas fa-folder mr-2"></i>File Manager
+                      </button>
+                      <button 
+                        @click="activeToolTab = 'workflows'" 
+                        :class="[activeToolTab === 'workflows' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
+                        class="px-4 py-2 rounded font-medium transition-colors"
+                      >
+                        <i class="fas fa-project-diagram mr-2"></i>Workflows
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- Terminal Tab -->
+                  <div v-if="activeToolTab === 'terminal'" class="tools-content bg-blueGray-900 rounded">
+                    <TerminalWindow />
+                  </div>
+                  
+                  <!-- File Manager Tab -->
+                  <div v-else-if="activeToolTab === 'files'" class="tools-content">
+                    <FileBrowser />
+                  </div>
+                  
+                  <!-- Workflows Tab -->
+                  <div v-else-if="activeToolTab === 'workflows'" class="tools-content">
+                    <WorkflowApproval />
+                  </div>
+                </div>
+              </section>
+
+              <!-- Monitoring View -->
+              <section v-else-if="activeTab === 'monitoring'" key="monitoring" class="card">
+                <div class="card-body">
+                  <div class="mb-6">
+                    <h3 class="text-xl font-semibold text-blueGray-700 mb-4">Monitoring</h3>
+                    <div class="flex flex-wrap gap-2 mb-6">
+                      <button 
+                        @click="activeMonitoringTab = 'voice'" 
+                        :class="[activeMonitoringTab === 'voice' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
+                        class="px-4 py-2 rounded font-medium transition-colors"
+                      >
+                        <i class="fas fa-microphone mr-2"></i>Voice Interface
+                      </button>
+                      <button 
+                        @click="activeMonitoringTab = 'system'" 
+                        :class="[activeMonitoringTab === 'system' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
+                        class="px-4 py-2 rounded font-medium transition-colors"
+                      >
+                        <i class="fas fa-chart-line mr-2"></i>System Monitor
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- Voice Interface Tab -->
+                  <div v-if="activeMonitoringTab === 'voice'" class="monitoring-content">
+                    <VoiceInterface />
+                  </div>
+                  
+                  <!-- System Monitor Tab -->
+                  <div v-else-if="activeMonitoringTab === 'system'" class="monitoring-content">
+                    <div class="mb-4">
+                      <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh">
+                        <i class="fas fa-sync mr-2"></i>
+                        Refresh
+                      </button>
+                    </div>
+                    <SystemMonitor />
+                  </div>
                 </div>
               </section>
 
@@ -449,6 +495,13 @@
                   <WorkflowApproval />
                 </div>
               </section>
+              <!-- Secrets View -->
+              <section v-else-if="activeTab === 'secrets'" key="secrets" class="card">
+                <div class="card-body p-0">
+                  <SecretsManager />
+                </div>
+              </section>
+
               <!-- Settings View -->
               <section v-else-if="activeTab === 'settings'" key="settings" class="card">
                 <div class="card-body">
@@ -456,14 +509,25 @@
                 </div>
               </section>
 
-              <!-- Files View -->
+              <!-- Legacy routes for backward compatibility -->
               <section v-else-if="activeTab === 'files'" key="files" class="card">
                 <div class="card-body p-0">
                   <FileBrowser />
                 </div>
               </section>
-
-              <!-- Monitor View -->
+              
+              <section v-else-if="activeTab === 'terminal'" key="terminal" class="card bg-blueGray-900">
+                <div class="card-body p-0">
+                  <TerminalWindow />
+                </div>
+              </section>
+              
+              <section v-else-if="activeTab === 'voice'" key="voice" class="card">
+                <div class="card-body">
+                  <VoiceInterface />
+                </div>
+              </section>
+              
               <section v-else-if="activeTab === 'monitor'" key="monitor" class="card">
                 <div class="card-body p-0">
                   <div class="mb-4 px-6 pt-6">
@@ -496,6 +560,9 @@
     @cancelled="onElevationCancelled"
     @close="onElevationClose"
   />
+
+  <!-- RUM Dashboard for Development -->
+  <RumDashboard />
 </template>
 
 <script>
@@ -505,11 +572,13 @@ import VoiceInterface from './components/VoiceInterface.vue';
 import KnowledgeManager from './components/KnowledgeManager.vue';
 import TerminalWindow from './components/TerminalWindow.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
+import SecretsManager from './components/SecretsManager.vue';
 import FileBrowser from './components/FileBrowser.vue';
 import SystemMonitor from './components/SystemMonitor.vue';
 import WorkflowApproval from './components/WorkflowApproval.vue';
 import PhaseStatusIndicator from './components/PhaseStatusIndicator.vue';
 import ElevationDialog from './components/ElevationDialog.vue';
+import RumDashboard from './components/RumDashboard.vue';
 import elevationService from './services/elevationService';
 
 export default {
@@ -520,17 +589,23 @@ export default {
     KnowledgeManager,
     TerminalWindow,
     SettingsPanel,
+    SecretsManager,
     FileBrowser,
     SystemMonitor,
     WorkflowApproval,
     PhaseStatusIndicator,
-    ElevationDialog
+    ElevationDialog,
+    RumDashboard
   },
   setup() {
     const activeTab = ref('dashboard');
     const activeChatId = ref(`chat-${Date.now()}`);
     const navbarOpen = ref(false);
     const mobileMenuContainer = ref(null);
+    
+    // Sub-tab states for new grouped sections
+    const activeToolTab = ref('terminal');
+    const activeMonitoringTab = ref('voice');
     // Simple tab switching without router
     const updateRoute = (tab) => {
       activeTab.value = tab;
@@ -659,6 +734,8 @@ export default {
       activeChatId,
       navbarOpen,
       mobileMenuContainer,
+      activeToolTab,
+      activeMonitoringTab,
       backendStatus,
       llmStatus,
       redisStatus,

@@ -30,13 +30,11 @@ class BaseTerminalWebSocket(ABC):
     @abstractmethod
     async def send_message(self, message: dict):
         """Send message to WebSocket client"""
-        pass
 
     @property
     @abstractmethod
     def terminal_type(self) -> str:
         """Get terminal type for logging"""
-        pass
 
     async def start_pty_shell(self):
         """Start a PTY shell process - consolidated implementation"""
@@ -77,8 +75,27 @@ class BaseTerminalWebSocket(ABC):
             )
 
     def _read_pty_output(self):
-        """Read output from PTY in separate thread - consolidated implementation"""
+        """Read output from PTY in separate thread with queue-based delivery"""
         import select
+        import queue
+        import time
+
+        # Create output queue for thread-safe message passing
+        self.output_queue = queue.Queue()
+
+        # Start async message sender task
+        if hasattr(self, '_output_sender_task'):
+            self._output_sender_task.cancel()
+
+        # Schedule async output sender
+        try:
+            loop = asyncio.get_event_loop()
+            self._output_sender_task = asyncio.run_coroutine_threadsafe(
+                self._async_output_sender(), loop
+            )
+        except RuntimeError:
+            # No loop available - will handle synchronously
+            self._output_sender_task = None
 
         try:
             while self.active and self.pty_fd:
@@ -91,52 +108,26 @@ class BaseTerminalWebSocket(ABC):
                         if data:
                             try:
                                 output = data.decode("utf-8", errors="replace")
-
                                 # Call hook for processing output
                                 processed_output = self.process_output(output)
 
-                                # Send to WebSocket via async context
-                                if self.websocket and self.active:
+                                # Queue message for async delivery
+                                message = {
+                                    "type": "output",
+                                    "content": processed_output,  # Standardized field name
+                                    "timestamp": time.time()
+                                }
+
+                                try:
+                                    self.output_queue.put_nowait(message)
+                                except queue.Full:
+                                    # Queue is full, drop oldest message to prevent blocking
                                     try:
-                                        # Get the current event loop or create new one
-                                        try:
-                                            loop = asyncio.get_event_loop()
-                                            if loop.is_running():
-                                                # Use run_coroutine_threadsafe
-                                                asyncio.run_coroutine_threadsafe(
-                                                    self.send_message(
-                                                        {
-                                                            "type": "output",
-                                                            "data": processed_output,
-                                                        }
-                                                    ),
-                                                    loop,
-                                                )
-                                            else:
-                                                # Loop not running, run directly
-                                                loop.run_until_complete(
-                                                    self.send_message(
-                                                        {
-                                                            "type": "output",
-                                                            "data": processed_output,
-                                                        }
-                                                    )
-                                                )
-                                        except RuntimeError:
-                                            # No event loop, create new one
-                                            loop = asyncio.new_event_loop()
-                                            asyncio.set_event_loop(loop)
-                                            loop.run_until_complete(
-                                                self.send_message(
-                                                    {
-                                                        "type": "output",
-                                                        "data": processed_output,
-                                                    }
-                                                )
-                                            )
-                                            loop.close()
-                                    except Exception as e:
-                                        logger.error(f"Error sending PTY output: {e}")
+                                        self.output_queue.get_nowait()
+                                        self.output_queue.put_nowait(message)
+                                    except queue.Empty:
+                                        pass
+
                             except Exception as e:
                                 logger.error(f"Error processing PTY data: {e}")
                         else:
@@ -149,6 +140,48 @@ class BaseTerminalWebSocket(ABC):
                     break
         except Exception as e:
             logger.error(f"PTY reader thread error: {e}")
+        finally:
+            # Signal async sender to stop
+            if hasattr(self, 'output_queue'):
+                try:
+                    self.output_queue.put_nowait({"type": "stop"})
+                except queue.Full:
+                    pass
+
+    async def _async_output_sender(self):
+        """Async task to send queued output messages to WebSocket"""
+        import queue
+
+        if not hasattr(self, 'output_queue'):
+            return
+
+        try:
+            while self.active:
+                try:
+                    # Wait for message with timeout
+                    message = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(
+                            None, self.output_queue.get, True, 0.1
+                        ),
+                        timeout=0.2
+                    )
+
+                    if message.get("type") == "stop":
+                        break
+
+                    # Send message if WebSocket is active
+                    if self.websocket and self.active:
+                        await self.send_message(message)
+
+                except asyncio.TimeoutError:
+                    continue
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error in async output sender: {e}")
+
+        except Exception as e:
+            logger.error(f"Async output sender error: {e}")
 
     def process_output(self, output: str) -> str:
         """Process PTY output before sending - override in subclasses"""
@@ -173,6 +206,30 @@ class BaseTerminalWebSocket(ABC):
         logger.info(f"Cleaning up {self.terminal_type} session")
 
         self.active = False
+
+        # Cancel async output sender task
+        if hasattr(self, '_output_sender_task') and self._output_sender_task:
+            try:
+                self._output_sender_task.cancel()
+                # Wait for task to complete cancellation
+                try:
+                    await asyncio.wait_for(asyncio.wrap_future(self._output_sender_task), timeout=1.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
+            except Exception as e:
+                logger.warning(f"Error cancelling output sender task: {e}")
+
+        # Clear output queue
+        if hasattr(self, 'output_queue'):
+            try:
+                # Drain the queue
+                while not self.output_queue.empty():
+                    try:
+                        self.output_queue.get_nowait()
+                    except Exception:
+                        break
+            except Exception as e:
+                logger.warning(f"Error clearing output queue: {e}")
 
         # Close PTY file descriptor
         if self.pty_fd:

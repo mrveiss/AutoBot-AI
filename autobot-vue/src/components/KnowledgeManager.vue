@@ -1755,13 +1755,51 @@ export default {
     });
 
     // Initialize component
-    onMounted(() => {
+    onMounted(async () => {
+      // Load settings first (synchronous)
       loadSettings();
-      loadStats();
-      loadKnowledgeEntries();
-      loadCategories();
-      loadSystemKnowledge();
-      loadSystemPrompts();
+      
+      // Only load data for the currently active tab to improve performance
+      await loadDataForActiveTab();
+    });
+
+    // Load data based on active tab to reduce initial load time
+    const loadDataForActiveTab = async () => {
+      try {
+        switch (activeTab.value) {
+          case 'search':
+            // Search tab doesn't need preloading
+            break;
+          case 'categories':
+            await loadCategories();
+            break;
+          case 'entries':
+            await loadKnowledgeEntries();
+            break;
+          case 'system':
+            await loadSystemKnowledge();
+            break;
+          case 'prompts':
+            await loadSystemPrompts();
+            break;
+          case 'stats':
+            await loadStats();
+            break;
+          default:
+            // For initial load, only load entries and categories
+            await loadKnowledgeEntries();
+            break;
+        }
+      } catch (error) {
+        console.error('Error loading tab data:', error);
+      }
+    };
+
+    // Watch for tab changes and load data as needed
+    watch(activeTab, async (newTab, oldTab) => {
+      if (newTab !== oldTab) {
+        await loadDataForActiveTab();
+      }
     });
 
     return {
@@ -1789,6 +1827,7 @@ export default {
       tagsInput,
       newLink,
       loadKnowledgeEntries,
+      loadDataForActiveTab,
       filterEntries,
       refreshEntries,
       getEntryTitle,

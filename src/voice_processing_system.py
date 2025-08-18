@@ -7,17 +7,11 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
 from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
-from src.multimodal_processor import (
-    ModalInput,
-    ModalityType,
-    ProcessingIntent,
-    multimodal_processor,
-)
 from src.task_execution_tracker import task_tracker
 
 logger = logging.getLogger(__name__)
@@ -213,7 +207,8 @@ class SpeechRecognitionEngine:
                 )
 
                 logger.info(
-                    f"Speech recognition completed: {audio_input.audio_id}, confidence: {result.confidence:.2f}"
+                    f"Speech recognition completed: {audio_input.audio_id}, "
+                    f"confidence: {result.confidence:.2f}"
                 )
                 return result
 
@@ -268,7 +263,6 @@ class SpeechRecognitionEngine:
                     "language": "unknown",
                 }
 
-            import speech_recognition as sr
 
             # Convert audio data to AudioData format
             audio_data = self._convert_to_audio_data(audio_input)
@@ -548,7 +542,8 @@ class NaturalLanguageProcessor:
                 )
 
                 logger.info(
-                    f"Voice command analyzed: {command_type.value} - {intent} (confidence: {overall_confidence:.2f})"
+                    f"Voice command analyzed: {command_type.value} - {intent} "
+                    f"(confidence: {overall_confidence:.2f})"
                 )
                 return analysis
 
@@ -998,7 +993,8 @@ class VoiceProcessingSystem:
                 )
 
                 logger.info(
-                    f"Voice command processed successfully: {command_analysis.command_type.value}"
+                    f"Voice command processed successfully: "
+                    f"{command_analysis.command_type.value}"
                 )
                 return response
 

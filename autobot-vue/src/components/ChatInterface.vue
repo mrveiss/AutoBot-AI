@@ -86,6 +86,10 @@
               <span class="text-sm text-blueGray-600">Show Debug Messages</span>
             </label>
             <label class="flex items-center">
+              <input type="checkbox" v-model="settings.message_display.show_sources" class="mr-2" />
+              <span class="text-sm text-blueGray-600">Show Sources</span>
+            </label>
+            <label class="flex items-center">
               <input type="checkbox" v-model="settings.chat.auto_scroll" class="mr-2" />
               <span class="text-sm text-blueGray-600">Autoscroll</span>
             </label>
@@ -180,6 +184,7 @@
                   ></textarea>
                 </div>
 
+
                 <!-- Chat Control Buttons -->
                 <div class="flex flex-col gap-2">
                   <label class="btn btn-secondary p-2" title="Attach file">
@@ -253,7 +258,14 @@
                 </div>
               </div>
             </div>
-            <PlaywrightDesktopViewer class="flex-1" />
+            <div class="flex-1 p-4">
+              <!-- Unified Research Browser Component -->
+              <ResearchBrowser 
+                :session-id="currentResearchSession"
+                :research-data="researchResults"
+                class="flex-1"
+              />
+            </div>
           </div>
       </div>
     </div>
@@ -292,7 +304,7 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import TerminalSidebar from './TerminalSidebar.vue';
 import TerminalWindow from './TerminalWindow.vue';
 import WorkflowApproval from './WorkflowApproval.vue';
@@ -302,6 +314,7 @@ import CommandPermissionDialog from './CommandPermissionDialog.vue';
 // Desktop viewer components (placeholder implementation)
 import PlaywrightDesktopViewer from './PlaywrightDesktopViewer.vue';
 import ComputerDesktopViewer from './ComputerDesktopViewer.vue';
+import ResearchBrowser from './ResearchBrowser.vue';
 import apiClient from '../utils/ApiClient.js';
 import { apiService } from '@/services/api.js';
 
@@ -316,7 +329,8 @@ export default {
     CommandPermissionDialog,
     // Desktop viewer components (placeholder)
     PlaywrightDesktopViewer,
-    ComputerDesktopViewer
+    ComputerDesktopViewer,
+    ResearchBrowser
   },
   setup() {
     // Reactive state
@@ -333,6 +347,13 @@ export default {
     const reloadNeeded = ref(false);
     const chatMessages = ref(null);
     const attachedFiles = ref([]);
+
+    // Message Display Controls
+
+    // Research Browser state
+    const currentResearchSession = ref(null);
+    const researchResults = ref(null);
+    const showResearchBrowser = ref(false);
 
     // Workflow state
     const activeWorkflowId = ref(null);
@@ -360,7 +381,8 @@ export default {
         show_planning: true,
         show_debug: false,
         show_thoughts: true,
-        show_utility: false
+        show_utility: false,
+        show_sources: true  // Default on for source attribution
       },
       chat: {
         auto_scroll: true
@@ -370,11 +392,17 @@ export default {
     // Computed properties
     const filteredMessages = computed(() => {
       return messages.value.filter(message => {
+        // Filter based on message type and display toggles from settings
         if (message.type === 'thought' && !settings.value.message_display.show_thoughts) return false;
         if (message.type === 'json' && !settings.value.message_display.show_json) return false;
         if (message.type === 'utility' && !settings.value.message_display.show_utility) return false;
         if (message.type === 'planning' && !settings.value.message_display.show_planning) return false;
         if (message.type === 'debug' && !settings.value.message_display.show_debug) return false;
+        if (message.type === 'source' && !settings.value.message_display.show_sources) return false;
+        
+        // Always show regular user/assistant messages
+        if (!message.type || message.type === 'user' || message.type === 'assistant') return true;
+        
         return true;
       });
     });
@@ -572,6 +600,20 @@ export default {
           return `<div class="tool-output-message">
             <div class="message-header">🔧 Tool Output</div>
             <div class="message-content">${escapedText}</div>
+          </div>`;
+        case 'source':
+        case 'source_attribution':
+          return `<div class="source-attribution-message">
+            <div class="message-header">📋 Sources</div>
+            <div class="message-content">${escapedText}</div>
+          </div>`;
+        case 'research_summary':
+          return `<div class="research-summary-message">
+            <div class="message-header">🔍 Research Results</div>
+            <div class="message-content">${escapedText}</div>
+            <div class="research-action mt-2 text-sm text-blue-600">
+              💡 Switch to Browser tab to interact with research sessions
+            </div>
           </div>`;
         default:
           return `<div class="regular-message">${escapedText}</div>`;
@@ -963,6 +1005,38 @@ export default {
                   timestamp: new Date().toLocaleTimeString(),
                   type: messageType
                 });
+
+                // Handle research results if present
+                if (chatResponse.data.research && chatResponse.data.research.success && chatResponse.data.research.results) {
+                  researchResults.value = chatResponse.data.research;
+                  
+                  // Check if any results have interaction required
+                  const hasInteraction = chatResponse.data.research.results.some(result => 
+                    result.interaction_required || result.status === 'interaction_required'
+                  );
+                  
+                  if (hasInteraction) {
+                    showResearchBrowser.value = true;
+                    currentResearchSession.value = chatResponse.data.research.results.find(r => r.session_id)?.session_id || null;
+                  }
+
+                  // Add research summary message
+                  const resultCount = chatResponse.data.research.results.length;
+                  const interactionCount = chatResponse.data.research.results.filter(r => r.interaction_required).length;
+                  
+                  let researchSummary = `🔍 **Research completed**: ${resultCount} results found`;
+                  if (interactionCount > 0) {
+                    researchSummary += ` (${interactionCount} require user interaction)`;
+                  }
+                  
+                  messages.value.push({
+                    sender: 'system',
+                    text: researchSummary,
+                    timestamp: new Date().toLocaleTimeString(),
+                    type: 'research_summary',
+                    researchData: chatResponse.data.research
+                  });
+                }
               }
             } else {
               throw new Error('Invalid response from chat endpoint');
@@ -1019,6 +1093,7 @@ export default {
         }
       });
     };
+
 
     const newChat = async () => {
       try {
@@ -1262,27 +1337,79 @@ export default {
 
     // WebSocket methods
     const connectWebSocket = () => {
+      // Don't create multiple connections
+      if (websocket.value && websocket.value.readyState === WebSocket.OPEN) {
+        return
+      }
+      
       const wsUrl = `ws://localhost:8001/ws`;
-      websocket.value = new WebSocket(wsUrl);
+      
+      // Track WebSocket events with RUM if available
+      if (window.rum) {
+        window.rum.trackWebSocketEvent('connection_attempt', { url: wsUrl });
+      }
+      
+      try {
+        websocket.value = new WebSocket(wsUrl);
+      } catch (error) {
+        console.error('Failed to create WebSocket connection:', error)
+        if (window.rum) {
+          window.rum.trackWebSocketEvent('creation_failed', { url: wsUrl, error: error.message })
+        }
+        // Retry after delay
+        setTimeout(connectWebSocket, 5000)
+        return
+      }
 
       websocket.value.onopen = () => {
+        if (window.rum) {
+          window.rum.trackWebSocketEvent('connection_opened', { url: wsUrl });
+        }
       };
 
       websocket.value.onmessage = (event) => {
         try {
           const eventData = JSON.parse(event.data);
+          if (window.rum) {
+            window.rum.trackWebSocketEvent('message_received', { 
+              dataSize: event.data.length,
+              eventType: eventData.type || 'unknown'
+            });
+          }
           handleWebSocketEvent(eventData);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
+          if (window.rum) {
+            window.rum.trackWebSocketEvent('message_parse_error', { error: error.message || String(error) });
+          }
         }
       };
 
       websocket.value.onerror = (error) => {
         console.error('WebSocket error:', error);
+        if (window.rum) {
+          window.rum.trackWebSocketEvent('error', { error: error.toString() });
+          window.rum.reportCriticalIssue('websocket_error', {
+            url: wsUrl,
+            error: error.toString(),
+            readyState: websocket.value?.readyState
+          });
+        }
       };
 
-      websocket.value.onclose = () => {
-        setTimeout(connectWebSocket, 3000);
+      websocket.value.onclose = (event) => {
+        if (window.rum) {
+          window.rum.trackWebSocketEvent('connection_closed', { 
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean
+          });
+        }
+        
+        // Only reconnect if it wasn't a clean close and component is still mounted
+        if (!event.wasClean && activeTab.value !== 'dashboard') {
+          setTimeout(connectWebSocket, 3000);
+        }
       };
     };
 
@@ -1370,8 +1497,24 @@ export default {
         };
       }
 
-      // Connect WebSocket for real-time updates
-      connectWebSocket();
+      // Connect WebSocket for real-time updates only for chat functionality
+      // Dashboard will have its own independent monitoring
+      setTimeout(() => {
+        if (activeTab.value === 'chat') {
+          connectWebSocket();
+        }
+      }, 2000);
+      
+      // Watch for tab changes to manage WebSocket connection
+      watch(activeTab, (newTab, oldTab) => {
+        if (newTab === 'chat' && (!websocket.value || websocket.value.readyState !== WebSocket.OPEN)) {
+          // Connect when switching to chat
+          setTimeout(connectWebSocket, 500);
+        } else if (oldTab === 'chat' && newTab !== 'chat' && websocket.value && websocket.value.readyState === WebSocket.OPEN) {
+          // Disconnect when leaving chat
+          websocket.value.close(1000, 'leaving chat tab');
+        }
+      });
 
       // Load chat list with timeout protection
       try {
@@ -1424,6 +1567,7 @@ export default {
       currentChatId,
       backendStarting,
       chatMessages,
+      // Message Display Controls
       settings,
       filteredMessages,
       formatMessage,
@@ -1465,7 +1609,11 @@ export default {
       pendingCommand,
       onCommandApproved,
       onCommandDenied,
-      onCommandCommented
+      onCommandCommented,
+      // Research Browser
+      currentResearchSession,
+      researchResults,
+      showResearchBrowser
     };
   }
 };
@@ -1643,6 +1791,39 @@ export default {
   line-height: 1.6;
 }
 
+.source-attribution-message {
+  border-left: 4px solid #3b82f6;
+  background-color: #eff6ff;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.source-attribution-message .message-header {
+  background-color: #3b82f6;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  margin: -0.75rem -0.75rem 0.5rem -0.75rem;
+  border-radius: 0 0.5rem 0 0;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.source-attribution-message .message-content {
+  color: #1e40af;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.source-attribution-message .message-content ul {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.source-attribution-message .message-content li {
+  margin: 0.25rem 0;
+}
+
 /* File attachment styles */
 .attached-file-chip {
   display: inline-flex;
@@ -1753,5 +1934,34 @@ export default {
   border-radius: 0.375rem;
   padding: 0.75rem;
   color: #1e40af;
+}
+
+.research-summary-message {
+  border-left: 4px solid #10b981;
+  background-color: #ecfdf5;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.research-summary-message .message-header {
+  background-color: #10b981;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  margin: -0.75rem -0.75rem 0.5rem -0.75rem;
+  border-radius: 0 0.5rem 0 0;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.research-summary-message .message-content {
+  color: #059669;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.research-summary-message .research-action {
+  color: #3b82f6;
+  font-style: italic;
 }
 </style>
