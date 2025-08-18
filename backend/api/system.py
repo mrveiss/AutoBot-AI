@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 @router.get("/health")
 async def health_check(detailed: bool = False):
     """Health check endpoint for connection status monitoring
-    
+
     Args:
         detailed: If True, performs comprehensive checks (slower)
                  If False, performs fast checks with caching (default)
@@ -166,11 +166,12 @@ async def get_system_status(request: Request):
         llm_config = ConfigService.get_llm_config()
 
         # Resolve actual model names for display
-        default_llm = llm_config["default_llm"]
+        default_llm = llm_config.get("default_llm", "unknown")
         current_llm_display = default_llm
         if default_llm.startswith("ollama_"):
             base_alias = default_llm.replace("ollama_", "")
-            actual_model = llm_config["ollama"]["models"].get(base_alias, base_alias)
+            ollama_models = llm_config.get("ollama", {}).get("models", {})
+            actual_model = ollama_models.get(base_alias, base_alias)
             current_llm_display = f"Ollama: {actual_model}"
         elif default_llm.startswith("openai_"):
             current_llm_display = f"OpenAI: {default_llm.replace('openai_', '')}"
@@ -187,9 +188,9 @@ async def get_system_status(request: Request):
         return {
             "status": "success",
             "current_llm": current_llm_display,
-            "default_llm": llm_config["default_llm"],
-            "task_llm": llm_config["task_llm"],
-            "ollama_models": llm_config["ollama"]["models"],
+            "default_llm": llm_config.get("default_llm", "unknown"),
+            "task_llm": llm_config.get("task_llm", "unknown"),
+            "ollama_models": llm_config.get("ollama", {}).get("models", {}),
             "background_tasks": {
                 "status": background_tasks_status,
                 "count": background_tasks_count,

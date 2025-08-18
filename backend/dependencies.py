@@ -5,8 +5,6 @@ This module provides dependency injection functions for FastAPI endpoints,
 removing the need for components to directly import and use global_config_manager.
 """
 
-from typing import Generator, Optional
-
 from fastapi import Depends
 
 from src.config import ConfigManager, global_config_manager
@@ -77,7 +75,7 @@ def get_orchestrator(
     diagnostics=Depends(get_diagnostics),
 ):
     """
-    Dependency injection provider for orchestrator.
+    Lazy loading dependency injection provider for orchestrator.
 
     Args:
         config: Configuration manager instance
@@ -88,6 +86,7 @@ def get_orchestrator(
     Returns:
         Orchestrator: Orchestrator instance configured with all dependencies
     """
+    # Lazy import to reduce startup time
     from src.orchestrator import Orchestrator
 
     return Orchestrator(
@@ -166,10 +165,10 @@ def get_cached_knowledge_base(config: ConfigManager = Depends(get_config)):
 
 def get_cached_orchestrator(config: ConfigManager = Depends(get_config)):
     """
-    Cached version of orchestrator dependency.
+    Cached version of orchestrator dependency with lazy loading.
 
     This version caches the orchestrator instance to avoid
-    repeated initialization costs.
+    repeated initialization costs and uses lazy import.
 
     Args:
         config: Configuration manager instance
@@ -177,11 +176,14 @@ def get_cached_orchestrator(config: ConfigManager = Depends(get_config)):
     Returns:
         Orchestrator: Cached orchestrator instance
     """
-    from src.orchestrator import Orchestrator
 
-    return dependency_cache.get_or_create(
-        "orchestrator", lambda: Orchestrator(config_manager=config)
-    )
+    # Lazy import inside cache function to defer loading
+    def _create_orchestrator():
+        from src.orchestrator import Orchestrator
+
+        return Orchestrator(config_manager=config)
+
+    return dependency_cache.get_or_create("orchestrator", _create_orchestrator)
 
 
 # Type aliases for cleaner dependency annotations
