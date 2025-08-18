@@ -15,10 +15,18 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
-async def health_check():
-    """Health check endpoint for connection status monitoring"""
+async def health_check(detailed: bool = False):
+    """Health check endpoint for connection status monitoring
+    
+    Args:
+        detailed: If True, performs comprehensive checks (slower)
+                 If False, performs fast checks with caching (default)
+    """
     try:
-        status = await ConnectionTester.get_comprehensive_health_status()
+        if detailed:
+            status = await ConnectionTester.get_comprehensive_health_status()
+        else:
+            status = await ConnectionTester.get_fast_health_status()
         return status
     except Exception as e:
         logger.error(f"Error in health check: {str(e)}")

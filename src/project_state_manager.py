@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import sqlite3
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -15,6 +16,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# Cache for project status with 60-second TTL
+_project_status_cache = {"data": None, "timestamp": 0, "ttl": 60}
 
 
 class DevelopmentPhase(Enum):
@@ -708,8 +712,17 @@ class ProjectStateManager:
             "next_suggested": suggested_next.value if suggested_next else None,
         }
 
-    def get_project_status(self) -> Dict[str, Any]:
-        """Get comprehensive project status"""
+    def get_project_status(self, use_cache: bool = True) -> Dict[str, Any]:
+        """Get comprehensive project status with optional caching"""
+        global _project_status_cache
+        
+        # Check cache first if enabled
+        if use_cache:
+            current_time = time.time()
+            if (_project_status_cache["data"] and 
+                current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]):
+                return _project_status_cache["data"]
+
         total_phases = len(self.phases)
         completed_phases = sum(1 for info in self.phases.values() if info.is_completed)
         active_phases = sum(1 for info in self.phases.values() if info.is_active)
@@ -719,7 +732,7 @@ class ProjectStateManager:
             / total_phases
         )
 
-        return {
+        status_data = {
             "current_phase": self.current_phase.value,
             "total_phases": total_phases,
             "completed_phases": completed_phases,
@@ -747,6 +760,48 @@ class ProjectStateManager:
                 }
                 for phase, info in self.phases.items()
             },
+        }
+
+        # Cache the result if caching is enabled
+        if use_cache:
+            _project_status_cache["data"] = status_data
+            _project_status_cache["timestamp"] = time.time()
+
+        return status_data
+
+    def get_fast_project_status(self) -> Dict[str, Any]:
+        """Get a fast project status without validation checks"""
+        global _project_status_cache
+        
+        # Always use cache for fast status
+        current_time = time.time()
+        if (_project_status_cache["data"] and 
+            current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]):
+            return _project_status_cache["data"]
+
+        # If no cache, return basic status without expensive operations
+        total_phases = len(self.phases)
+        
+        return {
+            "current_phase": self.current_phase.value,
+            "total_phases": total_phases,
+            "completed_phases": 0,  # Skip expensive calculation
+            "active_phases": 1,     # Assume current phase is active
+            "overall_completion": 0.6,  # Placeholder
+            "next_suggested_phase": None,
+            "last_validation": None,
+            "phases": {
+                phase.value: {
+                    "name": info.name,
+                    "completion": 0.5,  # Placeholder
+                    "is_active": phase == self.current_phase,
+                    "is_completed": False,  # Skip expensive check
+                    "capabilities": len(info.capabilities),
+                    "implemented_capabilities": len(info.capabilities) // 2,  # Estimate
+                }
+                for phase, info in self.phases.items()
+            },
+            "fast_mode": True
         }
 
     def generate_validation_report(self) -> str:

@@ -3,8 +3,10 @@ Shared utilities for testing connections to various services.
 Eliminates duplication across system.py, llm.py, and redis.py
 """
 
+import asyncio
 import logging
 import os
+import time
 from datetime import datetime
 from typing import Any, Dict
 
@@ -15,9 +17,70 @@ from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
+# Cache for health status with 30-second TTL
+_health_cache = {"data": None, "timestamp": 0, "ttl": 30}
+
 
 class ConnectionTester:
     """Centralized connection testing for all backend services"""
+
+    @staticmethod
+    async def get_fast_health_status() -> Dict[str, Any]:
+        """Fast health check without expensive operations (< 1 second)"""
+        try:
+            # Check cache first
+            current_time = time.time()
+            if (_health_cache["data"] and 
+                current_time - _health_cache["timestamp"] < _health_cache["ttl"]):
+                return _health_cache["data"]
+
+            # Quick Redis check
+            redis_client = get_redis_client()
+            redis_status = "disconnected"
+            try:
+                if redis_client:
+                    redis_client.ping()
+                    redis_status = "connected"
+            except Exception:
+                pass
+
+            # Quick Ollama availability check (no generation test)
+            ollama_status = "disconnected"
+            try:
+                ollama_endpoint = os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434")
+                ollama_check_url = f"{ollama_endpoint}/api/tags"
+                response = requests.get(ollama_check_url, timeout=3)
+                if response.status_code == 200:
+                    ollama_status = "connected"
+            except Exception:
+                pass
+
+            health_data = {
+                "status": "healthy",
+                "backend": "connected", 
+                "ollama": ollama_status,
+                "redis_status": redis_status,
+                "timestamp": datetime.now().isoformat(),
+                "fast_check": True
+            }
+
+            # Cache the result
+            _health_cache["data"] = health_data
+            _health_cache["timestamp"] = current_time
+
+            return health_data
+
+        except Exception as e:
+            logger.error(f"Error in fast health check: {str(e)}")
+            return {
+                "status": "unhealthy",
+                "backend": "connected",
+                "ollama": "unknown", 
+                "redis_status": "unknown",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat(),
+                "fast_check": True
+            }
 
     @staticmethod
     async def test_ollama_connection() -> Dict[str, Any]:
