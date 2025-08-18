@@ -161,6 +161,124 @@ python test_npu_worker.py
 
 # Code search via NPU
 python src/agents/npu_code_search_agent.py --query "your_search_query"
+
+# Comprehensive codebase profiling
+python scripts/comprehensive_code_profiler.py
+
+# Automated testing suite
+python scripts/automated_testing_procedure.py
+
+# API endpoint performance testing
+python scripts/profile_api_endpoints.py
+```
+
+### 🧪 Comprehensive Testing Procedures
+
+#### **Automated Testing Framework**
+The codebase includes a comprehensive automated testing suite that covers:
+- **Unit Tests**: Individual function and module testing
+- **Integration Tests**: Component interaction validation
+- **API Tests**: Endpoint response and performance validation
+- **Performance Tests**: Import speed and configuration access timing
+- **Security Tests**: Command validation and file upload security
+- **Code Quality Tests**: Flake8 compliance and import structure
+
+#### **Test Execution Commands**
+```bash
+# Run full automated test suite
+python scripts/automated_testing_procedure.py
+
+# Run specific test categories
+python -c "
+from scripts.automated_testing_procedure import AutomatedTestingSuite
+import asyncio
+tester = AutomatedTestingSuite()
+
+# Integration tests only
+tester.run_integration_tests()
+
+# Security tests only  
+tester.run_security_tests()
+
+# Performance tests only
+tester.run_performance_tests()
+"
+
+# Quick critical tests (fast)
+timeout 60s python -c "
+import asyncio, sys
+sys.path.insert(0, '.')
+from scripts.automated_testing_procedure import AutomatedTestingSuite
+
+async def quick_test():
+    tester = AutomatedTestingSuite()
+    integration = tester.run_integration_tests()
+    api = await tester.run_api_tests()
+    security = tester.run_security_tests()
+    print('✅ Integration:', len([r for r in integration if r.status == 'PASS']))
+    print('✅ API:', len([r for r in api if r.status == 'PASS']))
+    print('✅ Security:', len([r for r in security if r.status == 'PASS']))
+
+asyncio.run(quick_test())
+"
+```
+
+#### **Performance Profiling Commands**
+```bash
+# Full codebase analysis (AST, complexity, patterns)
+python scripts/comprehensive_code_profiler.py
+
+# Quick API performance check
+python scripts/profile_api_endpoints.py
+
+# Backend startup profiling
+python scripts/profile_backend.py
+
+# Generate performance report
+ls reports/codebase_analysis_*.json | tail -1 | xargs cat | jq '.performance_hotspots'
+```
+
+#### **Test Results and Reports**
+- **Test Results**: `reports/test_results_<timestamp>.json`
+- **Codebase Analysis**: `reports/codebase_analysis_<timestamp>.json`  
+- **Performance Analysis**: `reports/performance_analysis_report.md`
+- **API Performance**: Console output with speed ratings
+
+#### **Hardware-Accelerated Testing**
+```bash
+# NPU-accelerated code search testing
+python test_npu_worker.py
+
+# GPU/CUDA testing (if available)
+python -c "
+from src.llm_interface import TORCH_AVAILABLE
+from src.worker_node import TORCH_AVAILABLE as WORKER_TORCH
+print(f'LLM Interface CUDA: {TORCH_AVAILABLE}')
+print(f'Worker Node CUDA: {WORKER_TORCH}')
+"
+
+# Redis performance testing
+python -c "
+from src.utils.redis_client import get_redis_client
+import time
+client = get_redis_client()
+start = time.time()
+for i in range(1000): client.ping()
+print(f'Redis 1000 pings: {(time.time()-start)*1000:.0f}ms')
+"
+```
+
+#### **Continuous Integration Testing**
+```bash
+# Pre-commit testing pipeline
+flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503
+python scripts/profile_api_endpoints.py
+./run_agent.sh --test-mode
+
+# Full CI/CD simulation
+python scripts/automated_testing_procedure.py
+python scripts/comprehensive_code_profiler.py
+npm run build --prefix autobot-vue
 ```
 
 ### 📋 Pre-Deployment Checklist
