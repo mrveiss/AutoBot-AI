@@ -226,8 +226,17 @@ def get_file_info(file_path: Path, relative_path: str) -> FileInfo:
 
 
 def is_safe_file(filename: str) -> bool:
-    """Check if file type is allowed"""
+    """Check if file type is allowed and filename is safe"""
     if not filename:
+        return False
+
+    # Check for dangerous characters in filename
+    dangerous_chars = {'<', '>', '"', '|', '?', '*', '\0', '\r', '\n'}
+    if any(char in filename for char in dangerous_chars):
+        return False
+
+    # Check filename length
+    if len(filename) > 255:
         return False
 
     # Check extension
@@ -236,8 +245,23 @@ def is_safe_file(filename: str) -> bool:
         return False
 
     # Check for dangerous filenames
-    dangerous_names = {".htaccess", ".env", "passwd", "shadow"}
+    dangerous_names = {
+        ".htaccess", ".env", "passwd", "shadow", "config", "web.config",
+        "autoexec.bat", "boot.ini", "hosts", "httpd.conf", "nginx.conf"
+    }
     if filename.lower() in dangerous_names:
+        return False
+        
+    # Check for executable extensions not in allowlist
+    dangerous_extensions = {
+        ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".vbs", ".js",
+        ".jar", ".app", ".deb", ".rpm", ".dmg", ".pkg", ".msi"
+    }
+    if extension in dangerous_extensions and extension not in ALLOWED_EXTENSIONS:
+        return False
+
+    # Prevent null bytes and control characters in filename
+    if '\0' in filename or any(ord(c) < 32 for c in filename):
         return False
 
     return True
@@ -312,6 +336,41 @@ async def list_files(request: Request, path: str = ""):
         raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
 
 
+def validate_file_content(content: bytes, filename: str) -> bool:
+    """
+    Validate file content for security threats.
+    
+    Args:
+        content: File content bytes
+        filename: Original filename
+        
+    Returns:
+        bool: True if content is safe, False otherwise
+    """
+    # Check for null bytes (potential binary injection)
+    if b'\x00' in content:
+        # Only allow null bytes in known binary formats
+        extension = Path(filename).suffix.lower()
+        binary_formats = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf'}
+        if extension not in binary_formats:
+            return False
+    
+    # Check for script tags and other dangerous content
+    content_str = content.decode('utf-8', errors='ignore').lower()
+    dangerous_patterns = [
+        '<script', '</script>', 'javascript:', 'vbscript:', 'onload=',
+        'onerror=', 'onclick=', 'eval(', 'document.write', 'innerHTML',
+        '<?php', '<%', '<jsp:', 'exec(', 'system(', 'shell_exec('
+    ]
+    
+    for pattern in dangerous_patterns:
+        if pattern in content_str:
+            logger.warning(f"Dangerous content detected in {filename}: {pattern}")
+            return False
+    
+    return True
+
+
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
     request: Request,
@@ -342,14 +401,31 @@ async def upload_file(
                 status_code=400, detail=f"File type not allowed: {file.filename}"
             )
 
-        # Check file size
+        # Read and validate file content
         content = await file.read()
+        
+        # Check file size
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
                 detail=(
                     "File too large. Maximum size: " f"{MAX_FILE_SIZE // (1024*1024)}MB"
                 ),
+            )
+        
+        # Validate content for security threats
+        if not validate_file_content(content, file.filename):
+            raise HTTPException(
+                status_code=400, 
+                detail="File content contains potentially dangerous elements"
+            )
+        
+        # Verify MIME type matches file extension
+        detected_mime = mimetypes.guess_type(file.filename)[0]
+        if detected_mime and file.content_type and file.content_type != detected_mime:
+            logger.warning(
+                f"MIME type mismatch for {file.filename}: "
+                f"declared={file.content_type}, detected={detected_mime}"
             )
 
         # Validate and resolve target directory
