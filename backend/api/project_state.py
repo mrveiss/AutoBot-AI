@@ -58,11 +58,21 @@ class PhaseValidationModel(BaseModel):
 
 
 @router.get("/status", response_model=ProjectStatus)
-async def get_project_status():
-    """Get overall project development status"""
+async def get_project_status(detailed: bool = False):
+    """Get overall project development status
+    
+    Args:
+        detailed: If True, performs full validation checks (slower)
+                 If False, uses cached data and estimates (default, faster)
+    """
     try:
         manager = get_project_state_manager()
-        status = manager.get_project_status()
+        
+        if detailed:
+            status = manager.get_project_status(use_cache=False)
+        else:
+            # Use cached data for fast response
+            status = manager.get_project_status(use_cache=True)
 
         # Convert to Pydantic models
         phases = {}
