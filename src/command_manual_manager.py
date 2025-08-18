@@ -490,77 +490,15 @@ class CommandManualManager:
         """
         lines = manual_text.split("\n")
 
-        # Extract description (usually in NAME section)
-        description = ""
-        syntax = ""
-        examples = []
-        common_options = []
-        related_commands = []
-        section = 1
+        # Extract different sections using specialized methods
+        description = self._extract_description(command_name, lines)
+        syntax = self._extract_syntax(command_name, lines)
+        examples = self._extract_examples(command_name, lines)
+        common_options = self._extract_common_options(lines)
+        related_commands = self._extract_related_commands(lines)
+        section = self._extract_section_number(manual_text)
 
-        # Parse NAME section for description
-        in_name_section = False
-        in_synopsis_section = False
-        in_examples_section = False
-        in_see_also_section = False
-
-        for line in lines:
-            line = line.strip()
-
-            # Section headers
-            if re.match(r"^[A-Z][A-Z\s]+$", line):
-                in_name_section = line.startswith("NAME")
-                in_synopsis_section = line.startswith("SYNOPSIS")
-                in_examples_section = line.startswith("EXAMPLES")
-                in_see_also_section = line.startswith("SEE ALSO")
-                continue
-
-            # Extract description from NAME section
-            if in_name_section and line and not description:
-                # Remove command name and dash, keep description
-                desc_match = re.search(
-                    rf"{re.escape(command_name)}\s*[-–]\s*(.+)", line
-                )
-                if desc_match:
-                    description = desc_match.group(1)
-                elif " - " in line:
-                    description = line.split(" - ", 1)[1]
-                elif line:
-                    description = line
-
-            # Extract syntax from SYNOPSIS section
-            if in_synopsis_section and line and not syntax:
-                # Clean up the syntax line
-                if command_name in line:
-                    syntax = line
-
-            # Extract examples
-            if in_examples_section and line:
-                if line.startswith(command_name) or line.startswith("$"):
-                    examples.append(line)
-
-            # Extract related commands from SEE ALSO section
-            if in_see_also_section and line:
-                # Extract command names (format: command(1), command(8), etc.)
-                related_matches = re.findall(r"\b(\w+)\(\d+\)", line)
-                related_commands.extend(related_matches)
-
-        # Extract common options by looking for option patterns
-        option_pattern = r"^\s*(-\w|--\w+)"
-        for line in lines:
-            if re.match(option_pattern, line):
-                option_match = re.match(
-                    r"^\s*((?:-\w|--\w+)(?:\s*,\s*(?:-\w|--\w+))*)", line
-                )
-                if option_match:
-                    common_options.append(option_match.group(1))
-
-        # Extract section number from header
-        section_match = re.search(r"\((\d+)\)", manual_text[:200])
-        if section_match:
-            section = int(section_match.group(1))
-
-        # Determine risk level and category
+        # Determine classification
         risk_level = self._determine_risk_level(command_name, manual_text)
         category = self._determine_category(command_name, manual_text)
 
@@ -576,6 +514,155 @@ class CommandManualManager:
             manual_text=manual_text,
             section=section,
         )
+
+    def _extract_description(self, command_name: str, lines: List[str]) -> str:
+        """Extract description from NAME section of manual.
+
+        Args:
+            command_name: Name of the command
+            lines: Manual text lines
+
+        Returns:
+            Extracted description
+        """
+        description = ""
+        in_name_section = False
+
+        for line in lines:
+            line = line.strip()
+
+            if re.match(r"^[A-Z][A-Z\s]+$", line):
+                in_name_section = line.startswith("NAME")
+                continue
+
+            if in_name_section and line and not description:
+                # Remove command name and dash, keep description
+                desc_match = re.search(
+                    rf"{re.escape(command_name)}\s*[-–]\s*(.+)", line
+                )
+                if desc_match:
+                    description = desc_match.group(1)
+                elif " - " in line:
+                    description = line.split(" - ", 1)[1]
+                elif line:
+                    description = line
+
+        return description
+
+    def _extract_syntax(self, command_name: str, lines: List[str]) -> str:
+        """Extract syntax from SYNOPSIS section of manual.
+
+        Args:
+            command_name: Name of the command
+            lines: Manual text lines
+
+        Returns:
+            Extracted syntax
+        """
+        syntax = ""
+        in_synopsis_section = False
+
+        for line in lines:
+            line = line.strip()
+
+            if re.match(r"^[A-Z][A-Z\s]+$", line):
+                in_synopsis_section = line.startswith("SYNOPSIS")
+                continue
+
+            if in_synopsis_section and line and not syntax:
+                if command_name in line:
+                    syntax = line
+                    break
+
+        return syntax
+
+    def _extract_examples(self, command_name: str, lines: List[str]) -> List[str]:
+        """Extract examples from EXAMPLES section of manual.
+
+        Args:
+            command_name: Name of the command
+            lines: Manual text lines
+
+        Returns:
+            List of extracted examples
+        """
+        examples = []
+        in_examples_section = False
+
+        for line in lines:
+            line = line.strip()
+
+            if re.match(r"^[A-Z][A-Z\s]+$", line):
+                in_examples_section = line.startswith("EXAMPLES")
+                continue
+
+            if in_examples_section and line:
+                if line.startswith(command_name) or line.startswith("$"):
+                    examples.append(line)
+
+        return examples
+
+    def _extract_common_options(self, lines: List[str]) -> List[str]:
+        """Extract common options from manual text.
+
+        Args:
+            lines: Manual text lines
+
+        Returns:
+            List of common options
+        """
+        common_options = []
+        option_pattern = r"^\s*(-\w|--\w+)"
+
+        for line in lines:
+            if re.match(option_pattern, line):
+                option_match = re.match(
+                    r"^\s*((?:-\w|--\w+)(?:\s*,\s*(?:-\w|--\w+))*)", line
+                )
+                if option_match:
+                    common_options.append(option_match.group(1))
+
+        return common_options
+
+    def _extract_related_commands(self, lines: List[str]) -> List[str]:
+        """Extract related commands from SEE ALSO section.
+
+        Args:
+            lines: Manual text lines
+
+        Returns:
+            List of related command names
+        """
+        related_commands = []
+        in_see_also_section = False
+
+        for line in lines:
+            line = line.strip()
+
+            if re.match(r"^[A-Z][A-Z\s]+$", line):
+                in_see_also_section = line.startswith("SEE ALSO")
+                continue
+
+            if in_see_also_section and line:
+                # Extract command names (format: command(1), command(8), etc.)
+                related_matches = re.findall(r"\b(\w+)\(\d+\)", line)
+                related_commands.extend(related_matches)
+
+        return related_commands
+
+    def _extract_section_number(self, manual_text: str) -> int:
+        """Extract section number from manual header.
+
+        Args:
+            manual_text: Full manual text
+
+        Returns:
+            Section number (defaults to 1)
+        """
+        section_match = re.search(r"\((\d+)\)", manual_text[:200])
+        if section_match:
+            return int(section_match.group(1))
+        return 1
 
     def get_manual_text(self, command_name: str) -> Optional[str]:
         """Get manual text for a command using the man command.

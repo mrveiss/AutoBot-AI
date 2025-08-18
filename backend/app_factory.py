@@ -35,9 +35,9 @@ from backend.api.llm import router as llm_router
 from backend.api.metrics import router as metrics_router
 from backend.api.prompts import router as prompts_router
 from backend.api.redis import router as redis_router
+from backend.api.research_browser import router as research_browser_router
 from backend.api.scheduler import router as scheduler_router
 from backend.api.secrets import router as secrets_router
-from backend.api.research_browser import router as research_browser_router
 from backend.api.security import router as security_router
 from backend.api.settings import router as settings_router
 from backend.api.system import router as system_router
@@ -64,7 +64,6 @@ from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.knowledge_base import KnowledgeBase
 
 # Import core components
-from src.orchestrator import Orchestrator
 from src.security_layer import SecurityLayer
 from src.utils.redis_client import get_redis_client
 from src.voice_interface import VoiceInterface
@@ -154,8 +153,9 @@ async def _initialize_core_components(app: FastAPI) -> None:
     logger.debug("Initializing core components...")
 
     try:
-        app.state.orchestrator = Orchestrator()
-        logger.info("Orchestrator initialized and stored in app.state")
+        # Lazy load orchestrator only when needed
+        app.state.orchestrator = None
+        logger.info("Orchestrator will be lazy-loaded when first requested")
 
         app.state.knowledge_base = KnowledgeBase()
         logger.info("KnowledgeBase initialized and stored in app.state")
@@ -215,14 +215,12 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
         # Keep the full orchestrator for backward compatibility, but don't start
         # blocking tasks
         logger.info(
-            "PERFORMANCE FIX: Skipping full orchestrator startup to "
-            "prevent blocking"
+            "PERFORMANCE FIX: Skipping full orchestrator startup to " "prevent blocking"
         )
 
         # DISABLE Redis background tasks that block the event loop
         logger.info(
-            "PERFORMANCE FIX: Disabling Redis background tasks to "
-            "prevent blocking"
+            "PERFORMANCE FIX: Disabling Redis background tasks to " "prevent blocking"
         )
         app.state.background_tasks = []
 
@@ -241,8 +239,7 @@ async def _initialize_knowledge_base(app: FastAPI) -> None:
 
     # URGENT FIX: Skip KB initialization to prevent blocking during startup
     logger.info(
-        "PERFORMANCE FIX: Skipping KnowledgeBase ainit() to "
-        "prevent startup blocking"
+        "PERFORMANCE FIX: Skipping KnowledgeBase ainit() to " "prevent startup blocking"
     )
     # try:
     #     await app.state.knowledge_base.ainit()

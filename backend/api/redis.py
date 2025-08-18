@@ -35,6 +35,20 @@ async def update_redis_config(config_data: dict):
         )
 
 
+@router.get("/status")
+async def get_redis_status():
+    """Get Redis connection status"""
+    try:
+        result = ConnectionTester.test_redis_connection()
+        return result
+    except Exception as e:
+        logger.error(f"Redis status check failed: {str(e)}")
+        return {
+            "status": "disconnected",
+            "message": f"Failed to connect to Redis: {str(e)}",
+        }
+
+
 @router.post("/test_connection")
 async def test_redis_connection():
     """Test Redis connection with current configuration"""

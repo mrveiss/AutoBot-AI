@@ -296,47 +296,93 @@ async def get_comprehensive_llm_status():
             "providers": {
                 "local": {
                     "ollama": {
-                        "configured": bool(local_config.get("providers", {}).get("ollama", {}).get("selected_model")),
+                        "configured": bool(
+                            local_config.get("providers", {})
+                            .get("ollama", {})
+                            .get("selected_model")
+                        ),
                         "status": "connected",  # Assume connected for now
-                        "model": local_config.get("providers", {}).get("ollama", {}).get("selected_model", ""),
-                        "endpoint": local_config.get("providers", {}).get("ollama", {}).get("host", "http://localhost:11434")
+                        "model": local_config.get("providers", {})
+                        .get("ollama", {})
+                        .get("selected_model", ""),
+                        "endpoint": local_config.get("providers", {})
+                        .get("ollama", {})
+                        .get("host", "http://localhost:11434"),
                     },
                     "lmstudio": {
-                        "configured": bool(local_config.get("providers", {}).get("lmstudio", {}).get("selected_model")),
+                        "configured": bool(
+                            local_config.get("providers", {})
+                            .get("lmstudio", {})
+                            .get("selected_model")
+                        ),
                         "status": "disconnected",  # Typically not running
-                        "model": local_config.get("providers", {}).get("lmstudio", {}).get("selected_model", ""),
-                        "endpoint": local_config.get("providers", {}).get("lmstudio", {}).get("endpoint", "http://localhost:1234/v1")
-                    }
+                        "model": local_config.get("providers", {})
+                        .get("lmstudio", {})
+                        .get("selected_model", ""),
+                        "endpoint": local_config.get("providers", {})
+                        .get("lmstudio", {})
+                        .get("endpoint", "http://localhost:1234/v1"),
+                    },
                 },
                 "cloud": {
                     "openai": {
-                        "configured": bool(cloud_config.get("providers", {}).get("openai", {}).get("api_key")),
-                        "status": "disconnected" if not cloud_config.get("providers", {}).get("openai", {}).get("api_key") else "connected",
-                        "model": cloud_config.get("providers", {}).get("openai", {}).get("selected_model", ""),
-                        "endpoint": cloud_config.get("providers", {}).get("openai", {}).get("endpoint", "https://api.openai.com/v1")
+                        "configured": bool(
+                            cloud_config.get("providers", {})
+                            .get("openai", {})
+                            .get("api_key")
+                        ),
+                        "status": "disconnected"
+                        if not cloud_config.get("providers", {})
+                        .get("openai", {})
+                        .get("api_key")
+                        else "connected",
+                        "model": cloud_config.get("providers", {})
+                        .get("openai", {})
+                        .get("selected_model", ""),
+                        "endpoint": cloud_config.get("providers", {})
+                        .get("openai", {})
+                        .get("endpoint", "https://api.openai.com/v1"),
                     },
                     "anthropic": {
-                        "configured": bool(cloud_config.get("providers", {}).get("anthropic", {}).get("api_key")),
-                        "status": "disconnected" if not cloud_config.get("providers", {}).get("anthropic", {}).get("api_key") else "connected",
-                        "model": cloud_config.get("providers", {}).get("anthropic", {}).get("selected_model", ""),
-                        "endpoint": cloud_config.get("providers", {}).get("anthropic", {}).get("endpoint", "https://api.anthropic.com/v1")
-                    }
-                }
+                        "configured": bool(
+                            cloud_config.get("providers", {})
+                            .get("anthropic", {})
+                            .get("api_key")
+                        ),
+                        "status": "disconnected"
+                        if not cloud_config.get("providers", {})
+                        .get("anthropic", {})
+                        .get("api_key")
+                        else "connected",
+                        "model": cloud_config.get("providers", {})
+                        .get("anthropic", {})
+                        .get("selected_model", ""),
+                        "endpoint": cloud_config.get("providers", {})
+                        .get("anthropic", {})
+                        .get("endpoint", "https://api.anthropic.com/v1"),
+                    },
+                },
             },
             "active_provider": {
                 "type": provider_type,
-                "name": local_config.get("provider", "ollama") if provider_type == "local" else cloud_config.get("provider", "openai"),
+                "name": local_config.get("provider", "ollama")
+                if provider_type == "local"
+                else cloud_config.get("provider", "openai"),
                 "model": (
-                    local_config.get("providers", {}).get("ollama", {}).get("selected_model", "")
+                    local_config.get("providers", {})
+                    .get("ollama", {})
+                    .get("selected_model", "")
                     if provider_type == "local"
-                    else cloud_config.get("providers", {}).get(cloud_config.get("provider", "openai"), {}).get("selected_model", "")
-                )
+                    else cloud_config.get("providers", {})
+                    .get(cloud_config.get("provider", "openai"), {})
+                    .get("selected_model", "")
+                ),
             },
             "settings": {
                 "streaming": llm_config.get("streaming", False),
                 "timeout": llm_config.get("timeout", 60),
-                "max_retries": llm_config.get("max_retries", 3)
-            }
+                "max_retries": llm_config.get("max_retries", 3),
+            },
         }
 
         return JSONResponse(status_code=200, content=status)
@@ -344,9 +390,14 @@ async def get_comprehensive_llm_status():
     except Exception as e:
         logger.error(f"Failed to get comprehensive LLM status: {e}")
         return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to get LLM status: {str(e)}"}
+            status_code=500, content={"error": f"Failed to get LLM status: {str(e)}"}
         )
+
+
+@router.get("/status")
+async def get_llm_status():
+    """Get current LLM status (alias for quick status)"""
+    return await get_quick_llm_status()
 
 
 @router.get("/status/quick")
@@ -360,21 +411,34 @@ async def get_quick_llm_status():
 
         if provider_type == "local":
             local_config = llm_config.get("local", {})
-            model = local_config.get("providers", {}).get("ollama", {}).get("selected_model", "")
+            model = (
+                local_config.get("providers", {})
+                .get("ollama", {})
+                .get("selected_model", "")
+            )
             status = "connected" if model else "disconnected"
         else:
             cloud_config = llm_config.get("cloud", {})
             provider = cloud_config.get("provider", "openai")
-            api_key = cloud_config.get("providers", {}).get(provider, {}).get("api_key", "")
-            model = cloud_config.get("providers", {}).get(provider, {}).get("selected_model", "")
+            api_key = (
+                cloud_config.get("providers", {}).get(provider, {}).get("api_key", "")
+            )
+            model = (
+                cloud_config.get("providers", {})
+                .get(provider, {})
+                .get("selected_model", "")
+            )
             status = "connected" if api_key and model else "disconnected"
 
-        return JSONResponse(status_code=200, content={
-            "status": status,
-            "provider_type": provider_type,
-            "model": model,
-            "timestamp": "2025-08-18T10:31:00Z"
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": status,
+                "provider_type": provider_type,
+                "model": model,
+                "timestamp": "2025-08-18T10:31:00Z",
+            },
+        )
 
     except Exception as e:
         logger.error(f"Failed to get quick LLM status: {e}")
@@ -384,6 +448,6 @@ async def get_quick_llm_status():
                 "status": "error",
                 "provider_type": "unknown",
                 "model": "",
-                "error": str(e)
-            }
+                "error": str(e),
+            },
         )
