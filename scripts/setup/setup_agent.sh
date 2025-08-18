@@ -270,6 +270,7 @@ else
     echo "⬇️ Installing Group 1: Core Framework Dependencies..."
     cat > requirements_group_1.txt << EOF
 fastapi>=0.115.0
+starlette>=0.47.2
 uvicorn>=0.30.0
 requests==2.31.0
 pyyaml==6.0.1
@@ -291,8 +292,8 @@ EOF
     # Group 2: AI/ML Framework Dependencies (Critical for Multi-Agent)
     echo "⬇️ Installing Group 2: AI/ML Framework Dependencies..."
     cat > requirements_group_2.txt << EOF
-torch>=2.0.0
-transformers>=4.36.0
+torch>=2.8.0
+transformers>=4.53.0
 sentence-transformers>=2.2.0
 tiktoken>=0.5.0
 numpy>=1.26.0
@@ -330,7 +331,7 @@ chromadb>=0.4.0
 httpx>=0.25.0
 sh>=2.0.0
 python-docx>=1.1.0
-pypdf>=3.17.0
+pypdf>=6.0.0
 markdownify==0.11.6
 nltk>=3.8.0
 textstat>=0.7.3
