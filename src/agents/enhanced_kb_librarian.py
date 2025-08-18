@@ -770,39 +770,69 @@ METADATA:
         """Extract installation and usage instructions from KB results"""
         for result in results:
             content = result.get("content", "")
-            if tool_name.lower() in content.lower():
-                # Parse structured content
-                instructions = {
-                    "name": tool_name,
-                    "installation": "",
-                    "usage": "",
-                    "commands": [],
-                }
-
+            if self._content_contains_tool(content, tool_name):
+                instructions = self._initialize_instructions(tool_name)
                 lines = content.split("\n")
-                current_section = None
+                self._parse_content_sections(lines, instructions)
 
-                for line in lines:
-                    line = line.strip()
-                    if line.startswith("Installation:"):
-                        current_section = "installation"
-                    elif line.startswith("Basic Usage:") or line.startswith("Usage:"):
-                        current_section = "usage"
-                    elif line.startswith("Common Commands:"):
-                        current_section = "commands"
-                    elif current_section and line:
-                        if current_section == "installation":
-                            instructions["installation"] += line + "\n"
-                        elif current_section == "usage":
-                            instructions["usage"] += line + "\n"
-                        elif current_section == "commands":
-                            if line.startswith("-") or line.startswith("•"):
-                                instructions["commands"].append(line[1:].strip())
-
-                if instructions["installation"] or instructions["usage"]:
+                if self._has_valid_instructions(instructions):
                     return instructions
 
         return None
+
+    def _content_contains_tool(self, content: str, tool_name: str) -> bool:
+        """Check if content contains the specified tool name"""
+        return tool_name.lower() in content.lower()
+
+    def _initialize_instructions(self, tool_name: str) -> Dict[str, Any]:
+        """Initialize empty instructions structure"""
+        return {
+            "name": tool_name,
+            "installation": "",
+            "usage": "",
+            "commands": [],
+        }
+
+    def _parse_content_sections(
+        self, lines: List[str], instructions: Dict[str, Any]
+    ) -> None:
+        """Parse content lines into instruction sections"""
+        current_section = None
+
+        for line in lines:
+            line = line.strip()
+            section = self._identify_section(line)
+
+            if section:
+                current_section = section
+            elif current_section and line:
+                self._add_content_to_section(current_section, line, instructions)
+
+    def _identify_section(self, line: str) -> Optional[str]:
+        """Identify which section a line belongs to"""
+        if line.startswith("Installation:"):
+            return "installation"
+        elif line.startswith("Basic Usage:") or line.startswith("Usage:"):
+            return "usage"
+        elif line.startswith("Common Commands:"):
+            return "commands"
+        return None
+
+    def _add_content_to_section(
+        self, section: str, line: str, instructions: Dict[str, Any]
+    ) -> None:
+        """Add content line to the appropriate instruction section"""
+        if section == "installation":
+            instructions["installation"] += line + "\n"
+        elif section == "usage":
+            instructions["usage"] += line + "\n"
+        elif section == "commands":
+            if line.startswith("-") or line.startswith("•"):
+                instructions["commands"].append(line[1:].strip())
+
+    def _has_valid_instructions(self, instructions: Dict[str, Any]) -> bool:
+        """Check if instructions contain valid content"""
+        return bool(instructions["installation"] or instructions["usage"])
 
     async def _store_tool_research_results(
         self, tool_type: str, tools: List[Dict[str, Any]]

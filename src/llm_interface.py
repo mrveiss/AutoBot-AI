@@ -10,13 +10,14 @@ from dotenv import load_dotenv
 # Conditional torch import for environments without CUDA
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     print("Warning: PyTorch not available or CUDA libraries missing")
     TORCH_AVAILABLE = False
     torch = None
 
-from src.circuit_breaker import circuit_breaker_async, protected_llm_call
+from src.circuit_breaker import circuit_breaker_async
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
@@ -340,37 +341,71 @@ class LLMInterface:
         return detected_hardware
 
     def _select_backend(self):
+        """Select the best available backend based on hardware detection and priority"""
         detected_hardware = self._detect_hardware()
 
         for preferred_backend in self.hardware_priority:
-            if (
-                preferred_backend == "openvino_npu"
-                and "openvino_npu" in detected_hardware
-            ):
-                return "openvino_npu"
-            if preferred_backend == "openvino" and any(
-                hw in detected_hardware
-                for hw in ["openvino_npu", "openvino_gpu", "openvino_cpu"]
-            ):
-                if "openvino_npu" in detected_hardware:
+            backend = self._try_backend_selection(preferred_backend, detected_hardware)
+            if backend:
+                return backend
+
+        return "cpu"  # Fallback
+
+    def _try_backend_selection(
+        self, preferred_backend: str, detected_hardware: set
+    ) -> str:
+        """Try to select a specific backend if hardware supports it"""
+        if preferred_backend == "openvino_npu":
+            return self._select_openvino_npu(detected_hardware)
+        elif preferred_backend == "openvino":
+            return self._select_openvino_variant(detected_hardware)
+        elif preferred_backend == "cuda":
+            return self._select_cuda(detected_hardware)
+        elif preferred_backend == "onnxruntime":
+            return self._select_onnxruntime(detected_hardware)
+        elif preferred_backend == "cpu":
+            return self._select_cpu(detected_hardware)
+        return None
+
+    def _select_openvino_npu(self, detected_hardware: set) -> str:
+        """Select OpenVINO NPU if available"""
+        if "openvino_npu" in detected_hardware:
+            return "openvino_npu"
+        return None
+
+    def _select_openvino_variant(self, detected_hardware: set) -> str:
+        """Select the best OpenVINO variant available"""
+        openvino_options = ["openvino_npu", "openvino_gpu", "openvino_cpu"]
+
+        for option in openvino_options:
+            if option in detected_hardware:
+                if option == "openvino_npu":
                     return "openvino_npu"
-                elif "openvino_gpu" in detected_hardware:
+                elif option == "openvino_gpu":
                     return "openvino_gpu"
-                else:
+                elif option == "openvino_cpu":
                     return "openvino_cpu"
-            if preferred_backend == "cuda" and "cuda" in detected_hardware:
-                return "cuda"
-            if preferred_backend == "onnxruntime" and (
-                (
-                    "onnxruntime_cpu" in detected_hardware
-                    or "onnxruntime_cuda" in detected_hardware
-                    or "onnxruntime_openvino" in detected_hardware
-                )
-            ):
-                return "onnxruntime"
-            if preferred_backend == "cpu" and "cpu" in detected_hardware:
-                return "cpu"
-        return "cpu"
+        return None
+
+    def _select_cuda(self, detected_hardware: set) -> str:
+        """Select CUDA if available"""
+        if "cuda" in detected_hardware:
+            return "cuda"
+        return None
+
+    def _select_onnxruntime(self, detected_hardware: set) -> str:
+        """Select ONNX Runtime if any variant is available"""
+        onnx_options = ["onnxruntime_cpu", "onnxruntime_cuda", "onnxruntime_openvino"]
+
+        if any(option in detected_hardware for option in onnx_options):
+            return "onnxruntime"
+        return None
+
+    def _select_cpu(self, detected_hardware: set) -> str:
+        """Select CPU backend if available"""
+        if "cpu" in detected_hardware:
+            return "cpu"
+        return None
 
     async def chat_completion(
         self, messages: list, llm_type: str = "orchestrator", **kwargs
