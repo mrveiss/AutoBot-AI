@@ -44,6 +44,18 @@ class WorkflowClassifier:
                     "need",
                     "what",
                     "which",
+                    "whats new",
+                    "what's new",
+                    "latest",
+                    "current",
+                    "news",
+                    "updates",
+                    ".com",
+                    ".lv",
+                    ".net",
+                    ".org",
+                    "website",
+                    "site",
                 ],
                 "install": [
                     "install",
@@ -100,12 +112,12 @@ class WorkflowClassifier:
                 },
                 "installation": {
                     "condition": "install >= 1",
-                    "complexity": "install",
+                    "complexity": "complex",
                     "priority": 80,
                 },
                 "single_research": {
                     "condition": "research >= 1",
-                    "complexity": "research",
+                    "complexity": "complex",
                     "priority": 70,
                 },
                 "complex_request": {
@@ -215,13 +227,6 @@ class WorkflowClassifier:
             "how to",
         ]
         research_keywords = ["find", "search", "tools", "best", "recommend", "compare"]
-        security_keywords = [
-            "scan",
-            "security",
-            "network",
-            "port",
-            "vulnerabilities",
-        ]
 
         # Check for security/network combined
         has_security = any(
@@ -238,12 +243,12 @@ class WorkflowClassifier:
 
         # Check for installation tasks
         if any(kw in message_lower for kw in ["install", "setup", "configure"]):
-            return TaskComplexity.INSTALL
+            return TaskComplexity.COMPLEX
 
         # Check for research tasks
         research_count = sum(1 for kw in research_keywords if kw in message_lower)
         if research_count >= 1:
-            return TaskComplexity.RESEARCH
+            return TaskComplexity.COMPLEX
 
         return TaskComplexity.SIMPLE
 

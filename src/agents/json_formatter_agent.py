@@ -331,7 +331,7 @@ class JSONFormatterAgent:
                         )
                         fallback[field] = typed_value
                         warnings.append(f"Extracted {field} from text")
-                    except:
+                    except Exception:
                         pass
         else:
             # Create minimal JSON
@@ -364,7 +364,7 @@ class JSONFormatterAgent:
             # Try to parse as list or create single-item list
             try:
                 return json.loads(value) if value.startswith("[") else [value]
-            except:
+            except Exception:
                 return [value]
         else:
             return value
@@ -386,7 +386,7 @@ class JSONFormatterAgent:
                     validated[field] = self._convert_to_type(
                         str(data[field]), expected_type
                     )
-                except:
+                except Exception:
                     validated[field] = self._get_default_value(expected_type)
             else:
                 validated[field] = self._get_default_value(expected_type)

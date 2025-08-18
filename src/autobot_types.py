@@ -6,8 +6,10 @@ from enum import Enum
 
 
 class TaskComplexity(Enum):
-    SIMPLE = "simple"  # Single agent can handle
-    RESEARCH = "research"  # Requires web research
-    INSTALL = "install"  # Requires system commands
-    COMPLEX = "complex"  # Multi-agent coordination needed
-    SECURITY_SCAN = "security_scan"  # Security scanning workflow
+    SIMPLE = "simple"  # Regular conversation with Knowledge Base integration
+    COMPLEX = "complex"  # Requires tools, research, or system actions
+
+    # Legacy values for backward compatibility (map to COMPLEX)
+    RESEARCH = "complex"
+    INSTALL = "complex"
+    SECURITY_SCAN = "complex"

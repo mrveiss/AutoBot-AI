@@ -1,4 +1,6 @@
 // ApiClient.js - Unified API client for all backend operations
+// RumAgent is accessed via window.rum global
+
 class ApiClient {
   constructor() {
     this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
@@ -26,6 +28,18 @@ class ApiClient {
   // Generic request method with error handling and timeout
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
+    const method = options.method || 'GET';
+    const startTime = performance.now();
+    
+    // Track API call start
+    if (window.rum) {
+      window.rum.trackUserInteraction('api_call_initiated', null, { 
+        method, 
+        endpoint, 
+        url 
+      });
+    }
+    
     const config = {
       timeout: this.timeout,
       headers: {
@@ -45,15 +59,43 @@ class ApiClient {
       });
 
       clearTimeout(timeoutId);
+      const endTime = performance.now();
 
       if (!response.ok) {
+        // Track failed response
+        if (window.rum) {
+          window.rum.trackApiCall(method, endpoint, startTime, endTime, response.status);
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
+      // Track successful response
+      if (window.rum) {
+        window.rum.trackApiCall(method, endpoint, startTime, endTime, response.status);
+      }
       return response;
+      
     } catch (error) {
+      const endTime = performance.now();
+      
       if (error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${this.timeout}ms`);
+        const timeoutError = new Error(`Request timeout after ${this.timeout}ms`);
+        if (window.rum) {
+          window.rum.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError);
+          window.rum.reportCriticalIssue('api_timeout', {
+            method,
+            endpoint,
+            url,
+            duration: endTime - startTime,
+            timeout: this.timeout
+          });
+        }
+        throw timeoutError;
+      }
+      
+      // Track other errors
+      if (window.rum) {
+        window.rum.trackApiCall(method, endpoint, startTime, endTime, 'error', error);
       }
       throw error;
     }

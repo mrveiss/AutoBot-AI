@@ -68,7 +68,7 @@ class TestMultiModalWorkflowIntegration:
             font = ImageFont.load_default()
             draw.text((50, 200), "Test UI Element", fill="black", font=font)
             draw.text((200, 200), "Button", fill="white", font=font)
-        except:
+        except Exception:
             # Fallback without font
             draw.text((50, 200), "Test UI Element", fill="black")
             draw.text((200, 200), "Button", fill="white")
