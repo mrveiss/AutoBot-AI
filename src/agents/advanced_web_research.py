@@ -98,37 +98,37 @@ class CaptchaSolver:
         submit_result = await http_client.post_json(submit_url, json_data=submit_data)
 
         if submit_result.get("status") != 1:
-                logger.error(f"CAPTCHA submit failed: {submit_result}")
+            logger.error(f"CAPTCHA submit failed: {submit_result}")
+            return None
+
+        captcha_id = submit_result["request"]
+        logger.info(f"CAPTCHA submitted, ID: {captcha_id}")
+
+        # Poll for result
+        for attempt in range(self.timeout // 5):
+            await asyncio.sleep(5)
+
+            result_params = {
+                "key": self.api_key,
+                "action": "get",
+                "id": captcha_id,
+                "json": 1,
+            }
+
+            async with session.get(result_url, params=result_params) as response:
+                result = await response.json()
+
+            if result.get("status") == 1:
+                logger.info("CAPTCHA solved successfully")
+                return result["request"]
+            elif result.get("error_text") == "CAPCHA_NOT_READY":
+                continue
+            else:
+                logger.error(f"CAPTCHA solving failed: {result}")
                 return None
 
-            captcha_id = submit_result["request"]
-            logger.info(f"CAPTCHA submitted, ID: {captcha_id}")
-
-            # Poll for result
-            for attempt in range(self.timeout // 5):
-                await asyncio.sleep(5)
-
-                result_params = {
-                    "key": self.api_key,
-                    "action": "get",
-                    "id": captcha_id,
-                    "json": 1,
-                }
-
-                async with session.get(result_url, params=result_params) as response:
-                    result = await response.json()
-
-                if result.get("status") == 1:
-                    logger.info("CAPTCHA solved successfully")
-                    return result["request"]
-                elif result.get("error_text") == "CAPCHA_NOT_READY":
-                    continue
-                else:
-                    logger.error(f"CAPTCHA solving failed: {result}")
-                    return None
-
-            logger.error("CAPTCHA solving timeout")
-            return None
+        logger.error("CAPTCHA solving timeout")
+        return None
 
     async def _solve_anticaptcha_recaptcha(
         self, site_key: str, page_url: str, invisible: bool
