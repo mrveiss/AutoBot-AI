@@ -11,6 +11,7 @@ import psutil
 # Conditional torch import for environments without CUDA
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     print("Warning: PyTorch not available or CUDA libraries missing")
@@ -68,7 +69,16 @@ class WorkerNode:
 
     def detect_capabilities(self) -> Dict[str, Any]:
         """Detects and returns hardware and software capabilities."""
-        capabilities = {
+        capabilities = self._get_basic_system_info()
+        capabilities.update(self._detect_gpu_capabilities())
+        capabilities.update(self._detect_openvino_capabilities())
+        capabilities.update(self._detect_onnx_capabilities())
+        capabilities.update(self._detect_llm_backends())
+        return capabilities
+
+    def _get_basic_system_info(self) -> Dict[str, Any]:
+        """Get basic system information."""
+        return {
             "worker_id": self.worker_id,
             "os": platform.system(),
             "os_release": platform.release(),
@@ -81,107 +91,131 @@ class WorkerNode:
             },
             "ram": {
                 "total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-                "available_gb": round(
-                    psutil.virtual_memory().available / (1024**3), 2
-                ),
+                "available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
                 "usage_percent": psutil.virtual_memory().percent,
             },
-            "gpu": {
-                "cuda_available": TORCH_AVAILABLE and torch.cuda.is_available(), 
-                "cuda_devices": []
-            },
-            "openvino_available": False,
-            "onnxruntime_available": False,
-            "llm_backends_supported": [],
             "kb_supported": True,
             "gui_automation_supported": GUI_AUTOMATION_SUPPORTED,
         }
 
-        if capabilities["gpu"]["cuda_available"] and TORCH_AVAILABLE:
-            for i in range(torch.cuda.device_count()):
-                capabilities["gpu"]["cuda_devices"].append(
-                    {
-                        "name": torch.cuda.get_device_name(i),
-                        "memory_gb": round(
-                            torch.cuda.get_device_properties(i).total_memory
-                            / (1024**3),
-                            2,
-                        ),
-                    }
-                )
-            try:
-                nvidia_smi_output = (
-                    subprocess.check_output(
-                        [
-                            "nvidia-smi",
-                            "--query-gpu=name,memory.total,memory.used,"
-                            "memory.free,utilization.gpu,utilization.memory",
-                            "--format=csv,noheader,nounits",
-                        ]
-                    )
-                    .decode()
-                    .strip()
-                    .split("\n")
-                )
-                gpu_details = []
-                for line in nvidia_smi_output:
-                    parts = [p.strip() for p in line.split(",")]
-                    if len(parts) == 6:
-                        gpu_details.append(
-                            {
-                                "name": parts[0],
-                                "memory_total_mb": int(parts[1]),
-                                "memory_used_mb": int(parts[2]),
-                                "memory_free_mb": int(parts[3]),
-                                "gpu_util_percent": int(parts[4]),
-                                "mem_util_percent": int(parts[5]),
-                            }
-                        )
-                capabilities["gpu"]["nvidia_smi_details"] = gpu_details
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                pass
+    def _detect_gpu_capabilities(self) -> Dict[str, Any]:
+        """Detect GPU and CUDA capabilities."""
+        gpu_info = {
+            "gpu": {
+                "cuda_available": TORCH_AVAILABLE and torch.cuda.is_available(),
+                "cuda_devices": [],
+            }
+        }
 
+        if gpu_info["gpu"]["cuda_available"] and TORCH_AVAILABLE:
+            gpu_info["gpu"]["cuda_devices"] = self._get_cuda_device_info()
+            nvidia_details = self._get_nvidia_smi_details()
+            if nvidia_details:
+                gpu_info["gpu"]["nvidia_smi_details"] = nvidia_details
+
+        return gpu_info
+
+    def _get_cuda_device_info(self) -> list:
+        """Get CUDA device information."""
+        devices = []
+        for i in range(torch.cuda.device_count()):
+            devices.append(
+                {
+                    "name": torch.cuda.get_device_name(i),
+                    "memory_gb": round(
+                        torch.cuda.get_device_properties(i).total_memory / (1024**3), 2
+                    ),
+                }
+            )
+        return devices
+
+    def _get_nvidia_smi_details(self) -> list:
+        """Get detailed GPU information using nvidia-smi."""
+        try:
+            nvidia_smi_output = (
+                subprocess.check_output(
+                    [
+                        "nvidia-smi",
+                        "--query-gpu=name,memory.total,memory.used,memory.free,"
+                        "utilization.gpu,utilization.memory",
+                        "--format=csv,noheader,nounits",
+                    ]
+                )
+                .decode()
+                .strip()
+                .split("\n")
+            )
+
+            gpu_details = []
+            for line in nvidia_smi_output:
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) == 6:
+                    gpu_details.append(
+                        {
+                            "name": parts[0],
+                            "memory_total_mb": int(parts[1]),
+                            "memory_used_mb": int(parts[2]),
+                            "memory_free_mb": int(parts[3]),
+                            "gpu_util_percent": int(parts[4]),
+                            "mem_util_percent": int(parts[5]),
+                        }
+                    )
+            return gpu_details
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return []
+
+    def _detect_openvino_capabilities(self) -> Dict[str, Any]:
+        """Detect OpenVINO capabilities."""
         try:
             from openvino.runtime import Core
 
             core = Core()
             available_devices = core.available_devices
-            capabilities["openvino_available"] = True
-            capabilities["openvino_devices"] = available_devices
 
             npu_devices = [d for d in available_devices if "NPU" in d]
             gpu_devices = [d for d in available_devices if "GPU" in d]
-
-            capabilities["openvino_npu_available"] = len(npu_devices) > 0
-            capabilities["openvino_gpu_available"] = len(gpu_devices) > 0
-            capabilities["openvino_npu_devices"] = npu_devices
-            capabilities["openvino_gpu_devices"] = gpu_devices
 
             if npu_devices:
                 print(f"🚀 NPU acceleration available: {npu_devices}")
             if gpu_devices:
                 print(f"🎮 OpenVINO GPU acceleration available: {gpu_devices}")
 
+            return {
+                "openvino_available": True,
+                "openvino_devices": available_devices,
+                "openvino_npu_available": len(npu_devices) > 0,
+                "openvino_gpu_available": len(gpu_devices) > 0,
+                "openvino_npu_devices": npu_devices,
+                "openvino_gpu_devices": gpu_devices,
+            }
         except ImportError:
-            pass
+            return {"openvino_available": False}
         except Exception as e:
             print(f"⚠️ OpenVINO detection error: {e}")
+            return {"openvino_available": False}
 
+    def _detect_onnx_capabilities(self) -> Dict[str, Any]:
+        """Detect ONNX runtime capabilities."""
         try:
             import onnxruntime as rt
 
-            capabilities["onnxruntime_available"] = True
-            capabilities["onnxruntime_providers"] = rt.get_available_providers()
+            return {
+                "onnxruntime_available": True,
+                "onnxruntime_providers": rt.get_available_providers(),
+            }
         except ImportError:
-            pass
+            return {"onnxruntime_available": False}
 
-        capabilities["llm_backends_supported"].append("ollama")
+    def _detect_llm_backends(self) -> Dict[str, Any]:
+        """Detect available LLM backends."""
+        backends = ["ollama"]
+
         if self.llm_interface.openai_api_key:
-            capabilities["llm_backends_supported"].append("openai")
+            backends.append("openai")
         if global_config_manager.get_nested("llm_config.transformers.model_path"):
-            capabilities["llm_backends_supported"].append("transformers")
+            backends.append("transformers")
 
-        return capabilities
+        return {"llm_backends_supported": backends}
 
     async def report_capabilities(self):
         capabilities = self.detect_capabilities()

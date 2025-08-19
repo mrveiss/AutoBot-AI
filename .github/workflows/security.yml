@@ -1,0 +1,294 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, dev, Dev_new_gui ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  PYTHON_VERSION: '3.10'
+  NODE_VERSION: '18'
+
+jobs:
+  dependency-security:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-audit bandit safety
+        pip install -r requirements.txt
+
+    - name: Python Dependency Audit
+      run: |
+        echo "## Python Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+        pip-audit --format=json --output=python-audit.json || true
+        pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
+
+    - name: Safety Check (Alternative Python Security)
+      run: |
+        echo "## Safety Security Report" >> $GITHUB_STEP_SUMMARY
+        safety check --json --output safety-report.json || true
+        safety check || true
+
+    - name: Install Frontend dependencies
+      run: |
+        npm ci
+
+    - name: Node.js Dependency Audit
+      run: |
+        echo "## Node.js Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+        npm audit --audit-level=moderate --json > npm-audit.json || true
+        npm audit --audit-level=moderate || true
+
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-security-reports
+        path: |
+          python-audit.json
+          safety-report.json
+          npm-audit.json
+        retention-days: 30
+
+  static-analysis:
+    name: Static Application Security Testing (SAST)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install SAST tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit semgrep flake8 pylint
+
+    - name: Bandit Security Linter
+      run: |
+        echo "## Bandit Security Analysis" >> $GITHUB_STEP_SUMMARY
+        bandit -r src/ backend/ -f json -o bandit-report.json || true
+        bandit -r src/ backend/ -f txt || true
+
+    - name: Semgrep SAST Scan
+      run: |
+        echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
+        semgrep --config=auto --json --output=semgrep-report.json src/ backend/ || true
+        semgrep --config=auto src/ backend/ || true
+
+    - name: Python Code Quality Check
+      run: |
+        echo "## Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
+        flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503 \
+          --output-file=flake8-report.txt || true
+        cat flake8-report.txt || true
+
+    - name: Secret Detection
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+
+    - name: Upload SAST Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: sast-security-reports
+        path: |
+          bandit-report.json
+          semgrep-report.json
+          flake8-report.txt
+        retention-days: 30
+
+  container-security:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker Images for Scanning
+      run: |
+        # Build main application image if Dockerfile exists
+        if [ -f "Dockerfile" ]; then
+          docker build -t autobot:latest .
+        fi
+
+        # Build specific service images if Dockerfiles exist
+        if [ -f "docker/ai-stack/Dockerfile" ]; then
+          docker build -t autobot-ai:latest -f docker/ai-stack/Dockerfile .
+        fi
+
+        if [ -f "docker/npu-worker/Dockerfile" ]; then
+          docker build -t autobot-npu:latest -f docker/npu-worker/Dockerfile .
+        fi
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      if: hashFiles('Dockerfile') != ''
+      with:
+        image-ref: 'autobot:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Trivy filesystem scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'json'
+        output: 'trivy-fs-results.json'
+
+    - name: Upload Container Security Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: container-security-reports
+        path: |
+          trivy-results.sarif
+          trivy-fs-results.json
+        retention-days: 30
+
+    - name: Upload to GitHub Security Tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always() && hashFiles('trivy-results.sarif') != ''
+      with:
+        sarif_file: trivy-results.sarif
+
+  compliance-check:
+    name: Security Compliance Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for Security Files
+      run: |
+        echo "## Security Compliance Check" >> $GITHUB_STEP_SUMMARY
+
+        # Check for required security files
+        files=(
+          ".gitignore"
+          "requirements.txt"
+        )
+
+        missing_files=()
+        for file in "${files[@]}"; do
+          if [ ! -e "$file" ]; then
+            missing_files+=("$file")
+          fi
+        done
+
+        if [ ${#missing_files[@]} -eq 0 ]; then
+          echo "✅ All required security files present" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Missing security files:" >> $GITHUB_STEP_SUMMARY
+          printf '%s\n' "${missing_files[@]}" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Security Best Practices Check
+      run: |
+        echo "## Security Best Practices" >> $GITHUB_STEP_SUMMARY
+
+        # Check for security-related imports
+        security_imports=$(grep -r "hashlib\|secrets\|cryptography\|bcrypt" src/ backend/ | wc -l)
+        echo "✅ Security-related imports found: $security_imports" >> $GITHUB_STEP_SUMMARY
+
+        # Check for input validation patterns
+        validation_patterns=$(grep -r "validator\|sanitize\|escape\|validate" src/ backend/ | wc -l)
+        echo "✅ Input validation patterns found: $validation_patterns" >> $GITHUB_STEP_SUMMARY
+
+        # Check for error handling
+        error_handling=$(grep -r "try:\|except\|raise" src/ backend/ | wc -l)
+        echo "✅ Error handling patterns found: $error_handling" >> $GITHUB_STEP_SUMMARY
+
+  security-summary:
+    name: Security Summary Report
+    runs-on: ubuntu-latest
+    needs: [dependency-security, static-analysis, container-security, compliance-check]
+    if: always()
+
+    steps:
+    - name: Download all security reports
+      uses: actions/download-artifact@v4
+
+    - name: Generate Security Summary
+      run: |
+        echo "# 🛡️ Security Scan Summary" > security-summary.md
+        echo "" >> security-summary.md
+        echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> security-summary.md
+        echo "**Branch:** ${{ github.ref_name }}" >> security-summary.md
+        echo "**Commit:** ${{ github.sha }}" >> security-summary.md
+        echo "" >> security-summary.md
+
+        # Check if reports exist and summarize
+        if [ -d "dependency-security-reports" ]; then
+          echo "## 📦 Dependency Security" >> security-summary.md
+          echo "- Python audit completed" >> security-summary.md
+          echo "- Node.js audit completed" >> security-summary.md
+          echo "" >> security-summary.md
+        fi
+
+        if [ -d "sast-security-reports" ]; then
+          echo "## 🔍 Static Analysis Security Testing" >> security-summary.md
+          echo "- Bandit security linting completed" >> security-summary.md
+          echo "- Semgrep security analysis completed" >> security-summary.md
+          echo "- Secret detection completed" >> security-summary.md
+          echo "" >> security-summary.md
+        fi
+
+        if [ -d "container-security-reports" ]; then
+          echo "## 🐳 Container Security" >> security-summary.md
+          echo "- Trivy vulnerability scanning completed" >> security-summary.md
+          echo "" >> security-summary.md
+        fi
+
+        echo "## 📋 Recommendations" >> security-summary.md
+        echo "1. Review all security reports for critical findings" >> security-summary.md
+        echo "2. Update dependencies with known vulnerabilities" >> security-summary.md
+        echo "3. Address any SAST findings in critical code paths" >> security-summary.md
+        echo "4. Ensure container images are regularly updated" >> security-summary.md
+
+    - name: Upload Security Summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-summary
+        path: security-summary.md
+        retention-days: 90

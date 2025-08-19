@@ -1,6 +1,7 @@
 """
 Base Terminal WebSocket Handler
 Provides common terminal functionality for websocket handlers including PTY management
+Updated to use improved TerminalWebSocketManager for race condition fixes
 """
 
 import asyncio
@@ -12,13 +13,19 @@ import threading
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from src.utils.terminal_websocket_manager import TerminalWebSocketAdapter
+
 logger = logging.getLogger(__name__)
 
 
 class BaseTerminalWebSocket(ABC):
-    """Base class for terminal WebSocket handlers with consolidated PTY management"""
+    """Base class for terminal WebSocket handlers with improved race condition handling"""
 
     def __init__(self):
+        # Use new terminal manager for race condition fixes
+        self.terminal_adapter = TerminalWebSocketAdapter(self, self.terminal_type)
+        
+        # Legacy compatibility properties
         self.websocket = None
         self.pty_fd: Optional[int] = None
         self.process: Optional[subprocess.Popen] = None
@@ -37,35 +44,19 @@ class BaseTerminalWebSocket(ABC):
         """Get terminal type for logging"""
 
     async def start_pty_shell(self):
-        """Start a PTY shell process - consolidated implementation"""
+        """Start a PTY shell process using improved terminal manager"""
         try:
-            # Create PTY
-            master_fd, slave_fd = pty.openpty()
-            self.pty_fd = master_fd
-
-            # Start shell process with PTY
-            self.process = subprocess.Popen(
-                ["/bin/bash"],
-                stdin=slave_fd,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                cwd=self.current_dir,
-                env=self.env,
-                preexec_fn=os.setsid,
-            )
-
-            # Close slave fd (process has it)
-            os.close(slave_fd)
-
-            # Start reader thread
-            self.reader_thread = threading.Thread(
-                target=self._read_pty_output, daemon=True
-            )
-            self.reader_thread.start()
-
+            self.active = True
+            await self.terminal_adapter.start_session(self.websocket)
+            
+            # Update legacy properties for compatibility
+            self.pty_fd = self.terminal_adapter.manager.pty_fd
+            self.process = self.terminal_adapter.manager.process
+            
             logger.info(f"PTY shell started for {self.terminal_type}")
 
         except Exception as e:
+            self.active = False
             logger.error(f"Failed to start PTY shell: {e}")
             await self.send_message(
                 {
@@ -188,12 +179,10 @@ class BaseTerminalWebSocket(ABC):
         return output
 
     async def send_input(self, text: str):
-        """Send input to PTY shell - consolidated implementation"""
-        if self.pty_fd and self.active:
+        """Send input to PTY shell using improved terminal manager"""
+        if self.active:
             try:
-                # Call hook for processing input (override in subclasses)
-                processed_input = await self.process_input(text)
-                os.write(self.pty_fd, processed_input.encode("utf-8"))
+                await self.terminal_adapter.send_input(text)
             except Exception as e:
                 logger.error(f"Error writing to PTY: {e}")
 
@@ -231,32 +220,20 @@ class BaseTerminalWebSocket(ABC):
             except Exception as e:
                 logger.warning(f"Error clearing output queue: {e}")
 
-        # Close PTY file descriptor
-        if self.pty_fd:
-            try:
-                os.close(self.pty_fd)
-            except OSError:
-                pass
+        # Use new terminal manager for cleanup
+        try:
+            await self.terminal_adapter.stop_session()
+            
+            # Clear legacy properties
             self.pty_fd = None
-
-        # Terminate process
-        if self.process:
-            try:
-                self.process.terminate()
-                # Give process time to terminate gracefully
-                try:
-                    self.process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
-            except OSError:
-                pass
             self.process = None
+            self.reader_thread = None
+            self.websocket = None
+            
+        except Exception as e:
+            logger.error(f"Error during improved cleanup: {e}")
 
-        # Wait for reader thread to finish
-        if self.reader_thread and self.reader_thread.is_alive():
-            self.reader_thread.join(timeout=1)
-
-        self.reader_thread = None
+        logger.info(f"{self.terminal_type} cleanup completed")
 
     async def execute_command(self, command: str) -> bool:
         """Send command to PTY shell with common handling"""
@@ -280,3 +257,11 @@ class BaseTerminalWebSocket(ABC):
     async def validate_command(self, command: str) -> bool:
         """Validate command before execution (override in subclasses)"""
         return True
+    
+    def get_terminal_stats(self) -> dict:
+        """Get terminal session statistics"""
+        try:
+            return self.terminal_adapter.get_stats()
+        except Exception as e:
+            logger.error(f"Error getting terminal stats: {e}")
+            return {"error": str(e)}

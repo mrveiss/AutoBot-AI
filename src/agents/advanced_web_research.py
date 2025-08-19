@@ -27,6 +27,7 @@ except ImportError:
 
 try:
     import aiohttp
+
     from src.utils.http_client import get_http_client
 
     AIOHTTP_AVAILABLE = True
@@ -92,7 +93,7 @@ class CaptchaSolver:
 
         # Use singleton HTTP client
         http_client = get_http_client()
-        
+
         # Submit CAPTCHA for solving
         submit_result = await http_client.post_json(submit_url, json_data=submit_data)
 
