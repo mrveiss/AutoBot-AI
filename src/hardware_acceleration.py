@@ -10,7 +10,7 @@ import os
 import platform
 import subprocess
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict
 
 import psutil
 
@@ -64,56 +64,68 @@ class HardwareAccelerationManager:
         self.available_devices[AccelerationType.CPU] = self._get_cpu_info()
 
         logger.info(
-            f"Hardware detection complete - NPU: {self.npu_available}, GPU: {self.gpu_available}, CPU: Available"
+            f"Hardware detection complete - NPU: {self.npu_available}, "
+            f"GPU: {self.gpu_available}, CPU: Available"
         )
 
     def _detect_npu(self) -> bool:
         """Detect Intel NPU availability."""
         try:
-            # Check for Intel NPU device files
-            npu_devices = []
-            if os.path.exists("/dev"):
-                for device in os.listdir("/dev"):
-                    if "intel_npu" in device or "npu" in device.lower():
-                        npu_devices.append(device)
-
-            if npu_devices:
-                logger.info(f"Intel NPU devices detected: {npu_devices}")
-                return True
-
-            # Check via lspci
-            try:
-                result = subprocess.run(
-                    ["lspci"], capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0:
-                    output = result.stdout.lower()
-                    if "neural" in output or "npu" in output or "ai" in output:
-                        logger.info("NPU hardware detected via lspci")
-                        return True
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
-
-            # Check OpenVINO NPU support
-            try:
-                from openvino.runtime import Core
-
-                core = Core()
-                devices = core.available_devices
-                npu_devices_ov = [d for d in devices if "NPU" in d]
-                if npu_devices_ov:
-                    logger.info(f"NPU devices available via OpenVINO: {npu_devices_ov}")
-                    return True
-            except ImportError:
-                logger.debug("OpenVINO not available for NPU detection")
-            except Exception as e:
-                logger.debug(f"OpenVINO NPU detection failed: {e}")
-
-            return False
-
+            return (
+                self._check_npu_device_files()
+                or self._check_npu_via_lspci()
+                or self._check_npu_via_openvino()
+            )
         except Exception as e:
             logger.error(f"NPU detection error: {e}")
             return False
+
+    def _check_npu_device_files(self) -> bool:
+        """Check for NPU device files in /dev."""
+        if not os.path.exists("/dev"):
+            return False
+
+        npu_devices = [
+            device
+            for device in os.listdir("/dev")
+            if "intel_npu" in device or "npu" in device.lower()
+        ]
+
+        if npu_devices:
+            logger.info(f"Intel NPU devices detected: {npu_devices}")
+            return True
+        return False
+
+    def _check_npu_via_lspci(self) -> bool:
+        """Check for NPU hardware via lspci command."""
+        try:
+            result = subprocess.run(
+                ["lspci"], capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                output = result.stdout.lower()
+                if any(keyword in output for keyword in ["neural", "npu", "ai"]):
+                    logger.info("NPU hardware detected via lspci")
+                    return True
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        return False
+
+    def _check_npu_via_openvino(self) -> bool:
+        """Check for NPU support via OpenVINO."""
+        try:
+            from openvino.runtime import Core
+
+            core = Core()
+            npu_devices = [d for d in core.available_devices if "NPU" in d]
+            if npu_devices:
+                logger.info(f"NPU devices available via OpenVINO: {npu_devices}")
+                return True
+        except ImportError:
+            logger.debug("OpenVINO not available for NPU detection")
+        except Exception as e:
+            logger.debug(f"OpenVINO NPU detection failed: {e}")
+        return False
 
     def _detect_gpu(self) -> bool:
         """Detect GPU availability."""
@@ -451,7 +463,8 @@ class HardwareAccelerationManager:
         # Performance tips
         if self.npu_available:
             recommendations["performance_tips"].append(
-                "NPU excels at 1B models - use for Chat, Knowledge Retrieval, System Commands agents"
+                "NPU excels at 1B models - use for Chat, Knowledge Retrieval, "
+                "System Commands agents"
             )
 
         if self.gpu_available:

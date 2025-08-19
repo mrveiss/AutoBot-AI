@@ -5,7 +5,8 @@ Provides efficient aiohttp client session management to prevent resource exhaust
 
 import asyncio
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 

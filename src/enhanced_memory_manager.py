@@ -15,7 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from src.utils.database_pool import get_connection_pool, EagerLoader
+from src.utils.database_pool import EagerLoader, get_connection_pool
 
 logger = logging.getLogger(__name__)
 
@@ -471,26 +471,26 @@ class EnhancedMemoryManager:
         with pool.get_connection() as conn:
             # Use EagerLoader to prevent N+1 queries
             eager_loader = EagerLoader()
-            
+
             # Get task IDs first for batch loading
             cursor = conn.execute(query, params)
             task_rows = cursor.fetchall()
-            
+
             if not task_rows:
                 return tasks
-            
+
             # Extract task IDs for batch queries
             task_ids = [row[0] for row in task_rows]
-            task_ids_placeholder = ','.join(['?' for _ in task_ids])
-            
+            task_ids_placeholder = ",".join(["?" for _ in task_ids])
+
             # Batch load markdown references
             ref_cursor = conn.execute(
                 f"""
-                SELECT task_id, markdown_file_path 
+                SELECT task_id, markdown_file_path
                 FROM markdown_references
                 WHERE task_id IN ({task_ids_placeholder})
                 """,
-                task_ids
+                task_ids,
             )
             markdown_refs_by_task = {}
             for ref_row in ref_cursor.fetchall():
@@ -498,15 +498,15 @@ class EnhancedMemoryManager:
                 if task_id not in markdown_refs_by_task:
                     markdown_refs_by_task[task_id] = []
                 markdown_refs_by_task[task_id].append(ref_row[1])
-            
+
             # Batch load subtask relationships
             subtask_cursor = conn.execute(
                 f"""
-                SELECT parent_task_id, subtask_id 
+                SELECT parent_task_id, subtask_id
                 FROM subtask_relationships
                 WHERE parent_task_id IN ({task_ids_placeholder})
                 """,
-                task_ids
+                task_ids,
             )
             subtasks_by_parent = {}
             for subtask_row in subtask_cursor.fetchall():
@@ -514,7 +514,7 @@ class EnhancedMemoryManager:
                 if parent_id not in subtasks_by_parent:
                     subtasks_by_parent[parent_id] = []
                 subtasks_by_parent[parent_id].append(subtask_row[1])
-            
+
             # Now build task objects with pre-loaded data
             for row in task_rows:
                 task_id = row[0]

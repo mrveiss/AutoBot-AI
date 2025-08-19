@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ConnectionTester, ModelManager
+from src.utils.advanced_cache_manager import smart_cache, advanced_cache
 
 router = APIRouter()
 
@@ -15,6 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
+@smart_cache(
+    data_type="health_checks",
+    key_func=lambda detailed=False: f"health:{'detailed' if detailed else 'fast'}"
+)
 async def health_check(detailed: bool = False):
     """Health check endpoint for connection status monitoring
 

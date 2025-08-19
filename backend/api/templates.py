@@ -1,6 +1,6 @@
 """
 Workflow Templates API endpoints
-Provides access to pre-configured workflow templates
+Provides access to pre-configured workflow templates with intelligent caching
 """
 
 from typing import Dict, Optional
@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from src.autobot_types import TaskComplexity
 from src.workflow_templates import TemplateCategory, workflow_template_manager
+from src.utils.advanced_cache_manager import smart_cache, advanced_cache
 
 router = APIRouter()
 
@@ -25,7 +26,22 @@ class TemplateValidationRequest(BaseModel):
     variables: Dict[str, str]
 
 
+def _generate_templates_cache_key(category, tags, complexity):
+    """Generate cache key for template list"""
+    key_parts = []
+    if category:
+        key_parts.append(f"cat:{category}")
+    if tags:
+        key_parts.append(f"tags:{tags}")
+    if complexity:
+        key_parts.append(f"comp:{complexity}")
+    return "list:" + (":".join(key_parts) if key_parts else "all")
+
 @router.get("/templates")
+@smart_cache(
+    data_type="templates",
+    key_func=lambda category=None, tags=None, complexity=None: _generate_templates_cache_key(category, tags, complexity)
+)
 async def list_workflow_templates(
     category: Optional[str] = Query(None, description="Filter by template category"),
     tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
@@ -99,6 +115,10 @@ async def list_workflow_templates(
 
 
 @router.get("/templates/{template_id}")
+@smart_cache(
+    data_type="templates",
+    key_func=lambda template_id: f"detail:{template_id}"
+)
 async def get_template_details(template_id: str):
     """Get detailed information about a specific template"""
     try:
