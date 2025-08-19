@@ -15,6 +15,7 @@ from pydantic import BaseModel
 # Add project root to path and import project state manager
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 from src.project_state_manager import DevelopmentPhase, get_project_state_manager
+from src.utils.advanced_cache_manager import smart_cache
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,10 @@ class PhaseValidationModel(BaseModel):
 
 
 @router.get("/status", response_model=ProjectStatus)
+@smart_cache(
+    data_type="project_status",
+    key_func=lambda detailed=False: f"status:{'detailed' if detailed else 'fast'}"
+)
 async def get_project_status(detailed: bool = False):
     """Get overall project development status
     
