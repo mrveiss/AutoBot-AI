@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
+# Import database pooling for performance
+from src.utils.database_pool import get_connection_pool
 
 
 @dataclass
@@ -223,47 +225,47 @@ class LongTermMemoryManager:
         Returns:
             ID of stored memory entry
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # Use connection pool for better performance
+        pool = get_connection_pool(self.db_path)
+        with pool.get_connection() as conn:
+            cursor = conn.cursor()
 
-        try:
-            # Create content hash for duplicate detection
-            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            try:
+                # Create content hash for duplicate detection
+                content_hash = hashlib.sha256(content.encode()).hexdigest()
 
-            # Serialize metadata and embedding
-            metadata_json = json.dumps(metadata) if metadata else None
-            embedding_blob = pickle.dumps(embedding) if embedding else None
+                # Serialize metadata and embedding
+                metadata_json = json.dumps(metadata) if metadata else None
+                embedding_blob = pickle.dumps(embedding) if embedding else None
 
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO memory_entries
-                (category, content, metadata, reference_path, embedding, content_hash)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    category,
-                    content,
-                    metadata_json,
-                    reference_path,
-                    embedding_blob,
-                    content_hash,
-                ),
-            )
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO memory_entries
+                    (category, content, metadata, reference_path, embedding, content_hash)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        category,
+                        content,
+                        metadata_json,
+                        reference_path,
+                        embedding_blob,
+                        content_hash,
+                    ),
+                )
 
-            entry_id = cursor.lastrowid
-            conn.commit()
+                entry_id = cursor.lastrowid
+                conn.commit()
 
-            if entry_id is None:
-                raise RuntimeError("Failed to get lastrowid after insert")
+                if entry_id is None:
+                    raise RuntimeError("Failed to get lastrowid after insert")
 
-            logging.info(f"Stored memory entry {entry_id} in category '{category}'")
-            return entry_id
+                logging.info(f"Stored memory entry {entry_id} in category '{category}'")
+                return entry_id
 
-        except Exception as e:
-            logging.error(f"Error storing memory: {str(e)}")
-            raise
-        finally:
-            conn.close()
+            except Exception as e:
+                logging.error(f"Error storing memory: {str(e)}")
+                raise
 
     def retrieve_memory(
         self,
