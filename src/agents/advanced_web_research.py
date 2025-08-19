@@ -27,11 +27,13 @@ except ImportError:
 
 try:
     import aiohttp
+    from src.utils.http_client import get_http_client
 
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
     logging.warning("aiohttp not available. Install with: pip install aiohttp")
+    get_http_client = None
 
 logger = logging.getLogger(__name__)
 
@@ -88,12 +90,13 @@ class CaptchaSolver:
             "json": 1,
         }
 
-        async with aiohttp.ClientSession() as session:
-            # Submit CAPTCHA for solving
-            async with session.post(submit_url, data=submit_data) as response:
-                submit_result = await response.json()
+        # Use singleton HTTP client
+        http_client = get_http_client()
+        
+        # Submit CAPTCHA for solving
+        submit_result = await http_client.post_json(submit_url, json_data=submit_data)
 
-            if submit_result.get("status") != 1:
+        if submit_result.get("status") != 1:
                 logger.error(f"CAPTCHA submit failed: {submit_result}")
                 return None
 

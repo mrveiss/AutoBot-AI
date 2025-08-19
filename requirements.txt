@@ -15,7 +15,7 @@ websockets>=11.0.0
 openai>=1.0.0                    # OpenAI API support for future cloud models
 anthropic>=0.7.0                 # Claude API support for future integration
 tiktoken>=0.5.0                  # Token counting for different models
-transformers==4.53.0             # HuggingFace transformers for model utils - SECURITY UPDATE
+transformers>=4.55.2             # HuggingFace transformers for model utils - SECURITY UPDATE
 sentence-transformers>=2.2.0     # Embedding models support
 torch>=2.8.0                     # PyTorch for model operations - SECURITY UPDATE
 
@@ -86,7 +86,7 @@ gtts==2.3.1
 pre-commit>=3.6.0
 detect-secrets>=1.4.0
 pycryptodome>=3.19.0              # Encryption for secure agent communication
-cryptography==45.0.4             # Additional crypto support - pinned for security
+cryptography>=45.0.6             # Additional crypto support - SECURITY UPDATE
 
 # ===== MONITORING & OBSERVABILITY =====
 prometheus-client>=0.19.0         # Metrics collection
