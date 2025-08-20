@@ -72,6 +72,7 @@ This is the comprehensive documentation index for AutoBot - the definitive auton
 - [Edge Browser Fix Report](testing/EDGE_BROWSER_FIX_REPORT.md) - Browser compatibility
 
 ### 📊 Monitoring & Features
+- **[Codebase Analytics System](features/CODEBASE_ANALYTICS.md)** - Redis-based code analysis with NPU acceleration
 - [Metrics Monitoring Summary](features/METRICS_MONITORING_SUMMARY.md) - Performance tracking
 - [System Status](features/SYSTEM_STATUS.md) - Health monitoring
 - [System Optimization Report](features/SYSTEM_OPTIMIZATION_REPORT.md) - Performance tuning
