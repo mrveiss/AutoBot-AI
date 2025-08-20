@@ -269,7 +269,7 @@ class WorkflowClassifier:
             eval_context = {}
 
             # Extract variables for evaluation
-            for var_name, value in variables.items():
+            for var_name, value in context.items():
                 # Convert to appropriate type for evaluation
                 if isinstance(value, str) and value.isdigit():
                     eval_context[var_name] = int(value)
