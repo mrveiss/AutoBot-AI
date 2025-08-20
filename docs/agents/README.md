@@ -1,281 +1,190 @@
-# AutoBot Agents Documentation
+# AutoBot Agent Architecture Documentation
 
-## Overview
+This documentation provides comprehensive information about all agents in the AutoBot system, their roles, interactions, and integration patterns.
 
-AutoBot includes a comprehensive suite of intelligent agents that provide specialized assistance for various tasks. These agents work autonomously and collaboratively to enhance user productivity and system functionality.
+## 📋 Table of Contents
 
-## Agent Categories
+1. [Architecture Overview](#architecture-overview)
+2. [Agent Categories](#agent-categories)
+3. [System Interactions](#system-interactions)
+4. [Integration Patterns](#integration-patterns)
+5. [Agent Directory](#agent-directory)
 
-### 🔍 Librarian Agents
-Intelligent information management and research assistants.
+## 🏗️ Architecture Overview
 
-- **[Librarian Agents Guide](librarian-agents-guide.md)** - Complete guide to all librarian functionality
-  - KB Librarian Agent - Local knowledge base search and summarization
-  - Containerized Librarian Assistant - Web research with quality assessment
-  - Enhanced KB Librarian - Advanced knowledge management features
-  - System Knowledge Manager - System-wide knowledge operations
+AutoBot uses a multi-agent orchestration system where specialized agents handle different types of tasks. The system follows a hub-and-spoke model with the Agent Orchestrator as the central coordinator.
 
-### 🛠️ Helper Agents  
-Specialized assistants for various productivity and system tasks.
-
-- **[Helper Agents Guide](helper-agents-guide.md)** - Complete guide to helper agent functionality
-  - Web Research Assistant - Multi-source web research and aggregation
-  - Advanced Web Research Agent - Complex research with validation
-  - Interactive Terminal Agent - Command-line assistance and automation
-  - System Command Agent - Safe system command execution
-
-## Quick Reference
-
-### Librarian Agent API Endpoints
-```bash
-# KB Librarian
-GET    /api/kb-librarian/status
-POST   /api/kb-librarian/query
-PUT    /api/kb-librarian/configure
-
-# Knowledge Base Operations
-GET    /api/knowledge_base/stats
-POST   /api/knowledge_base/sync
-GET    /api/knowledge_base/sync-status
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    User Interface Layer                         │
+│  (Frontend, API Endpoints, WebSocket, Chat Interface)          │
+└─────────────────┬───────────────────────────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────────────────────────┐
+│                 Agent Orchestrator                              │
+│  • Request routing and delegation                               │
+│  • Load balancing and failover                                  │
+│  • Response aggregation                                         │
+│  • Performance monitoring                                       │
+└─────────────────┬───────────────────────────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────────────────────────┐
+│                Specialized Agent Layer                          │
+│  ┌─────────────┬─────────────┬─────────────┬─────────────┐      │
+│  │ Knowledge   │ System      │ Research    │ Development │      │
+│  │ Management  │ Operations  │ & Web       │ & Code      │      │
+│  │ Agents      │ Agents      │ Agents      │ Agents      │      │
+│  └─────────────┴─────────────┴─────────────┴─────────────┘      │
+└─────────────────┬───────────────────────────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────────────────────────┐
+│                Infrastructure Layer                             │
+│  • Knowledge Base (SQLite/Vector DB)                           │
+│  • Redis (Caching, Task Queue, Session State)                  │
+│  • LLM Interfaces (Ollama, OpenAI, Local Models)              │
+│  • NPU Acceleration (OpenVINO)                                 │
+│  • Security Layer (RBAC, Audit Logging)                        │
+│  • File System (Sandboxed Operations)                          │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Common Usage Patterns
+## 📂 Agent Categories
 
-#### Knowledge Base Search
+### 1. **Orchestration & Coordination**
+- [Agent Orchestrator](./orchestration/agent_orchestrator.md) - Central routing and coordination
+- [Base Agent](./orchestration/base_agent.md) - Abstract base class for all agents
+
+### 2. **Knowledge Management**
+- [KB Librarian Agent](./knowledge/kb_librarian_agent.md) - Knowledge base search and retrieval
+- [Enhanced KB Librarian](./knowledge/enhanced_kb_librarian.md) - Advanced KB operations
+- [Knowledge Retrieval Agent](./knowledge/knowledge_retrieval_agent.md) - Fast fact lookup
+- [Knowledge Extraction Agent](./knowledge/knowledge_extraction_agent.md) - Document processing
+- [System Knowledge Manager](./knowledge/system_knowledge_manager.md) - System state management
+
+### 3. **Conversational & Chat**
+- [Chat Agent](./chat/chat_agent.md) - Lightweight conversational interactions
+
+### 4. **Document Processing & RAG**
+- [RAG Agent](./rag/rag_agent.md) - Retrieval-Augmented Generation
+
+### 5. **System Operations**
+- [Enhanced System Commands Agent](./system/enhanced_system_commands_agent.md) - Secure command execution
+- [System Command Agent](./system/system_command_agent.md) - Basic system commands
+- [Interactive Terminal Agent](./system/interactive_terminal_agent.md) - Terminal sessions
+
+### 6. **Research & Web**
+- [Web Research Assistant](./research/web_research_assistant.md) - Web research and data gathering
+- [Advanced Web Research](./research/advanced_web_research.md) - Advanced scraping with Playwright
+- [Research Agent](./research/research_agent.md) - Multi-step research coordination
+
+### 7. **Development & Code Analysis**
+- [NPU Code Search Agent](./development/npu_code_search_agent.md) - High-performance code search
+- [Development Speedup Agent](./development/development_speedup_agent.md) - Development acceleration
+
+### 8. **Security & Network**
+- [Security Scanner Agent](./security/security_scanner_agent.md) - Defensive security scanning
+- [Network Discovery Agent](./security/network_discovery_agent.md) - Network topology discovery
+
+### 9. **Utility & Support**
+- [JSON Formatter Agent](./utility/json_formatter_agent.md) - JSON processing
+- [Classification Agent](./utility/classification_agent.md) - Text/intent classification
+- [LLM Failsafe Agent](./utility/llm_failsafe_agent.md) - Fallback responses
+
+## 🔄 System Interactions
+
+### Request Flow
+1. **Request Entry**: User requests enter through REST API, WebSocket, or chat interface
+2. **Authentication**: Security layer validates permissions and user roles
+3. **Orchestration**: Agent Orchestrator analyzes request and selects appropriate agent(s)
+4. **Execution**: Selected agent(s) process the request using system resources
+5. **Response**: Results are aggregated and returned to the user
+
+### Data Flow
+- **Knowledge Base**: Agents read/write structured knowledge, facts, and documents
+- **Redis**: Used for caching, session state, task queues, and real-time data
+- **File System**: Sandboxed file operations for uploads, processing, and storage
+- **External APIs**: Web research, LLM providers, and third-party integrations
+
+### Communication Patterns
+- **Synchronous**: Direct function calls for simple operations
+- **Asynchronous**: Task queues and callbacks for long-running operations  
+- **Event-driven**: WebSocket notifications and real-time updates
+- **Batch Processing**: Bulk operations and background tasks
+
+## 🔧 Integration Patterns
+
+### 1. **Agent-to-Agent Communication**
 ```python
-from src.agents import get_kb_librarian
+# Agents can call other agents through the orchestrator
+await orchestrator.delegate_to_agent("kb_librarian", query_params)
 
-librarian = get_kb_librarian()
-results = await librarian.process_query("How to install dependencies?")
+# Or directly for performance-critical operations
+from src.agents.knowledge_retrieval_agent import get_knowledge_retrieval_agent
+knowledge_agent = get_knowledge_retrieval_agent()
+results = await knowledge_agent.quick_lookup(term)
 ```
 
-#### Web Research
+### 2. **System Resource Access**
 ```python
-from src.agents import get_containerized_librarian_assistant
+# Knowledge Base integration
+from src.knowledge_base import KnowledgeBase
+kb = KnowledgeBase()
+chunks = await kb.search_chunks(query)
 
-assistant = get_containerized_librarian_assistant()
-research = await assistant.research_query("Python async best practices 2025")
+# Redis integration
+from src.utils.redis_client import get_redis_client
+redis_client = get_redis_client()
+cached_result = redis_client.get(cache_key)
+
+# Security integration
+from src.security_layer import SecurityLayer
+security = SecurityLayer()
+if security.check_permission(user_role, "files.upload", resource):
+    # Proceed with operation
 ```
 
-#### System Operations
+### 3. **Error Handling Integration**
 ```python
-from src.agents.interactive_terminal_agent import InteractiveTerminalAgent
+from src.utils.error_boundaries import error_boundary
 
-terminal = InteractiveTerminalAgent()
-status = await terminal.get_system_status()
+@error_boundary(component="agent_name", function="process_request")
+async def process_request(self, request):
+    # Agent processing logic with automatic error handling
+    return response
 ```
 
-## Agent Integration Flow
+## 📊 Performance Considerations
 
-```
-User Query
-    ↓
-Chat System
-    ↓
-Agent Router ──→ KB Librarian (searches local docs first)
-    ↓                    ↓
-    ↓               Found Results? ──→ Yes ──→ Summarize & Respond
-    ↓                    ↓
-    ↓                   No
-    ↓                    ↓
-Web Research ──→ Containerized Librarian (web search)
-Assistant                ↓
-    ↓               Quality Content? ──→ Yes ──→ Store in KB
-    ↓                    ↓
-    ↓                   No
-    ↓                    ↓
-Helper Agents ──→ System/Terminal Agents (if system query)
-    ↓
-Final Response (with sources & attribution)
-```
+### Model Selection Strategy
+- **1B Models**: Chat, simple classification, basic commands (fast responses)
+- **3B Models**: RAG, research, complex routing decisions (better reasoning)
+- **NPU Acceleration**: Code search, semantic similarity (hardware optimization)
 
-## Configuration
+### Caching Strategy
+- **L1 Cache**: In-memory agent state and frequently accessed data
+- **L2 Cache**: Redis for session state and cross-request data
+- **L3 Cache**: Knowledge base for persistent structured data
 
-### Global Agent Settings
-```yaml
-# config/config.yaml
-agents:
-  enabled: true
-  max_concurrent: 5
-  timeout_seconds: 30
-  logging:
-    level: INFO
-    performance_metrics: true
+### Load Balancing
+- Multiple agent instances can run in containers
+- Request routing based on agent availability and load
+- Failover to backup agents when primary agents are unavailable
 
-# KB Librarian
-kb_librarian:
-  enabled: true
-  similarity_threshold: 0.7
-  max_results: 5
-  auto_summarize: true
+## 🚀 Getting Started
 
-# Web Research
-librarian_assistant:
-  enabled: true
-  playwright_service_url: "http://localhost:3000"
-  max_search_results: 5
-  quality_threshold: 0.7
-```
+1. **Read the Architecture Overview** to understand the system design
+2. **Explore Agent Categories** to find agents relevant to your use case
+3. **Check Integration Examples** in individual agent documentation
+4. **Review Security Considerations** for production deployment
 
-## Monitoring and Health
+## 🔗 Quick Links
 
-### Agent Status Dashboard
-```bash
-# Check all agent status
-curl "http://localhost:8001/api/system/health" | jq '.agents'
-
-# KB Librarian specific status
-curl "http://localhost:8001/api/kb-librarian/status"
-
-# Knowledge base sync status
-curl "http://localhost:8001/api/knowledge_base/sync-status"
-```
-
-### Performance Metrics
-- Query response times
-- Success/failure rates
-- Knowledge base hit rates
-- Web research quality scores
-- System resource usage
-
-## Troubleshooting
-
-### Common Issues
-
-**KB Librarian returns no results:**
-```bash
-# Sync knowledge base
-python scripts/sync_kb_docs.py
-
-# Check KB status
-curl "http://localhost:8001/api/knowledge_base/stats"
-```
-
-**Web research fails:**
-```bash
-# Check Playwright service
-docker ps | grep playwright
-
-# Test connectivity
-curl "http://localhost:3000/health"
-```
-
-**Agent timeouts:**
-```bash
-# Check system resources
-curl "http://localhost:8001/api/system/health" | jq '.system'
-
-# Review agent logs
-tail -f logs/agents.log
-```
-
-## Development Guide
-
-### Adding New Agents
-
-1. **Create Agent Class**:
-```python
-# src/agents/my_custom_agent.py
-class MyCustomAgent:
-    def __init__(self):
-        self.config = config
-        self.enabled = self.config.get_nested("my_agent.enabled", True)
-    
-    async def process(self, query: str) -> Dict[str, Any]:
-        # Agent implementation
-        pass
-```
-
-2. **Register Agent**:
-```python
-# src/agents/__init__.py
-from .my_custom_agent import MyCustomAgent
-
-__all__ = [..., "MyCustomAgent"]
-```
-
-3. **Add Configuration**:
-```yaml
-# config/config.yaml
-my_agent:
-  enabled: true
-  custom_setting: "value"
-```
-
-4. **Create Tests**:
-```python
-# tests/agents/test_my_agent.py
-import pytest
-from src.agents.my_custom_agent import MyCustomAgent
-
-@pytest.mark.asyncio
-async def test_my_agent():
-    agent = MyCustomAgent()
-    result = await agent.process("test query")
-    assert result["status"] == "success"
-```
-
-### Best Practices
-
-1. **Agent Design**:
-   - Single responsibility principle
-   - Async/await for all I/O operations
-   - Comprehensive error handling
-   - Configurable behavior
-
-2. **Integration**:
-   - Use existing interfaces (KnowledgeBase, LLMInterface)
-   - Follow naming conventions
-   - Provide clear API documentation
-
-3. **Testing**:
-   - Unit tests for core functionality
-   - Integration tests with other agents
-   - End-to-end tests via API
-
-## Security Considerations
-
-### Agent Security Model
-- Input validation and sanitization
-- Output filtering and verification
-- Rate limiting and resource management
-- Audit logging for all operations
-
-### Web Research Security
-- Domain allowlisting/blocklisting
-- Content sanitization
-- SSL/TLS verification
-- User agent rotation
-
-### System Agent Security
-- Command whitelisting
-- Permission validation
-- Sandboxed execution
-- Comprehensive audit trails
-
-## Future Roadmap
-
-### Planned Enhancements
-- **Multi-modal Agents**: Support for image, video, and audio processing
-- **Collaborative Agents**: Multi-agent coordination and task distribution
-- **Learning Agents**: Agents that improve through user feedback
-- **Custom Agent Builder**: UI for creating custom agents
-
-### Integration Targets
-- **External APIs**: Integration with specialized knowledge APIs
-- **Enterprise Systems**: Connection to corporate knowledge bases
-- **Cloud Services**: Scalable cloud-based agent execution
-- **Mobile Support**: Mobile-optimized agent interactions
+- [Agent Development Guide](./development_guide.md)
+- [Security Best Practices](./security_guide.md)
+- [Performance Optimization](./performance_guide.md)
+- [Troubleshooting Guide](./troubleshooting.md)
 
 ---
 
-## Getting Started
-
-1. **Enable Agents**: Ensure agents are enabled in your configuration
-2. **Populate KB**: Run `python scripts/sync_kb_docs.py` to populate knowledge base
-3. **Test Functionality**: Try queries through the chat interface or API
-4. **Monitor Performance**: Check agent status and performance metrics
-
-For detailed information about specific agents, see the individual guide files:
-- [Librarian Agents Guide](librarian-agents-guide.md)
-- [Helper Agents Guide](helper-agents-guide.md)
+*Last updated: 2025-08-19*
+*For questions or contributions, see the [CONTRIBUTING.md](../../CONTRIBUTING.md) guide.*
