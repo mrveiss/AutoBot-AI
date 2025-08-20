@@ -10,7 +10,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority, TaskStatus
+from src.enhanced_memory_manager_async import (
+    get_async_enhanced_memory_manager,
+    TaskPriority,
+    TaskStatus,
+)
 from src.markdown_reference_system import MarkdownReferenceSystem
 
 logger = logging.getLogger(__name__)

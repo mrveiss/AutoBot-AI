@@ -11,7 +11,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
+from src.enhanced_memory_manager_async import (
+    get_async_enhanced_memory_manager,
+    TaskPriority,
+)
 from src.task_execution_tracker import task_tracker
 
 logger = logging.getLogger(__name__)

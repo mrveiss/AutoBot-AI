@@ -16,7 +16,11 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
+from src.enhanced_memory_manager_async import (
+    AsyncEnhancedMemoryManager,
+    get_async_enhanced_memory_manager,
+    TaskPriority,
+)
 from src.task_execution_tracker import task_tracker
 from src.utils.config_manager import get_config_section, is_feature_enabled
 
@@ -83,7 +87,7 @@ class BaseModalProcessor:
     def __init__(self, processor_type: str):
         self.processor_type = processor_type
         self.logger = logging.getLogger(f"{__name__}.{processor_type}")
-        self.memory_manager = EnhancedMemoryManager()
+        self.memory_manager = get_async_enhanced_memory_manager()
         
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process input and return result"""
@@ -286,7 +290,7 @@ class UnifiedMultiModalProcessor:
         self.vision_processor = VisionProcessor()
         self.voice_processor = VoiceProcessor()
         self.context_processor = ContextProcessor()
-        self.memory_manager = EnhancedMemoryManager()
+        self.memory_manager = get_async_enhanced_memory_manager()
         self.logger = logging.getLogger(__name__)
         
         # Processing statistics
