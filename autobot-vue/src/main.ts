@@ -5,8 +5,9 @@ import router from './router'
 import './assets/tailwind.css'
 import './assets/vue-notus.css'
 
-// Import RUM agent for development monitoring
+// Import plugins
 import rumPlugin from './plugins/rum'
+import errorHandlerPlugin from './plugins/errorHandler'
 
 // Import RUM console helper for development
 if (import.meta.env.DEV) {
@@ -16,7 +17,8 @@ if (import.meta.env.DEV) {
 const app = createApp(App)
 app.use(router)
 
-// Install RUM plugin for development monitoring
+// Install plugins in order: RUM first, then error handler
 app.use(rumPlugin, { router })
+app.use(errorHandlerPlugin)
 
 app.mount('#app')
