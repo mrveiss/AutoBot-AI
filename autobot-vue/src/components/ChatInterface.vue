@@ -1,6 +1,7 @@
 <template>
-  <div class="flex h-full bg-white overflow-hidden">
-    <!-- Knowledge Persistence Dialog -->
+  <ErrorBoundary fallback="Chat interface failed to load. Please refresh the page.">
+    <div class="flex h-full bg-white overflow-hidden">
+      <!-- Knowledge Persistence Dialog -->
     <KnowledgePersistenceDialog
       :visible="showKnowledgeDialog"
       :chat-id="currentChatId"
@@ -66,32 +67,32 @@
           <h3 class="text-lg font-semibold text-blueGray-700 mb-4 mt-6">Message Display</h3>
           <div class="space-y-3">
             <label class="flex items-center">
-              <input type="checkbox" v-model="settings.message_display.show_thoughts" class="mr-2" />
-              <span class="text-sm text-blueGray-600">Show Thoughts</span>
+              <input type="checkbox" v-model="settings.message_display.show_thoughts" class="mr-2" id="show-thoughts" />
+              <span class="text-sm text-blueGray-600" for="show-thoughts">Show Thoughts</span>
             </label>
             <label class="flex items-center">
-              <input type="checkbox" v-model="settings.message_display.show_json" class="mr-2" />
-              <span class="text-sm text-blueGray-600">Show JSON Output</span>
+              <input type="checkbox" v-model="settings.message_display.show_json" class="mr-2" id="show-json" />
+              <span class="text-sm text-blueGray-600" for="show-json">Show JSON Output</span>
             </label>
             <label class="flex items-center">
-              <input type="checkbox" v-model="settings.message_display.show_utility" class="mr-2" />
-              <span class="text-sm text-blueGray-600">Show Utility Messages</span>
+              <input type="checkbox" v-model="settings.message_display.show_utility" class="mr-2" id="show-utility" />
+              <span class="text-sm text-blueGray-600" for="show-utility">Show Utility Messages</span>
             </label>
             <label class="flex items-center">
-              <input type="checkbox" v-model="settings.message_display.show_planning" class="mr-2" />
-              <span class="text-sm text-blueGray-600">Show Planning Messages</span>
+              <input type="checkbox" v-model="settings.message_display.show_planning" class="mr-2" id="show-planning" />
+              <span class="text-sm text-blueGray-600" for="show-planning">Show Planning Messages</span>
             </label>
             <label class="flex items-center">
-              <input type="checkbox" v-model="settings.message_display.show_debug" class="mr-2" />
-              <span class="text-sm text-blueGray-600">Show Debug Messages</span>
+              <input type="checkbox" v-model="settings.message_display.show_debug" class="mr-2" id="show-debug" />
+              <span class="text-sm text-blueGray-600" for="show-debug">Show Debug Messages</span>
             </label>
             <label class="flex items-center">
-              <input type="checkbox" v-model="settings.message_display.show_sources" class="mr-2" />
-              <span class="text-sm text-blueGray-600">Show Sources</span>
+              <input type="checkbox" v-model="settings.message_display.show_sources" class="mr-2" id="show-sources" />
+              <span class="text-sm text-blueGray-600" for="show-sources">Show Sources</span>
             </label>
             <label class="flex items-center">
-              <input type="checkbox" v-model="settings.chat.auto_scroll" class="mr-2" />
-              <span class="text-sm text-blueGray-600">Autoscroll</span>
+              <input type="checkbox" v-model="settings.chat.auto_scroll" class="mr-2" id="auto-scroll" />
+              <span class="text-sm text-blueGray-600" for="auto-scroll">Autoscroll</span>
             </label>
           </div>
           <h3 class="text-lg font-semibold text-blueGray-700 mb-4 mt-6">Backend Control</h3>
@@ -300,7 +301,8 @@
         </div>
       </div>
     </div>
-  </div>
+    </div>
+  </ErrorBoundary>
 </template>
 
 <script>
@@ -315,6 +317,7 @@ import CommandPermissionDialog from './CommandPermissionDialog.vue';
 import PlaywrightDesktopViewer from './PlaywrightDesktopViewer.vue';
 import ComputerDesktopViewer from './ComputerDesktopViewer.vue';
 import ResearchBrowser from './ResearchBrowser.vue';
+import ErrorBoundary from './ErrorBoundary.vue';
 import apiClient from '../utils/ApiClient.js';
 import { apiService } from '@/services/api.js';
 
@@ -330,7 +333,8 @@ export default {
     // Desktop viewer components (placeholder)
     PlaywrightDesktopViewer,
     ComputerDesktopViewer,
-    ResearchBrowser
+    ResearchBrowser,
+    ErrorBoundary
   },
   setup() {
     // Reactive state
@@ -731,7 +735,7 @@ export default {
     };
 
     const onCommandApproved = (result) => {
-      console.log('Command approved:', result);
+      // Command approved
       // The dialog already sent "yes" to the backend
       showCommandDialog.value = false;
 
@@ -750,7 +754,7 @@ export default {
     };
 
     const onCommandDenied = (reason) => {
-      console.log('Command denied:', reason);
+      // Command denied
       showCommandDialog.value = false;
 
       // Add denial message to chat
@@ -771,7 +775,7 @@ export default {
     };
 
     const onCommandCommented = (data) => {
-      console.log('Command commented:', data);
+      // Command commented
       showCommandDialog.value = false;
 
       // Add the user's feedback to chat
@@ -965,7 +969,7 @@ export default {
           }
         } else {
           // Workflow failed, try fallback to regular chat
-          console.log('Workflow failed, falling back to regular chat endpoint');
+          // Workflow failed, falling back to regular chat endpoint
           try {
             const chatResponse = await apiClient.sendChatMessage(userInput, {
               chatId: currentChatId.value || 'default'

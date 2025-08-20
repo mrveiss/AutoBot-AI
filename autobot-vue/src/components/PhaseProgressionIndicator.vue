@@ -388,7 +388,7 @@ export default {
             }));
           }
         } catch (error) {
-          console.log('Could not load validation data, using phase status data');
+          // Could not load validation data, using phase status data
         }
 
         // Calculate overall system maturity

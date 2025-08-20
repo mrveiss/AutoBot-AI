@@ -1,5 +1,6 @@
 <template>
-  <div class="knowledge-manager">
+  <ErrorBoundary fallback="Knowledge Base failed to load. Please try refreshing.">
+    <div class="knowledge-manager">
 
     <div class="tabs">
       <button
@@ -26,34 +27,70 @@
       </div>
 
       <div class="search-form">
-        <!-- Main search input -->
+        <!-- Main search input with enhanced UX -->
         <div class="search-input-container">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Enter search query..."
-            @keyup.enter="performSearch"
-            @input="onSearchInput"
-            class="main-search-input"
-          />
+          <div class="search-input-wrapper">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search knowledge base... (try keywords, questions, or topics)"
+              @keyup.enter="performSearch"
+              @input="onSearchInput"
+              @focus="showSearchHelp = true"
+              @blur="hideSearchHelp"
+              class="main-search-input enhanced"
+              id="knowledge-search-input"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <div class="search-input-icons">
+              <i v-if="searching" class="fas fa-spinner fa-spin search-spinner"></i>
+              <i v-else-if="searchQuery" @click="clearSearch" class="fas fa-times clear-search" title="Clear search"></i>
+              <i v-else class="fas fa-search search-icon"></i>
+            </div>
+          </div>
           <button
             @click="performSearch"
             :disabled="searching || !searchQuery.trim()"
-            class="search-btn"
+            class="search-btn enhanced"
+            :class="{ 'searching': searching }"
           >
             {{ searching ? 'Searching...' : 'Search' }}
           </button>
         </div>
 
-        <!-- Search suggestions -->
-        <div v-if="showSuggestions && searchSuggestions.length > 0" class="search-suggestions">
-          <div
-            v-for="suggestion in searchSuggestions"
-            :key="suggestion"
-            @click="applySuggestion(suggestion)"
-            class="suggestion-item"
-          >
-            {{ suggestion }}
+        <!-- Search help tooltip -->
+        <div v-if="showSearchHelp && !searchQuery" class="search-help-tooltip">
+          <div class="help-item">
+            <strong>💡 Search Tips:</strong>
+          </div>
+          <div class="help-item">• Use quotes for exact phrases: "machine learning"</div>
+          <div class="help-item">• Use wildcards: config* or *setup</div>
+          <div class="help-item">• Try natural questions: "How to configure Redis?"</div>
+        </div>
+
+        <!-- Enhanced search suggestions with categories -->
+        <div v-if="showSuggestions && searchSuggestions.length > 0" class="search-suggestions enhanced">
+          <div class="suggestions-header">
+            <i class="fas fa-lightbulb"></i>
+            <span>Suggested searches</span>
+          </div>
+          <div class="suggestions-list">
+            <div
+              v-for="(suggestion, index) in searchSuggestions"
+              :key="suggestion"
+              @click="applySuggestion(suggestion)"
+              @keyup.enter="applySuggestion(suggestion)"
+              class="suggestion-item enhanced"
+              :class="{ 'highlighted': index === selectedSuggestionIndex }"
+              tabindex="0"
+            >
+              <i class="fas fa-search suggestion-icon"></i>
+              <span class="suggestion-text">{{ suggestion }}</span>
+              <span class="suggestion-count" v-if="suggestionCounts[suggestion]">
+                {{ suggestionCounts[suggestion] }} results
+              </span>
+            </div>
           </div>
         </div>
 
@@ -150,57 +187,134 @@
               <option value="title">Title</option>
               <option value="type">Content Type</option>
             </select>
-            <button @click="toggleSortOrder" class="sort-order-btn">
-              {{ sortOrder === 'desc' ? '↓' : '↑' }}
+            <button @click="toggleSortOrder" class="sort-order-btn enhanced">
+              <i class="fas" :class="sortOrder === 'desc' ? 'fa-sort-amount-down' : 'fa-sort-amount-up'"></i>
+              {{ sortOrder === 'desc' ? 'Desc' : 'Asc' }}
             </button>
           </div>
-          <div class="view-controls">
+          <div class="view-controls enhanced">
             <button
               @click="resultsViewMode = 'list'"
               :class="{ active: resultsViewMode === 'list' }"
               class="view-mode-btn"
+              title="List view"
             >
-              List
+              <i class="fas fa-list"></i>
             </button>
             <button
               @click="resultsViewMode = 'cards'"
               :class="{ active: resultsViewMode === 'cards' }"
               class="view-mode-btn"
+              title="Card view"
             >
-              Cards
+              <i class="fas fa-th-large"></i>
+            </button>
+          </div>
+          <div class="action-controls">
+            <button
+              @click="exportResults"
+              class="export-btn"
+              :disabled="!searchResults.length"
+              title="Export search results"
+            >
+              <i class="fas fa-download"></i>
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Enhanced search results -->
-      <div v-if="filteredResults.length > 0" class="search-results" :class="resultsViewMode">
+      <!-- No results state with suggestions -->
+      <div v-if="searchPerformed && filteredResults.length === 0" class="no-results">
+        <div class="no-results-icon">
+          <i class="fas fa-search"></i>
+        </div>
+        <h3>No results found</h3>
+        <p v-if="searchQuery">We couldn't find anything matching "{{ searchQuery }}"</p>
+        <div class="no-results-suggestions">
+          <h4>Try:</h4>
+          <ul>
+            <li>• Checking your spelling</li>
+            <li>• Using different keywords</li>
+            <li>• Making your search less specific</li>
+            <li>• Using the advanced search filters</li>
+          </ul>
+        </div>
+        <div class="no-results-actions">
+          <button @click="clearSearch" class="btn-secondary">
+            <i class="fas fa-times"></i> Clear Search
+          </button>
+          <button @click="showAdvancedSearch = true" class="btn-primary">
+            <i class="fas fa-sliders-h"></i> Advanced Search
+          </button>
+        </div>
+      </div>
+
+      <!-- Enhanced search results with improved UX -->
+      <div v-if="filteredResults.length > 0" class="search-results enhanced" :class="resultsViewMode">
         <div
           v-for="(result, index) in paginatedResults"
           :key="result.id || `result-${index}`"
-          class="search-result"
-          :class="{ 'high-score': result.score > 0.8 }"
+          class="search-result enhanced"
+          :class="{
+            'high-score': result.score > 0.8,
+            'medium-score': result.score > 0.5 && result.score <= 0.8,
+            'low-score': result.score <= 0.5
+          }"
+          @click="selectResult(result)"
+          :tabindex="0"
+          @keyup.enter="selectResult(result)"
         >
-          <div class="result-header">
+          <div class="result-header enhanced">
             <div class="result-title">
-              <h5 v-html="highlightText(getResultTitle(result), searchQuery)"></h5>
+              <h5 v-html="highlightText(getResultTitle(result), searchQuery)" class="title-text"></h5>
               <div class="result-badges">
-                <span class="badge score" :class="getScoreClass(result.score)">
+                <span class="badge score" :class="getScoreClass(result.score)" :title="`Relevance score: ${result.score?.toFixed(3)}`">
+                  <i class="fas fa-star"></i>
                   {{ result.score?.toFixed(2) || '0.00' }}
                 </span>
-                <span v-if="result.type" class="badge type">{{ result.type }}</span>
-                <span v-if="result.collection" class="badge collection">{{ result.collection }}</span>
+                <span v-if="result.type" class="badge type" :title="`Content type: ${result.type}`">
+                  <i class="fas" :class="getTypeIcon(result.type)"></i>
+                  {{ result.type }}
+                </span>
+                <span v-if="result.collection" class="badge collection" :title="`Collection: ${result.collection}`">
+                  <i class="fas fa-folder"></i>
+                  {{ result.collection }}
+                </span>
               </div>
             </div>
-            <div class="result-actions">
-              <button @click="viewResult(result)" class="action-btn view-btn" title="View Full Content">
-                👁️
+            <div class="result-actions enhanced">
+              <button
+                @click.stop="viewResult(result)"
+                class="action-btn view-btn"
+                title="View full content"
+                :aria-label="`View full content of ${getResultTitle(result)}`"
+              >
+                <i class="fas fa-eye"></i>
               </button>
-              <button @click="useResult(result)" class="action-btn use-btn" title="Use in Chat">
-                💬
+              <button
+                @click.stop="useResult(result)"
+                class="action-btn use-btn"
+                title="Use in chat"
+                :aria-label="`Use ${getResultTitle(result)} in chat conversation`"
+              >
+                <i class="fas fa-comments"></i>
               </button>
-              <button @click="copyResult(result)" class="action-btn copy-btn" title="Copy Content">
-                📋
+              <button
+                @click.stop="copyResult(result)"
+                class="action-btn copy-btn"
+                title="Copy to clipboard"
+                :aria-label="`Copy ${getResultTitle(result)} to clipboard`"
+              >
+                <i class="fas fa-copy"></i>
+              </button>
+              <button
+                @click.stop="bookmarkResult(result)"
+                class="action-btn bookmark-btn"
+                :class="{ 'bookmarked': isBookmarked(result) }"
+                :title="isBookmarked(result) ? 'Remove bookmark' : 'Add bookmark'"
+                :aria-label="`${isBookmarked(result) ? 'Remove' : 'Add'} bookmark for ${getResultTitle(result)}`"
+              >
+                <i class="fas" :class="isBookmarked(result) ? 'fa-bookmark' : 'fa-bookmark-o'"></i>
               </button>
             </div>
           </div>
@@ -880,15 +994,20 @@
         </div>
       </div>
     </div>
-  </div>
+    </div>
+  </ErrorBoundary>
 </template>
 
 <script>
 import { ref, onMounted, watch, computed } from 'vue';
 import apiClient from '../utils/ApiClient.js';
+import ErrorBoundary from './ErrorBoundary.vue';
 
 export default {
   name: 'KnowledgeManager',
+  components: {
+    ErrorBoundary
+  },
   setup() {
     // Tab management
     const activeTab = ref('search');
@@ -1088,6 +1207,97 @@ export default {
       }
     }, 300);
 
+    // Search help state
+    const showSearchHelp = ref(false);
+    const suggestionCounts = ref({});
+    const selectedSuggestionIndex = ref(-1);
+
+    const hideSearchHelp = () => {
+      setTimeout(() => {
+        showSearchHelp.value = false;
+      }, 200);
+    };
+
+    const clearSearch = () => {
+      searchQuery.value = '';
+      searchResults.value = [];
+      filteredResults.value = [];
+      searchPerformed.value = false;
+      showSuggestions.value = false;
+      showSearchHelp.value = false;
+    };
+
+    const selectResult = (result) => {
+      // Emit or handle result selection
+      console.log('Selected result:', result);
+    };
+
+    const getTypeIcon = (type) => {
+      const icons = {
+        text: 'fa-file-text',
+        document: 'fa-file-alt',
+        code: 'fa-code',
+        note: 'fa-sticky-note',
+        url: 'fa-link',
+        image: 'fa-image',
+        video: 'fa-video',
+        audio: 'fa-music'
+      };
+      return icons[type] || 'fa-file';
+    };
+
+    const formatDate = (timestamp) => {
+      if (!timestamp) return 'Unknown';
+      try {
+        const date = new Date(timestamp);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+      } catch {
+        return 'Invalid date';
+      }
+    };
+
+    const formatContentSize = (size) => {
+      if (size < 1000) return `${size} chars`;
+      if (size < 1000000) return `${(size / 1000).toFixed(1)}K chars`;
+      return `${(size / 1000000).toFixed(1)}M chars`;
+    };
+
+    // Bookmarking functionality
+    const bookmarkedResults = ref(new Set());
+
+    const isBookmarked = (result) => {
+      return bookmarkedResults.value.has(result.id);
+    };
+
+    const bookmarkResult = (result) => {
+      if (isBookmarked(result)) {
+        bookmarkedResults.value.delete(result.id);
+      } else {
+        bookmarkedResults.value.add(result.id);
+      }
+    };
+
+    // Export functionality
+    const exportResults = () => {
+      if (!searchResults.value.length) return;
+
+      const exportData = {
+        query: lastSearchQuery.value,
+        timestamp: new Date().toISOString(),
+        total_results: searchResults.value.length,
+        filtered_results: filteredResults.value.length,
+        results: filteredResults.value
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `search_results_${Date.now()}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
     const applySuggestion = (suggestion) => {
       searchQuery.value = suggestion;
       showSuggestions.value = false;
@@ -1121,13 +1331,13 @@ export default {
     // Result actions
     const viewResult = (result) => {
       // Open result in modal or new tab
-      console.log('Viewing result:', result);
+      // Viewing result
       // TODO: Implement result viewer
     };
 
     const useResult = (result) => {
       // Add result to chat context or use in current conversation
-      console.log('Using result in chat:', result);
+      // Using result in chat
       // TODO: Implement chat integration
     };
 
@@ -1135,7 +1345,7 @@ export default {
       try {
         await navigator.clipboard.writeText(result.content || result.text || '');
         // TODO: Show toast notification
-        console.log('Content copied to clipboard');
+        // Content copied to clipboard
       } catch (error) {
         console.error('Failed to copy content:', error);
       }
@@ -1600,14 +1810,6 @@ export default {
       return content.length > 150 ? content.substring(0, 150) + '...' : content;
     };
 
-    const formatDate = (dateString) => {
-      if (!dateString) return 'Unknown';
-      try {
-        return new Date(dateString).toLocaleDateString();
-      } catch {
-        return 'Unknown';
-      }
-    };
 
     const isUrlEntry = (entry) => {
       // Check if source contains a URL
@@ -2181,11 +2383,6 @@ export default {
       return content.length > 200 ? content.substring(0, 200) + '...' : content;
     };
 
-    const formatContentSize = (size) => {
-      if (size < 1024) return `${size} chars`;
-      if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-      return `${Math.round(size / (1024 * 1024))} MB`;
-    };
 
     // System Prompts functionality
     const systemPrompts = ref([]);
@@ -2375,6 +2572,19 @@ export default {
       viewResult,
       useResult,
       copyResult,
+
+      // Search UI helpers
+      showSearchHelp,
+      hideSearchHelp,
+      suggestionCounts,
+      selectedSuggestionIndex,
+      clearSearch,
+      selectResult,
+      getTypeIcon,
+      formatContentSize,
+      isBookmarked,
+      bookmarkResult,
+      exportResults,
 
       // Knowledge Entries
       knowledgeEntries,
@@ -4428,6 +4638,452 @@ export default {
   margin-top: 2px;
 }
 
+/* Enhanced Search UI Styles */
+.search-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.main-search-input.enhanced {
+  width: 100%;
+  padding: 12px 45px 12px 16px;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.main-search-input.enhanced:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.15);
+}
+
+.search-input-icons {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+
+.search-spinner, .clear-search, .search-icon {
+  font-size: 16px;
+  color: #6c757d;
+  cursor: pointer;
+}
+
+.clear-search:hover {
+  color: #dc3545;
+}
+
+.search-btn.enhanced {
+  padding: 12px 20px;
+  margin-left: 12px;
+  background: linear-gradient(45deg, #007bff, #0056b3);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.search-btn.enhanced:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+}
+
+.search-btn.enhanced:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.search-help-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 16px;
+  z-index: 1000;
+  margin-top: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.help-item {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.help-item:last-child {
+  margin-bottom: 0;
+}
+
+.search-suggestions.enhanced {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  z-index: 1000;
+  margin-top: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.suggestions-header {
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  font-weight: 600;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.suggestion-item.enhanced {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.suggestion-item.enhanced:hover,
+.suggestion-item.enhanced.highlighted {
+  background: #f8f9fa;
+}
+
+.suggestion-icon {
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.suggestion-text {
+  flex: 1;
+  font-size: 14px;
+  color: #495057;
+}
+
+.suggestion-count {
+  font-size: 12px;
+  color: #6c757d;
+  background: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.search-results.enhanced {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.search-result.enhanced {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.search-result.enhanced:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: #007bff;
+}
+
+.search-result.enhanced.high-score {
+  border-left: 4px solid #28a745;
+}
+
+.search-result.enhanced.medium-score {
+  border-left: 4px solid #ffc107;
+}
+
+.search-result.enhanced.low-score {
+  border-left: 4px solid #dc3545;
+}
+
+.result-header.enhanced {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.result-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge.score.high {
+  background: #d4edda;
+  color: #155724;
+}
+
+.badge.score.medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.badge.score.low {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.badge.type {
+  background: #e2e3e5;
+  color: #6c757d;
+}
+
+.badge.collection {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.result-actions.enhanced {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  padding: 8px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+}
+
+.action-btn:hover {
+  background: #e9ecef;
+  transform: translateY(-1px);
+}
+
+.action-btn.view-btn:hover {
+  color: #007bff;
+  border-color: #007bff;
+}
+
+.action-btn.use-btn:hover {
+  color: #28a745;
+  border-color: #28a745;
+}
+
+.action-btn.copy-btn:hover {
+  color: #6c757d;
+  border-color: #6c757d;
+}
+
+.action-btn.bookmark-btn.bookmarked {
+  background: #fff3cd;
+  color: #856404;
+  border-color: #ffeaa7;
+}
+
+.result-metadata {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.result-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag {
+  background: #e9ecef;
+  color: #6c757d;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.more-tags {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.metadata-items {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.metadata-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.no-results {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6c757d;
+}
+
+.no-results-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.no-results h3 {
+  margin: 16px 0;
+  color: #495057;
+}
+
+.no-results-suggestions {
+  margin: 24px 0;
+  text-align: left;
+  display: inline-block;
+}
+
+.no-results-suggestions h4 {
+  margin-bottom: 8px;
+  color: #495057;
+}
+
+.no-results-suggestions ul {
+  list-style: none;
+  padding: 0;
+}
+
+.no-results-suggestions li {
+  margin-bottom: 4px;
+  color: #6c757d;
+}
+
+.no-results-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.btn-secondary, .btn-primary {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+}
+
+.view-controls.enhanced {
+  display: flex;
+  gap: 4px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.view-mode-btn {
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #6c757d;
+  transition: all 0.2s ease;
+}
+
+.view-mode-btn.active {
+  background: white;
+  color: #007bff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.export-btn {
+  padding: 8px 12px;
+  background: #17a2b8;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: #138496;
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Card view mode */
+.search-results.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.search-results.cards .search-result.enhanced {
+  height: fit-content;
+}
+
 /* Responsive Design for Enhanced Search */
 @media (max-width: 768px) {
   .search-header {
@@ -4457,6 +5113,24 @@ export default {
 
   .tips-grid {
     grid-template-columns: 1fr;
+  }
+
+  .result-actions.enhanced {
+    flex-wrap: wrap;
+  }
+
+  .no-results-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .search-input-container {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .search-btn.enhanced {
+    margin-left: 0;
   }
 }
 </style>

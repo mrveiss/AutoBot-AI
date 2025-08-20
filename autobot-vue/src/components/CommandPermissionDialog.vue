@@ -37,10 +37,13 @@
                 type="checkbox"
                 v-model="rememberForSession"
                 :disabled="isProcessing"
+                id="remember-session"
+                aria-describedby="remember-help"
               />
               <span class="checkmark"></span>
               Remember my choice for similar commands this session
             </label>
+            <div id="remember-help" class="sr-only">This will apply your decision to similar commands during this session</div>
           </div>
 
           <div class="warning-message" v-if="error">

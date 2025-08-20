@@ -66,25 +66,25 @@
             </div>
             <span class="status-badge" :class="getResultStatusClass(result.status)">{{ result.status }}</span>
           </div>
-          
+
           <div v-if="result.content && result.content.success" class="content-preview mt-3">
             <div class="text-xs font-medium text-gray-600 mb-2">Content Preview:</div>
             <div class="text-sm text-gray-700 bg-gray-50 rounded p-2 max-h-32 overflow-y-auto">
               {{ result.content.text_content ? result.content.text_content.substring(0, 300) + '...' : 'No content extracted' }}
             </div>
-            
+
             <!-- Structured Data -->
             <div v-if="result.content.structured_data && result.content.structured_data.headings && result.content.structured_data.headings.length > 0" class="mt-2">
               <div class="text-xs font-medium text-gray-600 mb-1">Headings:</div>
               <div class="flex flex-wrap gap-1">
-                <span v-for="heading in result.content.structured_data.headings.slice(0, 3)" :key="heading.text" 
+                <span v-for="heading in result.content.structured_data.headings.slice(0, 3)" :key="heading.text"
                       class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                   {{ heading.level }}: {{ heading.text.substring(0, 30) }}{{ heading.text.length > 30 ? '...' : '' }}
                 </span>
               </div>
             </div>
           </div>
-          
+
           <!-- Interaction Required for This Result -->
           <div v-if="result.interaction_required" class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
             <div class="flex items-center justify-between">
@@ -106,44 +106,44 @@
     <div v-if="sessionId" class="session-controls border-t p-4 bg-gray-50">
       <h4 class="text-md font-semibold text-gray-800 mb-3">Session Controls</h4>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <button @click="handleSessionAction('extract_content')" 
+        <button @click="handleSessionAction('extract_content')"
                 class="btn btn-outline btn-sm" :disabled="loading">
           <i class="fas fa-file-alt mr-1"></i>
           Extract Content
         </button>
-        
-        <button @click="handleSessionAction('save_mhtml')" 
+
+        <button @click="handleSessionAction('save_mhtml')"
                 class="btn btn-outline btn-sm" :disabled="loading">
           <i class="fas fa-save mr-1"></i>
           Save MHTML
         </button>
-        
-        <button @click="navigateToUrl" 
+
+        <button @click="navigateToUrl"
                 class="btn btn-outline btn-sm" :disabled="loading">
           <i class="fas fa-arrow-right mr-1"></i>
           Navigate
         </button>
-        
-        <button @click="closeSession" 
+
+        <button @click="closeSession"
                 class="btn btn-danger btn-sm" :disabled="loading">
           <i class="fas fa-times mr-1"></i>
           Close Session
         </button>
       </div>
-      
+
       <!-- URL Input for Navigation -->
       <div v-if="showNavigationInput" class="mt-3">
         <div class="flex space-x-2">
-          <input v-model="navigationUrl" 
-                 type="url" 
-                 placeholder="Enter URL to navigate to..." 
+          <input v-model="navigationUrl"
+                 type="url"
+                 placeholder="Enter URL to navigate to..."
                  class="flex-1 px-3 py-2 border border-gray-300 rounded text-sm"
                  @keyup.enter="performNavigation">
-          <button @click="performNavigation" 
+          <button @click="performNavigation"
                   class="btn btn-primary btn-sm" :disabled="!navigationUrl || loading">
             Go
           </button>
-          <button @click="showNavigationInput = false" 
+          <button @click="showNavigationInput = false"
                   class="btn btn-secondary btn-sm">
             Cancel
           </button>
@@ -163,37 +163,37 @@
         <div class="flex items-center space-x-2">
           <!-- URL Input Bar -->
           <div class="flex items-center space-x-1">
-            <input 
-              v-model="browserUrl" 
-              type="url" 
+            <input
+              v-model="browserUrl"
+              type="url"
               placeholder="Enter URL to navigate..."
               class="px-2 py-1 border border-gray-300 rounded text-sm w-48"
               :disabled="sessionId && !agentPaused"
               @keyup.enter="navigateToBrowserUrl"
             >
-            <button 
-              @click="navigateToBrowserUrl" 
+            <button
+              @click="navigateToBrowserUrl"
               :disabled="!browserUrl || browserLoading || (sessionId && !agentPaused)"
               class="btn btn-primary btn-xs"
             >
               <i class="fas fa-arrow-right"></i>
             </button>
           </div>
-          
+
           <!-- Agent Control Buttons -->
           <div v-if="sessionId" class="flex items-center space-x-1 border-l border-gray-300 pl-2">
-            <button 
-              v-if="!agentPaused" 
-              @click="pauseAgent" 
+            <button
+              v-if="!agentPaused"
+              @click="pauseAgent"
               class="btn btn-warning btn-xs"
               title="Pause agent and take control of browser"
             >
               <i class="fas fa-pause mr-1"></i>
               Take Control
             </button>
-            <button 
-              v-if="agentPaused" 
-              @click="resumeAgent" 
+            <button
+              v-if="agentPaused"
+              @click="resumeAgent"
               class="btn btn-success btn-xs"
               title="Resume agent research session"
             >
@@ -211,9 +211,9 @@
           </button>
         </div>
       </div>
-      
+
       <div v-if="showBrowser" class="browser-content">
-        <PopoutChromiumBrowser 
+        <PopoutChromiumBrowser
           :session-id="activeSessionId"
           :initial-url="currentUrlForDisplay"
           :can-resize="true"
@@ -225,7 +225,7 @@
           @dock="onBrowserDock"
         />
       </div>
-      
+
       <!-- Browser hidden message -->
       <div v-else class="p-4 text-center text-gray-500">
         <i class="fas fa-eye text-4xl mb-3 opacity-30"></i>
@@ -285,16 +285,16 @@ export default {
     const browserUrl = ref('')
     const browserLoading = ref(false)
     const agentPaused = ref(false)
-    
+
     const researchResults = computed(() => {
       return props.researchData?.results || []
     })
-    
+
     // Unified session ID - use research session if available, otherwise manual
     const activeSessionId = computed(() => {
       return props.sessionId || 'unified-browser'
     })
-    
+
     // Get current URL from research results or user input
     const currentUrlForDisplay = computed(() => {
       if (researchResults.value.length > 0) {
@@ -302,7 +302,7 @@ export default {
       }
       return currentBrowserUrl.value || currentUrl.value || 'about:blank'
     })
-    
+
     const statusClass = computed(() => {
       const statusClasses = {
         'active': 'bg-green-100 text-green-800',
@@ -313,7 +313,7 @@ export default {
       }
       return statusClasses[status.value] || 'bg-gray-100 text-gray-800'
     })
-    
+
     const getResultStatusClass = (resultStatus) => {
       const statusClasses = {
         'completed': 'bg-green-100 text-green-800',
@@ -323,31 +323,31 @@ export default {
       }
       return statusClasses[resultStatus] || 'bg-gray-100 text-gray-800'
     }
-    
+
     const refreshStatus = async () => {
       if (!props.sessionId) return
-      
+
       loading.value = true
       try {
         const response = await apiClient.get(`/api/research/session/${props.sessionId}/status`)
-        
+
         status.value = response.data.status
         currentUrl.value = response.data.current_url
         currentBrowserUrl.value = response.data.current_url
         interactionRequired.value = response.data.interaction_required
         interactionMessage.value = response.data.interaction_message
-        
+
         // Get browser info
         const browserResponse = await apiClient.get(`/api/research/browser/${props.sessionId}`)
         browserInfo.value = browserResponse.data
-        
+
       } catch (error) {
         console.error('Failed to refresh status:', error)
       } finally {
         loading.value = false
       }
     }
-    
+
     const handleWaitForUser = async () => {
       loading.value = true
       try {
@@ -356,10 +356,10 @@ export default {
           action: 'wait',
           timeout_seconds: 300
         })
-        
+
         actionResult.value = response.data
         await refreshStatus()
-        
+
       } catch (error) {
         console.error('Wait for user failed:', error)
         actionResult.value = { error: error.message }
@@ -367,7 +367,7 @@ export default {
         loading.value = false
       }
     }
-    
+
     const handleSessionAction = async (action) => {
       loading.value = true
       try {
@@ -375,10 +375,10 @@ export default {
           session_id: props.sessionId,
           action: action
         })
-        
+
         actionResult.value = response.data
         await refreshStatus()
-        
+
       } catch (error) {
         console.error(`Session action ${action} failed:`, error)
         actionResult.value = { error: error.message }
@@ -386,13 +386,13 @@ export default {
         loading.value = false
       }
     }
-    
+
     const openBrowserSession = () => {
       if (browserInfo.value && browserInfo.value.docker_browser && browserInfo.value.docker_browser.vnc_url) {
         window.open(browserInfo.value.docker_browser.vnc_url, '_blank', 'width=1280,height=720')
       }
     }
-    
+
     const openBrowserForResult = (result) => {
       if (result.browser_url) {
         showBrowser.value = true
@@ -400,25 +400,25 @@ export default {
         openBrowserSession()
       }
     }
-    
+
     const navigateToUrl = () => {
       showNavigationInput.value = true
     }
-    
+
     const performNavigation = async () => {
       if (!navigationUrl.value) return
-      
+
       loading.value = true
       try {
         const response = await apiClient.post(`/api/research/session/${props.sessionId}/navigate`, {
           url: navigationUrl.value
         })
-        
+
         actionResult.value = response.data
         showNavigationInput.value = false
         navigationUrl.value = ''
         await refreshStatus()
-        
+
       } catch (error) {
         console.error('Navigation failed:', error)
         actionResult.value = { error: error.message }
@@ -426,77 +426,77 @@ export default {
         loading.value = false
       }
     }
-    
+
     const closeSession = async () => {
       if (!confirm('Are you sure you want to close this research session?')) return
-      
+
       loading.value = true
       try {
         await apiClient.delete(`/api/research/session/${props.sessionId}`)
-        
+
         // Emit event to parent component
         // In a full implementation, you'd use emit or store
         window.location.reload() // Simple approach for now
-        
+
       } catch (error) {
         console.error('Close session failed:', error)
       } finally {
         loading.value = false
       }
     }
-    
+
     const copyUrl = async () => {
       if (currentUrl.value) {
         await navigator.clipboard.writeText(currentUrl.value)
         // Could show a toast notification here
       }
     }
-    
+
     const toggleBrowserView = () => {
       showBrowser.value = !showBrowser.value
     }
-    
+
     const onBrowserLoad = () => {
-      console.log('Browser iframe loaded')
+      // Browser iframe loaded
     }
-    
+
     // PopoutChromiumBrowser event handlers
     const onBrowserClose = () => {
       showBrowser.value = false
-      console.log('Browser closed')
+      // Browser closed
     }
-    
+
     const onBrowserNavigate = (data) => {
       currentBrowserUrl.value = data.url
       currentUrl.value = data.url
-      console.log('Browser navigated to:', data.url)
+      // Browser navigated
     }
-    
+
     const onBrowserInteract = (data) => {
-      console.log('Browser interaction:', data.action)
+      // Browser interaction
     }
-    
+
     const onBrowserPopout = () => {
-      console.log('Browser popped out')
+      // Browser popped out
     }
-    
+
     const onBrowserDock = () => {
-      console.log('Browser docked')
+      // Browser docked
     }
-    
+
     const popoutBrowser = () => {
       // This will be handled by the PopoutChromiumBrowser component
       showBrowser.value = true
     }
-    
+
     const navigateToBrowserUrl = async () => {
       if (!browserUrl.value) return
-      
+
       browserLoading.value = true
       try {
         // Always show the browser when navigating
         showBrowser.value = true
-        
+
         // If there's no research session, create one for this navigation
         if (!props.sessionId) {
           const response = await apiClient.post('/api/research/url', {
@@ -504,22 +504,22 @@ export default {
             url: browserUrl.value,
             extract_content: false // Just navigate, don't extract content
           })
-          
-          console.log('Unified browser navigation response:', response.data)
-          
+
+          // Unified browser navigation response
+
           if (response.data && response.data.success && response.data.session_id) {
             // We now have a research session for this navigation
             currentBrowserUrl.value = browserUrl.value
-            console.log('Created research session for unified browser:', response.data.session_id)
+            // Created research session for unified browser
           }
         }
-        
+
         // Update the browser URL regardless of session creation
         currentBrowserUrl.value = browserUrl.value
-        
+
         // Clear the input
         browserUrl.value = ''
-        
+
       } catch (error) {
         console.error('Failed to navigate browser:', error)
         // Even on error, try to navigate the browser directly
@@ -529,27 +529,27 @@ export default {
         browserLoading.value = false
       }
     }
-    
+
     const relaunchBrowser = () => {
       // Simply show the browser again with existing URL
       showBrowser.value = true
-      console.log('Browser relaunched for session:', props.sessionId)
+      // Browser relaunched for session
     }
-    
+
     const pauseAgent = async () => {
       if (!props.sessionId) return
-      
+
       try {
         // Signal the agent to pause by sending a manual_intervention action
         const response = await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: 'manual_intervention'
         })
-        
+
         if (response.data && response.data.success) {
           agentPaused.value = true
-          console.log('Agent research session paused - user has control')
-          
+          // Agent research session paused - user has control
+
           // Add a message to inform the user
           actionResult.value = {
             message: 'Agent paused - you now have control of the browser',
@@ -560,10 +560,10 @@ export default {
         console.error('Failed to pause agent:', error)
       }
     }
-    
+
     const resumeAgent = async () => {
       if (!props.sessionId) return
-      
+
       try {
         // Resume agent by clearing the manual intervention
         const response = await apiClient.post('/api/research/session/action', {
@@ -571,17 +571,17 @@ export default {
           action: 'wait', // This will resume normal agent operation
           timeout_seconds: 300
         })
-        
+
         if (response.data) {
           agentPaused.value = false
-          console.log('Agent research session resumed')
-          
+          // Agent research session resumed
+
           // Add a message to inform the user
           actionResult.value = {
             message: 'Agent resumed - research session is now active',
             timestamp: new Date().toISOString()
           }
-          
+
           // Refresh session status
           await refreshStatus()
         }
@@ -589,10 +589,10 @@ export default {
         console.error('Failed to resume agent:', error)
       }
     }
-    
+
     // Auto-refresh status periodically
     let statusInterval
-    
+
     onMounted(() => {
       if (props.sessionId) {
         refreshStatus()
@@ -602,25 +602,25 @@ export default {
         // Show browser when we have research results with URLs
         showBrowser.value = true
       }
-      
+
       // Always show browser for better observability
       showBrowser.value = true
     })
-    
+
     onUnmounted(() => {
       if (statusInterval) {
         clearInterval(statusInterval)
       }
     })
-    
+
     // Watch for research data changes to auto-show browser
     watch(() => props.researchData, (newData) => {
       if (newData && newData.results && newData.results.length > 0) {
         showBrowser.value = true
-        console.log('Research data updated, showing browser with URL:', initialBrowserUrl.value)
+        // Research data updated, showing browser with URL
       }
     }, { deep: true })
-    
+
     return {
       loading,
       status,

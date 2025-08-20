@@ -70,7 +70,7 @@ export default {
 
       try {
         // Since we know the container is running, connect directly
-        console.log('Connecting to Playwright VNC interface...');
+        // Connecting to Playwright VNC interface
 
         // Wait a moment for interface setup
         setTimeout(() => {
@@ -99,7 +99,7 @@ export default {
     };
 
     const onVNCLoad = () => {
-      console.log('VNC iframe loaded successfully');
+      // VNC iframe loaded successfully
     };
 
     const onVNCError = () => {
@@ -128,7 +128,7 @@ export default {
       // Auto-check health on mount
       checkPlaywrightHealth().then(healthy => {
         if (healthy) {
-          console.log('Playwright service is available');
+          // Playwright service is available
         }
       });
     });

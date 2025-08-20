@@ -43,7 +43,7 @@ class TerminalService {
     const oldState = this.connectionStates.get(sessionId);
     this.connectionStates.set(sessionId, state);
 
-    console.log(`Terminal ${sessionId}: ${oldState} -> ${state}`);
+    // Terminal state change
 
     // Trigger state change callback
     this.triggerCallback(sessionId, 'onStatusChange', state);
@@ -180,13 +180,13 @@ class TerminalService {
       this.connections.set(sessionId, ws);
 
       ws.onopen = () => {
-        console.log(`WebSocket opened for session ${sessionId}`);
+        // WebSocket opened for session
         this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTED);
 
         // Send initial ready check with improved timing
         setTimeout(() => {
           if (this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTED) {
-            console.log(`Terminal ${sessionId}: Auto-setting to READY after connection`);
+            // Terminal auto-setting to READY after connection
             this.setConnectionState(sessionId, CONNECTION_STATES.READY);
           }
         }, 300); // Optimized delay for backend readiness
@@ -197,7 +197,7 @@ class TerminalService {
       };
 
       ws.onclose = (event) => {
-        console.log(`WebSocket closed for session ${sessionId}:`, event.code, event.reason);
+        // WebSocket closed for session
         this.cleanupSession(sessionId);
 
         // Attempt reconnection if not intentional
@@ -233,7 +233,7 @@ class TerminalService {
 
     const delay = this.reconnectDelay * Math.pow(2, attempts); // Exponential backoff
 
-    console.log(`Attempting reconnection ${attempts + 1}/${this.maxReconnectAttempts} for session ${sessionId} in ${delay}ms`);
+    // Attempting reconnection
 
     this.setConnectionState(sessionId, CONNECTION_STATES.RECONNECTING);
 
@@ -308,7 +308,7 @@ class TerminalService {
             // Transition to ready after brief delay to ensure backend is ready
             setTimeout(() => {
               if (this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTED) {
-                console.log(`Terminal ${sessionId}: Setting to READY state`);
+                // Terminal setting to READY state
                 this.setConnectionState(sessionId, CONNECTION_STATES.READY);
               }
             }, 200); // Increased delay for better reliability
@@ -319,7 +319,7 @@ class TerminalService {
 
         case 'pong':
           // Health check response - connection is healthy
-          console.log(`Health check pong received from ${sessionId}`);
+          // Health check pong received
           if (this.getConnectionState(sessionId) !== CONNECTION_STATES.READY) {
             this.setConnectionState(sessionId, CONNECTION_STATES.READY);
           }

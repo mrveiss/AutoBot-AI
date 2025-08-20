@@ -55,8 +55,21 @@ def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
         try:
             _dashboard_generator = ValidationDashboardGenerator()
             logger.info("Dashboard generator initialized")
+        except ImportError as e:
+            logger.error(
+                f"Failed to initialize dashboard generator due to import error: {e}"
+            )
+            return None
+        except (OSError, IOError) as e:
+            logger.error(
+                "Failed to initialize dashboard generator due to "
+                f"file system error: {e}"
+            )
+            return None
         except Exception as e:
-            logger.error(f"Failed to initialize dashboard generator: {e}")
+            logger.error(
+                f"Failed to initialize dashboard generator due to unexpected error: {e}"
+            )
             return None
 
     return _dashboard_generator
@@ -77,8 +90,15 @@ def get_validation_judges() -> Optional[Dict[str, Any]]:
                 "agent_response_judge": AgentResponseJudge(),
             }
             logger.info("Validation judges initialized")
+        except ImportError as e:
+            logger.error(
+                f"Failed to initialize validation judges due to import error: {e}"
+            )
+            return None
         except Exception as e:
-            logger.error(f"Failed to initialize validation judges: {e}")
+            logger.error(
+                f"Failed to initialize validation judges due to unexpected error: {e}"
+            )
             return None
 
     return _validation_judges
@@ -115,6 +135,9 @@ async def get_dashboard_status():
             "data_retention_days": generator.data_retention_days,
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting dashboard status due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="Dashboard generator not available")
     except Exception as e:
         logger.error(f"Error getting dashboard status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -140,6 +163,18 @@ async def get_validation_report():
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(
+            f"Error generating validation report due to missing dependency: {e}"
+        )
+        raise HTTPException(status_code=503, detail="Dashboard generator not available")
+    except (OSError, IOError) as e:
+        logger.error(
+            "Error generating validation report due to " f"file system error: {e}"
+        )
+        raise HTTPException(
+            status_code=500, detail="File system error during report generation"
+        )
     except Exception as e:
         logger.error(f"Error generating validation report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -172,6 +207,30 @@ async def get_dashboard_html():
 
         return HTMLResponse(content=html_content)
 
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error generating dashboard HTML due to missing dependency: {e}")
+        return HTMLResponse(
+            content=f"""
+            <html><body>
+                <h1>Dashboard Error</h1>
+                <p>Service unavailable: Dashboard generator not available</p>
+                <p>Error: {e}</p>
+            </body></html>
+            """,
+            status_code=503,
+        )
+    except (OSError, IOError) as e:
+        logger.error(f"Error generating dashboard HTML due to file system error: {e}")
+        return HTMLResponse(
+            content=f"""
+            <html><body>
+                <h1>Dashboard Error</h1>
+                <p>File system error occurred during dashboard generation</p>
+                <p>Error: {e}</p>
+            </body></html>
+            """,
+            status_code=500,
+        )
     except Exception as e:
         logger.error(f"Error generating dashboard HTML: {e}")
         return HTMLResponse(
@@ -205,6 +264,12 @@ async def get_dashboard_file():
             media_type="text/html",
         )
 
+    except FileNotFoundError as e:
+        logger.error(f"Dashboard file not found: {e}")
+        raise HTTPException(status_code=404, detail="Dashboard file not found")
+    except (OSError, IOError) as e:
+        logger.error(f"Error serving dashboard file due to file system error: {e}")
+        raise HTTPException(status_code=500, detail="File system error")
     except Exception as e:
         logger.error(f"Error serving dashboard file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -233,6 +298,16 @@ async def generate_dashboard(
                 logger.info(
                     f"Background dashboard generation completed: {dashboard_path}"
                 )
+            except (ImportError, AttributeError) as e:
+                logger.error(
+                    "Background dashboard generation failed due to "
+                    f"missing dependency: {e}"
+                )
+            except (OSError, IOError) as e:
+                logger.error(
+                    "Background dashboard generation failed due to "
+                    f"file system error: {e}"
+                )
             except Exception as e:
                 logger.error(f"Background dashboard generation failed: {e}")
 
@@ -249,6 +324,11 @@ async def generate_dashboard(
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(
+            f"Error initiating dashboard generation due to missing dependency: {e}"
+        )
+        raise HTTPException(status_code=503, detail="Dashboard generator not available")
     except Exception as e:
         logger.error(f"Error initiating dashboard generation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -305,6 +385,9 @@ async def get_dashboard_metrics():
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting dashboard metrics due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="Dashboard generator not available")
     except Exception as e:
         logger.error(f"Error getting dashboard metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -330,6 +413,9 @@ async def get_trend_data():
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting trend data due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="Dashboard generator not available")
     except Exception as e:
         logger.error(f"Error getting trend data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -364,6 +450,9 @@ async def get_system_alerts():
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting system alerts due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="Dashboard generator not available")
     except Exception as e:
         logger.error(f"Error getting system alerts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -400,6 +489,11 @@ async def get_system_recommendations():
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(
+            f"Error getting system recommendations due to missing dependency: {e}"
+        )
+        raise HTTPException(status_code=503, detail="Dashboard generator not available")
     except Exception as e:
         logger.error(f"Error getting system recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -456,6 +550,12 @@ async def judge_workflow_step(request: dict):
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error in workflow step judgment due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="Validation judges not available")
+    except ValueError as e:
+        logger.error(f"Error in workflow step judgment due to invalid input: {e}")
+        raise HTTPException(status_code=400, detail="Invalid workflow step data")
     except Exception as e:
         logger.error(f"Error in workflow step judgment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -508,6 +608,12 @@ async def judge_agent_response(request: dict):
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error in agent response judgment due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="Validation judges not available")
+    except ValueError as e:
+        logger.error(f"Error in agent response judgment due to invalid input: {e}")
+        raise HTTPException(status_code=400, detail="Invalid agent response data")
     except Exception as e:
         logger.error(f"Error in agent response judgment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -536,6 +642,15 @@ async def get_judge_status():
             try:
                 metrics = judge.get_performance_metrics()
                 judge_metrics[judge_name] = metrics
+            except (ImportError, AttributeError) as e:
+                logger.error(
+                    f"Error getting metrics for {judge_name} due to "
+                    f"missing dependency: {e}"
+                )
+                judge_metrics[judge_name] = {
+                    "error": "Judge not available",
+                    "details": str(e),
+                }
             except Exception as e:
                 logger.error(f"Error getting metrics for {judge_name}: {e}")
                 judge_metrics[judge_name] = {"error": str(e)}
@@ -548,6 +663,9 @@ async def get_judge_status():
             "timestamp": datetime.now().isoformat(),
         }
 
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting judge status due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="Validation judges not available")
     except Exception as e:
         logger.error(f"Error getting judge status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
