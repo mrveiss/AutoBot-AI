@@ -33,13 +33,13 @@ export default {
     // Function to fetch chat history from backend
     const refreshHistory = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats`);
+        const response = await fetch(`${settings.value.backend.api_endpoint}/api/list_sessions`);
         if (response.ok) {
           const data = await response.json();
-          const chats = data.chats || [];
+          const chats = data.sessions || [];
           history.value = await Promise.all(chats.map(async (chat) => {
             try {
-              const messagesResponse = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chat.chatId}`);
+              const messagesResponse = await fetch(`${settings.value.backend.api_endpoint}/api/load_session/${chat.chatId}`);
               if (messagesResponse.ok) {
                 const data = await messagesResponse.json();
                 const messages = data.history || [];

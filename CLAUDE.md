@@ -76,6 +76,134 @@ project_root/
 - Dead code elimination assistance
 - Refactoring opportunity identification
 
+### 🌐 API Development Standards
+
+**CRITICAL: ALWAYS CHECK FOR EXISTING ENDPOINTS BEFORE CREATING NEW ONES**
+
+#### 🔍 Pre-Development API Audit (MANDATORY)
+Before creating ANY new API endpoint, you MUST:
+
+1. **Search existing endpoints**:
+   ```bash
+   # Search all backend API files for similar endpoints
+   find backend/api -name "*.py" | xargs grep -h "@router\." | grep -i "keyword"
+
+   # Check for similar functionality
+   grep -r "function_name\|endpoint_pattern" backend/api/
+
+   # Verify frontend usage patterns
+   find autobot-vue -name "*.js" -o -name "*.vue" | xargs grep -l "api/"
+   ```
+
+2. **Audit existing implementations**:
+   - Check if similar functionality already exists
+   - Identify any duplicate or overlapping endpoints
+   - Verify if existing endpoints can be extended instead
+
+3. **Document justification** if new endpoint is truly needed:
+   - Why existing endpoints cannot be used/extended
+   - What unique functionality this provides
+   - How it differs from similar endpoints
+
+#### 🚫 FORBIDDEN: API Duplication Patterns
+**NEVER CREATE** these duplicate patterns:
+
+❌ **Multiple health/status endpoints**:
+- Use existing `/api/system/health` for all health checks
+- Add module-specific details to single response
+
+❌ **Similar endpoint names**:
+- `/api/chat` vs `/api/chats` (confusing!)
+- `/api/config` vs `/api/settings` vs `/api/configuration`
+- `/api/status` vs `/api/health` vs `/api/info`
+
+❌ **Functional duplicates**:
+- Multiple terminal implementations
+- Multiple workflow systems
+- Multiple WebSocket handlers for same purpose
+
+❌ **Version confusion**:
+- `/api/endpoint` vs `/api/v1/endpoint` vs `/api/v2/endpoint`
+- Keep single versioned API pattern
+
+#### ✅ REQUIRED: API Design Standards
+**ALWAYS FOLLOW** these patterns:
+
+✅ **RESTful naming conventions**:
+```
+GET    /api/{resource}           # List all
+POST   /api/{resource}           # Create new
+GET    /api/{resource}/{id}      # Get specific
+PUT    /api/{resource}/{id}      # Update specific
+DELETE /api/{resource}/{id}      # Delete specific
+```
+
+✅ **Consistent response format**:
+```json
+{
+  "status": "success|error",
+  "data": {...},
+  "message": "descriptive message",
+  "timestamp": "ISO-8601",
+  "request_id": "unique-id"
+}
+```
+
+✅ **Single responsibility per endpoint**:
+- One endpoint = one clear purpose
+- Avoid kitchen-sink endpoints that do multiple things
+- Use query parameters for filtering/options
+
+✅ **Logical grouping by functionality**:
+```
+/api/chat/*          # All chat operations
+/api/terminal/*      # All terminal operations
+/api/workflow/*      # All workflow operations
+/api/system/*        # All system operations
+```
+
+#### 🔧 API Consolidation Process
+When you find duplicate endpoints:
+
+1. **Immediate action**:
+   - Document the duplication in `/docs/API_Duplication_Analysis.md`
+   - Do NOT create additional duplicates
+   - Use existing endpoint or consolidate first
+
+2. **Consolidation steps**:
+   - Identify which implementation is most complete/used
+   - Plan migration for deprecated endpoints
+   - Add deprecation warnings to old endpoints
+   - Update frontend to use consolidated endpoint
+   - Remove deprecated code after grace period
+
+3. **Prevention measures**:
+   - Update this CLAUDE.md with any new patterns found
+   - Add API design review to commit checklist
+   - Document API decision rationale in code comments
+
+#### 📋 API Development Checklist
+Before creating new API endpoints:
+
+- [ ] Searched for existing similar endpoints
+- [ ] Verified no functional duplicates exist
+- [ ] Checked frontend usage patterns
+- [ ] Followed RESTful naming conventions
+- [ ] Implemented consistent response format
+- [ ] Added proper error handling
+- [ ] Updated API documentation
+- [ ] Added appropriate tests
+- [ ] Verified no breaking changes to existing endpoints
+
+#### 🚨 API Emergency Procedures
+If you discover major API duplications:
+
+1. **Stop development** on duplicate endpoints
+2. **Create consolidation plan** (see `/docs/API_Consolidation_Priority_Plan.md`)
+3. **Fix critical missing endpoints** first (broken functionality)
+4. **Implement backward compatibility** during consolidation
+5. **Test thoroughly** before removing old endpoints
+
 ### 🔐 Secrets Management Requirements
 
 **IMPLEMENT COMPREHENSIVE SECRETS MANAGEMENT SYSTEM**
@@ -148,10 +276,11 @@ project_root/
 
 #### Priority Hierarchy
 1. **🔴 Critical Errors** (blocking functionality)
-2. **🟡 Warnings** (potential issues)
-3. **🔵 Security Updates** (mandatory)
-4. **🟢 Features** (new functionality)
-5. **⚪ Refactoring** (code improvement)
+2. **🟡 API Duplications** (technical debt, maintenance burden)
+3. **🟡 Warnings** (potential issues)
+4. **🔵 Security Updates** (mandatory)
+5. **🟢 Features** (new functionality)
+6. **⚪ Refactoring** (code improvement)
 
 ### 🛠️ Quick Commands Reference
 
@@ -166,6 +295,10 @@ project_root/
 flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503  # Quality check
 python test_phase9_ai.py                                             # Phase 9 testing
 python test_npu_worker.py                                           # NPU testing
+
+# API DUPLICATION PREVENTION (MANDATORY BEFORE NEW ENDPOINTS)
+find backend/api -name "*.py" | xargs grep -h "@router\." | grep -i "keyword"  # Search existing endpoints
+find autobot-vue -name "*.js" -o -name "*.vue" | xargs grep -l "api/"         # Check frontend usage
 
 # PHASE VALIDATION (ON-DEMAND ONLY)
 # NO programmatic phase validation - use GUI "Load Validation Data" button

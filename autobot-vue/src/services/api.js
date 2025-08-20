@@ -36,15 +36,19 @@ class ApiService {
   }
 
   async getChatHistory() {
-    return this.get('/api/chat/history')
+    return this.get('/api/history')
+  }
+
+  async getChatSessions() {
+    return this.get('/api/list_sessions')
   }
 
   async getChatMessages(chatId) {
-    return this.get(`/api/chat/history/${chatId}`)
+    return this.get(`/api/load_session/${chatId}`)
   }
 
   async deleteChatHistory(chatId) {
-    return this.delete(`/api/chat/history/${chatId}`)
+    return this.delete(`/api/chats/${chatId}`)
   }
 
   // Workflow API methods

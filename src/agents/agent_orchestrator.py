@@ -1,24 +1,60 @@
 """
 Agent Orchestrator - Coordinates specialized agents for optimal task handling.
 
-Routes requests to appropriate agents based on request type and context.
-Uses Llama 3.2 3B model for complex routing decisions and coordination.
+Enhanced orchestrator that supports both legacy agent routing and distributed
+agent communication protocols. Routes requests to appropriate agents based on
+request type and context, with fallback capabilities.
 """
 
+import asyncio
 import logging
+import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
 
+# Import communication protocol
+try:
+    from src.protocols.agent_communication import get_communication_manager
+
+    COMMUNICATION_AVAILABLE = True
+except ImportError:
+    COMMUNICATION_AVAILABLE = False
+    logging.warning("Agent communication protocol not available")
+
+# Import base agent for distributed capabilities
+try:
+    from .base_agent import AgentHealth, AgentRequest, BaseAgent
+
+    DISTRIBUTED_AGENTS_AVAILABLE = True
+except ImportError:
+    DISTRIBUTED_AGENTS_AVAILABLE = False
+
 # Import specialized agents
-from .chat_agent import get_chat_agent
-from .containerized_librarian_assistant import get_containerized_librarian_assistant
-from .enhanced_system_commands_agent import get_enhanced_system_commands_agent
-from .kb_librarian_agent import get_kb_librarian
-from .rag_agent import get_rag_agent
+try:
+    from .chat_agent import get_chat_agent
+    from .containerized_librarian_assistant import get_containerized_librarian_assistant
+    from .enhanced_system_commands_agent import get_enhanced_system_commands_agent
+    from .kb_librarian_agent import get_kb_librarian
+    from .rag_agent import get_rag_agent
+
+    LEGACY_AGENTS_AVAILABLE = True
+except ImportError:
+    LEGACY_AGENTS_AVAILABLE = False
+    logging.warning("Some legacy agents not available")
+
+# Import distributed agents
+try:
+    from .classification_agent import ClassificationAgent
+    from .npu_code_search_agent import NPUCodeSearchAgent
+
+    DISTRIBUTED_AGENTS_AVAILABLE = True
+except ImportError:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -46,31 +82,200 @@ class AgentCapability:
     resource_usage: str
 
 
+@dataclass
+class DistributedAgentInfo:
+    """Information about a distributed agent"""
+
+    agent: "BaseAgent"
+    health: "AgentHealth"
+    last_health_check: datetime
+    active_tasks: Set[str]
+
+
 class AgentOrchestrator:
     """
-    Orchestrates multiple specialized agents for optimal task distribution.
+    Enhanced orchestrator that coordinates both legacy and distributed agents.
 
-    Uses a 3B model for routing decisions and coordinates responses from
-    specialized 1B and 3B agents based on task requirements.
+    Supports dual modes:
+    1. Legacy mode: Uses specialized agents with direct method calls
+    2. Distributed mode: Uses standardized communication protocol
+
+    Automatically falls back between modes based on availability.
     """
 
     def __init__(self):
-        """Initialize the Agent Orchestrator."""
+        """Initialize the Enhanced Agent Orchestrator."""
         self.llm_interface = LLMInterface()
         self.model_name = global_config_manager.get_task_specific_model("orchestrator")
         self.agent_type = "orchestrator"
+        self.orchestrator_id = f"orchestrator_{uuid.uuid4().hex[:8]}"
 
         # Initialize agent capabilities map
         self.agent_capabilities = self._initialize_agent_capabilities()
 
-        # Agent instances (lazy loaded)
+        # Legacy agent instances (lazy loaded)
         self._chat_agent = None
         self._system_commands_agent = None
         self._rag_agent = None
         self._kb_librarian = None
         self._research_agent = None
 
-        logger.info(f"Agent Orchestrator initialized with model: {self.model_name}")
+        # Distributed agent management
+        self.distributed_agents: Dict[str, DistributedAgentInfo] = {}
+        self.communication_manager = None
+        self.health_check_interval = 30.0
+        self.health_monitor_task = None
+        self.is_running = False
+
+        # Initialize communication if available
+        if COMMUNICATION_AVAILABLE:
+            try:
+                self.communication_manager = get_communication_manager()
+            except Exception as e:
+                logger.warning(f"Could not initialize communication manager: {e}")
+
+        # Built-in distributed agents
+        self.builtin_distributed_agents = {}
+        if DISTRIBUTED_AGENTS_AVAILABLE:
+            self.builtin_distributed_agents = {
+                "classification": ClassificationAgent,
+                "npu_code_search": NPUCodeSearchAgent,
+            }
+
+        logger.info(f"Enhanced Agent Orchestrator initialized: {self.orchestrator_id}")
+        logger.info(f"Communication available: {COMMUNICATION_AVAILABLE}")
+        logger.info(f"Legacy agents available: {LEGACY_AGENTS_AVAILABLE}")
+        logger.info(f"Distributed agents available: {DISTRIBUTED_AGENTS_AVAILABLE}")
+
+    async def start_distributed_mode(self):
+        """Start distributed agent management"""
+        if not COMMUNICATION_AVAILABLE or not DISTRIBUTED_AGENTS_AVAILABLE:
+            logger.warning("Distributed mode not available")
+            return False
+
+        if self.is_running:
+            logger.warning("Distributed mode already running")
+            return True
+
+        try:
+            self.is_running = True
+
+            # Initialize built-in distributed agents
+            await self._initialize_distributed_agents()
+
+            # Start health monitoring
+            self.health_monitor_task = asyncio.create_task(self._health_monitor_loop())
+
+            logger.info("Distributed agent mode started successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to start distributed mode: {e}")
+            self.is_running = False
+            return False
+
+    async def stop_distributed_mode(self):
+        """Stop distributed agent management"""
+        if not self.is_running:
+            return
+
+        self.is_running = False
+
+        # Cancel health monitoring
+        if self.health_monitor_task:
+            self.health_monitor_task.cancel()
+
+        # Shutdown distributed agents
+        for agent_id in list(self.distributed_agents.keys()):
+            await self._unregister_distributed_agent(agent_id)
+
+        logger.info("Distributed agent mode stopped")
+
+    async def _initialize_distributed_agents(self):
+        """Initialize built-in distributed agents"""
+        for agent_type, agent_class in self.builtin_distributed_agents.items():
+            try:
+                agent = agent_class()
+                await self._register_distributed_agent(agent)
+                logger.info(f"Initialized distributed agent: {agent_type}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to initialize distributed agent {agent_type}: {e}"
+                )
+
+    async def _register_distributed_agent(self, agent: "BaseAgent") -> bool:
+        """Register a distributed agent"""
+        try:
+            agent_id = agent.agent_id
+
+            # Initialize agent communication
+            if not agent.communication_protocol:
+                await agent.initialize_communication(agent.get_capabilities())
+
+            # Perform health check
+            health = await agent.health_check()
+
+            # Register agent
+            self.distributed_agents[agent_id] = DistributedAgentInfo(
+                agent=agent,
+                health=health,
+                last_health_check=datetime.now(),
+                active_tasks=set(),
+            )
+
+            logger.info(f"Registered distributed agent: {agent_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to register distributed agent: {e}")
+            return False
+
+    async def _unregister_distributed_agent(self, agent_id: str) -> bool:
+        """Unregister a distributed agent"""
+        try:
+            if agent_id not in self.distributed_agents:
+                return False
+
+            agent_info = self.distributed_agents[agent_id]
+            await agent_info.agent.shutdown_communication()
+            del self.distributed_agents[agent_id]
+
+            logger.info(f"Unregistered distributed agent: {agent_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to unregister distributed agent {agent_id}: {e}")
+            return False
+
+    async def _health_monitor_loop(self):
+        """Background health monitoring for distributed agents"""
+        while self.is_running:
+            try:
+                for agent_id, agent_info in list(self.distributed_agents.items()):
+                    try:
+                        health = await agent_info.agent.health_check()
+                        agent_info.health = health
+                        agent_info.last_health_check = datetime.now()
+
+                        if health.status.value != "healthy":
+                            logger.warning(
+                                f"Distributed agent {agent_id} health issue: "
+                                f"{health.status.value}"
+                            )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Health check failed for distributed agent "
+                            f"{agent_id}: {e}"
+                        )
+
+                await asyncio.sleep(self.health_check_interval)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in distributed health monitor: {e}")
+                await asyncio.sleep(5)
 
     def _initialize_agent_capabilities(self) -> Dict[AgentType, AgentCapability]:
         """Initialize the capabilities map for all agents."""
@@ -151,38 +356,48 @@ class AgentOrchestrator:
         request: str,
         context: Optional[Dict[str, Any]] = None,
         chat_history: Optional[List[Dict[str, Any]]] = None,
+        preferred_agents: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
-        Process a request by routing to appropriate agent(s).
+        Enhanced request processing supporting both legacy and distributed agents.
 
         Args:
             request: User's request
             context: Optional context information
             chat_history: Optional chat history for context
+            preferred_agents: Optional list of preferred agents to use
 
         Returns:
             Dict containing response and routing information
         """
         try:
-            logger.info(f"Agent Orchestrator processing request: {request[:50]}...")
+            logger.info(
+                f"Enhanced Agent Orchestrator processing request: {request[:50]}..."
+            )
 
-            # Determine optimal agent routing
-            routing_decision = await self._determine_agent_routing(request, context)
+            # Try distributed agents first if available and running
+            if self.is_running and len(self.distributed_agents) > 0:
+                try:
+                    return await self._process_with_distributed_agents(
+                        request, context, chat_history, preferred_agents
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Distributed processing failed: {e}, falling back to legacy"
+                    )
 
-            # Execute based on routing decision
-            if routing_decision["strategy"] == "single_agent":
-                return await self._execute_single_agent(
-                    routing_decision["primary_agent"], request, context, chat_history
-                )
-            elif routing_decision["strategy"] == "multi_agent":
-                return await self._execute_multi_agent(
-                    routing_decision, request, context, chat_history
-                )
-            else:
-                # Fallback to direct orchestrator handling
-                return await self._execute_orchestrator_fallback(
+            # Fallback to legacy agent processing
+            if LEGACY_AGENTS_AVAILABLE:
+                return await self._process_with_legacy_agents(
                     request, context, chat_history
                 )
+            else:
+                return {
+                    "status": "error",
+                    "response": "No agents available for processing",
+                    "agent_used": "none",
+                    "routing_strategy": "no_agents_available",
+                }
 
         except Exception as e:
             logger.error(f"Agent Orchestrator error: {e}")
@@ -193,6 +408,146 @@ class AgentOrchestrator:
                 "agent_used": "orchestrator",
                 "routing_strategy": "error_fallback",
             }
+
+    async def _process_with_distributed_agents(
+        self,
+        request: str,
+        context: Optional[Dict[str, Any]] = None,
+        chat_history: Optional[List[Dict[str, Any]]] = None,
+        preferred_agents: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Process request using distributed agent system"""
+
+        # Select best distributed agent
+        selected_agent = await self._select_distributed_agent(
+            request, context, preferred_agents
+        )
+
+        if not selected_agent:
+            raise Exception("No suitable distributed agent found")
+
+        # Execute request with selected agent
+        task_id = f"task_{uuid.uuid4().hex[:8]}"
+        start_time = datetime.now()
+
+        try:
+            # Track active task
+            self.distributed_agents[selected_agent.agent_id].active_tasks.add(task_id)
+
+            # Create agent request
+            agent_request = AgentRequest(
+                request_id=task_id,
+                agent_type=selected_agent.agent_type,
+                action="process_user_request",
+                payload={
+                    "request": request,
+                    "context": context or {},
+                    "chat_history": chat_history or [],
+                },
+                priority="normal",
+            )
+
+            # Execute request
+            response = await selected_agent.process_request(agent_request)
+            execution_time = (datetime.now() - start_time).total_seconds()
+
+            return {
+                "status": response.status,
+                "response": response.result.get("response", "No response")
+                if response.result
+                else "No result",
+                "agent_used": selected_agent.agent_id,
+                "agent_type": selected_agent.agent_type,
+                "execution_time": execution_time,
+                "routing_strategy": "distributed",
+                "task_id": task_id,
+            }
+
+        finally:
+            # Remove from active tasks
+            if selected_agent.agent_id in self.distributed_agents:
+                self.distributed_agents[selected_agent.agent_id].active_tasks.discard(
+                    task_id
+                )
+
+    async def _select_distributed_agent(
+        self,
+        request: str,
+        context: Optional[Dict[str, Any]] = None,
+        preferred_agents: Optional[List[str]] = None,
+    ) -> Optional["BaseAgent"]:
+        """Select the best distributed agent for the request"""
+
+        # Filter healthy agents
+        healthy_agents = [
+            info.agent
+            for info in self.distributed_agents.values()
+            if info.health.status.value == "healthy"
+        ]
+
+        if not healthy_agents:
+            return None
+
+        # Simple selection logic - can be enhanced with classification
+        request_lower = request.lower()
+
+        # Prefer specific agent types based on content
+        if any(
+            term in request_lower for term in ["search", "find", "code", "function"]
+        ):
+            npu_agents = [
+                a for a in healthy_agents if a.agent_type == "npu_code_search"
+            ]
+            if npu_agents:
+                return npu_agents[0]
+
+        if any(term in request_lower for term in ["classify", "category", "type"]):
+            classification_agents = [
+                a for a in healthy_agents if a.agent_type == "classification"
+            ]
+            if classification_agents:
+                return classification_agents[0]
+
+        # Prefer explicitly requested agents
+        if preferred_agents:
+            for agent in healthy_agents:
+                if (
+                    agent.agent_id in preferred_agents
+                    or agent.agent_type in preferred_agents
+                ):
+                    return agent
+
+        # Return least busy agent
+        return min(
+            healthy_agents,
+            key=lambda a: len(self.distributed_agents[a.agent_id].active_tasks),
+        )
+
+    async def _process_with_legacy_agents(
+        self,
+        request: str,
+        context: Optional[Dict[str, Any]] = None,
+        chat_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Process request using legacy agent system"""
+
+        # Determine optimal agent routing
+        routing_decision = await self._determine_agent_routing(request, context)
+
+        # Execute based on routing decision
+        if routing_decision["strategy"] == "single_agent":
+            return await self._execute_single_agent(
+                routing_decision["primary_agent"], request, context, chat_history
+            )
+        elif routing_decision["strategy"] == "multi_agent":
+            return await self._execute_multi_agent(
+                routing_decision, request, context, chat_history
+            )
+        else:
+            # Fallback to direct orchestrator handling
+            return await self._execute_orchestrator_fallback(
+                request, context, chat_history
+            )
 
     async def _determine_agent_routing(
         self, request: str, context: Optional[Dict[str, Any]] = None
@@ -646,6 +1001,53 @@ Consider:
         except Exception as e:
             logger.error(f"Error extracting response content: {e}")
             return "Error extracting response"
+
+    async def get_statistics(self) -> Dict[str, Any]:
+        """Get orchestrator statistics and performance metrics"""
+        try:
+            stats = {
+                "orchestrator_id": self.orchestrator_id,
+                "model_name": self.model_name,
+                "is_running": self.is_running,
+                "communication_available": COMMUNICATION_AVAILABLE,
+                "legacy_agents_available": LEGACY_AGENTS_AVAILABLE,
+                "distributed_agents_available": DISTRIBUTED_AGENTS_AVAILABLE,
+                "agent_capabilities_count": len(self.agent_capabilities),
+                "distributed_agents": {},
+                "legacy_agents": {},
+                "health_check_interval": self.health_check_interval,
+            }
+
+            # Distributed agent statistics
+            if self.distributed_agents:
+                for agent_id, agent_info in self.distributed_agents.items():
+                    stats["distributed_agents"][agent_id] = {
+                        "agent_type": agent_info.agent.agent_type,
+                        "health_status": agent_info.health.status.value,
+                        "last_health_check": agent_info.last_health_check.isoformat(),
+                        "active_tasks": len(agent_info.active_tasks),
+                        "active_task_list": list(agent_info.active_tasks),
+                    }
+
+            # Legacy agent status
+            legacy_agent_status = {
+                "chat_agent": self._chat_agent is not None,
+                "system_commands_agent": self._system_commands_agent is not None,
+                "rag_agent": self._rag_agent is not None,
+                "kb_librarian": self._kb_librarian is not None,
+                "research_agent": self._research_agent is not None,
+            }
+            stats["legacy_agents"] = legacy_agent_status
+
+            return stats
+
+        except Exception as e:
+            logger.error(f"Error getting orchestrator statistics: {e}")
+            return {
+                "error": str(e),
+                "orchestrator_id": self.orchestrator_id,
+                "is_running": self.is_running,
+            }
 
 
 # Singleton instance
