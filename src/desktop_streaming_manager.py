@@ -6,6 +6,7 @@ Provides NoVNC integration and WebSocket-based desktop streaming capabilities
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional
 import websockets
 
 from src.task_execution_tracker import task_tracker
+from src.utils.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -460,7 +462,7 @@ class DesktopStreamingManager:
                         "click",
                         str(button),
                     ],
-                    env={**os.environ, "DISPLAY": f":{display}"},
+                    env={**config_manager.get("system.environment", os.environ), "DISPLAY": f":{display}"},
                 )
 
             elif control_type == "key_press":
@@ -468,7 +470,7 @@ class DesktopStreamingManager:
                 if key:
                     subprocess.run(
                         ["xdotool", "key", key],
-                        env={**os.environ, "DISPLAY": f":{display}"},
+                        env={**config_manager.get("system.environment", os.environ), "DISPLAY": f":{display}"},
                     )
 
             elif control_type == "type_text":
@@ -476,7 +478,7 @@ class DesktopStreamingManager:
                 if text:
                     subprocess.run(
                         ["xdotool", "type", text],
-                        env={**os.environ, "DISPLAY": f":{display}"},
+                        env={**config_manager.get("system.environment", os.environ), "DISPLAY": f":{display}"},
                     )
 
         except Exception as e:

@@ -14,6 +14,8 @@ from typing import Any, Dict
 
 import psutil
 
+from src.utils.config_manager import config_manager
+
 logger = logging.getLogger(__name__)
 
 
@@ -517,7 +519,8 @@ class HardwareAccelerationManager:
                 }
             )
 
-            # Apply environment variables
+            # Store environment variables in config and apply them
+            config_manager.set("runtime.environment_overrides", env_vars)
             for key, value in env_vars.items():
                 os.environ[key] = value
                 logger.debug(f"Set {key}={value}")
