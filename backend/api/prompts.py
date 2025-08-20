@@ -1,18 +1,36 @@
 import asyncio
 import logging
 import os
-import aiofiles
+import time
+from typing import Dict, Optional
 
+import aiofiles
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
+# Cache for prompts to avoid re-reading files on every request
+_prompts_cache: Optional[Dict] = None
+_cache_timestamp: float = 0
+_cache_ttl: int = 300  # 5 minutes cache
+
 
 @router.get("/")
 async def get_prompts():
+    global _prompts_cache, _cache_timestamp
+
     try:
+        # Check cache first
+        current_time = time.time()
+        if _prompts_cache and (current_time - _cache_timestamp) < _cache_ttl:
+            logger.info(
+                f"Returning cached prompts "
+                f"({len(_prompts_cache.get('prompts', []))} items)"
+            )
+            return _prompts_cache
+
         # Adjust path to look for prompts directory at project root
         prompts_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
@@ -20,52 +38,138 @@ async def get_prompts():
         prompts = []
         defaults = {}
 
-        # Function to read prompt files recursively - PERFORMANCE FIX: Make async
-        async def read_prompt_files(directory, base_path=""):
-            entries = await asyncio.to_thread(os.listdir, directory)
-            for entry in entries:
-                full_path = os.path.join(directory, entry)
-                rel_path = os.path.join(base_path, entry) if base_path else entry
-                if await asyncio.to_thread(os.path.isdir, full_path):
-                    await read_prompt_files(full_path, rel_path)
-                elif await asyncio.to_thread(os.path.isfile, full_path) and (
-                    entry.endswith(".txt") or entry.endswith(".md")
-                ):
-                    try:
-                        # PERFORMANCE FIX: Convert to async file I/O
+        # PERFORMANCE FIX: Add timeout and limit concurrent file reads
+        semaphore = asyncio.Semaphore(10)  # Max 10 concurrent file reads
+
+        async def read_single_file(
+            full_path: str, rel_path: str, entry: str, base_path: str
+        ):
+            """Read a single prompt file with timeout protection"""
+            async with semaphore:  # Limit concurrent reads
+                try:
+                    # PERFORMANCE FIX: Add timeout to file operations
+                    async with asyncio.timeout(5.0):  # 5 second timeout per file
                         async with aiofiles.open(full_path, "r", encoding="utf-8") as f:
                             content = await f.read()
-                        prompt_id = (
-                            rel_path.replace("/", "_")
-                            .replace("\\", "_")
-                            .rsplit(".", 1)[0]
-                        )
-                        prompt_type = base_path if base_path else "custom"
-                        prompts.append(
-                            {
-                                "id": prompt_id,
-                                "name": entry.rsplit(".", 1)[0],
-                                "type": prompt_type,
-                                "path": rel_path,
-                                "content": content,
-                            }
-                        )
-                        if "default" in directory:
-                            defaults[prompt_id] = content
-                    except Exception as e:
-                        logger.error(f"Error reading prompt file {full_path}: {str(e)}")
 
-        # Read prompts from the prompts directory
+                    prompt_id = (
+                        rel_path.replace("/", "_").replace("\\", "_").rsplit(".", 1)[0]
+                    )
+                    prompt_type = base_path if base_path else "custom"
+
+                    prompt_info = {
+                        "id": prompt_id,
+                        "name": entry.rsplit(".", 1)[0],
+                        "type": prompt_type,
+                        "path": rel_path,
+                        "content": content[:1000],  # Limit content size for
+                        # initial load
+                        "full_content_available": len(content) > 1000,
+                    }
+
+                    default_info = None
+                    if "default" in full_path:
+                        default_info = (prompt_id, content)
+
+                    return prompt_info, default_info
+
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout reading prompt file {full_path}")
+                    return None, None
+                except Exception as e:
+                    logger.error(f"Error reading prompt file {full_path}: {str(e)}")
+                    return None, None
+
+        # Function to collect prompt files recursively - PERFORMANCE FIX: Make concurrent
+        async def collect_prompt_files(directory, base_path=""):
+            """Collect all prompt files without reading content first"""
+            try:
+                entries = await asyncio.to_thread(os.listdir, directory)
+                tasks = []
+
+                for entry in entries:
+                    full_path = os.path.join(directory, entry)
+                    rel_path = os.path.join(base_path, entry) if base_path else entry
+
+                    if await asyncio.to_thread(os.path.isdir, full_path):
+                        # Recurse into subdirectories
+                        sub_tasks = await collect_prompt_files(full_path, rel_path)
+                        tasks.extend(sub_tasks)
+                    elif await asyncio.to_thread(os.path.isfile, full_path) and (
+                        entry.endswith(".txt") or entry.endswith(".md")
+                    ):
+                        # Add file read task
+                        task = read_single_file(full_path, rel_path, entry, base_path)
+                        tasks.append(task)
+
+                return tasks
+
+            except Exception as e:
+                logger.error(f"Error collecting files from {directory}: {e}")
+                return []
+
+        # Read prompts from the prompts directory with timeout protection
         if os.path.exists(prompts_dir):
-            await read_prompt_files(prompts_dir)
+            try:
+                # PERFORMANCE FIX: Add overall timeout for the entire operation
+                # Use asyncio.wait_for for Python < 3.11 compatibility
+                async def load_all_prompts():
+                    # Collect all file read tasks
+                    file_tasks = await collect_prompt_files(prompts_dir)
+                    logger.info(f"Found {len(file_tasks)} prompt files to read")
+
+                    # Execute all file reads concurrently
+                    results = await asyncio.gather(*file_tasks, return_exceptions=True)
+
+                    # Process results
+                    for result in results:
+                        if isinstance(result, Exception):
+                            logger.warning(f"File read failed: {result}")
+                            continue
+
+                        prompt_info, default_info = result
+                        if prompt_info:
+                            prompts.append(prompt_info)
+                        if default_info:
+                            defaults[default_info[0]] = default_info[1]
+
+                # 25 second overall timeout using wait_for
+                await asyncio.wait_for(load_all_prompts(), timeout=25.0)
+
+            except asyncio.TimeoutError:
+                logger.error("Prompts loading timed out after 25 seconds")
+                # Return partial results
+                if not prompts:
+                    raise HTTPException(
+                        status_code=504,
+                        detail="Prompts loading timed out. Please try again or contact administrator.",
+                    )
         else:
             logger.warning(f"Prompts directory {prompts_dir} not found")
 
-        logger.info(f"Returning {len(prompts)} prompts")
-        return {"prompts": prompts, "defaults": defaults}
+        # Cache the results
+        _prompts_cache = {"prompts": prompts, "defaults": defaults}
+        _cache_timestamp = current_time
+
+        logger.info(f"Successfully loaded {len(prompts)} prompts")
+        return _prompts_cache
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        logger.error(f"Error getting prompts: {str(e)}")
+        logger.error(f"Error getting prompts: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error getting prompts: {str(e)}")
+
+
+@router.post("/cache/clear")
+async def clear_prompts_cache():
+    """Clear the prompts cache to force reload on next request"""
+    global _prompts_cache, _cache_timestamp
+    _prompts_cache = None
+    _cache_timestamp = 0
+    logger.info("Prompts cache cleared")
+    return {"status": "success", "message": "Prompts cache cleared"}
 
 
 @router.post("/{prompt_id}")

@@ -14,34 +14,298 @@
 
     <!-- Search Tab -->
     <div v-if="activeTab === 'search'" class="tab-content">
-      <h3>Search Knowledge Base</h3>
-      <div class="search-form">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Enter search query..."
-          @keyup.enter="performSearch"
-        />
-        <button @click="performSearch" :disabled="searching" aria-label="{{ searching ? 'searching...' : 'search' }}">
-          {{ searching ? 'Searching...' : 'Search' }}
+      <div class="search-header">
+        <h3>Search Knowledge Base</h3>
+        <button
+          @click="toggleAdvancedSearch"
+          class="toggle-advanced-btn"
+          :class="{ 'active': showAdvancedSearch }"
+        >
+          {{ showAdvancedSearch ? 'Simple Search' : 'Advanced Search' }}
         </button>
       </div>
 
-      <div v-if="searchResults.length > 0" class="search-results">
-        <h4>Search Results ({{ searchResults.length }})</h4>
-        <div v-for="(result, index) in searchResults" :key="result.id || `result-${index}`" class="search-result">
-          <div class="result-score">Score: {{ result.score?.toFixed(3) || 'N/A' }}</div>
-          <div class="result-content">{{ result.content || result.text || 'No content' }}</div>
-          <div class="result-metadata" v-if="result.metadata">
-            <span v-for="(value, key) in result.metadata" :key="key">
-              <strong>{{ key }}:</strong> {{ value }}
-            </span>
+      <div class="search-form">
+        <!-- Main search input -->
+        <div class="search-input-container">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Enter search query..."
+            @keyup.enter="performSearch"
+            @input="onSearchInput"
+            class="main-search-input"
+          />
+          <button
+            @click="performSearch"
+            :disabled="searching || !searchQuery.trim()"
+            class="search-btn"
+          >
+            {{ searching ? 'Searching...' : 'Search' }}
+          </button>
+        </div>
+
+        <!-- Search suggestions -->
+        <div v-if="showSuggestions && searchSuggestions.length > 0" class="search-suggestions">
+          <div
+            v-for="suggestion in searchSuggestions"
+            :key="suggestion"
+            @click="applySuggestion(suggestion)"
+            class="suggestion-item"
+          >
+            {{ suggestion }}
+          </div>
+        </div>
+
+        <!-- Advanced search filters -->
+        <div v-if="showAdvancedSearch" class="advanced-search">
+          <div class="filter-row">
+            <div class="filter-group">
+              <label>Content Type:</label>
+              <select v-model="searchFilters.contentType">
+                <option value="">All Types</option>
+                <option value="text">Text</option>
+                <option value="document">Document</option>
+                <option value="code">Code</option>
+                <option value="note">Note</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label>Collection:</label>
+              <select v-model="searchFilters.collection">
+                <option value="">All Collections</option>
+                <option v-for="collection in availableCollections" :key="collection" :value="collection">
+                  {{ collection }}
+                </option>
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label>Date Range:</label>
+              <select v-model="searchFilters.dateRange">
+                <option value="">Any Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="filter-row">
+            <div class="filter-group">
+              <label>Min Score:</label>
+              <input
+                v-model.number="searchFilters.minScore"
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                class="score-slider"
+              />
+              <span class="score-value">{{ searchFilters.minScore.toFixed(1) }}</span>
+            </div>
+
+            <div class="filter-group">
+              <label>Tags:</label>
+              <input
+                v-model="searchFilters.tags"
+                type="text"
+                placeholder="Enter tags (comma separated)"
+                class="tags-input"
+              />
+            </div>
+          </div>
+
+          <div class="search-options">
+            <label class="checkbox-option">
+              <input v-model="searchFilters.exactMatch" type="checkbox" />
+              Exact phrase matching
+            </label>
+            <label class="checkbox-option">
+              <input v-model="searchFilters.includeMetadata" type="checkbox" />
+              Search in metadata
+            </label>
+            <label class="checkbox-option">
+              <input v-model="searchFilters.caseSensitive" type="checkbox" />
+              Case sensitive
+            </label>
           </div>
         </div>
       </div>
 
+      <!-- Search results header with sorting -->
+      <div v-if="searchResults.length > 0" class="results-header">
+        <div class="results-info">
+          <h4>Search Results ({{ filteredResults.length }} of {{ searchResults.length }})</h4>
+          <span class="search-time" v-if="searchTime">Found in {{ searchTime }}ms</span>
+        </div>
+        <div class="results-controls">
+          <div class="sort-controls">
+            <label>Sort by:</label>
+            <select v-model="sortBy" @change="sortResults">
+              <option value="score">Relevance Score</option>
+              <option value="date">Date Modified</option>
+              <option value="title">Title</option>
+              <option value="type">Content Type</option>
+            </select>
+            <button @click="toggleSortOrder" class="sort-order-btn">
+              {{ sortOrder === 'desc' ? '↓' : '↑' }}
+            </button>
+          </div>
+          <div class="view-controls">
+            <button
+              @click="resultsViewMode = 'list'"
+              :class="{ active: resultsViewMode === 'list' }"
+              class="view-mode-btn"
+            >
+              List
+            </button>
+            <button
+              @click="resultsViewMode = 'cards'"
+              :class="{ active: resultsViewMode === 'cards' }"
+              class="view-mode-btn"
+            >
+              Cards
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Enhanced search results -->
+      <div v-if="filteredResults.length > 0" class="search-results" :class="resultsViewMode">
+        <div
+          v-for="(result, index) in paginatedResults"
+          :key="result.id || `result-${index}`"
+          class="search-result"
+          :class="{ 'high-score': result.score > 0.8 }"
+        >
+          <div class="result-header">
+            <div class="result-title">
+              <h5 v-html="highlightText(getResultTitle(result), searchQuery)"></h5>
+              <div class="result-badges">
+                <span class="badge score" :class="getScoreClass(result.score)">
+                  {{ result.score?.toFixed(2) || '0.00' }}
+                </span>
+                <span v-if="result.type" class="badge type">{{ result.type }}</span>
+                <span v-if="result.collection" class="badge collection">{{ result.collection }}</span>
+              </div>
+            </div>
+            <div class="result-actions">
+              <button @click="viewResult(result)" class="action-btn view-btn" title="View Full Content">
+                👁️
+              </button>
+              <button @click="useResult(result)" class="action-btn use-btn" title="Use in Chat">
+                💬
+              </button>
+              <button @click="copyResult(result)" class="action-btn copy-btn" title="Copy Content">
+                📋
+              </button>
+            </div>
+          </div>
+
+          <div class="result-content">
+            <p v-html="highlightText(getResultPreview(result), searchQuery)"></p>
+          </div>
+
+          <div class="result-metadata" v-if="result.metadata || result.tags">
+            <div v-if="result.tags && result.tags.length > 0" class="result-tags">
+              <span class="icon">🏷️</span>
+              <span v-for="tag in result.tags.slice(0, 3)" :key="tag" class="tag">{{ tag }}</span>
+              <span v-if="result.tags.length > 3" class="more-tags">+{{ result.tags.length - 3 }}</span>
+            </div>
+
+            <div v-if="result.metadata" class="metadata-items">
+              <span v-if="result.metadata.source" class="metadata-item">
+                <span class="icon">📄</span> {{ result.metadata.source }}
+              </span>
+              <span v-if="result.metadata.created" class="metadata-item">
+                <span class="icon">📅</span> {{ formatDate(result.metadata.created) }}
+              </span>
+              <span v-if="result.content" class="metadata-item">
+                <span class="icon">📏</span> {{ formatContentSize(result.content.length) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div v-if="totalPages > 1" class="pagination">
+          <button
+            @click="currentPage = 1"
+            :disabled="currentPage === 1"
+            class="page-btn"
+          >
+            First
+          </button>
+          <button
+            @click="currentPage--"
+            :disabled="currentPage === 1"
+            class="page-btn"
+          >
+            Prev
+          </button>
+
+          <span class="page-info">
+            Page {{ currentPage }} of {{ totalPages }}
+          </span>
+
+          <button
+            @click="currentPage++"
+            :disabled="currentPage === totalPages"
+            class="page-btn"
+          >
+            Next
+          </button>
+          <button
+            @click="currentPage = totalPages"
+            :disabled="currentPage === totalPages"
+            class="page-btn"
+          >
+            Last
+          </button>
+        </div>
+      </div>
+
       <div v-else-if="searchPerformed && !searching" class="no-results">
-        No results found for "{{ lastSearchQuery }}"
+        <div class="empty-state">
+          <span class="icon large">🔍</span>
+          <h4>No results found</h4>
+          <p>No matches found for "<strong>{{ lastSearchQuery }}</strong>"</p>
+          <div class="suggestions">
+            <h5>Try:</h5>
+            <ul>
+              <li>Using different keywords</li>
+              <li>Checking your spelling</li>
+              <li>Using fewer or more general terms</li>
+              <li v-if="showAdvancedSearch">Adjusting your filters</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick search tips -->
+      <div v-if="!searchPerformed" class="search-tips">
+        <h4>Search Tips</h4>
+        <div class="tips-grid">
+          <div class="tip-item">
+            <span class="tip-icon">🔍</span>
+            <strong>Basic Search:</strong> Type keywords to find relevant content
+          </div>
+          <div class="tip-item">
+            <span class="tip-icon">🎯</span>
+            <strong>Exact Match:</strong> Use quotes for exact phrases "like this"
+          </div>
+          <div class="tip-item">
+            <span class="tip-icon">🏷️</span>
+            <strong>Tags:</strong> Search by tags using #tag syntax
+          </div>
+          <div class="tip-item">
+            <span class="tip-icon">⚙️</span>
+            <strong>Advanced:</strong> Use advanced search for precise filtering
+          </div>
+        </div>
       </div>
     </div>
 
@@ -620,7 +884,7 @@
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 
 export default {
@@ -767,24 +1031,289 @@ export default {
       }
     };
 
-    // Search functionality
+    // Enhanced Search functionality
+    const showAdvancedSearch = ref(false);
+    const showSuggestions = ref(false);
+    const searchSuggestions = ref([]);
+    const searchTime = ref(null);
+
+    // Search filters
+    const searchFilters = ref({
+      contentType: '',
+      collection: '',
+      dateRange: '',
+      minScore: 0.0,
+      tags: '',
+      exactMatch: false,
+      includeMetadata: true,
+      caseSensitive: false
+    });
+
+    // Results management
+    const sortBy = ref('score');
+    const sortOrder = ref('desc');
+    const resultsViewMode = ref('list');
+    const currentPage = ref(1);
+    const resultsPerPage = ref(10);
+    const filteredResults = ref([]);
+    const availableCollections = ref(['default', 'docs', 'code', 'notes']);
+
+    // Computed properties for pagination
+    const totalPages = computed(() => Math.ceil(filteredResults.value.length / resultsPerPage.value));
+    const paginatedResults = computed(() => {
+      const start = (currentPage.value - 1) * resultsPerPage.value;
+      const end = start + resultsPerPage.value;
+      return filteredResults.value.slice(start, end);
+    });
+
+    // Search suggestions based on previous searches
+    const commonSearchTerms = ref([
+      'configuration', 'setup', 'API', 'documentation', 'troubleshooting',
+      'installation', 'deployment', 'security', 'authentication', 'database'
+    ]);
+
+    const toggleAdvancedSearch = () => {
+      showAdvancedSearch.value = !showAdvancedSearch.value;
+    };
+
+    const onSearchInput = debounce(() => {
+      const query = searchQuery.value.toLowerCase().trim();
+      if (query.length > 2) {
+        searchSuggestions.value = commonSearchTerms.value
+          .filter(term => term.toLowerCase().includes(query))
+          .slice(0, 5);
+        showSuggestions.value = searchSuggestions.value.length > 0;
+      } else {
+        showSuggestions.value = false;
+      }
+    }, 300);
+
+    const applySuggestion = (suggestion) => {
+      searchQuery.value = suggestion;
+      showSuggestions.value = false;
+      performSearch();
+    };
+
+    // Text highlighting function
+    const highlightText = (text, query) => {
+      if (!text || !query) return text;
+
+      const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return text.replace(regex, '<mark>$1</mark>');
+    };
+
+    // Result helper functions
+    const getResultTitle = (result) => {
+      return result.title || result.metadata?.title || 'Untitled';
+    };
+
+    const getResultPreview = (result) => {
+      const content = result.content || result.text || 'No content available';
+      return content.length > 200 ? content.substring(0, 200) + '...' : content;
+    };
+
+    const getScoreClass = (score) => {
+      if (score >= 0.8) return 'high';
+      if (score >= 0.6) return 'medium';
+      return 'low';
+    };
+
+    // Result actions
+    const viewResult = (result) => {
+      // Open result in modal or new tab
+      console.log('Viewing result:', result);
+      // TODO: Implement result viewer
+    };
+
+    const useResult = (result) => {
+      // Add result to chat context or use in current conversation
+      console.log('Using result in chat:', result);
+      // TODO: Implement chat integration
+    };
+
+    const copyResult = async (result) => {
+      try {
+        await navigator.clipboard.writeText(result.content || result.text || '');
+        // TODO: Show toast notification
+        console.log('Content copied to clipboard');
+      } catch (error) {
+        console.error('Failed to copy content:', error);
+      }
+    };
+
+    // Sorting functions
+    const sortResults = () => {
+      filteredResults.value.sort((a, b) => {
+        let aVal, bVal;
+
+        switch (sortBy.value) {
+          case 'score':
+            aVal = a.score || 0;
+            bVal = b.score || 0;
+            break;
+          case 'date':
+            aVal = new Date(a.metadata?.created || a.created || 0);
+            bVal = new Date(b.metadata?.created || b.created || 0);
+            break;
+          case 'title':
+            aVal = getResultTitle(a).toLowerCase();
+            bVal = getResultTitle(b).toLowerCase();
+            break;
+          case 'type':
+            aVal = a.type || 'unknown';
+            bVal = b.type || 'unknown';
+            break;
+          default:
+            return 0;
+        }
+
+        if (sortOrder.value === 'desc') {
+          return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        } else {
+          return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        }
+      });
+    };
+
+    const toggleSortOrder = () => {
+      sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc';
+      sortResults();
+    };
+
+    // Filter results based on advanced search criteria
+    const filterResults = () => {
+      let results = [...searchResults.value];
+
+      // Apply filters
+      if (searchFilters.value.minScore > 0) {
+        results = results.filter(r => (r.score || 0) >= searchFilters.value.minScore);
+      }
+
+      if (searchFilters.value.contentType) {
+        results = results.filter(r => r.type === searchFilters.value.contentType);
+      }
+
+      if (searchFilters.value.collection) {
+        results = results.filter(r => r.collection === searchFilters.value.collection);
+      }
+
+      if (searchFilters.value.tags) {
+        const tags = searchFilters.value.tags.split(',').map(t => t.trim().toLowerCase());
+        results = results.filter(r =>
+          r.tags && r.tags.some(tag =>
+            tags.some(filterTag => tag.toLowerCase().includes(filterTag))
+          )
+        );
+      }
+
+      // Apply date range filter
+      if (searchFilters.value.dateRange) {
+        const now = new Date();
+        let cutoffDate;
+
+        switch (searchFilters.value.dateRange) {
+          case 'today':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case 'week':
+            cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            break;
+          case 'year':
+            cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            break;
+        }
+
+        if (cutoffDate) {
+          results = results.filter(r => {
+            const resultDate = new Date(r.metadata?.created || r.created || 0);
+            return resultDate >= cutoffDate;
+          });
+        }
+      }
+
+      filteredResults.value = results;
+      currentPage.value = 1; // Reset to first page
+      sortResults();
+    };
+
+    // Enhanced search function
     const performSearch = async () => {
       if (!searchQuery.value.trim()) return;
 
+      const startTime = performance.now();
       searching.value = true;
       searchPerformed.value = true;
       lastSearchQuery.value = searchQuery.value;
+      showSuggestions.value = false;
 
       try {
-        const data = await apiClient.searchKnowledge(searchQuery.value);
+        // Build search parameters
+        const searchParams = {
+          query: searchQuery.value,
+          limit: 50, // Get more results for filtering
+          include_metadata: searchFilters.value.includeMetadata
+        };
+
+        // Add advanced search options
+        if (searchFilters.value.exactMatch) {
+          searchParams.exact_match = true;
+        }
+
+        if (searchFilters.value.caseSensitive) {
+          searchParams.case_sensitive = true;
+        }
+
+        const data = await apiClient.searchKnowledge(searchParams.query, searchParams);
         searchResults.value = data.results || [];
+
+        // Record search time
+        searchTime.value = Math.round(performance.now() - startTime);
+
+        // Apply filters and sorting
+        filterResults();
+
+        // Update search suggestions based on successful search
+        if (searchResults.value.length > 0) {
+          const queryWords = searchQuery.value.toLowerCase().split(' ');
+          queryWords.forEach(word => {
+            if (word.length > 3 && !commonSearchTerms.value.includes(word)) {
+              commonSearchTerms.value.push(word);
+            }
+          });
+        }
+
       } catch (error) {
         console.error('Search error:', error);
         searchResults.value = [];
+        filteredResults.value = [];
+        searchTime.value = null;
       } finally {
         searching.value = false;
       }
     };
+
+    // Watch for filter changes
+    watch(searchFilters, () => {
+      if (searchResults.value.length > 0) {
+        filterResults();
+      }
+    }, { deep: true });
+
+    // Debounce function for search suggestions
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
 
     // Add content functionality
 
@@ -1814,6 +2343,38 @@ export default {
       searchPerformed,
       lastSearchQuery,
       performSearch,
+
+      // Enhanced Search
+      showAdvancedSearch,
+      showSuggestions,
+      searchSuggestions,
+      searchTime,
+      searchFilters,
+      availableCollections,
+      toggleAdvancedSearch,
+      onSearchInput,
+      applySuggestion,
+
+      // Results Management
+      sortBy,
+      sortOrder,
+      resultsViewMode,
+      currentPage,
+      resultsPerPage,
+      filteredResults,
+      totalPages,
+      paginatedResults,
+      sortResults,
+      toggleSortOrder,
+
+      // Result Helpers
+      highlightText,
+      getResultTitle,
+      getResultPreview,
+      getScoreClass,
+      viewResult,
+      useResult,
+      copyResult,
 
       // Knowledge Entries
       knowledgeEntries,
@@ -3424,5 +3985,478 @@ export default {
   text-align: center;
   padding: 40px;
   color: #6c757d;
+}
+
+/* Enhanced Search Interface Styles */
+.search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.toggle-advanced-btn {
+  padding: 8px 16px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.toggle-advanced-btn:hover,
+.toggle-advanced-btn.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.search-input-container {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.main-search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+.main-search-input:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.search-btn {
+  padding: 12px 24px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.3s ease;
+}
+
+.search-btn:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.search-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+/* Search Suggestions */
+.search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 60px;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.suggestion-item:hover {
+  background: #f8f9fa;
+}
+
+/* Advanced Search Filters */
+.advanced-search {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 20px;
+  margin-top: 15px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  flex: 1;
+}
+
+.filter-group label {
+  font-weight: 500;
+  margin-bottom: 5px;
+  color: #495057;
+}
+
+.filter-group select,
+.filter-group input[type="text"] {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.score-slider {
+  width: 100%;
+}
+
+.score-value {
+  margin-left: 10px;
+  font-weight: 500;
+  color: #007bff;
+}
+
+.search-options {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.checkbox-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+/* Results Header */
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 20px 0 15px 0;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.results-info h4 {
+  margin: 0;
+  color: #495057;
+}
+
+.search-time {
+  color: #6c757d;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.results-controls {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.sort-controls,
+.view-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sort-controls select {
+  padding: 6px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+
+.sort-order-btn,
+.view-mode-btn {
+  padding: 6px 12px;
+  background: #e9ecef;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sort-order-btn:hover,
+.view-mode-btn:hover,
+.view-mode-btn.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+/* Enhanced Results Display */
+.search-results.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.search-result {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.search-result:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #007bff;
+}
+
+.search-result.high-score {
+  border-left: 4px solid #28a745;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.result-title h5 {
+  margin: 0 0 8px 0;
+  color: #212529;
+  line-height: 1.3;
+}
+
+.result-title h5 mark {
+  background: #fff3cd;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.result-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.badge.score {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.badge.score.high {
+  background: #d1e7dd;
+  color: #0f5132;
+}
+
+.badge.score.medium {
+  background: #fff3cd;
+  color: #664d03;
+}
+
+.badge.score.low {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.badge.type,
+.badge.collection {
+  background: #cff4fc;
+  color: #055160;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  padding: 6px 10px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.result-content p {
+  color: #6c757d;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.result-content mark {
+  background: #fff3cd;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.result-metadata {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e9ecef;
+}
+
+.result-tags,
+.metadata-items {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.result-tags {
+  margin-bottom: 8px;
+}
+
+.tag,
+.more-tags {
+  background: #e7f3ff;
+  color: #0056b3;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.more-tags {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+.metadata-item {
+  color: #6c757d;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.page-btn {
+  padding: 8px 16px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-info {
+  margin: 0 10px;
+  font-weight: 500;
+  color: #495057;
+}
+
+/* Search Tips */
+.search-tips {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.search-tips h4 {
+  margin: 0 0 15px 0;
+  color: #495057;
+}
+
+.tips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.tip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 15px;
+  background: white;
+  border-radius: 6px;
+  border-left: 3px solid #007bff;
+}
+
+.tip-icon {
+  font-size: 18px;
+  margin-top: 2px;
+}
+
+/* Responsive Design for Enhanced Search */
+@media (max-width: 768px) {
+  .search-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .results-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+
+  .results-controls {
+    justify-content: space-between;
+  }
+
+  .search-results.cards {
+    grid-template-columns: 1fr;
+  }
+
+  .tips-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -235,7 +235,8 @@ async def _enhanced_knowledge_search(
     await _send_typed_message(
         existing_history,
         "info",
-        "🔍 Information not found in knowledge base. Searching the web for latest information...",
+        "🔍 Information not found in knowledge base. "
+        "Searching the web for latest information...",
         chat_history_manager,
         chat_id,
     )
@@ -276,11 +277,17 @@ async def _enhanced_knowledge_search(
             # Present sources to user for approval
             sources_text = "📚 **Found information from these sources:**\n\n"
             for i, source in enumerate(quality_sources, 1):
-                sources_text += f"**{i}. {source['title']}** (Quality: {source['quality_score']:.1f}/1.0)\n"
+                sources_text += (
+                    f"**{i}. {source['title']}** "
+                    f"(Quality: {source['quality_score']:.1f}/1.0)\n"
+                )
                 sources_text += f"   🔗 {source['url']}\n"
                 sources_text += f"   📄 {source['content_preview']}\n\n"
 
-            sources_text += "**Would you like me to add this information to the knowledge base for future reference?**\n"
+            sources_text += (
+                "**Would you like me to add this information to the "
+                "knowledge base for future reference?**\n"
+            )
             sources_text += (
                 "Reply with 'yes' to approve these sources, or 'no' to decline."
             )
@@ -304,7 +311,8 @@ async def _enhanced_knowledge_search(
             await _send_typed_message(
                 existing_history,
                 "warning",
-                "⚠️ Found web results but they don't meet quality standards for knowledge base storage.",
+                "⚠️ Found web results but they don't meet quality standards "
+                "for knowledge base storage.",
                 chat_history_manager,
                 chat_id,
             )
@@ -361,7 +369,8 @@ async def _handle_source_approval(
             await _send_typed_message(
                 existing_history,
                 "success",
-                f"✅ Successfully added {stored_count} sources to the knowledge base. This information will be available for future queries!",
+                f"✅ Successfully added {stored_count} sources to the knowledge "
+                f"base. This information will be available for future queries!",
                 chat_history_manager,
                 chat_id,
             )
@@ -382,7 +391,10 @@ async def _handle_source_approval(
         await _send_typed_message(
             existing_history,
             "info",
-            "📝 Sources not added to knowledge base as requested. The information is still available in this conversation.",
+            (
+                "📝 Sources not added to knowledge base as requested. "
+                "The information is still available in this conversation."
+            ),
             chat_history_manager,
             chat_id,
         )
@@ -393,7 +405,10 @@ async def _handle_source_approval(
         await _send_typed_message(
             existing_history,
             "clarification",
-            "Please respond with 'yes' to add the sources to knowledge base, or 'no' to decline.",
+            (
+                "Please respond with 'yes' to add the sources to "
+                "knowledge base, or 'no' to decline."
+            ),
             chat_history_manager,
             chat_id,
         )
@@ -473,11 +488,19 @@ async def _interpret_command_output(command: str, output: str, llm_interface) ->
         messages = [
             {
                 "role": "system",
-                "content": "You are a system administrator assistant. Interpret the command output in simple, user-friendly language. Focus on the most important information. Be concise but informative.",
+                "content": (
+                    "You are a system administrator assistant. Interpret "
+                    "the command output in simple, user-friendly language. "
+                    "Focus on the most important information. Be concise "
+                    "but informative."
+                ),
             },
             {
                 "role": "user",
-                "content": f"Command: {command}\n\nOutput:\n{cleaned_output}\n\nPlease explain what this output means in simple terms:",
+                "content": (
+                    f"Command: {command}\n\nOutput:\n{cleaned_output}\n\n"
+                    "Please explain what this output means in simple terms:"
+                ),
             },
         ]
 
@@ -919,7 +942,8 @@ async def conversation_chat_message(chat_message: dict, request: Request):
         }
 
         logger.info(
-            f"Conversation response completed in {result.get('processing_time', 0):.2f}s"
+            f"Conversation response completed in "
+            f"{result.get('processing_time', 0):.2f}s"
         )
         return JSONResponse(status_code=200, content=response_data)
 
@@ -994,7 +1018,10 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 # Fallback to basic response
                 response_data = {
                     "role": "assistant",
-                    "content": f"I'm having trouble initializing the AI system right now. Your message '{message}' was received but I can't process it.",
+                    "content": (
+                        f"I'm having trouble initializing the AI system right now. "
+                        f"Your message '{message}' was received but I can't process it."
+                    ),
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "messageType": "response",
                     "rawData": None,
@@ -1008,13 +1035,15 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
         existing_history = []
         if chat_history_manager:
             try:
-                # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
+                # PERFORMANCE FIX: Convert blocking file I/O to async to prevent
+                # timeouts
                 existing_history = (
                     await asyncio.to_thread(chat_history_manager.load_session, chat_id)
                     or []
                 )
                 logger.error(
-                    f"DEBUG: Loaded {len(existing_history)} messages from chat history for {chat_id}"
+                    f"DEBUG: Loaded {len(existing_history)} messages from chat "
+                    f"history for {chat_id}"
                 )
                 if existing_history:
                     logger.error(f"DEBUG: Last message: {existing_history[-1]}")
@@ -1032,7 +1061,8 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
             last_message = existing_history[-1] if existing_history else {}
             if last_message.get("messageType") == "source_approval":
                 is_approval_response = True
-                # Look for pending approval data (would be stored in a state manager in production)
+                # Look for pending approval data (would be stored in a state
+                # manager in production)
                 # For now, we'll skip the approval handling and proceed with normal flow
 
         # Check if user is responding to command approval request
@@ -1117,7 +1147,12 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
 
                                 response_data = {
                                     "role": "assistant",
-                                    "content": f"✅ Command executed successfully!\n\n**Command**: `{command_to_run}`\n**Output**: ```\n{output}\n```\n\n**Interpretation**: {interpretation}",
+                                    "content": (
+                                        f"✅ Command executed successfully!\n\n"
+                                        f"**Command**: `{command_to_run}`\n"
+                                        f"**Output**: ```\n{output}\n```\n\n"
+                                        f"**Interpretation**: {interpretation}"
+                                    ),
                                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                                     "messageType": "command_result",
                                     "rawData": result_data,
@@ -1132,7 +1167,9 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                                 output = result_data.get("output", "")
                                 response_data = {
                                     "role": "assistant",
-                                    "content": f"❌ {error_msg}\n\nOutput: ```\n{output}\n```",
+                                    "content": (
+                                        f"❌ {error_msg}\n\nOutput: ```\n{output}\n```"
+                                    ),
                                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                                     "messageType": "error",
                                     "rawData": result_data,
@@ -1145,7 +1182,9 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                             logger.error(f"Command execution failed: {cmd_error}")
                             response_data = {
                                 "role": "assistant",
-                                "content": f"❌ Failed to execute command: {str(cmd_error)}",
+                                "content": (
+                                    f"❌ Failed to execute command: {str(cmd_error)}"
+                                ),
                                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                                 "messageType": "error",
                                 "rawData": None,
@@ -1156,7 +1195,10 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                     # User declined command execution
                     response_data = {
                         "role": "assistant",
-                        "content": "👌 Command execution cancelled. Is there anything else I can help you with?",
+                        "content": (
+                            "👌 Command execution cancelled. Is there anything "
+                            "else I can help you with?"
+                        ),
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                         "messageType": "info",
                         "rawData": None,
@@ -1166,7 +1208,10 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                     # Invalid response, ask again
                     response_data = {
                         "role": "assistant",
-                        "content": "Please respond with 'yes' to execute the command, or 'no' to cancel.",
+                        "content": (
+                            "Please respond with 'yes' to execute the command, or "
+                            "'no' to cancel."
+                        ),
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                         "messageType": "clarification",
                         "rawData": None,
@@ -1183,7 +1228,16 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
 
             response_data = {
                 "role": "assistant",
-                "content": f"Thank you for the feedback on the command `{original_command}`!\n\n**Your feedback**: {feedback_text}\n\nI'll take this into consideration. Would you like me to:\n1. Try a different command based on your suggestion\n2. Explain alternative approaches\n3. Skip this operation entirely\n\nPlease let me know how you'd like to proceed.",
+                "content": (
+                    f"Thank you for the feedback on the command "
+                    f"`{original_command}`!\n\n"
+                    f"**Your feedback**: {feedback_text}\n\n"
+                    "I'll take this into consideration. Would you like me to:\n"
+                    "1. Try a different command based on your suggestion\n"
+                    "2. Explain alternative approaches\n"
+                    "3. Skip this operation entirely\n\n"
+                    "Please let me know how you'd like to proceed."
+                ),
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "messageType": "feedback_response",
                 "rawData": {
@@ -1205,7 +1259,13 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
             # Return special response to trigger command permission dialog
             response_data = {
                 "role": "assistant",
-                "content": f"🔧 **Command Required**: {command_needed['explanation']}\n\n**Command**: `{command_needed['command']}`\n\n**Purpose**: {command_needed['purpose']}\n\n**Do you want me to execute this command?** (Reply 'yes' to proceed or 'no' to cancel)",
+                "content": (
+                    f"🔧 **Command Required**: {command_needed['explanation']}\n\n"
+                    f"**Command**: `{command_needed['command']}`\n\n"
+                    f"**Purpose**: {command_needed['purpose']}\n\n"
+                    "**Do you want me to execute this command?** "
+                    "(Reply 'yes' to proceed or 'no' to cancel)"
+                ),
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "messageType": "command_permission_request",
                 "commandData": {
@@ -1228,7 +1288,8 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
             }
             existing_history.append(approval_message)
             if chat_history_manager:
-                # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
+                # PERFORMANCE FIX: Convert blocking file I/O to async to prevent
+                # timeouts
                 await asyncio.to_thread(
                     chat_history_manager.save_session,
                     chat_id,
@@ -1284,13 +1345,19 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                             if search_result["results"]
                             else ""
                         )
-                        enhanced_message = f"Based on knowledge base: {message}\n\nRelevant information: {kb_content[:1000]}"
+                        enhanced_message = (
+                            f"Based on knowledge base: {message}\n\n"
+                            f"Relevant information: {kb_content[:1000]}"
+                        )
 
                         # Get LLM response with KB context
                         messages = [
                             {
                                 "role": "system",
-                                "content": "Answer based on the provided knowledge base information. Be helpful and informative.",
+                                "content": (
+                                    "Answer based on the provided knowledge base "
+                                    "information. Be helpful and informative."
+                                ),
                             },
                             {"role": "user", "content": enhanced_message},
                         ]
@@ -1438,7 +1505,10 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
             # Fallback to a simple response
             fallback_response = {
                 "role": "assistant",
-                "content": f"I'm having trouble processing your request right now. Your message '{message}' was received but I encountered an error.",
+                "content": (
+                    f"I'm having trouble processing your request right now. "
+                    f"Your message '{message}' was received but I encountered an error."
+                ),
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "messageType": "response",
                 "rawData": None,
@@ -1482,12 +1552,13 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
 
         # Get the orchestrator and chat_history_manager from app state
         logging.info(
-            "DEBUG: Getting orchestrator and chat_history_manager from app state..."
+            "DEBUG: Getting orchestrator and chat_history_manager from app " "state..."
         )
         orchestrator = getattr(request.app.state, "orchestrator", None)
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
         logging.info(
-            f"DEBUG: Got orchestrator: {orchestrator is not None}, chat_history_manager: {chat_history_manager is not None}"
+            f"DEBUG: Got orchestrator: {orchestrator is not None}, "
+            f"chat_history_manager: {chat_history_manager is not None}"
         )
 
         # Get chat knowledge manager if available
@@ -1553,7 +1624,8 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                         else message
                     )
                     logger.info(
-                        f"DEBUG: Creating new context for chat {chat_id} with topic: {topic}"
+                        f"DEBUG: Creating new context for chat {chat_id} with "
+                        f"topic: {topic}"
                     )
                     context = await chat_knowledge_manager.create_or_update_context(
                         chat_id=chat_id, topic=topic
@@ -1651,14 +1723,16 @@ Current question: {message}"""
                             chat_id,
                         )
                 logger.info(
-                    f"DEBUG: KB search completed - found {kb_result.get('documents_found', 0)} documents"
+                    f"DEBUG: KB search completed - found "
+                    f"{kb_result.get('documents_found', 0)} documents"
                 )
             else:
                 logger.warning("DEBUG: KB Librarian not available")
 
         except asyncio.TimeoutError:
             logger.warning(
-                "DEBUG: KB search timed out after 10 seconds - continuing without KB results"
+                "DEBUG: KB search timed out after 10 seconds - continuing "
+                "without KB results"
             )
             kb_result["timeout"] = True
         except Exception as e:
@@ -1729,14 +1803,18 @@ Current question: {message}"""
                 # Build enhanced context with KB results
                 kb_context = ""
                 if kb_result.get("documents_found", 0) > 0:
-                    kb_context = f"\n\nKnowledge Base Context:\n{kb_result.get('answer', 'Relevant information found in knowledge base.')}"
+                    kb_context = (
+                        "\n\nKnowledge Base Context:\n"
+                        f"{kb_result.get('answer', 'Relevant information found in knowledge base.')}"
+                    )
 
                 enhanced_context = f"""Chat ID: {chat_id}
 Knowledge Base documents found: {kb_result.get('documents_found', 0)}
 {kb_context}
 
 IMPORTANT: Always cite sources when using information from the Knowledge Base.
-If no KB documents were found, clearly state this and provide general knowledge responses."""
+If no KB documents were found, clearly state this and provide general "
+"knowledge responses."""
 
                 response = await get_robust_llm_response(
                     user_input=enhanced_message,
@@ -1765,7 +1843,11 @@ If no KB documents were found, clearly state this and provide general knowledge 
             except Exception as e:
                 logger.error(f"LLM failsafe failed: {e}")
                 orchestrator_result = {
-                    "response_text": f"I received your message: '{message}'. I'm currently optimizing my response capabilities. Please try again in a moment.",
+                    "response_text": (
+                        f"I received your message: '{message}'. I'm currently "
+                        "optimizing my response capabilities. Please try again in a "
+                        "moment."
+                    ),
                     "status": "fallback",
                     "routing_method": "error_fallback",
                 }
@@ -1987,7 +2069,10 @@ If no KB documents were found, clearly state this and provide general knowledge 
             # Send storage note as separate utility message
             stored_count = len(web_research_result.get("stored_in_kb", []))
             if stored_count > 0:
-                storage_note = f"*Note: {stored_count} high-quality sources were added to the knowledge base for future reference.*"
+                storage_note = (
+                    f"*Note: {stored_count} high-quality sources were added to the "
+                    "knowledge base for future reference.*"
+                )
                 await _send_typed_message(
                     existing_history,
                     "utility",
@@ -2039,7 +2124,13 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
             )
 
             # Send thoughts message about workflow execution
-            thoughts_text = f"Analyzing request complexity and determining optimal agent coordination strategy. This {tool_args.get('message_classification', 'unknown')} request requires {tool_args.get('planned_steps', 0)} coordinated steps across {len(tool_args.get('agents_involved', []))} specialized agents."
+            thoughts_text = (
+                "Analyzing request complexity and determining optimal agent "
+                "coordination strategy. This "
+                f"{tool_args.get('message_classification', 'unknown')} request "
+                f"requires {tool_args.get('planned_steps', 0)} coordinated steps "
+                f"across {len(tool_args.get('agents_involved', []))} specialized agents."
+            )
 
             await _send_typed_message(
                 existing_history,
@@ -2052,7 +2143,10 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
             # Send utility messages for each agent step
             agent_results = workflow_details.get("agent_results", [])
             for result in agent_results:
-                utility_text = f"Step {result['step']}: {result['agent']} agent completed '{result['action']}' in {result['duration']} - {result['result']}"
+                utility_text = (
+                    f"Step {result['step']}: {result['agent']} agent completed "
+                    f"'{result['action']}' in {result['duration']} - {result['result']}"
+                )
                 await _send_typed_message(
                     existing_history,
                     "utility",
@@ -2062,7 +2156,10 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
                 )
 
                 # Send debug message for each step execution
-                debug_text = f"Agent: {result['agent']} | Action: {result['action']} | Duration: {result['duration']} | Status: completed"
+                debug_text = (
+                    f"Agent: {result['agent']} | Action: {result['action']} | "
+                    f"Duration: {result['duration']} | Status: completed"
+                )
                 await _send_typed_message(
                     existing_history, "debug", debug_text, chat_history_manager, chat_id
                 )

@@ -59,21 +59,9 @@ class MarkdownReferenceRequest(BaseModel):
     reference_type: str = "documentation"
 
 
-@router.get("/health")
-async def health_check():
-    """Health check for enhanced memory system"""
-    try:
-        memory_mgr, markdown_sys = get_memory_manager()
-        stats = memory_mgr.get_task_statistics(days_back=1)
-        return {
-            "status": "healthy",
-            "memory_manager": "operational",
-            "markdown_system": "operational",
-            "recent_tasks": stats.get("total_tasks", 0),
-        }
-    except Exception as e:
-        logger.error(f"Enhanced memory health check failed: {e}")
-        return {"status": "unhealthy", "error": str(e)}
+# Health check moved to consolidated health service
+# See backend/services/consolidated_health_service.py
+# Use /api/system/health?detailed=true for comprehensive status
 
 
 @router.get("/statistics")

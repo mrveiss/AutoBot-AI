@@ -1,19 +1,18 @@
 """
 Async Enhanced Memory Manager for AutoBot Phase 7
-Comprehensive task logging and execution history with aiosqlite and markdown references
+Comprehensive task logging and execution history with aiosqlite and
+markdown references
 """
 
-import base64
+import asyncio
 import hashlib
 import json
 import logging
-import pickle
-import asyncio
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
@@ -97,7 +96,7 @@ class AsyncEnhancedMemoryManager:
     def __init__(self, db_path: str = "data/enhanced_memory.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Initialize async database setup
         self._initialized = False
         self._init_lock = asyncio.Lock()
@@ -108,7 +107,7 @@ class AsyncEnhancedMemoryManager:
         """Initialize async database schema"""
         if self._initialized:
             return
-            
+
         async with self._init_lock:
             if self._initialized:
                 return
@@ -208,15 +207,15 @@ class AsyncEnhancedMemoryManager:
     async def create_task(self, task: TaskEntry) -> str:
         """Create a new task with async performance"""
         await self._init_database()
-        
+
         # Generate task ID if not provided
-        if not hasattr(task, 'task_id') or not task.task_id:
+        if not hasattr(task, "task_id") or not task.task_id:
             task.task_id = f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hashlib.md5(task.description.encode()).hexdigest()[:8]}"
 
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute(
                 """
-                INSERT OR REPLACE INTO tasks 
+                INSERT OR REPLACE INTO tasks
                 (task_id, description, status, priority, created_at, updated_at, completed_at,
                  assigned_agent, parent_task_id, tags, metadata, execution_log,
                  estimated_duration_minutes, actual_duration_minutes, dependencies, markdown_reference)
@@ -247,18 +246,25 @@ class AsyncEnhancedMemoryManager:
         return task.task_id
 
     async def update_task_status(
-        self, task_id: str, status: TaskStatus, metadata: Optional[Dict[str, Any]] = None
+        self,
+        task_id: str,
+        status: TaskStatus,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Update task status with async performance"""
         await self._init_database()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             updates = {
                 "status": status.value,
                 "updated_at": datetime.now().timestamp(),
             }
 
-            if status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+            if status in [
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.CANCELLED,
+            ]:
                 updates["completed_at"] = datetime.now().timestamp()
 
             if metadata:
@@ -279,7 +285,7 @@ class AsyncEnhancedMemoryManager:
             cursor = await conn.execute(
                 f"UPDATE tasks SET {set_clause} WHERE task_id = ?", values
             )
-            
+
             success = cursor.rowcount > 0
             await conn.commit()
 
@@ -293,14 +299,14 @@ class AsyncEnhancedMemoryManager:
     async def log_execution(self, record: ExecutionRecord) -> str:
         """Log execution record with async performance"""
         await self._init_database()
-        
+
         if not record.record_id:
             record.record_id = f"exec_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hashlib.md5(f'{record.task_id}_{record.action}'.encode()).hexdigest()[:8]}"
 
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute(
                 """
-                INSERT INTO execution_records 
+                INSERT INTO execution_records
                 (record_id, task_id, timestamp, action, result, duration_ms, success, error_message, agent_context)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -324,7 +330,7 @@ class AsyncEnhancedMemoryManager:
     async def get_task(self, task_id: str) -> Optional[TaskEntry]:
         """Retrieve task by ID with async performance"""
         await self._init_database()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
@@ -358,7 +364,7 @@ class AsyncEnhancedMemoryManager:
     ) -> List[TaskEntry]:
         """Get tasks by status with async performance"""
         await self._init_database()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 "SELECT * FROM tasks WHERE status = ? ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?",
@@ -396,7 +402,7 @@ class AsyncEnhancedMemoryManager:
     ) -> List[ExecutionRecord]:
         """Get execution history for a task with async performance"""
         await self._init_database()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 "SELECT * FROM execution_records WHERE task_id = ? ORDER BY timestamp DESC LIMIT ?",
@@ -432,13 +438,13 @@ class AsyncEnhancedMemoryManager:
     ) -> int:
         """Store memory entry with async performance"""
         await self._init_database()
-        
+
         content_hash = hashlib.sha256(content.encode()).hexdigest()
 
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
-                INSERT OR REPLACE INTO memory_entries 
+                INSERT OR REPLACE INTO memory_entries
                 (category, content, content_hash, metadata, timestamp, embedding, reference_path)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -461,7 +467,7 @@ class AsyncEnhancedMemoryManager:
     async def get_task_statistics(self) -> Dict[str, Any]:
         """Get comprehensive task statistics with async performance"""
         await self._init_database()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             stats = {}
 
@@ -513,7 +519,7 @@ class AsyncEnhancedMemoryManager:
     async def cleanup_old_data(self, retention_days: int = 90):
         """Clean up old data with async performance"""
         await self._init_database()
-        
+
         cutoff_timestamp = (datetime.now() - timedelta(days=retention_days)).timestamp()
 
         async with aiosqlite.connect(self.db_path) as conn:
@@ -550,6 +556,7 @@ class AsyncEnhancedMemoryManager:
 
 # Global async enhanced memory manager instance
 _async_enhanced_memory_manager = None
+
 
 def get_async_enhanced_memory_manager() -> AsyncEnhancedMemoryManager:
     """Get global async enhanced memory manager instance"""

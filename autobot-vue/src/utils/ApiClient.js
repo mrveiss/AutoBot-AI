@@ -2,6 +2,7 @@
 // RumAgent is accessed via window.rum global
 
 import { API_CONFIG, ENDPOINTS, getApiUrl } from '@/config/environment.js';
+import errorHandler from '@/utils/ErrorHandler.js';
 
 class ApiClient {
   constructor() {
@@ -12,6 +13,81 @@ class ApiClient {
     // Update baseUrl from settings if available, but prefer environment config
     if (this.settings?.backend?.api_endpoint && !API_CONFIG.DEV_MODE) {
       this.baseUrl = this.settings.backend.api_endpoint;
+    }
+
+    // PERFORMANCE OPTIMIZATION: Add caching layer for frequently accessed data
+    this.cache = new Map();
+    this.cacheConfig = {
+      defaultTTL: 5 * 60 * 1000, // 5 minutes
+      maxSize: 100,
+      endpoints: {
+        '/api/settings/': 10 * 60 * 1000, // 10 minutes for settings
+        '/api/system/health': 30 * 1000,   // 30 seconds for health
+        '/api/prompts/': 15 * 60 * 1000,   // 15 minutes for prompts (they change rarely)
+        '/api/chats': 2 * 60 * 1000,       // 2 minutes for chat list
+      }
+    };
+
+    // Cleanup expired cache entries periodically
+    this.cacheCleanupInterval = setInterval(() => {
+      this.cleanupCache();
+    }, 2 * 60 * 1000); // Every 2 minutes
+  }
+
+  // Cache management methods
+  getCacheKey(endpoint, params = {}) {
+    return `${endpoint}:${JSON.stringify(params)}`;
+  }
+
+  getCachedData(cacheKey) {
+    const entry = this.cache.get(cacheKey);
+    if (!entry) return null;
+
+    if (Date.now() > entry.expires) {
+      this.cache.delete(cacheKey);
+      return null;
+    }
+
+    return entry.data;
+  }
+
+  setCachedData(cacheKey, data, endpoint) {
+    // Determine TTL based on endpoint or use default
+    const ttl = this.cacheConfig.endpoints[endpoint] || this.cacheConfig.defaultTTL;
+    const expires = Date.now() + ttl;
+
+    // Manage cache size
+    if (this.cache.size >= this.cacheConfig.maxSize) {
+      // Remove oldest entry
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+
+    this.cache.set(cacheKey, {
+      data,
+      expires,
+      endpoint
+    });
+  }
+
+  cleanupCache() {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expires) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  clearCache(pattern = null) {
+    if (pattern) {
+      for (const [key] of this.cache.entries()) {
+        if (key.includes(pattern)) {
+          this.cache.delete(key);
+        }
+      }
+    } else {
+      this.cache.clear();
     }
   }
 
@@ -33,17 +109,40 @@ class ApiClient {
     const method = options.method || 'GET';
     const startTime = performance.now();
 
+    // PERFORMANCE OPTIMIZATION: Check cache for GET requests
+    if (method === 'GET' && !options.skipCache) {
+      const cacheKey = this.getCacheKey(endpoint, options.params || {});
+      const cachedData = this.getCachedData(cacheKey);
+
+      if (cachedData) {
+        // Return cached response wrapped in a Response-like object
+        return {
+          ok: true,
+          status: 200,
+          json: async () => cachedData,
+          headers: new Map([['x-cache', 'hit']])
+        };
+      }
+    }
+
+    // PERFORMANCE FIX: Dynamic timeout based on endpoint
+    let requestTimeout = this.timeout;
+    const slowEndpoints = ['/api/prompts/', '/api/settings/config', '/api/system/health'];
+    if (slowEndpoints.some(slow => endpoint.includes(slow))) {
+      requestTimeout = Math.max(this.timeout, 45000); // 45 seconds for slow endpoints
+    }
+
     // Track API call start
     if (window.rum) {
       window.rum.trackUserInteraction('api_call_initiated', null, {
         method,
         endpoint,
-        url
+        url,
+        timeout: requestTimeout
       });
     }
 
     const config = {
-      timeout: this.timeout,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers
@@ -51,9 +150,17 @@ class ApiClient {
       ...options
     };
 
+    // ABORT FIX: Better abort signal handling
+    const controller = new AbortController();
+    let timeoutId;
+    let isTimedOut = false;
+
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+      // Set up timeout with clear reason
+      timeoutId = setTimeout(() => {
+        isTimedOut = true;
+        controller.abort();
+      }, requestTimeout);
 
       const response = await fetch(url, {
         ...config,
@@ -68,20 +175,64 @@ class ApiClient {
         if (window.rum) {
           window.rum.trackApiCall(method, endpoint, startTime, endTime, response.status);
         }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+        // BETTER ERROR MESSAGES: More context for different HTTP errors
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        if (response.status === 504) {
+          errorMessage += ` - Server timeout. The operation took too long to complete.`;
+        } else if (response.status === 503) {
+          errorMessage += ` - Service temporarily unavailable. Please try again.`;
+        } else if (response.status === 404) {
+          errorMessage += ` - Endpoint not found: ${endpoint}`;
+        }
+
+        throw new Error(errorMessage);
       }
 
       // Track successful response
       if (window.rum) {
         window.rum.trackApiCall(method, endpoint, startTime, endTime, response.status);
       }
+
+      // PERFORMANCE OPTIMIZATION: Cache successful GET responses
+      if (method === 'GET' && response.ok && !options.skipCache) {
+        try {
+          // Clone response to avoid consuming the stream
+          const responseClone = response.clone();
+          const data = await responseClone.json();
+          const cacheKey = this.getCacheKey(endpoint, options.params || {});
+          this.setCachedData(cacheKey, data, endpoint);
+        } catch (error) {
+          // Don't fail the request if caching fails
+          console.warn('Failed to cache response:', error);
+        }
+      }
+
       return response;
 
     } catch (error) {
       const endTime = performance.now();
 
+      // Clear timeout if still active
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      // BETTER ABORT ERROR HANDLING: More descriptive error messages
       if (error.name === 'AbortError') {
-        const timeoutError = new Error(`Request timeout after ${this.timeout}ms`);
+        let timeoutError;
+        if (isTimedOut) {
+          timeoutError = new Error(
+            `Request timeout: ${method} ${endpoint} took longer than ${requestTimeout}ms. ` +
+            `This usually indicates the backend is overloaded or the operation is complex.`
+          );
+        } else {
+          timeoutError = new Error(
+            `Request was cancelled: ${method} ${endpoint}. ` +
+            `This may be due to navigation or component unmounting.`
+          );
+        }
+
         if (window.rum) {
           window.rum.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError);
           window.rum.reportCriticalIssue('api_timeout', {
@@ -89,16 +240,46 @@ class ApiClient {
             endpoint,
             url,
             duration: endTime - startTime,
-            timeout: this.timeout
+            timeout: requestTimeout,
+            isTimedOut
           });
         }
+
         throw timeoutError;
       }
 
-      // Track other errors
+      // NETWORK ERROR HANDLING: Better messages for connection issues
+      if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+        const networkError = new Error(
+          `Network error: Cannot connect to backend at ${this.baseUrl}. ` +
+          `Please check if the backend service is running and accessible.`
+        );
+        networkError.originalError = error;
+
+        if (window.rum) {
+          window.rum.trackApiCall(method, endpoint, startTime, endTime, 'network_error', networkError);
+          window.rum.reportCriticalIssue('network_error', {
+            method,
+            endpoint,
+            url,
+            baseUrl: this.baseUrl,
+            originalError: error.message
+          });
+        }
+
+        throw networkError;
+      }
+
+      // Track other errors with more context
       if (window.rum) {
         window.rum.trackApiCall(method, endpoint, startTime, endTime, 'error', error);
       }
+
+      // Add context to generic errors
+      error.endpoint = endpoint;
+      error.method = method;
+      error.url = url;
+
       throw error;
     }
   }
@@ -534,10 +715,53 @@ class ApiClient {
 
     return status;
   }
+
+  // PERFORMANCE OPTIMIZATION: Cleanup method for proper resource management
+  destroy() {
+    if (this.cacheCleanupInterval) {
+      clearInterval(this.cacheCleanupInterval);
+      this.cacheCleanupInterval = null;
+    }
+    this.cache.clear();
+  }
+
+  // PERFORMANCE OPTIMIZATION: Get cache statistics for debugging
+  getCacheStats() {
+    const stats = {
+      size: this.cache.size,
+      maxSize: this.cacheConfig.maxSize,
+      entries: [],
+      hitRate: 0, // Would need to track hits/misses to calculate
+    };
+
+    for (const [key, entry] of this.cache.entries()) {
+      stats.entries.push({
+        key,
+        endpoint: entry.endpoint,
+        expiresIn: Math.max(0, entry.expires - Date.now()),
+        size: JSON.stringify(entry.data).length
+      });
+    }
+
+    return stats;
+  }
 }
 
 // Create and export a singleton instance
 const apiClient = new ApiClient();
+
+// PERFORMANCE OPTIMIZATION: Cleanup on page unload
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    apiClient.destroy();
+  });
+
+  // Make cache stats available globally for debugging
+  if (!window.PRODUCTION_MODE) {
+    window.apiClientStats = () => apiClient.getCacheStats();
+    window.clearApiCache = (pattern) => apiClient.clearCache(pattern);
+  }
+}
 
 export default apiClient;
 export { ApiClient };

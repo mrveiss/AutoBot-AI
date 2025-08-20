@@ -12,7 +12,6 @@ import sys
 
 # Import configuration from centralized source
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.config import API_BASE_URL
 import sqlite3
 import time
 from datetime import datetime, timedelta
@@ -20,6 +19,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import psutil
+
+from src.config import API_BASE_URL
 
 try:
     import aiohttp

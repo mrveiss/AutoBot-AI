@@ -581,20 +581,102 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import ApiClient from './utils/ApiClient.js';
-import ChatInterface from './components/ChatInterface.vue';
-import VoiceInterface from './components/VoiceInterface.vue';
-import KnowledgeManager from './components/KnowledgeManager.vue';
-import TerminalWindow from './components/TerminalWindow.vue';
-import SettingsPanel from './components/SettingsPanel.vue';
-import SecretsManager from './components/SecretsManager.vue';
-import FileBrowser from './components/FileBrowser.vue';
-import SystemMonitor from './components/SystemMonitor.vue';
-import WorkflowApproval from './components/WorkflowApproval.vue';
+// PERFORMANCE OPTIMIZATION: Lazy load components to reduce initial bundle size
+import { defineAsyncComponent } from 'vue';
+
+// Core components loaded immediately (small and always needed)
 import PhaseProgressionIndicator from './components/PhaseProgressionIndicator.vue';
-import ValidationDashboard from './components/ValidationDashboard.vue';
 import ElevationDialog from './components/ElevationDialog.vue';
-import RumDashboard from './components/RumDashboard.vue';
 import ErrorNotifications from './components/ErrorNotifications.vue';
+
+// Lazy-loaded components (loaded only when needed)
+const ChatInterface = defineAsyncComponent({
+  loader: () => import('./components/ChatInterface.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Chat...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Chat component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const VoiceInterface = defineAsyncComponent({
+  loader: () => import('./components/VoiceInterface.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-4"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div><span class="ml-2">Loading Voice...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Voice component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const KnowledgeManager = defineAsyncComponent({
+  loader: () => import('./components/KnowledgeManager.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Knowledge Base...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Knowledge Base component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const TerminalWindow = defineAsyncComponent({
+  loader: () => import('./components/TerminalWindow.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Terminal...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Terminal component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const SettingsPanel = defineAsyncComponent({
+  loader: () => import('./components/SettingsPanel.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Settings...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Settings component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const SecretsManager = defineAsyncComponent({
+  loader: () => import('./components/SecretsManager.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Secrets...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Secrets component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const FileBrowser = defineAsyncComponent({
+  loader: () => import('./components/FileBrowser.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading File Browser...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load File Browser component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const SystemMonitor = defineAsyncComponent({
+  loader: () => import('./components/SystemMonitor.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading System Monitor...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load System Monitor component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const WorkflowApproval = defineAsyncComponent({
+  loader: () => import('./components/WorkflowApproval.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-4"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div><span class="ml-2">Loading Workflow...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Workflow component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const ValidationDashboard = defineAsyncComponent({
+  loader: () => import('./components/ValidationDashboard.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Validation Dashboard...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Validation Dashboard component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
+const RumDashboard = defineAsyncComponent({
+  loader: () => import('./components/RumDashboard.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading RUM Dashboard...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load RUM Dashboard component</div>' },
+  delay: 100,
+  timeout: 10000
+});
 import elevationService from './services/elevationService';
 
 export default {

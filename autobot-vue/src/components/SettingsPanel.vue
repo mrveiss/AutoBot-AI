@@ -12,8 +12,20 @@
       </button>
     </div>
     <div class="settings-content">
+      <!-- Loading indicator -->
+      <div v-if="settingsLoadingStatus === 'loading'" class="settings-loading">
+        <div class="loading-spinner"></div>
+        <p>Loading settings...</p>
+      </div>
+
+      <!-- Settings status message -->
+      <div v-if="settingsLoadingStatus === 'offline'" class="settings-status offline">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>Backend offline - using cached settings</span>
+      </div>
+
       <!-- Chat Settings -->
-      <div v-if="activeTab === 'chat' && settings.chat" class="settings-section">
+      <div v-if="activeTab === 'chat' && settings.chat && isSettingsLoaded" class="settings-section">
         <h3>Chat Settings</h3>
         <div class="setting-item">
           <label>Auto Scroll to Bottom</label>
@@ -677,6 +689,7 @@ export default {
     // Settings structure will be populated from backend or local storage
     const settings = ref(defaultSettings());
     const isSettingsLoaded = ref(false);
+    const settingsLoadingStatus = ref('loading'); // 'loading', 'loaded', 'error', 'offline'
     const developerInfo = ref(null);
     const healthStatus = ref({
       llm: {
@@ -770,6 +783,8 @@ export default {
 
     // Function to load settings from backend config.yaml
     const loadSettingsFromBackend = async () => {
+      let settingsSource = 'default';
+
       try {
         const response = await apiClient.get('/api/settings/config');
         const configSettings = await response.json();
@@ -780,24 +795,47 @@ export default {
 
         // Save to local storage as well
         localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+        settingsSource = 'backend';
+        settingsLoadingStatus.value = 'loaded';
+
+        // Clear any previous error messages
+        if (saveMessage.value && saveMessage.value.includes('backend offline')) {
+          saveMessage.value = '';
+        }
+
       } catch (error) {
-        console.error('Error loading settings from backend:', error);
+        console.warn('Backend unavailable, using local settings:', error.message);
+
         // Load from local storage if backend fails
         const savedSettings = localStorage.getItem('chat_settings');
         if (savedSettings) {
           try {
             const parsedSettings = JSON.parse(savedSettings);
             settings.value = deepMerge(defaultSettings(), parsedSettings);
+            settingsSource = 'local';
           } catch (e) {
             console.error('Error parsing saved settings:', e);
             settings.value = defaultSettings();
+            settingsSource = 'default';
           }
         } else {
           settings.value = defaultSettings();
+          settingsSource = 'default';
         }
+
+        // Show user-friendly message about offline mode
+        saveMessage.value = `Settings loaded from ${settingsSource} storage (backend offline)`;
+        saveMessageType.value = 'warning';
+        settingsLoadingStatus.value = 'offline';
       }
+
       // Load prompts after settings are loaded
       await loadPrompts();
+
+      // Mark settings as loaded regardless of source
+      isSettingsLoaded.value = true;
+
+      console.info(`Settings loaded from: ${settingsSource}`);
     };
 
     // Function to sync settings panel with actual agent configuration
@@ -1250,6 +1288,7 @@ export default {
       savePrompt,
       revertPromptToDefault,
       isSettingsLoaded,
+      settingsLoadingStatus,
       onProviderTypeChange,
       onLocalProviderChange,
       onCloudProviderChange,
@@ -1707,5 +1746,48 @@ export default {
 .status-value.disconnected {
   color: #dc3545;
   font-weight: 500;
+}
+
+/* Settings loading and status styles */
+.settings-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  color: #6c757d;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e9ecef;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.settings-status {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  margin-bottom: 15px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.settings-status.offline {
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  color: #856404;
+}
+
+.settings-status i {
+  margin-right: 8px;
 }
 </style>
