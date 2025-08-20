@@ -36,6 +36,7 @@ class PromptManager:
             loader=FileSystemLoader(str(self.prompts_dir)),
             trim_blocks=True,
             lstrip_blocks=True,
+            autoescape=True,  # Enable autoescaping for security
         )
 
         # Load all prompts on initialization
