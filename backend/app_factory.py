@@ -27,6 +27,7 @@ from backend.api.developer import (
     enhanced_405_handler,
 )
 from backend.api.developer import router as developer_router
+from backend.api.error_monitoring import router as error_monitoring_router
 from backend.api.files import router as files_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.kb_librarian import router as kb_librarian_router
@@ -43,10 +44,10 @@ from backend.api.settings import router as settings_router
 from backend.api.system import router as system_router
 from backend.api.templates import router as templates_router
 from backend.api.terminal import router as terminal_router
+from backend.api.terminal_consolidated import router as terminal_consolidated_router
 from backend.api.voice import router as voice_router
 from backend.api.websockets import router as websocket_router
 from backend.api.workflow import router as workflow_router
-from backend.api.error_monitoring import router as error_monitoring_router
 
 # Import workflow automation router
 try:
@@ -472,6 +473,12 @@ def add_api_routes(app: FastAPI) -> None:
         (developer_router, "/developer", ["developer"], "developer"),
         (kb_librarian_router, "/kb-librarian", ["kb-librarian"], "kb_librarian"),
         (terminal_router, "/terminal", ["terminal"], "terminal"),
+        (
+            terminal_consolidated_router,
+            "/terminal/consolidated",
+            ["terminal_consolidated"],
+            "terminal_consolidated",
+        ),
         (workflow_router, "/workflow", ["workflow"], "workflow"),
         (metrics_router, "/metrics", ["metrics"], "metrics"),
         (templates_router, "/templates", ["templates"], "templates"),

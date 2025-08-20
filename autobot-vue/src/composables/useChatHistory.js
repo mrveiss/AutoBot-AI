@@ -46,12 +46,12 @@ export function useChatHistory() {
   // Function to fetch chat history from backend with fallback to local storage
   const loadChatList = async () => {
     try {
-      const response = await apiClient.get('/api/chats');
-      const chats = response.chats || [];
+      const response = await apiClient.get('/api/list_sessions');
+      const chats = response.sessions || [];
 
       const processedChats = await Promise.all(chats.map(async (chat) => {
         try {
-          const messagesResponse = await apiClient.getChatMessages(chat.chatId);
+          const messagesResponse = await apiClient.get(`/api/load_session/${chat.chatId}`);
           const messages = messagesResponse.history || [];
           const userMessage = messages.find(msg => msg.sender === 'user');
           const subject = userMessage ?
@@ -112,7 +112,7 @@ export function useChatHistory() {
     }
 
     try {
-      await apiClient.deleteChat(chatId);
+      await apiClient.delete(`/api/chats/${chatId}`);
 
       // Remove from local storage
       localStorage.removeItem(`chat_${chatId}_messages`);
@@ -136,7 +136,7 @@ export function useChatHistory() {
   // Function to create a new chat
   const createNewChat = async () => {
     try {
-      const newChatData = await apiClient.createNewChat();
+      const newChatData = await apiClient.post('/api/chats/new');
       const newChatId = newChatData.chat_id;
 
       // Add to chat list

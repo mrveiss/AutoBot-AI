@@ -66,11 +66,11 @@ class ChatManager {
   // Get list of all chats
   async getChatList() {
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/chats`);
+      const response = await fetch(`${this.apiEndpoint}/api/list_sessions`);
 
       if (response.ok) {
         const data = await response.json();
-        const chats = data.chats || [];
+        const chats = data.sessions || [];
         // Filter out chats with invalid IDs
         return chats.filter(chat => chat.chatId && chat.chatId !== 'undefined' && chat.chatId !== 'null');
       } else {
@@ -103,7 +103,7 @@ class ChatManager {
   async loadChatMessages(chatId) {
     try {
       // Try backend first
-      const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}`);
+      const response = await fetch(`${this.apiEndpoint}/api/load_session/${chatId}`);
 
       if (response.ok) {
         const messages = await response.json();
