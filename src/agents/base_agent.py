@@ -6,11 +6,25 @@ Provides unified interface for agents running locally or in containers
 import asyncio
 import json
 import logging
+import time
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
+
+# Import communication protocol
+from src.protocols.agent_communication import (
+    AgentIdentity, 
+    AgentCommunicationManager,
+    get_communication_manager,
+    MessageType,
+    MessagePriority,
+    StandardMessage,
+    MessageHeader,
+    MessagePayload
+)
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +133,11 @@ class BaseAgent(ABC):
         self.success_count = 0
         self.error_count = 0
         self.total_execution_time = 0.0
+
+        # Communication protocol integration
+        self.agent_id = f"{agent_type}_{uuid.uuid4().hex[:8]}"
+        self.communication_protocol = None
+        self._message_handlers = {}
 
         logger.info(f"Initialized {agent_type} agent in {deployment_mode.value} mode")
 
@@ -249,6 +268,119 @@ class BaseAgent(ABC):
                 error=str(e),
                 execution_time=execution_time,
             )
+
+    # Communication Protocol Methods
+    async def initialize_communication(self, capabilities: List[str] = None) -> bool:
+        """Initialize agent communication protocol"""
+        try:
+            # Create agent identity
+            identity = AgentIdentity(
+                agent_id=self.agent_id,
+                agent_type=self.agent_type,
+                capabilities=capabilities or self.capabilities,
+                supported_patterns=[],
+                health_status="healthy"
+            )
+
+            # Register with communication manager
+            manager = get_communication_manager()
+            channel_configs = [
+                {"type": "direct", "id": f"{self.agent_id}_direct"},
+                {"type": "redis", "id": f"{self.agent_id}_redis"}
+            ]
+            
+            self.communication_protocol = await manager.register_agent(identity, channel_configs)
+            
+            # Register default message handlers
+            self.communication_protocol.register_message_handler(
+                MessageType.REQUEST, self._handle_communication_request
+            )
+            
+            logger.info(f"Agent {self.agent_id} communication initialized")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize communication for {self.agent_id}: {e}")
+            return False
+
+    async def _handle_communication_request(self, message: StandardMessage) -> Optional[StandardMessage]:
+        """Handle incoming communication requests"""
+        try:
+            # Convert communication message to AgentRequest
+            request_data = message.payload.content
+            agent_request = AgentRequest(
+                request_id=message.header.message_id,
+                agent_type=self.agent_type,
+                action=request_data.get('action', 'process'),
+                payload=request_data.get('payload', {}),
+                context=request_data.get('context', {}),
+                priority=request_data.get('priority', 'normal')
+            )
+
+            # Process the request
+            response = await self.process_request(agent_request)
+
+            # Convert AgentResponse back to communication message
+            response_message = StandardMessage(
+                header=MessageHeader(message_type=MessageType.RESPONSE),
+                payload=MessagePayload(content={
+                    'status': response.status,
+                    'result': response.result,
+                    'error': response.error,
+                    'execution_time': response.execution_time
+                })
+            )
+
+            return response_message
+
+        except Exception as e:
+            logger.error(f"Error handling communication request: {e}")
+            # Return error response
+            return StandardMessage(
+                header=MessageHeader(message_type=MessageType.ERROR),
+                payload=MessagePayload(content={
+                    'error': str(e),
+                    'error_type': type(e).__name__
+                })
+            )
+
+    async def send_message_to_agent(self, recipient_id: str, message_data: Any, 
+                                   timeout: float = 30.0) -> Optional[Any]:
+        """Send a message to another agent"""
+        if not self.communication_protocol:
+            logger.error(f"Communication not initialized for agent {self.agent_id}")
+            return None
+
+        try:
+            from src.protocols.agent_communication import send_agent_request
+            return await send_agent_request(self.agent_id, recipient_id, message_data, timeout)
+        except Exception as e:
+            logger.error(f"Error sending message to {recipient_id}: {e}")
+            return None
+
+    async def broadcast_message(self, message_data: Any) -> int:
+        """Broadcast a message to all agents"""
+        if not self.communication_protocol:
+            logger.error(f"Communication not initialized for agent {self.agent_id}")
+            return 0
+
+        try:
+            from src.protocols.agent_communication import broadcast_to_all_agents
+            return await broadcast_to_all_agents(self.agent_id, message_data)
+        except Exception as e:
+            logger.error(f"Error broadcasting message: {e}")
+            return 0
+
+    async def shutdown_communication(self):
+        """Shutdown agent communication"""
+        if self.communication_protocol:
+            try:
+                manager = get_communication_manager()
+                await manager.unregister_agent(self.agent_id)
+                self.communication_protocol = None
+                logger.info(f"Agent {self.agent_id} communication shutdown")
+            except Exception as e:
+                logger.error(f"Error shutting down communication: {e}")
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get performance statistics for this agent"""
