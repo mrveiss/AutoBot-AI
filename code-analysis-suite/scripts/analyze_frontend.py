@@ -26,8 +26,8 @@ async def analyze_frontend_code():
     
     # Analyze frontend code
     results = await analyzer.analyze_frontend_code(
-        root_path=".",
-        patterns=["**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.vue", "**/*.svelte", "**/*.html"]
+        root_path="..",
+        patterns=["autobot-vue/src/**/*.js", "autobot-vue/src/**/*.ts", "autobot-vue/src/**/*.jsx", "autobot-vue/src/**/*.tsx", "autobot-vue/src/**/*.vue", "autobot-vue/src/**/*.svelte", "autobot-vue/index.html"]
     )
     
     print("=== Frontend Code Analysis Results ===\n")
