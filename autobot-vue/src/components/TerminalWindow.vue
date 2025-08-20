@@ -1,14 +1,15 @@
 <template>
-  <div class="terminal-window-standalone">
+  <div class="terminal-window-standalone" data-testid="terminal-window">
     <div class="window-header">
       <div class="window-title">
         <span class="terminal-icon">⬛</span>
-        <span>Terminal - {{ sessionTitle }}</span>
+        <span data-testid="terminal-title">Terminal - {{ sessionTitle }}</span>
       </div>
       <div class="window-controls">
         <!-- Emergency Kill Button -->
         <button
           class="control-button emergency-kill"
+          data-testid="emergency-kill-button"
           @click="emergencyKillAll"
           :disabled="!hasRunningProcesses"
           title="EMERGENCY KILL - Stop all running processes immediately"
@@ -30,6 +31,7 @@
         <!-- Interrupt Current Process -->
         <button
           class="control-button interrupt"
+          data-testid="interrupt-button"
           @click="interruptProcess"
           :disabled="!hasActiveProcess"
           title="Send Ctrl+C to interrupt current process"
@@ -39,6 +41,7 @@
 
         <button
           class="control-button"
+          data-testid="reconnect-button"
           @click="reconnect"
           :disabled="connecting"
           title="Reconnect"
@@ -47,6 +50,7 @@
         </button>
         <button
           class="control-button"
+          data-testid="clear-button"
           @click="clearTerminal"
           title="Clear"
         >
@@ -82,6 +86,7 @@
     <div class="terminal-main" ref="terminalMain">
       <div
         class="terminal-output"
+        data-testid="terminal-output"
         ref="terminalOutput"
         @click="focusInput"
        tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
@@ -101,11 +106,21 @@
             @keydown="handleKeydown"
             @keyup.enter="sendCommand"
             class="terminal-input"
+            data-testid="terminal-input"
             :disabled="!canInput"
             autocomplete="off"
             spellcheck="false"
             autofocus
           />
+          <button
+            class="send-button"
+            data-testid="terminal-send"
+            @click="sendCommand"
+            :disabled="!canInput"
+            title="Send Command"
+          >
+            ⏎
+          </button>
           <span class="cursor" :class="{ 'blink': showCursor }">█</span>
         </div>
       </div>
@@ -1631,6 +1646,28 @@ export default {
   outline: none;
   flex: 1;
   min-width: 0;
+}
+
+.send-button {
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid rgba(0, 255, 0, 0.3);
+  color: #00ff00;
+  padding: 4px 8px;
+  margin-left: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.send-button:hover:not(:disabled) {
+  background: rgba(0, 255, 0, 0.2);
+  border-color: rgba(0, 255, 0, 0.5);
+}
+
+.send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .cursor {
