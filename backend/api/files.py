@@ -8,6 +8,7 @@ path traversal protection, and authentication/authorization.
 import logging
 import mimetypes
 import shutil
+import aiofiles
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -442,9 +443,9 @@ async def upload_file(
                 detail="File already exists. Use overwrite=true to replace it.",
             )
 
-        # Write file
-        with open(target_file, "wb") as f:
-            f.write(content)
+        # Write file - PERFORMANCE FIX: Convert to async file I/O
+        async with aiofiles.open(target_file, "wb") as f:
+            await f.write(content)
 
         # Get file info for response
         relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
@@ -547,8 +548,9 @@ async def view_file(request: Request, path: str):
         content = None
         if file_info.mime_type and file_info.mime_type.startswith("text/"):
             try:
-                with open(target_file, "r", encoding="utf-8") as f:
-                    content = f.read()
+                # PERFORMANCE FIX: Convert to async file I/O
+                async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
+                    content = await f.read()
             except UnicodeDecodeError:
                 # File is binary, don't include content
                 pass
