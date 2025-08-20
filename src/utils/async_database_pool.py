@@ -151,13 +151,13 @@ class AsyncSQLiteConnectionPool:
                     # Pool is full, close connection
                     try:
                         await conn.close()
-                    except:
+                    except Exception:
                         pass
                 except Exception as e:
                     logger.error(f"Error returning connection to pool: {e}")
                     try:
                         await conn.close()
-                    except:
+                    except Exception:
                         pass
 
     async def close_all(self):
