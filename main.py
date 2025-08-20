@@ -14,13 +14,11 @@ import logging.config
 from backend.app_factory import create_app
 from src.config import config as global_config_manager
 
-# Configure logging at the very beginning
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("logs/autobot_backend.log"), logging.StreamHandler()],
-)
-logger = logging.getLogger(__name__)
+# Configure logging using centralized logging manager
+from src.utils.logging_manager import get_backend_logger, setup_logging
+
+setup_logging()
+logger = get_backend_logger(__name__)
 
 # Create the FastAPI application at module level for ASGI server
 app = create_app()
