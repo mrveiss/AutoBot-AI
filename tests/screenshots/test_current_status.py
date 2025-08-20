@@ -3,15 +3,15 @@
 Test current status of workflow orchestration after restart
 """
 
-import sys
 import asyncio
+import sys
 from pathlib import Path
 
 # Add AutoBot to Python path
 sys.path.append(str(Path(__file__).parent))
 
 from src.orchestrator import Orchestrator
-from src.types import TaskComplexity
+from src.type_definitions import TaskComplexity
 
 
 async def test_current_status():
