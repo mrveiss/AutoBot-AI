@@ -1,11 +1,19 @@
 import asyncio
 import json
-import logging
+import os
 import re
 
-import requests
 import aiohttp
+import requests
 from dotenv import load_dotenv
+
+# Import configuration managers
+from src.circuit_breaker import circuit_breaker_async
+from src.config import config as global_config_manager
+from src.prompt_manager import prompt_manager
+from src.retry_mechanism import retry_network_operation
+from src.utils.config_manager import config_manager
+from src.utils.logging_manager import get_llm_logger
 
 # Conditional torch import for environments without CUDA
 try:
@@ -17,17 +25,7 @@ except ImportError:
     TORCH_AVAILABLE = False
     torch = None
 
-from src.circuit_breaker import circuit_breaker_async
-
-# Import configuration managers
-from src.config import config as global_config_manager
-from src.utils.config_manager import config_manager
-from src.prompt_manager import prompt_manager
-from src.retry_mechanism import retry_network_operation
-
 load_dotenv()
-
-from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("llm")
 
@@ -86,11 +84,14 @@ palm = MockPalm()
 class LLMInterface:
     def __init__(self):
         # Use centralized configuration with fallback to environment variables
-        self.ollama_host = config_manager.get("llm.ollama.base_url", "http://localhost:11434")
-        
+        self.ollama_host = config_manager.get(
+            "llm.ollama.base_url", "http://localhost:11434"
+        )
+
         # Try config first, then environment variable
-        self.openai_api_key = (config_manager.get("llm.openai.api_key", "") or 
-                              config_manager.get("openai.api_key", ""))
+        self.openai_api_key = config_manager.get(
+            "llm.openai.api_key", ""
+        ) or config_manager.get("openai.api_key", "")
 
         self.ollama_models = global_config_manager.get_nested(
             "llm_config.ollama.models", {}
@@ -220,7 +221,7 @@ class LLMInterface:
         try:
             health_check_url = f"{self.ollama_host}/api/tags"
 
-            # Use retry mechanism for network connection - PERFORMANCE FIX: Native async HTTP
+            # Use retry mechanism for network connection - Native async HTTP
             async def make_request():
                 timeout = aiohttp.ClientTimeout(total=5)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -518,18 +519,20 @@ class LLMInterface:
             async def make_llm_request():
                 timeout = aiohttp.ClientTimeout(total=600)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(url, headers=headers, json=data) as response:
+                    async with session.post(
+                        url, headers=headers, json=data
+                    ) as response:
                         response.raise_for_status()
                         response_text = await response.text()
                         response_json = await response.json()
-                        
+
                         print(f"Ollama Raw Response Status: {response.status}")
                         print(f"Ollama Raw Response Headers: {response.headers}")
                         print(f"Ollama Raw Response Text: {response_text}")
                         logger.debug(f"Ollama Raw Response Status: {response.status}")
                         logger.debug(f"Ollama Raw Response Headers: {response.headers}")
                         logger.debug(f"Ollama Raw Response Text: {response_text}")
-                        
+
                         return response_json
 
             return await retry_network_operation(make_llm_request)
@@ -588,16 +591,22 @@ class LLMInterface:
             **kwargs,
         }
         try:
-            # Use retry mechanism for OpenAI API calls - PERFORMANCE FIX: Native async HTTP
+            # Use retry mechanism for OpenAI API calls - Native async HTTP
             async def make_openai_request():
                 timeout = aiohttp.ClientTimeout(total=600)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(url, headers=headers, json=data) as response:
+                    async with session.post(
+                        url, headers=headers, json=data
+                    ) as response:
                         response.raise_for_status()
                         return await response.json()
 
             return await retry_network_operation(make_openai_request)
-        except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError, asyncio.TimeoutError) as e:
+        except (
+            aiohttp.ClientResponseError,
+            aiohttp.ClientConnectorError,
+            asyncio.TimeoutError,
+        ) as e:
             print(f"Error communicating with OpenAI: {e}")
             return None
 
