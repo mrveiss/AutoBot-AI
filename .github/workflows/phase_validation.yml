@@ -1,0 +1,305 @@
+name: Phase Validation Integration
+
+on:
+  push:
+    branches: [ main, Dev_new_gui ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      phase_filter:
+        description: 'Specific phase to validate (leave empty for all phases)'
+        required: false
+        default: ''
+
+env:
+  PYTHON_VERSION: '3.10'
+
+jobs:
+  phase-validation:
+    name: AutoBot Phase Validation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y redis-server build-essential python3-dev
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install aiohttp psutil requests pyyaml
+
+    - name: Create necessary directories and config files
+      run: |
+        mkdir -p data logs static config
+        touch data/.gitkeep logs/.gitkeep static/.gitkeep
+
+        # Create minimal config for validation
+        cat > config/config.yaml << 'EOF'
+        llm:
+          orchestrator_llm: "mock"
+          task_llm: "mock"
+          ollama:
+            model: "mock-model"
+            models: {}
+          unified:
+            embedding:
+              providers:
+                ollama:
+                  selected_model: "mock-embed"
+        deployment:
+          mode: "local"
+        data:
+          reliability_stats_file: "data/reliability_stats.json"
+        diagnostics:
+          enabled: false
+          use_llm_for_analysis: false
+          use_web_search_for_analysis: false
+          auto_apply_fixes: false
+        redis:
+          host: "localhost"
+          port: 6379
+          db: 0
+        EOF
+
+    - name: Start Redis server
+      run: |
+        sudo systemctl start redis-server
+        redis-cli ping
+
+    - name: Start backend for validation
+      run: |
+        # Start backend in background for endpoint validation
+        cd backend
+        python -m pip install -r ../requirements-ci.txt --prefer-binary
+        timeout 60s python main.py &
+        BACKEND_PID=$!
+        sleep 10  # Give backend time to start
+
+        # Check if backend is running
+        if curl -f http://localhost:8001/api/system/health; then
+          echo "✅ Backend started successfully"
+        else
+          echo "⚠️ Backend startup failed - continuing with file validation only"
+        fi
+
+    - name: Run Phase Validation System
+      run: |
+        echo "🔍 Running AutoBot Phase Validation System..."
+
+        # Run the validation system
+        python scripts/phase_validation_system.py --output-format json > phase_validation_results.json
+
+        # Display results
+        echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY
+        python -c "
+        import json
+        try:
+            with open('phase_validation_results.json', 'r') as f:
+                results = json.load(f)
+
+            print(f'📊 **Overall System Maturity:** {results.get(\"overall_maturity\", 0):.1f}%')
+            print('')
+            print('### Phase Details:')
+
+            for phase in results.get('phases', []):
+                status = phase.get('status', 'unknown')
+                completion = phase.get('completion_percentage', 0)
+                emoji = '✅' if status == 'complete' else '🔄' if status == 'in_progress' else '❌'
+                print(f'{emoji} **{phase.get(\"name\", \"Unknown\")}**: {completion:.1f}% complete')
+
+                # Show failing criteria
+                if completion < 100:
+                    criteria = phase.get('validation_details', {})
+                    for check_type, check_data in criteria.items():
+                        if not check_data.get('passed', True):
+                            print(f'   - ⚠️ {check_type}: {check_data.get(\"message\", \"Failed\")}')
+
+        except Exception as e:
+            print(f'Error reading validation results: {e}')
+        " >> $GITHUB_STEP_SUMMARY
+
+    - name: Generate Validation Dashboard
+      run: |
+        echo "📈 Generating validation dashboard..."
+        python scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "⚠️ Dashboard generation failed"
+
+    - name: Phase Validation Gate
+      run: |
+        echo "🚪 Checking phase validation gate..."
+
+        # Extract overall maturity from results
+        MATURITY=$(python -c "
+        import json, sys
+        try:
+            with open('phase_validation_results.json', 'r') as f:
+                results = json.load(f)
+            print(results.get('overall_maturity', 0))
+        except:
+            print(0)
+        ")
+
+        echo "System maturity: ${MATURITY}%"
+
+        # Set minimum maturity threshold for different branches
+        if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          THRESHOLD=80
+          echo "Main branch - requiring ${THRESHOLD}% maturity"
+        else
+          THRESHOLD=60
+          echo "Development branch - requiring ${THRESHOLD}% maturity"
+        fi
+
+        # Compare maturity to threshold
+        if (( $(echo "$MATURITY >= $THRESHOLD" | bc -l) )); then
+          echo "✅ Phase validation passed: ${MATURITY}% >= ${THRESHOLD}%"
+        else
+          echo "❌ Phase validation failed: ${MATURITY}% < ${THRESHOLD}%"
+          echo "## ❌ Phase Validation Gate Failed" >> $GITHUB_STEP_SUMMARY
+          echo "Current maturity (${MATURITY}%) does not meet threshold (${THRESHOLD}%)" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+    - name: Upload Validation Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: phase-validation-reports
+        path: |
+          phase_validation_results.json
+          validation_dashboard.html
+        retention-days: 30
+
+    - name: Comment Phase Status on PR
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+
+          try {
+            const results = JSON.parse(fs.readFileSync('phase_validation_results.json', 'utf8'));
+
+            let comment = '## 🤖 AutoBot Phase Validation Results\n\n';
+            comment += `**System Maturity:** ${results.overall_maturity?.toFixed(1)}%\n\n`;
+            comment += '### Phase Status:\n\n';
+
+            for (const phase of results.phases || []) {
+              const emoji = phase.status === 'complete' ? '✅' :
+                           phase.status === 'in_progress' ? '🔄' : '❌';
+              comment += `${emoji} **${phase.name}**: ${phase.completion_percentage?.toFixed(1)}%\n`;
+            }
+
+            comment += '\n### Recommendations:\n';
+            for (const rec of results.recommendations || []) {
+              comment += `- ${rec.title}: ${rec.action}\n`;
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('Could not post phase validation comment:', error.message);
+          }
+
+    - name: Phase Validation Summary
+      if: always()
+      run: |
+        echo "🎯 Phase Validation Summary"
+        echo "=========================="
+
+        if [ -f "phase_validation_results.json" ]; then
+          python -c "
+          import json
+          with open('phase_validation_results.json', 'r') as f:
+              results = json.load(f)
+
+          maturity = results.get('overall_maturity', 0)
+          phases = results.get('phases', [])
+
+          print(f'📊 Overall System Maturity: {maturity:.1f}%')
+          print(f'📋 Phases Evaluated: {len(phases)}')
+
+          complete_phases = sum(1 for p in phases if p.get('status') == 'complete')
+          print(f'✅ Complete Phases: {complete_phases}/{len(phases)}')
+
+          if maturity >= 80:
+              print('🎉 System is production-ready!')
+          elif maturity >= 60:
+              print('🔧 System is development-ready')
+          else:
+              print('🚧 System needs additional development')
+          "
+        else
+          echo "❌ No validation results found"
+        fi
+
+  integration-validation:
+    name: Integration Phase Validation
+    runs-on: ubuntu-latest
+    needs: phase-validation
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download validation results
+      uses: actions/download-artifact@v4
+      with:
+        name: phase-validation-reports
+
+    - name: Integration readiness check
+      run: |
+        echo "🔗 Checking integration readiness..."
+
+        # Check if validation results indicate system is ready for integration
+        MATURITY=$(python -c "
+        import json
+        try:
+            with open('phase_validation_results.json', 'r') as f:
+                results = json.load(f)
+            print(results.get('overall_maturity', 0))
+        except:
+            print(0)
+        ")
+
+        if (( $(echo "$MATURITY >= 70" | bc -l) )); then
+          echo "✅ System ready for integration (${MATURITY}%)"
+          echo "## ✅ Integration Ready" >> $GITHUB_STEP_SUMMARY
+          echo "System maturity: ${MATURITY}% - Ready for integration testing" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ System not ready for integration (${MATURITY}%)"
+          echo "## ⚠️ Integration Not Ready" >> $GITHUB_STEP_SUMMARY
+          echo "System maturity: ${MATURITY}% - Additional development required" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Update phase progression status
+      run: |
+        echo "📊 Updating phase progression status..."
+
+        # This could integrate with your phase progression system
+        # to automatically update the current system phase based on validation
+        echo "Phase validation completed at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "Results available in validation dashboard"
