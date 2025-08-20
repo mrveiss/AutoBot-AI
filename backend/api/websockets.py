@@ -12,10 +12,34 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from src.event_manager import event_manager
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+@router.websocket("/ws-test")
+async def websocket_test_endpoint(websocket: WebSocket):
+    """Simple test WebSocket endpoint without event manager integration."""
+    try:
+        await websocket.accept()
+        logger.info("Test WebSocket connected successfully")
+        await websocket.send_json(
+            {"type": "connected", "message": "Test connection successful"}
+        )
+
+        while websocket.client_state == WebSocketState.CONNECTED:
+            try:
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                await websocket.send_json({"type": "echo", "message": message})
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+            except Exception as e:
+                logger.error(f"Error in test WebSocket: {e}")
+                break
+
+    except Exception as e:
+        logger.error(f"Test WebSocket error: {e}")
+    finally:
+        logger.info("Test WebSocket disconnected")
 
 
 @router.websocket("/ws")
@@ -28,13 +52,39 @@ async def websocket_endpoint(websocket: WebSocket):
     - Chat history integration for all events
     - Event type mapping and message formatting
     """
-    await websocket.accept()
-    logger.info(f"WebSocket connected from client: {websocket.client}")
-    logger.info(f"Requested WebSocket path: {websocket.scope['path']}")
-    logger.info(f"WebSocket connection type: {websocket.scope['type']}")
+    chat_history_manager = None
 
-    # Access chat_history_manager from app.state via scope
-    chat_history_manager = websocket.scope["app"].state.chat_history_manager
+    try:
+        await websocket.accept()
+        logger.info(f"WebSocket connected from client: {websocket.client}")
+
+        # Send immediate connection confirmation
+        await websocket.send_json(
+            {
+                "type": "connection_established",
+                "payload": {"message": "WebSocket connected successfully"},
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to accept WebSocket connection: {e}", exc_info=True)
+        return
+
+    # Access chat_history_manager from app.state via scope with error handling
+    try:
+        if hasattr(websocket.scope.get("app"), "state"):
+            chat_history_manager = getattr(
+                websocket.scope["app"].state, "chat_history_manager", None
+            )
+            if chat_history_manager:
+                logger.info("Successfully accessed chat_history_manager from app.state")
+            else:
+                logger.warning("chat_history_manager not available in app.state")
+        else:
+            logger.warning("app.state not available in WebSocket scope")
+    except Exception as e:
+        logger.error(f"Failed to access chat_history_manager: {e}")
+        # Don't send error to client here, just continue without chat history
 
     async def broadcast_event(event_data: dict):
         """
@@ -143,16 +193,31 @@ async def websocket_endpoint(websocket: WebSocket):
                 text = f"🛑 Workflow {workflow_id}: Cancelled by user"
                 sender = "workflow"
 
-            # Add to chat history if we have meaningful text
-            if text:
-                chat_history_manager.add_message(sender, text, message_type, raw_data)
+            # Add to chat history if we have meaningful text and chat_history_manager is available
+            if text and chat_history_manager:
+                try:
+                    chat_history_manager.add_message(
+                        sender, text, message_type, raw_data
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to add message to chat history: {e}")
 
         except RuntimeError as e:
             logger.error(f"Error sending to WebSocket: {e}")
             # Connection may have been closed, continue silently
 
     # Register the broadcast function with the event manager
-    event_manager.register_websocket_broadcast(broadcast_event)
+    try:
+        from src.event_manager import event_manager
+
+        event_manager.register_websocket_broadcast(broadcast_event)
+        logger.info("Successfully registered WebSocket broadcast with event manager")
+    except ImportError as e:
+        logger.warning(f"Event manager not available, continuing without it: {e}")
+        # Continue without event manager - this is not critical
+    except Exception as e:
+        logger.warning(f"Failed to register WebSocket broadcast, continuing: {e}")
+        # Continue without event manager registration - this is not critical
 
     try:
         # Keep connection alive and handle incoming messages
@@ -161,22 +226,41 @@ async def websocket_endpoint(websocket: WebSocket):
                 message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
             except asyncio.TimeoutError:
                 # Send ping to keep connection alive
-                await websocket.send_text(json.dumps({"type": "ping"}))
+                try:
+                    await websocket.send_text(json.dumps({"type": "ping"}))
+                except Exception as e:
+                    logger.error(f"Failed to send ping: {e}")
+                    break
                 continue
+            except Exception as e:
+                logger.error(f"Error receiving message: {e}")
+                break
+
             try:
                 data = json.loads(message)
                 if data.get("type") == "user_message":
                     # Handle user messages if needed
                     # For now, just log them
                     logger.debug(f"Received user message via WebSocket: {data}")
+                elif data.get("type") == "pong":
+                    # Client responded to ping
+                    logger.debug("Received pong from client")
             except json.JSONDecodeError:
                 logger.warning(f"Received invalid JSON via WebSocket: {message}")
 
     except WebSocketDisconnect:
-        logger.info("WebSocket disconnected")
+        logger.info("WebSocket disconnected normally")
     except Exception as e:
         logger.error(f"WebSocket error: {e}", exc_info=True)
     finally:
         # Unregister the broadcast function when connection closes
-        event_manager.register_websocket_broadcast(None)
+        try:
+            from src.event_manager import event_manager
+
+            event_manager.register_websocket_broadcast(None)
+            logger.info("WebSocket broadcast unregistered from event manager")
+        except ImportError:
+            logger.debug("Event manager not available for cleanup")
+        except Exception as e:
+            logger.error(f"Error during event manager cleanup: {e}")
         logger.info("WebSocket connection cleanup completed")
