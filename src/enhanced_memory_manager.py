@@ -372,8 +372,11 @@ class EnhancedMemoryManager:
         """Store embedding vector as pickled blob in SQLite"""
         content_hash = hashlib.sha256(content.encode()).hexdigest()
 
-        # Serialize embedding vector using pickle and base64 encode
-        embedding_data = base64.b64encode(pickle.dumps(embedding_vector))
+        # Serialize embedding vector using JSON and base64 encode
+        # This is safer than pickle for security
+        import json
+
+        embedding_data = base64.b64encode(json.dumps(embedding_vector).encode())
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
@@ -425,9 +428,11 @@ class EnhancedMemoryManager:
                 )
                 conn.commit()
 
-                # Deserialize embedding vector
+                # Deserialize embedding vector using JSON (safer than pickle)
+                import json
+
                 embedding_data = base64.b64decode(row[0])
-                embedding_vector = pickle.loads(embedding_data)
+                embedding_vector = json.loads(embedding_data.decode())
 
                 logger.debug(f"Retrieved cached embedding for: {content_hash[:16]}...")
                 return embedding_vector
