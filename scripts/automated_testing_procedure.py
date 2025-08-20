@@ -75,9 +75,20 @@ class AutomatedTestingSuite:
         start_time = time.time()
         
         try:
-            # Run pytest on the file
-            cmd = [sys.executable, "-m", "pytest", str(test_file), "-v", "--tb=short"]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            # Run pytest on the file with non-interactive environment
+            env = os.environ.copy()
+            env['CI'] = '1'  # Set CI environment variable
+            env['PYTEST_CURRENT_TEST'] = str(test_file)
+            
+            cmd = [sys.executable, "-m", "pytest", str(test_file), "-v", "--tb=short", "--no-header"]
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=60,
+                env=env,
+                stdin=subprocess.DEVNULL  # Prevent hanging on input
+            )
             
             duration = time.time() - start_time
             
