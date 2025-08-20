@@ -1,130 +1,22 @@
 <template>
   <div class="min-h-screen bg-blueGray-50">
-    <!-- Top Brand Bar -->
-    <nav class="bg-white shadow-lg flex flex-wrap items-center justify-between w-full z-[9998] relative py-4 px-6">
-      <div class="flex flex-row items-center justify-between w-full mx-auto">
-        <!-- Brand -->
-        <div class="flex items-center flex-shrink-0">
-          <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-full flex items-center justify-center shadow-lg">
-            <span class="text-white text-xl font-bold">A</span>
-          </div>
-          <span class="ml-3 text-xl font-semibold text-blueGray-700">AutoBot Pro</span>
-        </div>
-
-        <!-- Mobile menu button and dropdown container -->
-        <div class="relative" ref="mobileMenuContainer">
-          <button
-            class="cursor-pointer text-black opacity-50 md:hidden px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent"
-            type="button"
-            @click="toggleNavbar"
-           aria-label="No">
-            <i class="fas fa-bars" :class="navbarOpen ? 'fa-times' : 'fa-bars'"></i>
-          </button>
-
-          <!-- Mobile Navigation Menu -->
-          <div
-            v-if="navbarOpen"
-            class="md:hidden fixed top-16 right-4 z-[99999] w-64"
-            @click.stop
-           tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-            <div class="mt-2 bg-white rounded-lg p-4 shadow-xl border border-blueGray-200" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
-              <ul class="flex flex-col space-y-2">
-                <li>
-                  <a
-                    @click="updateRoute('dashboard')"
-                    :class="[activeTab === 'dashboard' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
-                    Dashboard
-                  </a>
-                </li>
-                <li>
-                  <a
-                    @click="updateRoute('chat')"
-                    :class="[activeTab === 'chat' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-comments mr-2 text-sm"></i>
-                    AI Assistant
-                  </a>
-                </li>
-                <li>
-                  <a
-                    @click="updateRoute('knowledge')"
-                    :class="[activeTab === 'knowledge' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-brain mr-2 text-sm"></i>
-                    Knowledge Base
-                  </a>
-                </li>
-                <li>
-                  <a
-                    @click="updateRoute('tools')"
-                    :class="[activeTab === 'tools' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-tools mr-2 text-sm"></i>
-                    Tools
-                  </a>
-                </li>
-                <li>
-                  <a
-                    @click="updateRoute('monitoring')"
-                    :class="[activeTab === 'monitoring' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-chart-bar mr-2 text-sm"></i>
-                    Monitoring
-                  </a>
-                </li>
-                <li>
-                  <a
-                    @click="updateRoute('secrets')"
-                    :class="[activeTab === 'secrets' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-key mr-2 text-sm"></i>
-                    Secrets
-                  </a>
-                </li>
-                <li>
-                  <a
-                    @click="updateRoute('settings')"
-                    :class="[activeTab === 'settings' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                    class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                  >
-                    <i class="fas fa-cog mr-2 text-sm"></i>
-                    Settings
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- User menu (Right) -->
-        <div class="flex items-center flex-shrink-0">
-          <a class="text-blueGray-600 hover:text-blueGray-800 px-3 py-2 flex items-center text-xs uppercase font-bold">
-            <i class="fas fa-user-circle text-lg mr-2"></i>
-            Admin User
-          </a>
-        </div>
-      </div>
-    </nav>
-
     <!-- Main content -->
     <div class="relative bg-blueGray-50" :class="activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
 
       <!-- Header gradient with navigation -->
-      <div class="relative bg-gradient-to-br from-indigo-600 to-indigo-800 md:pt-4 pb-4 pt-2 z-40">
-        <div class="px-4 md:px-10 mx-auto w-full">
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between">
-            <!-- Page heading removed - tab name already shown in navigation -->
+      <div class="relative bg-gradient-to-br from-indigo-600 to-indigo-800 z-40">
+        <div class="px-4 md:px-6 mx-auto w-full">
+          <div class="flex flex-row items-center justify-between py-3">
+            <!-- Brand (Left side) -->
+            <div class="flex items-center flex-shrink-0 ml-2">
+              <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
+                <span class="text-indigo-700 text-lg font-bold">A</span>
+              </div>
+              <span class="ml-3 text-lg font-semibold text-white">AutoBot Pro</span>
+            </div>
 
-            <!-- Navigation Links -->
-            <div class="flex items-center relative">
+            <!-- Navigation Links (Center) -->
+            <div class="flex-1 flex items-center justify-center">
               <!-- Desktop Navigation -->
               <div class="hidden md:flex">
                 <ul class="flex flex-row list-none space-x-1">
@@ -200,24 +92,147 @@
                   </li>
                 </ul>
               </div>
+            </div>
 
+            <!-- User menu and Mobile menu button (Right side) -->
+            <div class="flex items-center mr-2">
+              <!-- User menu (Desktop) -->
+              <div class="hidden md:flex items-center">
+                <a class="text-white hover:text-indigo-200 px-3 py-2 flex items-center text-xs uppercase font-bold transition-colors duration-150">
+                  <i class="fas fa-user-circle text-lg mr-2"></i>
+                  Admin User
+                </a>
+              </div>
+
+              <!-- Mobile menu button -->
+              <div class="relative md:hidden" ref="mobileMenuContainer">
+                <button
+                  class="cursor-pointer text-white px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent"
+                  type="button"
+                  @click="toggleNavbar"
+                  aria-label="Menu">
+                  <i class="fas fa-bars" :class="navbarOpen ? 'fa-times' : 'fa-bars'"></i>
+                </button>
+
+                <!-- Mobile Navigation Menu -->
+                <div
+                  v-if="navbarOpen"
+                  class="fixed top-16 right-4 z-[99999] w-64"
+                  @click.stop
+                  tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
+                  <div class="mt-2 bg-white rounded-lg p-4 shadow-xl border border-blueGray-200" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+                    <ul class="flex flex-col space-y-2">
+                      <li>
+                        <a
+                          @click="updateRoute('dashboard')"
+                          :class="[activeTab === 'dashboard' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        >
+                          <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
+                          Dashboard
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          @click="updateRoute('chat')"
+                          :class="[activeTab === 'chat' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        >
+                          <i class="fas fa-comments mr-2 text-sm"></i>
+                          AI Assistant
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          @click="updateRoute('knowledge')"
+                          :class="[activeTab === 'knowledge' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        >
+                          <i class="fas fa-brain mr-2 text-sm"></i>
+                          Knowledge Base
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          @click="updateRoute('tools')"
+                          :class="[activeTab === 'tools' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        >
+                          <i class="fas fa-tools mr-2 text-sm"></i>
+                          Tools
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          @click="updateRoute('monitoring')"
+                          :class="[activeTab === 'monitoring' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        >
+                          <i class="fas fa-chart-bar mr-2 text-sm"></i>
+                          Monitoring
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          @click="updateRoute('validation')"
+                          :class="[activeTab === 'validation' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        >
+                          <i class="fas fa-check-circle mr-2 text-sm"></i>
+                          Validation
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          @click="updateRoute('secrets')"
+                          :class="[activeTab === 'secrets' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        >
+                          <i class="fas fa-key mr-2 text-sm"></i>
+                          Secrets
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          @click="updateRoute('settings')"
+                          :class="[activeTab === 'settings' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        >
+                          <i class="fas fa-cog mr-2 text-sm"></i>
+                          Settings
+                        </a>
+                      </li>
+                      <li class="border-t border-gray-200 pt-2 mt-2">
+                        <div class="text-xs uppercase text-gray-500 font-bold px-3 py-1">
+                          <i class="fas fa-user-circle mr-2"></i>
+                          Admin User
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-
       <!-- Content area -->
-      <div class="px-4 md:px-10 mx-auto w-full" :class="activeTab === 'dashboard' ? 'mt-0' : (activeTab === 'chat' ? 'flex-1 flex flex-col' : 'mt-4')">
-        <div class="flex flex-wrap" :class="activeTab === 'chat' ? 'flex-1 h-full' : 'mt-4'">
+      <div class="px-4 md:px-10 mx-auto w-full" :class="activeTab === 'chat' ? 'flex-1 flex flex-col' : ''">
+        <div class="flex flex-wrap" :class="activeTab === 'chat' ? 'flex-1 h-full' : 'mt-6'">
           <div class="w-full px-4" :class="activeTab === 'chat' ? 'flex-1 h-full flex flex-col' : 'mb-12'">
             <!-- Remove Transition for debugging -->
             <div>
               <!-- Dashboard View -->
               <div v-if="activeTab === 'dashboard'" key="dashboard">
-                <!-- Phase Status Indicator -->
+                <!-- Phase Progression Indicator -->
                 <div class="w-full mb-6">
-                  <PhaseStatusIndicator />
+                  <PhaseProgressionIndicator
+                    @success="onPhaseSuccess"
+                    @error="onPhaseError"
+                    @validation-complete="onValidationComplete"
+                    @phase-validated="onPhaseValidated"
+                  />
                 </div>
 
                 <div class="relative flex flex-col min-w-0 break-words w-full mb-6 shadow-lg rounded-lg bg-white">
@@ -372,18 +387,6 @@
                     </div>
                   </div>
                   </div>
-                  
-                  <!-- System Monitor Section -->
-                  <div class="relative flex flex-col min-w-0 break-words w-full mt-6 mb-6 shadow-lg rounded-lg bg-white">
-                    <div class="rounded-t mb-0 px-6 py-4">
-                      <div class="text-center flex justify-between">
-                        <h6 class="text-blueGray-700 text-xl font-bold">System Monitor</h6>
-                      </div>
-                    </div>
-                    <div class="flex-auto p-0">
-                      <SystemMonitor />
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -407,22 +410,22 @@
                   <div class="mb-6">
                     <h3 class="text-xl font-semibold text-blueGray-700 mb-4">Tools</h3>
                     <div class="flex flex-wrap gap-2 mb-6">
-                      <button 
-                        @click="activeToolTab = 'terminal'" 
+                      <button
+                        @click="activeToolTab = 'terminal'"
                         :class="[activeToolTab === 'terminal' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
                         class="px-4 py-2 rounded font-medium transition-colors"
                       >
                         <i class="fas fa-terminal mr-2"></i>Terminal
                       </button>
-                      <button 
-                        @click="activeToolTab = 'files'" 
+                      <button
+                        @click="activeToolTab = 'files'"
                         :class="[activeToolTab === 'files' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
                         class="px-4 py-2 rounded font-medium transition-colors"
                       >
                         <i class="fas fa-folder mr-2"></i>File Manager
                       </button>
-                      <button 
-                        @click="activeToolTab = 'workflows'" 
+                      <button
+                        @click="activeToolTab = 'workflows'"
                         :class="[activeToolTab === 'workflows' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
                         class="px-4 py-2 rounded font-medium transition-colors"
                       >
@@ -430,17 +433,17 @@
                       </button>
                     </div>
                   </div>
-                  
+
                   <!-- Terminal Tab -->
                   <div v-if="activeToolTab === 'terminal'" class="tools-content bg-blueGray-900 rounded">
                     <TerminalWindow />
                   </div>
-                  
+
                   <!-- File Manager Tab -->
                   <div v-else-if="activeToolTab === 'files'" class="tools-content">
                     <FileBrowser />
                   </div>
-                  
+
                   <!-- Workflows Tab -->
                   <div v-else-if="activeToolTab === 'workflows'" class="tools-content">
                     <WorkflowApproval />
@@ -454,15 +457,15 @@
                   <div class="mb-6">
                     <h3 class="text-xl font-semibold text-blueGray-700 mb-4">Monitoring</h3>
                     <div class="flex flex-wrap gap-2 mb-6">
-                      <button 
-                        @click="activeMonitoringTab = 'voice'" 
+                      <button
+                        @click="activeMonitoringTab = 'voice'"
                         :class="[activeMonitoringTab === 'voice' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
                         class="px-4 py-2 rounded font-medium transition-colors"
                       >
                         <i class="fas fa-microphone mr-2"></i>Voice Interface
                       </button>
-                      <button 
-                        @click="activeMonitoringTab = 'system'" 
+                      <button
+                        @click="activeMonitoringTab = 'system'"
                         :class="[activeMonitoringTab === 'system' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
                         class="px-4 py-2 rounded font-medium transition-colors"
                       >
@@ -470,12 +473,12 @@
                       </button>
                     </div>
                   </div>
-                  
+
                   <!-- Voice Interface Tab -->
                   <div v-if="activeMonitoringTab === 'voice'" class="monitoring-content">
                     <VoiceInterface />
                   </div>
-                  
+
                   <!-- System Monitor Tab -->
                   <div v-else-if="activeMonitoringTab === 'system'" class="monitoring-content">
                     <div class="mb-4">
@@ -486,6 +489,13 @@
                     </div>
                     <SystemMonitor />
                   </div>
+                </div>
+              </section>
+
+              <!-- Validation Dashboard View -->
+              <section v-else-if="activeTab === 'validation'" key="validation" class="card">
+                <div class="card-body p-0">
+                  <ValidationDashboard />
                 </div>
               </section>
 
@@ -515,19 +525,19 @@
                   <FileBrowser />
                 </div>
               </section>
-              
+
               <section v-else-if="activeTab === 'terminal'" key="terminal" class="card bg-blueGray-900">
                 <div class="card-body p-0">
                   <TerminalWindow />
                 </div>
               </section>
-              
+
               <section v-else-if="activeTab === 'voice'" key="voice" class="card">
                 <div class="card-body">
                   <VoiceInterface />
                 </div>
               </section>
-              
+
               <section v-else-if="activeTab === 'monitor'" key="monitor" class="card">
                 <div class="card-body p-0">
                   <div class="mb-4 px-6 pt-6">
@@ -576,7 +586,8 @@ import SecretsManager from './components/SecretsManager.vue';
 import FileBrowser from './components/FileBrowser.vue';
 import SystemMonitor from './components/SystemMonitor.vue';
 import WorkflowApproval from './components/WorkflowApproval.vue';
-import PhaseStatusIndicator from './components/PhaseStatusIndicator.vue';
+import PhaseProgressionIndicator from './components/PhaseProgressionIndicator.vue';
+import ValidationDashboard from './components/ValidationDashboard.vue';
 import ElevationDialog from './components/ElevationDialog.vue';
 import RumDashboard from './components/RumDashboard.vue';
 import elevationService from './services/elevationService';
@@ -593,7 +604,8 @@ export default {
     FileBrowser,
     SystemMonitor,
     WorkflowApproval,
-    PhaseStatusIndicator,
+    PhaseProgressionIndicator,
+    ValidationDashboard,
     ElevationDialog,
     RumDashboard
   },
@@ -602,7 +614,7 @@ export default {
     const activeChatId = ref(`chat-${Date.now()}`);
     const navbarOpen = ref(false);
     const mobileMenuContainer = ref(null);
-    
+
     // Sub-tab states for new grouped sections
     const activeToolTab = ref('terminal');
     const activeMonitoringTab = ref('voice');
@@ -653,6 +665,27 @@ export default {
 
 
     const refreshStats = () => {
+    };
+
+    // Phase progression event handlers
+    const onPhaseSuccess = (message) => {
+      console.log('Phase operation successful:', message);
+      // Could add toast notification here
+    };
+
+    const onPhaseError = (message) => {
+      console.error('Phase operation failed:', message);
+      // Could add error toast notification here
+    };
+
+    const onValidationComplete = (result) => {
+      console.log('Validation completed:', result);
+      // Could update dashboard stats or show results
+    };
+
+    const onPhaseValidated = (data) => {
+      console.log('Phase validated:', data);
+      // Could show validation details
     };
 
     // Elevation Dialog state
@@ -758,7 +791,12 @@ export default {
       elevationRequestId,
       onElevationApproved,
       onElevationCancelled,
-      onElevationClose
+      onElevationClose,
+      // Phase progression handlers
+      onPhaseSuccess,
+      onPhaseError,
+      onValidationComplete,
+      onPhaseValidated
     };
   }
 };
