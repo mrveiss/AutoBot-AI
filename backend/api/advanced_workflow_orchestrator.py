@@ -434,7 +434,7 @@ class AdvancedWorkflowOrchestrator:
             self.workflow_intelligence[workflow_id] = intelligence
 
             # Step 5: Create enhanced workflow
-            workflow = await self._create_enhanced_workflow(
+            await self._create_enhanced_workflow(
                 workflow_id, user_request, optimized_steps, session_id, intelligence
             )
 
