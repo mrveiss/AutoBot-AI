@@ -76,6 +76,10 @@ class WorkerNode:
         capabilities.update(self._detect_llm_backends())
         return capabilities
 
+    def get_system_capabilities(self) -> Dict[str, Any]:
+        """Alias for detect_capabilities() - for backward compatibility."""
+        return self.detect_capabilities()
+
     def _get_basic_system_info(self) -> Dict[str, Any]:
         """Get basic system information."""
         return {

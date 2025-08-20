@@ -9,6 +9,9 @@ import pandas as pd
 from docx import Document as DocxDocument
 from llama_index.core import Document, Settings, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
+
+# Import AutoBot semantic chunker
+from src.utils.semantic_chunker import semantic_chunker
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
@@ -64,6 +67,17 @@ class KnowledgeBase:
         self.chunk_size = self.config_manager.get_nested("llama_index.chunk_size", 512)
         self.chunk_overlap = self.config_manager.get_nested(
             "llama_index.chunk_overlap", 20
+        )
+        
+        # RAG Optimization: Enable semantic chunking
+        self.use_semantic_chunking = self.config_manager.get_nested(
+            "knowledge_base.semantic_chunking.enabled", True
+        )
+        self.semantic_chunking_model = self.config_manager.get_nested(
+            "knowledge_base.semantic_chunking.model", "all-MiniLM-L6-v2"
+        )
+        self.semantic_percentile_threshold = self.config_manager.get_nested(
+            "knowledge_base.semantic_chunking.percentile_threshold", 95.0
         )
 
         # Redis configuration for LlamaIndex vector store
@@ -198,9 +212,17 @@ class KnowledgeBase:
         Settings.embed_model = self.embed_model
         Settings.chunk_size = self.chunk_size
         Settings.chunk_overlap = self.chunk_overlap
-        Settings.node_parser = SentenceSplitter(
-            chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
-        )
+        
+        # Configure node parser based on semantic chunking setting
+        if self.use_semantic_chunking:
+            # For semantic chunking, we'll handle chunking manually in add_file
+            Settings.node_parser = None  # Will be handled by semantic_chunker
+            logging.info(f"Semantic chunking enabled with model: {self.semantic_chunking_model}")
+        else:
+            Settings.node_parser = SentenceSplitter(
+                chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
+            )
+            logging.info("Using traditional sentence-based chunking")
 
         try:
             # Get the actual embedding dimension from the model
@@ -346,9 +368,26 @@ class KnowledgeBase:
                 "original_path": file_path,
                 **(metadata if metadata else {}),
             }
-            document = Document(text=content, metadata=doc_metadata)
-
-            self.index.insert(document)
+            
+            if self.use_semantic_chunking:
+                # Use semantic chunking for better knowledge processing
+                logging.info(f"Processing file with semantic chunking: {file_path}")
+                chunk_docs = await semantic_chunker.chunk_document(content, doc_metadata)
+                
+                # Insert each semantic chunk as a separate document
+                for chunk_data in chunk_docs:
+                    chunk_document = Document(
+                        text=chunk_data["text"], 
+                        metadata=chunk_data["metadata"]
+                    )
+                    self.index.insert(chunk_document)
+                
+                logging.info(f"Inserted {len(chunk_docs)} semantic chunks from {file_path}")
+            else:
+                # Use traditional chunking
+                document = Document(text=content, metadata=doc_metadata)
+                self.index.insert(document)
+                logging.info(f"Inserted traditional chunks from {file_path}")
 
             logging.info(
                 f"File '{file_path}' processed and added to LlamaIndex (Redis)."
@@ -445,6 +484,79 @@ class KnowledgeBase:
             except Exception as fact_error:
                 logging.error(f"Fact search also failed: {fact_error}")
                 return []
+
+    async def add_text_with_semantic_chunking(
+        self, content: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Add text content using semantic chunking for enhanced knowledge processing.
+        
+        Args:
+            content: Text content to add
+            metadata: Optional metadata for the content
+            
+        Returns:
+            Dict with status and processing details
+        """
+        if self.index is None:
+            logging.warning(
+                "KnowledgeBase not initialized, attempting initialization..."
+            )
+            try:
+                await self.ainit()
+                logging.info("KnowledgeBase initialized successfully")
+            except Exception as e:
+                logging.error(f"Failed to initialize KnowledgeBase: {e}")
+                return {
+                    "status": "error",
+                    "message": f"KnowledgeBase initialization failed: {e}",
+                }
+
+        try:
+            text_metadata = {
+                "source": "direct_text_input",
+                "content_type": "text",
+                "timestamp": datetime.now().isoformat(),
+                **(metadata if metadata else {}),
+            }
+            
+            if self.use_semantic_chunking:
+                # Use semantic chunking for better knowledge processing
+                logging.info("Processing text with semantic chunking")
+                chunk_docs = await semantic_chunker.chunk_document(content, text_metadata)
+                
+                # Insert each semantic chunk as a separate document
+                for chunk_data in chunk_docs:
+                    chunk_document = Document(
+                        text=chunk_data["text"], 
+                        metadata=chunk_data["metadata"]
+                    )
+                    self.index.insert(chunk_document)
+                
+                logging.info(f"Added {len(chunk_docs)} semantic chunks to knowledge base")
+                return {
+                    "status": "success",
+                    "message": f"Text processed into {len(chunk_docs)} semantic chunks",
+                    "chunks_created": len(chunk_docs),
+                    "semantic_chunking": True
+                }
+            else:
+                # Use traditional processing
+                document = Document(text=content, metadata=text_metadata)
+                self.index.insert(document)
+                return {
+                    "status": "success",
+                    "message": "Text added to knowledge base",
+                    "chunks_created": 1,
+                    "semantic_chunking": False
+                }
+                
+        except Exception as e:
+            logging.error(f"Error adding text to knowledge base: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Error adding text: {str(e)}",
+            }
 
     async def store_fact(
         self, content: str, metadata: Optional[Dict[str, Any]] = None

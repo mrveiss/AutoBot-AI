@@ -11,11 +11,13 @@ import hashlib
 import json
 import logging
 import os
-import pickle
-import sqlite3
+import pickle  # Still imported for backward compatibility, but using JSON for new data
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+import aiosqlite
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
@@ -62,8 +64,9 @@ class LongTermMemoryManager:
             "max_entries_per_category", 10000
         )
 
-        # Initialize database
-        self._init_memory_db()
+        # Initialize async database setup
+        self._initialized = False
+        self._init_lock = asyncio.Lock()
 
         logging.info(f"Long-term memory manager initialized at {self.db_path}")
 
@@ -73,29 +76,41 @@ class LongTermMemoryManager:
             return os.path.abspath(path)
         return path
 
-    def _init_memory_db(self):
-        """Initialize SQLite database with comprehensive memory tables"""
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+    async def _init_memory_db(self):
+        """Initialize async SQLite database with comprehensive memory tables"""
+        if self._initialized:
+            return
+            
+        async with self._init_lock:
+            if self._initialized:
+                return
+                
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+            async with aiosqlite.connect(self.db_path) as conn:
+                # Enable WAL mode for better concurrency
+                await conn.execute("PRAGMA journal_mode=WAL")
+                await conn.execute("PRAGMA synchronous=NORMAL")
+                await conn.execute("PRAGMA cache_size=10000")
+                await conn.execute("PRAGMA temp_store=MEMORY")
+                await conn.execute("PRAGMA foreign_keys=ON")
 
-        # Main memory table for all types of long-term storage
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS memory_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category TEXT NOT NULL,
-                content TEXT NOT NULL,
-                metadata TEXT, -- JSON string of metadata
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                reference_path TEXT, -- Path to referenced markdown files
-                embedding BLOB, -- Pickled embedding vector
-                content_hash TEXT, -- Hash for duplicate detection
-                UNIQUE(category, content_hash)
-            )
-        """
-        )
+                # Main memory table for all types of long-term storage
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS memory_entries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        category TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        metadata TEXT, -- JSON string of metadata
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        reference_path TEXT, -- Path to referenced markdown files
+                        embedding BLOB, -- Pickled embedding vector
+                        content_hash TEXT, -- Hash for duplicate detection
+                        UNIQUE(category, content_hash)
+                    )
+                    """
+                )
 
         # Task execution logs
         cursor.execute(
