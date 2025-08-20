@@ -432,6 +432,70 @@ except Exception as e:
     print(f'⚠️ OpenVINO test failed: {e}')
 " || echo "⚠️ OpenVINO test script failed"
 
+# --- Voice Interface Setup (Optional) ---
+echo "🎤 Setting up voice interface (optional)..."
+
+# Ask user if they want voice interface support
+echo "Do you want to install voice interface support? (y/N)"
+echo "Note: Requires system audio libraries and may fail in some environments."
+read -r -n 1 voice_choice
+echo
+
+if [[ $voice_choice =~ ^[Yy]$ ]]; then
+    echo "📦 Installing system audio dependencies..."
+
+    # Install system dependencies based on OS
+    if command -v apt-get &>/dev/null; then
+        # Ubuntu/Debian
+        sudo apt-get update && sudo apt-get install -y \
+            portaudio19-dev python3-pyaudio \
+            espeak espeak-data libespeak1 libespeak-dev \
+            flac || {
+            echo "⚠️ Failed to install some system audio dependencies"
+        }
+    elif command -v brew &>/dev/null; then
+        # macOS
+        brew install portaudio espeak || {
+            echo "⚠️ Failed to install some system audio dependencies"
+        }
+    else
+        echo "⚠️ Unknown system - please install audio libraries manually"
+        echo "   See docs/VOICE_INTERFACE_SETUP.md for details"
+    fi
+
+    echo "📦 Installing Python voice interface dependencies..."
+    pip install -r requirements-voice.txt || {
+        echo "⚠️ Failed to install voice interface dependencies"
+        echo "   Voice interface will be disabled"
+        echo "   See docs/VOICE_INTERFACE_SETUP.md for troubleshooting"
+    }
+
+    # Test voice interface
+    echo "🧪 Testing voice interface..."
+    python3 -c "
+try:
+    import speech_recognition as sr
+    import pyaudio
+    import gtts
+    print('✅ Voice interface dependencies installed successfully')
+
+    # Test microphone access
+    r = sr.Recognizer()
+    mic_list = sr.Microphone.list_microphone_names()
+    print(f'📱 Found {len(mic_list)} microphone(s)')
+
+except ImportError as e:
+    print(f'⚠️ Voice interface import failed: {e}')
+except Exception as e:
+    print(f'⚠️ Voice interface test failed: {e}')
+" || echo "⚠️ Voice interface test failed"
+
+    echo "✅ Voice interface setup completed (check results above)"
+else
+    echo "⏭️ Skipping voice interface setup"
+    echo "   You can install it later with: pip install -r requirements-voice.txt"
+fi
+
 # --- 4. Install Required Ollama Models for Multi-Agent Architecture ---
 echo "🤖 Installing required Ollama models for multi-agent architecture..."
 

@@ -79,10 +79,9 @@ llama-index-vector-stores-redis
 llama-index-readers-file          # File readers for RAG
 
 # ===== VOICE INTERFACE DEPENDENCIES =====
-speechrecognition==3.10.0
-pydub==0.25.1
-pyaudio==0.2.11
-gtts==2.3.1
+# Moved to requirements-voice.txt to avoid CI/CD build failures
+# Install separately: pip install -r requirements-voice.txt
+# These require system audio libraries not available in all environments
 
 # ===== SECURITY & DEVELOPMENT TOOLS =====
 pre-commit>=3.6.0
