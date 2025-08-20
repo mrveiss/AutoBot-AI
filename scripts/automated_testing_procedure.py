@@ -43,7 +43,12 @@ class AutomatedTestingSuite:
             "code_quality_tests": [],
             "api_tests": []
         }
-        self.backend_url = "http://localhost:8001"
+        # Import configuration from centralized source
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from src.config import API_BASE_URL
+        self.backend_url = API_BASE_URL
         
     def run_unit_tests(self) -> List[TestResult]:
         """Run Python unit tests"""

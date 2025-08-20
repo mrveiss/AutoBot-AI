@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """Quick backend diagnostic script"""
 
+import os
+import sys
 import requests
 import time
+
+# Import configuration from centralized source
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.config import API_BASE_URL, OLLAMA_URL
 
 print("🔍 Checking backend health...")
 
 # Test endpoints
 endpoints = [
-    ("http://localhost:8001/api/hello", "Basic API"),
-    ("http://localhost:8001/api/system/health", "Health Check"),
-    ("http://localhost:8001/api/chat/list", "Chat List"),
+    (f"{API_BASE_URL}/api/hello", "Basic API"),
+    (f"{API_BASE_URL}/api/system/health", "Health Check"),
+    (f"{API_BASE_URL}/api/chat/list", "Chat List"),
 ]
 
 for url, name in endpoints:
@@ -32,7 +38,7 @@ for url, name in endpoints:
 # Check Ollama
 print("\n🤖 Checking Ollama...")
 try:
-    response = requests.get("http://localhost:11434/api/tags", timeout=5)
+    response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
     if response.status_code == 200:
         models = response.json().get("models", [])
         print(f"   ✅ Ollama is running with {len(models)} models")

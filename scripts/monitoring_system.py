@@ -8,6 +8,11 @@ import asyncio
 import json
 import logging
 import os
+import sys
+
+# Import configuration from centralized source
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.config import API_BASE_URL
 import sqlite3
 import time
 from datetime import datetime, timedelta
@@ -262,7 +267,7 @@ class SystemMonitor:
         services_to_monitor = [
             {
                 "name": "backend",
-                "url": "http://localhost:8001/api/system/health",
+                "url": f"{API_BASE_URL}/api/system/health",
                 "port": 8001,
             },
             {"name": "frontend", "url": "http://localhost:5173", "port": 5173},
