@@ -523,6 +523,105 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+## ⚠️ Known Issues & Developer Notes
+
+> **Last Updated**: August 21, 2025 | **Codebase Analysis**: 45.2% duplication detected
+
+### **🔴 Critical Issues**
+
+**Code Duplication (HIGH PRIORITY)**
+- **Issue**: 45.2% duplication rate across 9,524 declarations
+- **Impact**: Maintenance overhead, inconsistent behavior
+- **Top Duplicates**: `__init__` (278x), `main` (190x), `process_request` (24x)
+- **Status**: [Analysis Complete](reports/DUPLICATE_DETECTION_ANALYSIS.md) | Refactoring planned
+- **ETA**: Reduction to <20% duplication by Phase 10
+
+### **🟡 Development Issues**
+
+**Linting Compliance**
+- **Issue**: 51 line length errors in analytics endpoints
+- **Files**: `backend/api/code_search.py` (E501 violations)
+- **Impact**: CI/CD pipeline warnings
+- **Status**: Functional code, cosmetic fixes pending
+
+**Agent Communication Standardization**
+- **Issue**: Inconsistent `process_request` implementations across 24 agents
+- **Impact**: Development complexity, debugging difficulty
+- **Solution**: Base agent class standardization in progress
+
+### **🟢 Minor Issues**
+
+**Test Framework Consistency**
+- **Issue**: `setup_method` duplicated 20 times across test files
+- **Impact**: Test maintenance overhead
+- **Solution**: Common test base class creation planned
+
+### **📋 Developer Onboarding Notes**
+
+**1. Start Development Here:**
+```bash
+# Essential first steps
+./setup_agent.sh          # One-time setup
+./run_agent.sh --test-mode # Verify installation
+npm run build              # Test frontend build
+```
+
+**2. Common Gotchas:**
+- **Backend Port**: Always use 8001 (not 8000)
+- **Redis Requirement**: Must run Redis Stack (not standard Redis)
+- **NPU Optimization**: Automatically detected, graceful fallback to CPU
+- **Docker Dependencies**: Some features require specific containers
+
+**3. Code Standards:**
+- **Line Length**: 88 characters (configured in pre-commit)
+- **Import Order**: Use `isort --profile black`
+- **Type Hints**: Required for all new public functions
+- **Documentation**: Google-style docstrings mandatory
+
+**4. Testing Requirements:**
+- **Pre-commit**: `flake8`, `black`, `isort` must pass
+- **Integration**: Use `./run_agent.sh --test-mode` before commits
+- **Coverage**: Maintain >80% test coverage for new code
+
+### **🎯 Quick Fixes Available**
+
+These issues can be resolved quickly by new contributors:
+
+1. **Linting Fixes** (1-2 hours)
+   - Fix line length in `backend/api/code_search.py`
+   - Remove unused imports
+   - Apply consistent formatting
+
+2. **Documentation Updates** (2-4 hours)
+   - Add docstrings to undocumented functions
+   - Update API documentation
+   - Fix broken internal links
+
+3. **Test Standardization** (4-6 hours)
+   - Create `AutoBotTestBase` class
+   - Migrate duplicate `setup_method` implementations
+   - Add missing test cases
+
+### **🚨 Before Contributing**
+
+**Required Reading:**
+- [Architecture Overview](docs/architecture/VISUAL_ARCHITECTURE.md)
+- [Agent System Guide](docs/AGENT_SYSTEM_GUIDE.md)
+- [Duplicate Analysis](reports/DUPLICATE_DETECTION_ANALYSIS.md)
+
+**Development Environment:**
+- **Python**: 3.10+ required
+- **Node.js**: 18+ required for frontend
+- **Docker**: Required for full functionality
+- **Git Hooks**: Pre-commit hooks will auto-install
+
+**Issue Reporting:**
+- **Bugs**: Include logs from `./run_agent.sh --test-mode`
+- **Features**: Reference existing architecture patterns
+- **Performance**: Include profiling data when possible
+
+---
+
 ## 🌟 Status Overview
 
 **Current Status**: ✅ ENTERPRISE-READY - All core features operational with advanced capabilities implemented
