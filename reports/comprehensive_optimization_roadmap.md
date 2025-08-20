@@ -351,13 +351,40 @@ python scripts/automated_testing_procedure.py
   - **Migration Strategy**: 3-phase approach over 23 weeks
 - **Service Boundaries Identified**:
   - **Foundation Services**: Configuration, Caching, Database, Logging (Phase 1)
-  - **AI Agent Services**: Knowledge, Research, Execution, Chat services (Phase 2) 
+  - **AI Agent Services**: Knowledge, Research, Execution, Chat services (Phase 2)
   - **Business Logic Services**: Domain-specific API services (Phase 3)
 - **Migration Readiness**: HIGH - Strong candidate with comprehensive strategy
 - **Status**: Complete architectural assessment with actionable migration plan
 
 ### Future Enhancements 📋
-- [ ] Advanced monitoring and alerting
+- [x] **Advanced Monitoring and Alerting** - Comprehensive system monitoring and performance tracking
+
+### 🔧 Recent Critical Fixes (2025-08-19 Latest)
+
+#### Advanced Monitoring System Fixes ✅
+- **Health Endpoint Coroutine Fix**: Fixed TypeError where health endpoint returned coroutine string instead of JSON
+  - **Root Cause**: `smart_cache` decorator in `advanced_cache_manager.py` was not properly detecting and awaiting coroutine results
+  - **Solution**: Updated `get_or_compute()` method to use `inspect.iscoroutine()` for proper async detection
+  - **Files Modified**: `src/utils/advanced_cache_manager.py` (line 179-181)
+  - **Result**: Health endpoint now returns proper JSON: `{"status":"healthy","backend":"connected",...}`
+
+- **Database Query Ambiguity Fix**: Resolved "ambiguous column name: timestamp" in monitoring dashboard
+  - **Root Cause**: SQL query had ambiguous timestamp columns between system_metrics and application_metrics
+  - **Solution**: Added proper table aliases (sm., am.) and restructured JOIN query
+  - **Files Modified**: `scripts/monitoring_system.py` (lines 567-583)
+  - **Result**: Dashboard generation works without errors
+
+- **Health Check Endpoints Correction**: Updated monitoring to use actual API endpoints
+  - **Issue**: Monitoring system was checking `/api/chat/status` and `/api/knowledge/status` (404 endpoints)
+  - **Solution**: Updated to use `/api/system/status` and `/api/chat_knowledge/health` (working endpoints)
+  - **Files Modified**: `scripts/monitoring_system.py` (lines 392-397)
+  - **Result**: All health checks now return 200 OK with proper status data
+
+#### System Status Summary ✅
+- **Health Endpoints**: All functioning correctly (no more coroutine errors)
+- **Monitoring Dashboard**: Generating successfully with real-time metrics
+- **System Performance**: CPU 1.1%, Memory 15.2%, Disk 9.0% (all healthy)
+- **Service Health**: Backend HEALTHY, Redis HEALTHY, Frontend HEALTHY
 
 ---
 
