@@ -45,12 +45,16 @@ class ResearchBrowserSession:
             self.playwright = await async_playwright().start()
 
             # Use existing browser if available (Docker container)
+            # Note: The Playwright container runs an Express API server on port 3000,
+            # not a CDP endpoint. We'll use local browser instead.
             try:
+                # Try to connect to CDP if available (for future use)
                 self.browser = await self.playwright.chromium.connect_over_cdp(
                     "http://localhost:9222"
                 )
                 logger.info(
-                    f"Connected to existing browser for session {self.session_id}"
+                    f"Connected to existing browser via CDP for session "
+                    f"{self.session_id}"
                 )
             except Exception:
                 # Fall back to launching new browser

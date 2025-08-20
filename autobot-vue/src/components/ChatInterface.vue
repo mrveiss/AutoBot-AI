@@ -260,7 +260,7 @@
             </div>
             <div class="flex-1 p-4">
               <!-- Unified Research Browser Component -->
-              <ResearchBrowser 
+              <ResearchBrowser
                 :session-id="currentResearchSession"
                 :research-data="researchResults"
                 class="flex-1"
@@ -399,10 +399,10 @@ export default {
         if (message.type === 'planning' && !settings.value.message_display.show_planning) return false;
         if (message.type === 'debug' && !settings.value.message_display.show_debug) return false;
         if (message.type === 'source' && !settings.value.message_display.show_sources) return false;
-        
+
         // Always show regular user/assistant messages
         if (!message.type || message.type === 'user' || message.type === 'assistant') return true;
-        
+
         return true;
       });
     });
@@ -1009,12 +1009,12 @@ export default {
                 // Handle research results if present
                 if (chatResponse.data.research && chatResponse.data.research.success && chatResponse.data.research.results) {
                   researchResults.value = chatResponse.data.research;
-                  
+
                   // Check if any results have interaction required
-                  const hasInteraction = chatResponse.data.research.results.some(result => 
+                  const hasInteraction = chatResponse.data.research.results.some(result =>
                     result.interaction_required || result.status === 'interaction_required'
                   );
-                  
+
                   if (hasInteraction) {
                     showResearchBrowser.value = true;
                     currentResearchSession.value = chatResponse.data.research.results.find(r => r.session_id)?.session_id || null;
@@ -1023,12 +1023,12 @@ export default {
                   // Add research summary message
                   const resultCount = chatResponse.data.research.results.length;
                   const interactionCount = chatResponse.data.research.results.filter(r => r.interaction_required).length;
-                  
+
                   let researchSummary = `🔍 **Research completed**: ${resultCount} results found`;
                   if (interactionCount > 0) {
                     researchSummary += ` (${interactionCount} require user interaction)`;
                   }
-                  
+
                   messages.value.push({
                     sender: 'system',
                     text: researchSummary,
@@ -1341,14 +1341,14 @@ export default {
       if (websocket.value && websocket.value.readyState === WebSocket.OPEN) {
         return
       }
-      
+
       const wsUrl = `ws://localhost:8001/ws`;
-      
+
       // Track WebSocket events with RUM if available
       if (window.rum) {
         window.rum.trackWebSocketEvent('connection_attempt', { url: wsUrl });
       }
-      
+
       try {
         websocket.value = new WebSocket(wsUrl);
       } catch (error) {
@@ -1371,7 +1371,7 @@ export default {
         try {
           const eventData = JSON.parse(event.data);
           if (window.rum) {
-            window.rum.trackWebSocketEvent('message_received', { 
+            window.rum.trackWebSocketEvent('message_received', {
               dataSize: event.data.length,
               eventType: eventData.type || 'unknown'
             });
@@ -1399,13 +1399,13 @@ export default {
 
       websocket.value.onclose = (event) => {
         if (window.rum) {
-          window.rum.trackWebSocketEvent('connection_closed', { 
+          window.rum.trackWebSocketEvent('connection_closed', {
             code: event.code,
             reason: event.reason,
             wasClean: event.wasClean
           });
         }
-        
+
         // Only reconnect if it wasn't a clean close and component is still mounted
         if (!event.wasClean && activeTab.value !== 'dashboard') {
           setTimeout(connectWebSocket, 3000);
@@ -1416,6 +1416,15 @@ export default {
     const handleWebSocketEvent = (eventData) => {
       const eventType = eventData.type;
       const payload = eventData.payload;
+
+      // Handle ping/pong for keepalive
+      if (eventType === 'ping') {
+        // Respond with pong
+        if (websocket.value && websocket.value.readyState === WebSocket.OPEN) {
+          websocket.value.send(JSON.stringify({ type: 'pong' }));
+        }
+        return;
+      }
 
       if (eventType.startsWith('workflow_')) {
         // Handle workflow events
@@ -1504,7 +1513,7 @@ export default {
           connectWebSocket();
         }
       }, 2000);
-      
+
       // Watch for tab changes to manage WebSocket connection
       watch(activeTab, (newTab, oldTab) => {
         if (newTab === 'chat' && (!websocket.value || websocket.value.readyState !== WebSocket.OPEN)) {
