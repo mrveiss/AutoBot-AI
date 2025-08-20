@@ -11,12 +11,13 @@ from typing import Any, Dict, List, Optional
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
 
-from .base_agent import AgentRequest, AgentResponse, LocalAgent
+from .base_agent import AgentRequest
+from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = logging.getLogger(__name__)
 
 
-class ChatAgent(LocalAgent):
+class ChatAgent(StandardizedAgent):
     """Lightweight chat agent for quick conversational responses."""
 
     def __init__(self):
@@ -31,44 +32,28 @@ class ChatAgent(LocalAgent):
             "basic_explanations",
         ]
 
+        # Register action handlers using standardized pattern
+        self.register_actions(
+            {
+                "chat": ActionHandler(
+                    handler_method="handle_chat",
+                    required_params=["message"],
+                    optional_params=["context", "chat_history"],
+                    description="Process chat messages",
+                )
+            }
+        )
+
         logger.info(f"Chat Agent initialized with model: {self.model_name}")
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
-        """
-        Process agent request using the standardized interface.
-        """
-        try:
-            if request.action == "chat":
-                message = request.payload.get("message", "")
-                context = request.context or {}
-                chat_history = request.payload.get("chat_history", [])
+    async def handle_chat(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle chat action - replaces duplicate process_request logic"""
+        message = request.payload["message"]
+        context = request.context or {}
+        chat_history = request.payload.get("chat_history", [])
 
-                result = await self.process_chat_message(message, context, chat_history)
-
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result=result,
-                )
-            else:
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="error",
-                    result=None,
-                    error=f"Unknown action: {request.action}",
-                )
-
-        except Exception as e:
-            logger.error(f"Chat agent error: {e}")
-            return AgentResponse(
-                request_id=request.request_id,
-                agent_type=self.agent_type,
-                status="error",
-                result=None,
-                error=str(e),
-            )
+        result = await self.process_chat_message(message, context, chat_history)
+        return result
 
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports."""
@@ -171,7 +156,8 @@ You specialize in:
 - Basic explanations
 - Friendly interactions
 
-For complex technical tasks, analysis, or system commands, you should indicate that specialized agents can handle those better."""
+For complex technical tasks, analysis, or system commands, you should "
+        "indicate that specialized agents can handle those better."""
 
     def _extract_response_content(self, response: Any) -> str:
         """Extract the actual text content from LLM response."""
