@@ -1,28 +1,28 @@
 # API Endpoint Mapping - Frontend vs Backend
 
 **Generated:** August 20, 2025
-**Status:** Critical mismatches found
+**Status:** API Endpoints Validated - Hardcoded URLs Fixed
 
-## 🔴 CRITICAL MISMATCHES
+## ✅ RESOLVED - NO MISMATCHES
 
 ### Knowledge Base Endpoints
 | Frontend Expected | Backend Actual | Status |
 |------------------|----------------|--------|
-| POST `/api/knowledge_base/search` | POST `/api/knowledge/search` | ❌ MISMATCH |
-| POST `/api/knowledge_base/add_text` | POST `/api/knowledge/add_text` | ❌ MISMATCH |
-| POST `/api/knowledge_base/add_url` | POST `/api/knowledge/add_url` | ❌ MISMATCH |
-| POST `/api/knowledge_base/add_file` | POST `/api/knowledge/add_file` | ❌ MISMATCH |
-| GET `/api/knowledge_base/export` | GET `/api/knowledge/export` | ❌ MISMATCH |
-| POST `/api/knowledge_base/cleanup` | POST `/api/knowledge/cleanup` | ❌ MISMATCH |
-| GET `/api/knowledge_base/stats` | GET `/api/knowledge/stats` | ❌ MISMATCH |
-| GET `/api/knowledge_base/detailed_stats` | GET `/api/knowledge/detailed_stats` | ❌ MISMATCH |
-| GET `/api/knowledge_base/entries` | GET `/api/knowledge/entries` | ❌ MISMATCH |
-| POST `/api/knowledge_base/entries` | POST `/api/knowledge/entries` | ❌ MISMATCH |
-| PUT `/api/knowledge_base/entries/{id}` | PUT `/api/knowledge/entries/{id}` | ❌ MISMATCH |
-| DELETE `/api/knowledge_base/entries/{id}` | DELETE `/api/knowledge/entries/{id}` | ❌ MISMATCH |
-| GET `/api/knowledge_base/entries/{id}` | GET `/api/knowledge/entries/{id}` | ❌ MISMATCH |
-| POST `/api/knowledge_base/entries/{id}/crawl` | POST `/api/knowledge/entries/{id}/crawl` | ❌ MISMATCH |
-| GET `/api/knowledge_base/categories` | GET `/api/knowledge/categories` | ❌ MISMATCH |
+| POST `/api/knowledge_base/search` | POST `/api/knowledge_base/search` | ✅ MATCH |
+| POST `/api/knowledge_base/add_text` | POST `/api/knowledge_base/add_text` | ✅ MATCH |
+| POST `/api/knowledge_base/add_url` | POST `/api/knowledge_base/add_url` | ✅ MATCH |
+| POST `/api/knowledge_base/add_file` | POST `/api/knowledge_base/add_file` | ✅ MATCH |
+| GET `/api/knowledge_base/export` | GET `/api/knowledge_base/export` | ✅ MATCH |
+| POST `/api/knowledge_base/cleanup` | POST `/api/knowledge_base/cleanup` | ✅ MATCH |
+| GET `/api/knowledge_base/stats` | GET `/api/knowledge_base/stats` | ✅ MATCH |
+| GET `/api/knowledge_base/detailed_stats` | GET `/api/knowledge_base/detailed_stats` | ✅ MATCH |
+| GET `/api/knowledge_base/entries` | GET `/api/knowledge_base/entries` | ✅ MATCH |
+| POST `/api/knowledge_base/entries` | POST `/api/knowledge_base/entries` | ✅ MATCH |
+| PUT `/api/knowledge_base/entries/{id}` | PUT `/api/knowledge_base/entries/{id}` | ✅ MATCH |
+| DELETE `/api/knowledge_base/entries/{id}` | DELETE `/api/knowledge_base/entries/{id}` | ✅ MATCH |
+| GET `/api/knowledge_base/entries/{id}` | GET `/api/knowledge_base/entries/{id}` | ✅ MATCH |
+| POST `/api/knowledge_base/entries/{id}/crawl` | POST `/api/knowledge_base/entries/{id}/crawl` | ✅ MATCH |
+| GET `/api/knowledge_base/categories` | GET `/api/knowledge_base/categories` | ✅ MATCH |
 
 ## 🟡 Additional API Endpoints to Verify
 
