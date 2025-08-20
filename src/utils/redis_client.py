@@ -5,13 +5,13 @@ client factory
 """
 
 import logging
-import os
 from typing import Optional, Union
 
 import redis
 import redis.asyncio as async_redis
 
 from src.config import config as global_config_manager
+from src.utils.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +57,11 @@ def get_redis_client(
             logger.warning("No Redis configuration found")
             return None
 
-        # Extract connection parameters with defaults
-        host = redis_config.get("host", os.getenv("REDIS_HOST", "localhost"))
-        port = redis_config.get("port", 6379)
-        password = redis_config.get("password", os.getenv("REDIS_PASSWORD"))
-        db = redis_config.get("db", 0)
+        # Extract connection parameters using centralized config
+        host = config_manager.get("redis.host", "localhost")
+        port = config_manager.get("redis.port", 6379)
+        password = config_manager.get("redis.password", None)
+        db = config_manager.get("redis.db", 0)
 
         if async_client:
             if _async_redis_client is None:
@@ -149,9 +149,9 @@ def test_redis_connection() -> bool:
         if not redis_config:
             return False
 
-        host = redis_config.get("host", os.getenv("REDIS_HOST", "localhost"))
-        port = redis_config.get("port", 6379)
-        password = redis_config.get("password", os.getenv("REDIS_PASSWORD"))
+        host = config_manager.get("redis.host", "localhost")
+        port = config_manager.get("redis.port", 6379)
+        password = config_manager.get("redis.password", None)
 
         test_client = redis.Redis(
             host=host, port=port, password=password, decode_responses=True
