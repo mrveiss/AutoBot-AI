@@ -35,8 +35,12 @@ async def test_api_endpoints():
     print("🚀 API Endpoint Performance Testing")
     print("=" * 50)
     
-    # Base URL - update if backend is running on different port
-    base_url = "http://localhost:8001"
+    # Import configuration from centralized source
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from src.config import API_BASE_URL
+    base_url = API_BASE_URL
     
     endpoints = [
         # Health endpoints
