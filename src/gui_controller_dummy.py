@@ -1,6 +1,9 @@
 # src/gui_controller_dummy.py
 import asyncio
+import logging
 from typing import Any, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class GUIController:
@@ -11,8 +14,8 @@ class GUIController:
     """
 
     def __init__(self):
-        print(
-            "WARNING: Initializing Dummy GUIController. "
+        logger.info(
+            "Initializing Dummy GUIController for Linux environment. "
             "GUI automation features will be skipped."
         )
         pass
@@ -20,7 +23,7 @@ class GUIController:
     async def _screenshot(
         self, region: Optional[Tuple[int, int, int, int]] = None
     ) -> Any:
-        print("Dummy GUIController: _screenshot skipped.")
+        logger.debug("Dummy GUIController: _screenshot skipped.")
         await asyncio.sleep(0)
         # Return a dummy image or None, depending on downstream usage
         return None
@@ -33,14 +36,14 @@ class GUIController:
         clicks: int = 1,
         interval: float = 0.0,
     ) -> Dict[str, Any]:
-        print(f"Dummy GUIController: click_element('{image_path}') skipped.")
+        logger.debug(f"Dummy GUIController: click_element('{image_path}') skipped.")
         await asyncio.sleep(0)
         return {"status": "success", "message": "GUI click skipped (Dummy Controller)."}
 
     async def read_text_from_region(
         self, x: int, y: int, width: int, height: int
     ) -> Dict[str, Any]:
-        print(
+        logger.debug(
             "Dummy GUIController: read_text_from_region("
             f"{x}, {y}, {width}, {height}) skipped."
         )
@@ -52,7 +55,7 @@ class GUIController:
         }
 
     async def type_text(self, text: str, interval: float = 0.0) -> Dict[str, Any]:
-        print(f"Dummy GUIController: type_text('{text}') skipped.")
+        logger.debug(f"Dummy GUIController: type_text('{text}') skipped.")
         await asyncio.sleep(0)
         return {
             "status": "success",
@@ -60,7 +63,7 @@ class GUIController:
         }
 
     async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
-        print(f"Dummy GUIController: move_mouse({x}, {y}) skipped.")
+        logger.debug(f"Dummy GUIController: move_mouse({x}, {y}) skipped.")
         await asyncio.sleep(0)
         return {
             "status": "success",
@@ -68,7 +71,7 @@ class GUIController:
         }
 
     async def bring_window_to_front(self, app_title: str) -> Dict[str, Any]:
-        print(f"Dummy GUIController: bring_window_to_front('{app_title}') " "skipped.")
+        logger.debug(f"Dummy GUIController: bring_window_to_front('{app_title}') skipped.")
         await asyncio.sleep(0)
         return {
             "status": "success",
