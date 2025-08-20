@@ -870,7 +870,7 @@ export default {
     const loadKnowledgeEntries = async () => {
       try {
         loading.value = true;
-        const response = await apiClient.get('/api/knowledge/entries');
+        const response = await apiClient.get('/api/knowledge_base/entries');
         const data = await response.json();
         knowledgeEntries.value = data.entries || [];
         filteredKnowledgeEntries.value = knowledgeEntries.value;
@@ -1135,7 +1135,7 @@ export default {
         }
 
         // Call backend to crawl URL and extract content
-        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge/crawl_url`, {
+        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/crawl_url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1208,7 +1208,7 @@ export default {
       }
 
       try {
-        await apiClient.delete(`/api/knowledge/entries/${entryId}`);
+        await apiClient.delete(`/api/knowledge_base/entries/${entryId}`);
         await loadKnowledgeEntries();
         showSuccess('Entry deleted successfully');
       } catch (error) {
@@ -1237,7 +1237,7 @@ export default {
 
       crawlingInModal.value = true;
       try {
-        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge/crawl_url`, {
+        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/crawl_url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1325,13 +1325,13 @@ export default {
 
         let response;
         if (showEditModal.value) {
-          response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge/entries/${currentEntry.value.id}`, {
+          response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/entries/${currentEntry.value.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entryData)
           });
         } else {
-          response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge/entries`, {
+          response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/entries`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entryData)
@@ -1349,7 +1349,7 @@ export default {
           const result = await response.json();
           if (result.id) {
             try {
-              const crawlResponse = await fetch(`${apiClient.getBaseUrl()}/api/knowledge/crawl_url`, {
+              const crawlResponse = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/crawl_url`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1581,7 +1581,7 @@ export default {
     const loadSystemKnowledge = async () => {
       try {
         loadingSystemKnowledge.value = true;
-        const response = await apiClient.get('/api/knowledge/system_knowledge/documentation');
+        const response = await apiClient.get('/api/knowledge_base/system_knowledge/documentation');
         const data = await response.json();
         systemKnowledge.value = data.documentation || [];
       } catch (error) {
@@ -1599,7 +1599,7 @@ export default {
     const importSystemDocs = async () => {
       try {
         importingDocs.value = true;
-        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge/system_knowledge/import_documentation`, {
+        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/system_knowledge/import_documentation`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -1684,7 +1684,7 @@ export default {
     const importSystemPrompts = async () => {
       try {
         importingPrompts.value = true;
-        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge/system_knowledge/import_prompts`, {
+        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/system_knowledge/import_prompts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
