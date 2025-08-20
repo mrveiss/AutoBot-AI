@@ -178,6 +178,8 @@
 </template>
 
 <script>
+import ApiClient from '../utils/ApiClient.js';
+
 export default {
   name: 'ValidationDashboard',
   data() {
@@ -207,7 +209,8 @@ export default {
       this.error = null;
 
       try {
-        const response = await fetch('http://localhost:8001/api/validation-dashboard/report');
+        const apiClient = new ApiClient();
+        const response = await fetch(`${apiClient.baseUrl}/api/validation-dashboard/report`);
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
