@@ -44,7 +44,10 @@ class SearchStats:
     results_count: int
 
 
-class NPUCodeSearchAgent:
+from .base_agent import LocalAgent, AgentRequest, AgentResponse
+
+
+class NPUCodeSearchAgent(LocalAgent):
     """
     NPU-accelerated code search agent using Redis for indexing.
 
@@ -58,6 +61,7 @@ class NPUCodeSearchAgent:
 
     def __init__(self):
         """Initialize the NPU code search agent"""
+        super().__init__("npu_code_search")
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         # Redis setup
@@ -76,6 +80,16 @@ class NPUCodeSearchAgent:
         self.npu_available = False
         self.openvino_core = None
         self._init_npu()
+        
+        # Define capabilities
+        self.capabilities = [
+            "code_search",
+            "semantic_similarity", 
+            "npu_acceleration",
+            "redis_indexing",
+            "file_indexing",
+            "pattern_matching"
+        ]
 
         # Supported file extensions for code search
         self.supported_extensions = {
@@ -121,6 +135,18 @@ class NPUCodeSearchAgent:
             ".md",
         }
 
+        # Initialize communication protocol for agent-to-agent messaging
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self.initialize_communication(self.capabilities))
+            else:
+                loop.run_until_complete(self.initialize_communication(self.capabilities))
+        except RuntimeError:
+            # Event loop not available yet, will initialize later
+            pass
+
         # Language-specific patterns
         self.language_patterns = {
             "python": {
@@ -143,7 +169,7 @@ class NPUCodeSearchAgent:
         """Initialize NPU acceleration if available"""
         try:
             # Check worker capabilities for NPU
-            capabilities = self.worker_node.get_system_capabilities()
+            capabilities = self.worker_node.detect_capabilities()
             self.npu_available = capabilities.get("openvino_npu_available", False)
 
             if self.npu_available:
@@ -158,6 +184,86 @@ class NPUCodeSearchAgent:
         except Exception as e:
             self.logger.warning(f"Failed to initialize NPU: {e}")
             self.npu_available = False
+
+    async def process_request(self, request: AgentRequest) -> AgentResponse:
+        """Process incoming agent requests"""
+        try:
+            action = request.action
+            payload = request.payload
+            
+            if action == "search_code":
+                query = payload.get("query", "")
+                max_results = payload.get("max_results", 10)
+                file_patterns = payload.get("file_patterns", [])
+                
+                results = await self.search_code(
+                    query=query,
+                    max_results=max_results,
+                    file_patterns=file_patterns
+                )
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result={
+                        "search_results": [
+                            {
+                                "file_path": r.file_path,
+                                "content": r.content,
+                                "line_number": r.line_number,
+                                "confidence": r.confidence,
+                                "context_lines": r.context_lines,
+                                "metadata": r.metadata
+                            }
+                            for r in results
+                        ]
+                    }
+                )
+            
+            elif action == "index_directory":
+                directory = payload.get("directory", ".")
+                force_reindex = payload.get("force_reindex", False)
+                
+                stats = await self.index_codebase(directory, force_reindex)
+                
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result={"indexing_stats": stats}
+                )
+            
+            elif action == "get_capabilities":
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="success",
+                    result={"capabilities": self.capabilities}
+                )
+            
+            else:
+                return AgentResponse(
+                    request_id=request.request_id,
+                    agent_type=self.agent_type,
+                    status="error",
+                    result=None,
+                    error=f"Unknown action: {action}"
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error processing request: {e}")
+            return AgentResponse(
+                request_id=request.request_id,
+                agent_type=self.agent_type,
+                status="error",
+                result=None,
+                error=str(e)
+            )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities this agent supports"""
+        return self.capabilities
 
     async def index_codebase(
         self, root_path: str, force_reindex: bool = False
