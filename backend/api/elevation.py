@@ -8,7 +8,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -175,16 +175,21 @@ async def get_pending_requests():
 
 
 async def verify_sudo_password(password: str) -> bool:
-    """Safely verify sudo password"""
+    """Safely verify sudo password without command injection"""
     try:
-        # Use sudo -k to clear cached credentials, then test with -v
-        process = await asyncio.create_subprocess_shell(
-            f'echo "{password}" | sudo -S -k -v',
+        # SECURITY FIX: Use subprocess_exec instead of shell to prevent injection
+        process = await asyncio.create_subprocess_exec(
+            "sudo",
+            "-S",
+            "-k",
+            "-v",
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
 
-        stdout, stderr = await process.communicate()
+        # Send password safely through stdin
+        stdout, stderr = await process.communicate(input=f"{password}\n".encode())
         return process.returncode == 0
 
     except Exception as e:
@@ -193,10 +198,23 @@ async def verify_sudo_password(password: str) -> bool:
 
 
 async def run_elevated_command(command: str) -> dict:
-    """Run command with elevated privileges"""
+    """Run command with elevated privileges safely"""
     try:
-        process = await asyncio.create_subprocess_shell(
-            f"sudo {command}",
+        # SECURITY FIX: Parse command safely and use exec instead of shell
+        import shlex
+
+        cmd_parts = shlex.split(command)
+        if not cmd_parts:
+            raise ValueError("Empty command")
+
+        # Validate command against allowlist for security
+        allowed_commands = ["apt", "systemctl", "mount", "umount", "chmod", "chown"]
+        if cmd_parts[0] not in allowed_commands:
+            raise ValueError(f"Command '{cmd_parts[0]}' not in allowlist")
+
+        process = await asyncio.create_subprocess_exec(
+            "sudo",
+            *cmd_parts,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
