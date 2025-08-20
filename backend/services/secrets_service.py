@@ -3,15 +3,18 @@ Secrets Management Service
 Handles secure storage, retrieval, and management of secrets with dual-scope support
 """
 
-import os
 import json
 import logging
+import os
+import aiofiles
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
 import sqlite3
 from pathlib import Path
 from cryptography.fernet import Fernet
+
+from src.utils.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +42,8 @@ class SecretsService:
         if encryption_key:
             self.cipher = Fernet(encryption_key.encode())
         else:
-            # Generate a new key from environment or create new
-            env_key = os.getenv('AUTOBOT_SECRETS_KEY')
+            # Generate a new key from config or environment
+            env_key = config_manager.get('security.secrets_key', None)
             if env_key:
                 self.cipher = Fernet(env_key.encode())
             else:
