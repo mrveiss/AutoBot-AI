@@ -432,6 +432,13 @@
                       >
                         <i class="fas fa-project-diagram mr-2"></i>Workflows
                       </button>
+                      <button
+                        @click="activeToolTab = 'analytics'"
+                        :class="[activeToolTab === 'analytics' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
+                        class="px-4 py-2 rounded font-medium transition-colors"
+                      >
+                        <i class="fas fa-chart-line mr-2"></i>Codebase Analytics
+                      </button>
                     </div>
                   </div>
 
@@ -448,6 +455,11 @@
                   <!-- Workflows Tab -->
                   <div v-else-if="activeToolTab === 'workflows'" class="tools-content">
                     <WorkflowApproval />
+                  </div>
+
+                  <!-- Codebase Analytics Tab -->
+                  <div v-else-if="activeToolTab === 'analytics'" class="tools-content">
+                    <CodebaseAnalytics />
                   </div>
                 </div>
               </section>
@@ -680,6 +692,15 @@ const RumDashboard = defineAsyncComponent({
   delay: 100,
   timeout: 10000
 });
+
+const CodebaseAnalytics = defineAsyncComponent({
+  loader: () => import('./components/CodebaseAnalytics.vue'),
+  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Codebase Analytics...</span></div>' },
+  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Codebase Analytics component</div>' },
+  delay: 100,
+  timeout: 10000
+});
+
 import elevationService from './services/elevationService';
 
 export default {
@@ -698,6 +719,7 @@ export default {
     ValidationDashboard,
     ElevationDialog,
     RumDashboard,
+    CodebaseAnalytics,
     ErrorNotifications,
     ErrorBoundary
   },
