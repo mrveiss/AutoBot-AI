@@ -248,7 +248,7 @@ class OllamaProvider(LLMProvider):
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(f"{self.base_url}/api/tags") as response:
                     return response.status == 200
-        except:
+        except (aiohttp.ClientError, asyncio.TimeoutError, Exception):
             return False
     
     async def get_available_models(self) -> List[str]:
@@ -261,7 +261,7 @@ class OllamaProvider(LLMProvider):
                     if response.status == 200:
                         models_data = await response.json()
                         return [model["name"] for model in models_data.get("models", [])]
-        except:
+        except (aiohttp.ClientError, asyncio.TimeoutError, Exception):
             pass
         return self.config.available_models
 
@@ -345,7 +345,7 @@ class OpenAIProvider(LLMProvider):
         try:
             await self.client.models.list()
             return True
-        except:
+        except Exception:
             return False
     
     def get_available_models(self) -> List[str]:
