@@ -1,0 +1,337 @@
+"""
+Workflow Step Judge
+
+Implements LLM-as-Judge for workflow step evaluation, approval, and quality assessment.
+This judge evaluates workflow steps before execution to ensure quality, safety, and effectiveness.
+"""
+
+import json
+import logging
+from typing import Any, Dict, List, Optional
+
+from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
+
+logger = logging.getLogger(__name__)
+
+
+class WorkflowStepJudge(BaseLLMJudge):
+    """Judge for evaluating workflow steps before execution"""
+
+    def __init__(self, llm_interface=None):
+        super().__init__("workflow_step", llm_interface)
+        self.safety_threshold = 0.7  # Minimum safety score required
+        self.quality_threshold = 0.6  # Minimum quality score required
+
+    async def evaluate_workflow_step(
+        self,
+        step_data: Dict[str, Any],
+        workflow_context: Dict[str, Any],
+        user_context: Dict[str, Any],
+        alternatives: Optional[List[Dict[str, Any]]] = None,
+        risk_tolerance: str = "medium",
+    ) -> JudgmentResult:
+        """
+        Evaluate a workflow step for approval
+
+        Args:
+            step_data: The workflow step to evaluate
+            workflow_context: Context about the current workflow
+            user_context: Context about the user and their permissions
+            alternatives: Alternative ways to accomplish the same goal
+            risk_tolerance: User's risk tolerance (low/medium/high)
+
+        Returns:
+            JudgmentResult with detailed evaluation
+        """
+        # Define evaluation criteria
+        criteria = [
+            JudgmentDimension.SAFETY,
+            JudgmentDimension.QUALITY,
+            JudgmentDimension.RELEVANCE,
+            JudgmentDimension.FEASIBILITY,
+            JudgmentDimension.EFFICIENCY,
+            JudgmentDimension.COMPLIANCE,
+        ]
+
+        # Prepare comprehensive context
+        context = {
+            "workflow_context": workflow_context,
+            "user_context": user_context,
+            "risk_tolerance": risk_tolerance,
+            "safety_threshold": self.safety_threshold,
+            "quality_threshold": self.quality_threshold,
+        }
+
+        return await self.make_judgment(
+            subject=step_data,
+            criteria=criteria,
+            context=context,
+            alternatives=alternatives,
+        )
+
+    async def _prepare_judgment_prompt(
+        self,
+        subject: Any,
+        criteria: List[JudgmentDimension],
+        context: Dict[str, Any],
+        alternatives: Optional[List[Any]] = None,
+        **kwargs,
+    ) -> str:
+        """Prepare the prompt for workflow step evaluation"""
+
+        step_data = subject
+        workflow_context = context.get("workflow_context", {})
+        user_context = context.get("user_context", {})
+        risk_tolerance = context.get("risk_tolerance", "medium")
+
+        prompt = f"""
+Please evaluate the following workflow step for execution approval:
+
+WORKFLOW STEP TO EVALUATE:
+{json.dumps(step_data, indent=2)}
+
+WORKFLOW CONTEXT:
+- Current workflow: {workflow_context.get('workflow_name', 'Unknown')}
+- Previous steps: {len(workflow_context.get('completed_steps', []))} completed
+- Workflow goal: {workflow_context.get('goal', 'Not specified')}
+- Current state: {workflow_context.get('current_state', 'Unknown')}
+
+USER CONTEXT:
+- User permissions: {user_context.get('permissions', [])}
+- Risk tolerance: {risk_tolerance}
+- User experience level: {user_context.get('experience_level', 'unknown')}
+- Current environment: {user_context.get('environment', 'unknown')}
+
+EVALUATION CRITERIA:
+Please evaluate this step on the following dimensions (score 0.0 to 1.0):
+
+1. SAFETY: Risk assessment and potential for harm
+   - Consider command safety, system impact, data safety
+   - Evaluate potential for unintended consequences
+   - Check for destructive or irreversible operations
+
+2. QUALITY: Likelihood of successful execution
+   - Assess if the step will accomplish its intended goal
+   - Check for proper parameters and configuration
+   - Evaluate completeness and correctness
+
+3. RELEVANCE: Alignment with workflow goals
+   - Check if this step advances the workflow objective
+   - Assess if it's necessary and not redundant
+   - Evaluate timing and sequencing appropriateness
+
+4. FEASIBILITY: Technical possibility of execution
+   - Check if required resources are available
+   - Assess if dependencies are met
+   - Evaluate system capabilities and constraints
+
+5. EFFICIENCY: Resource utilization and performance
+   - Assess computational/time costs
+   - Check for more efficient alternatives
+   - Evaluate resource impact
+
+6. COMPLIANCE: Adherence to policies and best practices
+   - Check security policy compliance
+   - Assess regulatory requirements
+   - Evaluate coding/operational standards
+
+ALTERNATIVES TO CONSIDER:
+{json.dumps(alternatives, indent=2) if alternatives else "No alternatives provided"}
+
+DECISION CRITERIA:
+- Safety score must be ≥ {context.get('safety_threshold', 0.7)} for approval
+- Quality score must be ≥ {context.get('quality_threshold', 0.6)} for approval
+- Consider user's risk tolerance: {risk_tolerance}
+
+Please provide your evaluation in the required JSON format with:
+- Detailed reasoning for each criterion
+- Specific evidence for your scores
+- Clear recommendation (APPROVE/REJECT/CONDITIONAL/REVISE)
+- Actionable improvement suggestions if applicable
+- Analysis of alternatives if provided
+
+Focus on being thorough but practical - the goal is to ensure safe, effective workflow execution.
+"""
+
+        return prompt.strip()
+
+    async def should_approve_step(
+        self,
+        step_data: Dict[str, Any],
+        workflow_context: Dict[str, Any],
+        user_context: Dict[str, Any],
+    ) -> tuple[bool, str]:
+        """
+        Quick approval check for workflow steps
+
+        Returns:
+            tuple: (should_approve: bool, reason: str)
+        """
+        try:
+            judgment = await self.evaluate_workflow_step(
+                step_data, workflow_context, user_context
+            )
+
+            # Check safety and quality thresholds
+            safety_score = next(
+                (
+                    s.score
+                    for s in judgment.criterion_scores
+                    if s.dimension == JudgmentDimension.SAFETY
+                ),
+                0.0,
+            )
+            quality_score = next(
+                (
+                    s.score
+                    for s in judgment.criterion_scores
+                    if s.dimension == JudgmentDimension.QUALITY
+                ),
+                0.0,
+            )
+
+            if safety_score < self.safety_threshold:
+                return (
+                    False,
+                    f"Safety score ({safety_score:.2f}) below threshold ({self.safety_threshold})",
+                )
+
+            if quality_score < self.quality_threshold:
+                return (
+                    False,
+                    f"Quality score ({quality_score:.2f}) below threshold ({self.quality_threshold})",
+                )
+
+            if judgment.recommendation in ["APPROVE", "CONDITIONAL"]:
+                return True, f"Approved: {judgment.reasoning[:100]}..."
+            else:
+                return False, judgment.reasoning
+
+        except Exception as e:
+            logger.error(f"Error in workflow step approval: {e}")
+            return False, f"Evaluation error: {str(e)}"
+
+    async def suggest_improvements(
+        self,
+        step_data: Dict[str, Any],
+        workflow_context: Dict[str, Any],
+        user_context: Dict[str, Any],
+    ) -> List[str]:
+        """
+        Get improvement suggestions for a workflow step
+
+        Returns:
+            List of specific improvement suggestions
+        """
+        try:
+            judgment = await self.evaluate_workflow_step(
+                step_data, workflow_context, user_context
+            )
+            return judgment.improvement_suggestions
+
+        except Exception as e:
+            logger.error(f"Error getting improvement suggestions: {e}")
+            return [f"Error generating suggestions: {str(e)}"]
+
+    async def compare_alternatives(
+        self,
+        primary_step: Dict[str, Any],
+        alternatives: List[Dict[str, Any]],
+        workflow_context: Dict[str, Any],
+        user_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Compare multiple workflow step alternatives
+
+        Returns:
+            Dict with ranked alternatives and recommendations
+        """
+        try:
+            # Evaluate all alternatives
+            evaluations = []
+
+            # Evaluate primary step
+            primary_eval = await self.evaluate_workflow_step(
+                primary_step, workflow_context, user_context, alternatives
+            )
+            evaluations.append(
+                {"step": primary_step, "evaluation": primary_eval, "type": "primary"}
+            )
+
+            # Evaluate alternatives
+            for i, alt_step in enumerate(alternatives):
+                alt_eval = await self.evaluate_workflow_step(
+                    alt_step, workflow_context, user_context, [primary_step]
+                )
+                evaluations.append(
+                    {
+                        "step": alt_step,
+                        "evaluation": alt_eval,
+                        "type": f"alternative_{i+1}",
+                    }
+                )
+
+            # Rank by overall score
+            evaluations.sort(key=lambda x: x["evaluation"].overall_score, reverse=True)
+
+            return {
+                "best_option": evaluations[0],
+                "all_evaluations": evaluations,
+                "ranking_rationale": "Ranked by overall score considering safety, quality, and efficiency",
+                "recommendation": evaluations[0]["evaluation"].recommendation,
+            }
+
+        except Exception as e:
+            logger.error(f"Error comparing alternatives: {e}")
+            return {
+                "error": str(e),
+                "best_option": None,
+                "all_evaluations": [],
+                "recommendation": "REJECT",
+            }
+
+    def _get_system_prompt(self) -> str:
+        """Get specialized system prompt for workflow step evaluation"""
+        return """You are an expert AI judge specializing in workflow step evaluation and approval. Your role is to assess workflow steps for safety, quality, and effectiveness before execution.
+
+Your expertise includes:
+- Risk assessment and safety evaluation
+- Technical feasibility analysis
+- Workflow optimization and efficiency
+- Security and compliance checking
+- Alternative solution analysis
+
+Evaluation Guidelines:
+1. SAFETY FIRST: Always prioritize user and system safety
+2. BE PRACTICAL: Consider real-world constraints and user context
+3. BE SPECIFIC: Provide concrete, actionable feedback
+4. CONSIDER ALTERNATIVES: Suggest better approaches when possible
+5. BE CONSISTENT: Apply evaluation criteria uniformly
+6. EXPLAIN REASONING: Provide clear justification for scores
+
+Critical Safety Considerations:
+- Destructive operations (rm, format, delete)
+- Network security risks
+- Data exposure or privacy concerns
+- System instability risks
+- Privilege escalation attempts
+- Resource exhaustion potential
+
+Quality Factors:
+- Correctness of approach
+- Completeness of parameters
+- Error handling and robustness
+- Maintainability and clarity
+- Performance and efficiency
+
+Response Format Requirements:
+Always respond with valid JSON containing all required fields:
+- overall_score: float between 0.0 and 1.0
+- recommendation: exactly one of "APPROVE", "REJECT", "CONDITIONAL", "REVISE"
+- confidence: exactly one of "very_low", "low", "medium", "high", "very_high"
+- reasoning: detailed explanation (2-3 sentences minimum)
+- criterion_scores: array with all requested criteria
+- improvement_suggestions: array of specific, actionable suggestions
+- alternatives_analysis: array analyzing provided alternatives
+
+Be thorough, objective, and focused on enabling safe, effective workflow execution."""

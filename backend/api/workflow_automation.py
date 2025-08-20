@@ -16,13 +16,24 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from backend.api.simple_terminal_websocket import SimpleTerminalWebSocket
+from backend.api.simple_terminal_websocket import SimpleTerminalSession
 from src.enhanced_orchestrator import EnhancedOrchestrator
 
 # Import existing orchestrator and workflow components
 from src.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
+
+# Import LLM judges for workflow evaluation
+try:
+    from src.judges.multi_agent_arbitrator import MultiAgentArbitrator
+    from src.judges.security_risk_judge import SecurityRiskJudge
+    from src.judges.workflow_step_judge import WorkflowStepJudge
+
+    JUDGES_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"LLM judges not available: {e}")
+    JUDGES_AVAILABLE = False
 
 router = APIRouter(prefix="/api/workflow_automation", tags=["workflow_automation"])
 
@@ -117,9 +128,23 @@ class WorkflowAutomationManager:
 
     def __init__(self):
         self.active_workflows: Dict[str, ActiveWorkflow] = {}
-        self.terminal_sessions: Dict[str, SimpleTerminalWebSocket] = {}
+        self.terminal_sessions: Dict[str, SimpleTerminalSession] = {}
         self.orchestrator = Orchestrator()
         self.enhanced_orchestrator = EnhancedOrchestrator()
+
+        # Initialize LLM judges if available
+        self.judges_enabled = JUDGES_AVAILABLE
+        if self.judges_enabled:
+            try:
+                self.workflow_step_judge = WorkflowStepJudge()
+                self.security_risk_judge = SecurityRiskJudge()
+                self.multi_agent_arbitrator = MultiAgentArbitrator()
+                logger.info("LLM judges initialized for workflow automation")
+            except Exception as e:
+                logger.error(f"Failed to initialize LLM judges: {e}")
+                self.judges_enabled = False
+        else:
+            logger.info("LLM judges disabled for workflow automation")
 
         # Workflow templates for common tasks
         self.workflow_templates = {
@@ -277,6 +302,35 @@ class WorkflowAutomationManager:
             workflow.current_step_index += 1
             await self._process_next_workflow_step(workflow_id)
             return
+
+        # Evaluate step with LLM judges if enabled
+        if self.judges_enabled:
+            try:
+                step_evaluation = await self._evaluate_workflow_step(
+                    workflow_id, current_step
+                )
+                if not step_evaluation.get("should_proceed", True):
+                    logger.warning(
+                        f"Step {current_step.step_id} rejected by LLM judge: {step_evaluation.get('reason', 'Unknown')}"
+                    )
+                    current_step.status = WorkflowStepStatus.FAILED
+                    workflow.is_paused = True
+                    await self._send_workflow_message(
+                        workflow.session_id,
+                        {
+                            "type": "step_rejected_by_judge",
+                            "workflow_id": workflow_id,
+                            "step_id": current_step.step_id,
+                            "reason": step_evaluation.get(
+                                "reason", "Step rejected by safety evaluation"
+                            ),
+                            "suggestions": step_evaluation.get("suggestions", []),
+                        },
+                    )
+                    return
+            except Exception as e:
+                logger.error(f"Error evaluating workflow step with LLM judge: {e}")
+                # Continue without judge evaluation
 
         # Update step status
         current_step.status = WorkflowStepStatus.WAITING_APPROVAL
@@ -570,6 +624,153 @@ class WorkflowAutomationManager:
             ],
             "user_interventions": workflow.user_interventions,
         }
+
+    async def _evaluate_workflow_step(
+        self, workflow_id: str, step: WorkflowStep
+    ) -> Dict[str, Any]:
+        """Evaluate workflow step using LLM judges"""
+        if not self.judges_enabled:
+            return {"should_proceed": True, "reason": "Judges disabled"}
+
+        try:
+            workflow = self.active_workflows[workflow_id]
+
+            # Prepare step data for evaluation
+            step_data = {
+                "step_id": step.step_id,
+                "command": step.command,
+                "description": step.description,
+                "explanation": step.explanation,
+                "risk_level": step.risk_level,
+                "estimated_duration": step.estimated_duration,
+                "dependencies": step.dependencies or [],
+            }
+
+            # Prepare workflow context
+            workflow_context = {
+                "workflow_name": workflow.name,
+                "workflow_description": workflow.description,
+                "current_step_index": workflow.current_step_index,
+                "total_steps": len(workflow.steps),
+                "completed_steps": [
+                    s
+                    for s in workflow.steps[: workflow.current_step_index]
+                    if s.status == WorkflowStepStatus.COMPLETED
+                ],
+                "automation_mode": workflow.automation_mode.value,
+                "session_id": workflow.session_id,
+            }
+
+            # Prepare user context (simplified for now)
+            user_context = {
+                "permissions": [
+                    "user"
+                ],  # Could be enhanced with actual user permissions
+                "experience_level": "intermediate",
+                "environment": "development",  # Could be determined from context
+            }
+
+            # Evaluate with workflow step judge
+            workflow_judgment = await self.workflow_step_judge.evaluate_workflow_step(
+                step_data, workflow_context, user_context
+            )
+
+            # Evaluate with security risk judge for commands
+            security_judgment = await self.security_risk_judge.evaluate_command_security(
+                step.command,
+                {
+                    "working_directory": "/home/user",  # Could be actual working directory
+                    "user": "user",
+                    "session_type": "automated_workflow",
+                },
+                user_permissions=["user"],
+                environment="development",
+            )
+
+            # Combine judgments
+            should_approve_workflow = workflow_judgment.recommendation in [
+                "APPROVE",
+                "CONDITIONAL",
+            ]
+            should_approve_security = security_judgment.recommendation in [
+                "APPROVE",
+                "CONDITIONAL",
+            ]
+
+            # Extract safety scores
+            workflow_safety = next(
+                (
+                    s.score
+                    for s in workflow_judgment.criterion_scores
+                    if s.dimension.value == "safety"
+                ),
+                0.8,
+            )
+            security_safety = next(
+                (
+                    s.score
+                    for s in security_judgment.criterion_scores
+                    if s.dimension.value == "safety"
+                ),
+                0.8,
+            )
+
+            # Decision logic
+            min_safety = min(workflow_safety, security_safety)
+            should_proceed = (
+                should_approve_workflow and should_approve_security and min_safety > 0.7
+            )
+
+            # Prepare response
+            evaluation_result = {
+                "should_proceed": should_proceed,
+                "workflow_judgment": {
+                    "recommendation": workflow_judgment.recommendation,
+                    "overall_score": workflow_judgment.overall_score,
+                    "reasoning": workflow_judgment.reasoning,
+                },
+                "security_judgment": {
+                    "recommendation": security_judgment.recommendation,
+                    "overall_score": security_judgment.overall_score,
+                    "reasoning": security_judgment.reasoning,
+                },
+                "combined_safety_score": min_safety,
+                "suggestions": (
+                    workflow_judgment.improvement_suggestions
+                    + security_judgment.improvement_suggestions
+                ),
+            }
+
+            if not should_proceed:
+                reasons = []
+                if not should_approve_workflow:
+                    reasons.append(
+                        f"Workflow evaluation: {workflow_judgment.recommendation}"
+                    )
+                if not should_approve_security:
+                    reasons.append(
+                        f"Security evaluation: {security_judgment.recommendation}"
+                    )
+                if min_safety <= 0.7:
+                    reasons.append(f"Safety score too low: {min_safety:.2f}")
+
+                evaluation_result["reason"] = "; ".join(reasons)
+
+            logger.info(
+                f"Step evaluation for {step.step_id}: proceed={should_proceed}, "
+                f"workflow_score={workflow_judgment.overall_score:.2f}, "
+                f"security_score={security_judgment.overall_score:.2f}"
+            )
+
+            return evaluation_result
+
+        except Exception as e:
+            logger.error(f"Error in step evaluation: {e}")
+            return {
+                "should_proceed": True,  # Default to proceed on evaluation error
+                "reason": f"Evaluation error: {str(e)}",
+                "suggestions": ["Manual review recommended due to evaluation error"],
+            }
 
     # Workflow Templates
     def _create_system_update_workflow(self, session_id: str) -> List[WorkflowStep]:

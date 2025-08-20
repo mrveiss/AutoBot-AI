@@ -5,14 +5,14 @@ Provides endpoints for real-time validation dashboard and reports
 
 import logging
 import os
-import aiofiles
 
 # Import the dashboard generator
 import sys
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+import aiofiles
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -24,11 +24,23 @@ except ImportError as e:
     ValidationDashboardGenerator = None
     import_error = str(e)
 
+# Import LLM judges for validation enhancement
+try:
+    from src.judges.agent_response_judge import AgentResponseJudge
+    from src.judges.workflow_step_judge import WorkflowStepJudge
+
+    VALIDATION_JUDGES_AVAILABLE = True
+except ImportError:
+    VALIDATION_JUDGES_AVAILABLE = False
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Global dashboard generator instance
 _dashboard_generator = None
+
+# Global validation judges
+_validation_judges = None
 
 
 def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
@@ -48,6 +60,28 @@ def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
             return None
 
     return _dashboard_generator
+
+
+def get_validation_judges() -> Optional[Dict[str, Any]]:
+    """Get or create validation judges instance"""
+    global _validation_judges
+
+    if not VALIDATION_JUDGES_AVAILABLE:
+        logger.warning("Validation judges not available")
+        return None
+
+    if _validation_judges is None:
+        try:
+            _validation_judges = {
+                "workflow_step_judge": WorkflowStepJudge(),
+                "agent_response_judge": AgentResponseJudge(),
+            }
+            logger.info("Validation judges initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize validation judges: {e}")
+            return None
+
+    return _validation_judges
 
 
 class DashboardGenerateRequest(BaseModel):
@@ -415,3 +449,146 @@ async def validation_dashboard_health():
     except Exception as e:
         logger.error(f"Validation dashboard health check failed: {e}")
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+
+
+@router.post("/judge_workflow_step")
+async def judge_workflow_step(request: dict):
+    """Use LLM judges to evaluate a workflow step"""
+    try:
+        judges = get_validation_judges()
+
+        if judges is None:
+            raise HTTPException(
+                status_code=503, detail="Validation judges not available"
+            )
+
+        step_data = request.get("step_data", {})
+        workflow_context = request.get("workflow_context", {})
+        user_context = request.get("user_context", {})
+
+        if not step_data:
+            raise HTTPException(status_code=400, detail="step_data is required")
+
+        # Evaluate with workflow step judge
+        workflow_judge = judges["workflow_step_judge"]
+        judgment = await workflow_judge.evaluate_workflow_step(
+            step_data, workflow_context, user_context
+        )
+
+        return {
+            "status": "success",
+            "judgment": {
+                "overall_score": judgment.overall_score,
+                "recommendation": judgment.recommendation,
+                "confidence": judgment.confidence.value,
+                "reasoning": judgment.reasoning,
+                "criterion_scores": [
+                    {
+                        "dimension": score.dimension.value,
+                        "score": score.score,
+                        "confidence": score.confidence.value,
+                        "reasoning": score.reasoning,
+                        "evidence": score.evidence,
+                    }
+                    for score in judgment.criterion_scores
+                ],
+                "improvement_suggestions": judgment.improvement_suggestions,
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Error in workflow step judgment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/judge_agent_response")
+async def judge_agent_response(request: dict):
+    """Use LLM judges to evaluate an agent response"""
+    try:
+        judges = get_validation_judges()
+
+        if judges is None:
+            raise HTTPException(
+                status_code=503, detail="Validation judges not available"
+            )
+
+        user_request = request.get("request", {})
+        response = request.get("response", {})
+        agent_type = request.get("agent_type", "unknown")
+        context = request.get("context", {})
+
+        if not response:
+            raise HTTPException(status_code=400, detail="response is required")
+
+        # Evaluate with agent response judge
+        response_judge = judges["agent_response_judge"]
+        judgment = await response_judge.evaluate_agent_response(
+            user_request, response, agent_type, context
+        )
+
+        return {
+            "status": "success",
+            "judgment": {
+                "overall_score": judgment.overall_score,
+                "recommendation": judgment.recommendation,
+                "confidence": judgment.confidence.value,
+                "reasoning": judgment.reasoning,
+                "criterion_scores": [
+                    {
+                        "dimension": score.dimension.value,
+                        "score": score.score,
+                        "confidence": score.confidence.value,
+                        "reasoning": score.reasoning,
+                        "evidence": score.evidence,
+                    }
+                    for score in judgment.criterion_scores
+                ],
+                "improvement_suggestions": judgment.improvement_suggestions,
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Error in agent response judgment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/judge_status")
+async def get_judge_status():
+    """Get status of validation judges"""
+    try:
+        judges = get_validation_judges()
+
+        if judges is None:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "service": "validation_judges",
+                    "error": "Judges not available",
+                    "timestamp": datetime.now().isoformat(),
+                },
+            )
+
+        # Get performance metrics for judges
+        judge_metrics = {}
+        for judge_name, judge in judges.items():
+            try:
+                metrics = judge.get_performance_metrics()
+                judge_metrics[judge_name] = metrics
+            except Exception as e:
+                logger.error(f"Error getting metrics for {judge_name}: {e}")
+                judge_metrics[judge_name] = {"error": str(e)}
+
+        return {
+            "status": "healthy",
+            "service": "validation_judges",
+            "available_judges": list(judges.keys()),
+            "judge_metrics": judge_metrics,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting judge status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
