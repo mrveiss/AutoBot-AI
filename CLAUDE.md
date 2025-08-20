@@ -25,13 +25,22 @@ project_root/
 2. **NEVER abandon started tasks** - ALWAYS continue working until completion
 3. **Group tasks by priority** - errors/warnings ALWAYS take precedence over features
 4. **ALWAYS test before committing** - NO EXCEPTIONS
+5. **NEVER restart applications** - Application restarts are handled by USER ONLY
 
 #### 🧪 Testing & Quality Assurance
 - **Pre-commit checks**: `flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503`
 - **Test mode verification**: `./run_agent.sh --test-mode` before full deployment
 - **Phase 9 testing**: `python test_phase9_ai.py` after multi-modal changes
 - **NPU worker testing**: `python test_npu_worker.py` after OpenVINO modifications
+- **Phase validation**: ON-DEMAND ONLY - use "Load Validation Data" button in GUI
 - **ALL test files MUST be in `tests/` folder or subfolders**
+
+#### 🏗️ Application Lifecycle Management
+- **SETUP**: Application is configured ONCE using `./setup_agent.sh`
+- **EXECUTION**: Application runs ONLY via `./run_agent.sh [options]`
+- **RESTARTS**: Handled EXCLUSIVELY by user - NEVER restart programmatically
+- **CONFIGURATION**: All setup and configuration changes go through `setup_agent.sh`
+- **OPTIONS**: Use `./run_agent.sh --help` to see available runtime options
 
 #### ⚙️ Configuration & Dependencies
 - **NEVER hardcode values** - use `src/config.py` for all configuration
@@ -93,13 +102,13 @@ project_root/
   ```bash
   # 1. Run tests for affected areas
   python -m pytest tests/test_relevant_module.py -v
-  
+
   # 2. Lint check
   flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503
-  
+
   # 3. Quick functional test
   ./run_agent.sh --test-mode
-  
+
   # 4. Commit with descriptive message
   git add . && git commit -m "type: brief description of change"
   ```
@@ -147,35 +156,39 @@ project_root/
 ### 🛠️ Quick Commands Reference
 
 ```bash
-# Pre-commit quality check
-flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503
+# APPLICATION LIFECYCLE (USER CONTROLLED)
+./setup_agent.sh              # Initial setup and configuration
+./run_agent.sh                # Start application (standard mode)
+./run_agent.sh --test-mode     # Start in test mode
+./run_agent.sh --help          # Show available options
 
-# Test mode verification
-./run_agent.sh --test-mode
+# DEVELOPMENT & TESTING
+flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503  # Quality check
+python test_phase9_ai.py                                             # Phase 9 testing
+python test_npu_worker.py                                           # NPU testing
 
-# Phase 9 testing
-python test_phase9_ai.py
+# PHASE VALIDATION (ON-DEMAND ONLY)
+# NO programmatic phase validation - use GUI "Load Validation Data" button
+# Located: Web UI → Validation tab → "Load Validation Data" button
+# Purpose: On-demand system phase validation for performance optimization
 
-# NPU worker testing
-python test_npu_worker.py
+# CODE ANALYSIS & PROFILING
+python src/agents/npu_code_search_agent.py --query "search_term"    # NPU code search
+python scripts/comprehensive_code_profiler.py                       # Codebase analysis
+python scripts/automated_testing_procedure.py                       # Test suite
+python scripts/profile_api_endpoints.py                            # API performance
 
-# Code search via NPU
-python src/agents/npu_code_search_agent.py --query "your_search_query"
-
-# Comprehensive codebase profiling
-python scripts/comprehensive_code_profiler.py
-
-# Automated testing suite
-python scripts/automated_testing_procedure.py
-
-# API endpoint performance testing
-python scripts/profile_api_endpoints.py
+# IMPORTANT: ALL APPLICATION RESTARTS MUST BE DONE BY USER
+# Do not programmatically restart, stop, or kill application processes
+# Phase validation is ON-DEMAND ONLY - do not trigger programmatically
 ```
 
 ### 🧪 Comprehensive Testing Procedures
 
 #### **Automated Testing Framework**
+
 The codebase includes a comprehensive automated testing suite that covers:
+
 - **Unit Tests**: Individual function and module testing
 - **Integration Tests**: Component interaction validation
 - **API Tests**: Endpoint response and performance validation
@@ -184,6 +197,7 @@ The codebase includes a comprehensive automated testing suite that covers:
 - **Code Quality Tests**: Flake8 compliance and import structure
 
 #### **Test Execution Commands**
+
 ```bash
 # Run full automated test suite
 python scripts/automated_testing_procedure.py
@@ -197,7 +211,7 @@ tester = AutomatedTestingSuite()
 # Integration tests only
 tester.run_integration_tests()
 
-# Security tests only  
+# Security tests only
 tester.run_security_tests()
 
 # Performance tests only
@@ -224,6 +238,7 @@ asyncio.run(quick_test())
 ```
 
 #### **Performance Profiling Commands**
+
 ```bash
 # Full codebase analysis (AST, complexity, patterns)
 python scripts/comprehensive_code_profiler.py
@@ -239,12 +254,14 @@ ls reports/codebase_analysis_*.json | tail -1 | xargs cat | jq '.performance_hot
 ```
 
 #### **Test Results and Reports**
+
 - **Test Results**: `reports/test_results_<timestamp>.json`
-- **Codebase Analysis**: `reports/codebase_analysis_<timestamp>.json`  
+- **Codebase Analysis**: `reports/codebase_analysis_<timestamp>.json`
 - **Performance Analysis**: `reports/performance_analysis_report.md`
 - **API Performance**: Console output with speed ratings
 
 #### **Hardware-Accelerated Testing**
+
 ```bash
 # NPU-accelerated code search testing
 python test_npu_worker.py
@@ -269,6 +286,7 @@ print(f'Redis 1000 pings: {(time.time()-start)*1000:.0f}ms')
 ```
 
 #### **Continuous Integration Testing**
+
 ```bash
 # Pre-commit testing pipeline
 flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503
@@ -284,6 +302,7 @@ npm run build --prefix autobot-vue
 ### 📋 Pre-Deployment Checklist
 
 #### Before Each Commit
+
 - [ ] Tests pass for affected modules
 - [ ] Flake8 checks clean
 - [ ] Quick functional test completed
@@ -291,6 +310,7 @@ npm run build --prefix autobot-vue
 - [ ] Commit message is descriptive
 
 #### Before Full Deployment
+
 - [ ] All incremental commits verified
 - [ ] Integration tests pass
 - [ ] Documentation updated
@@ -301,6 +321,7 @@ npm run build --prefix autobot-vue
 - [ ] Related changes properly sequenced
 
 #### Emergency Rollback Plan
+
 - Each commit is atomic and can be reverted independently
 - Critical changes have backup commits before implementation
 - Database migrations are reversible

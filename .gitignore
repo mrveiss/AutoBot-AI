@@ -61,6 +61,9 @@ data/session_*
 data/workflow_*
 data/agent_*
 
+# Dynamic report data in data directory
+data/reports/
+
 # Backend data
 backend/data/chats/*
 
@@ -183,6 +186,15 @@ docs/reports/backend-*.json
 # All reports now stored in reports/ subdirectories by type
 # Maximum 2 reports per type for comparison purposes
 # Use scripts/utilities/report_manager.py for management
+
+# Dynamic report data (should not be committed)
+reports/memory/
+reports/monitoring/
+reports/phase_validation_*.json
+reports/state_tracking/
+reports/codebase_analysis_*.json
+reports/**/*.html
+reports/**/*.db
 
 # Legacy report patterns (prevent in root)
 /*_analysis_report.json
