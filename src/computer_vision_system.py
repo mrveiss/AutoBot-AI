@@ -17,11 +17,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 from src.desktop_streaming_manager import desktop_streaming
 from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
-from src.multimodal_processor import (
-    ModalInput,
+from src.unified_multimodal_processor import (
+    MultiModalInput,
     ModalityType,
     ProcessingIntent,
-    multimodal_processor,
+    unified_processor,
 )
 from src.task_execution_tracker import task_tracker
 
