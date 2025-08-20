@@ -819,6 +819,60 @@ class WorkflowAutomationManager:
             ),
         ]
 
+    def _create_security_scan_workflow(self, session_id: str) -> List[WorkflowStep]:
+        """Create security scanning workflow"""
+        return [
+            WorkflowStep("update_db", "sudo apt update", "Update package database"),
+            WorkflowStep(
+                "install_scanner",
+                "sudo apt install -y nmap lynis",
+                "Install security scanning tools",
+            ),
+            WorkflowStep(
+                "scan_ports",
+                "sudo nmap -sS -O localhost",
+                "Scan local ports and services",
+            ),
+            WorkflowStep(
+                "system_audit", "sudo lynis audit system", "Run system security audit"
+            ),
+            WorkflowStep(
+                "check_permissions",
+                "find /etc -perm -o=w -type f 2>/dev/null",
+                "Check for world-writable files in /etc",
+            ),
+        ]
+
+    def _create_backup_workflow(self, session_id: str) -> List[WorkflowStep]:
+        """Create backup creation workflow"""
+        return [
+            WorkflowStep(
+                "create_backup_dir",
+                "mkdir -p ~/backups/$(date +%Y%m%d)",
+                "Create dated backup directory",
+            ),
+            WorkflowStep(
+                "backup_config",
+                "tar -czf ~/backups/$(date +%Y%m%d)/config_backup.tar.gz ~/.bashrc ~/.profile /etc/hosts",
+                "Backup configuration files",
+            ),
+            WorkflowStep(
+                "backup_documents",
+                "tar -czf ~/backups/$(date +%Y%m%d)/docs_backup.tar.gz ~/Documents",
+                "Backup documents directory",
+            ),
+            WorkflowStep(
+                "verify_backups",
+                "ls -la ~/backups/$(date +%Y%m%d)/",
+                "Verify backup files created",
+            ),
+            WorkflowStep(
+                "cleanup_old",
+                "find ~/backups -type d -mtime +30 -exec rm -rf {} +",
+                "Clean up backups older than 30 days",
+            ),
+        ]
+
 
 # Global workflow manager instance
 workflow_manager = WorkflowAutomationManager()
