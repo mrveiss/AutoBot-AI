@@ -12,6 +12,10 @@ from datetime import datetime
 import threading
 import queue
 
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.utils.terminal_input_handler import safe_input
+
 
 class OutputCapture:
     """Capture terminal output from subprocess with real-time display."""
@@ -119,13 +123,13 @@ def capture_autobot_output():
     for key, (desc, _) in commands.items():
         print(f"  {key}. {desc}")
 
-    choice = input("\nEnter your choice (1-5): ").strip()
+    choice = safe_input("\nEnter your choice (1-5): ", default="1").strip()
 
     if choice in commands:
         desc, command = commands[choice]
 
         if command is None:
-            command = input("Enter custom command: ").strip()
+            command = safe_input("Enter custom command: ", default="./run_agent.sh").strip()
 
         if command:
             capture.run_command(command)
