@@ -28,6 +28,8 @@ class NPUModelManager:
         self.loaded_models = {}
         self.core = None
         self.npu_available = False
+        self.gpu_devices = []
+        self.device_pool = []  # Pool of available devices for parallel inference
 
         # Initialize OpenVINO
         self._initialize_openvino()
@@ -48,8 +50,24 @@ class NPUModelManager:
             if npu_devices:
                 self.npu_available = True
                 logger.info(f"NPU devices available: {npu_devices}")
-            else:
-                logger.warning("No NPU devices detected - falling back to CPU")
+                self.device_pool.extend(npu_devices)
+
+            # Check for GPU devices
+            self.gpu_devices = [d for d in available_devices if "GPU" in d]
+            if self.gpu_devices:
+                logger.info(f"GPU devices available: {self.gpu_devices}")
+                self.device_pool.extend(self.gpu_devices)
+
+            # Add CPU as fallback
+            cpu_devices = [d for d in available_devices if "CPU" in d]
+            if cpu_devices:
+                self.device_pool.extend(cpu_devices)
+
+            if not self.device_pool:
+                logger.warning("No accelerated devices found, using CPU")
+                self.device_pool = ["CPU"]
+
+            logger.info(f"Device pool for parallel inference: {self.device_pool}")
 
         except Exception as e:
             logger.error(f"Failed to initialize OpenVINO: {e}")
@@ -192,3 +210,120 @@ class NPUModelManager:
         for model_id in list(self.loaded_models.keys()):
             await self.unload_model(model_id)
         logger.info("NPU Model Manager cleaned up")
+
+    def get_all_devices(self) -> list:
+        """Get all available devices for parallel processing"""
+        return self.device_pool.copy()
+
+    async def load_model_multi_device(
+        self, model_id: str, model_config: Dict[str, Any]
+    ) -> Dict[str, bool]:
+        """Load model on multiple devices for parallel inference"""
+        results = {}
+
+        for device in self.device_pool:
+            device_model_id = f"{model_id}_{device}"
+            try:
+                logger.info(f"Loading model {model_id} on device: {device}")
+
+                # Simulate loading on specific device
+                await asyncio.sleep(0.5)
+
+                self.loaded_models[device_model_id] = {
+                    "config": model_config,
+                    "device": device,
+                    "loaded_at": asyncio.get_event_loop().time(),
+                    "inference_count": 0,
+                    "base_model_id": model_id,
+                }
+
+                results[device] = True
+                logger.info(f"Successfully loaded model {model_id} on {device}")
+
+            except Exception as e:
+                logger.error(f"Failed to load model {model_id} on {device}: {e}")
+                results[device] = False
+
+        return results
+
+    async def parallel_inference(
+        self, model_id: str, input_texts: list, devices: list = None
+    ) -> Dict[str, Any]:
+        """Run inference on multiple devices in parallel"""
+        if devices is None:
+            devices = self.device_pool
+
+        # Distribute inputs across devices
+        device_count = len(devices)
+        input_count = len(input_texts)
+        inputs_per_device = (input_count + device_count - 1) // device_count
+
+        tasks = []
+        for i, device in enumerate(devices):
+            start_idx = i * inputs_per_device
+            end_idx = min((i + 1) * inputs_per_device, input_count)
+            device_inputs = input_texts[start_idx:end_idx]
+
+            if device_inputs:
+                device_model_id = f"{model_id}_{device}"
+                for text in device_inputs:
+                    task = self.inference(device_model_id, text)
+                    tasks.append((device, task))
+
+        # Run all inferences in parallel using asyncio.gather
+        results = []
+        if tasks:
+            # Execute all tasks concurrently
+            task_results = await asyncio.gather(
+                *[task for _, task in tasks], return_exceptions=True
+            )
+
+            # Process results with device information
+            for (device, _), result in zip(tasks, task_results):
+                if isinstance(result, Exception):
+                    logger.error(f"Parallel inference failed on {device}: {result}")
+                    results.append({"error": str(result), "device": device})
+                else:
+                    result["device"] = device
+                    results.append(result)
+
+        return {
+            "model_id": model_id,
+            "total_inputs": input_count,
+            "devices_used": devices,
+            "results": results,
+            "parallel_execution": True,
+        }
+
+    async def benchmark_parallel_vs_sequential(
+        self, model_id: str, input_texts: list, devices: list = None
+    ) -> Dict[str, Any]:
+        """Benchmark parallel vs sequential inference"""
+        import time
+
+        if devices is None:
+            devices = self.device_pool[:2]  # Use up to 2 devices for benchmark
+
+        # Sequential execution
+        start_sequential = time.time()
+        sequential_results = []
+        for text in input_texts:
+            result = await self.inference(f"{model_id}_{devices[0]}", text)
+            sequential_results.append(result)
+        sequential_time = time.time() - start_sequential
+
+        # Parallel execution
+        start_parallel = time.time()
+        await self.parallel_inference(model_id, input_texts, devices)
+        parallel_time = time.time() - start_parallel
+
+        speedup = sequential_time / parallel_time if parallel_time > 0 else 0
+
+        return {
+            "sequential_time_ms": sequential_time * 1000,
+            "parallel_time_ms": parallel_time * 1000,
+            "speedup": f"{speedup:.2f}x",
+            "devices_used": devices,
+            "input_count": len(input_texts),
+            "efficiency": f"{(speedup / len(devices)) * 100:.1f}%",
+        }
