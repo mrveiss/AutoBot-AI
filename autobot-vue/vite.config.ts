@@ -28,6 +28,11 @@ export default defineConfig({
       // Removed Content-Security-Policy to avoid unneeded headers
     },
     proxy: {
+      '/api': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+        secure: false
+      },
       '/vnc-proxy': {
         target: 'http://localhost:6080',
         changeOrigin: true,
