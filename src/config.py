@@ -24,10 +24,61 @@ API_TIMEOUT = int(os.getenv("AUTOBOT_API_TIMEOUT", "30000"))
 
 # Additional service ports
 PLAYWRIGHT_API_URL = os.getenv("AUTOBOT_PLAYWRIGHT_API_URL", "http://localhost:3000")
-PLAYWRIGHT_VNC_URL = os.getenv("AUTOBOT_PLAYWRIGHT_VNC_URL", "http://localhost:6080/vnc.html")
+PLAYWRIGHT_VNC_URL = os.getenv(
+    "AUTOBOT_PLAYWRIGHT_VNC_URL", "http://localhost:6080/vnc.html"
+)
 CHROME_DEBUG_PORT = int(os.getenv("AUTOBOT_CHROME_DEBUG_PORT", "9222"))
+
+# VNC Display Port - handles both container and host scenarios
+# Container: typically uses 5901 to avoid conflict with host VNC on 5900
+# Host: uses 5900 (Kali default VNC port)
 VNC_DISPLAY_PORT = int(os.getenv("AUTOBOT_VNC_DISPLAY_PORT", "5900"))
+
+# Container-aware VNC port (for Docker deployments)
+VNC_CONTAINER_PORT = int(os.getenv("AUTOBOT_VNC_CONTAINER_PORT", "5901"))
+
 FRONTEND_URL = os.getenv("AUTOBOT_FRONTEND_URL", "http://localhost:5173")
+
+
+def get_vnc_display_port():
+    """
+    Get the appropriate VNC display port based on environment
+    
+    Returns:
+        int: VNC port number (5900 for host, 5901 for container by default)
+    """
+    # Check if running in Docker container
+    if os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER'):
+        return VNC_CONTAINER_PORT
+    
+    # Check if VNC service is already running on 5900 (typical Kali setup)
+    import socket
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.1)
+        result = sock.connect_ex(('localhost', 5900))
+        sock.close()
+        
+        if result == 0:
+            # Port 5900 is in use (likely host VNC), use container port
+            return VNC_CONTAINER_PORT
+        else:
+            # Port 5900 is free, use it
+            return VNC_DISPLAY_PORT
+    except:
+        # Default to host port if detection fails
+        return VNC_DISPLAY_PORT
+
+
+def get_vnc_direct_url():
+    """
+    Get the direct VNC connection URL with appropriate port
+    
+    Returns:
+        str: VNC connection URL
+    """
+    port = get_vnc_display_port()
+    return f"vnc://localhost:{port}"
 
 # GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when
 # writing config files
