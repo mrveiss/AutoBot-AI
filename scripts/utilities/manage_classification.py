@@ -11,6 +11,10 @@ from pathlib import Path
 # Add AutoBot to Python path
 sys.path.append(str(Path(__file__).parent))
 
+# Add project root for terminal input handler
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from src.utils.terminal_input_handler import safe_input
+
 from src.workflow_classifier import WorkflowClassifier
 
 
@@ -44,18 +48,18 @@ def main():
         print("4. Add security keywords")
         print("5. Exit")
         
-        choice = input("\nChoice (1-5): ").strip()
+        choice = safe_input("\nChoice (1-5): ", default="5").strip()
         
         if choice == "1":
-            category = input("Enter category: ").strip()
-            keywords_input = input("Enter keywords (comma-separated): ").strip()
+            category = safe_input("Enter category: ", default="test").strip()
+            keywords_input = safe_input("Enter keywords (comma-separated): ", default="test,example").strip()
             if category and keywords_input:
                 keywords = [kw.strip() for kw in keywords_input.split(",")]
                 classifier.add_keywords(category, keywords)
                 print(f"✅ Added {len(keywords)} keywords to {category}")
         
         elif choice == "2":
-            message = input("Enter message to classify: ").strip()
+            message = safe_input("Enter message to classify: ", default="test message").strip()
             if message:
                 complexity = classifier.classify_request(message)
                 print(f"📋 Classification: {complexity.value}")

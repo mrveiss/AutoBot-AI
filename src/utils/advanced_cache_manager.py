@@ -3,14 +3,15 @@ Advanced Redis-based Caching Manager
 Implements intelligent caching strategies for different data types
 """
 
+import hashlib
+import inspect
 import json
 import logging
-import hashlib
 import time
-from typing import Any, Dict, Optional, Callable
-from functools import wraps
 from dataclasses import dataclass
 from enum import Enum
+from functools import wraps
+from typing import Any, Callable, Dict, Optional
 
 from src.utils.redis_client import get_redis_client
 
@@ -175,12 +176,13 @@ class AdvancedCacheManager:
         # Compute new value
         try:
             if hasattr(compute_func, "__call__"):
-                if hasattr(compute_func, "__await__"):
-                    # Async function
-                    computed_data = await compute_func()
+                result = compute_func()
+                if inspect.iscoroutine(result):
+                    # Result is a coroutine, await it
+                    computed_data = await result
                 else:
-                    # Sync function
-                    computed_data = compute_func()
+                    # Result is a regular value
+                    computed_data = result
             else:
                 computed_data = compute_func
 
