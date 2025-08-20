@@ -16,6 +16,12 @@ from typing import Any, Dict
 
 import yaml
 
+# Environment-configurable service URLs
+API_BASE_URL = os.getenv("AUTOBOT_API_BASE_URL", "http://localhost:8001")
+REDIS_URL = os.getenv("AUTOBOT_REDIS_URL", "redis://localhost:6379")
+OLLAMA_URL = os.getenv("AUTOBOT_OLLAMA_URL", "http://localhost:11434")
+API_TIMEOUT = int(os.getenv("AUTOBOT_API_TIMEOUT", "30000"))
+
 # GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when
 # writing config files
 _original_yaml_dump = yaml.dump
@@ -272,7 +278,9 @@ class ConfigManager:
 
         # URGENT FIX: Skip auto-detection during startup to prevent blocking
         # Auto-detection will be handled asynchronously after startup
-        logger.info("UNIFIED CONFIG: Skipping Ollama auto-detection during startup to prevent blocking")
+        logger.info(
+            "UNIFIED CONFIG: Skipping Ollama auto-detection during startup to prevent blocking"
+        )
 
         # Fallback to hardcoded default - use available model
         return "llama3.2:3b"
