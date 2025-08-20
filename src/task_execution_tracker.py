@@ -9,9 +9,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from src.enhanced_memory_manager import (
-    EnhancedMemoryManager,
-    TaskExecutionRecord,
+from src.enhanced_memory_manager_async import (
+    AsyncEnhancedMemoryManager,
+    get_async_enhanced_memory_manager,
+    ExecutionRecord,
     TaskPriority,
     TaskStatus,
 )
@@ -25,8 +26,8 @@ class TaskExecutionTracker:
     to provide automatic task logging, performance monitoring, and execution analytics
     """
 
-    def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
-        self.memory_manager = memory_manager or EnhancedMemoryManager()
+    def __init__(self, memory_manager: Optional[AsyncEnhancedMemoryManager] = None):
+        self.memory_manager = memory_manager or get_async_enhanced_memory_manager()
         self.active_tasks: Dict[str, Dict[str, Any]] = {}
         self.task_callbacks: Dict[str, List[Callable]] = {}
 
