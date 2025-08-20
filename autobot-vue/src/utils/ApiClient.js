@@ -30,16 +30,16 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const method = options.method || 'GET';
     const startTime = performance.now();
-    
+
     // Track API call start
     if (window.rum) {
-      window.rum.trackUserInteraction('api_call_initiated', null, { 
-        method, 
-        endpoint, 
-        url 
+      window.rum.trackUserInteraction('api_call_initiated', null, {
+        method,
+        endpoint,
+        url
       });
     }
-    
+
     const config = {
       timeout: this.timeout,
       headers: {
@@ -74,10 +74,10 @@ class ApiClient {
         window.rum.trackApiCall(method, endpoint, startTime, endTime, response.status);
       }
       return response;
-      
+
     } catch (error) {
       const endTime = performance.now();
-      
+
       if (error.name === 'AbortError') {
         const timeoutError = new Error(`Request timeout after ${this.timeout}ms`);
         if (window.rum) {
@@ -92,7 +92,7 @@ class ApiClient {
         }
         throw timeoutError;
       }
-      
+
       // Track other errors
       if (window.rum) {
         window.rum.trackApiCall(method, endpoint, startTime, endTime, 'error', error);
@@ -230,44 +230,44 @@ class ApiClient {
 
   // Knowledge Base API methods
   async searchKnowledge(query, limit = 10) {
-    const response = await this.post('/api/knowledge_base/search', { query, limit });
+    const response = await this.post('/api/knowledge/search', { query, limit });
     return response.json();
   }
 
   async addTextToKnowledge(text, title = '', source = 'Manual Entry') {
-    const response = await this.post('/api/knowledge_base/add_text', { text, title, source });
+    const response = await this.post('/api/knowledge/add_text', { text, title, source });
     return response.json();
   }
 
   async addUrlToKnowledge(url, method = 'fetch') {
-    const response = await this.post('/api/knowledge_base/add_url', { url, method });
+    const response = await this.post('/api/knowledge/add_url', { url, method });
     return response.json();
   }
 
   async addFileToKnowledge(file) {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await this.post('/api/knowledge_base/add_file', formData);
+    const response = await this.post('/api/knowledge/add_file', formData);
     return response.json();
   }
 
   async exportKnowledge() {
-    const response = await this.get('/api/knowledge_base/export');
+    const response = await this.get('/api/knowledge/export');
     return response.blob();
   }
 
   async cleanupKnowledge() {
-    const response = await this.post('/api/knowledge_base/cleanup');
+    const response = await this.post('/api/knowledge/cleanup');
     return response.json();
   }
 
   async getKnowledgeStats() {
-    const response = await this.get('/api/knowledge_base/stats');
+    const response = await this.get('/api/knowledge/stats');
     return response.json();
   }
 
   async getDetailedKnowledgeStats() {
-    const response = await this.get('/api/knowledge_base/detailed_stats');
+    const response = await this.get('/api/knowledge/detailed_stats');
     return response.json();
   }
 
