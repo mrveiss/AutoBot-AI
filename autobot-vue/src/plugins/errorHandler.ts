@@ -28,7 +28,7 @@ class GlobalErrorHandler {
     // Catch unhandled promise rejections
     window.addEventListener('unhandledrejection', (event) => {
       console.error('Unhandled promise rejection:', event.reason)
-      
+
       this.addNotification({
         message: this.getUnhandledRejectionMessage(event.reason),
         type: 'error',
@@ -50,7 +50,7 @@ class GlobalErrorHandler {
     // Catch JavaScript errors
     window.addEventListener('error', (event) => {
       console.error('Global JavaScript error:', event.error)
-      
+
       this.addNotification({
         message: this.getJavaScriptErrorMessage(event.error, event.filename, event.lineno),
         type: 'error',
@@ -75,11 +75,11 @@ class GlobalErrorHandler {
 
   private interceptFetch() {
     const originalFetch = window.fetch
-    
+
     window.fetch = async (...args) => {
       try {
         const response = await originalFetch(...args)
-        
+
         if (!response.ok) {
           // Track HTTP errors
           rumAgent.trackError('http_error', {
@@ -88,7 +88,7 @@ class GlobalErrorHandler {
             url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
             source: 'fetch_interceptor'
           })
-          
+
           if (response.status >= 500) {
             this.addNotification({
               message: `Server error (${response.status}). Please try again later.`,
@@ -115,11 +115,11 @@ class GlobalErrorHandler {
             })
           }
         }
-        
+
         return response
       } catch (error) {
         console.error('Fetch error:', error)
-        
+
         // Track network errors
         rumAgent.trackError('network_error', {
           message: (error as Error).message,
@@ -127,14 +127,14 @@ class GlobalErrorHandler {
           url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
           source: 'fetch_interceptor'
         })
-        
+
         this.addNotification({
           message: 'Network connection failed. Please check your internet connection.',
           type: 'error',
           dismissible: true,
           stack: (error as Error).stack
         })
-        
+
         throw error
       }
     }
@@ -152,7 +152,7 @@ class GlobalErrorHandler {
         return 'Application update detected. Please reload the page.'
       }
     }
-    
+
     return 'An unexpected error occurred. Please try refreshing the page.'
   }
 
@@ -168,7 +168,7 @@ class GlobalErrorHandler {
         return 'Data loading issue. Please try refreshing the page.'
       }
     }
-    
+
     return 'A JavaScript error occurred. Please try refreshing the page.'
   }
 
@@ -181,21 +181,21 @@ class GlobalErrorHandler {
     }
 
     // Prevent duplicate notifications
-    const isDuplicate = this.notifications.some(n => 
-      n.message === notification.message && 
+    const isDuplicate = this.notifications.some(n =>
+      n.message === notification.message &&
       Date.now() - n.timestamp < 5000 // Within 5 seconds
     )
-    
+
     if (!isDuplicate) {
       this.notifications.unshift(fullNotification)
-      
+
       // Keep only the most recent notifications
       if (this.notifications.length > this.maxNotifications) {
         this.notifications = this.notifications.slice(0, this.maxNotifications)
       }
-      
+
       this.notifyListeners()
-      
+
       // Auto-dismiss info notifications after 5 seconds
       if (notification.type === 'info') {
         setTimeout(() => {
@@ -219,7 +219,7 @@ class GlobalErrorHandler {
     this.listeners.add(listener)
     // Immediately call with current notifications
     listener([...this.notifications])
-    
+
     return () => {
       this.listeners.delete(listener)
     }
@@ -247,15 +247,15 @@ export default {
   install(app: App) {
     // Enhanced Vue error handler
     const originalErrorHandler = app.config.errorHandler
-    
+
     app.config.errorHandler = (error, instance, info) => {
       console.error('Vue Error:', error, info)
-      
+
       // Call original handler (RUM plugin)
       if (originalErrorHandler) {
         originalErrorHandler(error, instance, info)
       }
-      
+
       // Show user-friendly notification
       globalErrorHandler.addManualNotification(
         'Component error occurred. Some features may not work correctly.',
@@ -265,10 +265,10 @@ export default {
 
     // Add error handler to global properties
     app.config.globalProperties.$errorHandler = globalErrorHandler
-    
+
     // Provide for composition API
     app.provide('errorHandler', globalErrorHandler)
-    
+
     console.log('🚨 Global Error Handler installed')
   }
 }

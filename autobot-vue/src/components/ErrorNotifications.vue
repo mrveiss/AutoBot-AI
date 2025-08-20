@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div 
-      v-if="notifications.length > 0" 
+    <div
+      v-if="notifications.length > 0"
       class="error-notifications-container"
       role="alert"
       aria-live="polite"
@@ -16,14 +16,14 @@
           <div class="notification-icon">
             <component :is="getIcon(notification.type)" />
           </div>
-          
+
           <div class="notification-content">
             <p class="notification-message">{{ notification.message }}</p>
             <div v-if="notification.stack && showDetails[notification.id]" class="notification-stack">
               <pre>{{ notification.stack }}</pre>
             </div>
           </div>
-          
+
           <div class="notification-actions">
             <button
               v-if="notification.stack"
@@ -33,7 +33,7 @@
             >
               {{ showDetails[notification.id] ? '▼' : '▶' }}
             </button>
-            
+
             <button
               v-if="notification.dismissible"
               @click="dismiss(notification.id)"
@@ -45,7 +45,7 @@
           </div>
         </div>
       </TransitionGroup>
-      
+
       <div v-if="notifications.length > 1" class="notification-actions-bar">
         <button @click="clearAll" class="notification-btn notification-btn-clear">
           Clear All ({{ notifications.length }})

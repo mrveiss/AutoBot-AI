@@ -1,0 +1,27 @@
+[
+  {
+    "test": "Upload Endpoint Available",
+    "status": "PASS",
+    "message": "API endpoint accepts OPTIONS requests"
+  },
+  {
+    "test": "Valid File Upload",
+    "status": "PASS",
+    "message": "File uploaded successfully: None"
+  },
+  {
+    "test": "Invalid File Type Rejection",
+    "status": "PASS",
+    "message": "Executable file properly rejected"
+  },
+  {
+    "test": "File Size Limit",
+    "status": "INFO",
+    "message": "Large file accepted - no size limit or limit >10MB"
+  },
+  {
+    "test": "Security Validation",
+    "status": "PASS",
+    "message": "Path traversal attempt properly blocked"
+  }
+]
