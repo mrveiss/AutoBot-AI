@@ -56,6 +56,11 @@ async def get_state_tracking_status():
             if summary["current_state"]
             else None,
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(
+            f"Error getting state tracking status due to missing dependency: {e}"
+        )
+        raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error(f"Error getting state tracking status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -73,6 +78,9 @@ async def get_state_summary():
             "summary": summary,
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting state summary due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error(f"Error getting state summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -96,6 +104,9 @@ async def capture_state_snapshot(background_tasks: BackgroundTasks):
             "message": "State snapshot capture initiated",
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error capturing snapshot due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error(f"Error capturing snapshot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -136,6 +147,12 @@ async def record_state_change(request: StateChangeRequest):
             "change_type": change_type.value,
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error recording state change due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
+    except ValueError as e:
+        logger.error(f"Error recording state change due to invalid input: {e}")
+        raise HTTPException(status_code=400, detail="Invalid state change data")
     except Exception as e:
         logger.error(f"Error recording state change: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -157,6 +174,9 @@ async def get_milestones():
             "total_count": len(summary["milestones"]),
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting milestones due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error(f"Error getting milestones: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -208,6 +228,9 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
             "trend_data": trend_data,
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting metric trends due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error(f"Error getting metric trends: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -257,6 +280,9 @@ async def get_recent_changes(
             "showing": len(recent_changes),
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting recent changes due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error(f"Error getting recent changes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -275,6 +301,14 @@ async def generate_state_report():
             "format": "markdown",
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error generating report due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
+    except (OSError, IOError) as e:
+        logger.error(f"Error generating report due to file system error: {e}")
+        raise HTTPException(
+            status_code=500, detail="File system error during report generation"
+        )
     except Exception as e:
         logger.error(f"Error generating report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -302,6 +336,15 @@ async def export_state_data(request: ExportRequest):
             "format": request.format,
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error exporting state data due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
+    except ValueError as e:
+        logger.error(f"Error exporting state data due to invalid format: {e}")
+        raise HTTPException(status_code=400, detail="Invalid export format")
+    except (OSError, IOError) as e:
+        logger.error(f"Error exporting state data due to file system error: {e}")
+        raise HTTPException(status_code=500, detail="File system error during export")
     except Exception as e:
         logger.error(f"Error exporting state data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -327,6 +370,9 @@ async def get_all_metrics():
             "available_metrics": [m.value for m in TrackingMetric],
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting all metrics due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error(f"Error getting all metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -364,6 +410,9 @@ async def get_phase_history(phase_name: str, days: int = Query(30, ge=1, le=365)
             "history": phase_history,
             "timestamp": datetime.now().isoformat(),
         }
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Error getting phase history due to missing dependency: {e}")
+        raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error(f"Error getting phase history: {e}")
         raise HTTPException(status_code=500, detail=str(e))

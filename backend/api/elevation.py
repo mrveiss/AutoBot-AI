@@ -102,6 +102,12 @@ async def authorize_elevation(auth: ElevationAuthorization):
             "message": "Authorization successful",
         }
 
+    except ValueError as e:
+        logger.error(f"Elevation authorization failed due to invalid input: {e}")
+        raise HTTPException(status_code=400, detail="Invalid authorization data")
+    except (OSError, IOError) as e:
+        logger.error(f"Elevation authorization failed due to system error: {e}")
+        raise HTTPException(status_code=500, detail="System error during authorization")
     except Exception as e:
         logger.error(f"Elevation authorization failed: {e}")
         raise HTTPException(status_code=500, detail="Authorization failed")
@@ -151,6 +157,14 @@ async def execute_elevated_command(session_token: str, command: str):
             "return_code": result.get("return_code", 0),
         }
 
+    except (OSError, IOError) as e:
+        logger.error(f"Failed to execute elevated command due to system error: {e}")
+        raise HTTPException(
+            status_code=500, detail="System error during command execution"
+        )
+    except asyncio.TimeoutError as e:
+        logger.error(f"Failed to execute elevated command due to timeout: {e}")
+        raise HTTPException(status_code=408, detail="Command execution timed out")
     except Exception as e:
         logger.error(f"Failed to execute elevated command: {e}")
         raise HTTPException(
@@ -192,6 +206,12 @@ async def verify_sudo_password(password: str) -> bool:
         stdout, stderr = await process.communicate(input=f"{password}\n".encode())
         return process.returncode == 0
 
+    except (OSError, IOError) as e:
+        logger.error(f"Password verification failed due to system error: {e}")
+        return False
+    except asyncio.TimeoutError as e:
+        logger.error(f"Password verification failed due to timeout: {e}")
+        return False
     except Exception as e:
         logger.error(f"Password verification failed: {e}")
         return False
@@ -227,6 +247,12 @@ async def run_elevated_command(command: str) -> dict:
             "return_code": process.returncode,
         }
 
+    except (OSError, IOError) as e:
+        logger.error(f"Command execution failed due to system error: {e}")
+        return {"stdout": "", "stderr": f"System error: {str(e)}", "return_code": 1}
+    except asyncio.TimeoutError as e:
+        logger.error(f"Command execution failed due to timeout: {e}")
+        return {"stdout": "", "stderr": "Command timed out", "return_code": 124}
     except Exception as e:
         return {"stdout": "", "stderr": str(e), "return_code": 1}
 

@@ -184,7 +184,7 @@ export default {
         if (response.ok) {
           const result = await response.json();
           alert(`File ${file.name} uploaded successfully.`);
-          console.log('Upload response:', result);
+          // Upload response logged
           refreshFiles();
         } else {
           const errorText = await response.text();

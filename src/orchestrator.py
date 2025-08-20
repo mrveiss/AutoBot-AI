@@ -126,9 +126,15 @@ class Orchestrator:
         self.redis_client = None
         self.worker_capabilities: Dict[str, Dict[str, Any]] = {}
         self.pending_approvals: Dict[str, asyncio.Future] = {}
-        # Use default channel names since we're using memory.redis config
-        self.redis_command_approval_request_channel = "command_approval_request"
-        self.redis_command_approval_response_channel_prefix = "command_approval_"
+        # Get Redis channel configuration from centralized config
+        redis_config = self.config_manager.get_redis_config()
+        channels = redis_config.get("channels", {})
+        self.redis_command_approval_request_channel = channels.get(
+            "command_approval_request", "command_approval_request"
+        )
+        self.redis_command_approval_response_channel_prefix = channels.get(
+            "command_approval_response_prefix", "command_approval_"
+        )
 
         self.agent_paused = False
 
@@ -197,7 +203,11 @@ class Orchestrator:
             return
 
         pubsub = self.redis_client.pubsub()
-        worker_capabilities_channel = "worker_capabilities"
+        redis_config = self.config_manager.get_redis_config()
+        channels = redis_config.get("channels", {})
+        worker_capabilities_channel = channels.get(
+            "worker_capabilities", "worker_capabilities"
+        )
         pubsub.subscribe(worker_capabilities_channel)
         msg = "Listening for worker capabilities on Redis channel "
         msg += f"'{worker_capabilities_channel}'..."

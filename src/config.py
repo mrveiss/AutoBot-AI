@@ -710,6 +710,11 @@ class ConfigManager:
             "host": os.getenv("AUTOBOT_REDIS_HOST", "localhost"),
             "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
             "db": int(os.getenv("AUTOBOT_REDIS_DB", "1")),
+            "channels": {
+                "command_approval_request": "command_approval_request",
+                "command_approval_response_prefix": "command_approval_",
+                "worker_capabilities": "worker_capabilities",
+            },
         }
 
         return self._deep_merge(defaults, redis_config)

@@ -1,5 +1,6 @@
 <template>
-  <div class="settings-panel">
+  <ErrorBoundary fallback="Settings panel failed to load.">
+    <div class="settings-panel">
     <h2>Settings</h2>
     <div class="settings-tabs">
       <button
@@ -517,7 +518,8 @@
         {{ saveMessage }}
       </div>
     </div>
-  </div>
+    </div>
+  </ErrorBoundary>
 </template>
 
 <script>
@@ -525,9 +527,13 @@ import { ref, onMounted, watch, computed, onUnmounted } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 import { settingsService } from '../services/SettingsService.js';
 import { healthService } from '../services/HealthService.js';
+import ErrorBoundary from './ErrorBoundary.vue';
 
 export default {
   name: 'SettingsPanel',
+  components: {
+    ErrorBoundary
+  },
   setup() {
     // Define tabs for settings organization
     const tabs = [
@@ -849,10 +855,7 @@ export default {
         const agentConfigResponse = await apiClient.get('/api/agent-config/agents');
         const agentConfig = await agentConfigResponse.json();
 
-        console.log('Syncing settings with agent config:', {
-          llmStatus,
-          agentConfig: agentConfig.agents
-        });
+        // Syncing settings with agent config
 
         // Update settings to match actual LLM status
         if (llmStatus && settings.value.backend && settings.value.backend.llm) {
@@ -885,11 +888,7 @@ export default {
         }
 
         // Log the sync result for debugging
-        console.log('Settings synced with agent config:', {
-          provider_type: settings.value.backend.llm.provider_type,
-          local_provider: settings.value.backend.llm.local.provider,
-          streaming: settings.value.backend.streaming
-        });
+        // Settings synced with agent config
 
       } catch (error) {
         console.error('Error syncing settings with agent config:', error);

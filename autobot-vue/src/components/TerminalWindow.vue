@@ -1133,7 +1133,7 @@ export default {
       const oldStatus = connectionStatus.value;
       connectionStatus.value = status;
 
-      console.log(`Terminal status change: ${oldStatus} -> ${status}`);
+      // Terminal status change
 
       if (status === 'connected') {
         // Mark as not connecting anymore
@@ -1442,18 +1442,18 @@ export default {
       // Testing utilities for automated tests
       isTerminalReady: () => {
         const ready = canInput.value && terminalInput.value && !terminalInput.value.disabled;
-        console.log(`Terminal ready check: canInput=${canInput.value}, hasInput=${!!terminalInput.value}, enabled=${terminalInput.value ? !terminalInput.value.disabled : false}, result=${ready}`);
+        // Terminal ready check
         return ready;
       },
       ensureInputFocus: () => {
         if (canInput.value && terminalInput.value) {
-          console.log('Ensuring terminal input focus...');
+          // Ensuring terminal input focus
           terminalInput.value.focus();
           const focused = document.activeElement === terminalInput.value;
-          console.log(`Focus result: ${focused}`);
+          // Focus result
           return focused;
         }
-        console.log('Cannot ensure focus: canInput=', canInput.value, 'hasInput=', !!terminalInput.value);
+        // Cannot ensure focus
         return false;
       },
       // Additional debug utility for automated testing

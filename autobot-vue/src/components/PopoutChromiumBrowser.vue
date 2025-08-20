@@ -14,32 +14,32 @@
           <span v-if="sessionId" class="text-xs text-gray-500">Session: {{ sessionId.slice(0, 8) }}...</span>
         </div>
       </div>
-      
+
       <div class="flex items-center space-x-2">
         <!-- Browser Controls -->
         <div class="flex items-center space-x-1">
           <button @click="refreshBrowser" class="browser-btn" :disabled="loading" title="Refresh">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
           </button>
-          
+
           <button @click="navigateHome" class="browser-btn" title="Home">
             <i class="fas fa-home"></i>
           </button>
-          
+
           <button @click="showDevTools = !showDevTools" class="browser-btn" title="Developer Tools">
             <i class="fas fa-code"></i>
           </button>
         </div>
-        
+
         <div class="border-l border-gray-300 pl-2 flex items-center space-x-1">
           <button @click="togglePopout" class="browser-btn" :title="isPopout ? 'Dock Browser' : 'Pop Out Browser'">
             <i class="fas" :class="isPopout ? 'fa-compress-arrows-alt' : 'fa-external-link-alt'"></i>
           </button>
-          
+
           <button v-if="canResize" @click="toggleFullscreen" class="browser-btn" title="Toggle Fullscreen">
             <i class="fas" :class="isFullscreen ? 'fa-compress' : 'fa-expand'"></i>
           </button>
-          
+
           <button @click="closeBrowser" class="browser-btn text-red-600" title="Close Browser">
             <i class="fas fa-times"></i>
           </button>
@@ -58,13 +58,13 @@
             <i class="fas fa-arrow-right"></i>
           </button>
         </div>
-        
+
         <div class="flex-1 flex items-center">
           <div class="url-input-container flex-1">
             <i class="fas fa-lock text-green-500 mr-2" v-if="isSecure"></i>
             <i class="fas fa-globe text-gray-500 mr-2" v-else></i>
-            <input 
-              v-model="addressBarUrl" 
+            <input
+              v-model="addressBarUrl"
               @keyup.enter="() => navigateToUrl()"
               @focus="selectAll"
               class="url-input flex-1 bg-transparent outline-none text-sm"
@@ -90,7 +90,7 @@
             <p class="text-sm text-gray-600">Connecting to browser...</p>
           </div>
         </div>
-        
+
         <!-- VNC Error Overlay -->
         <div v-if="browserStatus === 'error'" class="absolute inset-0 bg-red-50 flex items-center justify-center z-10">
           <div class="text-center p-4">
@@ -101,9 +101,9 @@
             </button>
           </div>
         </div>
-        
+
         <!-- VNC Browser Instructions -->
-        <div v-if="(sessionId === 'unified-browser' || sessionId === 'manual-browser')" 
+        <div v-if="(sessionId === 'unified-browser' || sessionId === 'manual-browser')"
              class="absolute top-4 left-4 right-4 bg-blue-900 bg-opacity-90 text-white p-3 rounded-lg z-20">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-2">
@@ -118,19 +118,19 @@
             </div>
           </div>
         </div>
-        
-        <iframe 
-          :src="vncUrl" 
+
+        <iframe
+          :src="vncUrl"
           class="w-full h-full border-0"
           @load="onVncLoad"
           ref="vncIframe"
         />
       </div>
-      
+
       <!-- Native Browser Embed (if available) -->
       <div v-else-if="browserMode === 'native'" class="w-full h-full">
-        <webview 
-          :src="currentUrl" 
+        <webview
+          :src="currentUrl"
           class="w-full h-full"
           @dom-ready="onWebviewReady"
           @did-navigate="onNavigate"
@@ -140,17 +140,17 @@
           plugins
         />
       </div>
-      
+
       <!-- Chromium Remote Debugging -->
       <div v-else-if="browserMode === 'remote'" class="w-full h-full">
-        <iframe 
-          :src="remoteDebugUrl" 
+        <iframe
+          :src="remoteDebugUrl"
           class="w-full h-full border-0"
           @load="onRemoteDebugLoad"
           ref="remoteIframe"
         />
       </div>
-      
+
       <!-- Fallback Loading State -->
       <div v-else class="flex items-center justify-center h-full bg-gray-50">
         <div class="text-center">
@@ -272,25 +272,25 @@ export default {
     const showDevTools = ref(false)
     const showInteractionOverlay = ref(false)
     const interactionMessage = ref('')
-    
+
     // Browser modes
     const browserMode = ref('vnc') // 'vnc', 'native', 'remote'
     const vncUrl = ref('http://localhost:6080/vnc.html?autoconnect=true&resize=scale&reconnect=true&quality=6&view_only=false')
     const remoteDebugUrl = ref('http://localhost:9222')
-    
+
     // Resize observer
     const resizeObserver: Ref<ResizeObserver | null> = ref(null)
-    
+
     // Navigation state
     const canGoBack = ref(false)
     const canGoForward = ref(false)
     const isSecure = ref(false)
     const zoomLevel = ref(100)
     const pageLoadTime = ref(0)
-    
+
     // Console logs for dev tools
     const consoleLogs: Ref<ConsoleLogEntry[]> = ref([])
-    
+
     // Refs
     const vncIframe: Ref<HTMLIFrameElement | null> = ref(null)
     const webview: Ref<any | null> = ref(null)
@@ -308,16 +308,16 @@ export default {
       try {
         loading.value = true
         browserStatus.value = 'connecting'
-        
+
         // Only try to get session info if we have a real session ID
-        if (props.sessionId && 
-            props.sessionId !== 'manual-browser' && 
+        if (props.sessionId &&
+            props.sessionId !== 'manual-browser' &&
             props.sessionId !== 'unified-browser') {
           try {
             // Get browser session info for real research sessions
             const response = await apiClient.get(`/api/research/browser/${props.sessionId}`)
             const data = await response.json()
-            
+
             if (data.docker_browser && data.docker_browser.available) {
               browserMode.value = 'vnc'
               vncUrl.value = data.docker_browser.vnc_url || vncUrl.value
@@ -336,7 +336,7 @@ export default {
           browserMode.value = 'vnc'
           browserStatus.value = 'ready'
         }
-        
+
         // Try remote debugging as fallback
         if (browserMode.value !== 'vnc') {
           try {
@@ -353,21 +353,21 @@ export default {
             browserMode.value = 'vnc'
           }
         }
-        
+
         // Navigate to initial URL if provided and valid
         if (props.initialUrl && typeof props.initialUrl === 'string' && props.initialUrl !== 'about:blank') {
           // Set the URL in the address bar immediately
           currentUrl.value = props.initialUrl
           addressBarUrl.value = props.initialUrl
           isSecure.value = props.initialUrl.startsWith('https://')
-          
+
           // Navigate to the URL
           await navigateToUrl(props.initialUrl)
           addConsoleLog('info', `Navigating to initial URL: ${props.initialUrl}`)
         } else {
           addConsoleLog('info', `No initial URL provided, using: ${props.initialUrl || 'about:blank'}`)
         }
-        
+
       } catch (error) {
         console.error('Browser initialization failed:', error)
         browserStatus.value = 'error'
@@ -381,33 +381,33 @@ export default {
     // Navigation methods
     const navigateToUrl = async (url: string | null = null) => {
       let targetUrl = url || addressBarUrl.value
-      
+
       // Validate and sanitize URL
       if (!targetUrl || typeof targetUrl !== 'string') {
         console.warn('Invalid URL provided:', targetUrl)
         return
       }
-      
+
       targetUrl = targetUrl.trim()
       if (!targetUrl) return
-      
+
       // Add protocol if missing
       if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('about:')) {
         targetUrl = 'https://' + targetUrl
       }
-      
+
       try {
         loading.value = true
         const startTime = Date.now()
-        
+
         // Update current URL
         currentUrl.value = targetUrl
         addressBarUrl.value = targetUrl
         isSecure.value = targetUrl.startsWith('https://')
-        
+
         // Navigate via API only for real research sessions (not fake session IDs)
-        if (props.sessionId && 
-            props.sessionId !== 'manual-browser' && 
+        if (props.sessionId &&
+            props.sessionId !== 'manual-browser' &&
             props.sessionId !== 'unified-browser') {
           try {
             await apiClient.post(`/api/research/session/${props.sessionId}/navigate`, {
@@ -424,27 +424,27 @@ export default {
               // The VNC iframe will show whatever is running in the container
               addConsoleLog('info', `Manual navigation requested: ${targetUrl}`)
               browserStatus.value = 'ready'
-              
+
               // The actual browser will be controlled manually by the user through VNC
               // This gives the user full control over the browser in the VNC session
-              
+
             } catch (vncError) {
               console.warn('VNC manual navigation failed:', vncError)
               browserStatus.value = 'error'
             }
           }
-          
+
           if (webview.value && browserMode.value === 'native') {
             // For native webview, use direct navigation
             webview.value.src = targetUrl
           }
         }
-        
+
         pageLoadTime.value = Date.now() - startTime
         emit('navigate', { url: targetUrl, sessionId: props.sessionId })
-        
+
         addConsoleLog('info', `Navigated to: ${targetUrl}`)
-        
+
       } catch (error) {
         console.error('Navigation failed:', error)
         addConsoleLog('error', `Navigation failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -485,19 +485,19 @@ export default {
     // Browser control methods
     const togglePopout = () => {
       isPopout.value = !isPopout.value
-      
+
       if (isPopout.value) {
         // Create popup window for VNC browser
         const popup = window.open(
-          '', 
+          '',
           'vnc-research-browser',
           `width=1400,height=900,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no,status=no`
         )
-        
+
         if (popup) {
           // Create the popup content with VNC iframe
           const sessionTitle = props.sessionId ? `(${props.sessionId.slice(0, 8)}...)` : '(Manual)'
-          
+
           // Build HTML content as DOM elements instead of string to avoid parsing issues
           popup.document.head.innerHTML = `
             <title>VNC Research Browser - ${sessionTitle}</title>
@@ -513,7 +513,7 @@ export default {
               .vnc-overlay { position: absolute; top: 10px; left: 10px; right: 10px; background: rgba(59, 130, 246, 0.9); color: white; padding: 8px 12px; border-radius: 6px; font-size: 12px; z-index: 10; }
             </style>
           `
-          
+
           popup.document.body.innerHTML = `
             <div class="browser-header">
               <div class="browser-title">🖥️ VNC Research Browser ${sessionTitle}</div>
@@ -527,7 +527,7 @@ export default {
               <iframe src="${vncUrl.value}" class="vnc-iframe" title="VNC Browser Session"></iframe>
             </div>
           `
-          
+
           // Add JavaScript for resizing and overlay management
           const script = popup.document.createElement('script')
           script.textContent = `
@@ -550,10 +550,10 @@ export default {
             }, 5000);
           `
           popup.document.body.appendChild(script)
-          
+
           // Focus the popup
           popup.focus()
-          
+
           emit('popout', { popup, sessionId: props.sessionId })
           addConsoleLog('info', 'VNC browser popped out to new window')
         }
@@ -576,25 +576,25 @@ export default {
     const handleInteraction = async (action: string) => {
       try {
         // Only call API for real research sessions
-        if (props.sessionId && 
-            props.sessionId !== 'manual-browser' && 
+        if (props.sessionId &&
+            props.sessionId !== 'manual-browser' &&
             props.sessionId !== 'unified-browser') {
           const response = await apiClient.post('/api/research/session/action', {
             session_id: props.sessionId,
             action: action === 'wait' ? 'wait' : 'manual_intervention'
           })
-          
+
           emit('interact', { action, response, sessionId: props.sessionId })
         } else {
           // For manual browsers, just handle locally
           emit('interact', { action, sessionId: props.sessionId })
         }
-        
+
         if (action === 'takeover') {
           showInteractionOverlay.value = false
           addConsoleLog('info', 'User took manual control of browser session')
         }
-        
+
       } catch (error) {
         console.error('Interaction handling failed:', error)
         addConsoleLog('error', `Interaction failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -613,7 +613,7 @@ export default {
     // Zoom controls
     const adjustZoom = (delta: number) => {
       zoomLevel.value = Math.max(25, Math.min(500, zoomLevel.value + (delta * 100)))
-      
+
       if (webview.value) {
         webview.value.setZoomFactor(zoomLevel.value / 100)
       }
@@ -637,7 +637,7 @@ export default {
         level,
         message
       })
-      
+
       // Keep only last 100 logs
       if (consoleLogs.value.length > 100) {
         consoleLogs.value = consoleLogs.value.slice(-100)
@@ -691,13 +691,13 @@ export default {
           if (container) {
             const width = Math.floor(container.clientWidth)
             const height = Math.floor(container.clientHeight)
-            
+
             // Update VNC URL with current dimensions
             let newSrc = vncUrl.value
             if (newSrc.includes('resize=')) {
               newSrc = newSrc.replace(/resize=\w+/, 'resize=scale')
             }
-            
+
             // Add viewport dimensions if not already present
             if (!newSrc.includes('width=') && !newSrc.includes('height=')) {
               newSrc += `&width=${width}&height=${height}`
@@ -705,14 +705,14 @@ export default {
               newSrc = newSrc.replace(/width=\d+/, `width=${width}`)
               newSrc = newSrc.replace(/height=\d+/, `height=${height}`)
             }
-            
+
             // Only update if URL changed to avoid unnecessary reloads
             if (iframe.src !== newSrc) {
               iframe.src = newSrc
             }
           }
         }
-        
+
         if (webview.value) {
           // For native webview, trigger layout update
           try {
@@ -721,10 +721,10 @@ export default {
               document.body.style.zoom = ${zoomLevel.value / 100};
             `)
           } catch (e) {
-            console.log('Webview resize update failed:', e)
+            // Webview resize update failed
           }
         }
-        
+
         if (remoteIframe.value) {
           // For remote debugging iframe
           const iframe = remoteIframe.value
@@ -733,14 +733,14 @@ export default {
         }
       })
     }
-    
+
     // Lifecycle
     onMounted(() => {
       initializeBrowser()
-      
+
       // Add resize listener
       window.addEventListener('resize', handleResize)
-      
+
       // Set up ResizeObserver for container changes
       if (window.ResizeObserver) {
         resizeObserver.value = new ResizeObserver(entries => {
@@ -748,7 +748,7 @@ export default {
             handleResize()
           }
         })
-        
+
         // Observe the browser content div
         nextTick(() => {
           const browserContent = document.querySelector('.browser-content')
@@ -757,7 +757,7 @@ export default {
           }
         })
       }
-      
+
       if (props.autoPopout) {
         setTimeout(() => togglePopout(), 1000)
       }
@@ -766,11 +766,11 @@ export default {
     onUnmounted(() => {
       // Cleanup
       window.removeEventListener('resize', handleResize)
-      
+
       if (resizeObserver.value) {
         resizeObserver.value.disconnect()
       }
-      
+
       if (isPopout.value) {
         // Close popup if open
         emit('dock')
@@ -783,14 +783,14 @@ export default {
         initializeBrowser()
       }
     })
-    
+
     // Watch for initial URL changes
     watch(() => props.initialUrl, (newUrl) => {
       if (newUrl && typeof newUrl === 'string' && newUrl !== 'about:blank') {
         currentUrl.value = newUrl
         addressBarUrl.value = newUrl
         isSecure.value = newUrl.startsWith('https://')
-        
+
         // If browser is ready, navigate to the new URL
         if (browserStatus.value === 'ready') {
           navigateToUrl(newUrl)
@@ -818,15 +818,15 @@ export default {
       zoomLevel,
       pageLoadTime,
       consoleLogs,
-      
+
       // Refs
       vncIframe,
       webview,
       remoteIframe,
-      
+
       // Computed
       browserContentStyle,
-      
+
       // Methods
       initializeBrowser,
       navigateToUrl,

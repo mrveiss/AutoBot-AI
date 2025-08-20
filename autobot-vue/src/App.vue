@@ -1,7 +1,8 @@
 <template>
-  <div class="min-h-screen bg-blueGray-50">
-    <!-- Main content -->
-    <div class="relative bg-blueGray-50" :class="activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
+  <ErrorBoundary :on-error="handleGlobalError">
+    <div class="min-h-screen bg-blueGray-50">
+      <!-- Main content -->
+      <div class="relative bg-blueGray-50" :class="activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
 
       <!-- Header gradient with navigation -->
       <div class="relative bg-gradient-to-br from-indigo-600 to-indigo-800 z-40">
@@ -239,7 +240,7 @@
                   <div class="rounded-t mb-0 px-6 py-6">
                     <div class="text-center flex justify-between">
                       <h6 class="text-blueGray-700 text-xl font-bold">System Overview</h6>
-                      <button class="bg-indigo-500 text-white active:bg-indigo-600 text-xs font-bold uppercase px-3 py-1 rounded outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150" type="button" aria-label="No">
+                      <button class="bg-indigo-500 text-white active:bg-indigo-600 text-xs font-bold uppercase px-3 py-1 rounded outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150" type="button" aria-label="Refresh system overview">
                         <i class="fas fa-sync mr-1"></i> Refresh
                       </button>
                     </div>
@@ -269,19 +270,19 @@
                     <div class="bg-blueGray-50 rounded-lg p-6">
                       <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Quick Actions</h3>
                       <div class="grid grid-cols-2 gap-3">
-                        <button @click="updateRoute('chat')" class="btn btn-primary text-sm" aria-label="Button">
+                        <button @click="updateRoute('chat')" class="btn btn-primary text-sm" aria-label="Start new chat conversation">
                           <i class="fas fa-comments mr-2"></i>
                           New Chat
                         </button>
-                        <button @click="updateRoute('knowledge')" class="btn btn-secondary text-sm" aria-label="No">
+                        <button @click="updateRoute('knowledge')" class="btn btn-secondary text-sm" aria-label="Add new knowledge entry">
                           <i class="fas fa-plus mr-2"></i>
                           Add Knowledge
                         </button>
-                        <button @click="updateRoute('tools')" class="btn btn-secondary text-sm" aria-label="Tools">
+                        <button @click="updateRoute('tools')" class="btn btn-secondary text-sm" aria-label="Access development tools">
                           <i class="fas fa-tools mr-2"></i>
                           Tools
                         </button>
-                        <button @click="updateRoute('monitoring')" class="btn btn-outline text-sm" aria-label="Monitoring">
+                        <button @click="updateRoute('monitoring')" class="btn btn-outline text-sm" aria-label="View system monitoring dashboard">
                           <i class="fas fa-chart-bar mr-2"></i>
                           Monitoring
                         </button>
@@ -482,7 +483,7 @@
                   <!-- System Monitor Tab -->
                   <div v-else-if="activeMonitoringTab === 'system'" class="monitoring-content">
                     <div class="mb-4">
-                      <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh">
+                      <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh system statistics">
                         <i class="fas fa-sync mr-2"></i>
                         Refresh
                       </button>
@@ -541,7 +542,7 @@
               <section v-else-if="activeTab === 'monitor'" key="monitor" class="card">
                 <div class="card-body p-0">
                   <div class="mb-4 px-6 pt-6">
-                    <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh">
+                    <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh monitoring data">
                       <i class="fas fa-sync mr-2"></i>
                       Refresh
                     </button>
@@ -571,11 +572,12 @@
     @close="onElevationClose"
   />
 
-  <!-- RUM Dashboard for Development -->
-  <RumDashboard />
+    <!-- RUM Dashboard for Development -->
+    <RumDashboard />
 
-  <!-- Global Error Notifications -->
-  <ErrorNotifications />
+    <!-- Global Error Notifications -->
+    <ErrorNotifications />
+  </ErrorBoundary>
 </template>
 
 <script>
@@ -588,6 +590,7 @@ import { defineAsyncComponent } from 'vue';
 import PhaseProgressionIndicator from './components/PhaseProgressionIndicator.vue';
 import ElevationDialog from './components/ElevationDialog.vue';
 import ErrorNotifications from './components/ErrorNotifications.vue';
+import ErrorBoundary from './components/ErrorBoundary.vue';
 
 // Lazy-loaded components (loaded only when needed)
 const ChatInterface = defineAsyncComponent({
@@ -695,7 +698,8 @@ export default {
     ValidationDashboard,
     ElevationDialog,
     RumDashboard,
-    ErrorNotifications
+    ErrorNotifications,
+    ErrorBoundary
   },
   setup() {
     const activeTab = ref('dashboard');
@@ -757,7 +761,7 @@ export default {
 
     // Phase progression event handlers
     const onPhaseSuccess = (message) => {
-      console.log('Phase operation successful:', message);
+      // Phase operation successful
       // Could add toast notification here
     };
 
@@ -767,12 +771,12 @@ export default {
     };
 
     const onValidationComplete = (result) => {
-      console.log('Validation completed:', result);
+      // Validation completed
       // Could update dashboard stats or show results
     };
 
     const onPhaseValidated = (data) => {
-      console.log('Phase validated:', data);
+      // Phase validated
       // Could show validation details
     };
 
@@ -846,6 +850,13 @@ export default {
       document.removeEventListener('click', closeNavbarOnClickOutside);
     });
 
+    // Global error handler for ErrorBoundary
+    const handleGlobalError = (error, instance, info) => {
+      console.error('Global error caught:', error);
+      // You can add additional global error handling here
+      // e.g., send to analytics, show user notification, etc.
+    };
+
     return {
       activeTab,
       activeChatId,
@@ -876,6 +887,7 @@ export default {
       onElevationApproved,
       onElevationCancelled,
       onElevationClose,
+      handleGlobalError,
       // Phase progression handlers
       onPhaseSuccess,
       onPhaseError,
