@@ -46,6 +46,7 @@ from backend.api.terminal import router as terminal_router
 from backend.api.voice import router as voice_router
 from backend.api.websockets import router as websocket_router
 from backend.api.workflow import router as workflow_router
+from backend.api.error_monitoring import router as error_monitoring_router
 
 # Import workflow automation router
 try:
@@ -478,6 +479,7 @@ def add_api_routes(app: FastAPI) -> None:
         (secrets_router, "/secrets", ["secrets"], "secrets"),
         (research_browser_router, "/research", ["research"], "research_browser"),
         (security_router, "/security", ["security"], "security"),
+        (error_monitoring_router, "/errors", ["error-monitoring"], "error_monitoring"),
     ]
 
     # Add workflow automation router if available
@@ -620,6 +622,72 @@ def add_api_routes(app: FastAPI) -> None:
         logger.info("Advanced control router registered")
     except ImportError as e:
         logger.info(f"Advanced control router not available - skipping router: {e}")
+
+    # Add phase management router for Phase 6 features
+    try:
+        from backend.api.phase_management import router as phase_management_router
+
+        routers_config.append(
+            (
+                phase_management_router,
+                "/phases",
+                ["phase_management"],
+                "phase_management",
+            )
+        )
+        logger.info("Phase management router registered")
+    except ImportError as e:
+        logger.info(f"Phase management router not available - skipping router: {e}")
+
+    # Add state tracking router for comprehensive project state management
+    try:
+        from backend.api.state_tracking import router as state_tracking_router
+
+        routers_config.append(
+            (
+                state_tracking_router,
+                "/state-tracking",
+                ["state_tracking"],
+                "state_tracking",
+            )
+        )
+        logger.info("State tracking router registered")
+    except ImportError as e:
+        logger.info(f"State tracking router not available - skipping router: {e}")
+
+    # Add LLM awareness router for agent self-awareness
+    try:
+        from backend.api.llm_awareness import router as llm_awareness_router
+
+        routers_config.append(
+            (
+                llm_awareness_router,
+                "/llm-awareness",
+                ["llm_awareness"],
+                "llm_awareness",
+            )
+        )
+        logger.info("LLM awareness router registered")
+    except ImportError as e:
+        logger.info(f"LLM awareness router not available - skipping router: {e}")
+
+    # Add validation dashboard router for real-time monitoring
+    try:
+        from backend.api.validation_dashboard import (
+            router as validation_dashboard_router,
+        )
+
+        routers_config.append(
+            (
+                validation_dashboard_router,
+                "/validation-dashboard",
+                ["validation_dashboard"],
+                "validation_dashboard",
+            )
+        )
+        logger.info("Validation dashboard router registered")
+    except ImportError as e:
+        logger.info(f"Validation dashboard router not available - skipping router: {e}")
 
     for router, prefix, tags, name in routers_config:
         try:
