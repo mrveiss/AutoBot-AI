@@ -573,7 +573,7 @@
 
   <!-- RUM Dashboard for Development -->
   <RumDashboard />
-  
+
   <!-- Global Error Notifications -->
   <ErrorNotifications />
 </template>

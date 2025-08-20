@@ -7,7 +7,7 @@
       <div class="error-content">
         <h3 class="error-title">Something went wrong</h3>
         <p class="error-message">{{ userFriendlyMessage }}</p>
-        
+
         <div class="error-details" v-if="showDetails">
           <details>
             <summary class="error-details-toggle">Technical Details</summary>
@@ -20,23 +20,23 @@
             </div>
           </details>
         </div>
-        
+
         <div class="error-actions">
-          <button 
-            @click="retry" 
+          <button
+            @click="retry"
             class="btn btn-primary"
             :disabled="retrying"
           >
             {{ retrying ? 'Retrying...' : 'Try Again' }}
           </button>
-          <button 
-            @click="reload" 
+          <button
+            @click="reload"
             class="btn btn-secondary"
           >
             Reload Page
           </button>
-          <button 
-            @click="toggleDetails" 
+          <button
+            @click="toggleDetails"
             class="btn btn-ghost"
           >
             {{ showDetails ? 'Hide Details' : 'Show Details' }}
@@ -82,7 +82,7 @@ const rum = inject('rum', null) as any
 // Compute user-friendly error message
 const userFriendlyMessage = computed(() => {
   const error = errorInfo.value
-  
+
   // Map common errors to user-friendly messages
   if (error.message?.includes('Network Error')) {
     return 'Connection lost. Please check your internet connection and try again.'
@@ -99,14 +99,14 @@ const userFriendlyMessage = computed(() => {
   if (error.message?.includes('ResizeObserver loop limit exceeded')) {
     return 'Display refresh needed. This error is usually harmless.'
   }
-  
+
   return props.fallback
 })
 
 // Capture errors from child components
 onErrorCaptured((error: Error, instance: any, info: string) => {
   console.error('Error captured by ErrorBoundary:', error, info)
-  
+
   hasError.value = true
   errorInfo.value = {
     message: error.message,
@@ -114,7 +114,7 @@ onErrorCaptured((error: Error, instance: any, info: string) => {
     componentInfo: info,
     component: instance?.$options?.name || 'Unknown Component'
   }
-  
+
   // Track error with RUM if available
   if (rum) {
     rum.trackError('component_error', {
@@ -125,12 +125,12 @@ onErrorCaptured((error: Error, instance: any, info: string) => {
       boundaryComponent: 'ErrorBoundary'
     })
   }
-  
+
   // Call custom error handler if provided
   if (props.onError) {
     props.onError(error, instance, info)
   }
-  
+
   // Return false to stop the error from propagating
   return false
 })
@@ -138,12 +138,12 @@ onErrorCaptured((error: Error, instance: any, info: string) => {
 const retry = async () => {
   retrying.value = true
   hasError.value = false
-  
+
   // Wait a moment before resetting retry state
   setTimeout(() => {
     retrying.value = false
   }, 1000)
-  
+
   // Track retry attempt
   if (rum) {
     rum.trackUserInteraction('error_boundary_retry', null, {
@@ -161,13 +161,13 @@ const reload = () => {
       errorMessage: errorInfo.value.message
     })
   }
-  
+
   window.location.reload()
 }
 
 const toggleDetails = () => {
   showDetails.value = !showDetails.value
-  
+
   if (rum) {
     rum.trackUserInteraction('error_boundary_toggle_details', null, {
       expanded: showDetails.value
@@ -324,7 +324,7 @@ defineExpose({
     flex-direction: column;
     text-align: center;
   }
-  
+
   .error-actions {
     justify-content: center;
   }

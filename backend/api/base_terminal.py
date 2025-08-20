@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class BaseTerminalWebSocket(ABC):
-    """Base class for terminal WebSocket handlers with improved race condition handling"""
+    """Base class for terminal WebSocket handlers with improved race condition
+    handling"""
 
     def __init__(self):
         # Use new terminal manager for race condition fixes
@@ -66,8 +67,8 @@ class BaseTerminalWebSocket(ABC):
 
     def _read_pty_output(self):
         """Read output from PTY in separate thread with queue-based delivery"""
-        import select
         import queue
+        import select
         import time
 
         # Create output queue for thread-safe message passing
@@ -104,14 +105,16 @@ class BaseTerminalWebSocket(ABC):
                                 # Queue message for async delivery
                                 message = {
                                     "type": "output",
-                                    "content": processed_output,  # Standardized field name
+                                    # Standardized field name
+                                    "content": processed_output,
                                     "timestamp": time.time(),
                                 }
 
                                 try:
                                     self.output_queue.put_nowait(message)
                                 except queue.Full:
-                                    # Queue is full, drop oldest message to prevent blocking
+                                    # Queue is full, drop oldest message to
+                                    # prevent blocking
                                     try:
                                         self.output_queue.get_nowait()
                                         self.output_queue.put_nowait(message)
