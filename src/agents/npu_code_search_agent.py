@@ -13,10 +13,13 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 from src.utils.redis_client import get_redis_client
 from src.worker_node import WorkerNode
+
+from .base_agent import AgentRequest
+from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +47,7 @@ class SearchStats:
     results_count: int
 
 
-from .base_agent import LocalAgent, AgentRequest, AgentResponse
-
-
-class NPUCodeSearchAgent(LocalAgent):
+class NPUCodeSearchAgent(StandardizedAgent):
     """
     NPU-accelerated code search agent using Redis for indexing.
 
@@ -80,16 +80,38 @@ class NPUCodeSearchAgent(LocalAgent):
         self.npu_available = False
         self.openvino_core = None
         self._init_npu()
-        
+
         # Define capabilities
         self.capabilities = [
             "code_search",
-            "semantic_similarity", 
+            "semantic_similarity",
             "npu_acceleration",
             "redis_indexing",
             "file_indexing",
-            "pattern_matching"
+            "pattern_matching",
         ]
+
+        # Register action handlers using standardized pattern
+        self.register_actions(
+            {
+                "search_code": ActionHandler(
+                    handler_method="handle_search_code",
+                    required_params=["query"],
+                    optional_params=["max_results", "file_patterns"],
+                    description="Search for code using NPU-accelerated semantic search",
+                ),
+                "index_directory": ActionHandler(
+                    handler_method="handle_index_directory",
+                    required_params=["directory"],
+                    optional_params=["force_reindex"],
+                    description="Index a directory for code search",
+                ),
+                "get_capabilities": ActionHandler(
+                    handler_method="handle_get_capabilities",
+                    description="Get agent capabilities",
+                ),
+            }
+        )
 
         # Supported file extensions for code search
         self.supported_extensions = {
@@ -136,13 +158,14 @@ class NPUCodeSearchAgent(LocalAgent):
         }
 
         # Initialize communication protocol for agent-to-agent messaging
-        import asyncio
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 asyncio.create_task(self.initialize_communication(self.capabilities))
             else:
-                loop.run_until_complete(self.initialize_communication(self.capabilities))
+                loop.run_until_complete(
+                    self.initialize_communication(self.capabilities)
+                )
         except RuntimeError:
             # Event loop not available yet, will initialize later
             pass
@@ -185,81 +208,41 @@ class NPUCodeSearchAgent(LocalAgent):
             self.logger.warning(f"Failed to initialize NPU: {e}")
             self.npu_available = False
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
-        """Process incoming agent requests"""
-        try:
-            action = request.action
-            payload = request.payload
-            
-            if action == "search_code":
-                query = payload.get("query", "")
-                max_results = payload.get("max_results", 10)
-                file_patterns = payload.get("file_patterns", [])
-                
-                results = await self.search_code(
-                    query=query,
-                    max_results=max_results,
-                    file_patterns=file_patterns
-                )
-                
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result={
-                        "search_results": [
-                            {
-                                "file_path": r.file_path,
-                                "content": r.content,
-                                "line_number": r.line_number,
-                                "confidence": r.confidence,
-                                "context_lines": r.context_lines,
-                                "metadata": r.metadata
-                            }
-                            for r in results
-                        ]
-                    }
-                )
-            
-            elif action == "index_directory":
-                directory = payload.get("directory", ".")
-                force_reindex = payload.get("force_reindex", False)
-                
-                stats = await self.index_codebase(directory, force_reindex)
-                
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result={"indexing_stats": stats}
-                )
-            
-            elif action == "get_capabilities":
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result={"capabilities": self.capabilities}
-                )
-            
-            else:
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="error",
-                    result=None,
-                    error=f"Unknown action: {action}"
-                )
-                
-        except Exception as e:
-            self.logger.error(f"Error processing request: {e}")
-            return AgentResponse(
-                request_id=request.request_id,
-                agent_type=self.agent_type,
-                status="error",
-                result=None,
-                error=str(e)
-            )
+    async def handle_search_code(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle code search action"""
+        query = request.payload["query"]
+        max_results = request.payload.get("max_results", 10)
+        file_patterns = request.payload.get("file_patterns", [])
+
+        results = await self.search_code(
+            query=query, max_results=max_results, file_patterns=file_patterns
+        )
+
+        return {
+            "search_results": [
+                {
+                    "file_path": r.file_path,
+                    "content": r.content,
+                    "line_number": r.line_number,
+                    "confidence": r.confidence,
+                    "context_lines": r.context_lines,
+                    "metadata": r.metadata,
+                }
+                for r in results
+            ]
+        }
+
+    async def handle_index_directory(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle directory indexing action"""
+        directory = request.payload["directory"]
+        force_reindex = request.payload.get("force_reindex", False)
+
+        stats = await self.index_codebase(directory, force_reindex)
+        return {"indexing_stats": stats}
+
+    async def handle_get_capabilities(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle capabilities request"""
+        return {"capabilities": self.capabilities}
 
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports"""

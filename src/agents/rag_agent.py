@@ -7,17 +7,18 @@ and context ranking. Handles knowledge base integration and document analysis.
 
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from src.config import config as global_config_manager
 from src.llm_interface import LLMInterface
 
-from .base_agent import AgentRequest, AgentResponse, LocalAgent
+from .base_agent import AgentRequest
+from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = logging.getLogger(__name__)
 
 
-class RAGAgent(LocalAgent):
+class RAGAgent(StandardizedAgent):
     """RAG agent for document synthesis and knowledge integration."""
 
     def __init__(self):
@@ -33,74 +34,55 @@ class RAGAgent(LocalAgent):
             "knowledge_integration",
         ]
 
+        # Register action handlers using standardized pattern
+        self.register_actions(
+            {
+                "document_query": ActionHandler(
+                    handler_method="handle_document_query",
+                    required_params=["query"],
+                    optional_params=["documents", "context"],
+                    description="Process queries against retrieved documents",
+                ),
+                "reformulate_query": ActionHandler(
+                    handler_method="handle_reformulate_query",
+                    required_params=["query"],
+                    optional_params=["context"],
+                    description="Reformulate queries for better retrieval",
+                ),
+                "rank_documents": ActionHandler(
+                    handler_method="handle_rank_documents",
+                    required_params=["query", "documents"],
+                    description="Rank documents by relevance",
+                ),
+            }
+        )
+
         logger.info(f"RAG Agent initialized with model: {self.model_name}")
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
-        """
-        Process agent request using the standardized interface.
-        """
-        try:
-            action = request.action
-            payload = request.payload
+    async def handle_document_query(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle document query action"""
+        query = request.payload["query"]
+        documents = request.payload.get("documents", [])
+        context = request.context
 
-            if action == "document_query":
-                query = payload.get("query", "")
-                documents = payload.get("documents", [])
-                context = request.context
+        result = await self.process_document_query(query, documents, context)
+        return result
 
-                result = await self.process_document_query(query, documents, context)
+    async def handle_reformulate_query(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle query reformulation action"""
+        query = request.payload["query"]
+        context = request.context
 
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result=result,
-                )
+        result = await self.reformulate_query(query, context)
+        return result
 
-            elif action == "reformulate_query":
-                query = payload.get("query", "")
-                context = request.context
+    async def handle_rank_documents(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle document ranking action"""
+        query = request.payload["query"]
+        documents = request.payload["documents"]
 
-                result = await self.reformulate_query(query, context)
-
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result=result,
-                )
-
-            elif action == "rank_documents":
-                query = payload.get("query", "")
-                documents = payload.get("documents", [])
-
-                result = await self.rank_documents(query, documents)
-
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result=result,
-                )
-
-            else:
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="error",
-                    result=None,
-                    error=f"Unknown action: {action}",
-                )
-
-        except Exception as e:
-            logger.error(f"RAG agent error: {e}")
-            return AgentResponse(
-                request_id=request.request_id,
-                agent_type=self.agent_type,
-                status="error",
-                result=None,
-                error=str(e),
-            )
+        result = await self.rank_documents(query, documents)
+        return {"ranked_documents": result}
 
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports."""

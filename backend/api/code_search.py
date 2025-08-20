@@ -648,7 +648,9 @@ async def find_code_duplicates(request: AnalyticsRequest):
                         {
                             "pattern": pattern,
                             "similar_blocks": similar_blocks,
-                            "potential_savings": f"Could refactor {len(similar_blocks)} similar blocks",
+                            "potential_savings": (
+                                f"Could refactor {len(similar_blocks)} similar blocks"
+                            ),
                             "refactor_priority": len(similar_blocks)
                             * max(block["confidence"] for block in similar_blocks),
                         }
@@ -774,14 +776,20 @@ async def get_refactor_suggestions(request: AnalyticsRequest):
                 {
                     "type": "Extract Utility Functions",
                     "priority": "high",
-                    "description": "Functions with high usage but multiple definitions can be centralized",
+                    "description": (
+                        "Functions with high usage but multiple definitions "
+                        "can be centralized"
+                    ),
                     "impact": "Reduces code duplication and improves maintainability",
                     "effort": "medium",
                 },
                 {
                     "type": "Create Base Classes",
                     "priority": "medium",
-                    "description": "Similar classes can be refactored to use inheritance or composition",
+                    "description": (
+                        "Similar classes can be refactored to use inheritance "
+                        "or composition"
+                    ),
                     "impact": "Improves code organization and reduces repetition",
                     "effort": "high",
                 },
