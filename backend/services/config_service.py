@@ -16,14 +16,52 @@ logger = logging.getLogger(__name__)
 class ConfigService:
     """Centralized configuration management service"""
 
+    _cached_config = None
+    _cache_timestamp = None
+    CACHE_DURATION = 30  # Cache for 30 seconds
+
+    @staticmethod
+    def _should_refresh_cache() -> bool:
+        """Check if cache should be refreshed"""
+        import time
+
+        if ConfigService._cached_config is None:
+            return True
+
+        if ConfigService._cache_timestamp is None:
+            return True
+
+        return (
+            time.time() - ConfigService._cache_timestamp
+        ) > ConfigService.CACHE_DURATION
+
     @staticmethod
     def get_full_config() -> Dict[str, Any]:
         """Get complete application configuration"""
+        import time
+
+        # Return cached config if still valid
+        if not ConfigService._should_refresh_cache():
+            logger.debug("Returning cached configuration")
+            return ConfigService._cached_config
+
+        logger.debug("Refreshing configuration cache")
+
         try:
-            # Get the current LLM to determine which model is actually being used
-            current_llm = global_config_manager.get_nested(
-                "llm_config.default_llm", "ollama_deepseek-r1:14b"
-            )
+            # Get the complete config once to avoid repeated calls
+            full_config = global_config_manager.to_dict()
+            llm_config = global_config_manager.get_llm_config()
+
+            # Helper function to get nested values with default
+            def get_nested(path: str, default=None):
+                keys = path.split(".")
+                value = full_config
+                for key in keys:
+                    if isinstance(value, dict) and key in value:
+                        value = value[key]
+                    else:
+                        return default
+                return value
 
             # Build comprehensive config structure matching frontend expectations
             # Note: Prompts section is excluded as it's managed separately
@@ -208,10 +246,29 @@ class ConfigService:
                     ),
                 },
             }
+
+            # Cache the configuration
+            ConfigService._cached_config = config_data
+            ConfigService._cache_timestamp = time.time()
+            logger.debug(
+                f"Configuration cached for {ConfigService.CACHE_DURATION} seconds"
+            )
+
             return config_data
         except Exception as e:
             logger.error(f"Error getting full config: {str(e)}")
+            # Return cached config if available, even if refresh failed
+            if ConfigService._cached_config is not None:
+                logger.warning("Returning cached config due to refresh failure")
+                return ConfigService._cached_config
             raise
+
+    @staticmethod
+    def clear_cache():
+        """Clear the configuration cache to force refresh on next access"""
+        ConfigService._cached_config = None
+        ConfigService._cache_timestamp = None
+        logger.debug("Configuration cache cleared")
 
     @staticmethod
     def get_llm_config() -> Dict[str, Any]:
@@ -361,6 +418,9 @@ class ConfigService:
             # Reload the global config manager to pick up changes
             global_config_manager.reload()
 
+            # Clear cache to force fresh load on next access
+            ConfigService.clear_cache()
+
             logger.info(
                 "Full configuration saved and reloaded successfully (prompts excluded)"
             )
@@ -406,6 +466,9 @@ class ConfigService:
 
             # Reload the global config manager
             global_config_manager.reload()
+
+            # Clear cache to force fresh load on next access
+            ConfigService.clear_cache()
 
             logger.info("Updated backend settings in config.yaml")
             return {
