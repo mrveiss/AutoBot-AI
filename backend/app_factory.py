@@ -419,8 +419,20 @@ def add_middleware(app: FastAPI) -> None:
         allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-        allow_headers=["*"],
-        expose_headers=["*"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "X-Requested-With",
+            "Accept",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers",
+        ],
+        expose_headers=[
+            "Content-Type",
+            "X-Total-Count",
+            "X-Request-ID",
+        ],
     )
     logger.info(f"CORS middleware added with origins: {cors_origins}")
 

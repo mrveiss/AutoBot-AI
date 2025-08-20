@@ -8,11 +8,11 @@ path traversal protection, and authentication/authorization.
 import logging
 import mimetypes
 import shutil
-import aiofiles
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
@@ -179,7 +179,7 @@ def check_file_permissions(request: Request, operation: str) -> bool:
 def validate_and_resolve_path(path: str) -> Path:
     """
     Validate and resolve a path within the sandboxed directory.
-    Prevents path traversal attacks.
+    Prevents path traversal attacks with multiple security layers.
     """
     if not path:
         return SANDBOXED_ROOT
@@ -187,18 +187,34 @@ def validate_and_resolve_path(path: str) -> Path:
     # Remove leading/trailing slashes and normalize
     clean_path = path.strip("/")
 
-    # Check for path traversal attempts
-    if ".." in clean_path or clean_path.startswith("/"):
+    # Enhanced path traversal checks
+    if (
+        ".." in clean_path
+        or clean_path.startswith("/")
+        or "~" in clean_path
+        or any(char in clean_path for char in ["<", ">", ":", '"', "|", "?", "*"])
+    ):
         raise HTTPException(
             status_code=400, detail="Invalid path: path traversal not allowed"
+        )
+
+    # URL decode to catch encoded traversal attempts
+    import urllib.parse
+
+    decoded_path = urllib.parse.unquote(clean_path)
+    if ".." in decoded_path or decoded_path.startswith("/"):
+        raise HTTPException(
+            status_code=400, detail="Invalid path: encoded traversal not allowed"
         )
 
     # Resolve the full path within sandbox
     full_path = SANDBOXED_ROOT / clean_path
 
-    # Ensure the resolved path is within the sandbox
+    # Use realpath for canonical path resolution (prevents symlink attacks)
     try:
-        full_path.resolve().relative_to(SANDBOXED_ROOT.resolve())
+        canonical_full = full_path.resolve(strict=False)
+        canonical_sandbox = SANDBOXED_ROOT.resolve()
+        canonical_full.relative_to(canonical_sandbox)
     except ValueError:
         raise HTTPException(status_code=400, detail="Path outside sandbox not allowed")
 
@@ -232,7 +248,7 @@ def is_safe_file(filename: str) -> bool:
         return False
 
     # Check for dangerous characters in filename
-    dangerous_chars = {'<', '>', '"', '|', '?', '*', '\0', '\r', '\n'}
+    dangerous_chars = {"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"}
     if any(char in filename for char in dangerous_chars):
         return False
 
@@ -247,22 +263,44 @@ def is_safe_file(filename: str) -> bool:
 
     # Check for dangerous filenames
     dangerous_names = {
-        ".htaccess", ".env", "passwd", "shadow", "config", "web.config",
-        "autoexec.bat", "boot.ini", "hosts", "httpd.conf", "nginx.conf"
+        ".htaccess",
+        ".env",
+        "passwd",
+        "shadow",
+        "config",
+        "web.config",
+        "autoexec.bat",
+        "boot.ini",
+        "hosts",
+        "httpd.conf",
+        "nginx.conf",
     }
     if filename.lower() in dangerous_names:
         return False
 
     # Check for executable extensions not in allowlist
     dangerous_extensions = {
-        ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".vbs", ".js",
-        ".jar", ".app", ".deb", ".rpm", ".dmg", ".pkg", ".msi"
+        ".exe",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".scr",
+        ".pif",
+        ".vbs",
+        ".js",
+        ".jar",
+        ".app",
+        ".deb",
+        ".rpm",
+        ".dmg",
+        ".pkg",
+        ".msi",
     }
     if extension in dangerous_extensions and extension not in ALLOWED_EXTENSIONS:
         return False
 
     # Prevent null bytes and control characters in filename
-    if '\0' in filename or any(ord(c) < 32 for c in filename):
+    if "\0" in filename or any(ord(c) < 32 for c in filename):
         return False
 
     return True
@@ -349,19 +387,32 @@ def validate_file_content(content: bytes, filename: str) -> bool:
         bool: True if content is safe, False otherwise
     """
     # Check for null bytes (potential binary injection)
-    if b'\x00' in content:
+    if b"\x00" in content:
         # Only allow null bytes in known binary formats
         extension = Path(filename).suffix.lower()
-        binary_formats = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf'}
+        binary_formats = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf"}
         if extension not in binary_formats:
             return False
 
     # Check for script tags and other dangerous content
-    content_str = content.decode('utf-8', errors='ignore').lower()
+    content_str = content.decode("utf-8", errors="ignore").lower()
     dangerous_patterns = [
-        '<script', '</script>', 'javascript:', 'vbscript:', 'onload=',
-        'onerror=', 'onclick=', 'eval(', 'document.write', 'innerHTML',
-        '<?php', '<%', '<jsp:', 'exec(', 'system(', 'shell_exec('
+        "<script",
+        "</script>",
+        "javascript:",
+        "vbscript:",
+        "onload=",
+        "onerror=",
+        "onclick=",
+        "eval(",
+        "document.write",
+        "innerHTML",
+        "<?php",
+        "<%",
+        "<jsp:",
+        "exec(",
+        "system(",
+        "shell_exec(",
     ]
 
     for pattern in dangerous_patterns:
@@ -418,7 +469,7 @@ async def upload_file(
         if not validate_file_content(content, file.filename):
             raise HTTPException(
                 status_code=400,
-                detail="File content contains potentially dangerous elements"
+                detail="File content contains potentially dangerous elements",
             )
 
         # Verify MIME type matches file extension
