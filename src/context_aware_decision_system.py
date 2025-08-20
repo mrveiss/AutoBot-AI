@@ -13,9 +13,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from src.computer_vision_system import ScreenState, UIElement, computer_vision_system
+from src.enhanced_memory_manager import EnhancedMemoryManager
 from src.enhanced_memory_manager_async import (
-    get_async_enhanced_memory_manager,
     TaskPriority,
+    get_async_enhanced_memory_manager,
 )
 from src.multimodal_processor import (
     ModalInput,

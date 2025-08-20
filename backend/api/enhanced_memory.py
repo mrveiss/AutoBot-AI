@@ -10,12 +10,14 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from src.enhanced_memory_manager import EnhancedMemoryManager
 from src.enhanced_memory_manager_async import (
-    get_async_enhanced_memory_manager,
     TaskPriority,
     TaskStatus,
+    get_async_enhanced_memory_manager,
 )
 from src.markdown_reference_system import MarkdownReferenceSystem
+from src.task_execution_tracker import task_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ router = APIRouter(tags=["enhanced_memory"])
 # URGENT FIX: Use lazy initialization to prevent blocking during module import
 memory_manager = None
 markdown_system = None
+
 
 def get_memory_manager():
     """Lazy initialization of memory manager to prevent startup blocking"""
