@@ -247,12 +247,16 @@ async def get_browser_info(session_id: str):
         docker_browser_info = None
         try:
             # Try to detect Playwright container
+            # Import centralized configuration with intelligent port detection
+            from src.config import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
+            
             # This would integrate with your existing browser setup
             docker_browser_info = {
                 "available": True,
-                "vnc_url": "http://localhost:6080",  # NoVNC port
-                "direct_url": "vnc://localhost:5900",  # Direct VNC
+                "vnc_url": PLAYWRIGHT_VNC_URL.replace('vnc.html', ''),  # NoVNC web interface
+                "direct_url": get_vnc_direct_url(),  # Intelligent VNC connection (5900 or 5901)
                 "session_active": session.status == "active",
+                "environment": "container" if os.path.exists('/.dockerenv') else "host",
             }
         except Exception:
             docker_browser_info = {"available": False}
