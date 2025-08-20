@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+import aiofiles
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from src.source_attribution import SourceType, track_source
@@ -29,7 +30,9 @@ class ResearchBrowserSession:
         self.page: Optional[Page] = None
         self.created_at = datetime.now()
         self.last_activity = datetime.now()
-        self.status = "initializing"  # initializing, active, waiting_for_user, error, closed
+        self.status = (
+            "initializing"  # initializing, active, waiting_for_user, error, closed
+        )
         self.current_url = None
         self.interaction_required = False
         self.interaction_message = ""
@@ -46,7 +49,9 @@ class ResearchBrowserSession:
                 self.browser = await self.playwright.chromium.connect_over_cdp(
                     "http://localhost:9222"
                 )
-                logger.info(f"Connected to existing browser for session {self.session_id}")
+                logger.info(
+                    f"Connected to existing browser for session {self.session_id}"
+                )
             except Exception:
                 # Fall back to launching new browser
                 self.browser = await self.playwright.chromium.launch(
@@ -57,14 +62,14 @@ class ResearchBrowserSession:
                         "--disable-dev-shm-usage",
                         "--disable-background-timer-throttling",
                         "--disable-backgrounding-occluded-windows",
-                        "--disable-renderer-backgrounding"
-                    ]
+                        "--disable-renderer-backgrounding",
+                    ],
                 )
                 logger.info(f"Launched new browser for session {self.session_id}")
 
             self.context = await self.browser.new_context(
                 viewport={"width": 1280, "height": 720},
-                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             )
 
             self.page = await self.context.new_page()
@@ -87,7 +92,8 @@ class ResearchBrowserSession:
             return
 
         # Detect CAPTCHAs and other common interaction patterns
-        await self.page.add_init_script("""
+        await self.page.add_init_script(
+            """
             // Detect common CAPTCHA patterns
             const captchaSelectors = [
                 'iframe[src*="recaptcha"]',
@@ -140,7 +146,8 @@ class ResearchBrowserSession:
                 childList: true,
                 subtree: true
             });
-        """)
+        """
+        )
 
     async def navigate_to(self, url: str, wait_for_load: bool = True) -> Dict[str, Any]:
         """Navigate to a URL and return page information"""
@@ -159,10 +166,14 @@ class ResearchBrowserSession:
                 await asyncio.sleep(2)
 
             # Check for interaction requirements
-            interaction_data = await self.page.evaluate("window.autobot_interaction_required")
+            interaction_data = await self.page.evaluate(
+                "window.autobot_interaction_required"
+            )
             if interaction_data:
                 self.interaction_required = True
-                self.interaction_message = interaction_data.get("message", "User interaction required")
+                self.interaction_message = interaction_data.get(
+                    "message", "User interaction required"
+                )
                 self.status = "waiting_for_user"
 
                 return {
@@ -171,7 +182,7 @@ class ResearchBrowserSession:
                     "title": await self.page.title(),
                     "interaction_required": True,
                     "interaction_message": self.interaction_message,
-                    "session_id": self.session_id
+                    "session_id": self.session_id,
                 }
 
             # Get basic page information
@@ -187,8 +198,8 @@ class ResearchBrowserSession:
                     "url": url,
                     "title": title,
                     "session_id": self.session_id,
-                    "timestamp": datetime.now().isoformat()
-                }
+                    "timestamp": datetime.now().isoformat(),
+                },
             )
 
             return {
@@ -197,7 +208,7 @@ class ResearchBrowserSession:
                 "title": title,
                 "content_length": content_length,
                 "interaction_required": False,
-                "session_id": self.session_id
+                "session_id": self.session_id,
             }
 
         except Exception as e:
@@ -211,7 +222,8 @@ class ResearchBrowserSession:
 
         try:
             # Get text content
-            text_content = await self.page.evaluate("""
+            text_content = await self.page.evaluate(
+                """
                 () => {
                     // Remove script and style elements
                     const scripts = document.querySelectorAll('script, style');
@@ -237,10 +249,12 @@ class ResearchBrowserSession:
 
                     return document.body.innerText.trim();
                 }
-            """)
+            """
+            )
 
             # Get structured data
-            structured_data = await self.page.evaluate("""
+            structured_data = await self.page.evaluate(
+                """
                 () => {
                     const data = {};
 
@@ -264,7 +278,8 @@ class ResearchBrowserSession:
 
                     return data;
                 }
-            """)
+            """
+            )
 
             return {
                 "success": True,
@@ -272,11 +287,13 @@ class ResearchBrowserSession:
                 "title": await self.page.title(),
                 "text_content": text_content[:5000],  # Limit content length
                 "structured_data": structured_data,
-                "content_length": len(text_content)
+                "content_length": len(text_content),
             }
 
         except Exception as e:
-            logger.error(f"Content extraction failed for session {self.session_id}: {e}")
+            logger.error(
+                f"Content extraction failed for session {self.session_id}: {e}"
+            )
             return {"success": False, "error": str(e)}
 
     async def save_mhtml(self) -> Optional[str]:
@@ -298,8 +315,8 @@ class ResearchBrowserSession:
             cdp_session = await self.page.context.new_cdp_session(self.page)
             result = await cdp_session.send("Page.captureSnapshot", {"format": "mhtml"})
 
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(result["data"])
+            async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
+                await f.write(result["data"])
 
             self.mhtml_files.append(filepath)
             logger.info(f"Saved MHTML file: {filepath}")
@@ -320,7 +337,9 @@ class ResearchBrowserSession:
         while asyncio.get_event_loop().time() - start_time < timeout_seconds:
             try:
                 # Check if interaction is still required
-                interaction_data = await self.page.evaluate("window.autobot_interaction_required")
+                interaction_data = await self.page.evaluate(
+                    "window.autobot_interaction_required"
+                )
                 if not interaction_data:
                     self.interaction_required = False
                     self.status = "active"
@@ -343,7 +362,7 @@ class ResearchBrowserSession:
                 await self.context.close()
             if self.browser:
                 await self.browser.close()
-            if hasattr(self, 'playwright'):
+            if hasattr(self, "playwright"):
                 await self.playwright.stop()
 
             # Clean up MHTML files
@@ -383,24 +402,32 @@ class ResearchBrowserManager:
             self.sessions[session_id] = session
             self.conversation_sessions[conversation_id] = session_id
 
-            logger.info(f"Created research session {session_id} for conversation {conversation_id}")
+            logger.info(
+                f"Created research session {session_id} for conversation {conversation_id}"
+            )
             return session_id
         else:
-            logger.error(f"Failed to create research session for conversation {conversation_id}")
+            logger.error(
+                f"Failed to create research session for conversation {conversation_id}"
+            )
             return None
 
     def get_session(self, session_id: str) -> Optional[ResearchBrowserSession]:
         """Get a research session by ID"""
         return self.sessions.get(session_id)
 
-    def get_session_by_conversation(self, conversation_id: str) -> Optional[ResearchBrowserSession]:
+    def get_session_by_conversation(
+        self, conversation_id: str
+    ) -> Optional[ResearchBrowserSession]:
         """Get the research session for a conversation"""
         session_id = self.conversation_sessions.get(conversation_id)
         if session_id:
             return self.sessions.get(session_id)
         return None
 
-    async def research_url(self, conversation_id: str, url: str, extract_content: bool = True) -> Dict[str, Any]:
+    async def research_url(
+        self, conversation_id: str, url: str, extract_content: bool = True
+    ) -> Dict[str, Any]:
         """Research a URL with automatic fallbacks"""
         try:
             # Get or create session
@@ -408,7 +435,10 @@ class ResearchBrowserManager:
             if not session:
                 session_id = await self.create_session(conversation_id)
                 if not session_id:
-                    return {"success": False, "error": "Failed to create browser session"}
+                    return {
+                        "success": False,
+                        "error": "Failed to create browser session",
+                    }
                 session = self.sessions[session_id]
 
             # Navigate to URL
@@ -425,7 +455,7 @@ class ResearchBrowserManager:
                     "message": nav_result["interaction_message"],
                     "session_id": session.session_id,
                     "browser_url": f"/browser/{session.session_id}",
-                    "actions": ["wait", "manual_intervention", "save_mhtml"]
+                    "actions": ["wait", "manual_intervention", "save_mhtml"],
                 }
 
             # Extract content if requested
@@ -444,14 +474,16 @@ class ResearchBrowserManager:
                 "navigation": nav_result,
                 "content": content_result,
                 "session_id": session.session_id,
-                "browser_url": f"/browser/{session.session_id}"
+                "browser_url": f"/browser/{session.session_id}",
             }
 
         except Exception as e:
             logger.error(f"Research failed for URL {url}: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _try_mhtml_fallback(self, session: ResearchBrowserSession, url: str) -> Dict[str, Any]:
+    async def _try_mhtml_fallback(
+        self, session: ResearchBrowserSession, url: str
+    ) -> Dict[str, Any]:
         """Try to crawl using MHTML fallback"""
         try:
             logger.info(f"Attempting MHTML fallback for {url}")
@@ -473,14 +505,14 @@ class ResearchBrowserManager:
                         "status": "mhtml_fallback",
                         "content": content,
                         "mhtml_path": mhtml_path,
-                        "message": "Content extracted from MHTML backup"
+                        "message": "Content extracted from MHTML backup",
                     }
             except Exception as e:
                 logger.error(f"MHTML fallback also failed: {e}")
 
             return {
                 "success": False,
-                "error": "Both direct access and MHTML fallback failed"
+                "error": "Both direct access and MHTML fallback failed",
             }
 
         except Exception as e:
@@ -500,7 +532,7 @@ class ResearchBrowserManager:
                 "file_path": mhtml_path,
                 "file_size": file_size,
                 "text_content": "Content extracted from MHTML backup (parsing not yet implemented)",
-                "content_length": file_size
+                "content_length": file_size,
             }
 
         except Exception as e:
@@ -513,8 +545,7 @@ class ResearchBrowserManager:
             return
 
         oldest_session_id = min(
-            self.sessions.keys(),
-            key=lambda sid: self.sessions[sid].last_activity
+            self.sessions.keys(), key=lambda sid: self.sessions[sid].last_activity
         )
 
         await self.cleanup_session(oldest_session_id)

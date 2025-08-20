@@ -7,6 +7,7 @@ import logging
 import os
 from typing import Optional
 
+import aiofiles
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -35,9 +36,7 @@ async def research_url(request: ResearchRequest):
     """Research a URL with automatic fallbacks and interaction handling"""
     try:
         result = await research_browser_manager.research_url(
-            request.conversation_id,
-            request.url,
-            request.extract_content
+            request.conversation_id, request.url, request.extract_content
         )
 
         return JSONResponse(status_code=200, content=result)
@@ -45,8 +44,7 @@ async def research_url(request: ResearchRequest):
     except Exception as e:
         logger.error(f"Research URL failed: {e}")
         return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": str(e)}
+            status_code=500, content={"success": False, "error": str(e)}
         )
 
 
@@ -90,15 +88,16 @@ async def handle_session_action(request: SessionAction):
             result["content"] = content_result
 
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown action: {request.action}")
+            raise HTTPException(
+                status_code=400, detail=f"Unknown action: {request.action}"
+            )
 
         return JSONResponse(status_code=200, content=result)
 
     except Exception as e:
         logger.error(f"Session action failed: {e}")
         return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": str(e)}
+            status_code=500, content={"success": False, "error": str(e)}
         )
 
 
@@ -110,24 +109,24 @@ async def get_session_status(session_id: str):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        return JSONResponse(status_code=200, content={
-            "session_id": session_id,
-            "conversation_id": session.conversation_id,
-            "status": session.status,
-            "current_url": session.current_url,
-            "interaction_required": session.interaction_required,
-            "interaction_message": session.interaction_message,
-            "created_at": session.created_at.isoformat(),
-            "last_activity": session.last_activity.isoformat(),
-            "mhtml_files_count": len(session.mhtml_files)
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "session_id": session_id,
+                "conversation_id": session.conversation_id,
+                "status": session.status,
+                "current_url": session.current_url,
+                "interaction_required": session.interaction_required,
+                "interaction_message": session.interaction_message,
+                "created_at": session.created_at.isoformat(),
+                "last_activity": session.last_activity.isoformat(),
+                "mhtml_files_count": len(session.mhtml_files),
+            },
+        )
 
     except Exception as e:
         logger.error(f"Get session status failed: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @router.get("/session/{session_id}/mhtml/{filename}")
@@ -148,16 +147,16 @@ async def download_mhtml(session_id: str, filename: str):
         if not mhtml_path or not os.path.exists(mhtml_path):
             raise HTTPException(status_code=404, detail="MHTML file not found")
 
-        # Stream the file
-        def generate():
-            with open(mhtml_path, 'rb') as f:
-                while chunk := f.read(8192):
+        # Stream the file asynchronously
+        async def generate():
+            async with aiofiles.open(mhtml_path, "rb") as f:
+                while chunk := await f.read(8192):
                     yield chunk
 
         return StreamingResponse(
             generate(),
-            media_type='application/octet-stream',
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
     except Exception as e:
@@ -171,16 +170,15 @@ async def cleanup_session(session_id: str):
     try:
         await research_browser_manager.cleanup_session(session_id)
 
-        return JSONResponse(status_code=200, content={
-            "success": True,
-            "message": f"Session {session_id} cleaned up"
-        })
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "message": f"Session {session_id} cleaned up"},
+        )
 
     except Exception as e:
         logger.error(f"Cleanup session failed: {e}")
         return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": str(e)}
+            status_code=500, content={"success": False, "error": str(e)}
         )
 
 
@@ -191,27 +189,26 @@ async def list_sessions():
         sessions_info = []
 
         for session_id, session in research_browser_manager.sessions.items():
-            sessions_info.append({
-                "session_id": session_id,
-                "conversation_id": session.conversation_id,
-                "status": session.status,
-                "current_url": session.current_url,
-                "interaction_required": session.interaction_required,
-                "created_at": session.created_at.isoformat(),
-                "last_activity": session.last_activity.isoformat()
-            })
+            sessions_info.append(
+                {
+                    "session_id": session_id,
+                    "conversation_id": session.conversation_id,
+                    "status": session.status,
+                    "current_url": session.current_url,
+                    "interaction_required": session.interaction_required,
+                    "created_at": session.created_at.isoformat(),
+                    "last_activity": session.last_activity.isoformat(),
+                }
+            )
 
-        return JSONResponse(status_code=200, content={
-            "sessions": sessions_info,
-            "total_sessions": len(sessions_info)
-        })
+        return JSONResponse(
+            status_code=200,
+            content={"sessions": sessions_info, "total_sessions": len(sessions_info)},
+        )
 
     except Exception as e:
         logger.error(f"List sessions failed: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 class NavigationRequest(BaseModel):
@@ -233,8 +230,7 @@ async def navigate_session(session_id: str, request: NavigationRequest):
     except Exception as e:
         logger.error(f"Navigate session failed: {e}")
         return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": str(e)}
+            status_code=500, content={"success": False, "error": str(e)}
         )
 
 
@@ -256,46 +252,46 @@ async def get_browser_info(session_id: str):
                 "available": True,
                 "vnc_url": "http://localhost:6080",  # NoVNC port
                 "direct_url": "vnc://localhost:5900",  # Direct VNC
-                "session_active": session.status == "active"
+                "session_active": session.status == "active",
             }
         except Exception:
             docker_browser_info = {"available": False}
 
-        return JSONResponse(status_code=200, content={
-            "session_id": session_id,
-            "conversation_id": session.conversation_id,
-            "status": session.status,
-            "current_url": session.current_url,
-            "interaction_required": session.interaction_required,
-            "interaction_message": session.interaction_message,
-            "docker_browser": docker_browser_info,
-            "actions": [
-                {
-                    "action": "wait",
-                    "label": "Wait for Interaction",
-                    "description": "Wait for user to complete interaction"
-                },
-                {
-                    "action": "manual_intervention",
-                    "label": "Manual Control",
-                    "description": "Take manual control of browser"
-                },
-                {
-                    "action": "save_mhtml",
-                    "label": "Save Page",
-                    "description": "Save current page as MHTML backup"
-                },
-                {
-                    "action": "extract_content",
-                    "label": "Extract Content",
-                    "description": "Extract text content from current page"
-                }
-            ]
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "session_id": session_id,
+                "conversation_id": session.conversation_id,
+                "status": session.status,
+                "current_url": session.current_url,
+                "interaction_required": session.interaction_required,
+                "interaction_message": session.interaction_message,
+                "docker_browser": docker_browser_info,
+                "actions": [
+                    {
+                        "action": "wait",
+                        "label": "Wait for Interaction",
+                        "description": "Wait for user to complete interaction",
+                    },
+                    {
+                        "action": "manual_intervention",
+                        "label": "Manual Control",
+                        "description": "Take manual control of browser",
+                    },
+                    {
+                        "action": "save_mhtml",
+                        "label": "Save Page",
+                        "description": "Save current page as MHTML backup",
+                    },
+                    {
+                        "action": "extract_content",
+                        "label": "Extract Content",
+                        "description": "Extract text content from current page",
+                    },
+                ],
+            },
+        )
 
     except Exception as e:
         logger.error(f"Get browser info failed: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+        return JSONResponse(status_code=500, content={"error": str(e)})
