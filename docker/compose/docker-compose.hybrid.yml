@@ -60,7 +60,7 @@ services:
       retries: 3
       start_period: 60s
 
-  # NPU Worker (Intel NPU Accelerated Inference)
+  # NPU Worker (Intel NPU + NVIDIA GPU Accelerated Inference)
   autobot-npu-worker:
     build:
       context: .
@@ -83,7 +83,7 @@ services:
       - NPU_WORKER_HOST=0.0.0.0
       - NPU_WORKER_PORT=8081
       - NPU_WORKER_WORKERS=1
-      - OPENVINO_DEVICE=NPU
+      - OPENVINO_DEVICE=AUTO  # Auto-detect best device (NPU > GPU > CPU)
       - OV_LOG_LEVEL=ERROR
       - NPU_LOG_LEVEL=INFO
       - REDIS_HOST=autobot-redis
@@ -93,6 +93,9 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
       - ZE_INTEL_NPU_LOGLEVEL=1
       - ZE_ENABLE_VALIDATION_LAYER=0
+      # NVIDIA GPU support
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     depends_on:
       autobot-redis:
         condition: service_healthy
@@ -100,15 +103,24 @@ services:
       - autobot-network
     # NPU requires privileged access for hardware
     privileged: true
+    # GPU runtime support for NVIDIA cards
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    # Only start if NPU hardware is available
+    # Always available (supports NPU, GPU, or CPU fallback)
     profiles:
-      - npu
+      - ""
 
 networks:
   autobot-network:

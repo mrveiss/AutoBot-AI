@@ -1,12 +1,21 @@
-# AutoBot NPU Worker - Intel NPU Accelerated Inference
-# High-performance AI inference using Intel NPU hardware
+# AutoBot NPU Worker - Intel NPU + NVIDIA GPU Accelerated Inference
+# High-performance AI inference using Intel NPU hardware with GPU fallback
 
-FROM python:3.10.13-slim
+FROM nvidia/cuda:12.2-runtime-ubuntu22.04
+
+# Install Python 3.10
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    python3.10-venv \
+    && ln -sf /usr/bin/python3.10 /usr/bin/python \
+    && ln -sf /usr/bin/python3.10 /usr/bin/python3
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for NPU support
+# Install system dependencies for NPU and GPU support
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -19,12 +28,14 @@ RUN apt-get update && apt-get install -y \
     # OpenVINO dependencies
     libtbb-dev \
     libtbb12 \
-    # OpenCL for NPU acceleration
+    # OpenCL for NPU and GPU acceleration
     ocl-icd-libopencl1 \
     opencl-headers \
     clinfo \
     # Intel NPU driver dependencies
     git-lfs \
+    # NVIDIA GPU support
+    nvidia-opencl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Intel NPU driver in container
@@ -59,8 +70,8 @@ COPY src/llm_providers/ /app/src/llm_providers/
 ENV NPU_WORKER_HOST=0.0.0.0
 ENV NPU_WORKER_PORT=8081
 ENV NPU_WORKER_WORKERS=1
-ENV OPENVINO_DEVICE=NPU
-ENV OV_LOG_LEVEL=ERROR
+ENV OPENVINO_DEVICE=AUTO
+ENV OV_LOG_LEVEL=INFO
 ENV PYTHONPATH=/app:/app/src
 
 # Expose NPU worker port
