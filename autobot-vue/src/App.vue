@@ -577,6 +577,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import ApiClient from './utils/ApiClient.js';
 import ChatInterface from './components/ChatInterface.vue';
 import VoiceInterface from './components/VoiceInterface.vue';
 import KnowledgeManager from './components/KnowledgeManager.vue';
@@ -713,19 +714,15 @@ export default {
 
     const checkConnectionStatus = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/system/health');
-        if (response.ok) {
-          const data = await response.json();
-          backendStatus.value = { text: 'Connected', class: 'connected', message: 'Backend is running' };
-          llmStatus.value = data.llm_status ?
-            { text: 'Ready', class: 'connected', message: 'LLM is ready' } :
-            { text: 'Error', class: 'error', message: 'LLM connection failed' };
-          redisStatus.value = data.redis_status ?
-            { text: 'Connected', class: 'connected', message: 'Redis is running' } :
-            { text: 'Error', class: 'error', message: 'Redis connection failed' };
-        } else {
-          backendStatus.value = { text: 'Error', class: 'error', message: 'Backend connection failed' };
-        }
+        const apiClient = new ApiClient();
+        const data = await apiClient.get('/api/system/health');
+        backendStatus.value = { text: 'Connected', class: 'connected', message: 'Backend is running' };
+        llmStatus.value = data.llm_status ?
+          { text: 'Ready', class: 'connected', message: 'LLM is ready' } :
+          { text: 'Error', class: 'error', message: 'LLM connection failed' };
+        redisStatus.value = data.redis_status ?
+          { text: 'Connected', class: 'connected', message: 'Redis is running' } :
+          { text: 'Error', class: 'error', message: 'Redis connection failed' };
       } catch (error) {
         backendStatus.value = { text: 'Offline', class: 'error', message: 'Cannot reach backend' };
         llmStatus.value = { text: 'Unknown', class: 'warning', message: 'Status unknown' };

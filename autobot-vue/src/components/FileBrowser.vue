@@ -4,7 +4,7 @@
     <div class="file-actions">
       <button @click="refreshFiles" aria-label="Refresh">Refresh</button>
       <button @click="uploadFile" aria-label="Upload file">Upload File</button>
-      
+
       <!-- Alternative: Visible file input for accessibility and testing -->
       <div class="file-upload-section">
         <label for="visible-file-input" class="file-input-label">
@@ -20,7 +20,7 @@
           aria-label="Visible file upload input"
         />
       </div>
-      
+
       <!-- Hidden file input for programmatic access (legacy) -->
       <input
         ref="fileInput"
@@ -114,6 +114,7 @@
 
 <script>
 import { ref } from 'vue';
+import ApiClient from '../utils/ApiClient.js';
 
 export default {
   name: 'FileBrowser',
@@ -126,28 +127,9 @@ export default {
 
     const refreshFiles = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/files/list');
-        if (response.ok) {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const data = await response.json();
-            files.value = data.files || [];
-          } else {
-            console.warn('API endpoint returned non-JSON response, using mock data');
-            // Use mock data when API returns HTML error page
-            files.value = [
-              { name: 'sample.txt', size: 1024, type: 'file', modified: new Date().toISOString() },
-              { name: 'documents', size: 0, type: 'directory', modified: new Date().toISOString() }
-            ];
-          }
-        } else {
-          console.error('Failed to fetch files:', response.status, response.statusText);
-          // Use mock data when API is not available
-          files.value = [
-            { name: 'sample.txt', size: 1024, type: 'file', modified: new Date().toISOString() },
-            { name: 'documents', size: 0, type: 'directory', modified: new Date().toISOString() }
-          ];
-        }
+        const apiClient = new ApiClient();
+        const data = await apiClient.get('/api/files/list');
+        files.value = data.files || [];
       } catch (error) {
         console.error('Error fetching files:', error);
         // Use mock data when there's a network error or JSON parsing fails
@@ -185,19 +167,20 @@ export default {
     const processFileUpload = async (file) => {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       try {
         // Add user role header for permissions (temporary auth mechanism)
         const headers = {
           'X-User-Role': 'admin' // TODO: Replace with proper authentication
         };
-        
-        const response = await fetch('http://localhost:8001/api/files/upload', {
+
+        const apiClient = new ApiClient();
+        const response = await fetch(`${apiClient.baseUrl}/api/files/upload`, {
           method: 'POST',
           headers: headers,
           body: formData
         });
-        
+
         if (response.ok) {
           const result = await response.json();
           alert(`File ${file.name} uploaded successfully.`);
@@ -230,7 +213,8 @@ export default {
         const fileType = determineFileType(extension);
 
         // Build file URL for preview
-        const fileUrl = `http://localhost:8001/api/files/view/${encodeURIComponent(file.path || file.name)}`;
+        const apiClient = new ApiClient();
+        const fileUrl = `${apiClient.baseUrl}/api/files/view/${encodeURIComponent(file.path || file.name)}`;
 
         if (fileType === 'html') {
           // For HTML files, create a blob URL for safe rendering
@@ -345,7 +329,8 @@ export default {
 
     const deleteFile = async (file) => {
       try {
-        const response = await fetch('http://localhost:8001/api/files/delete', {
+        const apiClient = new ApiClient();
+        const response = await fetch(`${apiClient.baseUrl}/api/files/delete`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
