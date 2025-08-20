@@ -603,7 +603,7 @@ class AdvancedWorkflowOrchestrator:
             }
 
             # Generate base steps using existing orchestrator
-            from src.types import TaskComplexity
+            from src.type_definitions import TaskComplexity
 
             complexity = getattr(
                 TaskComplexity,
@@ -1305,6 +1305,6 @@ if __name__ == "__main__":
         print(f"Estimated time: {intelligence.estimated_completion_time:.1f} seconds")
         print(f"Optimizations: {len(intelligence.optimization_suggestions)}")
 
-#     import asyncio
+    #     import asyncio
 
     asyncio.run(demo_intelligent_workflow())

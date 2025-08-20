@@ -3,40 +3,42 @@ Centralized Type Definitions
 Consolidates commonly used typing imports to reduce duplication across the codebase
 """
 
+import datetime
+from dataclasses import dataclass
+from decimal import Decimal
+from enum import Enum, IntEnum
+from pathlib import Path
+
 # Standard typing imports
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
-    Union,
-    Tuple,
-    Callable,
-    TypeVar,
-    Generic,
-    Protocol,
-    Literal,
-    Final,
-    Set,
-    FrozenSet,
-    Sequence,
-    Mapping,
-    MutableMapping,
-    Iterator,
-    Iterable,
-    Generator,
     AsyncGenerator,
     Awaitable,
-    Coroutine,
+    Callable,
     ClassVar,
+    Coroutine,
+    Dict,
+    Final,
+    FrozenSet,
+    Generator,
+    Generic,
+    Iterable,
+    Iterator,
+    List,
+    Literal,
+    Mapping,
+    MutableMapping,
     NamedTuple,
+    Optional,
+    Protocol,
+    Sequence,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
 )
-from typing_extensions import TypedDict, NotRequired
-from dataclasses import dataclass
-from enum import Enum, IntEnum
-from pathlib import Path
-import datetime
-from decimal import Decimal
+
+from typing_extensions import NotRequired, TypedDict
 
 # Common type aliases
 StrDict = Dict[str, Any]
@@ -205,30 +207,42 @@ E = TypeVar("E", bound=Exception)  # Exception type
 class Cacheable(Protocol):
     """Protocol for objects that can be cached"""
 
-    def cache_key(self) -> str: ...
-    def cache_ttl(self) -> int: ...
+    def cache_key(self) -> str:
+        ...
+
+    def cache_ttl(self) -> int:
+        ...
 
 
 class Serializable(Protocol):
     """Protocol for objects that can be serialized"""
 
-    def to_dict(self) -> Dict[str, Any]: ...
+    def to_dict(self) -> Dict[str, Any]:
+        ...
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Serializable": ...
+    def from_dict(cls, data: Dict[str, Any]) -> "Serializable":
+        ...
 
 
 class Configurable(Protocol):
     """Protocol for configurable objects"""
 
-    def configure(self, config: ConfigDict) -> None: ...
-    def get_config(self) -> ConfigDict: ...
+    def configure(self, config: ConfigDict) -> None:
+        ...
+
+    def get_config(self) -> ConfigDict:
+        ...
 
 
 class Monitorable(Protocol):
     """Protocol for objects that can be monitored"""
 
-    def get_status(self) -> Dict[str, Any]: ...
-    def get_metrics(self) -> PerformanceMetrics: ...
+    def get_status(self) -> Dict[str, Any]:
+        ...
+
+    def get_metrics(self) -> PerformanceMetrics:
+        ...
 
 
 # Commonly used literals

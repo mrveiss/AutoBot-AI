@@ -8,8 +8,8 @@ import sys
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.workflow_templates import workflow_template_manager, TemplateCategory
-from src.types import TaskComplexity
+from src.type_definitions import TaskComplexity
+from src.workflow_templates import TemplateCategory, workflow_template_manager
 
 
 async def test_template_management():
