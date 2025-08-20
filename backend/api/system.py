@@ -10,6 +10,7 @@ from backend.services.config_service import ConfigService
 from backend.services.consolidated_health_service import consolidated_health
 from backend.utils.connection_utils import ModelManager
 from src.utils.advanced_cache_manager import smart_cache
+from src.config import PLAYWRIGHT_API_URL, PLAYWRIGHT_VNC_URL
 
 router = APIRouter()
 
@@ -278,7 +279,7 @@ async def check_playwright_health():
 
         # Check if Playwright service is accessible
         try:
-            response = requests.get("http://localhost:3000/health", timeout=5)
+            response = requests.get(f"{PLAYWRIGHT_API_URL}/health", timeout=5)
             if response.status_code == 200:
                 playwright_data = response.json()
                 return {
@@ -288,8 +289,8 @@ async def check_playwright_health():
                         "browser_connected", False
                     ),
                     "timestamp": playwright_data.get("timestamp"),
-                    "vnc_url": "http://localhost:6080/vnc.html",
-                    "api_url": "http://localhost:3000",
+                    "vnc_url": PLAYWRIGHT_VNC_URL,
+                    "api_url": PLAYWRIGHT_API_URL,
                 }
             else:
                 return {

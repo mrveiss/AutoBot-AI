@@ -5,6 +5,10 @@ export const API_CONFIG = {
   // API Base URLs
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001',
   WS_BASE_URL: import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8001/ws',
+  
+  // External Service URLs
+  PLAYWRIGHT_VNC_URL: import.meta.env.VITE_PLAYWRIGHT_VNC_URL || 'http://localhost:6080/vnc.html',
+  PLAYWRIGHT_API_URL: import.meta.env.VITE_PLAYWRIGHT_API_URL || 'http://localhost:3000',
 
   // Timeouts and Limits
   TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
