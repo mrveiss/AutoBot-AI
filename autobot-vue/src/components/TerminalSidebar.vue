@@ -112,6 +112,7 @@
                 @keydown="handleKeydown"
                 @keyup.enter="sendCommand"
                 class="terminal-input"
+                data-testid="terminal-input"
                 :disabled="!canInput"
                 autocomplete="off"
                 spellcheck="false"
