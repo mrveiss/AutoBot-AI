@@ -1,14 +1,16 @@
 // ApiClient.js - Unified API client for all backend operations
 // RumAgent is accessed via window.rum global
 
+import { API_CONFIG, ENDPOINTS, getApiUrl } from '@/config/environment.js';
+
 class ApiClient {
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
-    this.timeout = 30000; // 30 seconds default timeout
+    this.baseUrl = API_CONFIG.BASE_URL;
+    this.timeout = API_CONFIG.TIMEOUT;
     this.settings = this.loadSettings();
 
-    // Update baseUrl from settings if available
-    if (this.settings?.backend?.api_endpoint) {
+    // Update baseUrl from settings if available, but prefer environment config
+    if (this.settings?.backend?.api_endpoint && !API_CONFIG.DEV_MODE) {
       this.baseUrl = this.settings.backend.api_endpoint;
     }
   }
@@ -230,12 +232,12 @@ class ApiClient {
 
   // Knowledge Base API methods
   async searchKnowledge(query, limit = 10) {
-    const response = await this.post('/api/knowledge_base/search', { query, limit });
+    const response = await this.post(ENDPOINTS.KNOWLEDGE_SEARCH, { query, limit });
     return response.json();
   }
 
   async addTextToKnowledge(text, title = '', source = 'Manual Entry') {
-    const response = await this.post('/api/knowledge_base/add_text', { text, title, source });
+    const response = await this.post(ENDPOINTS.KNOWLEDGE_ADD_TEXT, { text, title, source });
     return response.json();
   }
 
@@ -262,7 +264,7 @@ class ApiClient {
   }
 
   async getKnowledgeStats() {
-    const response = await this.get('/api/knowledge_base/stats');
+    const response = await this.get(ENDPOINTS.KNOWLEDGE_STATS);
     return response.json();
   }
 
@@ -289,7 +291,7 @@ class ApiClient {
 
   // Health and status methods
   async checkHealth() {
-    const response = await this.get('/api/system/health');
+    const response = await this.get(ENDPOINTS.HEALTH);
     return response.json();
   }
 
