@@ -119,9 +119,22 @@ class StandardMessage:
         header_data = data['header']
         payload_data = data['payload']
         
-        # Reconstruct enums
-        header_data['message_type'] = MessageType(header_data['message_type'])
-        header_data['priority'] = MessagePriority(header_data['priority'])
+        # Reconstruct enums - handle both enum values and names
+        msg_type = header_data['message_type']
+        if isinstance(msg_type, str) and not msg_type.startswith('MessageType.'):
+            # If it's just the value like 'broadcast', use it directly
+            header_data['message_type'] = MessageType(msg_type)
+        else:
+            # If it's like 'MessageType.BROADCAST', extract the value
+            if isinstance(msg_type, str) and msg_type.startswith('MessageType.'):
+                msg_type = msg_type.split('.')[-1].lower()
+            header_data['message_type'] = MessageType(msg_type)
+        
+        priority = header_data['priority']
+        if isinstance(priority, int):
+            header_data['priority'] = MessagePriority(priority)
+        else:
+            header_data['priority'] = MessagePriority(int(priority))
         
         header = MessageHeader(**header_data)
         payload = MessagePayload(**payload_data)
