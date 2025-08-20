@@ -262,9 +262,23 @@ class WorkflowClassifier:
             # Replace AND/OR with Python operators
             condition = condition.replace(" AND ", " and ").replace(" OR ", " or ")
 
-            # Safely evaluate the condition
-            # In production, use a proper expression parser for security
-            return eval(condition, {"__builtins__": {}}, {})
+            # Safely evaluate the condition using AST parser
+            from src.utils.safe_expression_evaluator import safe_evaluator
+
+            # Create evaluation context with variable values
+            eval_context = {}
+
+            # Extract variables for evaluation
+            for var_name, value in variables.items():
+                # Convert to appropriate type for evaluation
+                if isinstance(value, str) and value.isdigit():
+                    eval_context[var_name] = int(value)
+                elif isinstance(value, str) and value.lower() in ("true", "false"):
+                    eval_context[var_name] = value.lower() == "true"
+                else:
+                    eval_context[var_name] = value
+
+            return safe_evaluator.evaluate(condition, eval_context)
         except Exception as e:
             logger.error(f"Error evaluating condition '{condition}': {e}")
             return False
