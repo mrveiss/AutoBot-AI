@@ -48,6 +48,18 @@ class ClassificationAgent(LocalAgent):
             "request_classification",
             "agent_selection",
         ]
+        
+        # Initialize communication protocol for agent-to-agent messaging
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self.initialize_communication(self.capabilities))
+            else:
+                loop.run_until_complete(self.initialize_communication(self.capabilities))
+        except RuntimeError:
+            # Event loop not available yet, will initialize later
+            pass
 
         # Initialize classification prompt
         self._initialize_classification_prompt()
@@ -446,8 +458,9 @@ if __name__ == "__main__":
 
             while True:
                 try:
-                    message = input("\n> ").strip()
-                    if message:
+                    from src.utils.terminal_input_handler import safe_input
+                    message = safe_input("\n> ", timeout=10.0, default="exit").strip()
+                    if message and message != "exit":
                         result = await agent.classify_request(message)
                         print(f"\nClassification: {result.complexity.value}")
                         print(f"Confidence: {result.confidence:.2f}")
@@ -456,6 +469,9 @@ if __name__ == "__main__":
                         print(f"Estimated steps: {result.estimated_steps}")
                         if result.context_analysis.get("domain"):
                             print(f"Domain: {result.context_analysis['domain']}")
+                    else:
+                        print("Exiting interactive mode...")
+                        break
                 except KeyboardInterrupt:
                     print("\n👋 Goodbye!")
                     break
