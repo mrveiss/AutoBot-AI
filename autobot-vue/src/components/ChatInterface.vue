@@ -826,7 +826,7 @@ export default {
             const formData = new FormData();
             formData.append('file', file);
 
-            const uploadResponse = await fetch('http://localhost:8001/api/files/upload', {
+            const uploadResponse = await fetch(`${apiClient.baseUrl}/api/files/upload`, {
               method: 'POST',
               body: formData
             });
@@ -851,7 +851,7 @@ export default {
         }
 
         // Check if this should use workflow orchestration
-        const workflowResponse = await fetch('http://localhost:8001/api/workflow/execute', {
+        const workflowResponse = await fetch(`${apiClient.baseUrl}/api/workflow/execute`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1342,7 +1342,7 @@ export default {
         return
       }
 
-      const wsUrl = `ws://localhost:8001/ws`;
+      const wsUrl = apiClient.baseUrl.replace('http', 'ws') + '/ws';
 
       // Track WebSocket events with RUM if available
       if (window.rum) {

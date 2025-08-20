@@ -707,7 +707,7 @@ export default {
     // Function to check health status
     const checkHealthStatus = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/system/health');
+        const response = await fetch(`${apiClient.baseUrl}/api/system/health`);
         if (response.ok) {
           const data = await response.json();
           healthStatus.value = {
@@ -774,10 +774,10 @@ export default {
         const response = await apiClient.get('/api/settings/config');
         const configSettings = await response.json();
         settings.value = deepMerge(defaultSettings(), configSettings);
-        
+
         // SYNC WITH AGENT CONFIG: Ensure settings match actual agent status
         await syncSettingsWithAgentConfig();
-        
+
         // Save to local storage as well
         localStorage.setItem('chat_settings', JSON.stringify(settings.value));
       } catch (error) {
@@ -806,25 +806,25 @@ export default {
         // Get comprehensive LLM status to see what's actually configured
         const llmStatusResponse = await apiClient.get('/api/llm/status/comprehensive');
         const llmStatus = await llmStatusResponse.json();
-        
+
         // Get agent configuration to see actual agent models
         const agentConfigResponse = await apiClient.get('/api/agent-config/agents');
         const agentConfig = await agentConfigResponse.json();
-        
+
         console.log('Syncing settings with agent config:', {
           llmStatus,
           agentConfig: agentConfig.agents
         });
-        
+
         // Update settings to match actual LLM status
         if (llmStatus && settings.value.backend && settings.value.backend.llm) {
           // Sync provider type
           settings.value.backend.llm.provider_type = llmStatus.provider_type || 'local';
-          
+
           // Sync active provider info
           if (llmStatus.active_provider) {
             const activeProvider = llmStatus.active_provider;
-            
+
             if (activeProvider.type === 'local') {
               settings.value.backend.llm.local.provider = activeProvider.name || 'ollama';
               if (activeProvider.model && settings.value.backend.llm.local.providers[activeProvider.name]) {
@@ -837,7 +837,7 @@ export default {
               }
             }
           }
-          
+
           // Sync streaming setting
           if (llmStatus.settings) {
             settings.value.backend.streaming = llmStatus.settings.streaming || false;
@@ -845,14 +845,14 @@ export default {
             settings.value.backend.max_retries = llmStatus.settings.max_retries || 3;
           }
         }
-        
+
         // Log the sync result for debugging
         console.log('Settings synced with agent config:', {
           provider_type: settings.value.backend.llm.provider_type,
           local_provider: settings.value.backend.llm.local.provider,
           streaming: settings.value.backend.streaming
         });
-        
+
       } catch (error) {
         console.error('Error syncing settings with agent config:', error);
         // Don't fail the settings load if sync fails
@@ -946,7 +946,7 @@ export default {
     // Function to dynamically load models from the selected provider
     const loadModels = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/llm/models');
+        const response = await fetch(`${apiClient.baseUrl}/api/llm/models`);
         const data = await response.json();
 
         if (settings.value.backend.llm.provider_type === 'local') {
@@ -1216,7 +1216,7 @@ export default {
 
         if (provider === 'ollama') {
           // Load Ollama embedding models
-          const response = await fetch('http://localhost:8001/api/llm/embedding/models');
+          const response = await fetch(`${apiClient.baseUrl}/api/llm/embedding/models`);
           const data = await response.json();
 
           if (data.models && Array.isArray(data.models)) {

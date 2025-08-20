@@ -916,7 +916,7 @@ export default {
     // File integration functions
     const loadAvailableFiles = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/files/list');
+        const response = await fetch(`${apiClient.baseUrl}/api/files/list`);
         if (response.ok) {
           const data = await response.json();
           availableFiles.value = data.files || [];
@@ -936,7 +936,7 @@ export default {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('http://localhost:8001/api/files/upload', {
+        const response = await fetch(`${apiClient.baseUrl}/api/files/upload`, {
           method: 'POST',
           body: formData
         });
@@ -986,7 +986,7 @@ export default {
 
     const extractFileContent = async (filePath) => {
       try {
-        const response = await fetch(`http://localhost:8001/api/files/view/${encodeURIComponent(filePath)}`);
+        const response = await fetch(`${apiClient.baseUrl}/api/files/view/${encodeURIComponent(filePath)}`);
         if (response.ok) {
           const contentType = response.headers.get('content-type');
 
@@ -1006,7 +1006,7 @@ export default {
           } else if (contentType && contentType.includes('pdf')) {
             // For PDF files, try to extract text via backend
             try {
-              const pdfResponse = await fetch(`http://localhost:8001/api/files/extract-text/${encodeURIComponent(filePath)}`);
+              const pdfResponse = await fetch(`${apiClient.baseUrl}/api/files/extract-text/${encodeURIComponent(filePath)}`);
               if (pdfResponse.ok) {
                 const pdfData = await pdfResponse.json();
                 currentEntry.value.content = pdfData.text || '';
@@ -1758,7 +1758,7 @@ export default {
     onMounted(async () => {
       // Load settings first (synchronous)
       loadSettings();
-      
+
       // Only load data for the currently active tab to improve performance
       await loadDataForActiveTab();
     });
