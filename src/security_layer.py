@@ -47,13 +47,15 @@ class SecurityLayer:
         if not self.enable_auth:
             return True  # If authentication is disabled, all actions are allowed
 
-        # GOD MODE: Unrestricted access for god/superuser roles
+        # SECURITY: Removed god mode - all access must go through proper RBAC
+        # Former god/superuser roles now use admin permissions with audit logging
         if user_role.lower() in ["god", "superuser", "root"]:
             print(
-                f"GOD MODE: Unrestricted access granted for role '{user_role}' "
-                f"to perform action '{action_type}' on resource '{resource}'."
+                f"DEPRECATED ROLE: '{user_role}' attempting '{action_type}' on "
+                f"'{resource}'. Using admin permissions instead. "
+                f"Update user role configuration."
             )
-            return True
+            user_role = "admin"  # Downgrade to admin with proper permissions
 
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])
 
@@ -97,10 +99,8 @@ class SecurityLayer:
             List of default permissions for the role
         """
         default_role_permissions = {
-            "god": ["allow_all"],  # GOD MODE: Unrestricted access
-            "superuser": ["allow_all"],  # GOD MODE: Unrestricted access
-            "root": ["allow_all"],  # GOD MODE: Unrestricted access
-            "admin": ["allow_all"],  # Admin has all permissions
+            # SECURITY: Removed god/superuser/root roles - deprecated for security
+            "admin": ["allow_all"],  # Admin has all permissions with audit logging
             "user": [
                 "files.view",
                 "files.download",
