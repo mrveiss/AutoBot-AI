@@ -573,6 +573,9 @@
 
   <!-- RUM Dashboard for Development -->
   <RumDashboard />
+  
+  <!-- Global Error Notifications -->
+  <ErrorNotifications />
 </template>
 
 <script>
@@ -591,6 +594,7 @@ import PhaseProgressionIndicator from './components/PhaseProgressionIndicator.vu
 import ValidationDashboard from './components/ValidationDashboard.vue';
 import ElevationDialog from './components/ElevationDialog.vue';
 import RumDashboard from './components/RumDashboard.vue';
+import ErrorNotifications from './components/ErrorNotifications.vue';
 import elevationService from './services/elevationService';
 
 export default {
@@ -608,7 +612,8 @@ export default {
     PhaseProgressionIndicator,
     ValidationDashboard,
     ElevationDialog,
-    RumDashboard
+    RumDashboard,
+    ErrorNotifications
   },
   setup() {
     const activeTab = ref('dashboard');
