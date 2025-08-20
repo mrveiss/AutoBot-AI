@@ -1,10 +1,10 @@
 import asyncio
 import json
 import logging
-import os
 import re
 
 import requests
+import aiohttp
 from dotenv import load_dotenv
 
 # Conditional torch import for environments without CUDA
@@ -19,19 +19,17 @@ except ImportError:
 
 from src.circuit_breaker import circuit_breaker_async
 
-# Import the centralized ConfigManager
+# Import configuration managers
 from src.config import config as global_config_manager
+from src.utils.config_manager import config_manager
 from src.prompt_manager import prompt_manager
 from src.retry_mechanism import retry_network_operation
 
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("logs/llm_usage.log"), logging.StreamHandler()],
-)
-logger = logging.getLogger("llm")
+from src.utils.logging_manager import get_llm_logger
+
+logger = get_llm_logger("llm")
 
 
 class LocalLLM:
@@ -87,14 +85,12 @@ palm = MockPalm()
 
 class LLMInterface:
     def __init__(self):
-        # Remove config_path and direct config loading
-        self.ollama_host = global_config_manager.get_nested(
-            "llm_config.ollama.host", "http://localhost:11434"
-        )
-        self.openai_api_key = os.getenv(
-            "OPENAI_API_KEY",
-            global_config_manager.get_nested("llm_config.openai.api_key", ""),
-        )
+        # Use centralized configuration with fallback to environment variables
+        self.ollama_host = config_manager.get("llm.ollama.base_url", "http://localhost:11434")
+        
+        # Try config first, then environment variable
+        self.openai_api_key = (config_manager.get("llm.openai.api_key", "") or 
+                              config_manager.get("openai.api_key", ""))
 
         self.ollama_models = global_config_manager.get_nested(
             "llm_config.ollama.models", {}
@@ -224,16 +220,15 @@ class LLMInterface:
         try:
             health_check_url = f"{self.ollama_host}/api/tags"
 
-            # Use retry mechanism for network connection
+            # Use retry mechanism for network connection - PERFORMANCE FIX: Native async HTTP
             async def make_request():
-                return await asyncio.to_thread(
-                    requests.get, health_check_url, timeout=5
-                )
+                timeout = aiohttp.ClientTimeout(total=5)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(health_check_url) as response:
+                        response.raise_for_status()
+                        return await response.json()
 
-            response = await retry_network_operation(make_request)
-            response.raise_for_status()
-
-            models_info = response.json()
+            models_info = await retry_network_operation(make_request)
             available_ollama_models = {
                 model["name"] for model in models_info.get("models", [])
             }
@@ -519,39 +514,39 @@ class LLMInterface:
         logger.debug(f"Ollama Request Data: {json.dumps(data, indent=2)}")
 
         try:
-            # Use retry mechanism for LLM API calls
+            # Use retry mechanism for LLM API calls - PERFORMANCE FIX: Native async HTTP
             async def make_llm_request():
-                return await asyncio.to_thread(
-                    requests.post, url, headers=headers, json=data, timeout=600
-                )
+                timeout = aiohttp.ClientTimeout(total=600)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(url, headers=headers, json=data) as response:
+                        response.raise_for_status()
+                        response_text = await response.text()
+                        response_json = await response.json()
+                        
+                        print(f"Ollama Raw Response Status: {response.status}")
+                        print(f"Ollama Raw Response Headers: {response.headers}")
+                        print(f"Ollama Raw Response Text: {response_text}")
+                        logger.debug(f"Ollama Raw Response Status: {response.status}")
+                        logger.debug(f"Ollama Raw Response Headers: {response.headers}")
+                        logger.debug(f"Ollama Raw Response Text: {response_text}")
+                        
+                        return response_json
 
-            response = await retry_network_operation(make_llm_request)
-
-            print(f"Ollama Raw Response Status: {response.status_code}")
-            print(f"Ollama Raw Response Headers: {response.headers}")
-            print(f"Ollama Raw Response Text: {response.text}")
-            logger.debug(f"Ollama Raw Response Status: {response.status_code}")
-            logger.debug(f"Ollama Raw Response Headers: {response.headers}")
-            logger.debug(f"Ollama Raw Response Text: {response.text}")
-
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.HTTPError as e:
-            error_msg = (
-                f"HTTP Error communicating with Ollama: {e.response.status_code}"
-            )
-            print(f"{error_msg} - {e.response.text}")
-            logger.error(f"{error_msg} - {e.response.text}")
+            return await retry_network_operation(make_llm_request)
+        except aiohttp.ClientResponseError as e:
+            error_msg = f"HTTP Error communicating with Ollama: {e.status}"
+            print(f"{error_msg} - {e.message}")
+            logger.error(f"{error_msg} - {e.message}")
             return None
-        except requests.exceptions.ConnectionError as e:
+        except aiohttp.ClientConnectorError as e:
             print(f"Connection Error communicating with Ollama: {e}")
             logger.error(f"Connection Error communicating with Ollama: {e}")
             return None
-        except requests.exceptions.Timeout as e:
+        except asyncio.TimeoutError as e:
             print(f"Timeout Error communicating with Ollama: {e}")
             logger.error(f"Timeout Error communicating with Ollama: {e}")
             return None
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             print(f"Generic Request Error communicating with Ollama: {e}")
             logger.error(f"Generic Request Error communicating with Ollama: {e}")
             return None
@@ -593,16 +588,16 @@ class LLMInterface:
             **kwargs,
         }
         try:
-            # Use retry mechanism for OpenAI API calls
+            # Use retry mechanism for OpenAI API calls - PERFORMANCE FIX: Native async HTTP
             async def make_openai_request():
-                return await asyncio.to_thread(
-                    requests.post, url, headers=headers, json=data, timeout=600
-                )
+                timeout = aiohttp.ClientTimeout(total=600)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(url, headers=headers, json=data) as response:
+                        response.raise_for_status()
+                        return await response.json()
 
-            response = await retry_network_operation(make_openai_request)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
+            return await retry_network_operation(make_openai_request)
+        except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError, asyncio.TimeoutError) as e:
             print(f"Error communicating with OpenAI: {e}")
             return None
 
