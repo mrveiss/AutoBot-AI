@@ -5,21 +5,21 @@ Provides non-blocking terminal input handling that works in both interactive
 and automated testing environments, preventing test timeouts and CI/CD failures.
 """
 
-import os
-import sys
 import asyncio
-import threading
-import queue
-from typing import Optional, Any, Callable, Dict, List
-from contextlib import contextmanager
-from unittest.mock import patch
 import logging
+import os
+import queue
+import sys
+import threading
+from contextlib import contextmanager
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class InputTimeoutError(Exception):
     """Raised when input operation times out."""
+
     pass
 
 
@@ -28,78 +28,80 @@ class TerminalInputHandler:
     Handles terminal input in a way that's compatible with both interactive
     and automated testing environments.
     """
-    
+
     def __init__(self):
         self.is_testing = self._detect_testing_environment()
         self.default_responses: Dict[str, str] = {}
         self.input_queue = queue.Queue()
         self.mock_responses = []
         self._mock_index = 0
-        
+
     def _detect_testing_environment(self) -> bool:
         """Detect if we're running in a testing environment."""
         # Check various indicators of testing environment
         testing_indicators = [
-            'pytest' in sys.modules,
-            'unittest' in sys.modules,
-            os.getenv('PYTEST_CURRENT_TEST') is not None,
-            os.getenv('CI') is not None,
-            os.getenv('GITHUB_ACTIONS') is not None,
-            os.getenv('JENKINS_URL') is not None,
-            os.getenv('TRAVIS') is not None,
-            '--test' in sys.argv,
-            '--automated' in sys.argv,
+            "pytest" in sys.modules,
+            "unittest" in sys.modules,
+            os.getenv("PYTEST_CURRENT_TEST") is not None,
+            os.getenv("CI") is not None,
+            os.getenv("GITHUB_ACTIONS") is not None,
+            os.getenv("JENKINS_URL") is not None,
+            os.getenv("TRAVIS") is not None,
+            "--test" in sys.argv,
+            "--automated" in sys.argv,
             not sys.stdin.isatty(),  # Not attached to a terminal
         ]
-        
+
         return any(testing_indicators)
-    
+
     def set_default_response(self, prompt_pattern: str, response: str):
         """
         Set a default response for a specific prompt pattern.
-        
+
         Args:
             prompt_pattern: Pattern to match in the prompt
             response: Default response to return
         """
         self.default_responses[prompt_pattern.lower()] = response
-    
+
     def set_mock_responses(self, responses: List[str]):
         """
         Set a sequence of mock responses for testing.
-        
+
         Args:
             responses: List of responses to return in order
         """
         self.mock_responses = responses
         self._mock_index = 0
-    
-    def get_input(self, prompt: str = "", timeout: float = 30.0, default: str = "") -> str:
+
+    def get_input(
+        self, prompt: str = "", timeout: float = 30.0, default: str = ""
+    ) -> str:
         """
         Get input from user with timeout and testing support.
-        
+
         Args:
             prompt: Prompt to display to user
             timeout: Timeout in seconds (ignored in testing)
             default: Default value to return if no input
-            
+
         Returns:
             User input string
-            
+
         Raises:
             InputTimeoutError: If timeout exceeded in interactive mode
         """
         # In testing mode, return mock or default responses
         if self.is_testing:
             return self._get_testing_response(prompt, default)
-        
+
         # Interactive mode - use timeout
         try:
             return self._get_interactive_input(prompt, timeout, default)
         except KeyboardInterrupt:
             print("\nOperation cancelled by user")
             return default
-    
+
     def _get_testing_response(self, prompt: str, default: str) -> str:
         """Get response in testing environment."""
         # Use mock responses if available
@@ -108,46 +110,46 @@ class TerminalInputHandler:
             self._mock_index += 1
             logger.debug(f"Mock response for '{prompt}': {response}")
             return response
-        
+
         # Check for pattern-based default responses
         prompt_lower = prompt.lower()
         for pattern, response in self.default_responses.items():
             if pattern in prompt_lower:
                 logger.debug(f"Default response for '{prompt}': {response}")
                 return response
-        
+
         # Return default or reasonable fallback
         if default:
             logger.debug(f"Using default for '{prompt}': {default}")
             return default
-        
+
         # Intelligent defaults based on prompt content
         return self._generate_intelligent_default(prompt)
-    
+
     def _generate_intelligent_default(self, prompt: str) -> str:
         """Generate intelligent default responses based on prompt content."""
         prompt_lower = prompt.lower()
-        
+
         # Common prompt patterns and their defaults
-        if any(word in prompt_lower for word in ['yes', 'no', 'y/n']):
-            return 'y'
-        elif 'choice' in prompt_lower and any(char.isdigit() for char in prompt):
+        if any(word in prompt_lower for word in ["yes", "no", "y/n"]):
+            return "y"
+        elif "choice" in prompt_lower and any(char.isdigit() for char in prompt):
             # Extract numbers from prompt and return the first one
             numbers = [char for char in prompt if char.isdigit()]
-            return numbers[0] if numbers else '1'
-        elif 'enter' in prompt_lower and 'command' in prompt_lower:
-            return 'help'
-        elif 'file' in prompt_lower or 'path' in prompt_lower:
-            return '/tmp/test_file'
-        elif 'name' in prompt_lower:
-            return 'test_user'
-        elif 'port' in prompt_lower:
-            return '8080'
-        elif 'host' in prompt_lower:
-            return 'localhost'
+            return numbers[0] if numbers else "1"
+        elif "enter" in prompt_lower and "command" in prompt_lower:
+            return "help"
+        elif "file" in prompt_lower or "path" in prompt_lower:
+            return "/tmp/test_file"
+        elif "name" in prompt_lower:
+            return "test_user"
+        elif "port" in prompt_lower:
+            return "8080"
+        elif "host" in prompt_lower:
+            return "localhost"
         else:
-            return ''  # Empty string for unknown prompts
-    
+            return ""  # Empty string for unknown prompts
+
     def _get_interactive_input(self, prompt: str, timeout: float, default: str) -> str:
         """Get input in interactive mode with timeout."""
         if timeout <= 0:
@@ -157,10 +159,10 @@ class TerminalInputHandler:
                 return response if response else default
             except EOFError:
                 return default
-        
+
         # Use threading for timeout support
         input_queue = queue.Queue()
-        
+
         def input_thread():
             try:
                 response = input(prompt).strip()
@@ -169,12 +171,12 @@ class TerminalInputHandler:
                 input_queue.put(default)
             except Exception as e:
                 input_queue.put(f"ERROR: {e}")
-        
+
         # Start input thread
         thread = threading.Thread(target=input_thread)
         thread.daemon = True
         thread.start()
-        
+
         # Wait for input with timeout
         try:
             response = input_queue.get(timeout=timeout)
@@ -184,72 +186,76 @@ class TerminalInputHandler:
             return response
         except queue.Empty:
             raise InputTimeoutError(f"Input timeout after {timeout} seconds")
-    
-    async def get_input_async(self, prompt: str = "", timeout: float = 30.0, default: str = "") -> str:
+
+    async def get_input_async(
+        self, prompt: str = "", timeout: float = 30.0, default: str = ""
+    ) -> str:
         """
         Asynchronous version of get_input.
-        
+
         Args:
             prompt: Prompt to display
             timeout: Timeout in seconds
             default: Default response
-            
+
         Returns:
             User input string
         """
         if self.is_testing:
             return self._get_testing_response(prompt, default)
-        
+
         # Run input in thread pool to avoid blocking event loop
         loop = asyncio.get_event_loop()
         try:
             return await loop.run_in_executor(
-                None, 
-                lambda: self.get_input(prompt, timeout, default)
+                None, lambda: self.get_input(prompt, timeout, default)
             )
         except InputTimeoutError:
             logger.warning(f"Async input timeout for prompt: {prompt}")
             return default
-    
+
     @contextmanager
     def mock_input_context(self, responses: List[str]):
         """
         Context manager for mocking input in tests.
-        
+
         Args:
             responses: List of responses to return
         """
         old_responses = self.mock_responses.copy()
         old_index = self._mock_index
-        
+
         try:
             self.set_mock_responses(responses)
             yield self
         finally:
             self.mock_responses = old_responses
             self._mock_index = old_index
-    
-    def configure_for_testing(self, 
-                            responses: Optional[List[str]] = None,
-                            defaults: Optional[Dict[str, str]] = None):
+
+    def configure_for_testing(
+        self,
+        responses: Optional[List[str]] = None,
+        defaults: Optional[Dict[str, str]] = None,
+    ):
         """
         Configure handler for testing environment.
-        
+
         Args:
             responses: Mock responses to use
             defaults: Default responses for prompt patterns
         """
         self.is_testing = True
-        
+
         if responses:
             self.set_mock_responses(responses)
-        
+
         if defaults:
             self.default_responses.update(defaults)
 
 
 # Global instance
 _terminal_input_handler = None
+
 
 def get_terminal_input_handler() -> TerminalInputHandler:
     """Get or create global terminal input handler."""
@@ -262,15 +268,15 @@ def get_terminal_input_handler() -> TerminalInputHandler:
 def safe_input(prompt: str = "", timeout: float = 30.0, default: str = "") -> str:
     """
     Safe input function that works in both interactive and testing environments.
-    
+
     This function should be used instead of the built-in input() to prevent
     test timeouts and provide consistent behavior across environments.
-    
+
     Args:
         prompt: Prompt to display to user
         timeout: Timeout in seconds (ignored in testing environments)
         default: Default value to return if no input or timeout
-        
+
     Returns:
         User input string or default
     """
@@ -282,15 +288,17 @@ def safe_input(prompt: str = "", timeout: float = 30.0, default: str = "") -> st
         return default
 
 
-async def safe_input_async(prompt: str = "", timeout: float = 30.0, default: str = "") -> str:
+async def safe_input_async(
+    prompt: str = "", timeout: float = 30.0, default: str = ""
+) -> str:
     """
     Asynchronous safe input function.
-    
+
     Args:
         prompt: Prompt to display
         timeout: Timeout in seconds
         default: Default response
-        
+
     Returns:
         User input string or default
     """
@@ -302,12 +310,12 @@ async def safe_input_async(prompt: str = "", timeout: float = 30.0, default: str
 def mock_terminal_input(responses: List[str]):
     """
     Context manager for mocking terminal input in tests.
-    
+
     Usage:
         with mock_terminal_input(['y', '1', 'test_name']):
             # Code that uses safe_input() will get these responses
             pass
-    
+
     Args:
         responses: List of responses to return in order
     """
@@ -319,25 +327,25 @@ def mock_terminal_input(responses: List[str]):
 def configure_testing_defaults():
     """Configure common default responses for testing."""
     handler = get_terminal_input_handler()
-    
+
     # Common testing defaults
     testing_defaults = {
-        'yes/no': 'y',
-        'y/n': 'y',
-        'continue': 'y',
-        'choice': '1',
-        'select': '1',
-        'enter your choice': '1',
-        'command': 'help',
-        'filename': 'test_file.txt',
-        'path': '/tmp/test',
-        'name': 'test_user',
-        'port': '8080',
-        'host': 'localhost',
-        'url': 'http://localhost:8080',
-        'email': 'test@example.com'
+        "yes/no": "y",
+        "y/n": "y",
+        "continue": "y",
+        "choice": "1",
+        "select": "1",
+        "enter your choice": "1",
+        "command": "help",
+        "filename": "test_file.txt",
+        "path": "/tmp/test",
+        "name": "test_user",
+        "port": "8080",
+        "host": "localhost",
+        "url": "http://localhost:8080",
+        "email": "test@example.com",
     }
-    
+
     handler.default_responses.update(testing_defaults)
 
 
@@ -345,16 +353,17 @@ def configure_testing_defaults():
 def patch_builtin_input():
     """
     Monkey patch the built-in input function to use safe_input.
-    
+
     This should be called early in test initialization to ensure
     all input() calls use the safe version.
     """
     import builtins
+
     original_input = builtins.input
-    
+
     def patched_input(prompt=""):
         return safe_input(prompt, timeout=30.0, default="")
-    
+
     builtins.input = patched_input
     return original_input
 
@@ -362,4 +371,5 @@ def patch_builtin_input():
 def restore_builtin_input(original_input):
     """Restore the original input function."""
     import builtins
+
     builtins.input = original_input

@@ -124,14 +124,20 @@ class WorkflowTemplateManager:
                 WorkflowStep(
                     id="kb_search",
                     agent_type="librarian",
-                    action="Search Knowledge Base for network scanning tools and techniques",
+                    action=(
+                        "Search Knowledge Base for network scanning tools and "
+                        "techniques"
+                    ),
                     description="Librarian: Search Knowledge Base",
                     expected_duration_ms=3000,
                 ),
                 WorkflowStep(
                     id="research_tools",
                     agent_type="research",
-                    action="Research latest network security scanning tools and methodologies",
+                    action=(
+                        "Research latest network security scanning tools and "
+                        "methodologies"
+                    ),
                     description="Research: Research Tools",
                     dependencies=["kb_search"],
                     expected_duration_ms=30000,
@@ -140,7 +146,9 @@ class WorkflowTemplateManager:
                     id="present_options",
                     agent_type="orchestrator",
                     action="Present scanning tool options and scan types",
-                    description="Orchestrator: Present Tool Options (requires your approval)",
+                    description=(
+                        "Orchestrator: Present Tool Options (requires your " "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["research_tools"],
                     expected_duration_ms=2000,
@@ -176,7 +184,10 @@ class WorkflowTemplateManager:
                     id="generate_report",
                     agent_type="orchestrator",
                     action="Generate comprehensive security assessment report",
-                    description="Orchestrator: Generate Security Report (requires your approval)",
+                    description=(
+                        "Orchestrator: Generate Security Report (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["vulnerability_check"],
                     expected_duration_ms=10000,
@@ -184,7 +195,10 @@ class WorkflowTemplateManager:
                 WorkflowStep(
                     id="store_results",
                     agent_type="knowledge_manager",
-                    action="Store security scan results and recommendations in knowledge base",
+                    action=(
+                        "Store security scan results and recommendations in "
+                        "knowledge base"
+                    ),
                     description="Knowledge_Manager: Store Results",
                     dependencies=["generate_report"],
                     expected_duration_ms=5000,
@@ -198,7 +212,9 @@ class WorkflowTemplateManager:
         template = WorkflowTemplate(
             id="vulnerability_assessment",
             name="Vulnerability Assessment",
-            description="Targeted vulnerability assessment with remediation recommendations",
+            description=(
+                "Targeted vulnerability assessment with remediation " "recommendations"
+            ),
             category=TemplateCategory.SECURITY,
             complexity=TaskComplexity.SECURITY_SCAN,
             estimated_duration_minutes=20,
@@ -212,7 +228,10 @@ class WorkflowTemplateManager:
                 WorkflowStep(
                     id="research_vulnerabilities",
                     agent_type="research",
-                    action="Research current vulnerability databases and threat intelligence",
+                    action=(
+                        "Research current vulnerability databases and threat "
+                        "intelligence"
+                    ),
                     description="Research: CVE and Threat Research",
                     expected_duration_ms=25000,
                 ),
@@ -237,7 +256,10 @@ class WorkflowTemplateManager:
                     id="remediation_plan",
                     agent_type="orchestrator",
                     action="Create remediation plan with prioritized recommendations",
-                    description="Orchestrator: Create Remediation Plan (requires your approval)",
+                    description=(
+                        "Orchestrator: Create Remediation Plan (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["analyze_results"],
                     expected_duration_ms=10000,
@@ -274,14 +296,18 @@ class WorkflowTemplateManager:
             tags=["security", "audit", "compliance", "assessment"],
             variables={
                 "audit_scope": "Scope of security audit",
-                "compliance_framework": "Compliance framework (SOC2, ISO27001, PCI-DSS)",
+                "compliance_framework": (
+                    "Compliance framework (SOC2, ISO27001, PCI-DSS)"
+                ),
             },
             steps=[
                 WorkflowStep(
                     id="audit_planning",
                     agent_type="orchestrator",
                     action="Plan security audit scope and methodology",
-                    description="Orchestrator: Audit Planning (requires your approval)",
+                    description=(
+                        "Orchestrator: Audit Planning (requires your " "approval)"
+                    ),
                     requires_approval=True,
                     expected_duration_ms=10000,
                 ),
@@ -323,7 +349,10 @@ class WorkflowTemplateManager:
                     id="audit_report",
                     agent_type="orchestrator",
                     action="Generate comprehensive security audit report",
-                    description="Orchestrator: Generate Audit Report (requires your approval)",
+                    description=(
+                        "Orchestrator: Generate Audit Report (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["compliance_check"],
                     expected_duration_ms=15000,
@@ -353,7 +382,9 @@ class WorkflowTemplateManager:
             tags=["research", "analysis", "knowledge", "investigation"],
             variables={
                 "research_topic": "Main research topic or question",
-                "research_depth": "Depth of research (surface, detailed, comprehensive)",
+                "research_depth": (
+                    "Depth of research (surface, detailed, comprehensive)"
+                ),
             },
             steps=[
                 WorkflowStep(
@@ -450,7 +481,10 @@ class WorkflowTemplateManager:
                     id="strategic_recommendations",
                     agent_type="orchestrator",
                     action="Generate strategic recommendations based on analysis",
-                    description="Orchestrator: Strategic Recommendations (requires your approval)",
+                    description=(
+                        "Orchestrator: Strategic Recommendations (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["swot_analysis"],
                     expected_duration_ms=15000,
@@ -523,7 +557,10 @@ class WorkflowTemplateManager:
                     id="recommendation",
                     agent_type="orchestrator",
                     action="Provide technology recommendation with rationale",
-                    description="Orchestrator: Technology Recommendation (requires your approval)",
+                    description=(
+                        "Orchestrator: Technology Recommendation (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["pros_cons_analysis"],
                     expected_duration_ms=10000,
@@ -599,7 +636,10 @@ class WorkflowTemplateManager:
                     id="recommendations",
                     agent_type="orchestrator",
                     action="Provide system optimization recommendations",
-                    description="Orchestrator: Optimization Recommendations (requires your approval)",
+                    description=(
+                        "Orchestrator: Optimization Recommendations (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["health_report"],
                     expected_duration_ms=8000,
@@ -664,7 +704,9 @@ class WorkflowTemplateManager:
                     id="optimization_plan",
                     agent_type="orchestrator",
                     action="Create detailed optimization implementation plan",
-                    description="Orchestrator: Optimization Plan (requires your approval)",
+                    description=(
+                        "Orchestrator: Optimization Plan (requires your " "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["optimization_research"],
                     expected_duration_ms=15000,
@@ -673,7 +715,10 @@ class WorkflowTemplateManager:
                     id="implement_optimizations",
                     agent_type="system_commands",
                     action="Implement approved performance optimizations",
-                    description="System_Commands: Apply Optimizations (requires your approval)",
+                    description=(
+                        "System_Commands: Apply Optimizations (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["optimization_plan"],
                     expected_duration_ms=45000,
@@ -738,7 +783,9 @@ class WorkflowTemplateManager:
                     id="backup_strategy",
                     agent_type="orchestrator",
                     action="Design comprehensive backup strategy",
-                    description="Orchestrator: Backup Strategy (requires your approval)",
+                    description=(
+                        "Orchestrator: Backup Strategy (requires your " "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["backup_research"],
                     expected_duration_ms=15000,
@@ -747,7 +794,10 @@ class WorkflowTemplateManager:
                     id="implement_backup",
                     agent_type="system_commands",
                     action="Implement backup solution and schedule",
-                    description="System_Commands: Backup Implementation (requires your approval)",
+                    description=(
+                        "System_Commands: Backup Implementation (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["backup_strategy"],
                     expected_duration_ms=40000,
@@ -865,7 +915,9 @@ class WorkflowTemplateManager:
             variables={
                 "application": "Application or service to deploy",
                 "environment": "Target deployment environment",
-                "deployment_strategy": "Deployment strategy (blue-green, rolling, canary)",
+                "deployment_strategy": (
+                    "Deployment strategy (blue-green, rolling, canary)"
+                ),
             },
             steps=[
                 WorkflowStep(
@@ -879,7 +931,9 @@ class WorkflowTemplateManager:
                     id="environment_setup",
                     agent_type="system_commands",
                     action="Setup and configure deployment environment",
-                    description="System_Commands: Environment Setup (requires your approval)",
+                    description=(
+                        "System_Commands: Environment Setup (requires your " "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["pipeline_research"],
                     expected_duration_ms=40000,
@@ -896,7 +950,10 @@ class WorkflowTemplateManager:
                     id="deploy_application",
                     agent_type="system_commands",
                     action="Execute deployment pipeline",
-                    description="System_Commands: Application Deployment (requires your approval)",
+                    description=(
+                        "System_Commands: Application Deployment (requires your "
+                        "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["pipeline_config"],
                     expected_duration_ms=35000,
@@ -939,7 +996,9 @@ class WorkflowTemplateManager:
             tags=["testing", "quality", "automation", "development"],
             variables={
                 "application_type": "Type of application or system to test",
-                "testing_scope": "Scope of testing (unit, integration, e2e, performance)",
+                "testing_scope": (
+                    "Scope of testing (unit, integration, e2e, performance)"
+                ),
             },
             steps=[
                 WorkflowStep(
@@ -961,7 +1020,9 @@ class WorkflowTemplateManager:
                     id="setup_frameworks",
                     agent_type="system_commands",
                     action="Setup testing frameworks and tools",
-                    description="System_Commands: Framework Setup (requires your approval)",
+                    description=(
+                        "System_Commands: Framework Setup (requires your " "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["test_strategy"],
                     expected_duration_ms=30000,
@@ -1012,7 +1073,9 @@ class WorkflowTemplateManager:
             tags=["data", "analysis", "insights", "visualization"],
             variables={
                 "data_source": "Source of data to analyze",
-                "analysis_type": "Type of analysis (descriptive, predictive, prescriptive)",
+                "analysis_type": (
+                    "Type of analysis (descriptive, predictive, prescriptive)"
+                ),
                 "output_format": "Desired output format for results",
             },
             steps=[
@@ -1141,7 +1204,9 @@ class WorkflowTemplateManager:
                     id="create_alerts",
                     agent_type="orchestrator",
                     action="Create alerts and monitoring rules based on findings",
-                    description="Orchestrator: Create Alert Rules (requires your approval)",
+                    description=(
+                        "Orchestrator: Create Alert Rules (requires your " "approval)"
+                    ),
                     requires_approval=True,
                     dependencies=["generate_report"],
                     expected_duration_ms=10000,

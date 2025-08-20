@@ -9,8 +9,8 @@ from fastapi.responses import JSONResponse
 from backend.services.config_service import ConfigService
 from backend.services.consolidated_health_service import consolidated_health
 from backend.utils.connection_utils import ModelManager
-from src.utils.advanced_cache_manager import smart_cache
 from src.config import PLAYWRIGHT_API_URL, PLAYWRIGHT_VNC_URL
+from src.utils.advanced_cache_manager import smart_cache
 
 router = APIRouter()
 

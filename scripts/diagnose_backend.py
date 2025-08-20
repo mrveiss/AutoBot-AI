@@ -3,8 +3,9 @@
 
 import os
 import sys
-import requests
 import time
+
+import requests
 
 # Import configuration from centralized source
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -50,6 +51,8 @@ except Exception as e:
     print(f"   ❌ Cannot connect to Ollama: {e}")
 
 print("\n💡 Diagnosis Summary:")
-print("   - If all endpoints timeout, the backend is likely stuck during initialization")
+print(
+    "   - If all endpoints timeout, the backend is likely stuck during initialization"
+)
 print("   - Check the backend logs for LLM initialization errors")
 print("   - Try restarting the backend with: pkill -f uvicorn && ./run_agent.sh")

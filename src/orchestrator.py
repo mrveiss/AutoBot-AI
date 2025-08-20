@@ -70,7 +70,7 @@ try:
 except ImportError:
     LangChainAgentOrchestrator = None
     LANGCHAIN_AVAILABLE = False
-    msg = "WARNING: LangChain Agent not available. Using standard orchestrator only."
+    msg = "WARNING: LangChain Agent not available. " "Using standard orchestrator only."
     print(msg)
 
 
@@ -86,12 +86,17 @@ class Orchestrator:
         Initialize Orchestrator with dependency injection support.
 
         Args:
-            config_manager: Configuration manager instance (optional, uses global if None)
-            llm_interface: LLM interface instance (optional, creates new if None)
-            knowledge_base: Knowledge base instance (optional, creates new if None)
-            diagnostics: Diagnostics instance (optional, creates new if None)
+            config_manager: Configuration manager instance
+                (optional, uses global if None)
+            llm_interface: LLM interface instance
+                (optional, creates new if None)
+            knowledge_base: Knowledge base instance
+                (optional, creates new if None)
+            diagnostics: Diagnostics instance
+                (optional, creates new if None)
         """
-        # Use provided dependencies or fall back to defaults for backward compatibility
+        # Use provided dependencies or fall back to defaults
+        # for backward compatibility
         self.config_manager = config_manager or global_config_manager
         self.llm_interface = llm_interface or LLMInterface()
         self.knowledge_base = knowledge_base or KnowledgeBase()
@@ -105,9 +110,12 @@ class Orchestrator:
             "orchestrator_llm",
             llm_config.get("ollama", {}).get("model", "tinyllama:latest"),
         )
+        default_model = llm_config.get("ollama", {}).get(
+            "model", "llama3.2:1b-instruct-q4_K_M"
+        )
         self.task_llm_model = llm_config.get(
             "task_llm",
-            f"ollama_{llm_config.get('ollama', {}).get('model', 'llama3.2:1b-instruct-q4_K_M')}",
+            f"ollama_{default_model}",
         )
         self.ollama_models = llm_config.get("ollama", {}).get("models", {})
         self.phi2_enabled = False  # This will be driven by config if needed
@@ -126,7 +134,8 @@ class Orchestrator:
 
         # Workflow orchestration enhancements
         self.active_workflows: Dict[str, List[WorkflowStep]] = {}
-        # Cache classification results to avoid inconsistent LLM responses
+        # Cache classification results to avoid inconsistent
+        # LLM responses
         self._classification_cache: Dict[str, TaskComplexity] = {}
         self.agent_registry = {
             "research": "Web research with Playwright",
@@ -164,7 +173,8 @@ class Orchestrator:
             print("Orchestrator configured for local task transport.")
             self.local_worker = WorkerNode()
 
-        # Initialize unified tool registry to eliminate code duplication
+        # Initialize unified tool registry to eliminate
+        # code duplication
         worker_node = self.local_worker if hasattr(self, "local_worker") else None
         self.tool_registry = ToolRegistry(
             worker_node=worker_node, knowledge_base=self.knowledge_base
@@ -179,7 +189,8 @@ class Orchestrator:
     async def _listen_for_worker_capabilities(self):
         """
         Listen for worker capability reports via Redis pub/sub.
-        Workers publish their capabilities on startup and capability changes.
+        Workers publish their capabilities on startup and
+        capability changes.
         """
         if not self.redis_client:
             print("Redis client not available for worker capabilities listening")
@@ -198,7 +209,8 @@ class Orchestrator:
                 # for async compatibility
                 message = pubsub.get_message(timeout=1.0)
                 if message is None:
-                    await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
+                    # Small delay to prevent busy waiting
+                    await asyncio.sleep(0.1)
                     continue
 
                 if message["type"] == "message":
@@ -224,39 +236,41 @@ class Orchestrator:
                                 {
                                     "level": "INFO",
                                     "message": (
-                                        f"Worker {worker_id} capabilities updated: "
+                                        f"Worker {worker_id} capabilities "
+                                        "updated: "
                                         f"{list(capabilities.keys())}"
                                     ),
                                 },
                             )
                         else:
                             msg = (
-                                "Invalid worker capabilities message: missing "
-                                f"worker_id or capabilities - {data}"
+                                "Invalid worker capabilities message: "
+                                "missing worker_id or capabilities - "
+                                f"{data}"
                             )
                             print(msg)
 
                     except json.JSONDecodeError as e:
-                        print(f"Failed to parse worker capabilities message: {e}")
+                        print(f"Failed to parse worker capabilities " f"message: {e}")
                         await event_manager.publish(
                             "log_message",
                             {
                                 "level": "ERROR",
                                 "message": (
-                                    "Failed to parse worker capabilities "
-                                    f"message: {e}"
+                                    "Failed to parse worker "
+                                    f"capabilities message: {e}"
                                 ),
                             },
                         )
                     except Exception as e:
-                        print(f"Error processing worker capabilities message: {e}")
+                        print(f"Error processing worker capabilities " f"message: {e}")
                         await event_manager.publish(
                             "log_message",
                             {
                                 "level": "ERROR",
                                 "message": (
-                                    "Error processing worker capabilities "
-                                    f"message: {e}"
+                                    "Error processing worker "
+                                    f"capabilities message: {e}"
                                 ),
                             },
                         )
@@ -297,7 +311,8 @@ class Orchestrator:
                 # for async compatibility
                 message = pubsub.get_message(timeout=1.0)
                 if message is None:
-                    await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
+                    # Small delay to prevent busy waiting
+                    await asyncio.sleep(0.1)
                     continue
 
                 if message["type"] == "pmessage":
@@ -321,7 +336,7 @@ class Orchestrator:
                                 f"{task_id}: {data}"
                             )
                     except Exception as e:
-                        print(f"Error processing command approval message: {e}")
+                        print(f"Error processing command approval " f"message: {e}")
 
         except Exception as e:
             print(f"Error in command approval listener: {e}")
@@ -492,7 +507,7 @@ class Orchestrator:
             {
                 "level": "INFO",
                 "message": (
-                    f"Generating plan using Orchestrator LLM: {target_llm_model}"
+                    "Generating plan using Orchestrator LLM: " f"{target_llm_model}"
                 ),
             },
         )
@@ -531,7 +546,8 @@ class Orchestrator:
                 },
             )
 
-        # Use the centralized prompt manager to get the orchestrator system prompt
+        # Use the centralized prompt manager to get the
+        # orchestrator system prompt
         gui_automation_supported = (
             self.task_transport_type == "local" and GUI_AUTOMATION_SUPPORTED
         )
@@ -576,8 +592,8 @@ class Orchestrator:
                 )
                 system_prompt_parts = [
                     self.llm_interface.orchestrator_system_prompt,
-                    "You have access to the following tools. You MUST use these "
-                    "tools to achieve the user's goal.",
+                    "You have access to the following tools. You MUST "
+                    "use these tools to achieve the user's goal.",
                 ]
                 system_prompt = "\n".join(system_prompt_parts)
                 if context_str:
@@ -649,7 +665,8 @@ class Orchestrator:
                 else:
                     print(
                         "LLM returned unexpected JSON (not a tool call). "
-                        f"Treating as conversational: {llm_raw_content}"
+                        "Treating as conversational: "
+                        f"{llm_raw_content}"
                     )
 
                     # Check if the JSON is empty or malformed
@@ -666,9 +683,9 @@ class Orchestrator:
                             response_text = "Hello! How can I assist you today?"
                         else:
                             response_text = (
-                                "I received your message but couldn't generate "
-                                "a proper response. Could you please try rephrasing "
-                                "your question?"
+                                "I received your message but couldn't "
+                                "generate a proper response. Could you "
+                                "please try rephrasing your question?"
                             )
                     else:
                         response_text = llm_raw_content
@@ -676,7 +693,8 @@ class Orchestrator:
                     return {
                         "thoughts": [
                             "The LLM returned unexpected JSON. "
-                            "Providing a helpful conversational response."
+                            "Providing a helpful conversational "
+                            "response."
                         ],
                         "tool_name": "respond_conversationally",
                         "tool_args": {"response_text": response_text},
@@ -688,15 +706,16 @@ class Orchestrator:
                 )
                 return {
                     "thoughts": [
-                        "The user's request does not require a tool. "
-                        "Responding conversationally."
+                        "The user's request does not require a "
+                        "tool. Responding conversationally."
                     ],
                     "tool_name": "respond_conversationally",
                     "tool_args": {"response_text": llm_raw_content},
                 }
 
         error_message = (
-            "Failed to generate an action from Orchestrator LLM. No content received."
+            "Failed to generate an action from Orchestrator LLM. "
+            "No content received."
         )
         await event_manager.publish("error", {"message": error_message})
         print(error_message)
@@ -1214,10 +1233,15 @@ class Orchestrator:
 
         goal_clean = goal.strip().lower()
         is_command = any(re.search(pattern, goal_clean) for pattern in command_patterns)
-        is_conversational = any(re.search(pattern, goal_clean) for pattern in conversational_patterns)
+        is_conversational = any(
+            re.search(pattern, goal_clean) for pattern in conversational_patterns
+        )
         is_simple = is_command or is_conversational
 
-        print(f"DEBUG: _is_simple_command('{goal}') -> {is_simple} (command: {is_command}, conversational: {is_conversational})")
+        print(
+            f"DEBUG: _is_simple_command('{goal}') -> "
+            f"{is_simple} (command: {is_command}, conversational: {is_conversational})"
+        )
         return is_simple
 
     async def _execute_simple_command(self, goal: str) -> Dict[str, Any]:
@@ -1299,17 +1323,25 @@ class Orchestrator:
             ]
 
             goal_clean = goal.strip().lower()
-            is_conversational = any(re.search(pattern, goal_clean) for pattern in conversational_patterns)
+            is_conversational = any(
+                re.search(pattern, goal_clean) for pattern in conversational_patterns
+            )
 
             if is_conversational:
-                print(f"DEBUG: Detected conversational input: '{goal}', providing direct response")
+                print(
+                    f"DEBUG: Detected conversational input: '{goal}', providing direct response"
+                )
 
                 # Provide appropriate conversational responses
                 if re.search(r"^(hello|hi|hey|greetings?)!?$", goal_clean):
                     response_text = "Hello! I'm AutoBot, your AI assistant. I'm here to help you with various tasks including system commands, research, security analysis, and more. What can I help you with today?"
-                elif re.search(r"^(good\s+(morning|afternoon|evening|day))!?$", goal_clean):
+                elif re.search(
+                    r"^(good\s+(morning|afternoon|evening|day))!?$", goal_clean
+                ):
                     response_text = "Good day! I'm AutoBot, ready to assist you with your tasks. How can I help you today?"
-                elif re.search(r"^(how\s+are\s+you|how\s+are\s+things)[\?!]?$", goal_clean):
+                elif re.search(
+                    r"^(how\s+are\s+you|how\s+are\s+things)[\?!]?$", goal_clean
+                ):
                     response_text = "I'm doing well and ready to help! My systems are operational and I'm equipped with various capabilities including system commands, research tools, security scanning, and more. What would you like to work on?"
                 elif re.search(r"^(thanks?|thank\s+you)!?$", goal_clean):
                     response_text = "You're welcome! I'm always happy to help. Let me know if you need anything else."
@@ -1324,14 +1356,16 @@ class Orchestrator:
                     "status": "success",
                     "tool_name": "conversational_response",
                     "tool_args": {"response_text": response_text},
-                    "response_text": response_text
+                    "response_text": response_text,
                 }
 
             print(
                 "DEBUG: _execute_simple_command could not determine a direct "
                 f"command for '{goal}'. Falling back to generate_task_plan."
             )
-            return await self.generate_task_plan(goal, [{"role": "user", "content": goal}])
+            return await self.generate_task_plan(
+                goal, [{"role": "user", "content": goal}]
+            )
 
     async def _handle_command_approval(self, result):
         command = result.get("command")
@@ -2034,7 +2068,8 @@ class Orchestrator:
 
             elif agent_type == "knowledge_manager":
                 # Store information in knowledge base
-                context_info = f"Workflow execution for: {original_goal}"
+                # Context info for workflow execution
+                pass  # Workflow findings stored automatically
                 if previous_results:
                     # Summarize what we learned to store
                     return "Stored workflow findings and tool information for future reference"

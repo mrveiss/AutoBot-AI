@@ -40,8 +40,14 @@ def test_config_values():
 
     try:
         from src.config import (
-            API_BASE_URL, API_TIMEOUT, OLLAMA_URL, REDIS_URL,
-            get_vnc_display_port, get_vnc_direct_url, VNC_DISPLAY_PORT, VNC_CONTAINER_PORT
+            API_BASE_URL,
+            API_TIMEOUT,
+            OLLAMA_URL,
+            REDIS_URL,
+            VNC_CONTAINER_PORT,
+            VNC_DISPLAY_PORT,
+            get_vnc_direct_url,
+            get_vnc_display_port,
         )
 
         # Test basic values
@@ -55,7 +61,10 @@ def test_config_values():
         vnc_url = get_vnc_direct_url()
         assert isinstance(vnc_port, int), "VNC port should be integer"
         assert vnc_url.startswith("vnc://"), "VNC URL should start with vnc://"
-        assert vnc_port in [VNC_DISPLAY_PORT, VNC_CONTAINER_PORT], "VNC port should be valid option"
+        assert vnc_port in [
+            VNC_DISPLAY_PORT,
+            VNC_CONTAINER_PORT,
+        ], "VNC port should be valid option"
 
         print(f"   ✅ API_BASE_URL: {API_BASE_URL}")
         print(f"   ✅ REDIS_URL: {REDIS_URL}")

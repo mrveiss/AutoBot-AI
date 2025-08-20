@@ -7,8 +7,8 @@ Each agent can have its own LLM model configuration and status monitoring.
 """
 
 import logging
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -21,6 +21,7 @@ router = APIRouter()
 
 class AgentConfig(BaseModel):
     """Agent configuration model"""
+
     agent_id: str
     name: str
     model: str
@@ -31,6 +32,7 @@ class AgentConfig(BaseModel):
 
 class AgentModelUpdate(BaseModel):
     """Agent model update request"""
+
     agent_id: str
     model: str
     provider: Optional[str] = "ollama"
@@ -45,7 +47,7 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 1,
-        "tasks": ["workflow_planning", "task_classification", "agent_coordination"]
+        "tasks": ["workflow_planning", "task_classification", "agent_coordination"],
     },
     "chat": {
         "name": "Chat Agent",
@@ -54,7 +56,7 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 1,
-        "tasks": ["conversation", "user_assistance", "general_queries"]
+        "tasks": ["conversation", "user_assistance", "general_queries"],
     },
     "kb_librarian": {
         "name": "Knowledge Base Librarian",
@@ -63,7 +65,7 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
-        "tasks": ["knowledge_search", "document_analysis", "information_retrieval"]
+        "tasks": ["knowledge_search", "document_analysis", "information_retrieval"],
     },
     "research": {
         "name": "Research Agent",
@@ -72,7 +74,7 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
-        "tasks": ["web_research", "fact_checking", "data_gathering"]
+        "tasks": ["web_research", "fact_checking", "data_gathering"],
     },
     "system_commands": {
         "name": "System Commands Agent",
@@ -81,7 +83,7 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
-        "tasks": ["command_execution", "system_operations", "tool_usage"]
+        "tasks": ["command_execution", "system_operations", "tool_usage"],
     },
     "security_scanner": {
         "name": "Security Scanner Agent",
@@ -90,7 +92,7 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
-        "tasks": ["security_analysis", "vulnerability_scanning", "threat_assessment"]
+        "tasks": ["security_analysis", "vulnerability_scanning", "threat_assessment"],
     },
     "code_analysis": {
         "name": "Code Analysis Agent",
@@ -99,8 +101,8 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
-        "tasks": ["code_review", "static_analysis", "bug_detection"]
-    }
+        "tasks": ["code_review", "static_analysis", "bug_detection"],
+    },
 }
 
 
@@ -117,16 +119,13 @@ async def list_agents():
         for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
             # Get current model from config or use default
             current_model = global_config_manager.get_nested(
-                f"agents.{agent_id}.model",
-                config["default_model"]
+                f"agents.{agent_id}.model", config["default_model"]
             )
             current_provider = global_config_manager.get_nested(
-                f"agents.{agent_id}.provider",
-                config["provider"]
+                f"agents.{agent_id}.provider", config["provider"]
             )
             enabled = global_config_manager.get_nested(
-                f"agents.{agent_id}.enabled",
-                config["enabled"]
+                f"agents.{agent_id}.enabled", config["enabled"]
             )
 
             # Determine status based on configuration
@@ -146,17 +145,20 @@ async def list_agents():
                 "performance": {
                     "avg_response_time": 0.0,
                     "success_rate": 1.0,
-                    "total_requests": 0
-                }
+                    "total_requests": 0,
+                },
             }
             agents.append(agent_info)
 
-        return JSONResponse(status_code=200, content={
-            "agents": agents,
-            "total_count": len(agents),
-            "global_provider_type": provider_type,
-            "timestamp": datetime.now().isoformat()
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "agents": agents,
+                "total_count": len(agents),
+                "global_provider_type": provider_type,
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
 
     except Exception as e:
         logger.error(f"Failed to list agents: {e}")
@@ -176,16 +178,13 @@ async def get_agent_config(agent_id: str):
 
         # Get current configuration
         current_model = global_config_manager.get_nested(
-            f"agents.{agent_id}.model",
-            base_config["default_model"]
+            f"agents.{agent_id}.model", base_config["default_model"]
         )
         current_provider = global_config_manager.get_nested(
-            f"agents.{agent_id}.provider",
-            base_config["provider"]
+            f"agents.{agent_id}.provider", base_config["provider"]
         )
         enabled = global_config_manager.get_nested(
-            f"agents.{agent_id}.enabled",
-            base_config["enabled"]
+            f"agents.{agent_id}.enabled", base_config["enabled"]
         )
 
         # Build detailed response
@@ -203,13 +202,13 @@ async def get_agent_config(agent_id: str):
             "configuration_options": {
                 "available_models": [],  # TODO: Get from model manager
                 "available_providers": ["ollama", "openai", "anthropic"],
-                "configurable_settings": ["model", "provider", "enabled", "priority"]
+                "configurable_settings": ["model", "provider", "enabled", "priority"],
             },
             "health_check": {
                 "last_check": datetime.now().isoformat(),
                 "response_time": 0.0,
-                "status": "healthy" if enabled else "disabled"
-            }
+                "status": "healthy" if enabled else "disabled",
+            },
         }
 
         return JSONResponse(status_code=200, content=agent_config)
@@ -219,8 +218,7 @@ async def get_agent_config(agent_id: str):
     except Exception as e:
         logger.error(f"Failed to get agent config for {agent_id}: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get agent config: {str(e)}"
+            status_code=500, detail=f"Failed to get agent config: {str(e)}"
         )
 
 
@@ -237,15 +235,14 @@ async def update_agent_model(agent_id: str, update: AgentModelUpdate):
         if update.agent_id != agent_id:
             raise HTTPException(
                 status_code=400,
-                detail="Agent ID in URL must match agent ID in request body"
+                detail="Agent ID in URL must match agent ID in request body",
             )
 
         # Update the configuration
         global_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
         if update.provider:
             global_config_manager.set_nested(
-                f"agents.{agent_id}.provider",
-                update.provider
+                f"agents.{agent_id}.provider", update.provider
             )
 
         # Save the configuration
@@ -263,22 +260,24 @@ async def update_agent_model(agent_id: str, update: AgentModelUpdate):
             "model": update.model,
             "provider": update.provider,
             "status": "updated",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
-        return JSONResponse(status_code=200, content={
-            "status": "success",
-            "message": f"Agent {agent_id} model updated successfully",
-            "updated_config": updated_config
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": f"Agent {agent_id} model updated successfully",
+                "updated_config": updated_config,
+            },
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to update agent {agent_id} model: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to update agent model: {str(e)}"
+            status_code=500, detail=f"Failed to update agent model: {str(e)}"
         )
 
 
@@ -296,11 +295,14 @@ async def enable_agent(agent_id: str):
 
         logger.info(f"Enabled agent {agent_id}")
 
-        return JSONResponse(status_code=200, content={
-            "status": "success",
-            "message": f"Agent {agent_id} enabled successfully",
-            "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"]
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": f"Agent {agent_id} enabled successfully",
+                "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
+            },
+        )
 
     except HTTPException:
         raise
@@ -323,19 +325,21 @@ async def disable_agent(agent_id: str):
 
         logger.info(f"Disabled agent {agent_id}")
 
-        return JSONResponse(status_code=200, content={
-            "status": "success",
-            "message": f"Agent {agent_id} disabled successfully",
-            "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"]
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": f"Agent {agent_id} disabled successfully",
+                "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
+            },
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to disable agent {agent_id}: {e}")
         raise HTTPException(
-            status_code=500, 
-            detail=f"Failed to disable agent: {str(e)}"
+            status_code=500, detail=f"Failed to disable agent: {str(e)}"
         )
 
 
@@ -350,8 +354,7 @@ async def check_agent_health(agent_id: str):
 
         enabled = global_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
         model = global_config_manager.get_nested(
-            f"agents.{agent_id}.model",
-            DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
+            f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
         )
 
         # Simple health check - for now just check if enabled and has model
@@ -366,10 +369,10 @@ async def check_agent_health(agent_id: str):
             "checks": {
                 "enabled": enabled,
                 "model_configured": bool(model),
-                "provider_available": True  # TODO: Actually check provider availability
+                "provider_available": True,  # TODO: Actually check provider availability
             },
             "timestamp": datetime.now().isoformat(),
-            "response_time": 0.001  # Mock response time
+            "response_time": 0.001,  # Mock response time
         }
 
         return JSONResponse(status_code=200, content=health_status)
@@ -379,8 +382,7 @@ async def check_agent_health(agent_id: str):
     except Exception as e:
         logger.error(f"Failed to check health for agent {agent_id}: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to check agent health: {str(e)}"
+            status_code=500, detail=f"Failed to check agent health: {str(e)}"
         )
 
 
@@ -397,21 +399,27 @@ async def get_agents_overview():
         agent_summary = []
 
         for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-            enabled = global_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
-            model = global_config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
+            enabled = global_config_manager.get_nested(
+                f"agents.{agent_id}.enabled", config["enabled"]
+            )
+            model = global_config_manager.get_nested(
+                f"agents.{agent_id}.model", config["default_model"]
+            )
 
             if enabled:
                 enabled_agents += 1
                 if model:
                     healthy_agents += 1
 
-            agent_summary.append({
-                "id": agent_id,
-                "name": config["name"],
-                "enabled": enabled,
-                "status": "healthy" if enabled and model else "unhealthy",
-                "priority": config["priority"]
-            })
+            agent_summary.append(
+                {
+                    "id": agent_id,
+                    "name": config["name"],
+                    "enabled": enabled,
+                    "status": "healthy" if enabled and model else "unhealthy",
+                    "priority": config["priority"],
+                }
+            )
 
         overview = {
             "total_agents": total_agents,
@@ -419,9 +427,11 @@ async def get_agents_overview():
             "healthy_agents": healthy_agents,
             "unhealthy_agents": enabled_agents - healthy_agents,
             "disabled_agents": total_agents - enabled_agents,
-            "overall_health": "good" if healthy_agents >= enabled_agents * 0.8 else "warning",
+            "overall_health": (
+                "good" if healthy_agents >= enabled_agents * 0.8 else "warning"
+            ),
             "agents": agent_summary,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         return JSONResponse(status_code=200, content=overview)
@@ -429,6 +439,5 @@ async def get_agents_overview():
     except Exception as e:
         logger.error(f"Failed to get agents overview: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get agents overview: {str(e)}"
+            status_code=500, detail=f"Failed to get agents overview: {str(e)}"
         )

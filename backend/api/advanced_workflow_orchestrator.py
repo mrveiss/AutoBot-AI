@@ -153,7 +153,9 @@ class AdvancedWorkflowOrchestrator:
                 step_id="dev_env_1",
                 command="sudo apt update",
                 description="Update package repositories",
-                explanation="Update system package lists before installing development tools",
+                explanation=(
+                    "Update system package lists before installing development tools"
+                ),
                 intent=WorkflowIntent.INSTALLATION,
                 confidence_score=0.95,
                 requires_confirmation=True,
@@ -162,14 +164,22 @@ class AdvancedWorkflowOrchestrator:
             ),
             SmartWorkflowStep(
                 step_id="dev_env_2",
-                command="sudo apt install -y git curl wget nodejs npm python3 python3-pip",
+                command=(
+                    "sudo apt install -y git curl wget nodejs npm python3 python3-pip"
+                ),
                 description="Install essential development tools",
-                explanation="Install Git, Node.js, Python, and common development utilities",
+                explanation=(
+                    "Install Git, Node.js, Python, and common development utilities"
+                ),
                 intent=WorkflowIntent.INSTALLATION,
                 confidence_score=0.9,
                 requires_confirmation=True,
-                validation_command="git --version && node --version && python3 --version",
-                rollback_command="sudo apt remove -y git curl wget nodejs npm python3-pip",
+                validation_command=(
+                    "git --version && node --version && python3 --version"
+                ),
+                rollback_command=(
+                    "sudo apt remove -y git curl wget nodejs npm python3-pip"
+                ),
                 ai_generated=True,
             ),
             SmartWorkflowStep(
@@ -203,7 +213,9 @@ class AdvancedWorkflowOrchestrator:
                 step_id="sec_1",
                 command="sudo ufw --force enable",
                 description="Enable UFW firewall",
-                explanation="Activate Ubuntu's uncomplicated firewall for basic protection",
+                explanation=(
+                    "Activate Ubuntu's uncomplicated firewall for basic protection"
+                ),
                 intent=WorkflowIntent.SECURITY,
                 confidence_score=0.9,
                 requires_confirmation=True,
@@ -239,7 +251,9 @@ class AdvancedWorkflowOrchestrator:
         return WorkflowTemplate(
             template_id="intelligent_security_hardening",
             name="🛡️ Intelligent Security Hardening",
-            description="AI-driven system security hardening with firewall configuration",
+            description=(
+                "AI-driven system security hardening with firewall configuration"
+            ),
             intent=WorkflowIntent.SECURITY,
             complexity=WorkflowComplexity.MODERATE,
             steps=steps,
@@ -314,7 +328,10 @@ class AdvancedWorkflowOrchestrator:
                 step_id="maint_2",
                 command="sudo apt autoremove -y",
                 description="Remove unnecessary packages",
-                explanation="Clean up automatically installed packages that are no longer needed",
+                explanation=(
+                    "Clean up automatically installed packages that are no "
+                    "longer needed"
+                ),
                 intent=WorkflowIntent.MAINTENANCE,
                 confidence_score=0.85,
                 requires_confirmation=True,
@@ -353,7 +370,7 @@ class AdvancedWorkflowOrchestrator:
                 step_id="backup_1",
                 command="mkdir -p ~/backups/$(date +%Y-%m-%d)",
                 description="Create dated backup directory",
-                explanation="Create a new backup directory with today's date",
+                explanation=("Create a new backup directory with today's date"),
                 intent=WorkflowIntent.BACKUP,
                 confidence_score=0.95,
                 requires_confirmation=False,
@@ -362,13 +379,18 @@ class AdvancedWorkflowOrchestrator:
             ),
             SmartWorkflowStep(
                 step_id="backup_2",
-                command="tar -czf ~/backups/$(date +%Y-%m-%d)/home_backup.tar.gz ~/Documents ~/Downloads ~/Desktop",
+                command=(
+                    "tar -czf ~/backups/$(date +%Y-%m-%d)/home_backup.tar.gz "
+                    "~/Documents ~/Downloads ~/Desktop"
+                ),
                 description="Backup user documents",
                 explanation="Create compressed archive of important user directories",
                 intent=WorkflowIntent.BACKUP,
                 confidence_score=0.8,
                 requires_confirmation=True,
-                validation_command="ls -lh ~/backups/$(date +%Y-%m-%d)/home_backup.tar.gz",
+                validation_command=(
+                    "ls -lh ~/backups/$(date +%Y-%m-%d)/home_backup.tar.gz"
+                ),
                 ai_generated=True,
             ),
             SmartWorkflowStep(
@@ -423,11 +445,11 @@ class AdvancedWorkflowOrchestrator:
                     optimized_steps
                 ),
                 confidence_score=self._calculate_workflow_confidence(optimized_steps),
-                optimization_suggestions=await self._generate_optimization_suggestions(
-                    optimized_steps
+                optimization_suggestions=(
+                    await self._generate_optimization_suggestions(optimized_steps)
                 ),
-                risk_mitigation_strategies=await self._generate_risk_mitigation(
-                    optimized_steps
+                risk_mitigation_strategies=(
+                    await self._generate_risk_mitigation(optimized_steps)
                 ),
             )
 
@@ -446,7 +468,8 @@ class AdvancedWorkflowOrchestrator:
             self.analytics["total_workflows_generated"] += 1
 
             logger.info(
-                f"Generated intelligent workflow {workflow_id} with {len(optimized_steps)} optimized steps"
+                f"Generated intelligent workflow {workflow_id} "
+                f"with {len(optimized_steps)} optimized steps"
             )
             return workflow_id
 
@@ -458,7 +481,8 @@ class AdvancedWorkflowOrchestrator:
         """Analyze user intent using AI"""
         try:
             analysis_prompt = """
-            Analyze this user request and determine the workflow intent, complexity, and requirements:
+            Analyze this user request and determine the workflow intent, \
+complexity, and requirements:
 
             Request: "{user_request}"
 
@@ -1205,7 +1229,7 @@ async def get_advanced_analytics():
                     "configuration",
                     "security",
                 ],  # Would be calculated from data
-                "success_rate_trend": "improving",  # Would be calculated from historical data
+                "success_rate_trend": "improving",  # From historical data
             },
         }
 

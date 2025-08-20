@@ -26,9 +26,9 @@ AutoBot automatically detects the appropriate VNC port based on the environment:
 ### Detection Logic
 1. **Container Detection**: Checks for `/.dockerenv` file or `DOCKER_CONTAINER` environment variable
 2. **Port Availability**: Tests if port 5900 is already in use
-3. **Smart Selection**: 
+3. **Smart Selection**:
    - If in container → use `VNC_CONTAINER_PORT` (5901)
-   - If port 5900 is busy (host VNC active) → use `VNC_CONTAINER_PORT` (5901)  
+   - If port 5900 is busy (host VNC active) → use `VNC_CONTAINER_PORT` (5901)
    - Otherwise → use `VNC_DISPLAY_PORT` (5900)
 
 ### Usage in Code
@@ -49,7 +49,7 @@ port = get_vnc_display_port()  # Returns 5900 or 5901
 - **AutoBot**: Detects port 5900 busy → uses port 5901
 - **Result**: `vnc://localhost:5901`
 
-### Scenario 2: Docker Container Deployment  
+### Scenario 2: Docker Container Deployment
 - **Environment**: Container detected via `/.dockerenv`
 - **AutoBot**: Uses container port 5901 to avoid host conflicts
 - **Result**: `vnc://localhost:5901` (mapped from container)
@@ -85,7 +85,7 @@ export AUTOBOT_VNC_CONTAINER_PORT=5903
 # Check what's using port 5900
 sudo netstat -tlnp | grep :5900
 
-# Check what's using port 5901  
+# Check what's using port 5901
 sudo netstat -tlnp | grep :5901
 
 # Test AutoBot's port detection
@@ -136,7 +136,7 @@ AUTOBOT_PLAYWRIGHT_API_URL=http://localhost:3000
 ```bash
 # .env file for production
 AUTOBOT_VNC_DISPLAY_PORT=15900
-AUTOBOT_VNC_CONTAINER_PORT=15901  
+AUTOBOT_VNC_CONTAINER_PORT=15901
 AUTOBOT_PLAYWRIGHT_VNC_URL=http://production-host:16080/vnc.html
 AUTOBOT_PLAYWRIGHT_API_URL=http://production-host:13000
 ```
@@ -147,7 +147,7 @@ AUTOBOT_PLAYWRIGHT_API_URL=http://production-host:13000
 AUTOBOT_VNC_DISPLAY_PORT=5900
 AUTOBOT_VNC_CONTAINER_PORT=5901
 
-# Instance 2  
+# Instance 2
 AUTOBOT_VNC_DISPLAY_PORT=5902
 AUTOBOT_VNC_CONTAINER_PORT=5903
 ```
