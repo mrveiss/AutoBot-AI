@@ -3,6 +3,8 @@ import os as os_module
 import tempfile
 from datetime import datetime
 from typing import Optional
+import aiohttp
+import asyncio
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -10,6 +12,10 @@ from pydantic import BaseModel
 
 from src.agents.system_knowledge_manager import SystemKnowledgeManager
 from src.knowledge_base import KnowledgeBase
+from src.services.fact_extraction_service import FactExtractionService
+from src.models.atomic_fact import FactType, TemporalType
+from src.utils.entity_resolver import entity_resolver
+from src.services.temporal_invalidation_service import get_temporal_invalidation_service
 
 router = APIRouter()
 
@@ -17,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 knowledge_base: KnowledgeBase | None = None
 system_knowledge_manager: SystemKnowledgeManager | None = None
+fact_extraction_service: FactExtractionService | None = None
 
 
 class GetFactRequest(BaseModel):
@@ -30,7 +37,7 @@ class SearchRequest(BaseModel):
 
 
 async def init_knowledge_base():
-    global knowledge_base, system_knowledge_manager
+    global knowledge_base, system_knowledge_manager, fact_extraction_service
     if knowledge_base is None:
         try:
             knowledge_base = KnowledgeBase()
@@ -47,6 +54,14 @@ async def init_knowledge_base():
         except Exception as e:
             logger.error(f"Failed to initialize system knowledge manager: {str(e)}")
             system_knowledge_manager = None
+
+    if fact_extraction_service is None and knowledge_base is not None:
+        try:
+            fact_extraction_service = FactExtractionService(knowledge_base)
+            logger.info("Fact extraction service initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize fact extraction service: {str(e)}")
+            fact_extraction_service = None
 
 
 @router.post("/get_fact")
@@ -145,6 +160,62 @@ async def add_text_to_knowledge(request: dict):
         logger.error(f"Error adding text to knowledge: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Error adding text to knowledge: {str(e)}"
+        )
+
+
+@router.post("/add_text_semantic")
+async def add_text_with_semantic_chunking(request: dict):
+    """Add text to knowledge base using semantic chunking for enhanced processing"""
+    try:
+        if knowledge_base is None:
+            await init_knowledge_base()
+
+        if knowledge_base is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+
+        text = request.get("text", "")
+        title = request.get("title", "")
+        source = request.get("source", "Manual Entry - Semantic")
+        use_semantic = request.get("use_semantic", True)
+
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Text content is required")
+
+        logger.info(f"Knowledge semantic add text request: {title} ({len(text)} chars)")
+
+        metadata = {
+            "title": title,
+            "source": source,
+            "type": "text",
+            "content_type": "semantic_chunked_entry",
+            "processing_method": "semantic_chunking" if use_semantic else "traditional",
+        }
+
+        if use_semantic and hasattr(knowledge_base, 'add_text_with_semantic_chunking'):
+            # Use the new semantic chunking method
+            result = await knowledge_base.add_text_with_semantic_chunking(text, metadata)
+        else:
+            # Fallback to traditional method
+            result = await knowledge_base.store_fact(text, metadata)
+            result["semantic_chunking"] = False
+            result["chunks_created"] = 1
+
+        return {
+            "status": result.get("status"),
+            "message": result.get("message", "Text processed successfully"),
+            "text_length": len(text),
+            "title": title,
+            "source": source,
+            "chunks_created": result.get("chunks_created", 1),
+            "semantic_chunking": result.get("semantic_chunking", False),
+            "processing_method": metadata["processing_method"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding semantic text to knowledge: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error adding semantic text to knowledge: {str(e)}"
         )
 
 
@@ -613,15 +684,31 @@ async def crawl_url(request: dict):
                 )
             }
 
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
+            # Validate URL to prevent SSRF attacks
+            from backend.services.url_validator import URLValidator
+
+            validator = URLValidator()
+            is_safe, error_msg = validator.is_safe_url(url)
+
+            if not is_safe:
+                return JSONResponse(
+                    status_code=400, content={"error": f"Invalid URL: {error_msg}"}
+                )
+
+            # PERFORMANCE FIX: Convert blocking HTTP to async to prevent timeouts
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+                async with session.get(url) as response:
+                    response.raise_for_status()
+                    response_content = await response.read()
+                    content_type = response.headers.get("content-type", "")
 
             # Extract text content from HTML
-            if "text/html" in response.headers.get("content-type", ""):
+            if "text/html" in content_type:
                 try:
                     from bs4 import BeautifulSoup
 
-                    soup = BeautifulSoup(response.content, "html.parser")
+                    soup = BeautifulSoup(response_content, "html.parser")
 
                     # Remove script and style elements
                     for script in soup(["script", "style"]):
@@ -639,7 +726,7 @@ async def crawl_url(request: dict):
 
                 except ImportError:
                     # Fallback to raw text if BeautifulSoup not available
-                    crawled_content = response.text
+                    crawled_content = response_content.decode('utf-8', errors='ignore')
 
                 # Limit content size (max 10000 characters)
                 if len(crawled_content) > 10000:
@@ -649,8 +736,9 @@ async def crawl_url(request: dict):
 
             else:
                 # For non-HTML content, use the raw text
-                crawled_content = response.text[:10000]
-                if len(response.text) > 10000:
+                response_text = response_content.decode('utf-8', errors='ignore')
+                crawled_content = response_text[:10000]
+                if len(response_text) > 10000:
                     crawled_content += "... [Content truncated]"
 
             # Update the entry
@@ -990,3 +1078,611 @@ async def import_system_prompts():
             "message": f"Failed to import system prompts: {str(e)}",
             "count": 0,
         }
+
+
+# ====================================================================
+# ATOMIC FACTS EXTRACTION API ENDPOINTS (RAG Optimization Phase 10)
+# ====================================================================
+
+@router.post("/extract_facts")
+async def extract_facts_from_text(request: dict):
+    """Extract atomic facts from text content using advanced RAG techniques"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        text = request.get("text", "")
+        source = request.get("source", "manual_input")
+        metadata = request.get("metadata", {})
+
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Text content is required")
+
+        logger.info(f"Atomic facts extraction request: {source} ({len(text)} chars)")
+
+        # Extract and store atomic facts
+        result = await fact_extraction_service.extract_and_store_facts(
+            content=text,
+            source=source,
+            metadata=metadata
+        )
+
+        return {
+            "status": result["status"],
+            "message": result.get("message", "Facts extracted successfully"),
+            "facts_extracted": result["facts_extracted"],
+            "facts_stored": result["facts_stored"],
+            "storage_errors": result.get("storage_errors", 0),
+            "processing_time": result["processing_time"],
+            "average_confidence": result.get("average_confidence", 0),
+            "distributions": {
+                "fact_types": result.get("fact_type_distribution", {}),
+                "temporal_types": result.get("temporal_type_distribution", {}),
+            },
+            "text_length": len(text),
+            "source": source
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error extracting facts: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error extracting facts: {str(e)}"
+        )
+
+
+@router.post("/extract_facts_from_chunks")
+async def extract_facts_from_semantic_chunks(request: dict):
+    """Extract atomic facts from semantic chunks using parallel processing"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        chunks = request.get("chunks", [])
+        source = request.get("source", "chunk_input")
+        metadata = request.get("metadata", {})
+
+        if not chunks:
+            raise HTTPException(status_code=400, detail="Chunks are required")
+
+        logger.info(f"Atomic facts extraction from chunks: {source} ({len(chunks)} chunks)")
+
+        # Extract facts from semantic chunks
+        result = await fact_extraction_service.extract_facts_from_chunks(
+            chunks=chunks,
+            source=source,
+            metadata=metadata
+        )
+
+        return {
+            "status": result["status"],
+            "message": result.get("message", "Facts extracted from chunks successfully"),
+            "facts_extracted": result["facts_extracted"],
+            "facts_stored": result["facts_stored"],
+            "storage_errors": result.get("storage_errors", 0),
+            "chunks_processed": result["chunks_processed"],
+            "successful_chunks": result.get("successful_chunks", 0),
+            "processing_time": result["processing_time"],
+            "average_confidence": result.get("average_confidence", 0),
+            "distributions": result.get("fact_distributions", {}),
+            "source": source
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error extracting facts from chunks: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error extracting facts from chunks: {str(e)}"
+        )
+
+
+@router.get("/atomic_facts")
+async def get_atomic_facts(
+    source: Optional[str] = None,
+    fact_type: Optional[str] = None,
+    temporal_type: Optional[str] = None,
+    min_confidence: Optional[float] = None,
+    active_only: bool = True,
+    limit: int = 100
+):
+    """Get atomic facts based on filtering criteria"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        # Convert string enums to enum objects
+        fact_type_enum = None
+        temporal_type_enum = None
+        
+        if fact_type:
+            try:
+                fact_type_enum = FactType(fact_type.upper())
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid fact_type: {fact_type}")
+        
+        if temporal_type:
+            try:
+                temporal_type_enum = TemporalType(temporal_type.upper())
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid temporal_type: {temporal_type}")
+
+        logger.info(f"Atomic facts query: source={source}, type={fact_type}, temporal={temporal_type}")
+
+        # Retrieve facts using criteria
+        facts = await fact_extraction_service.get_facts_by_criteria(
+            source=source,
+            fact_type=fact_type_enum,
+            temporal_type=temporal_type_enum,
+            min_confidence=min_confidence,
+            active_only=active_only,
+            limit=limit
+        )
+
+        # Convert facts to dictionaries for JSON response
+        facts_data = []
+        for fact in facts:
+            fact_dict = fact.to_dict()
+            # Add readable statement
+            fact_dict["statement"] = f"{fact.subject} {fact.predicate} {fact.object}"
+            facts_data.append(fact_dict)
+
+        return {
+            "success": True,
+            "facts": facts_data,
+            "total_returned": len(facts_data),
+            "filters_applied": {
+                "source": source,
+                "fact_type": fact_type,
+                "temporal_type": temporal_type,
+                "min_confidence": min_confidence,
+                "active_only": active_only
+            },
+            "limit": limit
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving atomic facts: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error retrieving atomic facts: {str(e)}"
+        )
+
+
+@router.get("/facts/statistics")
+async def get_fact_extraction_statistics():
+    """Get statistics about atomic fact extraction operations"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        logger.info("Fact extraction statistics request")
+
+        # Get comprehensive statistics
+        stats = await fact_extraction_service.get_extraction_statistics()
+
+        return {
+            "success": True,
+            "statistics": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting fact extraction statistics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting fact extraction statistics: {str(e)}"
+        )
+
+
+@router.post("/add_text_with_facts")
+async def add_text_with_automatic_fact_extraction(request: dict):
+    """Add text to knowledge base with automatic atomic fact extraction"""
+    try:
+        if knowledge_base is None or fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if knowledge_base is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        text = request.get("text", "")
+        title = request.get("title", "")
+        source = request.get("source", "Manual Entry with Facts")
+        extract_facts = request.get("extract_facts", True)
+
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Text content is required")
+
+        logger.info(f"Knowledge add text with facts: {title} ({len(text)} chars)")
+
+        metadata = {
+            "title": title,
+            "source": source,
+            "type": "text_with_facts",
+            "content_type": "enhanced_entry",
+            "facts_extraction_enabled": extract_facts,
+        }
+
+        # Store text using semantic chunking
+        if hasattr(knowledge_base, 'add_text_with_semantic_chunking'):
+            kb_result = await knowledge_base.add_text_with_semantic_chunking(text, metadata)
+        else:
+            kb_result = await knowledge_base.store_fact(text, metadata)
+            kb_result["semantic_chunking"] = False
+            kb_result["chunks_created"] = 1
+
+        # Extract atomic facts if requested
+        fact_result = {}
+        if extract_facts:
+            fact_result = await fact_extraction_service.extract_and_store_facts(
+                content=text,
+                source=f"{source}_facts",
+                metadata=metadata
+            )
+
+        return {
+            "status": "success",
+            "message": "Text added with atomic facts extraction",
+            "text_length": len(text),
+            "title": title,
+            "source": source,
+            # Knowledge base results
+            "kb_result": {
+                "chunks_created": kb_result.get("chunks_created", 1),
+                "semantic_chunking": kb_result.get("semantic_chunking", False),
+            },
+            # Fact extraction results
+            "fact_extraction": {
+                "enabled": extract_facts,
+                "facts_extracted": fact_result.get("facts_extracted", 0),
+                "facts_stored": fact_result.get("facts_stored", 0),
+                "processing_time": fact_result.get("processing_time", 0),
+                "average_confidence": fact_result.get("average_confidence", 0),
+            } if extract_facts else {"enabled": False}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding text with facts: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error adding text with facts: {str(e)}"
+        )
+
+
+# ====================================================================  
+# ENTITY RESOLUTION API ENDPOINTS (RAG Optimization Phase 10)
+# ====================================================================
+
+@router.post("/resolve_entities")
+async def resolve_entity_names(request: dict):
+    """Resolve a list of entity names to canonical entities using semantic similarity"""
+    try:
+        entity_names = request.get("entity_names", [])
+        context = request.get("context", {})
+
+        if not entity_names:
+            raise HTTPException(status_code=400, detail="Entity names list is required")
+
+        logger.info(f"Entity resolution request: {len(entity_names)} entities")
+
+        # Resolve entities using the entity resolver
+        result = await entity_resolver.resolve_entities(
+            entity_names=entity_names,
+            context=context
+        )
+
+        # Convert to JSON-serializable format
+        canonical_entities_data = []
+        for mapping in result.canonical_entities:
+            canonical_entities_data.append(mapping.to_dict())
+
+        return {
+            "success": True,
+            "original_entities": result.original_entities,
+            "resolved_mappings": result.resolved_mappings,
+            "canonical_entities": canonical_entities_data,
+            "resolution_summary": result.get_resolution_summary(),
+            "processing_time": result.processing_time,
+            "similarity_method": result.similarity_method.value,
+            "confidence_threshold": result.confidence_threshold
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resolving entities: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error resolving entities: {str(e)}"
+        )
+
+
+@router.get("/entity_mappings")
+async def get_entity_mappings(
+    entity_type: Optional[str] = None,
+    min_confidence: Optional[float] = None,
+    limit: int = 100
+):
+    """Get entity mappings with optional filtering"""
+    try:
+        logger.info(f"Entity mappings request: type={entity_type}, min_confidence={min_confidence}")
+
+        # Get resolution statistics which includes mapping information
+        stats = await entity_resolver.get_resolution_statistics()
+        
+        # For now, return the statistics as we don't have a direct method to get mappings
+        # In a full implementation, we would add a get_entity_mappings method to EntityResolver
+        return {
+            "success": True,
+            "statistics": stats,
+            "message": "Entity mappings accessible through resolution operations",
+            "filters": {
+                "entity_type": entity_type,
+                "min_confidence": min_confidence,
+                "limit": limit
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting entity mappings: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting entity mappings: {str(e)}"
+        )
+
+
+@router.get("/entity_resolution/statistics")
+async def get_entity_resolution_statistics():
+    """Get comprehensive statistics about entity resolution operations"""
+    try:
+        logger.info("Entity resolution statistics request")
+
+        # Get statistics from the entity resolver
+        stats = await entity_resolver.get_resolution_statistics()
+
+        return {
+            "success": True,
+            "statistics": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting entity resolution statistics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting entity resolution statistics: {str(e)}"
+        )
+
+
+@router.post("/facts/resolve_entities")
+async def resolve_entities_in_facts(request: dict):
+    """Apply entity resolution to existing atomic facts"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        # Get parameters
+        source = request.get("source")
+        limit = request.get("limit", 100)
+        min_confidence = request.get("min_confidence")
+
+        logger.info(f"Resolving entities in facts: source={source}, limit={limit}")
+
+        # Get facts to process
+        facts = await fact_extraction_service.get_facts_by_criteria(
+            source=source,
+            min_confidence=min_confidence,
+            limit=limit
+        )
+
+        if not facts:
+            return {
+                "success": True,
+                "message": "No facts found matching criteria",
+                "facts_processed": 0,
+                "entities_resolved": 0
+            }
+
+        # Apply entity resolution to facts
+        original_count = len(facts)
+        resolved_facts = await entity_resolver.resolve_facts_entities(facts)
+
+        # Count unique entities before and after resolution
+        original_entities = set()
+        resolved_entities = set()
+        
+        for fact in facts:
+            original_entities.update(fact.entities)
+            original_entities.add(fact.subject)
+            original_entities.add(fact.object)
+            
+        for fact in resolved_facts:
+            resolved_entities.update(fact.entities)
+            resolved_entities.add(fact.subject)
+            resolved_entities.add(fact.object)
+
+        return {
+            "success": True,
+            "message": "Entity resolution applied to facts",
+            "facts_processed": original_count,
+            "entities_before": len(original_entities),
+            "entities_after": len(resolved_entities),
+            "entities_resolved": len(original_entities) - len(resolved_entities),
+            "resolution_rate": round((len(original_entities) - len(resolved_entities)) / len(original_entities) * 100, 1) if original_entities else 0,
+            "filters": {
+                "source": source,
+                "min_confidence": min_confidence,
+                "limit": limit
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resolving entities in facts: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error resolving entities in facts: {str(e)}"
+        )
+
+
+# ====================================================================
+# TEMPORAL KNOWLEDGE INVALIDATION API ENDPOINTS (RAG Optimization Phase 10)
+# ====================================================================
+
+@router.post("/temporal/invalidation/sweep")
+async def run_temporal_invalidation_sweep(request: dict):
+    """Run a temporal knowledge invalidation sweep"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        # Get parameters
+        source_filter = request.get("source_filter")
+        dry_run = request.get("dry_run", True)  # Default to dry run for safety
+
+        logger.info(f"Temporal invalidation sweep: source={source_filter}, dry_run={dry_run}")
+
+        # Get temporal invalidation service
+        temporal_service = get_temporal_invalidation_service(fact_extraction_service)
+
+        # Run invalidation sweep
+        result = await temporal_service.run_invalidation_sweep(
+            source_filter=source_filter,
+            dry_run=dry_run
+        )
+
+        return {
+            "success": True,
+            "invalidation_sweep": result,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error running temporal invalidation sweep: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error running temporal invalidation sweep: {str(e)}"
+        )
+
+
+@router.get("/temporal/invalidation/statistics")
+async def get_temporal_invalidation_statistics():
+    """Get comprehensive temporal invalidation statistics"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        logger.info("Temporal invalidation statistics request")
+
+        # Get temporal invalidation service
+        temporal_service = get_temporal_invalidation_service(fact_extraction_service)
+
+        # Get statistics
+        stats = await temporal_service.get_invalidation_statistics()
+
+        return {
+            "success": True,
+            "statistics": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting temporal invalidation statistics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting temporal invalidation statistics: {str(e)}"
+        )
+
+
+@router.post("/temporal/invalidation/initialize_rules")
+async def initialize_temporal_invalidation_rules():
+    """Initialize default temporal invalidation rules"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        logger.info("Initializing temporal invalidation rules")
+
+        # Get temporal invalidation service
+        temporal_service = get_temporal_invalidation_service(fact_extraction_service)
+
+        # Initialize rules
+        result = await temporal_service.initialize_rules()
+
+        return {
+            "success": True,
+            "initialization_result": result,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error initializing temporal invalidation rules: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error initializing temporal invalidation rules: {str(e)}"
+        )
+
+
+@router.post("/temporal/invalidation/contradiction_check")
+async def check_fact_contradictions(request: dict):
+    """Check for contradictions between facts and invalidate conflicting ones"""
+    try:
+        if fact_extraction_service is None:
+            await init_knowledge_base()
+
+        if fact_extraction_service is None:
+            raise HTTPException(status_code=503, detail="Fact extraction service not available")
+
+        # Get parameters
+        fact_id = request.get("fact_id")
+        if not fact_id:
+            raise HTTPException(status_code=400, detail="fact_id is required")
+
+        logger.info(f"Checking contradictions for fact: {fact_id}")
+
+        # Get the fact to check
+        facts = await fact_extraction_service.get_facts_by_criteria(limit=1000)
+        target_fact = None
+        for fact in facts:
+            if fact.fact_id == fact_id:
+                target_fact = fact
+                break
+
+        if not target_fact:
+            raise HTTPException(status_code=404, detail="Fact not found")
+
+        # Get temporal invalidation service
+        temporal_service = get_temporal_invalidation_service(fact_extraction_service)
+
+        # Check for contradictions
+        result = await temporal_service.invalidate_contradictory_facts(target_fact)
+
+        return {
+            "success": True,
+            "fact_id": fact_id,
+            "contradiction_check": result,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking fact contradictions: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error checking fact contradictions: {str(e)}"
+        )
