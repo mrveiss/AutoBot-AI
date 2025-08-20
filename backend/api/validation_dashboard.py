@@ -405,50 +405,9 @@ async def get_system_recommendations():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/health")
-async def validation_dashboard_health():
-    """Health check for validation dashboard"""
-    try:
-        generator = get_dashboard_generator()
-
-        if generator is None:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "unhealthy",
-                    "service": "validation_dashboard",
-                    "error": "Generator not available",
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
-
-        # Test basic functionality
-        try:
-            await generator.generate_real_time_report()
-            report_generation_ok = True
-        except Exception as e:
-            logger.error(f"Report generation test failed: {e}")
-            report_generation_ok = False
-
-        health_checks = {
-            "generator_initialized": generator is not None,
-            "output_directory_exists": generator.output_dir.exists(),
-            "output_directory_writable": os.access(generator.output_dir, os.W_OK),
-            "report_generation": report_generation_ok,
-        }
-
-        overall_healthy = all(health_checks.values())
-
-        return {
-            "status": "healthy" if overall_healthy else "degraded",
-            "service": "validation_dashboard",
-            "components": health_checks,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(f"Validation dashboard health check failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+# Health check moved to consolidated health service
+# See backend/services/consolidated_health_service.py
+# Use /api/system/health?detailed=true for comprehensive status
 
 
 @router.post("/judge_workflow_step")

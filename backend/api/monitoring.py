@@ -6,11 +6,11 @@ Integrates hardware monitoring into the web interface.
 import subprocess
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import psutil
 import requests
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
@@ -53,7 +53,9 @@ class HardwareMonitor:
             result = subprocess.run(
                 [
                     "nvidia-smi",
-                    "--query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw,clocks.current.graphics,clocks.current.memory",
+                    "--query-gpu=name,memory.used,memory.total,utilization.gpu,"
+                    "temperature.gpu,power.draw,clocks.current.graphics,"
+                    "clocks.current.memory",
                     "--format=csv,noheader,nounits",
                 ],
                 capture_output=True,
@@ -180,7 +182,6 @@ class HardwareMonitor:
         """Get detailed system resource utilization."""
         try:
             memory = psutil.virtual_memory()
-            cpu_times = psutil.cpu_times()
             cpu_percent = psutil.cpu_percent(interval=0.1, percpu=True)
             disk = psutil.disk_usage("/")
             network = psutil.net_io_counters()
@@ -312,23 +313,9 @@ async def get_system_resources():
     return hardware_monitor.get_system_resources()
 
 
-@router.get("/health")
-async def get_health_summary():
-    """Get health summary for quick checks."""
-    status = await hardware_monitor.get_comprehensive_status()
-
-    return {
-        "overall_health": status.system_health.get("status", "unknown"),
-        "gpu_active": status.gpu_status.get("utilization_percent", 0) > 0,
-        "npu_available": status.npu_status.get("openvino_support", False),
-        "memory_usage_percent": status.system_resources.get("memory", {}).get(
-            "percent", 0
-        ),
-        "gpu_memory_usage_percent": status.gpu_status.get(
-            "memory_utilization_percent", 0
-        ),
-        "frontend_responsive": status.frontend_status.get("available", False),
-    }
+# Health check moved to consolidated health service
+# See backend/services/consolidated_health_service.py
+# Use /api/system/health?detailed=true for comprehensive status
 
 
 @router.post("/test-inference")

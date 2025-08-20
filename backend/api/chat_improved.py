@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
-from src.error_handler import log_error, safe_api_error, with_error_handling
+from src.error_handler import log_error, safe_api_error
 from src.exceptions import (
     AutoBotError,
     InternalError,
@@ -281,17 +281,6 @@ async def process_chat(request: ChatRequest, http_request: Request):
         )
 
 
-# Example of using decorators for simpler endpoints
-@router.get("/chat/health")
-@with_error_handling(
-    default_return=JSONResponse(
-        status_code=503, content={"status": "unhealthy", "error": "Health check failed"}
-    ),
-    context="chat_health_check",
-)
-async def health_check():
-    """Simple health check endpoint with decorator-based error handling."""
-    # This will automatically handle and log any errors
-    return JSONResponse(
-        status_code=200, content={"status": "healthy", "service": "chat"}
-    )
+# Health check moved to consolidated health service
+# See backend/services/consolidated_health_service.py
+# Use /api/system/health?detailed=true for comprehensive status

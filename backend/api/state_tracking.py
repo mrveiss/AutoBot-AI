@@ -3,13 +3,12 @@ State Tracking API for AutoBot
 Provides endpoints for comprehensive project state tracking and reporting
 """
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.enhanced_project_state_tracker import (
@@ -308,29 +307,9 @@ async def export_state_data(request: ExportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/health")
-async def state_tracking_health():
-    """Health check for state tracking system"""
-    try:
-        tracker = get_state_tracker()
-
-        # Quick health checks
-        health_status = {
-            "tracker_initialized": tracker is not None,
-            "snapshots_available": len(tracker.state_history) > 0,
-            "changes_recorded": len(tracker.change_log) > 0,
-            "milestones_defined": len(tracker.milestones) > 0,
-        }
-
-        return {
-            "status": "healthy",
-            "service": "state_tracking",
-            "components": health_status,
-            "timestamp": datetime.now().isoformat(),
-        }
-    except Exception as e:
-        logger.error(f"State tracking health check failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+# Health check moved to consolidated health service
+# See backend/services/consolidated_health_service.py
+# Use /api/system/health?detailed=true for comprehensive status
 
 
 @router.get("/metrics/all")

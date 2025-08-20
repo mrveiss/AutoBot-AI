@@ -7,8 +7,9 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
-from backend.utils.connection_utils import ConnectionTester, ModelManager
-from src.utils.advanced_cache_manager import smart_cache, advanced_cache
+from backend.services.consolidated_health_service import consolidated_health
+from backend.utils.connection_utils import ModelManager
+from src.utils.advanced_cache_manager import smart_cache
 
 router = APIRouter()
 
@@ -18,31 +19,56 @@ logger = logging.getLogger(__name__)
 @router.get("/health")
 @smart_cache(
     data_type="health_checks",
-    key_func=lambda detailed=False: f"health:{'detailed' if detailed else 'fast'}"
+    key_func=lambda detailed=False: f"health:{'detailed' if detailed else 'fast'}",
 )
 async def health_check(detailed: bool = False):
-    """Health check endpoint for connection status monitoring
+    """Consolidated health check endpoint for all system components
 
     Args:
-        detailed: If True, performs comprehensive checks (slower)
+        detailed: If True, performs comprehensive checks across all components (slower)
                  If False, performs fast checks with caching (default)
     """
     try:
         if detailed:
-            status = await ConnectionTester.get_comprehensive_health_status()
+            # Use comprehensive consolidated health check
+            status = await consolidated_health.get_comprehensive_health()
         else:
-            status = await ConnectionTester.get_fast_health_status()
+            # Use fast health check
+            status = await consolidated_health.get_fast_health()
+
         return status
     except Exception as e:
-        logger.error(f"Error in health check: {str(e)}")
+        logger.error(f"Error in consolidated health check: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "overall_status": "unhealthy",
+                "backend": "connected",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat(),
+                "fast_check": False,
+                "components": {"system": {"status": "error", "error": str(e)}},
+            },
+        )
+
+
+@router.get("/health/{component}")
+async def component_health_check(component: str):
+    """Get health status for a specific component
+
+    Args:
+        component: Component name (system, chat, llm, knowledge_base, terminal)
+    """
+    try:
+        status = consolidated_health.get_component_health(component)
+        return status
+    except Exception as e:
+        logger.error(f"Error checking component health for {component}: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={
                 "status": "unhealthy",
-                "backend": "connected",
-                "ollama": "unknown",
-                "redis_status": "unknown",
-                "redis_search_module_loaded": False,
+                "component": component,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat(),
             },

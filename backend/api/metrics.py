@@ -76,18 +76,9 @@ async def get_system_summary(
         )
 
 
-@router.get("/system/health")
-async def check_system_health():
-    """Check system resource health status"""
-    try:
-        health_check = system_monitor.check_resource_thresholds()
-
-        return {"success": True, "health_status": health_check}
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to check system health: {str(e)}"
-        )
+# Health check moved to consolidated health service
+# See backend/services/consolidated_health_service.py
+# Use /api/system/health?detailed=true for comprehensive status
 
 
 @router.get("/export/workflow")
