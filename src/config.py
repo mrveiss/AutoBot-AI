@@ -22,6 +22,13 @@ REDIS_URL = os.getenv("AUTOBOT_REDIS_URL", "redis://localhost:6379")
 OLLAMA_URL = os.getenv("AUTOBOT_OLLAMA_URL", "http://localhost:11434")
 API_TIMEOUT = int(os.getenv("AUTOBOT_API_TIMEOUT", "30000"))
 
+# Additional service ports
+PLAYWRIGHT_API_URL = os.getenv("AUTOBOT_PLAYWRIGHT_API_URL", "http://localhost:3000")
+PLAYWRIGHT_VNC_URL = os.getenv("AUTOBOT_PLAYWRIGHT_VNC_URL", "http://localhost:6080/vnc.html")
+CHROME_DEBUG_PORT = int(os.getenv("AUTOBOT_CHROME_DEBUG_PORT", "9222"))
+VNC_DISPLAY_PORT = int(os.getenv("AUTOBOT_VNC_DISPLAY_PORT", "5900"))
+FRONTEND_URL = os.getenv("AUTOBOT_FRONTEND_URL", "http://localhost:5173")
+
 # GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when
 # writing config files
 _original_yaml_dump = yaml.dump

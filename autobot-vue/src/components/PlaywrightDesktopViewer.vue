@@ -41,13 +41,14 @@
 
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
+import { API_CONFIG } from '@/config/environment.js';
 
 export default {
   name: 'PlaywrightDesktopViewer',
   setup() {
     const isConnected = ref(false);
     const isConnecting = ref(false);
-    const vncUrl = ref('http://localhost:6080/vnc.html?autoconnect=true&resize=scale');
+    const vncUrl = ref(`${API_CONFIG.PLAYWRIGHT_VNC_URL}?autoconnect=true&resize=scale`);
     const vncFrame = ref(null);
     const healthCheckInterval = ref(null);
 
