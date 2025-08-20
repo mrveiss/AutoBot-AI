@@ -133,8 +133,19 @@ class StandardMessage:
         priority = header_data['priority']
         if isinstance(priority, int):
             header_data['priority'] = MessagePriority(priority)
+        elif isinstance(priority, str):
+            if priority.startswith('MessagePriority.'):
+                # Extract enum name like 'NORMAL' from 'MessagePriority.NORMAL'
+                priority_name = priority.split('.')[-1]
+                header_data['priority'] = MessagePriority[priority_name]
+            else:
+                # Try to convert string to int, fallback to NORMAL
+                try:
+                    header_data['priority'] = MessagePriority(int(priority))
+                except ValueError:
+                    header_data['priority'] = MessagePriority.NORMAL
         else:
-            header_data['priority'] = MessagePriority(int(priority))
+            header_data['priority'] = MessagePriority.NORMAL
         
         header = MessageHeader(**header_data)
         payload = MessagePayload(**payload_data)
