@@ -1,0 +1,390 @@
+"""
+State Tracking API for AutoBot
+Provides endpoints for comprehensive project state tracking and reporting
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
+
+from src.enhanced_project_state_tracker import (
+    StateChangeType,
+    TrackingMetric,
+    get_state_tracker,
+)
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+class StateChangeRequest(BaseModel):
+    change_type: str
+    description: str
+    after_state: Dict[str, Any]
+    before_state: Optional[Dict[str, Any]] = None
+    user_id: Optional[str] = "system"
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class ExportRequest(BaseModel):
+    format: str = "json"  # json or markdown
+    include_history: bool = True
+    time_range_days: Optional[int] = None
+
+
+@router.get("/status")
+async def get_state_tracking_status():
+    """Get overall state tracking system status"""
+    try:
+        tracker = get_state_tracker()
+
+        # Get latest summary
+        summary = await tracker.get_state_summary()
+
+        return {
+            "status": "healthy",
+            "service": "state_tracking",
+            "timestamp": datetime.now().isoformat(),
+            "tracking_active": True,
+            "snapshot_count": summary["snapshot_count"],
+            "change_count": summary["change_count"],
+            "latest_snapshot": summary["current_state"]["validation_results"]
+            if summary["current_state"]
+            else None,
+        }
+    except Exception as e:
+        logger.error(f"Error getting state tracking status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/summary")
+async def get_state_summary():
+    """Get comprehensive state summary"""
+    try:
+        tracker = get_state_tracker()
+        summary = await tracker.get_state_summary()
+
+        return {
+            "status": "success",
+            "summary": summary,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting state summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/snapshot")
+async def capture_state_snapshot(background_tasks: BackgroundTasks):
+    """Manually trigger a state snapshot"""
+    try:
+        tracker = get_state_tracker()
+
+        # Run snapshot in background
+        async def capture_snapshot():
+            snapshot = await tracker.capture_state_snapshot()
+            logger.info(f"State snapshot captured at {snapshot.timestamp}")
+
+        background_tasks.add_task(capture_snapshot)
+
+        return {
+            "status": "success",
+            "message": "State snapshot capture initiated",
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error capturing snapshot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/change")
+async def record_state_change(request: StateChangeRequest):
+    """Record a state change event"""
+    try:
+        tracker = get_state_tracker()
+
+        # Convert string to enum
+        try:
+            change_type = StateChangeType(request.change_type)
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": f"Invalid change type: {request.change_type}",
+                    "valid_types": [t.value for t in StateChangeType],
+                },
+            )
+
+        # Record the change
+        await tracker.record_state_change(
+            change_type=change_type,
+            description=request.description,
+            after_state=request.after_state,
+            before_state=request.before_state,
+            user_id=request.user_id,
+            metadata=request.metadata,
+        )
+
+        return {
+            "status": "success",
+            "message": "State change recorded",
+            "change_type": change_type.value,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error recording state change: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/milestones")
+async def get_milestones():
+    """Get project milestone status"""
+    try:
+        tracker = get_state_tracker()
+        summary = await tracker.get_state_summary()
+
+        return {
+            "status": "success",
+            "milestones": summary["milestones"],
+            "achieved_count": sum(
+                1 for m in summary["milestones"].values() if m["achieved"]
+            ),
+            "total_count": len(summary["milestones"]),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting milestones: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/trends/{metric}")
+async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
+    """Get trend data for a specific metric"""
+    try:
+        tracker = get_state_tracker()
+
+        # Validate metric
+        try:
+            metric_enum = TrackingMetric(metric)
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": f"Invalid metric: {metric}",
+                    "valid_metrics": [m.value for m in TrackingMetric],
+                },
+            )
+
+        # Get historical data
+        cutoff_date = datetime.now() - timedelta(days=days)
+
+        # Filter snapshots within time range
+        relevant_snapshots = [
+            s for s in tracker.state_history if s.timestamp >= cutoff_date
+        ]
+
+        # Extract metric values
+        trend_data = []
+        for snapshot in relevant_snapshots:
+            if metric_enum in snapshot.system_metrics:
+                trend_data.append(
+                    {
+                        "timestamp": snapshot.timestamp.isoformat(),
+                        "value": snapshot.system_metrics[metric_enum],
+                    }
+                )
+
+        return {
+            "status": "success",
+            "metric": metric,
+            "days": days,
+            "data_points": len(trend_data),
+            "trend_data": trend_data,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting metric trends: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/changes")
+async def get_recent_changes(
+    limit: int = Query(10, ge=1, le=100), change_type: Optional[str] = None
+):
+    """Get recent state changes"""
+    try:
+        tracker = get_state_tracker()
+
+        # Filter changes
+        changes = tracker.change_log
+        if change_type:
+            try:
+                change_type_enum = StateChangeType(change_type)
+                changes = [c for c in changes if c.change_type == change_type_enum]
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "status": "error",
+                        "message": f"Invalid change type: {change_type}",
+                        "valid_types": [t.value for t in StateChangeType],
+                    },
+                )
+
+        # Get recent changes
+        recent_changes = changes[-limit:]
+
+        return {
+            "status": "success",
+            "changes": [
+                {
+                    "timestamp": change.timestamp.isoformat(),
+                    "type": change.change_type.value,
+                    "description": change.description,
+                    "user_id": change.user_id,
+                    "has_before_state": change.before_state is not None,
+                    "metadata": change.metadata,
+                }
+                for change in recent_changes
+            ],
+            "total_changes": len(changes),
+            "showing": len(recent_changes),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting recent changes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/report")
+async def generate_state_report():
+    """Generate comprehensive state tracking report"""
+    try:
+        tracker = get_state_tracker()
+        report = await tracker.generate_state_report()
+
+        return {
+            "status": "success",
+            "report": report,
+            "format": "markdown",
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error generating report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/export")
+async def export_state_data(request: ExportRequest):
+    """Export state tracking data"""
+    try:
+        tracker = get_state_tracker()
+
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"state_tracking_export_{timestamp}.{request.format}"
+        output_path = f"data/reports/state_tracking/{filename}"
+
+        # Export data
+        await tracker.export_state_data(output_path, format=request.format)
+
+        return {
+            "status": "success",
+            "message": "State data exported",
+            "filename": filename,
+            "path": output_path,
+            "format": request.format,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error exporting state data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/health")
+async def state_tracking_health():
+    """Health check for state tracking system"""
+    try:
+        tracker = get_state_tracker()
+
+        # Quick health checks
+        health_status = {
+            "tracker_initialized": tracker is not None,
+            "snapshots_available": len(tracker.state_history) > 0,
+            "changes_recorded": len(tracker.change_log) > 0,
+            "milestones_defined": len(tracker.milestones) > 0,
+        }
+
+        return {
+            "status": "healthy",
+            "service": "state_tracking",
+            "components": health_status,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"State tracking health check failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+
+
+@router.get("/metrics/all")
+async def get_all_metrics():
+    """Get current values for all tracking metrics"""
+    try:
+        tracker = get_state_tracker()
+        summary = await tracker.get_state_summary()
+
+        metrics = summary["current_state"]["system_metrics"]
+
+        return {
+            "status": "success",
+            "metrics": metrics,
+            "available_metrics": [m.value for m in TrackingMetric],
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting all metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/phase-history/{phase_name}")
+async def get_phase_history(phase_name: str, days: int = Query(30, ge=1, le=365)):
+    """Get historical data for a specific phase"""
+    try:
+        tracker = get_state_tracker()
+
+        # Get historical data
+        cutoff_date = datetime.now() - timedelta(days=days)
+
+        phase_history = []
+        for snapshot in tracker.state_history:
+            if (
+                snapshot.timestamp >= cutoff_date
+                and phase_name in snapshot.phase_states
+            ):
+                phase_data = snapshot.phase_states[phase_name]
+                phase_history.append(
+                    {
+                        "timestamp": snapshot.timestamp.isoformat(),
+                        "completion_percentage": phase_data["completion_percentage"],
+                        "status": phase_data["status"],
+                    }
+                )
+
+        return {
+            "status": "success",
+            "phase_name": phase_name,
+            "days": days,
+            "data_points": len(phase_history),
+            "history": phase_history,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting phase history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
