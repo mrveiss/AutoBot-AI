@@ -5,13 +5,14 @@ Uses Google's Gemma 2B/3 models for ultra-fast classification tasks
 
 import json
 import logging
-import requests
 from typing import Any, Dict, List, Optional
 
+import requests
+
+from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
-from src.agents.classification_agent import ClassificationResult
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
@@ -350,8 +351,8 @@ Respond with valid JSON:
 
 # CLI test tool
 if __name__ == "__main__":
-    import asyncio
     import argparse
+    import asyncio
 
     parser = argparse.ArgumentParser(description="Test Gemma Classification Agent")
     parser.add_argument("message", nargs="?", help="Message to classify")

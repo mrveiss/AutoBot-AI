@@ -67,8 +67,16 @@ FRONTEND_DIR="autobot-vue"
 
 echo "🔧 Starting AutoBot setup..."
 
-# Ensure required folders exist
+# Ensure required folders exist (including new architecture directories)
 mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DOCS_DIR" "$STATIC_DIR"
+
+# Create new architecture directories
+echo "📁 Creating Docker architecture directories..."
+mkdir -p docker/volumes/{prompts,knowledge_base,config,uploads,fluentd}
+mkdir -p docker/volumes/config
+mkdir -p logs/autobot-centralized
+mkdir -p logs/autobot-all-logs
+echo "✅ Docker architecture directories created."
 
 # --- 1. Verify Python 3.10 via pyenv ---
 echo "🔍 Checking for Python $PYTHON_VERSION with pyenv..."
@@ -219,10 +227,20 @@ else
     fi
 
     # Deploy Playwright service using docker-compose
-    $COMPOSE_CMD -f docker-compose.playwright.yml up -d || {
-        echo "❌ Failed to deploy 'autobot-playwright' container.";
-        exit 1;
-    }
+    if [ -f "docker/compose/docker-compose.playwright-vnc.yml" ]; then
+        $COMPOSE_CMD -f docker/compose/docker-compose.playwright-vnc.yml up -d || {
+            echo "❌ Failed to deploy 'autobot-playwright' container.";
+            exit 1;
+        }
+    elif [ -f "docker-compose.playwright.yml" ]; then
+        $COMPOSE_CMD -f docker-compose.playwright.yml up -d || {
+            echo "❌ Failed to deploy 'autobot-playwright' container.";
+            exit 1;
+        }
+    else
+        echo "❌ No Playwright Docker Compose file found."
+        exit 1
+    fi
     echo "✅ 'autobot-playwright' container deployed and started."
 
     # Wait for service to be healthy
@@ -258,7 +276,50 @@ echo "--- END PYENV DEBUG INFO ---"
 "${HOME}/.pyenv/versions/$PYTHON_VERSION/bin/python" -m venv "$VENV_PATH" || { echo "❌ Failed to create venv."; exit 1; }
 echo "✅ Virtual environment $VENV_PATH created."
 
-# --- 3. Activate and install main requirements ---
+# --- 3. Setup Redis Database Separation Configuration ---
+echo "🔧 Setting up Redis database separation configuration..."
+cat > docker/volumes/config/redis-databases.yaml << 'EOF'
+# Redis Database Separation Configuration
+# AutoBot uses 11 isolated databases for different data types
+databases:
+  main: 0           # Main application data
+  knowledge: 1      # Knowledge base and documents
+  prompts: 2        # Prompt templates and management
+  agents: 3         # Agent communication
+  metrics: 4        # Performance metrics
+  cache: 5          # General caching
+  sessions: 6       # User sessions
+  tasks: 7          # Task management
+  logs: 8           # Log data
+  temp: 9           # Temporary data
+  backup: 10        # Backup data
+EOF
+echo "✅ Redis database separation configuration created."
+
+# Create environment variables for Docker
+echo "🔧 Setting up Docker environment configuration..."
+cat > docker/env/redis.env << 'EOF'
+# Redis Database Separation Environment Variables
+REDIS_HOST=autobot-redis
+REDIS_PORT=6379
+REDIS_URL=redis://autobot-redis:6379
+
+# Database assignments
+REDIS_DB_MAIN=0
+REDIS_DB_KNOWLEDGE=1
+REDIS_DB_PROMPTS=2
+REDIS_DB_AGENTS=3
+REDIS_DB_METRICS=4
+REDIS_DB_CACHE=5
+REDIS_DB_SESSIONS=6
+REDIS_DB_TASKS=7
+REDIS_DB_LOGS=8
+REDIS_DB_TEMP=9
+REDIS_DB_BACKUP=10
+EOF
+echo "✅ Docker environment configuration created."
+
+# --- 4. Activate and install main requirements ---
 echo "--- Python Dependencies Installation for Multi-Agent Architecture ---"
 source "$VENV_PATH/bin/activate"
 if [ ! -f "$REQUIREMENTS_FILE" ]; then
@@ -350,7 +411,7 @@ EOF
     pip install -r requirements_group_6.txt || { echo "❌ Failed to install Group 6 requirements."; deactivate; exit 1; }
     echo "✅ Group 6 dependencies installed."
 
-    # Group 7: Monitoring & Development Tools
+    # Group 7: Monitoring & Development Tools (including centralized logging)
     echo "⬇️ Installing Group 7: Monitoring & Development Tools..."
     cat > requirements_group_7.txt << EOF
 rich>=13.7.0
@@ -359,9 +420,22 @@ structlog>=23.2.0
 prometheus-client>=0.19.0
 pre-commit>=3.6.0
 detect-secrets>=1.4.0
+flake8>=6.0.0
+pytest>=7.4.0
 EOF
     pip install -r requirements_group_7.txt || { echo "❌ Failed to install Group 7 requirements."; deactivate; exit 1; }
     echo "✅ Group 7 dependencies installed."
+
+    # Group 8: Redis Database Management and Codebase Analytics
+    echo "⬇️ Installing Group 8: Redis Database Management and Codebase Analytics..."
+    cat > requirements_group_8.txt << EOF
+redis>=5.0.0,<6.0
+pyyaml>=6.0.1
+jsonschema>=4.20.0
+ast-tools>=0.1.0
+EOF
+    pip install -r requirements_group_8.txt || { echo "❌ Failed to install Group 8 requirements."; deactivate; exit 1; }
+    echo "✅ Group 8 dependencies installed."
 
     # Clean up temporary files
     rm requirements_group_*.txt
@@ -446,11 +520,14 @@ if [[ $voice_choice =~ ^[Yy]$ ]]; then
 
     # Install system dependencies based on OS
     if command -v apt-get &>/dev/null; then
-        # Ubuntu/Debian
+        # Ubuntu/Debian (including centralized logging dependencies)
         sudo apt-get update && sudo apt-get install -y \
             portaudio19-dev python3-pyaudio \
             espeak espeak-data libespeak1 libespeak-dev \
-            flac || {
+            flac \
+            jq \
+            curl \
+            netcat-openbsd || {
             echo "⚠️ Failed to install some system audio dependencies"
         }
     elif command -v brew &>/dev/null; then
@@ -808,9 +885,9 @@ fi
 # Add current directory to PYTHONPATH for module discovery
 export PYTHONPATH=$(pwd)
 
-# Function to initialize system knowledge
+# Function to initialize system knowledge and Redis database separation
 initialize_system_knowledge() {
-    echo "🔄 Initializing system knowledge..."
+    echo "🔄 Initializing system knowledge and Redis database separation..."
 
     python3 -c "
 import asyncio
@@ -848,8 +925,54 @@ sys.exit(0 if result else 1)
     fi
 }
 
-# Initialize system knowledge
+# Function to test Redis database separation
+test_redis_separation() {
+    echo "🧪 Testing Redis database separation..."
+
+    python3 -c "
+try:
+    from src.utils.redis_database_manager import redis_db_manager
+
+    # Test database separation
+    if redis_db_manager.validate_database_separation():
+        print('✅ Redis database separation validated')
+
+        # Test different database connections
+        main_client = redis_db_manager.get_connection('main')
+        knowledge_client = redis_db_manager.get_connection('knowledge')
+        prompts_client = redis_db_manager.get_connection('prompts')
+
+        # Test isolation
+        main_client.set('test_key', 'main_value')
+        knowledge_client.set('test_key', 'knowledge_value')
+        prompts_client.set('test_key', 'prompts_value')
+
+        main_val = main_client.get('test_key')
+        knowledge_val = knowledge_client.get('test_key')
+        prompts_val = prompts_client.get('test_key')
+
+        if main_val == 'main_value' and knowledge_val == 'knowledge_value' and prompts_val == 'prompts_value':
+            print('✅ Database isolation working correctly')
+
+            # Cleanup test data
+            main_client.delete('test_key')
+            knowledge_client.delete('test_key')
+            prompts_client.delete('test_key')
+        else:
+            print('❌ Database isolation test failed')
+    else:
+        print('❌ Redis database separation validation failed')
+
+except ImportError as e:
+    print(f'⚠️ Redis database manager not available: {e}')
+except Exception as e:
+    print(f'❌ Redis separation test failed: {e}')
+" || echo "⚠️ Redis separation test failed (may be expected if Redis not running)"
+}
+
+# Initialize system knowledge and test Redis separation
 initialize_system_knowledge
+test_redis_separation
 
 python3 -c "
 # Test core modules
@@ -867,6 +990,18 @@ from src.agents import (
     get_agent_orchestrator, AgentType
 )
 print('✅ Multi-agent architecture modules imported successfully!')
+
+# Test StandardizedAgent base class
+from src.agents.standardized_agent import StandardizedAgent
+print('✅ StandardizedAgent base class imported successfully!')
+
+# Test Redis database manager
+from src.utils.redis_database_manager import redis_db_manager
+print('✅ Redis database manager imported successfully!')
+
+# Test codebase analytics
+from src.agents.npu_code_search_agent import NPUCodeSearchAgent
+print('✅ NPU Code Search Agent imported successfully!')
 
 # Test task-specific model configuration
 chat_model = global_config_manager.get_task_specific_model('chat')
@@ -886,6 +1021,22 @@ print('✅ Multi-Agent Architecture configuration validation completed successfu
 if [ $? -eq 0 ]; then
     echo "✅ Configuration validation passed!"
     echo "✅ Setup complete. You may now run ./run_agent.sh to launch AutoBot."
+echo ""
+echo "🚀 New Architecture Features Available:"
+echo "   ./run_agent.sh --centralized-logs    # All logs in one place"
+echo "   ./run_agent.sh --redis-separation    # Isolated Redis databases"
+echo "   ./run_agent.sh --all-containers      # Full Docker setup"
+echo "   ./run_agent.sh --help               # Show all options"
+echo ""
+echo "📊 Analytics Features:"
+echo "   Frontend: http://localhost:5173 → Analytics tab"
+echo "   API: /api/code_search/analytics/ endpoints"
+echo "   NPU acceleration: Available when hardware supports"
+echo ""
+echo "🐳 Docker Architecture:"
+echo "   Centralized volumes in: docker/volumes/"
+echo "   Logging output: logs/autobot-centralized/"
+echo "   Redis databases: 11 isolated databases (0-10)"
 else
     echo "❌ Configuration validation failed!"
     echo "Please check the error messages above and fix any issues."
@@ -897,5 +1048,14 @@ echo "Running pyenv versions:"
 pyenv versions
 echo "Running pyenv doctor:"
 pyenv doctor
+echo ""
+echo "Redis configuration:"
+ls -la docker/volumes/config/redis-databases.yaml 2>/dev/null || echo "Redis config not found"
+echo ""
+echo "Docker volumes:"
+ls -la docker/volumes/ 2>/dev/null || echo "Docker volumes not found"
+echo ""
+echo "Centralized logging:"
+ls -la logs/ 2>/dev/null || echo "Log directories not found"
 echo "--- END DIAGNOSTIC INFORMATION ---"
 echo "Please provide this output to the developer for troubleshooting."

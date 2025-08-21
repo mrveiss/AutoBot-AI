@@ -5,6 +5,10 @@
 # Parse command line arguments
 TEST_MODE=false
 START_ALL_CONTAINERS=false
+CENTRALIZED_LOGGING=false
+REDIS_SEPARATION=false
+DEFAULT_COMPOSE_FILE="docker/compose/docker-compose.hybrid.yml"
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --test-mode)
@@ -15,17 +19,60 @@ while [[ $# -gt 0 ]]; do
             START_ALL_CONTAINERS=true
             shift
             ;;
+        --centralized-logs)
+            CENTRALIZED_LOGGING=true
+            DEFAULT_COMPOSE_FILE="docker-compose.centralized-logs.yml"
+            shift
+            ;;
+        --redis-separation)
+            REDIS_SEPARATION=true
+            shift
+            ;;
+        --compose-file)
+            DEFAULT_COMPOSE_FILE="$2"
+            shift 2
+            ;;
+        --help)
+            echo "AutoBot Application Startup Script"
+            echo "Usage: $0 [options]"
+            echo ""
+            echo "Options:"
+            echo "  --test-mode           Run in test mode with additional checks"
+            echo "  --all-containers      Start all containers (Redis, NPU, AI Stack, Playwright)"
+            echo "  --centralized-logs    Use centralized logging architecture (ALL logs in one place)"
+            echo "  --redis-separation    Enable Redis database separation (11 isolated databases)"
+            echo "  --compose-file FILE   Use specific Docker Compose file"
+            echo "  --help               Show this help message"
+            echo ""
+            echo "Architecture Options:"
+            echo "  Default:              Standard hybrid mode (Docker + local processes)"
+            echo "  --centralized-logs:   ELK stack logging with Fluentd collection"
+            echo "  --redis-separation:   Isolated databases (main, knowledge, prompts, agents, etc.)"
+            echo ""
+            echo "Examples:"
+            echo "  $0                              # Standard startup"
+            echo "  $0 --test-mode                  # Test mode with validation"
+            echo "  $0 --centralized-logs           # All logs go to single location"
+            echo "  $0 --redis-separation           # Use separated Redis databases"
+            echo "  $0 --all-containers --centralized-logs  # Full setup with centralized logging"
+            exit 0
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--test-mode] [--all-containers]"
-            echo "  --test-mode       Run in test mode with additional checks"
-            echo "  --all-containers  Start all containers (Redis, NPU, AI Stack, Playwright)"
+            echo "Usage: $0 [--test-mode] [--all-containers] [--centralized-logs] [--redis-separation] [--help]"
             exit 1
             ;;
     esac
 done
 
 echo "Starting AutoBot application..."
+echo "Configuration:"
+echo "  Test Mode: $TEST_MODE"
+echo "  All Containers: $START_ALL_CONTAINERS"
+echo "  Centralized Logging: $CENTRALIZED_LOGGING"
+echo "  Redis Separation: $REDIS_SEPARATION"
+echo "  Compose File: $DEFAULT_COMPOSE_FILE"
+echo ""
 
 # Enhanced cleanup function with better signal handling
 cleanup() {
@@ -118,8 +165,28 @@ fi
 # Start all required Docker containers (from docker-compose)
 echo "Starting all required Docker containers..."
 
-# If --all-containers flag is set, use the comprehensive startup script
-if [ "$START_ALL_CONTAINERS" = true ]; then
+# Architecture-specific startup
+if [ "$CENTRALIZED_LOGGING" = true ]; then
+    echo "🚀 Starting AutoBot with CENTRALIZED LOGGING architecture..."
+    echo "   All container logs will be collected in a single location"
+    echo "   Log viewer available at http://localhost:5341"
+
+    # Ensure log directories exist
+    mkdir -p logs/autobot-centralized
+
+    # Start centralized logging infrastructure first
+    docker-compose -f "$DEFAULT_COMPOSE_FILE" up -d autobot-log-collector || {
+        echo "❌ Failed to start log collector."
+        exit 1
+    }
+
+    # Wait for log collector to be ready
+    echo "⏳ Waiting for log collector to be ready..."
+    sleep 5
+
+    echo "✅ Centralized logging infrastructure started"
+
+elif [ "$START_ALL_CONTAINERS" = true ]; then
     echo "🚀 Starting ALL containers (Redis, NPU, AI Stack, Playwright)..."
     ./scripts/deployment/start_all_containers.sh || {
         echo "❌ Failed to start all containers."
@@ -129,23 +196,66 @@ else
     echo "📦 Starting essential containers only (Redis, NPU, Playwright)..."
 fi
 
-# Start Redis Stack
+# Start Redis Stack with database separation support
 echo "🔄 Starting Redis Stack..."
+
+if [ "$REDIS_SEPARATION" = true ]; then
+    echo "   Using Redis database separation (11 isolated databases)"
+    echo "   Databases: main(0), knowledge(1), prompts(2), agents(3), metrics(4), cache(5), sessions(6), tasks(7), logs(8), temp(9), backup(10)"
+
+    # Ensure Redis database configuration exists
+    mkdir -p docker/volumes/config
+    if [ ! -f "docker/volumes/config/redis-databases.yaml" ]; then
+        echo "⚠️  Redis database configuration missing. Creating default configuration..."
+        cat > docker/volumes/config/redis-databases.yaml << EOF
+# Redis Database Separation Configuration
+databases:
+  main: 0           # Main application data
+  knowledge: 1      # Knowledge base and documents
+  prompts: 2        # Prompt templates and management
+  agents: 3         # Agent communication
+  metrics: 4        # Performance metrics
+  cache: 5          # General caching
+  sessions: 6       # User sessions
+  tasks: 7          # Task management
+  logs: 8           # Log data
+  temp: 9           # Temporary data
+  backup: 10        # Backup data
+EOF
+    fi
+fi
+
 if docker ps --format '{{.Names}}' | grep -q '^autobot-redis$'; then
     echo "✅ 'autobot-redis' container is already running."
+
+    # Verify Redis database separation if enabled
+    if [ "$REDIS_SEPARATION" = true ]; then
+        echo "🔍 Verifying Redis database separation..."
+        python -c "
+from src.utils.redis_database_manager import redis_db_manager
+try:
+    if redis_db_manager.validate_database_separation():
+        print('✅ Redis database separation validated')
+    else:
+        print('⚠️  Redis database separation validation failed')
+except Exception as e:
+    print(f'⚠️  Could not validate Redis separation: {e}')
+" 2>/dev/null || echo "⚠️  Could not validate Redis separation (Python environment may not be ready)"
+    fi
+
 elif docker ps -a --format '{{.Names}}' | grep -q '^autobot-redis$'; then
     echo "🔄 Starting existing 'autobot-redis' container..."
     docker start autobot-redis || {
         echo "❌ Failed to start existing Redis container. Removing and recreating..."
         docker rm autobot-redis
-        docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-redis || {
+        docker-compose -f "$DEFAULT_COMPOSE_FILE" up -d autobot-redis || {
             echo "❌ Failed to recreate Redis Stack container."
             exit 1
         }
     }
     echo "✅ 'autobot-redis' container started."
 else
-    docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-redis || {
+    docker-compose -f "$DEFAULT_COMPOSE_FILE" up -d autobot-redis || {
         echo "❌ Failed to start Redis Stack container via docker-compose."
         exit 1
     }
@@ -156,6 +266,13 @@ fi
 echo "🔄 Starting NPU Worker..."
 if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
     echo "✅ 'autobot-npu-worker' container is already running."
+
+    # Test NPU worker code search capabilities
+    if [ "$TEST_MODE" = true ]; then
+        echo "🧪 Testing NPU Worker code search capabilities..."
+        python test_npu_worker.py 2>/dev/null && echo "✅ NPU Worker tests passed" || echo "⚠️  NPU Worker tests failed (continuing anyway)"
+    fi
+
 elif docker ps -a --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
     echo "🔄 Starting existing 'autobot-npu-worker' container..."
     docker start autobot-npu-worker || {
@@ -163,7 +280,7 @@ elif docker ps -a --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
         # Don't exit - NPU worker is optional
     }
 else
-    docker-compose -f docker/compose/docker-compose.hybrid.yml up -d autobot-npu-worker || {
+    docker-compose -f "$DEFAULT_COMPOSE_FILE" up -d autobot-npu-worker || {
         echo "⚠️  Warning: Failed to start NPU Worker container. Continuing without NPU acceleration."
         # Don't exit - NPU worker is optional
     }
@@ -173,11 +290,33 @@ fi
 echo "⏳ Waiting for containers to be ready..."
 sleep 5
 
-# Check Redis health
+# Check Redis health and database separation
 echo "🔍 Checking Redis health..."
 for i in {1..10}; do
     if docker exec autobot-redis redis-cli ping >/dev/null 2>&1; then
         echo "✅ Redis is ready."
+
+        # Test Redis database separation if enabled
+        if [ "$REDIS_SEPARATION" = true ]; then
+            echo "🔍 Testing Redis database separation..."
+            docker exec autobot-redis redis-cli -n 0 set "test_main" "main_db" >/dev/null 2>&1
+            docker exec autobot-redis redis-cli -n 1 set "test_knowledge" "knowledge_db" >/dev/null 2>&1
+            docker exec autobot-redis redis-cli -n 2 set "test_prompts" "prompts_db" >/dev/null 2>&1
+
+            MAIN_VAL=$(docker exec autobot-redis redis-cli -n 0 get "test_main" 2>/dev/null)
+            KNOWLEDGE_VAL=$(docker exec autobot-redis redis-cli -n 1 get "test_knowledge" 2>/dev/null)
+            PROMPTS_VAL=$(docker exec autobot-redis redis-cli -n 2 get "test_prompts" 2>/dev/null)
+
+            if [ "$MAIN_VAL" = "main_db" ] && [ "$KNOWLEDGE_VAL" = "knowledge_db" ] && [ "$PROMPTS_VAL" = "prompts_db" ]; then
+                echo "✅ Redis database separation working correctly"
+                # Clean up test data
+                docker exec autobot-redis redis-cli -n 0 del "test_main" >/dev/null 2>&1
+                docker exec autobot-redis redis-cli -n 1 del "test_knowledge" >/dev/null 2>&1
+                docker exec autobot-redis redis-cli -n 2 del "test_prompts" >/dev/null 2>&1
+            else
+                echo "⚠️  Redis database separation test failed - databases may not be isolated"
+            fi
+        fi
         break
     fi
     echo "⏳ Waiting for Redis... (attempt $i/10)"
@@ -318,6 +457,23 @@ fi
 echo "AutoBot application started."
 echo "Backend available at http://localhost:8001/ (PID: $BACKEND_PID)"
 echo "Frontend available at http://localhost:5173/ (PID: $FRONTEND_PID)"
+echo ""
+echo "🚀 Additional Services:"
+if [ "$CENTRALIZED_LOGGING" = true ]; then
+    echo "📊 Centralized Logs: http://localhost:5341 (Seq log viewer)"
+    echo "🔍 Log Aggregator: http://localhost:9200 (Elasticsearch)"
+    echo "📋 All logs location: ./logs/autobot-centralized/"
+fi
+if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
+    echo "⚡ NPU Worker: http://localhost:8081 (Code search acceleration)"
+fi
+if [ "$REDIS_SEPARATION" = true ]; then
+    echo "💾 Redis: localhost:6379 (11 separated databases)"
+else
+    echo "💾 Redis: localhost:6379"
+fi
+echo "🎭 Playwright: http://localhost:3000 (Browser automation)"
+echo ""
 echo "Press Ctrl+C to stop all processes."
 
 # Wait for Ctrl+C

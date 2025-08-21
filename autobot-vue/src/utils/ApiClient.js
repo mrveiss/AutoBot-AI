@@ -322,7 +322,9 @@ class ApiClient {
 
   // Chat API methods
   async sendChatMessage(message, options = {}) {
-    const response = await this.post('/api/chat', { message, ...options });
+    // Use the correct endpoint with chat ID
+    const chatId = options.chatId || 'default';
+    const response = await this.post(`/api/chats/${chatId}/message`, { message });
 
     // Check if it's a streaming response
     const contentType = response.headers.get('content-type');
