@@ -1,7 +1,7 @@
 """
 Centralized Redis client utility
 Eliminates code duplication across modules by providing a singleton Redis
-client factory
+client factory with database separation support
 """
 
 import logging
@@ -12,85 +12,115 @@ import redis.asyncio as async_redis
 
 from src.config import config as global_config_manager
 from src.utils.config_manager import config_manager
+from src.utils.redis_database_manager import redis_db_manager
 
 logger = logging.getLogger(__name__)
 
-# Global Redis client instances
+# Global Redis client instances (for backward compatibility)
 _redis_client: Optional[redis.Redis] = None
 _async_redis_client: Optional[async_redis.Redis] = None
 
 
 def get_redis_client(
     async_client: bool = False,
+    database: str = "main",
 ) -> Union[redis.Redis, async_redis.Redis, None]:
     """
-    Returns a singleton instance of the Redis client, configured from the
-    global application config.
+    Returns a Redis client instance with database separation support.
 
     Args:
         async_client (bool): If True, returns async Redis client. If False,
             returns sync client.
+        database (str): Database name (e.g., 'main', 'knowledge', 'prompts')
 
     Returns:
         Union[redis.Redis, async_redis.Redis, None]: Redis client instance or
             None if Redis is disabled
     """
-    global _redis_client, _async_redis_client
-
     try:
-        # Get Redis configuration from global config manager
-        # First try memory.redis config (current structure)
-        memory_config = global_config_manager.get("memory", {})
-        redis_config = memory_config.get("redis", {})
-
-        # Fall back to task_transport.redis config if memory config not
-        # available
-        if not redis_config or not redis_config.get("enabled", False):
-            task_transport_config = global_config_manager.get("task_transport", {})
-            if task_transport_config.get("type") == "redis":
-                redis_config = task_transport_config.get("redis", {})
-            else:
-                logger.info("Redis is disabled in configuration")
-                return None
-
-        if not redis_config:
-            logger.warning("No Redis configuration found")
-            return None
-
-        # Extract connection parameters using centralized config
-        host = config_manager.get("redis.host", "localhost")
-        port = config_manager.get("redis.port", 6379)
-        password = config_manager.get("redis.password", None)
-        db = config_manager.get("redis.db", 0)
-
+        # Use new database manager for proper database separation
         if async_client:
-            if _async_redis_client is None:
-                _async_redis_client = async_redis.Redis(
-                    host=host,
-                    port=port,
-                    password=password,
-                    db=db,
-                    decode_responses=True,
+            # For async clients, we need to handle this properly
+            import asyncio
+
+            if asyncio.iscoroutinefunction(redis_db_manager.get_async_connection):
+                # Return a coroutine that can be awaited
+                async def get_async_client():
+                    return await redis_db_manager.get_async_connection(database)
+
+                return get_async_client()
+            else:
+                logger.warning(
+                    "Async Redis not properly configured, falling back to sync"
                 )
-                logger.info(
-                    f"Async Redis client initialized for {host}:{port} " f"(DB: {db})"
-                )
-            return _async_redis_client
+                return redis_db_manager.get_connection(database)
         else:
-            if _redis_client is None:
-                _redis_client = redis.Redis(
-                    host=host,
-                    port=port,
-                    password=password,
-                    db=db,
-                    decode_responses=True,
-                )
-                logger.info(f"Redis client initialized for {host}:{port} (DB: {db})")
-            return _redis_client
+            return redis_db_manager.get_connection(database)
 
     except Exception as e:
-        logger.error(f"Failed to initialize Redis client: {str(e)}")
-        return None
+        logger.error(f"Failed to get Redis client for database '{database}': {str(e)}")
+
+        # Fallback to legacy method for backward compatibility
+        global _redis_client, _async_redis_client
+
+        try:
+            # Get Redis configuration from global config manager
+            memory_config = global_config_manager.get("memory", {})
+            redis_config = memory_config.get("redis", {})
+
+            # Fall back to task_transport.redis config if memory config not available
+            if not redis_config or not redis_config.get("enabled", False):
+                task_transport_config = global_config_manager.get("task_transport", {})
+                if task_transport_config.get("type") == "redis":
+                    redis_config = task_transport_config.get("redis", {})
+                else:
+                    logger.info("Redis is disabled in configuration")
+                    return None
+
+            if not redis_config:
+                logger.warning("No Redis configuration found")
+                return None
+
+            # Extract connection parameters using centralized config
+            host = config_manager.get("redis.host", "localhost")
+            port = config_manager.get("redis.port", 6379)
+            password = config_manager.get("redis.password", None)
+            db = config_manager.get("redis.db", 0)
+
+            if async_client:
+                if _async_redis_client is None:
+                    _async_redis_client = async_redis.Redis(
+                        host=host,
+                        port=port,
+                        password=password,
+                        db=db,
+                        decode_responses=True,
+                    )
+                    logger.info(
+                        f"Fallback async Redis client initialized for "
+                        f"{host}:{port} (DB: {db})"
+                    )
+                return _async_redis_client
+            else:
+                if _redis_client is None:
+                    _redis_client = redis.Redis(
+                        host=host,
+                        port=port,
+                        password=password,
+                        db=db,
+                        decode_responses=True,
+                    )
+                    logger.info(
+                        f"Fallback Redis client initialized for "
+                        f"{host}:{port} (DB: {db})"
+                    )
+                return _redis_client
+
+        except Exception as fallback_error:
+            logger.error(
+                f"Fallback Redis client initialization failed: {str(fallback_error)}"
+            )
+            return None
 
 
 def get_redis_config() -> dict:
@@ -119,6 +149,14 @@ def reset_redis_clients():
     """
     global _redis_client, _async_redis_client
 
+    # Reset new database manager connections
+    try:
+        redis_db_manager.close_all_connections()
+        logger.info("Database manager connections closed")
+    except Exception as e:
+        logger.error(f"Error closing database manager connections: {e}")
+
+    # Reset legacy singleton instances for backward compatibility
     if _redis_client:
         try:
             _redis_client.close()
@@ -164,3 +202,29 @@ def test_redis_connection() -> bool:
     except Exception as e:
         logger.error(f"Redis connection test failed: {str(e)}")
         return False
+
+
+# Convenience functions for specific database access
+def get_knowledge_base_redis(**kwargs) -> redis.Redis:
+    """Get Redis client for knowledge base data"""
+    return get_redis_client(database="knowledge", **kwargs)
+
+
+def get_prompts_redis(**kwargs) -> redis.Redis:
+    """Get Redis client for prompt templates"""
+    return get_redis_client(database="prompts", **kwargs)
+
+
+def get_agents_redis(**kwargs) -> redis.Redis:
+    """Get Redis client for agent communication"""
+    return get_redis_client(database="agents", **kwargs)
+
+
+def get_metrics_redis(**kwargs) -> redis.Redis:
+    """Get Redis client for performance metrics"""
+    return get_redis_client(database="metrics", **kwargs)
+
+
+def get_main_redis(**kwargs) -> redis.Redis:
+    """Get Redis client for main application data"""
+    return get_redis_client(database="main", **kwargs)

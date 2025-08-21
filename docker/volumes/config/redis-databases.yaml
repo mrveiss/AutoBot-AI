@@ -1,0 +1,143 @@
+# AutoBot Redis Database Configuration
+# Centralized mapping of Redis databases for data isolation
+# This file should be used by all components accessing Redis
+
+redis_databases:
+  # Core application databases
+  main:
+    db: 0
+    description: "Main application data (sessions, cache, general data)"
+    components: ["backend", "api", "general_cache"]
+    ttl_default: 3600  # 1 hour
+
+  knowledge:
+    db: 1
+    description: "Knowledge base documents and metadata"
+    components: ["knowledge_base", "rag_agent", "document_processor"]
+    ttl_default: 86400  # 24 hours
+
+  prompts:
+    db: 2
+    description: "Prompt templates and management"
+    components: ["prompt_manager", "all_agents", "template_cache"]
+    ttl_default: 7200  # 2 hours
+
+  agents:
+    db: 3
+    description: "Agent communication and coordination"
+    components: ["agent_orchestrator", "agent_communication", "heartbeats"]
+    ttl_default: 300  # 5 minutes
+
+  metrics:
+    db: 4
+    description: "Performance metrics and monitoring data"
+    components: ["prometheus", "performance_monitor", "health_checks"]
+    ttl_default: 3600  # 1 hour
+
+  logs:
+    db: 5
+    description: "Structured logs and events"
+    components: ["logging_system", "audit_logs", "error_tracking"]
+    ttl_default: 604800  # 7 days
+
+  sessions:
+    db: 6
+    description: "User sessions and authentication"
+    components: ["auth_system", "session_manager", "user_state"]
+    ttl_default: 28800  # 8 hours
+
+  workflows:
+    db: 7
+    description: "Workflow state and orchestration"
+    components: ["workflow_engine", "task_queue", "process_state"]
+    ttl_default: 86400  # 24 hours
+
+  vectors:
+    db: 8
+    description: "Vector embeddings cache"
+    components: ["embedding_cache", "similarity_search", "vector_store"]
+    ttl_default: 604800  # 7 days
+
+  models:
+    db: 9
+    description: "Model metadata and versioning"
+    components: ["model_manager", "model_cache", "version_control"]
+    ttl_default: 86400  # 24 hours
+
+  # Special databases
+  testing:
+    db: 15
+    description: "Test data (isolated from production)"
+    components: ["test_suite", "integration_tests", "mock_data"]
+    ttl_default: 3600  # 1 hour
+
+# Database access patterns
+access_patterns:
+  read_heavy:
+    databases: ["prompts", "knowledge", "vectors"]
+    optimization: "Use read replicas if available"
+
+  write_heavy:
+    databases: ["logs", "metrics", "sessions"]
+    optimization: "Consider write batching"
+
+  frequent_access:
+    databases: ["main", "agents", "sessions"]
+    optimization: "Keep in memory, short TTL"
+
+  long_term_storage:
+    databases: ["knowledge", "vectors", "logs"]
+    optimization: "Can use disk persistence"
+
+# Security settings per database
+security:
+  high_security:
+    databases: ["sessions", "main"]
+    encryption: true
+    access_control: strict
+
+  medium_security:
+    databases: ["prompts", "knowledge", "agents"]
+    encryption: false
+    access_control: moderate
+
+  low_security:
+    databases: ["metrics", "logs", "testing"]
+    encryption: false
+    access_control: basic
+
+# Monitoring and alerts
+monitoring:
+  memory_usage:
+    alert_threshold: 80
+    databases: ["vectors", "knowledge", "logs"]
+
+  connection_count:
+    alert_threshold: 15
+    databases: ["all"]
+
+  key_count:
+    alert_threshold: 100000
+    databases: ["logs", "metrics"]
+
+# Backup strategy
+backup:
+  critical:
+    databases: ["main", "sessions", "knowledge"]
+    frequency: "daily"
+    retention: "30 days"
+
+  important:
+    databases: ["prompts", "workflows", "models"]
+    frequency: "weekly"
+    retention: "14 days"
+
+  optional:
+    databases: ["metrics", "logs", "vectors"]
+    frequency: "monthly"
+    retention: "7 days"
+
+  never:
+    databases: ["testing"]
+    frequency: "none"
+    retention: "none"
