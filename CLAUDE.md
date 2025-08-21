@@ -42,6 +42,15 @@ project_root/
 - **CONFIGURATION**: All setup and configuration changes go through `setup_agent.sh`
 - **OPTIONS**: Use `./run_agent.sh --help` to see available runtime options
 
+#### 🔴 CRITICAL: STARTUP/SETUP SCRIPT MAINTENANCE
+**ALL IMPLEMENTED CHANGES MUST BE REFLECTED IN STARTUP AND SETUP SCRIPTS**
+
+- `run_agent.sh` and `setup_agent.sh` MUST ALWAYS be up to date
+- **ZERO TOLERANCE** for missing changes in these scripts
+- New features, dependencies, Docker configurations, Redis settings MUST be included
+- Any architectural changes MUST be represented in script options and configurations
+- Scripts are the SINGLE SOURCE OF TRUTH for application deployment
+
 #### ⚙️ Configuration & Dependencies
 - **NEVER hardcode values** - use `src/config.py` for all configuration
 - **Update docstrings** following Google style for any function changes

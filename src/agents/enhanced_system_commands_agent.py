@@ -1,7 +1,7 @@
 """
-Enhanced System Commands Agent - Specialized for system command generation and validation.
+Enhanced System Commands Agent - Specialized for system command generation.
 
-Uses lightweight Llama 3.2 1B model for efficient command generation with security focus.
+Uses lightweight Llama 3.2 1B model for efficient command generation with security.
 Handles system operations, shell commands, and system administration tasks.
 """
 
