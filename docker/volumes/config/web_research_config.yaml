@@ -1,0 +1,95 @@
+# Advanced Web Research Configuration
+
+# Basic settings
+enable_advanced_research: false  # Set to true to enable Tier 2 capabilities
+headless: true  # Run browser in headless mode
+max_results: 8  # Maximum results per search query
+timeout: 30  # Page load timeout in seconds
+
+# CAPTCHA solving configuration
+captcha:
+  enabled: false  # Enable CAPTCHA solving services
+  service: "2captcha"  # Options: "2captcha", "anticaptcha", "capsolver"
+  api_key: ""  # Your CAPTCHA service API key
+  timeout: 120  # CAPTCHA solving timeout in seconds
+
+# Proxy configuration (for residential proxies)
+proxy:
+  enabled: false
+  type: "http"  # Options: "http", "socks5"
+  host: ""
+  port: 0
+  username: ""
+  password: ""
+  rotation: false  # Enable proxy rotation
+
+# Rate limiting settings
+rate_limiting:
+  min_delay_between_requests: 2.0  # Minimum seconds between requests to same domain
+  random_delay_range: [1.0, 3.0]  # Random delay range between search engines
+  max_concurrent_requests: 3  # Maximum concurrent page requests
+
+# Anti-detection settings
+anti_detection:
+  randomize_fingerprint: true  # Randomize browser fingerprint
+  use_stealth_scripts: true  # Inject anti-detection JavaScript
+  rotate_user_agents: true  # Rotate user agent strings
+  simulate_human_behavior: true  # Add human-like delays and interactions
+
+# Search engines configuration
+search_engines:
+  duckduckgo:
+    enabled: true
+    priority: 1  # Higher priority = used first
+  bing:
+    enabled: true
+    priority: 2
+  google:
+    enabled: false  # Disabled by default due to aggressive bot detection
+    priority: 3
+
+# Content extraction settings
+content_extraction:
+  max_content_length: 5000  # Maximum characters per page
+  clean_content: true  # Remove noise from extracted content
+  extract_metadata: true  # Extract page metadata
+
+# Quality scoring weights
+quality_scoring:
+  domain_reputation_weight: 0.3
+  content_length_weight: 0.2
+  title_relevance_weight: 0.2
+  freshness_weight: 0.1
+  search_engine_ranking_weight: 0.2
+
+# Caching settings
+caching:
+  enabled: true
+  ttl: 3600  # Cache time-to-live in seconds (1 hour)
+  max_cache_size: 100  # Maximum cached queries
+
+# Logging configuration
+logging:
+  level: "INFO"  # Options: "DEBUG", "INFO", "WARNING", "ERROR"
+  log_requests: true  # Log all HTTP requests
+  log_captcha_events: true  # Log CAPTCHA detection and solving
+  log_performance: true  # Log performance metrics
+
+# Fallback configuration
+fallback:
+  use_basic_research_on_failure: true  # Fall back to basic research if advanced fails
+  retry_attempts: 2  # Number of retry attempts before fallback
+  retry_delay: 5  # Delay between retries in seconds
+
+# Human-in-the-loop settings (for future implementation)
+human_intervention:
+  enabled: false  # Enable human CAPTCHA solving
+  notification_method: "terminal"  # Options: "terminal", "webhook", "email"
+  timeout: 300  # Time to wait for human response in seconds
+
+# Browser pool settings (for scaling)
+browser_pool:
+  enabled: false  # Enable browser instance pooling
+  max_instances: 3  # Maximum concurrent browser instances
+  instance_timeout: 600  # Browser instance timeout in seconds
+  reuse_instances: true  # Reuse browser instances across requests
