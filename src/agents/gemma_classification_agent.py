@@ -13,7 +13,8 @@ from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
 from src.agents.classification_agent import ClassificationResult
 
-from .base_agent import AgentRequest, AgentResponse, LocalAgent
+from .base_agent import AgentRequest
+from .standardized_agent import StandardizedAgent
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Using ClassificationResult from classification_agent instead of custom result type
 
 
-class GemmaClassificationAgent(LocalAgent):
+class GemmaClassificationAgent(StandardizedAgent):
     """Ultra-fast classification agent using Google's Gemma models."""
 
     def __init__(self, ollama_host: str = "http://localhost:11434"):
@@ -32,9 +33,9 @@ class GemmaClassificationAgent(LocalAgent):
 
         # Preferred models in order of preference (smallest/fastest first)
         self.preferred_models = [
-            "gemma2:2b",    # 2B parameters - ultra fast
-            "gemma3:latest", # Latest Gemma 3 model
-            "llama3.2:1b"   # Fallback to existing small model
+            "gemma2:2b",  # 2B parameters - ultra fast
+            "gemma3:latest",  # Latest Gemma 3 model
+            "llama3.2:1b",  # Fallback to existing small model
         ]
 
         self.capabilities = [
@@ -42,58 +43,27 @@ class GemmaClassificationAgent(LocalAgent):
             "intent_classification",
             "complexity_analysis",
             "workflow_routing",
-            "lightweight_llm_inference"
+            "lightweight_llm_inference",
         ]
 
         self._initialize_classification_prompt()
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
-        """Process agent request using Gemma models."""
-        try:
-            action = request.action
-            payload = request.payload
+    async def action_classify_request(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle classify_request action using Gemma models."""
+        user_message = request.payload.get("message", "")
+        result = await self.classify_request(user_message)
 
-            if action == "classify_request":
-                user_message = payload.get("message", "")
-                result = await self.classify_request(user_message)
-
-                result_dict = {
-                    "complexity": result.complexity.value,
-                    "confidence": result.confidence,
-                    "reasoning": result.reasoning,
-                    "suggested_agents": result.suggested_agents,
-                    "estimated_steps": result.estimated_steps,
-                    "user_approval_needed": result.user_approval_needed,
-                    "context_analysis": result.context_analysis,
-                    "model_used": result.context_analysis.get("model_used", "unknown"),
-                    "response_time_ms": result.context_analysis.get("response_time_ms", 0)
-                }
-
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result=result_dict,
-                )
-
-            else:
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="error",
-                    result=None,
-                    error=f"Unknown action: {action}",
-                )
-
-        except Exception as e:
-            logger.error(f"Gemma classification agent error: {e}")
-            return AgentResponse(
-                request_id=request.request_id,
-                agent_type=self.agent_type,
-                status="error",
-                result=None,
-                error=str(e),
-            )
+        return {
+            "complexity": result.complexity.value,
+            "confidence": result.confidence,
+            "reasoning": result.reasoning,
+            "suggested_agents": result.suggested_agents,
+            "estimated_steps": result.estimated_steps,
+            "user_approval_needed": result.user_approval_needed,
+            "context_analysis": result.context_analysis,
+            "model_used": result.context_analysis.get("model_used", "unknown"),
+            "response_time_ms": result.context_analysis.get("response_time_ms", 0),
+        }
 
     def _initialize_classification_prompt(self):
         """Initialize the optimized classification prompt for Gemma."""
@@ -130,6 +100,7 @@ Respond with valid JSON:
     async def classify_request(self, user_message: str) -> ClassificationResult:
         """Classify user request using Gemma models with fallback."""
         import time
+
         start_time = time.time()
 
         # Get keyword-based classification as fallback
@@ -156,7 +127,9 @@ Respond with valid JSON:
 
             # Log performance
             model_used = final_result.context_analysis.get("model_used", "unknown")
-            logger.info(f"Gemma classification completed in {response_time:.1f}ms using {model_used}")
+            logger.info(
+                f"Gemma classification completed in {response_time:.1f}ms using {model_used}"
+            )
 
             return final_result
 
@@ -164,7 +137,9 @@ Respond with valid JSON:
             logger.error(f"Gemma classification error: {e}")
             # Fallback to keyword classification
             final_result = self._create_fallback_result(user_message, keyword_result)
-            final_result.context_analysis["response_time_ms"] = (time.time() - start_time) * 1000
+            final_result.context_analysis["response_time_ms"] = (
+                time.time() - start_time
+            ) * 1000
             return final_result
 
     async def _gemma_classify(self, user_message: str) -> Optional[Dict[str, Any]]:
@@ -191,9 +166,9 @@ Respond with valid JSON:
                             "temperature": 0.3,  # Low temperature for consistent classification
                             "top_p": 0.9,
                             "num_predict": 200,  # Limit response length
-                        }
+                        },
                     },
-                    timeout=10  # Fast timeout for lightweight models
+                    timeout=10,  # Fast timeout for lightweight models
                 )
 
                 if response.status_code == 200:
@@ -207,7 +182,9 @@ Respond with valid JSON:
                         return parsed_result
 
                 else:
-                    logger.warning(f"Gemma model {model} returned status {response.status_code}")
+                    logger.warning(
+                        f"Gemma model {model} returned status {response.status_code}"
+                    )
 
             except Exception as e:
                 logger.warning(f"Failed to use Gemma model {model}: {e}")
@@ -233,7 +210,7 @@ Respond with valid JSON:
             import re
 
             # Look for JSON block
-            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text)
+            json_match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", response_text)
             if json_match:
                 json_text = json_match.group(0)
                 return json.loads(json_text)
@@ -250,7 +227,7 @@ Respond with valid JSON:
         self,
         gemma_result: Dict[str, Any],
         keyword_result: TaskComplexity,
-        user_message: str
+        user_message: str,
     ) -> ClassificationResult:
         """Create result from successful Gemma classification."""
 
@@ -263,9 +240,11 @@ Respond with valid JSON:
             confidence = float(gemma_result.get("confidence", 0.8))
 
             # If keyword and Gemma disagree and confidence is low, favor keyword
-            if (confidence < 0.7 and
-                keyword_result == TaskComplexity.COMPLEX and
-                gemma_complexity == TaskComplexity.SIMPLE):
+            if (
+                confidence < 0.7
+                and keyword_result == TaskComplexity.COMPLEX
+                and gemma_complexity == TaskComplexity.SIMPLE
+            ):
                 gemma_complexity = TaskComplexity.COMPLEX
                 confidence = 0.6
 
@@ -282,12 +261,14 @@ Respond with valid JSON:
                     "scope": gemma_result.get("scope", "single"),
                     "risk_level": gemma_result.get("risk_level", "low"),
                     "tools_required": gemma_result.get("tools_required", False),
-                    "web_browsing_needed": gemma_result.get("web_browsing_needed", False),
+                    "web_browsing_needed": gemma_result.get(
+                        "web_browsing_needed", False
+                    ),
                     "keyword_classification": keyword_result.value,
                     "classification_method": "gemma_llm",
                     "model_used": gemma_result.get("_model_used", "gemma"),
-                    "response_time_ms": 0.0  # Will be set later
-                }
+                    "response_time_ms": 0.0,  # Will be set later
+                },
             )
 
         except Exception as e:
@@ -295,9 +276,7 @@ Respond with valid JSON:
             return self._create_fallback_result(user_message, keyword_result)
 
     def _create_fallback_result(
-        self,
-        user_message: str,
-        keyword_result: TaskComplexity
+        self, user_message: str, keyword_result: TaskComplexity
     ) -> ClassificationResult:
         """Create fallback result using keyword classification."""
 
@@ -311,13 +290,19 @@ Respond with valid JSON:
             context_analysis={
                 "domain": "general",
                 "intent": "unknown",
-                "scope": "single" if keyword_result == TaskComplexity.SIMPLE else "multi-step",
-                "risk_level": "medium" if keyword_result == TaskComplexity.COMPLEX else "low",
+                "scope": (
+                    "single"
+                    if keyword_result == TaskComplexity.SIMPLE
+                    else "multi-step"
+                ),
+                "risk_level": (
+                    "medium" if keyword_result == TaskComplexity.COMPLEX else "low"
+                ),
                 "classification_method": "keyword_fallback",
                 "original_message": user_message,
                 "model_used": "keyword_classifier",
-                "response_time_ms": 0.0  # Will be set later
-            }
+                "response_time_ms": 0.0,  # Will be set later
+            },
         )
 
     def _extract_agents(self, gemma_result: Dict[str, Any]) -> List[str]:
@@ -371,7 +356,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test Gemma Classification Agent")
     parser.add_argument("message", nargs="?", help="Message to classify")
     parser.add_argument("--interactive", action="store_true", help="Interactive mode")
-    parser.add_argument("--benchmark", action="store_true", help="Run performance benchmark")
+    parser.add_argument(
+        "--benchmark", action="store_true", help="Run performance benchmark"
+    )
 
     args = parser.parse_args()
 
@@ -386,7 +373,7 @@ if __name__ == "__main__":
                 "install nginx on ubuntu",
                 "hello there",
                 "current updates on github.com",
-                "define machine learning"
+                "define machine learning",
             ]
 
             total_time = 0
@@ -396,7 +383,9 @@ if __name__ == "__main__":
                 response_time = result.context_analysis.get("response_time_ms", 0)
                 model_used = result.context_analysis.get("model_used", "unknown")
                 total_time += response_time
-                print(f"   Result: {result.complexity.value} ({result.confidence:.2f}) - {response_time:.1f}ms")
+                print(
+                    f"   Result: {result.complexity.value} ({result.confidence:.2f}) - {response_time:.1f}ms"
+                )
                 print(f"   Model: {model_used}")
 
             avg_time = total_time / len(test_cases)
@@ -413,8 +402,12 @@ if __name__ == "__main__":
                         result = await agent.classify_request(message)
                         print(f"\nClassification: {result.complexity.value}")
                         print(f"Confidence: {result.confidence:.2f}")
-                        model_used = result.context_analysis.get("model_used", "unknown")
-                        response_time = result.context_analysis.get("response_time_ms", 0)
+                        model_used = result.context_analysis.get(
+                            "model_used", "unknown"
+                        )
+                        response_time = result.context_analysis.get(
+                            "response_time_ms", 0
+                        )
                         print(f"Model: {model_used}")
                         print(f"Response Time: {response_time:.1f}ms")
                         print(f"Reasoning: {result.reasoning}")
@@ -435,6 +428,8 @@ if __name__ == "__main__":
             print(f"Context: {json.dumps(result.context_analysis, indent=2)}")
 
         else:
-            print("Usage: python gemma_classification_agent.py 'message' or --interactive or --benchmark")
+            print(
+                "Usage: python gemma_classification_agent.py 'message' or --interactive or --benchmark"
+            )
 
     asyncio.run(main())

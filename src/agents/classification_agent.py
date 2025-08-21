@@ -15,7 +15,8 @@ from src.llm_interface import LLMInterface
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
 
-from .base_agent import AgentRequest, AgentResponse, LocalAgent
+from .base_agent import AgentRequest
+from .standardized_agent import StandardizedAgent
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class ClassificationResult:
     context_analysis: Dict[str, Any]
 
 
-class ClassificationAgent(LocalAgent):
+class ClassificationAgent(StandardizedAgent):
     """Intelligent agent that understands user intent for workflow classification."""
 
     def __init__(self, llm_interface: Optional[LLMInterface] = None):
@@ -48,15 +49,18 @@ class ClassificationAgent(LocalAgent):
             "request_classification",
             "agent_selection",
         ]
-        
+
         # Initialize communication protocol for agent-to-agent messaging
         import asyncio
+
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 asyncio.create_task(self.initialize_communication(self.capabilities))
             else:
-                loop.run_until_complete(self.initialize_communication(self.capabilities))
+                loop.run_until_complete(
+                    self.initialize_communication(self.capabilities)
+                )
         except RuntimeError:
             # Event loop not available yet, will initialize later
             pass
@@ -64,54 +68,21 @@ class ClassificationAgent(LocalAgent):
         # Initialize classification prompt
         self._initialize_classification_prompt()
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
-        """
-        Process agent request using the standardized interface.
-        """
-        try:
-            action = request.action
-            payload = request.payload
+    async def action_classify_request(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle classify_request action."""
+        user_message = request.payload.get("message", "")
+        result = await self.classify_request(user_message)
 
-            if action == "classify_request":
-                user_message = payload.get("message", "")
-                result = await self.classify_request(user_message)
-
-                # Convert ClassificationResult to dict for serialization
-                result_dict = {
-                    "complexity": result.complexity.value,
-                    "confidence": result.confidence,
-                    "reasoning": result.reasoning,
-                    "suggested_agents": result.suggested_agents,
-                    "estimated_steps": result.estimated_steps,
-                    "user_approval_needed": result.user_approval_needed,
-                    "context_analysis": result.context_analysis,
-                }
-
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="success",
-                    result=result_dict,
-                )
-
-            else:
-                return AgentResponse(
-                    request_id=request.request_id,
-                    agent_type=self.agent_type,
-                    status="error",
-                    result=None,
-                    error=f"Unknown action: {action}",
-                )
-
-        except Exception as e:
-            logger.error(f"Classification agent error: {e}")
-            return AgentResponse(
-                request_id=request.request_id,
-                agent_type=self.agent_type,
-                status="error",
-                result=None,
-                error=str(e),
-            )
+        # Convert ClassificationResult to dict for serialization
+        return {
+            "complexity": result.complexity.value,
+            "confidence": result.confidence,
+            "reasoning": result.reasoning,
+            "suggested_agents": result.suggested_agents,
+            "estimated_steps": result.estimated_steps,
+            "user_approval_needed": result.user_approval_needed,
+            "context_analysis": result.context_analysis,
+        }
 
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports."""
@@ -459,6 +430,7 @@ if __name__ == "__main__":
             while True:
                 try:
                     from src.utils.terminal_input_handler import safe_input
+
                     message = safe_input("\n> ", timeout=10.0, default="exit").strip()
                     if message and message != "exit":
                         result = await agent.classify_request(message)
