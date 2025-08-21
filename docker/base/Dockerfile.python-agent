@@ -1,0 +1,133 @@
+# AutoBot Python Agent Base Image
+# Standardized foundation for all AI agents
+# Eliminates duplicate dependencies and patterns across 6+ containers
+
+FROM python:3.11-slim AS python-agent-base
+
+# Build arguments for user management
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+# Agent metadata
+LABEL maintainer="AutoBot Team"
+LABEL description="AutoBot Python Agent Base - Standardized foundation for AI agents"
+LABEL version="1.0.0"
+LABEL base.image="python:3.11-slim"
+
+# System packages (common across all agents)
+RUN apt-get update && apt-get install -y \
+    # Essential utilities
+    curl \
+    wget \
+    git \
+    unzip \
+    # Network utilities
+    netcat-openbsd \
+    dnsutils \
+    # Build tools (for Python packages)
+    build-essential \
+    gcc \
+    g++ \
+    # System libraries
+    libpq-dev \
+    libssl-dev \
+    libffi-dev \
+    # Audio/Video processing libraries
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    # Monitoring utilities
+    htop \
+    procps \
+    # Mathematical libraries
+    libopenblas-dev \
+    liblapack-dev \
+    # Clean up
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Python environment setup
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# User management (security best practice)
+RUN groupadd -g ${GROUP_ID} autobot && \
+    useradd -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash autobot
+
+# Create application directories
+RUN mkdir -p /app/{src,data,logs,config,prompts,knowledge_base,models} && \
+    chown -R autobot:autobot /app
+
+# Working directory
+WORKDIR /app
+
+# Copy requirements files
+COPY docker/base/requirements-base.txt /tmp/requirements-base.txt
+COPY docker/base/requirements-ai.txt /tmp/requirements-ai.txt
+COPY docker/base/requirements-web.txt /tmp/requirements-web.txt
+
+# Install Python dependencies in layers (for better caching)
+# Layer 1: Base requirements (most stable)
+RUN pip install --no-cache-dir -r /tmp/requirements-base.txt
+
+# Layer 2: AI/ML requirements (moderate stability)
+RUN pip install --no-cache-dir -r /tmp/requirements-ai.txt
+
+# Layer 3: Web requirements (less stable)
+RUN pip install --no-cache-dir -r /tmp/requirements-web.txt
+
+# Copy common scripts
+COPY docker/base/scripts/ /app/scripts/
+RUN chmod +x /app/scripts/*.sh && \
+    chown -R autobot:autobot /app/scripts
+
+# Copy application source code
+COPY --chown=autobot:autobot src/ /app/src/
+COPY --chown=autobot:autobot backend/ /app/backend/
+
+# Environment variables (standardized across all agents)
+ENV AUTOBOT_USER=autobot \
+    AUTOBOT_HOME=/app \
+    AUTOBOT_LOGS=/app/logs \
+    AUTOBOT_DATA=/app/data \
+    AUTOBOT_CONFIG=/app/config
+
+# Agent-specific environment (can be overridden in derived images)
+ENV AGENT_TYPE=base \
+    AGENT_NAME="AutoBot Base Agent" \
+    AGENT_DESCRIPTION="Base agent class for AutoBot system" \
+    HEALTH_CHECK_PORT=8000 \
+    STARTUP_TIMEOUT=120 \
+    DEPENDENCY_CHECK_TIMEOUT=60
+
+# Logging configuration
+ENV LOG_LEVEL=INFO \
+    LOG_FORMAT="%(asctime)s - %(name)s - %(levelname)s - %(message)s" \
+    LOG_FILE=/app/logs/agent.log
+
+# Performance tuning
+ENV MALLOC_ARENA_MAX=2 \
+    PYTHONHASHSEED=random
+
+# Switch to non-root user
+USER autobot
+
+# Health check template (can be overridden in derived images)
+ENV HEALTH_CHECK_PORT=8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${HEALTH_CHECK_PORT}/health || exit 1
+
+# Default entrypoint (standardized startup sequence)
+ENTRYPOINT ["/app/scripts/agent-entrypoint.sh"]
+
+# Default command (should be overridden in derived images)
+CMD ["python", "-c", "print('AutoBot Base Agent - Override CMD in derived image')"]
+
+# Expose default health check port
+EXPOSE 8000
+
+# Volume mounts (standardized across all agents)
+VOLUME ["/app/data", "/app/logs", "/app/config"]
