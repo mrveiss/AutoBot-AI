@@ -79,10 +79,11 @@ backend/config/settings.json
 .env.production.local
 
 # === LOG FILES ===
-# All log files should go in logs/ directory
+# All log files should go in data/logs/ directory (new location)
 logs/
+data/logs/
 *.log
-# Prevent root directory log files (they belong in logs/)
+# Prevent root directory log files (they belong in data/logs/)
 /backend*.log
 /frontend*.log
 /autobot*.log
