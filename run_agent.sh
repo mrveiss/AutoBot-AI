@@ -458,6 +458,24 @@ if [ "$CENTRALIZED_LOGGING" = true ]; then
     BACKEND_LOG="$LOGS_DIR/backend.log"
     FRONTEND_LOG="$LOGS_DIR/frontend.log"
 
+    # Rotate existing log files with timestamp
+    if [ -f "$BACKEND_LOG" ]; then
+        TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+        mv "$BACKEND_LOG" "${LOGS_DIR}/backend_${TIMESTAMP}.log"
+        echo "🔄 Rotated backend log to backend_${TIMESTAMP}.log"
+    fi
+
+    if [ -f "$FRONTEND_LOG" ]; then
+        TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+        mv "$FRONTEND_LOG" "${LOGS_DIR}/frontend_${TIMESTAMP}.log"
+        echo "🔄 Rotated frontend log to frontend_${TIMESTAMP}.log"
+    fi
+
+    # Keep only last 3 rotated log files for each type
+    echo "🧹 Cleaning old log files (keeping last 3)..."
+    ls -t ${LOGS_DIR}/backend_*.log 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+    ls -t ${LOGS_DIR}/frontend_*.log 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+
     # Ensure log files exist
     touch "$BACKEND_LOG"
     touch "$FRONTEND_LOG"

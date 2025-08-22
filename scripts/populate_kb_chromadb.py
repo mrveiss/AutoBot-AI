@@ -4,9 +4,9 @@ Populate knowledge base using ChromaDB instead of Redis to avoid dimension issue
 """
 
 import asyncio
+import glob
 import os
 import sys
-import glob
 from pathlib import Path
 
 # Add parent directory to path
@@ -19,20 +19,21 @@ async def populate_with_chromadb():
     print("Setting up ChromaDB-based knowledge base...")
 
     # Import after path is set
-    from llama_index.core import Settings, VectorStoreIndex, Document
+    import chromadb
+    from llama_index.core import Document, Settings, VectorStoreIndex
+    from llama_index.core.storage.storage_context import StorageContext
     from llama_index.embeddings.ollama import OllamaEmbedding
     from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
     from llama_index.vector_stores.chroma import ChromaVectorStore
-    from llama_index.core.storage.storage_context import StorageContext
-    import chromadb
 
-    # Set up LLM and embedding model
+    # Set up LLM and embedding model with configurable URL
+    ollama_base_url = os.getenv("AUTOBOT_OLLAMA_BASE_URL", "http://localhost:11434")
     llm = LlamaIndexOllamaLLM(
-        model="artifish/llama3.2-uncensored:latest", base_url="http://localhost:11434"
+        model="artifish/llama3.2-uncensored:latest", base_url=ollama_base_url
     )
 
     embed_model = OllamaEmbedding(
-        model_name="nomic-embed-text", base_url="http://localhost:11434"
+        model_name="nomic-embed-text", base_url=ollama_base_url
     )
 
     # Configure settings
