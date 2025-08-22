@@ -21,17 +21,17 @@ export default {
         componentInfo: info,
         component: (instance as any)?.$options?.name || 'unknown'
       })
-      
+
       // Also log to console for development
       console.error('Vue Error:', error, info)
     }
 
     // Add RUM agent to global properties
     app.config.globalProperties.$rum = rumAgent
-    
+
     // Provide RUM agent for composition API
     app.provide('rum', rumAgent)
-    
+
     // Add performance tracking mixin
     app.mixin({
       beforeMount() {
