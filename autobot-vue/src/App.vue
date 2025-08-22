@@ -629,13 +629,7 @@ const KnowledgeManager = defineAsyncComponent({
   timeout: 10000
 });
 
-const TerminalWindow = defineAsyncComponent({
-  loader: () => import('./components/TerminalWindow.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Terminal...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Terminal component</div>' },
-  delay: 100,
-  timeout: 10000
-});
+import TerminalWindow from './components/TerminalWindow.vue';
 
 const SettingsPanel = defineAsyncComponent({
   loader: () => import('./components/SettingsPanel.vue'),
@@ -669,13 +663,7 @@ const SystemMonitor = defineAsyncComponent({
   timeout: 10000
 });
 
-const WorkflowApproval = defineAsyncComponent({
-  loader: () => import('./components/WorkflowApproval.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-4"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div><span class="ml-2">Loading Workflow...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Workflow component</div>' },
-  delay: 100,
-  timeout: 10000
-});
+import WorkflowApproval from './components/WorkflowApproval.vue';
 
 const ValidationDashboard = defineAsyncComponent({
   loader: () => import('./components/ValidationDashboard.vue'),
