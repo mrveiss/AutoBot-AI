@@ -1,5 +1,10 @@
 <template>
   <ErrorBoundary :on-error="handleGlobalError">
+    <!-- Skip Navigation Link for Accessibility -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 bg-indigo-600 text-white px-4 py-2 rounded-br-lg z-[100000] focus:outline-none focus:ring-2 focus:ring-white">
+      Skip to main content
+    </a>
+    
     <div class="min-h-screen bg-blueGray-50">
       <!-- Main content -->
       <div class="relative bg-blueGray-50" :class="activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
@@ -17,83 +22,104 @@
             </div>
 
             <!-- Navigation Links (Center) -->
-            <div class="flex-1 flex items-center justify-center">
+            <nav class="flex-1 flex items-center justify-center" role="navigation" aria-label="Main navigation">
               <!-- Desktop Navigation -->
               <div class="hidden md:flex">
-                <ul class="flex flex-row list-none space-x-1">
-                  <li>
-                    <a
+                <ul class="flex flex-row list-none space-x-1" role="menubar">
+                  <li role="none">
+                    <button
                       @click="updateRoute('dashboard')"
                       :class="[activeTab === 'dashboard' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                      :aria-pressed="activeTab === 'dashboard'"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                      role="menuitem"
+                      aria-label="Go to Dashboard"
                     >
-                      <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
+                      <i class="fas fa-tachometer-alt mr-2 text-sm" aria-hidden="true"></i>
                       Dashboard
-                    </a>
+                    </button>
                   </li>
-                  <li>
-                    <a
+                  <li role="none">
+                    <button
                       @click="updateRoute('chat')"
                       :class="[activeTab === 'chat' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                      :aria-pressed="activeTab === 'chat'"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                      role="menuitem"
+                      aria-label="Go to AI Assistant Chat"
                     >
-                      <i class="fas fa-comments mr-2 text-sm"></i>
+                      <i class="fas fa-comments mr-2 text-sm" aria-hidden="true"></i>
                       AI Assistant
-                    </a>
+                    </button>
                   </li>
-                  <li>
-                    <a
+                  <li role="none">
+                    <button
                       @click="updateRoute('knowledge')"
                       :class="[activeTab === 'knowledge' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                      :aria-pressed="activeTab === 'knowledge'"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                      role="menuitem"
+                      aria-label="Go to Knowledge Base"
                     >
-                      <i class="fas fa-brain mr-2 text-sm"></i>
+                      <i class="fas fa-brain mr-2 text-sm" aria-hidden="true"></i>
                       Knowledge Base
-                    </a>
+                    </button>
                   </li>
-                  <li>
-                    <a
+                  <li role="none">
+                    <button
                       @click="updateRoute('tools')"
                       :class="[activeTab === 'tools' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                      :aria-pressed="activeTab === 'tools'"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                      role="menuitem"
+                      aria-label="Go to Tools"
                     >
-                      <i class="fas fa-tools mr-2 text-sm"></i>
+                      <i class="fas fa-tools mr-2 text-sm" aria-hidden="true"></i>
                       Tools
-                    </a>
+                    </button>
                   </li>
-                  <li>
-                    <a
+                  <li role="none">
+                    <button
                       @click="updateRoute('monitoring')"
                       :class="[activeTab === 'monitoring' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                      :aria-pressed="activeTab === 'monitoring'"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                      role="menuitem"
+                      aria-label="Go to Monitoring"
                     >
-                      <i class="fas fa-chart-bar mr-2 text-sm"></i>
+                      <i class="fas fa-chart-bar mr-2 text-sm" aria-hidden="true"></i>
                       Monitoring
-                    </a>
+                    </button>
                   </li>
-                  <li>
-                    <a
+                  <li role="none">
+                    <button
                       @click="updateRoute('secrets')"
                       :class="[activeTab === 'secrets' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                      :aria-pressed="activeTab === 'secrets'"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                      role="menuitem"
+                      aria-label="Go to Secrets Manager"
                     >
-                      <i class="fas fa-key mr-2 text-sm"></i>
+                      <i class="fas fa-key mr-2 text-sm" aria-hidden="true"></i>
                       Secrets
-                    </a>
+                    </button>
                   </li>
-                  <li>
-                    <a
+                  <li role="none">
+                    <button
                       @click="updateRoute('settings')"
                       :class="[activeTab === 'settings' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150"
+                      :aria-pressed="activeTab === 'settings'"
+                      class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                      role="menuitem"
+                      aria-label="Go to Settings"
                     >
-                      <i class="fas fa-cog mr-2 text-sm"></i>
+                      <i class="fas fa-cog mr-2 text-sm" aria-hidden="true"></i>
                       Settings
-                    </a>
+                    </button>
                   </li>
                 </ul>
               </div>
-            </div>
+            </nav>
 
             <!-- User menu and Mobile menu button (Right side) -->
             <div class="flex items-center mr-2">
@@ -108,21 +134,25 @@
               <!-- Mobile menu button -->
               <div class="relative md:hidden" ref="mobileMenuContainer">
                 <button
-                  class="cursor-pointer text-white px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent"
+                  class="cursor-pointer text-white px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                   type="button"
                   @click="toggleNavbar"
-                  aria-label="Menu">
-                  <i class="fas fa-bars" :class="navbarOpen ? 'fa-times' : 'fa-bars'"></i>
+                  :aria-label="navbarOpen ? 'Close navigation menu' : 'Open navigation menu'"
+                  :aria-expanded="navbarOpen"
+                  aria-controls="mobile-menu">
+                  <i class="fas" :class="navbarOpen ? 'fa-times' : 'fa-bars'" aria-hidden="true"></i>
                 </button>
 
                 <!-- Mobile Navigation Menu -->
-                <div
+                <nav
                   v-if="navbarOpen"
+                  id="mobile-menu"
                   class="fixed top-16 right-4 z-[99999] w-64"
-                  @click.stop
-                  tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
+                  role="navigation"
+                  aria-label="Mobile navigation"
+                  @click.stop>
                   <div class="mt-2 bg-white rounded-lg p-4 shadow-xl border border-blueGray-200" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
-                    <ul class="flex flex-col space-y-2">
+                    <ul class="flex flex-col space-y-2" role="menu">
                       <li>
                         <a
                           @click="updateRoute('dashboard')"
@@ -219,7 +249,7 @@
       </div>
 
       <!-- Content area -->
-      <div class="px-4 md:px-10 mx-auto w-full" :class="activeTab === 'chat' ? 'flex-1 flex flex-col' : ''">
+      <main id="main-content" class="px-4 md:px-10 mx-auto w-full" :class="activeTab === 'chat' ? 'flex-1 flex flex-col' : ''" role="main">
         <div class="flex flex-wrap" :class="activeTab === 'chat' ? 'flex-1 h-full' : 'mt-6'">
           <div class="w-full px-4" :class="activeTab === 'chat' ? 'flex-1 h-full flex flex-col' : 'mb-12'">
             <!-- Remove Transition for debugging -->
@@ -565,7 +595,7 @@
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
 
   </div>
@@ -911,6 +941,38 @@ export default {
 <style>
 @import './assets/vue-notus.css';
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css');
+
+/* Accessibility improvements */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.focus\:not-sr-only:focus {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  padding: inherit !important;
+  margin: inherit !important;
+  overflow: visible !important;
+  clip: auto !important;
+  white-space: normal !important;
+}
+
+/* Enhanced focus indicators */
+button:focus,
+a:focus,
+[tabindex]:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+}
 
 /* Vue Notus Color Mappings for App.vue */
 .bg-blueGray-50 { background-color: var(--blue-gray-50); }
