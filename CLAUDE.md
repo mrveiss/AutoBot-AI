@@ -20,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **[Frontend Development](docs/development/FRONTEND.md)** - Vue.js, WebSocket integration, UI/UX standards, error handling
 - **[Testing & Deployment](docs/development/TESTING_DEPLOYMENT.md)** - Testing procedures, commit workflow, deployment architecture
 - **[Logs](docs/logs)** - Project Logs, always check logs
+- **[Changelog](docs/changelog/)** - Daily change logs with fixes and improvements tracking
 
 ## 🚀 QUICK REFERENCE
 
@@ -48,6 +49,7 @@ project_root/
 ├── autobot-vue/           # Frontend Vue.js app
 ├── tests/                 # ALL test files
 ├── docs/                  # Comprehensive documentation
+│   ├── changelog/         # Daily change logs (changelog_yyyymmdd.md)
 ├── scripts/               # Utility scripts
 ├── docker/                # Docker infrastructure
 │   ├── compose/           # Docker compose configurations
