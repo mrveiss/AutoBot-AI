@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 📚 PROJECT INFORMATION SOURCES
+
+**IMPORTANT: Always refer to these primary sources for project information:**
+
+- **[README.md](README.md)** - Primary project documentation, architecture overview, and getting started guide
+- **[docs/](docs/)** - Comprehensive documentation folder with detailed guides and specifications
+- **[docs/INDEX.md](docs/INDEX.md)** - Complete documentation index and navigation
+- **[Executive Summary](EXECUTIVE_SUMMARY.md)** - Business overview and value proposition
+
 ## 📚 DEVELOPMENT GUIDES
 
 **For focused guidance, refer to these area-specific guides:**
@@ -10,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **[Backend & API Development](docs/development/BACKEND_API.md)** - API design, backend architecture, NPU worker, secrets management
 - **[Frontend Development](docs/development/FRONTEND.md)** - Vue.js, WebSocket integration, UI/UX standards, error handling
 - **[Testing & Deployment](docs/development/TESTING_DEPLOYMENT.md)** - Testing procedures, commit workflow, deployment architecture
-- **[Logs](docs/logs)** - Project Logs, allways check logs.
+- **[Logs](docs/logs)** - Project Logs, always check logs
 
 ## 🚀 QUICK REFERENCE
 
@@ -38,9 +47,13 @@ project_root/
 ├── backend/               # Backend services
 ├── autobot-vue/           # Frontend Vue.js app
 ├── tests/                 # ALL test files
-├── docs/development/      # Development guides
+├── docs/                  # Comprehensive documentation
 ├── scripts/               # Utility scripts
-├── docker/compose/        # Docker configurations
+├── docker/                # Docker infrastructure
+│   ├── compose/           # Docker compose configurations
+│   ├── agents/            # Agent-specific Dockerfiles
+│   ├── base/              # Base container configurations
+│   └── volumes/           # Volume configurations
 ├── data/                  # Data files
 └── run_agent.sh          # Main entry point
 ```
