@@ -7,14 +7,15 @@ Handles Seq authentication and creates basic analytics setup for AutoBot.
 """
 
 import json
-import sys
 from pathlib import Path
 
 import requests
 
 
 def create_seq_api_key(
-    seq_url="http://localhost:5341", username="admin", password="Autobot123!"  # pragma: allowlist secret
+    seq_url="http://localhost:5341",
+    username="admin",
+    password="Autobot123!",  # pragma: allowlist secret
 ):
     """Create API key for Seq access."""
 
