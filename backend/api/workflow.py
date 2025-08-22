@@ -181,24 +181,70 @@ async def execute_workflow(
 ):
     """Execute a workflow with coordination of multiple agents."""
     try:
-        # Get orchestrator from app state
+        # Get both orchestrators from app state
+        lightweight_orchestrator = getattr(
+            request.app.state, "lightweight_orchestrator", None
+        )
         orchestrator = getattr(request.app.state, "orchestrator", None)
+
+        if lightweight_orchestrator is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Lightweight orchestrator not available - "
+                "application not fully initialized",
+            )
+
         if orchestrator is None:
             raise HTTPException(
                 status_code=422,
-                detail="Orchestrator not available - application not fully initialized",
+                detail="Main orchestrator not available - "
+                "application not fully initialized",
             )
 
-        # Check if this should use workflow orchestration
-        should_orchestrate = await orchestrator.should_use_workflow_orchestration(
-            workflow_request.user_message
-        )
+        # TEMPORARY FIX: Use lightweight orchestrator to avoid blocking
+        # The full orchestrator's execute_goal method has blocking operations
+        try:
+            # Use lightweight orchestrator for fast, non-blocking response
+            result = await lightweight_orchestrator.route_request(
+                workflow_request.user_message
+            )
 
-        if not should_orchestrate:
-            # Simple request, handle directly
-            result = await orchestrator.execute_goal(workflow_request.user_message)
-            return {"success": True, "type": "direct_execution", "result": result}
+            # Check if we got a simple response or should use full orchestration
+            if result.get("bypass_orchestration"):
+                return {
+                    "success": True,
+                    "type": "lightweight_response",
+                    "result": result.get(
+                        "simple_response", "Response generated successfully"
+                    ),
+                    "routing_method": result.get(
+                        "routing_reason", "lightweight_pattern_match"
+                    ),
+                }
+            else:
+                # For complex requests, we need the full orchestrator but it's blocking
+                # For now, return a message explaining this limitation
+                return {
+                    "success": False,
+                    "type": "complex_workflow_blocked",
+                    "result": "Complex workflow orchestration is temporarily "
+                    "disabled due to blocking operations. This request "
+                    "requires multi-agent coordination which is not yet "
+                    "available in the current implementation.",
+                    "complexity": result.get("complexity", "unknown"),
+                    "suggested_agents": result.get("suggested_agents", []),
+                }
 
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(f"Workflow execution error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500, detail=f"Workflow execution failed: {str(e)}"
+            )
+
+        # The following code is unreachable and disabled to prevent hanging
         # Create workflow response
         workflow_response = await orchestrator.create_workflow_response(
             workflow_request.user_message
