@@ -54,12 +54,12 @@ RUN mkdir -p data logs reports/monitoring && \
 # Security: Switch to non-root user
 USER autobot
 
-# Health check
+# Health check - use configurable backend port
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8001/api/system/health || exit 1
+    CMD curl -f http://localhost:${AUTOBOT_BACKEND_PORT:-8001}/api/system/health || exit 1
 
-# Expose ports
-EXPOSE 8001
+# Expose configurable backend port
+EXPOSE ${AUTOBOT_BACKEND_PORT:-8001}
 
 # Environment variables
 ENV PYTHONPATH=/app

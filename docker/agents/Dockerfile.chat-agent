@@ -25,7 +25,8 @@ ENV AGENT_TYPE=chat \
 #     transformers==4.35.0
 
 # Agent-specific health check (override base health check)
-ENV HEALTH_CHECK_PORT=8000
+# Use configurable port that defaults to backend API port
+ENV HEALTH_CHECK_PORT=${AUTOBOT_BACKEND_PORT:-8001}
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=2 \
     CMD curl -f http://localhost:${HEALTH_CHECK_PORT}/health/chat || exit 1
 

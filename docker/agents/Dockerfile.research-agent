@@ -42,8 +42,9 @@ RUN python -m nltk.downloader punkt stopwords wordnet && \
 RUN mkdir -p /app/data/research_cache /app/data/citations && \
     chown -R ${USER_ID}:${GROUP_ID} /app/data/research_cache /app/data/citations
 
-# Agent-specific health check
-ENV HEALTH_CHECK_PORT=8000
+# Agent-specific health check (includes research capabilities)
+# Use configurable port that defaults to backend API port
+ENV HEALTH_CHECK_PORT=${AUTOBOT_BACKEND_PORT:-8001}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:${HEALTH_CHECK_PORT}/health/research || exit 1
 

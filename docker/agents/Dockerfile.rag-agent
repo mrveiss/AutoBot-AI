@@ -36,8 +36,9 @@ RUN pip install --no-cache-dir \
 RUN mkdir -p /app/data/vectors && \
     chown -R ${USER_ID}:${GROUP_ID} /app/data/vectors
 
-# Agent-specific health check
-ENV HEALTH_CHECK_PORT=8000
+# Agent-specific health check (includes vector database connectivity)
+# Use configurable port that defaults to backend API port
+ENV HEALTH_CHECK_PORT=${AUTOBOT_BACKEND_PORT:-8001}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:${HEALTH_CHECK_PORT}/health/rag || exit 1
 
