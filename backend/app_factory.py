@@ -189,8 +189,7 @@ async def _initialize_core_components(app: FastAPI) -> None:
             "initialized"
         )
 
-        # Verify components are accessible
-        logger.debug(f"Orchestrator in app.state: {app.state.orchestrator is not None}")
+        # Verify components are accessible (orchestrator will be initialized later)
         logger.debug(f"Diagnostics in app.state: {app.state.diagnostics is not None}")
         logger.debug(
             f"KnowledgeBase in app.state: {app.state.knowledge_base is not None}"
@@ -245,6 +244,14 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
         # Log and allow the app to potentially continue in a degraded state
 
     logger.debug("Orchestrator startup completed")
+
+    # Verify orchestrator initialization
+    logger.debug(
+        f"Orchestrator in app.state: {getattr(app.state, 'orchestrator', None) is not None}"
+    )
+    logger.debug(
+        f"Lightweight orchestrator in app.state: {getattr(app.state, 'lightweight_orchestrator', None) is not None}"
+    )
 
 
 async def _initialize_knowledge_base(app: FastAPI) -> None:

@@ -6,20 +6,37 @@ Seq Authentication and Basic Setup
 Handles Seq authentication and creates basic analytics setup for AutoBot.
 """
 
+import argparse
 import json
+import os
+import sys
 from pathlib import Path
 
 import requests
 
 
 def create_seq_api_key(
-    seq_url="http://localhost:5341",
-    username="admin",
-    password="Autobot123!",  # pragma: allowlist secret
+    seq_url=None,
+    username=None,
+    password=None,
 ):
     """Create API key for Seq access."""
 
+    # Get configuration from environment variables or prompt
+    seq_url = seq_url or os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
+    username = username or os.getenv("SEQ_USERNAME", "admin")
+    password = password or os.getenv("SEQ_PASSWORD")
+
+    if not password:
+        print("⚠️  No SEQ_PASSWORD environment variable found")
+        password = input("Please enter Seq admin password: ").strip()
+        if not password:
+            print("❌ Password is required")
+            return None
+
     print("🔐 Setting up Seq API authentication...")
+    print(f"   URL: {seq_url}")
+    print(f"   Username: {username}")
 
     session = requests.Session()
 
@@ -57,8 +74,89 @@ def create_seq_api_key(
         return None
 
 
-def setup_basic_seq_queries(seq_url="http://localhost:5341", api_key=None):
+def reset_seq_admin_password(seq_url=None, new_password=None):
+    """Reset Seq admin password using Docker container access."""
+
+    seq_url = seq_url or os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
+
+    print("🔄 Attempting to reset Seq admin password...")
+
+    try:
+        import subprocess
+
+        # Find the Seq container
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}", "--filter", "name=seq"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        seq_containers = [line for line in result.stdout.strip().split("\n") if line]
+
+        if not seq_containers:
+            print("❌ No Seq container found")
+            return False
+
+        seq_container = seq_containers[0]
+        print(f"📦 Found Seq container: {seq_container}")
+
+        # Get new password if not provided
+        if not new_password:
+            new_password = input("Enter new admin password: ").strip()
+            confirm_password = input("Confirm new password: ").strip()
+
+            if new_password != confirm_password:
+                print("❌ Passwords do not match")
+                return False
+
+        if not new_password:
+            print("❌ Password cannot be empty")
+            return False
+
+        # Reset password using seqcli in the container
+        reset_command = [
+            "docker",
+            "exec",
+            seq_container,
+            "seqcli",
+            "user",
+            "update",
+            "-n",
+            "admin",
+            "-p",
+            new_password,
+            "-s",
+            "http://localhost",
+        ]
+
+        print("🔐 Resetting admin password...")
+        result = subprocess.run(reset_command, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            print("✅ Password reset successfully")
+
+            # Set environment variable for future use
+            os.environ["SEQ_PASSWORD"] = new_password
+            print("💡 Password set in environment variable SEQ_PASSWORD")
+
+            return True
+        else:
+            print(f"❌ Password reset failed: {result.stderr}")
+            return False
+
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Docker command failed: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Error resetting password: {e}")
+        return False
+
+
+def setup_basic_seq_queries(seq_url=None, api_key=None):
     """Setup basic queries using direct SQL approach."""
+
+    seq_url = seq_url or os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
 
     print("📊 Setting up basic AutoBot queries in Seq...")
 
@@ -101,8 +199,10 @@ def setup_basic_seq_queries(seq_url="http://localhost:5341", api_key=None):
     print(f"📝 You can manually create these queries in Seq at: {seq_url}")
 
 
-def verify_seq_logs(seq_url="http://localhost:5341"):
+def verify_seq_logs(seq_url=None):
     """Verify that logs are being received in Seq."""
+
+    seq_url = seq_url or os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
 
     print("🔍 Verifying AutoBot logs in Seq...")
 
@@ -140,13 +240,34 @@ def verify_seq_logs(seq_url="http://localhost:5341"):
 
 
 def main():
-    seq_url = "http://localhost:5341"
+    seq_url = os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
 
     print("🚀 AutoBot Seq Analytics Configuration")
     print(f"   Seq URL: {seq_url}")
 
-    # Create API key
+    # Try to create API key
     api_key = create_seq_api_key(seq_url)
+
+    # If authentication failed, offer to reset password
+    if not api_key:
+        print("\n❌ Authentication failed!")
+        print("This often happens after Docker container restart.")
+
+        reset_choice = (
+            input("\nWould you like to reset the Seq admin password? (y/N): ")
+            .strip()
+            .lower()
+        )
+
+        if reset_choice in ["y", "yes"]:
+            if reset_seq_admin_password(seq_url):
+                print("\n🔄 Retrying authentication with new password...")
+                api_key = create_seq_api_key(seq_url)
+            else:
+                print("❌ Password reset failed")
+        else:
+            print("💡 You can manually reset the password later by running:")
+            print("   python scripts/seq_auth_setup.py --reset-password")
 
     # Setup basic queries
     setup_basic_seq_queries(seq_url, api_key)
@@ -159,11 +280,52 @@ def main():
     print(f"   📊 Logs present: {'Yes' if has_logs else 'No'}")
     print(f"\n🌐 Next steps:")
     print(f"   1. Access Seq at: {seq_url}")
-    print(f"   2. Login with: admin / autobot123")
+    print(f"   2. Login with admin and the password you set")
     print(f"   3. Manually create the queries shown above")
     print(f"   4. Create dashboards using those queries")
     print(f"   5. Set up alerts for critical errors")
 
+    # Save current password to environment if successful
+    if api_key and os.getenv("SEQ_PASSWORD"):
+        print(f"\n💡 To avoid prompts in the future, set:")
+        print(f"   export SEQ_PASSWORD='{os.getenv('SEQ_PASSWORD')}'")
+        print(f"   or add it to your .env file")
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="AutoBot Seq Analytics Configuration",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/seq_auth_setup.py                    # Interactive setup
+  python scripts/seq_auth_setup.py --reset-password   # Reset admin password
+
+Environment Variables:
+  AUTOBOT_LOG_VIEWER_URL  # Seq URL (default: http://localhost:5341)
+  SEQ_USERNAME            # Username (default: admin)
+  SEQ_PASSWORD            # Password (will prompt if not set)
+        """,
+    )
+
+    parser.add_argument(
+        "--reset-password", action="store_true", help="Reset Seq admin password"
+    )
+
+    parser.add_argument("--seq-url", help="Seq server URL")
+
+    parser.add_argument("--username", help="Admin username")
+
+    args = parser.parse_args()
+
+    if args.reset_password:
+        # Just reset password
+        if reset_seq_admin_password(args.seq_url):
+            print("✅ Password reset completed successfully")
+            sys.exit(0)
+        else:
+            print("❌ Password reset failed")
+            sys.exit(1)
+    else:
+        # Run full setup
+        main()
