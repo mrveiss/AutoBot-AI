@@ -9,6 +9,9 @@ import './assets/vue-notus.css'
 import rumPlugin from './plugins/rum'
 import errorHandlerPlugin from './plugins/errorHandler'
 
+// Import global services
+import './services/GlobalWebSocketService.js'
+
 // Import development and diagnostic tools
 if (import.meta.env.DEV) {
   import('./utils/RumConsoleHelper')

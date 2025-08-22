@@ -7,6 +7,7 @@ error handling, and monitoring.
 """
 
 import asyncio
+import json
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -36,6 +37,7 @@ from dotenv import load_dotenv
 
 from src.utils.config_manager import config_manager
 from src.utils.logging_manager import get_llm_logger
+from src.utils.service_registry import get_service_url
 
 load_dotenv()
 logger = get_llm_logger("unified_llm")
@@ -166,7 +168,7 @@ class OllamaProvider(LLMProvider):
 
     def __init__(self, config: ProviderConfig):
         super().__init__(config)
-        self.base_url = config.base_url or "http://localhost:11434"
+        self.base_url = config.base_url or get_service_url("ollama")
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """Execute chat completion with Ollama."""
@@ -190,7 +192,7 @@ class OllamaProvider(LLMProvider):
             payload = {
                 "model": model,
                 "messages": formatted_messages,
-                "stream": False,
+                "stream": True,
                 "options": {
                     "temperature": request.temperature,
                     "top_p": request.top_p,
@@ -200,15 +202,34 @@ class OllamaProvider(LLMProvider):
             if request.max_tokens:
                 payload["options"]["num_predict"] = request.max_tokens
 
-            # Make async request to Ollama - PERFORMANCE FIX: Convert blocking
-            # HTTP to async
+            # Make async streaming request to Ollama - PERFORMANCE FIX: Convert blocking
+            # HTTP to async with streaming
             timeout = aiohttp.ClientTimeout(total=request.timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/api/chat"
                 async with session.post(url, json=payload) as response:
                     response.raise_for_status()
-                    result = await response.json()
-            content = result.get("message", {}).get("content", "")
+
+                    # Handle streaming response
+                    full_content = ""
+                    result = {}
+                    async for line in response.content:
+                        line_text = line.decode("utf-8").strip()
+                        if line_text:
+                            try:
+                                chunk = json.loads(line_text)
+                                if "message" in chunk and "content" in chunk["message"]:
+                                    content = chunk["message"]["content"]
+                                    full_content += content
+
+                                # Check if this is the final chunk
+                                if chunk.get("done", False):
+                                    result = chunk
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+
+            content = full_content
 
             # Extract usage info if available
             usage = {}
@@ -470,7 +491,7 @@ class UnifiedLLMInterface:
         # Ollama configuration
         ollama_enabled = config_manager.get("llm.ollama.enabled", True)
         ollama_base_url = config_manager.get(
-            "llm.ollama.base_url", "http://localhost:11434"
+            "llm.ollama.base_url", get_service_url("ollama")
         )
         ollama_model = config_manager.get("llm.ollama.default_model", "deepseek-r1:14b")
 

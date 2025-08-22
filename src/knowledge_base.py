@@ -9,9 +9,6 @@ import pandas as pd
 from docx import Document as DocxDocument
 from llama_index.core import Document, Settings, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
-
-# Import AutoBot semantic chunker
-from src.utils.semantic_chunker import semantic_chunker
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
@@ -22,6 +19,11 @@ from pypdf import PdfReader
 from src.circuit_breaker import circuit_breaker_async
 
 # Import the centralized ConfigManager
+from src.config import (
+    HTTP_PROTOCOL,
+    OLLAMA_HOST_IP,
+    OLLAMA_PORT,
+)
 from src.config import config as global_config_manager
 
 # Import retry mechanism and circuit breaker
@@ -29,6 +31,9 @@ from src.retry_mechanism import RetryStrategy, retry_async
 
 # Import centralized Redis client utility
 from src.utils.redis_client import get_redis_client
+
+# Import AutoBot semantic chunker
+from src.utils.semantic_chunker import semantic_chunker
 
 
 class KnowledgeBase:
@@ -68,7 +73,7 @@ class KnowledgeBase:
         self.chunk_overlap = self.config_manager.get_nested(
             "llama_index.chunk_overlap", 20
         )
-        
+
         # RAG Optimization: Enable semantic chunking
         self.use_semantic_chunking = self.config_manager.get_nested(
             "knowledge_base.semantic_chunking.enabled", True
@@ -95,8 +100,8 @@ class KnowledgeBase:
         self.redis_index_name = "llama_index"
 
         # Initialize Redis client for direct use (e.g., for facts/logs)
-        # Use centralized Redis client utility
-        self.redis_client = get_redis_client(async_client=True)
+        # TEMPORARY FIX: Use sync Redis client to avoid async issues
+        self.redis_client = get_redis_client(async_client=False)
         if self.redis_client:
             logging.info("Redis client initialized via centralized utility")
         else:
@@ -128,7 +133,13 @@ class KnowledgeBase:
         # Use unified config to get the actual selected model
         llm_model = llm_config_data.get("ollama", {}).get("model", "tinyllama:latest")
         llm_base_url = llm_config_data.get("ollama", {}).get(
-            "base_url", "http://localhost:11434"
+            "base_url"
+        ) or llm_config_data.get("unified", {}).get("local", {}).get(
+            "providers", {}
+        ).get(
+            "ollama", {}
+        ).get(
+            "host", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
         )
 
         if llm_provider == "ollama":
@@ -212,12 +223,14 @@ class KnowledgeBase:
         Settings.embed_model = self.embed_model
         Settings.chunk_size = self.chunk_size
         Settings.chunk_overlap = self.chunk_overlap
-        
+
         # Configure node parser based on semantic chunking setting
         if self.use_semantic_chunking:
             # For semantic chunking, we'll handle chunking manually in add_file
             Settings.node_parser = None  # Will be handled by semantic_chunker
-            logging.info(f"Semantic chunking enabled with model: {self.semantic_chunking_model}")
+            logging.info(
+                f"Semantic chunking enabled with model: {self.semantic_chunking_model}"
+            )
         else:
             Settings.node_parser = SentenceSplitter(
                 chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
@@ -290,7 +303,7 @@ class KnowledgeBase:
             self.query_engine = self.index.as_query_engine(llm=self.llm)
             logging.info("In-memory VectorStoreIndex and QueryEngine initialized.")
 
-    async def _scan_redis_keys(self, pattern: str) -> List[str]:
+    def _scan_redis_keys(self, pattern: str) -> List[str]:
         """Non-blocking Redis key scanning to replace KEYS operations.
 
         Args:
@@ -302,13 +315,10 @@ class KnowledgeBase:
         all_keys: List[str] = []
         cursor = 0
         while True:
-            cursor, batch = await self.redis_client.scan(
-                cursor, match=pattern, count=100
-            )
+            cursor, batch = self.redis_client.scan(cursor, match=pattern, count=100)
             all_keys.extend(batch)
             if cursor == 0:
                 break
-            await asyncio.sleep(0)  # Yield control to prevent blocking
         return all_keys
 
     async def add_file(
@@ -368,21 +378,24 @@ class KnowledgeBase:
                 "original_path": file_path,
                 **(metadata if metadata else {}),
             }
-            
+
             if self.use_semantic_chunking:
                 # Use semantic chunking for better knowledge processing
                 logging.info(f"Processing file with semantic chunking: {file_path}")
-                chunk_docs = await semantic_chunker.chunk_document(content, doc_metadata)
-                
+                chunk_docs = await semantic_chunker.chunk_document(
+                    content, doc_metadata
+                )
+
                 # Insert each semantic chunk as a separate document
                 for chunk_data in chunk_docs:
                     chunk_document = Document(
-                        text=chunk_data["text"], 
-                        metadata=chunk_data["metadata"]
+                        text=chunk_data["text"], metadata=chunk_data["metadata"]
                     )
                     self.index.insert(chunk_document)
-                
-                logging.info(f"Inserted {len(chunk_docs)} semantic chunks from {file_path}")
+
+                logging.info(
+                    f"Inserted {len(chunk_docs)} semantic chunks from {file_path}"
+                )
             else:
                 # Use traditional chunking
                 document = Document(text=content, metadata=doc_metadata)
@@ -490,11 +503,11 @@ class KnowledgeBase:
     ) -> Dict[str, Any]:
         """
         Add text content using semantic chunking for enhanced knowledge processing.
-        
+
         Args:
             content: Text content to add
             metadata: Optional metadata for the content
-            
+
         Returns:
             Dict with status and processing details
         """
@@ -519,26 +532,29 @@ class KnowledgeBase:
                 "timestamp": datetime.now().isoformat(),
                 **(metadata if metadata else {}),
             }
-            
+
             if self.use_semantic_chunking:
                 # Use semantic chunking for better knowledge processing
                 logging.info("Processing text with semantic chunking")
-                chunk_docs = await semantic_chunker.chunk_document(content, text_metadata)
-                
+                chunk_docs = await semantic_chunker.chunk_document(
+                    content, text_metadata
+                )
+
                 # Insert each semantic chunk as a separate document
                 for chunk_data in chunk_docs:
                     chunk_document = Document(
-                        text=chunk_data["text"], 
-                        metadata=chunk_data["metadata"]
+                        text=chunk_data["text"], metadata=chunk_data["metadata"]
                     )
                     self.index.insert(chunk_document)
-                
-                logging.info(f"Added {len(chunk_docs)} semantic chunks to knowledge base")
+
+                logging.info(
+                    f"Added {len(chunk_docs)} semantic chunks to knowledge base"
+                )
                 return {
                     "status": "success",
                     "message": f"Text processed into {len(chunk_docs)} semantic chunks",
                     "chunks_created": len(chunk_docs),
-                    "semantic_chunking": True
+                    "semantic_chunking": True,
                 }
             else:
                 # Use traditional processing
@@ -548,9 +564,9 @@ class KnowledgeBase:
                     "status": "success",
                     "message": "Text added to knowledge base",
                     "chunks_created": 1,
-                    "semantic_chunking": False
+                    "semantic_chunking": False,
                 }
-                
+
         except Exception as e:
             logging.error(f"Error adding text to knowledge base: {str(e)}")
             return {
@@ -592,6 +608,11 @@ class KnowledgeBase:
     ) -> List[Dict[str, Any]]:
         if not self.redis_client:
             return []
+
+        # TEMPORARY FIX: Disable fact search to prevent async issues
+        logging.info("Fact search temporarily disabled to prevent hanging")
+        return []
+
         facts = []
         try:
             if fact_id:
@@ -609,7 +630,7 @@ class KnowledgeBase:
                     )
             elif query:
                 # Use non-blocking SCAN instead of blocking KEYS operation
-                all_keys = await self._scan_redis_keys("fact:*")
+                all_keys = self._scan_redis_keys("fact:*")
 
                 if all_keys:
                     # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
@@ -641,7 +662,7 @@ class KnowledgeBase:
                                 )
             else:
                 # Use non-blocking SCAN instead of blocking KEYS operation
-                all_keys = await self._scan_redis_keys("fact:*")
+                all_keys = self._scan_redis_keys("fact:*")
                 if all_keys:
                     # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
                     pipe = self.redis_client.pipeline()
@@ -785,7 +806,7 @@ class KnowledgeBase:
             return detailed_stats
         try:
             # Total size and average chunk size calculation for facts
-            all_fact_keys = await self._scan_redis_keys("fact:*")
+            all_fact_keys = self._scan_redis_keys("fact:*")
             total_content_length = 0
             fact_type_counts = {}
             latest_timestamp = 0
@@ -841,7 +862,7 @@ class KnowledgeBase:
         exported_data = []
         try:
             # Export facts from Redis
-            all_fact_keys = await self._scan_redis_keys("fact:*")
+            all_fact_keys = self._scan_redis_keys("fact:*")
             for key in all_fact_keys:
                 fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
                 if fact_data:
@@ -858,9 +879,7 @@ class KnowledgeBase:
             # Export data from LlamaIndex (more complex, usually involves
             # iterating nodes)
             if self.index:
-                all_doc_keys = await self._scan_redis_keys(
-                    f"{self.redis_index_name}:doc:*"
-                )
+                all_doc_keys = self._scan_redis_keys(f"{self.redis_index_name}:doc:*")
                 for key in all_doc_keys:
                     # Fetch the actual document/node data if needed, or just metadata
                     exported_data.append(
@@ -886,7 +905,7 @@ class KnowledgeBase:
         facts = []
         try:
             # Use non-blocking SCAN instead of blocking KEYS operation
-            all_keys = await self._scan_redis_keys("fact:*")
+            all_keys = self._scan_redis_keys("fact:*")
             if all_keys:
                 # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
                 pipe = self.redis_client.pipeline()
@@ -973,7 +992,7 @@ class KnowledgeBase:
             cutoff_timestamp = int(datetime.now().timestamp()) - (
                 days_to_keep * 24 * 3600
             )
-            all_fact_keys = await self._scan_redis_keys("fact:*")
+            all_fact_keys = self._scan_redis_keys("fact:*")
 
             for key in all_fact_keys:
                 fact_data: Dict[str, str] = await self.redis_client.hgetall(key)

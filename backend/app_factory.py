@@ -49,6 +49,16 @@ from backend.api.voice import router as voice_router
 from backend.api.websockets import router as websocket_router
 from backend.api.workflow import router as workflow_router
 
+# Import host IP addresses from main config
+from src.config import (
+    BACKEND_HOST_IP,
+    BACKEND_PORT,
+    FRONTEND_HOST_IP,
+    FRONTEND_PORT,
+    HTTP_PROTOCOL,
+    REDIS_HOST_IP,
+)
+
 # Import workflow automation router
 try:
     from backend.api.workflow_automation import router as workflow_automation_router
@@ -155,9 +165,8 @@ async def _initialize_core_components(app: FastAPI) -> None:
     logger.debug("Initializing core components...")
 
     try:
-        # Lazy load orchestrator only when needed
-        app.state.orchestrator = None
-        logger.info("Orchestrator will be lazy-loaded when first requested")
+        # Orchestrator will be initialized in _initialize_orchestrator
+        logger.info("Orchestrator will be initialized separately")
 
         app.state.knowledge_base = KnowledgeBase()
         logger.info("KnowledgeBase initialized and stored in app.state")
@@ -214,11 +223,12 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
         app.state.lightweight_orchestrator = lightweight_orchestrator
         logger.info("LightweightOrchestrator initialized successfully")
 
-        # Keep the full orchestrator for backward compatibility, but don't start
-        # blocking tasks
-        logger.info(
-            "PERFORMANCE FIX: Skipping full orchestrator startup to " "prevent blocking"
-        )
+        # Initialize full orchestrator for backward compatibility
+        logger.info("Initializing full orchestrator for chat endpoint compatibility")
+        from src.langchain_agent_orchestrator import Orchestrator
+
+        app.state.orchestrator = Orchestrator()
+        logger.info("Full orchestrator initialized successfully")
 
         # DISABLE Redis background tasks that block the event loop
         logger.info(
@@ -230,6 +240,8 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
         logger.error(f"Error during orchestrator startup: {e}", exc_info=True)
         # Ensure background_tasks is initialized even on failure
         app.state.background_tasks = []
+        # Set orchestrator to None on failure
+        app.state.orchestrator = None
         # Log and allow the app to potentially continue in a degraded state
 
     logger.debug("Orchestrator startup completed")
@@ -261,7 +273,7 @@ async def _initialize_chat_history_manager(app: FastAPI) -> None:
 
     redis_config = global_config_manager.get_redis_config()
     use_redis = redis_config.get("enabled", False)
-    redis_host = redis_config.get("host", "localhost")
+    redis_host = redis_config.get("host", REDIS_HOST_IP)
     redis_port = redis_config.get("port", 6379)
 
     logger.info(
@@ -318,7 +330,7 @@ async def create_lifespan_manager(app: FastAPI):
         # Check Redis modules
         redis_config = global_config_manager.get_redis_config()
         await _check_redis_modules(
-            redis_config.get("host", "localhost"), redis_config.get("port", 6379)
+            redis_config.get("host", REDIS_HOST_IP), redis_config.get("port", 6379)
         )
 
         # Initialize remaining components
@@ -412,7 +424,10 @@ def add_middleware(app: FastAPI) -> None:
     # Use fallback if cors_origins is empty
     # (since get() returns [] when key exists but is empty)
     if not cors_origins:
-        cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+        cors_origins = [
+            f"{HTTP_PROTOCOL}://{FRONTEND_HOST_IP}:{FRONTEND_PORT}",
+            f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
+        ]
 
     app.add_middleware(
         CORSMiddleware,

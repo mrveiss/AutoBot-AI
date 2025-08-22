@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
 from src.event_manager import event_manager
@@ -175,31 +175,36 @@ async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResp
 
 @router.post("/execute")
 async def execute_workflow(
-    request: WorkflowExecutionRequest, background_tasks: BackgroundTasks
+    workflow_request: WorkflowExecutionRequest,
+    background_tasks: BackgroundTasks,
+    request: Request,
 ):
     """Execute a workflow with coordination of multiple agents."""
     try:
-        # Import orchestrator here to avoid circular imports
-        from src.orchestrator import Orchestrator
-
-        orchestrator = Orchestrator()
+        # Get orchestrator from app state
+        orchestrator = getattr(request.app.state, "orchestrator", None)
+        if orchestrator is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Orchestrator not available - application not fully initialized",
+            )
 
         # Check if this should use workflow orchestration
         should_orchestrate = await orchestrator.should_use_workflow_orchestration(
-            request.user_message
+            workflow_request.user_message
         )
 
         if not should_orchestrate:
             # Simple request, handle directly
-            result = await orchestrator.execute_goal(request.user_message)
+            result = await orchestrator.execute_goal(workflow_request.user_message)
             return {"success": True, "type": "direct_execution", "result": result}
 
         # Create workflow response
         workflow_response = await orchestrator.create_workflow_response(
-            request.user_message
+            workflow_request.user_message
         )
         workflow_id = (
-            request.workflow_id
+            workflow_request.workflow_id
             or workflow_response.get("workflow_id")
             or str(uuid.uuid4())
         )
@@ -207,7 +212,7 @@ async def execute_workflow(
         # Store workflow in active workflows
         workflow_data = {
             "workflow_id": workflow_id,
-            "user_message": request.user_message,
+            "user_message": workflow_request.user_message,
             "classification": workflow_response.get("message_classification"),
             "steps": [],
             "current_step": 0,
@@ -215,12 +220,12 @@ async def execute_workflow(
             "created_at": datetime.now().isoformat(),
             "estimated_duration": workflow_response.get("estimated_duration"),
             "agents_involved": workflow_response.get("agents_involved", []),
-            "auto_approve": request.auto_approve,
+            "auto_approve": workflow_request.auto_approve,
         }
 
         # Start workflow metrics tracking
         metrics_data = {
-            "user_message": request.user_message,
+            "user_message": workflow_request.user_message,
             "complexity": workflow_response.get("message_classification", "unknown"),
             "total_steps": len(workflow_response.get("workflow_preview", [])),
             "agents_involved": workflow_response.get("agents_involved", []),
@@ -392,7 +397,6 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
         else step["agent_type"]
     )
     action = step["action"]
-    description = step["description"]
     step_id = step.get("step_id", f"step_{agent_type}")
 
     # Start step timing
@@ -412,12 +416,12 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
             # Extract search query from action
             search_query = action.replace("Search Knowledge Base", "").strip()
             if not search_query:
-                search_query = "network security scanning tools"  # Default based on workflow context
+                # Default based on workflow context
+                search_query = "network security scanning tools"
 
             result = await kb_agent.process_query(search_query)
-            step[
-                "result"
-            ] = f"Knowledge base search completed: {result.get('response', 'Search completed')}"
+            response = result.get("response", "Search completed")
+            step["result"] = f"Knowledge base search completed: {response}"
 
         elif agent_type == "research":
             # Real web research
@@ -435,9 +439,8 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
                 ] = f"Research completed: {result.get('summary', 'Tools researched')}"
             elif "installation guide" in action.lower():
                 result = await research_agent.get_tool_installation_guide("nmap")
-                step[
-                    "result"
-                ] = f"Installation guide retrieved: {result.get('installation_guide', 'Guide obtained')}"
+                guide = result.get("installation_guide", "Guide obtained")
+                step["result"] = f"Installation guide retrieved: {guide}"
             else:
                 request = ResearchRequest(query=action, focus="general")
                 result = await research_agent.perform_research(request)
@@ -446,18 +449,23 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
         elif agent_type == "orchestrator":
             # Orchestrator coordination
             if "present tool options" in action.lower():
-                step[
-                    "result"
-                ] = "Tool options: nmap (network discovery), masscan (fast port scanner), zmap (internet scanner). Please select which tool to install."
+                options = (
+                    "Tool options: nmap (network discovery), "
+                    "masscan (fast port scanner), zmap (internet scanner). "
+                    "Please select which tool to install."
+                )
+                step["result"] = options
             elif "create install plan" in action.lower():
-                step[
-                    "result"
-                ] = "Installation plan: 1) Update package manager, 2) Install selected tool, 3) Configure tool, 4) Run verification test"
+                plan = (
+                    "Installation plan: 1) Update package manager, "
+                    "2) Install selected tool, 3) Configure tool, "
+                    "4) Run verification test"
+                )
+                step["result"] = plan
             else:
                 result = await orchestrator.execute_goal(action)
-                step[
-                    "result"
-                ] = f"Orchestration completed: {result.get('response', 'Task coordinated')}"
+                response = result.get("response", "Task coordinated")
+                step["result"] = f"Orchestration completed: {response}"
 
         elif agent_type == "knowledge_manager":
             # Store information in knowledge base
@@ -492,9 +500,9 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
                 scan_context["scan_type"] = "service_detection"
 
             result = await security_scanner_agent.execute(action, scan_context)
-            step[
-                "result"
-            ] = f"Security scan completed: {result.get('status')} - {result.get('message', 'Scan results available')}"
+            status = result.get("status")
+            message = result.get("message", "Scan results available")
+            step["result"] = f"Security scan completed: {status} - {message}"
             step["scan_results"] = result
 
         elif agent_type == "network_discovery":
@@ -515,9 +523,11 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
                 discovery_context["task_type"] = "network_map"
 
             result = await network_discovery_agent.execute(action, discovery_context)
-            step[
-                "result"
-            ] = f"Network discovery completed: {result.get('status')} - Found {result.get('hosts_found', 0)} hosts"
+            status = result.get("status")
+            hosts_found = result.get("hosts_found", 0)
+            step["result"] = (
+                f"Network discovery completed: {status} - " f"Found {hosts_found} hosts"
+            )
             step["discovery_results"] = result
 
         elif agent_type == "system_commands":

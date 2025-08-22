@@ -1,0 +1,54 @@
+# Docker Local Deployment Configuration
+# All services running in Docker containers on single machine
+
+deployment_mode: docker_local
+domain: autobot.local
+
+services:
+  redis:
+    host: autobot-redis
+    port: 6379
+    scheme: redis
+    health_endpoint: /
+    timeout: 5
+    circuit_breaker_threshold: 3
+
+  ai-stack:
+    host: autobot-ai-stack
+    port: 11434
+    scheme: http
+    health_endpoint: /api/tags
+    timeout: 10
+    circuit_breaker_threshold: 3
+
+  npu-worker:
+    host: autobot-npu-worker
+    port: 8081
+    scheme: http
+    health_endpoint: /health
+    timeout: 10
+    circuit_breaker_threshold: 3
+
+  backend:
+    host: autobot-backend
+    port: 8001
+    scheme: http
+    health_endpoint: /api/health
+    timeout: 10
+    circuit_breaker_threshold: 3
+
+  frontend:
+    host: autobot-frontend
+    port: 80
+    scheme: http
+    health_endpoint: /
+    timeout: 5
+    circuit_breaker_threshold: 3
+
+  playwright-vnc:
+    host: autobot-playwright-vnc
+    port: 3000
+    scheme: http
+    health_endpoint: /
+    timeout: 5
+    circuit_breaker_threshold: 3

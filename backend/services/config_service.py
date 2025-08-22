@@ -8,7 +8,13 @@ from typing import Any, Dict
 
 import yaml
 
-from src.config import global_config_manager
+from src.config import (
+    BACKEND_HOST_IP,
+    BACKEND_PORT,
+    HTTP_PROTOCOL,
+    REDIS_HOST_IP,
+    global_config_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,13 +102,14 @@ class ConfigService:
                 },
                 "backend": {
                     "api_endpoint": global_config_manager.get_nested(
-                        "backend.api_endpoint", "http://localhost:8001"
+                        "backend.api_endpoint",
+                        f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
                     ),
                     "server_host": global_config_manager.get_nested(
                         "backend.server_host", "0.0.0.0"
                     ),
                     "server_port": global_config_manager.get_nested(
-                        "backend.server_port", 8001
+                        "backend.server_port", BACKEND_PORT
                     ),
                     "chat_data_dir": global_config_manager.get_nested(
                         "backend.chat_data_dir", "data/chats"
@@ -224,7 +231,7 @@ class ConfigService:
                             "memory.redis.enabled", False
                         ),
                         "host": global_config_manager.get_nested(
-                            "memory.redis.host", "localhost"
+                            "memory.redis.host", REDIS_HOST_IP
                         ),
                         "port": global_config_manager.get_nested(
                             "memory.redis.port", 6379
@@ -289,7 +296,7 @@ class ConfigService:
 
             return {
                 "type": task_transport_config.get("type", "local"),
-                "host": redis_config.get("host", "localhost"),
+                "host": redis_config.get("host", REDIS_HOST_IP),
                 "port": redis_config.get("port", 6379),
                 "channels": redis_config.get("channels", {}),
                 "priority": redis_config.get("priority", 10),

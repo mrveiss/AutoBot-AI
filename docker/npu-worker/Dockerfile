@@ -1,16 +1,19 @@
 # AutoBot NPU Worker - Intel NPU + NVIDIA GPU Accelerated Inference
 # High-performance AI inference using Intel NPU hardware with GPU fallback
 
-FROM nvidia/cuda:12.2-runtime-ubuntu22.04
+FROM ubuntu:22.04
 
-# Install Python 3.10
+# Install Python 3.10 with shared libraries
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3.10-dev \
+    libpython3.10 \
+    libpython3.10-dev \
     python3-pip \
     python3.10-venv \
     && ln -sf /usr/bin/python3.10 /usr/bin/python \
-    && ln -sf /usr/bin/python3.10 /usr/bin/python3
+    && ln -sf /usr/bin/python3.10 /usr/bin/python3 \
+    && ldconfig
 
 # Set working directory
 WORKDIR /app
@@ -34,8 +37,8 @@ RUN apt-get update && apt-get install -y \
     clinfo \
     # Intel NPU driver dependencies
     git-lfs \
-    # NVIDIA GPU support
-    nvidia-opencl-dev \
+    # GPU support (generic)
+    ocl-icd-opencl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Intel NPU driver in container

@@ -1,0 +1,53 @@
+# Docker Compose Local Deployment Configuration
+# All services run in containers on single machine
+
+deployment:
+  mode: docker_local
+  domain: autobot.local
+  network: autobot-network
+
+services:
+  redis:
+    host: autobot-redis
+    port: 6379
+    scheme: redis
+    health_endpoint: "/"
+
+  backend:
+    host: autobot-backend
+    port: 8001
+    scheme: http
+    health_endpoint: /api/system/health
+
+  frontend:
+    host: autobot-frontend
+    port: 3000
+    scheme: http
+    health_endpoint: /
+
+  ai-stack:
+    host: autobot-ai-stack
+    port: 8080
+    scheme: http
+    health_endpoint: /health
+
+  npu-worker:
+    host: autobot-npu-worker
+    port: 8081
+    scheme: http
+    health_endpoint: /health
+
+  playwright-vnc:
+    host: autobot-playwright-vnc
+    port: 3000
+    scheme: http
+    health_endpoint: /health
+
+# Environment variables for Docker deployment
+environment:
+  AUTOBOT_DEPLOYMENT_MODE: docker_local
+  AUTOBOT_DOMAIN: autobot.local
+  REDIS_HOST: autobot-redis
+  REDIS_PORT: 6379
+  BACKEND_HOST: autobot-backend
+  BACKEND_PORT: 8001

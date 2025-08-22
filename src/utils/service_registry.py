@@ -1,0 +1,466 @@
+"""
+AutoBot Service Registry
+=======================
+
+Provides service discovery and configuration management for distributed deployments.
+Supports multiple deployment patterns: single-machine, Docker Compose, and distributed.
+
+Key Features:
+- Environment-based service discovery
+- Health checking with circuit breakers
+- Fallback strategies for service failures
+- Support for external service registries (Consul, etcd)
+- Automatic service URL construction
+- Configuration-driven service mapping
+
+Usage:
+    registry = ServiceRegistry()
+    redis_url = registry.get_service_url("redis")
+    ai_endpoint = registry.get_service_url("ai-stack", "/api/process")
+"""
+
+import asyncio
+import json
+import logging
+import os
+import time
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
+import aiohttp
+import yaml
+
+
+class ServiceStatus(Enum):
+    """Service health status"""
+
+    HEALTHY = "healthy"
+    UNHEALTHY = "unhealthy"
+    UNKNOWN = "unknown"
+    CIRCUIT_OPEN = "circuit_open"
+
+
+class DeploymentMode(Enum):
+    """Deployment mode detection"""
+
+    LOCAL = "local"  # Single machine, no containers
+    DOCKER_LOCAL = "docker_local"  # Docker Compose on single machine
+    DISTRIBUTED = "distributed"  # Services across multiple machines
+    KUBERNETES = "kubernetes"  # Kubernetes deployment
+    CLOUD = "cloud"  # Cloud-managed services
+
+
+@dataclass
+class ServiceConfig:
+    """Service configuration with health checking"""
+
+    name: str
+    host: str
+    port: int
+    scheme: str = "http"
+    path: str = ""
+    health_endpoint: str = "/health"
+    timeout: int = 30
+    retries: int = 3
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_timeout: int = 60
+
+
+@dataclass
+class ServiceHealth:
+    """Service health state"""
+
+    status: ServiceStatus
+    last_check: float
+    failure_count: int = 0
+    circuit_open_until: float = 0
+    response_time: float = 0
+
+
+class ServiceRegistry:
+    """
+    Centralized service discovery and configuration management.
+
+    Handles multiple deployment scenarios:
+    1. Local development (localhost)
+    2. Docker Compose (container names)
+    3. Distributed deployment (external hosts)
+    4. Cloud deployment (managed services)
+    """
+
+    # Default service configurations
+    DEFAULT_SERVICES = {
+        "redis": {
+            "port": 6379,
+            "health_endpoint": "/",
+            "schemes": {"local": "redis", "docker": "redis", "distributed": "redis"},
+        },
+        "ai-stack": {
+            "port": 8080,
+            "health_endpoint": "/health",
+            "schemes": {"local": "http", "docker": "http", "distributed": "http"},
+        },
+        "npu-worker": {
+            "port": 8081,
+            "health_endpoint": "/health",
+            "schemes": {"local": "http", "docker": "http", "distributed": "http"},
+        },
+        "backend": {
+            "port": 8001,
+            "health_endpoint": "/api/system/health",
+            "schemes": {"local": "http", "docker": "http", "distributed": "http"},
+        },
+        "frontend": {
+            "port": 3000,
+            "health_endpoint": "/",
+            "schemes": {"local": "http", "docker": "http", "distributed": "http"},
+        },
+        "playwright-vnc": {
+            "port": 3000,
+            "health_endpoint": "/health",
+            "schemes": {"local": "http", "docker": "http", "distributed": "http"},
+        },
+    }
+
+    # Host resolution patterns by deployment mode
+    HOST_PATTERNS = {
+        DeploymentMode.LOCAL: {
+            # DEFAULT HYBRID: Backend/frontend on localhost, Docker services on localhost ports
+            "default": os.getenv("AUTOBOT_DEFAULT_HOST", "localhost"),
+            "redis": os.getenv("AUTOBOT_REDIS_HOST", "127.0.0.7"),
+            "backend": os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.3"),
+            "frontend": os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.3"),
+            "ai-stack": os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.6"),
+            "npu-worker": os.getenv("AUTOBOT_NPU_WORKER_HOST", "127.0.0.5"),
+            "playwright-vnc": os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "127.0.0.4"),
+            "ollama": os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1"),
+            "lmstudio": os.getenv("AUTOBOT_LM_STUDIO_HOST", "127.0.0.2"),
+        },
+        DeploymentMode.DOCKER_LOCAL: {
+            "default": "autobot-{service}",
+            "redis": "autobot-redis",
+            "ai-stack": "autobot-ai-stack",
+            "npu-worker": "autobot-npu-worker",
+        },
+        DeploymentMode.DISTRIBUTED: {
+            "default": "{service}.{domain}",
+            "redis": "redis.autobot.local",
+            "ai-stack": "ai-stack.autobot.local",
+            "npu-worker": "npu-worker.autobot.local",
+        },
+    }
+
+    def __init__(self, config_file: Optional[str] = None):
+        """Initialize service registry with optional configuration file"""
+        self.logger = logging.getLogger(__name__)
+        self.services: Dict[str, ServiceConfig] = {}
+        self.health_status: Dict[str, ServiceHealth] = {}
+        self.deployment_mode = self._detect_deployment_mode()
+        self.domain = os.getenv("AUTOBOT_DOMAIN", "autobot.local")
+
+        # Load configuration
+        self._load_default_services()
+        if config_file:
+            self._load_config_file(config_file)
+        self._load_environment_config()
+
+        self.logger.info(
+            f"Service registry initialized in {self.deployment_mode.value} mode"
+        )
+
+    def _detect_deployment_mode(self) -> DeploymentMode:
+        """Detect current deployment mode"""
+        # Check for explicit mode setting
+        mode = os.getenv("AUTOBOT_DEPLOYMENT_MODE", "").lower()
+        if mode:
+            try:
+                return DeploymentMode(mode)
+            except ValueError:
+                self.logger.warning(f"Invalid deployment mode: {mode}")
+
+        # Auto-detect based on environment
+        # DEFAULT BEHAVIOR: Local + Docker hybrid (backend on host, services in containers)
+        if os.path.exists("/.dockerenv"):
+            # Running inside container
+            if os.getenv("KUBERNETES_SERVICE_HOST"):
+                return DeploymentMode.KUBERNETES
+            elif os.getenv("AUTOBOT_DISTRIBUTED") == "true":
+                return DeploymentMode.DISTRIBUTED
+            else:
+                return DeploymentMode.DOCKER_LOCAL
+        else:
+            # Running on host - DEFAULT: Local with Docker services
+            if os.getenv("AUTOBOT_DISTRIBUTED") == "true":
+                return DeploymentMode.DISTRIBUTED
+            else:
+                # Default hybrid mode: backend/frontend on localhost, services in Docker
+                return DeploymentMode.LOCAL
+
+    def _load_default_services(self):
+        """Load default service configurations"""
+        for service_name, config in self.DEFAULT_SERVICES.items():
+            host = self._resolve_host(service_name)
+
+            service_config = ServiceConfig(
+                name=service_name,
+                host=host,
+                port=config["port"],
+                health_endpoint=config["health_endpoint"],
+                scheme=config["schemes"].get(
+                    self.deployment_mode.value.split("_")[0], "http"
+                ),
+            )
+
+            self.services[service_name] = service_config
+            self.health_status[service_name] = ServiceHealth(
+                status=ServiceStatus.UNKNOWN, last_check=0
+            )
+
+    def _resolve_host(self, service_name: str) -> str:
+        """Resolve hostname based on deployment mode and service"""
+        # Check for explicit environment variable
+        env_var = f"{service_name.upper().replace('-', '_')}_HOST"
+        explicit_host = os.getenv(env_var)
+        if explicit_host:
+            return explicit_host
+
+        # Use deployment mode patterns
+        patterns = self.HOST_PATTERNS.get(self.deployment_mode, {})
+
+        # Try service-specific pattern first
+        if service_name in patterns:
+            pattern = patterns[service_name]
+        else:
+            pattern = patterns.get("default", "localhost")
+
+        # Replace placeholders
+        return pattern.format(service=service_name, domain=self.domain)
+
+    def _load_config_file(self, config_file: str):
+        """Load services from configuration file"""
+        try:
+            with open(config_file, "r") as f:
+                if config_file.endswith(".yaml") or config_file.endswith(".yml"):
+                    config = yaml.safe_load(f)
+                else:
+                    config = json.load(f)
+
+            services_config = config.get("services", {})
+            for service_name, service_data in services_config.items():
+                if service_name in self.services:
+                    # Update existing service
+                    service = self.services[service_name]
+                    service.host = service_data.get("host", service.host)
+                    service.port = service_data.get("port", service.port)
+                    service.scheme = service_data.get("scheme", service.scheme)
+                    service.health_endpoint = service_data.get(
+                        "health_endpoint", service.health_endpoint
+                    )
+                else:
+                    # Add new service
+                    self.services[service_name] = ServiceConfig(
+                        name=service_name,
+                        host=service_data.get("host", "localhost"),
+                        port=service_data.get("port", 80),
+                        scheme=service_data.get("scheme", "http"),
+                        health_endpoint=service_data.get("health_endpoint", "/health"),
+                    )
+
+        except Exception as e:
+            self.logger.error(f"Failed to load config file {config_file}: {e}")
+
+    def _load_environment_config(self):
+        """Load service configurations from environment variables"""
+        for service_name in self.services:
+            service = self.services[service_name]
+            env_prefix = f"{service_name.upper().replace('-', '_')}"
+
+            # Update from environment variables
+            service.host = os.getenv(f"{env_prefix}_HOST", service.host)
+            service.port = int(os.getenv(f"{env_prefix}_PORT", service.port))
+            service.scheme = os.getenv(f"{env_prefix}_SCHEME", service.scheme)
+            service.path = os.getenv(f"{env_prefix}_PATH", service.path)
+            service.health_endpoint = os.getenv(
+                f"{env_prefix}_HEALTH_ENDPOINT", service.health_endpoint
+            )
+
+    def get_service_url(self, service_name: str, path: str = "") -> str:
+        """
+        Get full URL for a service
+
+        Args:
+            service_name: Name of the service
+            path: Optional path to append
+
+        Returns:
+            Full service URL
+
+        Example:
+            registry.get_service_url("redis")  # redis://localhost:6379
+            registry.get_service_url("ai-stack", "/api/process")  # http://ai-stack.autobot.local:8080/api/process
+        """
+        if service_name not in self.services:
+            self.logger.error(f"Unknown service: {service_name}")
+            raise ValueError(f"Service '{service_name}' not found in registry")
+
+        service = self.services[service_name]
+
+        # Construct URL
+        base_url = f"{service.scheme}://{service.host}:{service.port}"
+
+        # Add service path and requested path
+        full_path = f"{service.path.rstrip('/')}{path}" if path else service.path
+        if full_path and not full_path.startswith("/"):
+            full_path = f"/{full_path}"
+
+        return f"{base_url}{full_path}"
+
+    def get_service_config(self, service_name: str) -> Optional[ServiceConfig]:
+        """Get service configuration"""
+        return self.services.get(service_name)
+
+    def list_services(self) -> List[str]:
+        """List all registered services"""
+        return list(self.services.keys())
+
+    def register_service(self, service_config: ServiceConfig):
+        """Register a new service"""
+        self.services[service_config.name] = service_config
+        self.health_status[service_config.name] = ServiceHealth(
+            status=ServiceStatus.UNKNOWN, last_check=0
+        )
+        self.logger.info(f"Registered service: {service_config.name}")
+
+    async def check_service_health(self, service_name: str) -> ServiceHealth:
+        """Check health of a specific service"""
+        if service_name not in self.services:
+            raise ValueError(f"Service '{service_name}' not found")
+
+        service = self.services[service_name]
+        health = self.health_status[service_name]
+
+        # Check if circuit breaker is open
+        current_time = time.time()
+        if health.circuit_open_until > current_time:
+            health.status = ServiceStatus.CIRCUIT_OPEN
+            return health
+
+        try:
+            health_url = self.get_service_url(service_name, service.health_endpoint)
+
+            start_time = time.time()
+            timeout = aiohttp.ClientTimeout(total=service.timeout)
+
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(health_url) as response:
+                    health.response_time = time.time() - start_time
+
+                    if response.status == 200:
+                        health.status = ServiceStatus.HEALTHY
+                        health.failure_count = 0
+                    else:
+                        health.status = ServiceStatus.UNHEALTHY
+                        health.failure_count += 1
+
+        except Exception as e:
+            self.logger.warning(f"Health check failed for {service_name}: {e}")
+            health.status = ServiceStatus.UNHEALTHY
+            health.failure_count += 1
+
+        # Update circuit breaker
+        if health.failure_count >= service.circuit_breaker_threshold:
+            health.circuit_open_until = current_time + service.circuit_breaker_timeout
+            health.status = ServiceStatus.CIRCUIT_OPEN
+            self.logger.error(f"Circuit breaker opened for {service_name}")
+
+        health.last_check = current_time
+        return health
+
+    async def check_all_services_health(self) -> Dict[str, ServiceHealth]:
+        """Check health of all registered services"""
+        tasks = []
+        for service_name in self.services:
+            task = self.check_service_health(service_name)
+            tasks.append(task)
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        health_report = {}
+        for i, service_name in enumerate(self.services):
+            if isinstance(results[i], Exception):
+                self.logger.error(
+                    f"Health check error for {service_name}: {results[i]}"
+                )
+                health_report[service_name] = ServiceHealth(
+                    status=ServiceStatus.UNHEALTHY, last_check=time.time()
+                )
+            else:
+                health_report[service_name] = results[i]
+
+        return health_report
+
+    def get_service_health(self, service_name: str) -> ServiceHealth:
+        """Get cached health status for a service"""
+        return self.health_status.get(
+            service_name, ServiceHealth(status=ServiceStatus.UNKNOWN, last_check=0)
+        )
+
+    def is_service_healthy(self, service_name: str, max_age: int = 60) -> bool:
+        """Check if service is healthy (with cache age limit)"""
+        health = self.get_service_health(service_name)
+
+        # Check if health data is too old
+        if time.time() - health.last_check > max_age:
+            return False
+
+        return health.status == ServiceStatus.HEALTHY
+
+    def get_deployment_info(self) -> Dict[str, Any]:
+        """Get deployment information"""
+        return {
+            "deployment_mode": self.deployment_mode.value,
+            "domain": self.domain,
+            "services_count": len(self.services),
+            "services": {
+                name: {
+                    "url": self.get_service_url(name),
+                    "health": self.get_service_health(name).status.value,
+                }
+                for name in self.services
+            },
+        }
+
+
+# Global service registry instance
+_registry: Optional[ServiceRegistry] = None
+
+
+def get_service_registry(config_file: Optional[str] = None) -> ServiceRegistry:
+    """Get global service registry instance (singleton)"""
+    global _registry
+    if _registry is None:
+        _registry = ServiceRegistry(config_file)
+    return _registry
+
+
+def get_service_url(service_name: str, path: str = "") -> str:
+    """Convenience function to get service URL"""
+    registry = get_service_registry()
+    return registry.get_service_url(service_name, path)
+
+
+# Legacy compatibility functions
+def get_redis_url() -> str:
+    """Get Redis connection URL"""
+    return get_service_url("redis")
+
+
+def get_ai_stack_url(path: str = "") -> str:
+    """Get AI stack URL"""
+    return get_service_url("ai-stack", path)
+
+
+def get_npu_worker_url(path: str = "") -> str:
+    """Get NPU worker URL"""
+    return get_service_url("npu-worker", path)

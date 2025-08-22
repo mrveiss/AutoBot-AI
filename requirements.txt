@@ -100,3 +100,4 @@ python-dotenv>=1.0.0             # Environment variable management
 click>=8.1.0                     # CLI interface utilities
 jsonschema>=4.20.0               # JSON schema validation
 validators>=0.22.0               # Input validation utilities
+python-json-logger

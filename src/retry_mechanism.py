@@ -429,9 +429,9 @@ async def retry_network_operation(func: Callable, *args, **kwargs) -> Any:
     import aiohttp
 
     config = RetryConfig(
-        max_attempts=5,
-        base_delay=1.0,
-        max_delay=30.0,
+        max_attempts=3,  # Reduced from 5 to 3 attempts
+        base_delay=0.5,  # Reduced from 1.0 to 0.5 seconds
+        max_delay=8.0,  # Reduced from 30.0 to 8.0 seconds
         strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
         retryable_exceptions=(
             aiohttp.ClientError,

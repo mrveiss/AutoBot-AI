@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # Import the centralized ConfigManager and Redis client utility
@@ -48,7 +49,9 @@ class ChatHistoryManager:
         self.redis_host = redis_host or redis_config.get(
             "host", os.getenv("REDIS_HOST", "localhost")
         )
-        self.redis_port = redis_port or redis_config.get("port", 6379)
+        self.redis_port = redis_port or redis_config.get(
+            "port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+        )
 
         self.history: List[Dict[str, Any]] = []
         self.redis_client = None
@@ -302,6 +305,60 @@ class ChatHistoryManager:
 
         except Exception as e:
             logging.error(f"Error listing chat sessions: {str(e)}")
+            return []
+
+    def list_sessions_fast(self) -> List[Dict[str, Any]]:
+        """Fast listing of chat sessions using file metadata only (no decryption)."""
+        try:
+            sessions = []
+            chats_directory = self._get_chats_directory()
+
+            # Ensure chats directory exists
+            if not os.path.exists(chats_directory):
+                os.makedirs(chats_directory, exist_ok=True)
+                return sessions
+
+            # Use file system metadata for performance - avoid decryption
+            for filename in os.listdir(chats_directory):
+                if filename.startswith("chat_") and filename.endswith(".json"):
+                    chat_id = filename.replace("chat_", "").replace(".json", "")
+                    chat_path = os.path.join(chats_directory, filename)
+
+                    try:
+                        # Get file stats for metadata
+                        stat = os.stat(chat_path)
+                        created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
+                        last_modified = datetime.fromtimestamp(
+                            stat.st_mtime
+                        ).isoformat()
+                        file_size = stat.st_size
+
+                        # Use filename as default name until user sets a custom name
+                        default_name = f"Chat {chat_id[:8]}"
+
+                        sessions.append(
+                            {
+                                "chatId": chat_id,
+                                "name": default_name,
+                                "messageCount": 0,  # Not available without decryption
+                                "createdTime": created_time,
+                                "lastModified": last_modified,
+                                "fileSize": file_size,
+                                "fast_mode": True,  # Indicate this is fast mode without full data
+                            }
+                        )
+                    except Exception as e:
+                        logging.error(
+                            f"Error reading file stats for {filename}: {str(e)}"
+                        )
+                        continue
+
+            # Sort by last modified time (most recent first)
+            sessions.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
+            return sessions
+
+        except Exception as e:
+            logging.error(f"Error listing chat sessions (fast mode): {str(e)}")
             return []
 
     def load_session(self, session_id: str) -> List[Dict[str, Any]]:

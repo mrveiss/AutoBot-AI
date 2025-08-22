@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 
+from ..utils.service_registry import get_service_url
 from .base_agent import (
     AgentHealth,
     AgentRequest,
@@ -32,7 +33,7 @@ class AgentClientConfig:
     def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
         self.config = config_dict or {}
         self.default_mode = DeploymentMode.LOCAL
-        self.container_base_url = "http://localhost:8080"
+        self.container_base_url = get_service_url("ai-stack")
         self.request_timeout = 30.0
         self.retry_attempts = 3
         self.health_check_interval = 60.0

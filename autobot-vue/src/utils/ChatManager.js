@@ -1,6 +1,8 @@
 // ChatManager.js - Centralized chat management utility
+import { API_CONFIG } from '@/config/environment.js';
+
 class ChatManager {
-  constructor(apiEndpoint = 'http://localhost:8001') {
+  constructor(apiEndpoint = API_CONFIG.BASE_URL) {
     this.apiEndpoint = apiEndpoint;
     this.currentChatId = null;
     this.settings = {
@@ -253,7 +255,8 @@ class ChatManager {
         ...options
       };
 
-      const response = await fetch(`${this.apiEndpoint}/api/chat`, {
+      const chatId = options.chatId || this.currentChatId || 'default';
+      const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

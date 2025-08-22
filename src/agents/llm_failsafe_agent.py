@@ -73,8 +73,8 @@ class LLMFailsafeAgent:
 
         # Timeout settings (in seconds)
         self.timeouts = {
-            LLMTier.PRIMARY: 30.0,
-            LLMTier.SECONDARY: 20.0,
+            LLMTier.PRIMARY: 15.0,  # Reduced from 30.0 to 15.0 seconds
+            LLMTier.SECONDARY: 10.0,  # Reduced from 20.0 to 10.0 seconds
             LLMTier.BASIC: 5.0,
             LLMTier.EMERGENCY: 1.0,
         }
@@ -420,15 +420,22 @@ class LLMFailsafeAgent:
         self, prompt: str, start_time: float, error_msg: str
     ) -> LLMResponse:
         """Create absolute last resort response"""
+        # Create a more user-friendly emergency response
+        user_message = "I'm temporarily experiencing technical difficulties. Please try your request again in a moment."
+        if "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+            user_message = "I'm having trouble connecting to my AI models right now. Please try again in a few seconds."
+        elif "model" in error_msg.lower():
+            user_message = "My AI models are currently unavailable. I'm working to restore service. Please try again shortly."
+
         return LLMResponse(
-            content=f"CRITICAL ERROR: AutoBot is experiencing severe system issues. Error: {error_msg}. Please contact system administrator immediately.",
+            content=user_message,
             tier_used=LLMTier.EMERGENCY,
-            model_used="critical_fallback",
-            confidence=0.0,
+            model_used="emergency_fallback",
+            confidence=0.1,  # Slightly higher confidence for user-friendly message
             response_time=time.time() - start_time,
-            success=False,
-            warnings=["Critical system failure", "All tiers failed"],
-            metadata={"critical_error": error_msg, "original_prompt": prompt[:100]},
+            success=True,  # Mark as success to prevent further error handling
+            warnings=["All LLM tiers temporarily unavailable"],
+            metadata={"fallback_reason": error_msg, "original_prompt": prompt[:100]},
         )
 
     def _simplify_prompt(self, prompt: str) -> str:

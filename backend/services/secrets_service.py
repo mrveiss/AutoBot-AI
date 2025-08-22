@@ -6,23 +6,27 @@ Handles secure storage, retrieval, and management of secrets with dual-scope sup
 import json
 import logging
 import os
-import aiofiles
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
-from uuid import uuid4
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+import aiofiles
 from cryptography.fernet import Fernet
 
 from src.utils.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
+
 class SecretsService:
     """Service for managing secrets with encryption and scope isolation"""
 
-    def __init__(self, db_path: str = "data/secrets.db", encryption_key: Optional[str] = None):
+    def __init__(self, db_path: str = None, encryption_key: Optional[str] = None):
         """Initialize the secrets service with encryption"""
+        if db_path is None:
+            db_path = os.getenv("AUTOBOT_SECRETS_DB_PATH", "data/secrets.db")
         self.db_path = db_path
         self._ensure_db_directory()
 
@@ -43,21 +47,24 @@ class SecretsService:
             self.cipher = Fernet(encryption_key.encode())
         else:
             # Generate a new key from config or environment
-            env_key = config_manager.get('security.secrets_key', None)
+            env_key = config_manager.get("security.secrets_key", None)
             if env_key:
                 self.cipher = Fernet(env_key.encode())
             else:
                 # Generate and save a new key
                 key = Fernet.generate_key()
                 self.cipher = Fernet(key)
-                logger.warning("Generated new encryption key. Set AUTOBOT_SECRETS_KEY environment variable for persistence.")
+                logger.warning(
+                    "Generated new encryption key. Set AUTOBOT_SECRETS_KEY environment variable for persistence."
+                )
 
     def _init_database(self):
         """Initialize the SQLite database with secrets table"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute('''
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS secrets (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -76,22 +83,30 @@ class SecretsService:
                 is_active BOOLEAN DEFAULT 1,
                 UNIQUE(name, scope, chat_id)
             )
-        ''')
+        """
+        )
 
-        cursor.execute('''
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_secrets_scope ON secrets(scope);
-        ''')
+        """
+        )
 
-        cursor.execute('''
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_secrets_chat_id ON secrets(chat_id);
-        ''')
+        """
+        )
 
-        cursor.execute('''
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name);
-        ''')
+        """
+        )
 
         # Create audit log table
-        cursor.execute('''
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS secrets_audit (
                 id TEXT PRIMARY KEY,
                 secret_id TEXT NOT NULL,
@@ -101,7 +116,8 @@ class SecretsService:
                 details TEXT,
                 FOREIGN KEY (secret_id) REFERENCES secrets(id)
             )
-        ''')
+        """
+        )
 
         conn.commit()
         conn.close()
@@ -124,7 +140,7 @@ class SecretsService:
         description: Optional[str] = None,
         expires_at: Optional[str] = None,
         metadata: Optional[Dict] = None,
-        created_by: Optional[str] = None
+        created_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new secret with encryption"""
         secret_id = str(uuid4())
@@ -135,17 +151,29 @@ class SecretsService:
         cursor = conn.cursor()
 
         try:
-            cursor.execute('''
+            cursor.execute(
+                """
                 INSERT INTO secrets (
                     id, name, description, secret_type, encrypted_value,
                     scope, chat_id, created_at, updated_at, expires_at,
                     created_by, metadata
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                secret_id, name, description, secret_type, encrypted_value,
-                scope, chat_id, now, now, expires_at,
-                created_by, json.dumps(metadata) if metadata else None
-            ))
+            """,
+                (
+                    secret_id,
+                    name,
+                    description,
+                    secret_type,
+                    encrypted_value,
+                    scope,
+                    chat_id,
+                    now,
+                    now,
+                    expires_at,
+                    created_by,
+                    json.dumps(metadata) if metadata else None,
+                ),
+            )
 
             # Add audit log entry
             self._audit_action(cursor, secret_id, "created", created_by)
@@ -160,12 +188,14 @@ class SecretsService:
                 "scope": scope,
                 "chat_id": chat_id,
                 "created_at": now,
-                "expires_at": expires_at
+                "expires_at": expires_at,
             }
 
         except sqlite3.IntegrityError as e:
             conn.rollback()
-            raise ValueError(f"Secret with name '{name}' already exists in scope '{scope}' for chat '{chat_id}'")
+            raise ValueError(
+                f"Secret with name '{name}' already exists in scope '{scope}' for chat '{chat_id}'"
+            )
         finally:
             conn.close()
 
@@ -176,19 +206,19 @@ class SecretsService:
         scope: str = "general",
         chat_id: Optional[str] = None,
         include_value: bool = False,
-        accessed_by: Optional[str] = None
+        accessed_by: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get a secret by ID or name with optional value decryption"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        query = '''
+        query = """
             SELECT id, name, description, secret_type, encrypted_value,
                    scope, chat_id, created_at, updated_at, expires_at,
                    metadata, access_count
             FROM secrets
             WHERE is_active = 1
-        '''
+        """
 
         params = []
 
@@ -223,12 +253,14 @@ class SecretsService:
             "updated_at": row[8],
             "expires_at": row[9],
             "metadata": json.loads(row[10]) if row[10] else {},
-            "access_count": row[11]
+            "access_count": row[11],
         }
 
         # Check expiration
         if secret["expires_at"]:
-            if datetime.fromisoformat(secret["expires_at"]) < datetime.now(timezone.utc):
+            if datetime.fromisoformat(secret["expires_at"]) < datetime.now(
+                timezone.utc
+            ):
                 conn.close()
                 return None
 
@@ -236,12 +268,15 @@ class SecretsService:
         if include_value:
             secret["value"] = self._decrypt_value(row[4])
 
-            cursor.execute('''
+            cursor.execute(
+                """
                 UPDATE secrets
                 SET access_count = access_count + 1,
                     last_accessed_at = ?
                 WHERE id = ?
-            ''', (datetime.now(timezone.utc).isoformat(), secret["id"]))
+            """,
+                (datetime.now(timezone.utc).isoformat(), secret["id"]),
+            )
 
             self._audit_action(cursor, secret["id"], "accessed", accessed_by)
             conn.commit()
@@ -254,18 +289,18 @@ class SecretsService:
         scope: Optional[str] = None,
         chat_id: Optional[str] = None,
         secret_type: Optional[str] = None,
-        include_expired: bool = False
+        include_expired: bool = False,
     ) -> List[Dict[str, Any]]:
         """List secrets based on filters"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        query = '''
+        query = """
             SELECT id, name, description, secret_type, scope, chat_id,
                    created_at, updated_at, expires_at, access_count
             FROM secrets
             WHERE is_active = 1
-        '''
+        """
 
         params = []
 
@@ -282,7 +317,9 @@ class SecretsService:
             params.append(secret_type)
 
         if not include_expired:
-            query += " AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))"
+            query += (
+                " AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))"
+            )
 
         query += " ORDER BY created_at DESC"
 
@@ -290,18 +327,20 @@ class SecretsService:
 
         secrets = []
         for row in cursor.fetchall():
-            secrets.append({
-                "id": row[0],
-                "name": row[1],
-                "description": row[2],
-                "secret_type": row[3],
-                "scope": row[4],
-                "chat_id": row[5],
-                "created_at": row[6],
-                "updated_at": row[7],
-                "expires_at": row[8],
-                "access_count": row[9]
-            })
+            secrets.append(
+                {
+                    "id": row[0],
+                    "name": row[1],
+                    "description": row[2],
+                    "secret_type": row[3],
+                    "scope": row[4],
+                    "chat_id": row[5],
+                    "created_at": row[6],
+                    "updated_at": row[7],
+                    "expires_at": row[8],
+                    "access_count": row[9],
+                }
+            )
 
         conn.close()
         return secrets
@@ -314,7 +353,7 @@ class SecretsService:
         value: Optional[str] = None,
         expires_at: Optional[str] = None,
         metadata: Optional[Dict] = None,
-        updated_by: Optional[str] = None
+        updated_by: Optional[str] = None,
     ) -> bool:
         """Update an existing secret"""
         conn = sqlite3.connect(self.db_path)
@@ -353,7 +392,9 @@ class SecretsService:
 
         params.append(secret_id)
 
-        query = f"UPDATE secrets SET {', '.join(updates)} WHERE id = ? AND is_active = 1"
+        query = (
+            f"UPDATE secrets SET {', '.join(updates)} WHERE id = ? AND is_active = 1"
+        )
         cursor.execute(query, params)
 
         if cursor.rowcount > 0:
@@ -369,7 +410,7 @@ class SecretsService:
         self,
         secret_id: str,
         hard_delete: bool = False,
-        deleted_by: Optional[str] = None
+        deleted_by: Optional[str] = None,
     ) -> bool:
         """Delete or deactivate a secret"""
         conn = sqlite3.connect(self.db_path)
@@ -381,7 +422,7 @@ class SecretsService:
         else:
             cursor.execute(
                 "UPDATE secrets SET is_active = 0, updated_at = ? WHERE id = ? AND is_active = 1",
-                (datetime.now(timezone.utc).isoformat(), secret_id)
+                (datetime.now(timezone.utc).isoformat(), secret_id),
             )
             action = "deactivated"
 
@@ -400,7 +441,7 @@ class SecretsService:
         from_scope: str,
         to_scope: str,
         target_chat_id: Optional[str] = None,
-        transferred_by: Optional[str] = None
+        transferred_by: Optional[str] = None,
     ) -> bool:
         """Transfer a secret between scopes"""
         conn = sqlite3.connect(self.db_path)
@@ -408,8 +449,7 @@ class SecretsService:
 
         # Verify secret exists and matches from_scope
         cursor.execute(
-            "SELECT scope FROM secrets WHERE id = ? AND is_active = 1",
-            (secret_id,)
+            "SELECT scope FROM secrets WHERE id = ? AND is_active = 1", (secret_id,)
         )
         row = cursor.fetchone()
 
@@ -420,16 +460,23 @@ class SecretsService:
         # Update scope and chat_id
         cursor.execute(
             "UPDATE secrets SET scope = ?, chat_id = ?, updated_at = ? WHERE id = ?",
-            (to_scope, target_chat_id, datetime.now(timezone.utc).isoformat(), secret_id)
+            (
+                to_scope,
+                target_chat_id,
+                datetime.now(timezone.utc).isoformat(),
+                secret_id,
+            ),
         )
 
         if cursor.rowcount > 0:
             details = {
                 "from_scope": from_scope,
                 "to_scope": to_scope,
-                "target_chat_id": target_chat_id
+                "target_chat_id": target_chat_id,
             }
-            self._audit_action(cursor, secret_id, "transferred", transferred_by, details)
+            self._audit_action(
+                cursor, secret_id, "transferred", transferred_by, details
+            )
             conn.commit()
             conn.close()
             return True
@@ -442,7 +489,7 @@ class SecretsService:
         chat_id: str,
         action: str = "delete",  # "delete", "transfer", "export"
         target_chat_id: Optional[str] = None,
-        cleaned_by: Optional[str] = None
+        cleaned_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Clean up secrets when a chat is deleted"""
         conn = sqlite3.connect(self.db_path)
@@ -451,7 +498,7 @@ class SecretsService:
         # Get all secrets for the chat
         cursor.execute(
             "SELECT id, name FROM secrets WHERE chat_id = ? AND is_active = 1",
-            (chat_id,)
+            (chat_id,),
         )
         chat_secrets = cursor.fetchall()
 
@@ -459,27 +506,33 @@ class SecretsService:
             "action": action,
             "chat_id": chat_id,
             "affected_secrets": len(chat_secrets),
-            "secrets": []
+            "secrets": [],
         }
 
         for secret_id, name in chat_secrets:
             if action == "delete":
                 self.delete_secret(secret_id, deleted_by=cleaned_by)
-                results["secrets"].append({"id": secret_id, "name": name, "status": "deleted"})
+                results["secrets"].append(
+                    {"id": secret_id, "name": name, "status": "deleted"}
+                )
 
             elif action == "transfer" and target_chat_id:
                 success = self.transfer_secret(
                     secret_id, "chat", "chat", target_chat_id, cleaned_by
                 )
-                results["secrets"].append({
-                    "id": secret_id,
-                    "name": name,
-                    "status": "transferred" if success else "failed"
-                })
+                results["secrets"].append(
+                    {
+                        "id": secret_id,
+                        "name": name,
+                        "status": "transferred" if success else "failed",
+                    }
+                )
 
             elif action == "export":
                 # Export logic would go here
-                results["secrets"].append({"id": secret_id, "name": name, "status": "exported"})
+                results["secrets"].append(
+                    {"id": secret_id, "name": name, "status": "exported"}
+                )
 
         conn.close()
         return results
@@ -490,25 +543,26 @@ class SecretsService:
         secret_id: str,
         action: str,
         performed_by: Optional[str] = None,
-        details: Optional[Dict] = None
+        details: Optional[Dict] = None,
     ):
         """Add an audit log entry"""
-        cursor.execute('''
+        cursor.execute(
+            """
             INSERT INTO secrets_audit (id, secret_id, action, performed_by, performed_at, details)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
-            str(uuid4()),
-            secret_id,
-            action,
-            performed_by,
-            datetime.now(timezone.utc).isoformat(),
-            json.dumps(details) if details else None
-        ))
+        """,
+            (
+                str(uuid4()),
+                secret_id,
+                action,
+                performed_by,
+                datetime.now(timezone.utc).isoformat(),
+                json.dumps(details) if details else None,
+            ),
+        )
 
     def get_audit_log(
-        self,
-        secret_id: Optional[str] = None,
-        limit: int = 100
+        self, secret_id: Optional[str] = None, limit: int = 100
     ) -> List[Dict[str, Any]]:
         """Get audit log entries"""
         conn = sqlite3.connect(self.db_path)
@@ -517,24 +571,26 @@ class SecretsService:
         if secret_id:
             cursor.execute(
                 "SELECT * FROM secrets_audit WHERE secret_id = ? ORDER BY performed_at DESC LIMIT ?",
-                (secret_id, limit)
+                (secret_id, limit),
             )
         else:
             cursor.execute(
                 "SELECT * FROM secrets_audit ORDER BY performed_at DESC LIMIT ?",
-                (limit,)
+                (limit,),
             )
 
         audit_entries = []
         for row in cursor.fetchall():
-            audit_entries.append({
-                "id": row[0],
-                "secret_id": row[1],
-                "action": row[2],
-                "performed_by": row[3],
-                "performed_at": row[4],
-                "details": json.loads(row[5]) if row[5] else {}
-            })
+            audit_entries.append(
+                {
+                    "id": row[0],
+                    "secret_id": row[1],
+                    "action": row[2],
+                    "performed_by": row[3],
+                    "performed_at": row[4],
+                    "details": json.loads(row[5]) if row[5] else {},
+                }
+            )
 
         conn.close()
         return audit_entries
@@ -542,6 +598,7 @@ class SecretsService:
 
 # Singleton instance getter
 _secrets_service = None
+
 
 def get_secrets_service() -> SecretsService:
     """Get or create the secrets service singleton"""

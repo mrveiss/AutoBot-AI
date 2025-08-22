@@ -195,7 +195,7 @@ else
 fi
 
 # Assume Redis Stack is ready if Docker command succeeded
-echo "Assuming Redis Stack is ready and accessible via localhost:6379 from within WSL2."
+echo "Assuming Redis Stack is ready and accessible via ${AUTOBOT_REDIS_HOST:-127.0.0.7}:${AUTOBOT_REDIS_PORT:-6379} from within WSL2."
 echo "Please ensure the 'redis-stack' Docker container is running and healthy."
 
 # --- 3.5. GUI Testing Setup ---
@@ -246,7 +246,7 @@ else
     # Wait for service to be healthy
     echo "⏳ Waiting for Playwright service to be ready..."
     for i in {1..30}; do
-        if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+        if curl -sf http://${AUTOBOT_PLAYWRIGHT_HOST:-127.0.0.4}:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}/health > /dev/null 2>&1; then
             echo "✅ Playwright service is healthy and ready."
             break
         fi
@@ -254,7 +254,7 @@ else
         sleep 2
     done
 
-    if ! curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+    if ! curl -sf http://${AUTOBOT_PLAYWRIGHT_HOST:-127.0.0.4}:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}/health > /dev/null 2>&1; then
         echo "⚠️ Playwright service health check failed, but continuing setup..."
     fi
 fi
@@ -784,8 +784,8 @@ else
 fi
 
 echo "✅ Frontend setup complete!"
-echo "Access the Vue app at http://localhost:5173 (development)"
-echo "The built files are served from the backend at http://localhost:8001"
+echo "Access the Vue app at http://${AUTOBOT_FRONTEND_HOST:-127.0.0.3}:${AUTOBOT_FRONTEND_PORT:-5173} (development)"
+echo "The built files are served from the backend at http://${AUTOBOT_BACKEND_HOST:-127.0.0.3}:${AUTOBOT_BACKEND_PORT:-8001}"
 
 # --- 6. Copy default config if needed ---
 # Use the project root directory detected at script start
@@ -1029,7 +1029,7 @@ echo "   ./run_agent.sh --all-containers      # Full Docker setup"
 echo "   ./run_agent.sh --help               # Show all options"
 echo ""
 echo "📊 Analytics Features:"
-echo "   Frontend: http://localhost:5173 → Analytics tab"
+echo "   Frontend: http://${AUTOBOT_FRONTEND_HOST:-127.0.0.3}:${AUTOBOT_FRONTEND_PORT:-5173} → Analytics tab"
 echo "   API: /api/code_search/analytics/ endpoints"
 echo "   NPU acceleration: Available when hardware supports"
 echo ""

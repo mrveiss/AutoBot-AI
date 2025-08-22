@@ -26,5 +26,5 @@ llm_config:
     context_length: 4096
     gpu_enabled: true
     gpu_layers: 999
-    host: http://localhost:11434
+    host: ${AUTOBOT_OLLAMA_URL:-http://127.0.0.2:11434}
     parallel_requests: 2

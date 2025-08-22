@@ -3,12 +3,15 @@
 
 export const API_CONFIG = {
   // API Base URLs
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001',
-  WS_BASE_URL: import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8001/ws',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.3'}:${import.meta.env.VITE_BACKEND_PORT || '8001'}`,
+  WS_BASE_URL: import.meta.env.VITE_WS_BASE_URL || `${import.meta.env.VITE_WS_PROTOCOL || 'ws'}://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.3'}:${import.meta.env.VITE_BACKEND_PORT || '8001'}/ws`,
 
   // External Service URLs
-  PLAYWRIGHT_VNC_URL: import.meta.env.VITE_PLAYWRIGHT_VNC_URL || 'http://localhost:6080/vnc.html',
-  PLAYWRIGHT_API_URL: import.meta.env.VITE_PLAYWRIGHT_API_URL || 'http://localhost:3000',
+  PLAYWRIGHT_VNC_URL: import.meta.env.VITE_PLAYWRIGHT_VNC_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_PLAYWRIGHT_HOST || '127.0.0.4'}:${import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '6080'}/vnc.html`,
+  PLAYWRIGHT_API_URL: import.meta.env.VITE_PLAYWRIGHT_API_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_PLAYWRIGHT_HOST || '127.0.0.4'}:${import.meta.env.VITE_PLAYWRIGHT_API_PORT || '3000'}`,
+  OLLAMA_URL: import.meta.env.VITE_OLLAMA_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_OLLAMA_HOST || '127.0.0.2'}:${import.meta.env.VITE_OLLAMA_PORT || '11434'}`,
+  CHROME_DEBUG_URL: import.meta.env.VITE_CHROME_DEBUG_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_PLAYWRIGHT_HOST || '127.0.0.4'}:${import.meta.env.VITE_CHROME_DEBUG_PORT || '9222'}`,
+  LMSTUDIO_URL: import.meta.env.VITE_LMSTUDIO_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_LM_STUDIO_HOST || '127.0.0.2'}:${import.meta.env.VITE_LM_STUDIO_PORT || '1234'}`,
 
   // Timeouts and Limits
   TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),

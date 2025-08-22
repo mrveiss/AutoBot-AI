@@ -12,6 +12,8 @@ from typing import Any, Dict
 
 import aiohttp
 
+from .utils.service_registry import get_service_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,8 +29,8 @@ class NPUInferenceRequest:
 class NPUWorkerClient:
     """Client for communicating with NPU inference worker"""
 
-    def __init__(self, npu_endpoint: str = "http://localhost:8081"):
-        self.npu_endpoint = npu_endpoint
+    def __init__(self, npu_endpoint: str = None):
+        self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
         self.session = None
         self.available = False
         self._check_availability_task = None

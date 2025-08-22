@@ -135,7 +135,7 @@ async def check_system_health():
     """Check core system health"""
     try:
         # Import here to avoid circular dependencies
-        from backend.api.system import ConnectionTester
+        from backend.utils.connection_utils import ConnectionTester
 
         return await ConnectionTester.get_fast_health_status()
     except Exception as e:

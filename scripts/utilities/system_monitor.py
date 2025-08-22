@@ -5,6 +5,7 @@ AutoBot System Monitor - Real-time monitoring of optimized system performance.
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
 import time
@@ -17,7 +18,8 @@ import requests
 
 class AutoBotMonitor:
     def __init__(self):
-        self.api_base = "http://localhost:8001"
+        self.backend_port = os.getenv("AUTOBOT_BACKEND_PORT", "8001")
+        self.api_base = f"http://localhost:{self.backend_port}"
         self.frontend_url = "http://localhost:5173"
 
     def get_system_health(self) -> Dict[str, Any]:
@@ -365,7 +367,7 @@ class AutoBotMonitor:
             response = requests.get(f"{self.api_base}/docs", timeout=5)
             services["fastapi_backend"] = {
                 "status": "running" if response.status_code == 200 else "error",
-                "port": "8001",
+                "port": self.backend_port,
                 "docs_accessible": response.status_code == 200,
             }
         except Exception as e:

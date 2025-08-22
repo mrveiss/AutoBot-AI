@@ -528,6 +528,7 @@ import apiClient from '../utils/ApiClient.js';
 import { settingsService } from '../services/SettingsService.js';
 import { healthService } from '../services/HealthService.js';
 import ErrorBoundary from './ErrorBoundary.vue';
+import { API_CONFIG } from '@/config/environment.js';
 
 export default {
   name: 'SettingsPanel',
@@ -565,7 +566,7 @@ export default {
         message_retention_days: 30
       },
       backend: {
-        api_endpoint: 'http://localhost:8001',
+        api_endpoint: API_CONFIG.BASE_URL,
         server_host: '0.0.0.0',
         server_port: 8001,
         chat_data_dir: '',
@@ -583,12 +584,12 @@ export default {
             provider: 'ollama',
             providers: {
               ollama: {
-                endpoint: 'http://localhost:11434/api/generate',
+                endpoint: `${API_CONFIG.OLLAMA_URL}/api/generate`,
                 models: [],
                 selected_model: ''
               },
               lmstudio: {
-                endpoint: 'http://localhost:1234/v1/chat/completions',
+                endpoint: `${API_CONFIG.LMSTUDIO_URL}/v1/chat/completions`,
                 models: [],
                 selected_model: ''
               }
@@ -615,7 +616,7 @@ export default {
             provider: 'ollama',
             providers: {
               ollama: {
-                endpoint: 'http://localhost:11434/api/embeddings',
+                endpoint: `${API_CONFIG.OLLAMA_URL}/api/embeddings`,
                 models: [],
                 selected_model: 'nomic-embed-text'
               },
@@ -892,6 +893,29 @@ export default {
 
       } catch (error) {
         console.error('Error syncing settings with agent config:', error);
+
+        // Show user-friendly error message for settings sync failure
+        let errorMessage = 'Settings sync partially failed';
+        if (error.message?.includes('500')) {
+          errorMessage = '⚙️ LLM status endpoint unavailable - some settings may not reflect current state';
+        } else if (error.message?.includes('timeout')) {
+          errorMessage = '⚙️ Settings sync timeout - using cached configuration';
+        } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+          errorMessage = '⚙️ Network error during settings sync - using offline mode';
+        }
+
+        // Set save message to show the error
+        saveMessage.value = errorMessage;
+        saveMessageType.value = 'warning';
+
+        // Auto-hide the warning after 5 seconds
+        setTimeout(() => {
+          if (saveMessageType.value === 'warning') {
+            saveMessage.value = '';
+            saveMessageType.value = '';
+          }
+        }, 5000);
+
         // Don't fail the settings load if sync fails
       }
     };

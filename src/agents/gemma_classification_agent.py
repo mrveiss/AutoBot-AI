@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class GemmaClassificationAgent(StandardizedAgent):
     """Ultra-fast classification agent using Google's Gemma models."""
 
-    def __init__(self, ollama_host: str = "http://localhost:11434"):
+    def __init__(self, ollama_host: str = "http://127.0.0.2:11434"):
         super().__init__("gemma_classification")
         self.ollama_host = ollama_host
         self.redis_client = get_redis_client()
@@ -162,7 +162,7 @@ Respond with valid JSON:
                     json={
                         "model": model,
                         "prompt": prompt,
-                        "stream": False,
+                        "stream": True,
                         "options": {
                             "temperature": 0.3,  # Low temperature for consistent classification
                             "top_p": 0.9,
@@ -170,11 +170,24 @@ Respond with valid JSON:
                         },
                     },
                     timeout=10,  # Fast timeout for lightweight models
+                    stream=True,  # Enable streaming in requests
                 )
 
                 if response.status_code == 200:
-                    result = response.json()
-                    response_text = result.get("response", "").strip()
+                    # Handle streaming response
+                    full_response = ""
+                    for line in response.iter_lines():
+                        if line:
+                            try:
+                                chunk_data = json.loads(line.decode("utf-8"))
+                                if "response" in chunk_data:
+                                    full_response += chunk_data["response"]
+                                if chunk_data.get("done", False):
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+
+                    response_text = full_response.strip()
 
                     # Parse JSON response
                     parsed_result = self._parse_json_response(response_text)

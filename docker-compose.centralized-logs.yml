@@ -1,15 +1,14 @@
 # AutoBot with Centralized Logging - ALL LOGS GO TO ONE PLACE
 # Every container automatically sends logs to central collection point
 
+name: autobot
+
 # Centralized logging configuration for ALL containers
 x-centralized-logging: &centralized-logging
   driver: fluentd
   options:
     fluentd-address: localhost:24224
     tag: "autobot.{{.Name}}"
-    fluentd-async-connect: "true"
-    fluentd-retry-wait: "1s"
-    fluentd-max-retries: "30"
 
 x-agent-base: &agent-base
   build:
@@ -21,7 +20,11 @@ x-agent-base: &agent-base
   restart: unless-stopped
   networks:
     - autobot-network
-  logging: *centralized-logging  # ALL agents send logs to central location
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
   depends_on:
     autobot-redis:
       condition: service_healthy
@@ -77,7 +80,11 @@ services:
       - REDIS_URL=redis://autobot-redis:6379
     networks:
       - autobot-network
-    logging: *centralized-logging  # Redis logs go to central location
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 15s
@@ -101,7 +108,11 @@ services:
       - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*
     networks:
       - autobot-network
-    logging: *centralized-logging  # Ollama logs go to central location
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 30s
@@ -223,7 +234,7 @@ services:
       - "5341:80"  # Web interface for viewing ALL logs
     environment:
       - ACCEPT_EULA=Y
-      - SEQ_FIRSTRUN_ADMINPASSWORD=autobot123
+      - SEQ_FIRSTRUN_ADMINPASSWORD=Autobot123!
     volumes:
       - autobot_all_logs:/var/log/autobot:ro  # Read from central log location
       - autobot_log_data:/data
@@ -267,8 +278,5 @@ volumes:
 
 networks:
   autobot-network:
+    external: true
     name: autobot-network
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

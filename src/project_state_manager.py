@@ -15,6 +15,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .utils.service_registry import get_service_url
+
 logger = logging.getLogger(__name__)
 
 # Cache for project status with 60-second TTL
@@ -90,7 +92,11 @@ class DevelopmentPhaseInfo:
 class ProjectStateManager:
     """Manages project state, phase tracking, and validation"""
 
-    def __init__(self, db_path: str = "data/project_state.db"):
+    def __init__(self, db_path: str = None):
+        if db_path is None:
+            db_path = os.getenv(
+                "AUTOBOT_PROJECT_STATE_DB_PATH", "data/project_state.db"
+            )
         self.db_path = db_path
         self.project_root = Path(__file__).parent.parent
         self.phases: Dict[DevelopmentPhase, DevelopmentPhaseInfo] = {}
@@ -197,7 +203,7 @@ class ProjectStateManager:
                 "chat_api",
                 "REST API for chat functionality",
                 "api_endpoint",
-                "http://localhost:8001/api/chats",
+                get_service_url("backend", "/api/chats"),
             ),
             PhaseCapability(
                 "web_interface",
@@ -225,7 +231,7 @@ class ProjectStateManager:
                 "redis_integration",
                 "Redis for task queuing",
                 "api_endpoint",
-                "http://localhost:8001/api/redis/config",
+                get_service_url("backend", "/api/redis/config"),
             ),
         ]
 
@@ -254,19 +260,21 @@ class ProjectStateManager:
                 "terminal_integration",
                 "Full terminal functionality",
                 "api_endpoint",
-                "http://localhost:8001/api/terminal/sessions",
+                get_service_url("backend", "/api/terminal/sessions"),
             ),
             PhaseCapability(
                 "file_management",
                 "File upload/download system",
                 "api_endpoint",
-                "http://localhost:8001/api/files/stats",
+                get_service_url("backend", "/api/files/stats"),
             ),
             PhaseCapability(
                 "websocket_support",
                 "Real-time communication",
                 "websocket_endpoint",
-                "ws://localhost:8001/ws",
+                get_service_url("backend", "/ws")
+                .replace("http://", "ws://")
+                .replace("https://", "wss://"),
             ),
         ]
 
@@ -276,7 +284,7 @@ class ProjectStateManager:
                 "workflow_orchestration",
                 "Multi-agent workflow system",
                 "api_endpoint",
-                "http://localhost:8001/api/workflow/workflows",
+                get_service_url("backend", "/api/workflow/workflows"),
             ),
             PhaseCapability(
                 "session_takeover",
@@ -288,7 +296,7 @@ class ProjectStateManager:
                 "chat_knowledge",
                 "Context-aware chat system",
                 "api_endpoint",
-                "http://localhost:8001/api/chat_knowledge/health",
+                get_service_url("backend", "/api/chat_knowledge/health"),
             ),
         ]
 
@@ -490,6 +498,7 @@ class ProjectStateManager:
                     )
 
                 import requests
+
                 try:
                     response = requests.get(capability.validation_target, timeout=5)
                     success = response.status_code < 400
@@ -715,12 +724,15 @@ class ProjectStateManager:
     def get_project_status(self, use_cache: bool = True) -> Dict[str, Any]:
         """Get comprehensive project status with optional caching"""
         global _project_status_cache
-        
+
         # Check cache first if enabled
         if use_cache:
             current_time = time.time()
-            if (_project_status_cache["data"] and 
-                current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]):
+            if (
+                _project_status_cache["data"]
+                and current_time - _project_status_cache["timestamp"]
+                < _project_status_cache["ttl"]
+            ):
                 return _project_status_cache["data"]
 
         total_phases = len(self.phases)
@@ -772,21 +784,24 @@ class ProjectStateManager:
     def get_fast_project_status(self) -> Dict[str, Any]:
         """Get a fast project status without validation checks"""
         global _project_status_cache
-        
+
         # Always use cache for fast status
         current_time = time.time()
-        if (_project_status_cache["data"] and 
-            current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]):
+        if (
+            _project_status_cache["data"]
+            and current_time - _project_status_cache["timestamp"]
+            < _project_status_cache["ttl"]
+        ):
             return _project_status_cache["data"]
 
         # If no cache, return basic status without expensive operations
         total_phases = len(self.phases)
-        
+
         return {
             "current_phase": self.current_phase.value,
             "total_phases": total_phases,
             "completed_phases": 0,  # Skip expensive calculation
-            "active_phases": 1,     # Assume current phase is active
+            "active_phases": 1,  # Assume current phase is active
             "overall_completion": 0.6,  # Placeholder
             "next_suggested_phase": None,
             "last_validation": None,
@@ -801,7 +816,7 @@ class ProjectStateManager:
                 }
                 for phase, info in self.phases.items()
             },
-            "fast_mode": True
+            "fast_mode": True,
         }
 
     def generate_validation_report(self) -> str:

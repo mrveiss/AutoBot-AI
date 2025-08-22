@@ -4,9 +4,17 @@
 
 // Determine API base URL based on environment
 const getApiBaseUrl = () => {
-  // In development, use direct backend connection
+  // Check for environment variable first
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+
+  // In development, use backend host/port from env or fallback
   if (import.meta.env.DEV) {
-    return 'http://localhost:8001';
+    const protocol = import.meta.env.VITE_HTTP_PROTOCOL || 'http';
+    const host = import.meta.env.VITE_BACKEND_HOST || '127.0.0.3';
+    const port = import.meta.env.VITE_BACKEND_PORT || '8001';
+    return `${protocol}://${host}:${port}`;
   }
 
   // In production, use relative paths (assuming backend serves the frontend)

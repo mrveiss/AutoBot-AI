@@ -32,8 +32,15 @@ class HardwareMonitor:
     """Hardware monitoring service."""
 
     def __init__(self):
-        self.api_base = "http://localhost:8001"
-        self.frontend_url = "http://localhost:5173"
+        from src.config import (
+            API_BASE_URL,
+            FRONTEND_HOST_IP,
+            FRONTEND_PORT,
+            HTTP_PROTOCOL,
+        )
+
+        self.api_base = API_BASE_URL
+        self.frontend_url = f"{HTTP_PROTOCOL}://{FRONTEND_HOST_IP}:{FRONTEND_PORT}"
         self._monitoring_active = False
         self._latest_data = None
 
@@ -248,7 +255,9 @@ class HardwareMonitor:
 
         # Get Ollama models
         try:
-            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            from src.config import OLLAMA_URL
+
+            response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 ollama_models = {
@@ -325,8 +334,10 @@ async def test_inference_performance():
         test_prompt = "Test performance with a simple question: What is 2+2?"
         start_time = time.time()
 
+        from src.config import API_BASE_URL
+
         response = requests.post(
-            "http://localhost:8001/api/chat/message",
+            f"{API_BASE_URL}/api/chat/message",
             json={"message": test_prompt, "agent_type": "chat"},
             timeout=30,
         )

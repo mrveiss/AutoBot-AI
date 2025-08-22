@@ -232,6 +232,7 @@
 <script lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
+import { API_CONFIG } from '@/config/environment.js'
 import apiClient from '@/utils/ApiClient.ts'
 
 interface ConsoleLogEntry {
@@ -275,8 +276,8 @@ export default {
 
     // Browser modes
     const browserMode = ref('vnc') // 'vnc', 'native', 'remote'
-    const vncUrl = ref('http://localhost:6080/vnc.html?autoconnect=true&resize=scale&reconnect=true&quality=6&view_only=false')
-    const remoteDebugUrl = ref('http://localhost:9222')
+    const vncUrl = ref(`${API_CONFIG.PLAYWRIGHT_VNC_URL}?autoconnect=true&resize=scale&reconnect=true&quality=6&view_only=false`)
+    const remoteDebugUrl = ref(API_CONFIG.CHROME_DEBUG_URL)
 
     // Resize observer
     const resizeObserver: Ref<ResizeObserver | null> = ref(null)
@@ -340,7 +341,7 @@ export default {
         // Try remote debugging as fallback
         if (browserMode.value !== 'vnc') {
           try {
-            const debugResponse = await fetch('http://localhost:9222/json')
+            const debugResponse = await fetch(`${API_CONFIG.CHROME_DEBUG_URL}/json`)
             if (debugResponse.ok) {
               browserMode.value = 'remote'
               const tabs = await debugResponse.json()

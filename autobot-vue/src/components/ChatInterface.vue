@@ -871,17 +871,36 @@ export default {
           messageData.attachments = uploadedFilePaths;
         }
 
-        // Check if this should use workflow orchestration
-        const workflowResponse = await fetch(`${apiClient.baseUrl}/api/workflow/execute`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            user_message: userInput,
-            auto_approve: false
-          }),
-        });
+        // Try direct chat endpoint first for faster responses
+        let chatResponse;
+        try {
+          chatResponse = await fetch(`${apiClient.baseUrl}/api/chats/${this.currentChatId}/message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message: userInput,
+              ...messageData
+            }),
+            signal: AbortSignal.timeout(30000) // 30 second timeout
+          });
+        } catch (error) {
+          console.warn('🔄 Direct chat failed, falling back to workflow orchestration:', error.message);
+          // Fallback to workflow orchestration if direct chat fails
+          chatResponse = await fetch(`${apiClient.baseUrl}/api/workflow/execute`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              goal: userInput,
+              auto_approve: false
+            }),
+          });
+        }
+
+        const workflowResponse = chatResponse;
 
         if (workflowResponse.ok) {
           // Enhanced Edge browser compatibility: validate response before parsing

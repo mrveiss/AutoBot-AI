@@ -14,6 +14,8 @@ import threading
 from contextlib import contextmanager
 from typing import Dict, List, Optional
 
+from ..utils.service_registry import get_service_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -340,9 +342,9 @@ def configure_testing_defaults():
         "filename": "test_file.txt",
         "path": "/tmp/test",
         "name": "test_user",
-        "port": "8080",
-        "host": "localhost",
-        "url": "http://localhost:8080",
+        "port": os.getenv("AUTOBOT_AI_STACK_PORT", "8080"),
+        "host": os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.6"),
+        "url": get_service_url("ai-stack"),
         "email": "test@example.com",
     }
 

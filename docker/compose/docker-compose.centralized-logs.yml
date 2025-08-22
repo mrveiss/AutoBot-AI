@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # Seq - Centralized log viewer
+  autobot-seq:
+    image: datalust/seq:latest
+    container_name: autobot-seq
+    environment:
+      - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_ADMINUSERNAME=admin
+      - SEQ_FIRSTRUN_ADMINPASSWORD=autobot123
+    ports:
+      - "${AUTOBOT_LOG_VIEWER_PORT:-5341}:80"
+    volumes:
+      - seq-data:/data
+    networks:
+      - autobot-logging
+    restart: unless-stopped
+    labels:
+      - "autobot.service=seq"
+      - "autobot.logging=centralized"
+
+  # Fluentd - Log collector and forwarder
+  autobot-log-collector:
+    build: ./fluentd/
+    container_name: autobot-log-collector
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
+      - ./fluentd/plugins:/fluentd/plugins:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ../../../logs:/autobot/logs:ro
+    ports:
+      - "${AUTOBOT_FLUENTD_PORT:-24224}:24224"
+      - "${AUTOBOT_FLUENTD_PORT:-24224}:24224/udp"
+    networks:
+      - autobot-logging
+    depends_on:
+      - autobot-seq
+    restart: unless-stopped
+    labels:
+      - "autobot.service=fluentd"
+      - "autobot.logging=collector"
+
+  # Redis with logging
+  autobot-redis:
+    image: redis/redis-stack:latest
+    container_name: autobot-redis
+    ports:
+      - "${AUTOBOT_REDIS_PORT:-6379}:6379"
+      - "${AUTOBOT_REDIS_INSIGHT_PORT:-8001}:8001"
+    volumes:
+      - redis-data:/data
+    networks:
+      - autobot-logging
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: ${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_FLUENTD_PORT:-24224}
+        tag: autobot.redis
+    restart: unless-stopped
+    labels:
+      - "autobot.service=redis"
+
+  # AI Stack with logging
+  autobot-ai-stack:
+    build: ../../ai-stack/
+    container_name: autobot-ai-stack
+    ports:
+      - "${AUTOBOT_AI_STACK_PORT:-8080}:8080"
+    volumes:
+      - ai-models:/models
+    networks:
+      - autobot-logging
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: ${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_FLUENTD_PORT:-24224}
+        tag: autobot.ai-stack
+    restart: unless-stopped
+    labels:
+      - "autobot.service=ai-stack"
+
+  # NPU Worker with logging
+  autobot-npu-worker:
+    build: ../../npu-worker/
+    container_name: autobot-npu-worker
+    ports:
+      - "${AUTOBOT_NPU_WORKER_PORT:-8081}:8081"
+    volumes:
+      - npu-models:/models
+    networks:
+      - autobot-logging
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: ${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_FLUENTD_PORT:-24224}
+        tag: autobot.npu-worker
+    restart: unless-stopped
+    labels:
+      - "autobot.service=npu-worker"
+
+  # Playwright VNC with logging
+  autobot-playwright-vnc:
+    build: ../../playwright-vnc/
+    container_name: autobot-playwright-vnc
+    ports:
+      - "${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}:3000"
+      - "${AUTOBOT_PLAYWRIGHT_VNC_PORT:-6080}:6080"
+    volumes:
+      - ../../../playwright-server.js:/app/playwright-server.js:ro
+    networks:
+      - autobot-logging
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: ${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_FLUENTD_PORT:-24224}
+        tag: autobot.playwright
+    restart: unless-stopped
+    labels:
+      - "autobot.service=playwright"
+
+networks:
+  autobot-logging:
+    driver: bridge
+    name: autobot-logging
+
+volumes:
+  seq-data:
+    name: autobot-seq-data
+  redis-data:
+    name: autobot-redis-data
+  ai-models:
+    name: autobot-ai-models
+  npu-models:
+    name: autobot-npu-models

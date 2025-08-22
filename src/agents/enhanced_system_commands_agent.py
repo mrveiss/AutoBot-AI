@@ -214,7 +214,8 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
 
     def _get_system_commands_prompt(self) -> str:
         """Get security-focused system prompt for command generation."""
-        return """You are a system command generation assistant focused on security and safety.
+        return """You are a system command generation assistant focused on security
+        and safety.
 
 CRITICAL SECURITY RULES:
 1. NEVER generate commands that could harm the system
@@ -246,7 +247,8 @@ AVOID:
 - Dangerous disk operations (dd, fdisk, mkfs)
 - Pipe to shell operations (curl | bash, wget | sh)
 
-If asked to do something potentially harmful, explain why it's risky and suggest alternatives."""
+If asked to do something potentially harmful, explain why it's risky
+and suggest alternatives."""
 
     def _build_context_string(self, context: Dict[str, Any]) -> str:
         """Build context string for better command generation."""
