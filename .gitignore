@@ -259,3 +259,5 @@ tests/external/
 # Environment templates with example secrets
 examples/env_template.txt
 data/file_manager_root/Rag_optimization_methods.md
+# Security audit files with git commit hashes
+reports/**/security_audit_*.json
