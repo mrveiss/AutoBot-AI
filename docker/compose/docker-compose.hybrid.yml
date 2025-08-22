@@ -1,6 +1,8 @@
 # Docker Compose for AutoBot Hybrid Deployment
 # Local orchestrator + containerized AI stack
 
+name: autobot
+
 services:
   # Redis Stack (with search, JSON, and vector capabilities)
   autobot-redis:
@@ -8,8 +10,8 @@ services:
     container_name: autobot-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
-      - "8002:8002"  # RedisInsight web UI on port 8002
+      - "${AUTOBOT_REDIS_PORT:-6379}:6379"
+      - "${AUTOBOT_REDIS_INSIGHT_PORT:-8002}:8002"  # RedisInsight web UI
     volumes:
       - autobot_redis_data:/data
     environment:
@@ -31,24 +33,24 @@ services:
     container_name: autobot-ai-stack
     restart: unless-stopped
     ports:
-      - "8080:8080"  # AI API port
+      - "${AUTOBOT_AI_STACK_PORT:-8080}:8080"  # AI API port
     volumes:
       # Centralized data volumes
-      - ../../docker/volumes/prompts:/app/prompts:ro
-      - ../../docker/volumes/knowledge_base:/app/knowledge_base:ro
-      - ../../docker/volumes/models:/app/models
-      - ../../docker/volumes/config:/app/config:ro
+      - ../volumes/prompts:/app/prompts:ro
+      - ../volumes/knowledge_base:/app/knowledge_base:ro
+      - ../volumes/models:/app/models
+      - ../volumes/config:/app/config:ro
       # Container-specific volumes
       - autobot_ai_data:/app/data
       - autobot_ai_logs:/app/logs
-      - ./src:/app/src:ro  # Read-only source code mount for development
+      - ../../src:/app/src:ro  # Read-only source code mount for development
     environment:
       - AI_SERVER_HOST=0.0.0.0
       - AI_SERVER_PORT=8080
       - AI_SERVER_WORKERS=1
-      - OLLAMA_HOST=host.docker.internal:11434
+      - OLLAMA_HOST=${AUTOBOT_OLLAMA_HOST:-127.0.0.2}:${AUTOBOT_OLLAMA_PORT:-11434}
       - REDIS_HOST=autobot-redis
-      - REDIS_PORT=6379
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
       - CHROMA_DB_PATH=/app/data/chroma_db
       - DISABLE_EXTERNAL_APIS=true
       - PYTHONPATH=/app:/app/src
@@ -58,7 +60,7 @@ services:
     networks:
       - autobot-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -67,21 +69,21 @@ services:
   # NPU Worker (Intel NPU + NVIDIA GPU Accelerated Inference)
   autobot-npu-worker:
     build:
-      context: .
-      dockerfile: docker/npu-worker/Dockerfile
+      context: ../..
+      dockerfile: docker/npu-worker/Dockerfile.simple-worker
     container_name: autobot-npu-worker
     restart: unless-stopped
     ports:
-      - "8081:8081"  # NPU API port
+      - "${AUTOBOT_NPU_WORKER_PORT:-8081}:8081"  # NPU API port
     volumes:
       # Centralized data volumes
-      - ../../docker/volumes/prompts:/app/prompts:ro
-      - ../../docker/volumes/knowledge_base:/app/knowledge_base:ro
-      - ../../docker/volumes/models:/app/models
-      - ../../docker/volumes/config:/app/config:ro
+      - ../volumes/prompts:/app/prompts:ro
+      - ../volumes/knowledge_base:/app/knowledge_base:ro
+      - ../volumes/models:/app/models
+      - ../volumes/config:/app/config:ro
       # Container-specific volumes
       - autobot_npu_logs:/app/logs
-      - ./src:/app/src:ro  # Read-only source code mount
+      - ../../src:/app/src:ro  # Read-only source code mount
       # Mount NPU devices and firmware (if available)
       - /dev:/dev:ro
       - /lib/firmware:/lib/firmware:ro
@@ -95,12 +97,10 @@ services:
       - OV_LOG_LEVEL=ERROR
       - NPU_LOG_LEVEL=INFO
       - REDIS_HOST=autobot-redis
-      - REDIS_PORT=6379
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
       - PYTHONPATH=/app:/app/src
-      # Intel NPU driver environment variables
-      - LD_LIBRARY_PATH=/usr/local/lib
-      - ZE_INTEL_NPU_LOGLEVEL=1
-      - ZE_ENABLE_VALIDATION_LAYER=0
+      # Python shared library path fix
+      - LD_LIBRARY_PATH=/usr/local/lib:/usr/lib/x86_64-linux-gnu:/usr/local/lib/python3.10
       # NVIDIA GPU support
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
@@ -121,18 +121,40 @@ services:
               count: all
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    # Always available (supports NPU, GPU, or CPU fallback)
-    profiles:
-      - ""
+
+  # Seq Log Viewer (Centralized Logging)
+  autobot-seq:
+    image: datalust/seq:latest
+    container_name: autobot-seq
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_LOG_VIEWER_PORT:-5341}:80"
+    volumes:
+      - autobot_seq_data:/data
+    environment:
+      - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_ADMINUSERNAME=admin
+      - SEQ_FIRSTRUN_ADMINPASSWORD=autobot123
+    networks:
+      - autobot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "autobot.service=seq"
+      - "autobot.logging=centralized"
 
 networks:
   autobot-network:
-    driver: bridge
+    external: true
     name: autobot-network
 
 volumes:
@@ -148,3 +170,5 @@ volumes:
     name: autobot_npu_models
   autobot_npu_logs:
     name: autobot_npu_logs
+  autobot_seq_data:
+    name: autobot_seq_data
