@@ -99,7 +99,7 @@ ENV AUTOBOT_USER=autobot \
 ENV AGENT_TYPE=base \
     AGENT_NAME="AutoBot Base Agent" \
     AGENT_DESCRIPTION="Base agent class for AutoBot system" \
-    HEALTH_CHECK_PORT=8000 \
+    HEALTH_CHECK_PORT=${AUTOBOT_BACKEND_PORT:-8001} \
     STARTUP_TIMEOUT=120 \
     DEPENDENCY_CHECK_TIMEOUT=60
 
@@ -116,7 +116,8 @@ ENV MALLOC_ARENA_MAX=2 \
 USER autobot
 
 # Health check template (can be overridden in derived images)
-ENV HEALTH_CHECK_PORT=8000
+# Use configurable port that defaults to backend API port
+ENV HEALTH_CHECK_PORT=${AUTOBOT_BACKEND_PORT:-8001}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:${HEALTH_CHECK_PORT}/health || exit 1
 
@@ -127,7 +128,7 @@ ENTRYPOINT ["/app/scripts/agent-entrypoint.sh"]
 CMD ["python", "-c", "print('AutoBot Base Agent - Override CMD in derived image')"]
 
 # Expose default health check port
-EXPOSE 8000
+EXPOSE ${AUTOBOT_BACKEND_PORT:-8001}
 
 # Volume mounts (standardized across all agents)
 VOLUME ["/app/data", "/app/logs", "/app/config"]

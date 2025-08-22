@@ -70,7 +70,7 @@ services:
   autobot-npu-worker:
     build:
       context: ../..
-      dockerfile: docker/npu-worker/Dockerfile.simple-worker
+      dockerfile: docker/npu-worker/Dockerfile.npu-worker-simple-worker
     container_name: autobot-npu-worker
     restart: unless-stopped
     ports:
