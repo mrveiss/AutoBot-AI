@@ -625,8 +625,8 @@ async def list_chats(request: Request):
             )
 
         try:
-            # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-            sessions = await asyncio.to_thread(chat_history_manager.list_sessions)
+            # PERFORMANCE FIX: Use fast method that doesn't decrypt all files
+            sessions = await asyncio.to_thread(chat_history_manager.list_sessions_fast)
             return JSONResponse(status_code=200, content={"chats": sessions})
         except AttributeError as e:
             raise InternalError(
@@ -926,6 +926,30 @@ async def conversation_chat_message(chat_message: dict, request: Request):
 
             except Exception as e:
                 logger.error(f"Failed to save to chat history: {e}")
+
+        # Broadcast response via WebSocket for real-time updates
+        try:
+            from src.event_manager import event_manager
+
+            await event_manager.publish(
+                "llm_response",
+                {
+                    "response": result["response"],
+                    "chat_id": chat_id,
+                    "message_type": "response",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "sources": result.get("sources", ""),
+                    "classification": result.get("classification"),
+                    "conversation_id": result.get("conversation_id"),
+                    "processing_time": result.get("processing_time", 0),
+                },
+            )
+            logging.info(f"Broadcasted conversation response for chat_id: {chat_id}")
+        except Exception as e:
+            logging.warning(
+                f"Failed to broadcast conversation response via WebSocket: {e}"
+            )
+            # Don't fail the entire request if WebSocket broadcast fails
 
         # Return response in expected format
         response_data = {
@@ -1430,6 +1454,28 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 f"About to process chat history saving with content: {content[:100]}..."
             )
 
+            # Broadcast response via WebSocket for real-time updates
+            try:
+                from src.event_manager import event_manager
+
+                await event_manager.publish(
+                    "llm_response",
+                    {
+                        "response": content,
+                        "message_type": "response",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "tier_used": failsafe_response.tier_used.value,
+                        "model": failsafe_response.model_used,
+                        "confidence": failsafe_response.confidence,
+                    },
+                )
+                logging.info(f"Broadcasted direct chat response")
+            except Exception as e:
+                logging.warning(
+                    f"Failed to broadcast direct chat response via WebSocket: {e}"
+                )
+                # Don't fail the entire request if WebSocket broadcast fails
+
             # QUICK TEST: Return immediately after LLM call to see if it's hanging after this point
             response_data = {
                 "role": "assistant",
@@ -1829,7 +1875,12 @@ If no KB documents were found, clearly state this and provide general "
                         SourceType.LLM_TRAINING,
                         "Response generated from model training knowledge",
                         reliability=SourceReliability.MEDIUM,
-                        metadata={"model": "artifish/llama3.2-uncensored:latest"},
+                        metadata={
+                            "model": os.getenv(
+                                "AUTOBOT_DEFAULT_LLM_MODEL",
+                                "artifish/llama3.2-uncensored:latest",
+                            )
+                        },
                     )
 
                 orchestrator_result = {
@@ -2257,6 +2308,30 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
         await asyncio.to_thread(
             chat_history_manager.save_session, chat_id, messages=existing_history
         )
+
+        # Broadcast response via WebSocket for real-time updates
+        try:
+            from src.event_manager import event_manager
+
+            await event_manager.publish(
+                "llm_response",
+                {
+                    "response": response_message,
+                    "chat_id": chat_id,
+                    "message_type": "response",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "sources": [
+                        s.to_dict() for s in source_manager.current_response_sources
+                    ]
+                    if source_manager.current_response_sources
+                    else [],
+                    "sender": "bot",
+                },
+            )
+            logging.info(f"Broadcasted chat response for chat_id: {chat_id}")
+        except Exception as e:
+            logging.warning(f"Failed to broadcast response via WebSocket: {e}")
+            # Don't fail the entire request if WebSocket broadcast fails
 
         return JSONResponse(
             status_code=200,
