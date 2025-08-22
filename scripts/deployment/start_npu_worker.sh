@@ -24,7 +24,7 @@ fi
 # Build NPU worker if needed
 if ! docker images | grep -q "autobot-npu-worker"; then
     echo -e "${YELLOW}Building NPU worker container...${NC}"
-    docker build -f docker/npu-worker/Dockerfile -t autobot-npu-worker:latest .
+    docker build -f docker/npu-worker/Dockerfile.npu-worker -t autobot-npu-worker:latest .
 fi
 
 # Start with Docker Compose

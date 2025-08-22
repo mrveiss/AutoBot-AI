@@ -5,7 +5,25 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles numpy types for serialization"""
+
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.floating)):
+            return obj.item()
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif hasattr(obj, "__float__"):
+            return float(obj)
+        elif hasattr(obj, "__int__"):
+            return int(obj)
+        return super().default(obj)
+
+
 from docx import Document as DocxDocument
 from llama_index.core import Document, Settings, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
@@ -81,6 +99,14 @@ class KnowledgeBase:
         self.semantic_chunking_model = self.config_manager.get_nested(
             "knowledge_base.semantic_chunking.model", "all-MiniLM-L6-v2"
         )
+
+        # IMPORTANT: Override embedding model to use nomic-embed-text for consistency
+        # This ensures both LlamaIndex and semantic chunking use the same dimensions
+        if self.use_semantic_chunking:
+            logging.info(
+                "KNOWLEDGE BASE FIX: Using nomic-embed-text for both LlamaIndex and semantic chunking"
+            )
+            self.embedding_model_name = "nomic-embed-text:latest"
         self.semantic_percentile_threshold = self.config_manager.get_nested(
             "knowledge_base.semantic_chunking.percentile_threshold", 95.0
         )
@@ -100,7 +126,7 @@ class KnowledgeBase:
         self.redis_index_name = "llama_index"
 
         # Initialize Redis client for direct use (e.g., for facts/logs)
-        # TEMPORARY FIX: Use sync Redis client to avoid async issues
+        # Use sync Redis client for direct operations
         self.redis_client = get_redis_client(async_client=False)
         if self.redis_client:
             logging.info("Redis client initialized via centralized utility")
@@ -252,11 +278,37 @@ class KnowledgeBase:
                     f"{embedding_dim}: {e}"
                 )
 
+            # Create schema with proper vector dimensions
             schema = RedisVectorStoreSchema(
                 index_name=self.redis_index_name,
                 prefix="doc",
                 overwrite=True,  # Allow overwriting to fix dimension mismatch
-                vector_dims=embedding_dim,  # Use detected dimension
+            )
+
+            # Fix hardcoded 1536 dimensions in vector field by modifying existing field
+            try:
+                # Get the existing vector field and update its dimensions
+                vector_field = schema.fields["vector"]
+                if hasattr(vector_field, "attrs") and hasattr(
+                    vector_field.attrs, "dims"
+                ):
+                    # Update the dimension attribute to use variable detected dimension
+                    original_dims = vector_field.attrs.dims
+                    vector_field.attrs.dims = embedding_dim
+                    logging.info(
+                        f"Updated vector field dimensions from {original_dims} to {embedding_dim}"
+                    )
+                else:
+                    logging.warning(
+                        "Could not modify vector field dimensions, using default"
+                    )
+            except Exception as e:
+                logging.warning(
+                    f"Failed to update vector field dimensions: {e}, using default schema"
+                )
+
+            logging.info(
+                f"Created Redis schema with variable {embedding_dim} vector dimensions"
             )
 
             self.vector_store = RedisVectorStore(
@@ -585,14 +637,16 @@ class KnowledgeBase:
         try:
             import time
 
-            fact_id = await self.redis_client.incr("fact_id_counter")
+            fact_id = self.redis_client.incr("fact_id_counter")
             fact_key = f"fact:{fact_id}"
             fact_data = {
                 "content": content,
-                "metadata": json.dumps(metadata) if metadata else "{}",
+                "metadata": json.dumps(metadata, cls=NumpyEncoder)
+                if metadata
+                else "{}",
                 "timestamp": str(int(time.time())),
             }
-            await self.redis_client.hset(fact_key, mapping=fact_data)
+            self.redis_client.hset(fact_key, mapping=fact_data)
             logging.info(f"Fact stored in Redis with ID: {fact_id}")
             return {
                 "status": "success",
@@ -609,16 +663,15 @@ class KnowledgeBase:
         if not self.redis_client:
             return []
 
-        # TEMPORARY FIX: Disable fact search to prevent async issues
-        logging.info("Fact search temporarily disabled to prevent hanging")
-        return []
+        # Use sync Redis operations for fact retrieval
+        if not self.redis_client:
+            logging.warning("Redis client not available")
+            return []
 
         facts = []
         try:
             if fact_id:
-                fact_data: Dict[str, str] = await self.redis_client.hgetall(
-                    f"fact:{fact_id}"
-                )
+                fact_data: Dict[str, str] = self.redis_client.hgetall(f"fact:{fact_id}")
                 if fact_data:
                     facts.append(
                         {
@@ -637,7 +690,7 @@ class KnowledgeBase:
                     pipe = self.redis_client.pipeline()
                     for key in all_keys:
                         pipe.hgetall(key)
-                    results = await pipe.execute()
+                    results = pipe.execute()
 
                     for key, fact_data in zip(all_keys, results):
                         if fact_data:
@@ -668,7 +721,7 @@ class KnowledgeBase:
                     pipe = self.redis_client.pipeline()
                     for key in all_keys:
                         pipe.hgetall(key)
-                    results = await pipe.execute()
+                    results = pipe.execute()
 
                     for key, fact_data in zip(all_keys, results):
                         if fact_data:
@@ -683,7 +736,7 @@ class KnowledgeBase:
                                 }
                             )
             logging.info(
-                f"Retrieved {len(facts)} facts from Redis using optimized pipeline."
+                f"Retrieved {len(facts)} facts from Redis using sync operations."
             )
             return facts
         except Exception as e:
@@ -715,58 +768,46 @@ class KnowledgeBase:
             # Use Redis SCAN instead of KEYS to avoid blocking
             import asyncio
 
-            async def scan_keys(pattern: str) -> int:
+            def scan_keys(pattern: str) -> int:
                 """Non-blocking key counting using SCAN"""
                 count = 0
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(
+                    cursor, keys = self.redis_client.scan(
                         cursor, match=pattern, count=100
                     )
                     count += len(keys)
                     if cursor == 0:
                         break
-                    # Yield control to allow other operations
-                    await asyncio.sleep(0)
                 return count
 
-            # Run document and fact counting concurrently
-            doc_count_task = asyncio.create_task(
-                scan_keys(f"{self.redis_index_name}:doc:*")
-            )
-            fact_count_task = asyncio.create_task(scan_keys("fact:*"))
-
-            # Wait for both counts with timeout to prevent hanging
+            # Count documents and facts directly
             try:
-                doc_count, fact_count = await asyncio.wait_for(
-                    asyncio.gather(doc_count_task, fact_count_task),
-                    timeout=5.0,  # 5 second timeout
-                )
+                doc_count = scan_keys(f"{self.redis_index_name}:doc:*")
+                fact_count = scan_keys("fact:*")
                 stats["total_documents"] = doc_count
                 stats["total_chunks"] = doc_count  # Simple approximation
                 stats["total_facts"] = fact_count
-            except asyncio.TimeoutError:
-                logging.warning("Stats collection timed out, using fallback values")
+            except Exception as e:
+                logging.warning(f"Stats collection failed: {e}, using fallback values")
                 stats["total_documents"] = 0
                 stats["total_chunks"] = 0
                 stats["total_facts"] = 0
 
             # Quick category sampling (limit to prevent blocking)
             try:
-                cursor, sample_keys = await self.redis_client.scan(
+                cursor, sample_keys = self.redis_client.scan(
                     0, match=f"{self.redis_index_name}:doc:*", count=5
                 )
                 categories = set()
                 for key in sample_keys:
                     try:
-                        doc_data = await asyncio.wait_for(
-                            self.redis_client.hgetall(key), timeout=1.0
-                        )
+                        doc_data = self.redis_client.hgetall(key)
                         if doc_data and "metadata" in doc_data:
                             metadata = json.loads(doc_data.get("metadata", "{}"))
                             if "category" in metadata:
                                 categories.add(metadata["category"])
-                    except (asyncio.TimeoutError, Exception):
+                    except Exception:
                         continue
                 stats["categories"] = list(categories)
             except Exception:
@@ -812,7 +853,7 @@ class KnowledgeBase:
             latest_timestamp = 0
 
             for key in all_fact_keys:
-                fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
+                fact_data: Dict[str, str] = self.redis_client.hgetall(key)
                 if fact_data:
                     content = fact_data.get("content", "")
                     total_content_length += len(content)
@@ -864,7 +905,7 @@ class KnowledgeBase:
             # Export facts from Redis
             all_fact_keys = self._scan_redis_keys("fact:*")
             for key in all_fact_keys:
-                fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
+                fact_data: Dict[str, str] = self.redis_client.hgetall(key)
                 if fact_data:
                     exported_data.append(
                         {
@@ -945,7 +986,7 @@ class KnowledgeBase:
         """Update an existing fact"""
         try:
             fact_key = f"fact:{fact_id}"
-            existing_data = await self.redis_client.hgetall(fact_key)
+            existing_data = self.redis_client.hgetall(fact_key)
 
             if not existing_data:
                 return False
@@ -955,13 +996,15 @@ class KnowledgeBase:
 
             updated_data = {
                 "content": content,
-                "metadata": json.dumps(metadata) if metadata else "{}",
+                "metadata": json.dumps(metadata, cls=NumpyEncoder)
+                if metadata
+                else "{}",
                 "timestamp": existing_data.get(
                     "timestamp", str(int(time.time()))
                 ),  # Keep original timestamp
             }
 
-            await self.redis_client.hset(fact_key, mapping=updated_data)
+            self.redis_client.hset(fact_key, mapping=updated_data)
             logging.info(f"Fact {fact_id} updated successfully.")
             return True
         except Exception as e:
@@ -972,7 +1015,7 @@ class KnowledgeBase:
         """Delete a fact by ID"""
         try:
             fact_key = f"fact:{fact_id}"
-            result = await self.redis_client.delete(fact_key)
+            result = self.redis_client.delete(fact_key)
 
             if result:
                 logging.info(f"Fact {fact_id} deleted successfully.")
@@ -995,11 +1038,11 @@ class KnowledgeBase:
             all_fact_keys = self._scan_redis_keys("fact:*")
 
             for key in all_fact_keys:
-                fact_data: Dict[str, str] = await self.redis_client.hgetall(key)
+                fact_data: Dict[str, str] = self.redis_client.hgetall(key)
                 if fact_data:
                     timestamp = int(fact_data.get("timestamp", "0"))
                     if timestamp < cutoff_timestamp:
-                        await self.redis_client.delete(key)
+                        self.redis_client.delete(key)
                         removed_count += 1
 
             logging.info(
