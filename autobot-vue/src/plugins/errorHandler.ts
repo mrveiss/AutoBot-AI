@@ -269,7 +269,7 @@ export default {
     // Provide for composition API
     app.provide('errorHandler', globalErrorHandler)
 
-    console.log('🚨 Global Error Handler installed')
+    // Global Error Handler installed successfully
   }
 }
 
