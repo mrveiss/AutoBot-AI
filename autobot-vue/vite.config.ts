@@ -18,23 +18,26 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'vue': 'vue/dist/vue.esm-bundler.js'
     },
   },
   server: {
     port: 5173,
+    host: true,
+    allowedHosts: ['localhost', '127.0.0.1', 'host.docker.internal'],
     headers: {
       'X-Content-Type-Options': 'nosniff'
       // Removed Content-Security-Policy to avoid unneeded headers
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8001',
+        target: process.env.VITE_API_BASE_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_BACKEND_HOST || '127.0.0.3'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
         changeOrigin: true,
         secure: false
       },
       '/vnc-proxy': {
-        target: 'http://localhost:6080',
+        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || '127.0.0.4'}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || '6080'}`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/vnc-proxy/, '')
       }
@@ -45,19 +48,43 @@ export default defineConfig({
     assetsDir: '.',
     emptyOutDir: true,
     cssMinify: 'esbuild', // Use esbuild instead of lightningcss
+    chunkSizeWarningLimit: 1000, // Increase limit since we have good chunking strategy
     rollupOptions: {
       output: {
         manualChunks(id) {
           // Split Vue and related dependencies into their own chunk
-          if (id.includes('vue') || id.includes('vue-router')) {
+          if (id.includes('vue') || id.includes('vue-router') || id.includes('@vue')) {
             return 'vue';
           }
-          // Split utilities into their own chunk
-          if (id.includes('/src/utils/')) {
+          // Split large component groups
+          if (id.includes('/src/components/Terminal') || id.includes('/src/components/Workflow')) {
+            return 'terminal-workflow';
+          }
+          if (id.includes('/src/components/Chat') || id.includes('/src/components/Knowledge')) {
+            return 'chat-knowledge';
+          }
+          if (id.includes('/src/components/Settings') || id.includes('/src/components/Dashboard')) {
+            return 'settings-dashboard';
+          }
+          // Split utilities and services into their own chunk
+          if (id.includes('/src/utils/') || id.includes('/src/services/')) {
             return 'utils';
           }
-          // Split node_modules into vendor chunk
+          // Split node_modules by library type
           if (id.includes('node_modules')) {
+            // Large UI libraries
+            if (id.includes('monaco-editor') || id.includes('codemirror')) {
+              return 'editor';
+            }
+            // Charts and visualization
+            if (id.includes('chart') || id.includes('d3')) {
+              return 'charts';
+            }
+            // HTTP and networking
+            if (id.includes('axios') || id.includes('socket')) {
+              return 'network';
+            }
+            // Everything else
             return 'vendor';
           }
         },
