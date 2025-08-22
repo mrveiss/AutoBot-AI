@@ -224,8 +224,25 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
 
         # Initialize full orchestrator for backward compatibility
         logger.info("Initializing full orchestrator for chat endpoint compatibility")
-        from src.langchain_agent_orchestrator import Orchestrator
+        from src.orchestrator import Orchestrator
+        from src.utils.service_registry import ServiceConfig, get_service_registry
 
+        # Register ollama service if not already registered
+        registry = get_service_registry()
+        if "ollama" not in registry.services:
+            logger.info("Registering ollama service for orchestrator initialization")
+            ollama_service = ServiceConfig(
+                name="ollama",
+                host="localhost",
+                port=11434,
+                scheme="http",
+                path="",
+                health_endpoint="/api/tags",
+            )
+            registry.register_service(ollama_service)
+            logger.info("Ollama service registered successfully")
+
+        # Initialize the main orchestrator (has workflow orchestration methods)
         app.state.orchestrator = Orchestrator()
         logger.info("Full orchestrator initialized successfully")
 
@@ -247,10 +264,12 @@ async def _initialize_orchestrator(app: FastAPI) -> None:
 
     # Verify orchestrator initialization
     logger.debug(
-        f"Orchestrator in app.state: {getattr(app.state, 'orchestrator', None) is not None}"
+        f"Orchestrator in app.state: "
+        f"{getattr(app.state, 'orchestrator', None) is not None}"
     )
     logger.debug(
-        f"Lightweight orchestrator in app.state: {getattr(app.state, 'lightweight_orchestrator', None) is not None}"
+        f"Lightweight orchestrator in app.state: "
+        f"{getattr(app.state, 'lightweight_orchestrator', None) is not None}"
     )
 
 
