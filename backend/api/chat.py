@@ -12,7 +12,7 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.agents import get_kb_librarian
+# from src.agents import get_kb_librarian  # Currently not used
 from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.conversation import conversation_manager
@@ -1329,7 +1329,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
             and not is_command_approval_response
         ):
             try:
-                # Check if this seems like a query that should trigger knowledge/web search
+                # Check if query should trigger knowledge/web search
                 should_search = (
                     len(message.split()) > 2
                     and any(  # More than 2 words
@@ -1469,7 +1469,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                         "confidence": failsafe_response.confidence,
                     },
                 )
-                logging.info(f"Broadcasted direct chat response")
+                logging.info("Broadcasted direct chat response")
             except Exception as e:
                 logging.warning(
                     f"Failed to broadcast direct chat response via WebSocket: {e}"

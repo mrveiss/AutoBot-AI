@@ -79,6 +79,6 @@ export default {
       })
     }
 
-    console.log('🔍 Vue RUM Plugin installed')
+    // RUM Plugin installed successfully
   }
 }
