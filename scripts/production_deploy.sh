@@ -45,8 +45,8 @@ pre_deployment_checks() {
 
     # Check required files
     required_files=(
-        "Dockerfile"
-        "docker-compose.yml"
+        "docker/Dockerfile.production"
+        "docker/compose/docker-compose.production.yml"
         ".dockerignore"
         "requirements.txt"
         "main.py"
@@ -125,17 +125,17 @@ deploy_containers() {
 
     # Build images
     log "Building AutoBot images..."
-    docker-compose build --no-cache
+    docker-compose -f docker/compose/docker-compose.production.yml build --no-cache
 
     # Create necessary volumes and networks
     log "Creating Docker volumes and networks..."
-    docker-compose up -d --remove-orphans
+    docker-compose -f docker/compose/docker-compose.production.yml up -d --remove-orphans
 
     # Wait for services to be healthy
     log "Waiting for services to become healthy..."
     for service in redis ollama autobot-backend autobot-frontend; do
         timeout=120
-        while ! docker-compose ps "$service" | grep -q "healthy\|Up" && [[ $timeout -gt 0 ]]; do
+        while ! docker-compose -f docker/compose/docker-compose.production.yml ps "$service" | grep -q "healthy\|Up" && [[ $timeout -gt 0 ]]; do
             echo -n "."
             sleep 2
             ((timeout-=2))
@@ -188,7 +188,7 @@ setup_monitoring() {
 
     # Deploy monitoring stack if requested
     if [[ "${ENABLE_MONITORING:-true}" == "true" ]]; then
-        docker-compose --profile monitoring up -d
+        docker-compose -f docker/compose/docker-compose.production.yml --profile monitoring up -d
 
         # Wait for monitoring services
         sleep 10
@@ -239,9 +239,9 @@ deployment_summary() {
 
     echo ""
     echo -e "${GREEN}🔧 Management Commands:${NC}"
-    echo "  • View logs: docker-compose logs -f"
-    echo "  • Stop services: docker-compose down"
-    echo "  • Update services: docker-compose pull && docker-compose up -d"
+    echo "  • View logs: docker-compose -f docker/compose/docker-compose.production.yml logs -f"
+    echo "  • Stop services: docker-compose -f docker/compose/docker-compose.production.yml down"
+    echo "  • Update services: docker-compose -f docker/compose/docker-compose.production.yml pull && docker-compose -f docker/compose/docker-compose.production.yml up -d"
     echo "  • System validation: python scripts/phase_validation_system.py"
 
     echo ""
@@ -258,7 +258,7 @@ deployment_summary() {
 cleanup() {
     if [[ $? -ne 0 ]]; then
         error "Deployment failed. Check logs above for details."
-        echo "Rollback: docker-compose down && rm -f docker-compose.override.yml"
+        echo "Rollback: docker-compose -f docker/compose/docker-compose.production.yml down && rm -f docker-compose.override.yml"
     fi
 }
 

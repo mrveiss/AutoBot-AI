@@ -1,136 +1,282 @@
-version: '3.8'
+# AutoBot with Centralized Logging - ALL LOGS GO TO ONE PLACE
+# Every container automatically sends logs to central collection point
+
+name: autobot
+
+# Centralized logging configuration for ALL containers
+x-centralized-logging: &centralized-logging
+  driver: fluentd
+  options:
+    fluentd-address: ${AUTOBOT_FLUENTD_HOST:-localhost}:${AUTOBOT_FLUENTD_PORT:-24224}
+    tag: "autobot.{{.Name}}"
+
+x-agent-base: &agent-base
+  build:
+    context: .
+    dockerfile: docker/base/Dockerfile.python-agent
+    args:
+      USER_ID: ${USER_ID:-1000}
+      GROUP_ID: ${GROUP_ID:-1000}
+  restart: unless-stopped
+  networks:
+    - autobot-network
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+  depends_on:
+    autobot-redis:
+      condition: service_healthy
+    autobot-log-collector:
+      condition: service_started
 
 services:
-  # Seq - Centralized log viewer
-  autobot-seq:
+  # CENTRALIZED LOG COLLECTOR - FIRST TO START
+  autobot-log-collector:
+    image: fluent/fluentd:v1.16-debian-1
+    container_name: autobot-log-collector
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_FLUENTD_EXTERNAL_PORT:-24224}:${AUTOBOT_FLUENTD_INTERNAL_PORT:-24224}"
+      - "${AUTOBOT_FLUENTD_EXTERNAL_PORT:-24224}:${AUTOBOT_FLUENTD_INTERNAL_PORT:-24224}/udp"
+    volumes:
+      - ${VOLUMES_DIR:-./docker/volumes}/fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
+      - autobot_all_logs:/var/log/autobot
+      - ${AUTOBOT_HOST_DOCKER_CONTAINERS:-/var/lib/docker/containers}:/var/lib/docker/containers:ro
+      - ${AUTOBOT_HOST_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
+    environment:
+      - FLUENTD_CONF=fluent.conf
+      - FLUENTD_OPT=-v
+    networks:
+      - autobot-network
+    logging:
+      driver: "json-file"  # Log collector uses standard logging to avoid loops
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis with centralized logging
+  autobot-redis:
+    image: redis:7.2-alpine
+    container_name: autobot-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1 --save 300 10 --save 60 10000
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --databases 16
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - autobot_redis_data:/data
+      - ${VOLUMES_DIR:-./docker/volumes}/config/redis-databases.yaml:/app/config/redis-databases.yaml:ro
+    environment:
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://autobot-redis:6379
+    networks:
+      - autobot-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      autobot-log-collector:
+        condition: service_started
+
+  # Ollama with centralized logging
+  autobot-ollama:
+    image: ollama/ollama:latest
+    container_name: autobot-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - autobot_ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*
+    networks:
+      - autobot-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Backend with centralized logging
+  autobot-backend:
+    <<: *agent-base
+    container_name: autobot-backend
+    ports:
+      - "${BACKEND_PORT:-8001}:8001"
+    environment:
+      - USER_ID=${USER_ID:-1000}
+      - GROUP_ID=${GROUP_ID:-1000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://autobot-redis:6379
+      - SERVICE_TYPE=backend
+      - HEALTH_CHECK_PORT=8001
+      - REDIS_DATABASE=main
+      - OLLAMA_HOST=http://autobot-ollama:11434
+    volumes:
+      - ${VOLUMES_DIR:-./docker/volumes}/prompts:/app/prompts:ro
+      - ${VOLUMES_DIR:-./docker/volumes}/knowledge_base:/app/knowledge_base:ro
+      - ${VOLUMES_DIR:-./docker/volumes}/config:/app/config:ro
+      - ${VOLUMES_DIR:-./docker/volumes}/uploads:/app/uploads
+      - autobot_backend_data:/app/data
+      - autobot_all_logs:/app/logs  # Write to central log location
+    depends_on:
+      autobot-redis:
+        condition: service_healthy
+      autobot-ollama:
+        condition: service_healthy
+      autobot-log-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/system/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8001"]
+
+  # Chat Agent with centralized logging
+  autobot-chat-agent:
+    <<: *agent-base
+    container_name: autobot-chat-agent
+    build:
+      context: .
+      dockerfile: docker/agents/Dockerfile.chat-agent
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+    ports:
+      - "${CHAT_AGENT_PORT:-8002}:8000"
+    environment:
+      - USER_ID=${USER_ID:-1000}
+      - GROUP_ID=${GROUP_ID:-1000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://autobot-redis:6379
+      - AGENT_TYPE=chat
+      - HEALTH_CHECK_PORT=8000
+      - REDIS_DATABASE=agents
+      - DEFAULT_MODEL_NAME=${CHAT_MODEL:-llama3.2:1b}
+    volumes:
+      - ${VOLUMES_DIR:-./docker/volumes}/prompts:/app/prompts:ro
+      - ${VOLUMES_DIR:-./docker/volumes}/knowledge_base:/app/knowledge_base:ro
+      - ${VOLUMES_DIR:-./docker/volumes}/config:/app/config:ro
+      - autobot_chat_data:/app/data
+      - autobot_all_logs:/app/logs  # Write to central log location
+    command: ["python", "src/agents/chat_agent_server.py"]
+
+  # RAG Agent with centralized logging
+  autobot-rag-agent:
+    <<: *agent-base
+    container_name: autobot-rag-agent
+    build:
+      context: .
+      dockerfile: docker/agents/Dockerfile.rag-agent
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+    ports:
+      - "${RAG_AGENT_PORT:-8003}:8000"
+    environment:
+      - USER_ID=${USER_ID:-1000}
+      - GROUP_ID=${GROUP_ID:-1000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://autobot-redis:6379
+      - AGENT_TYPE=rag
+      - HEALTH_CHECK_PORT=8000
+      - REDIS_DATABASE=knowledge
+      - DEFAULT_MODEL_NAME=${RAG_MODEL:-dolphin-llama3:8b}
+      - VECTOR_DB_TYPE=chroma
+    volumes:
+      - ${VOLUMES_DIR:-./docker/volumes}/prompts:/app/prompts:ro
+      - ${VOLUMES_DIR:-./docker/volumes}/knowledge_base:/app/knowledge_base:ro
+      - ${VOLUMES_DIR:-./docker/volumes}/config:/app/config:ro
+      - autobot_rag_data:/app/data
+      - autobot_all_logs:/app/logs  # Write to central log location
+    command: ["python", "src/agents/rag_agent_server.py"]
+
+  # Log Viewer - Web interface for ALL centralized logs
+  autobot-log-viewer:
     image: datalust/seq:latest
-    container_name: autobot-seq
+    container_name: autobot-log-viewer
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_SEQ_EXTERNAL_PORT:-5341}:${AUTOBOT_SEQ_INTERNAL_PORT:-80}"  # Web interface for viewing ALL logs
     environment:
       - ACCEPT_EULA=Y
-      - SEQ_FIRSTRUN_ADMINUSERNAME=admin
-      - SEQ_FIRSTRUN_ADMINPASSWORD=autobot123
-    ports:
-      - "${AUTOBOT_LOG_VIEWER_PORT:-5341}:80"
+      - SEQ_FIRSTRUN_ADMINPASSWORD=${AUTOBOT_SEQ_ADMIN_PASSWORD:-Autobot123!}  # pragma: allowlist secret
     volumes:
-      - seq-data:/data
+      - autobot_all_logs:/var/log/autobot:ro  # Read from central log location
+      - autobot_log_data:/data
     networks:
-      - autobot-logging
-    restart: unless-stopped
-    labels:
-      - "autobot.service=seq"
-      - "autobot.logging=centralized"
-
-  # Fluentd - Log collector and forwarder
-  autobot-log-collector:
-    build: ./fluentd/
-    container_name: autobot-log-collector
-    volumes:
-      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
-      - ./fluentd/plugins:/fluentd/plugins:ro
-      - /var/log:/var/log:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ../../../logs:/autobot/logs:ro
-    ports:
-      - "${AUTOBOT_FLUENTD_PORT:-24224}:24224"
-      - "${AUTOBOT_FLUENTD_PORT:-24224}:24224/udp"
-    networks:
-      - autobot-logging
+      - autobot-network
     depends_on:
-      - autobot-seq
-    restart: unless-stopped
-    labels:
-      - "autobot.service=fluentd"
-      - "autobot.logging=collector"
-
-  # Redis with logging
-  autobot-redis:
-    image: redis/redis-stack:latest
-    container_name: autobot-redis
-    ports:
-      - "${AUTOBOT_REDIS_PORT:-6379}:6379"
-      - "${AUTOBOT_REDIS_INSIGHT_PORT:-8001}:8001"
-    volumes:
-      - redis-data:/data
-    networks:
-      - autobot-logging
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: ${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_FLUENTD_PORT:-24224}
-        tag: autobot.redis
-    restart: unless-stopped
-    labels:
-      - "autobot.service=redis"
-
-  # AI Stack with logging
-  autobot-ai-stack:
-    build: ../../ai-stack/
-    container_name: autobot-ai-stack
-    ports:
-      - "${AUTOBOT_AI_STACK_PORT:-8080}:8080"
-    volumes:
-      - ai-models:/models
-    networks:
-      - autobot-logging
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: ${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_FLUENTD_PORT:-24224}
-        tag: autobot.ai-stack
-    restart: unless-stopped
-    labels:
-      - "autobot.service=ai-stack"
-
-  # NPU Worker with logging
-  autobot-npu-worker:
-    build: ../../npu-worker/
-    container_name: autobot-npu-worker
-    ports:
-      - "${AUTOBOT_NPU_WORKER_PORT:-8081}:8081"
-    volumes:
-      - npu-models:/models
-    networks:
-      - autobot-logging
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: ${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_FLUENTD_PORT:-24224}
-        tag: autobot.npu-worker
-    restart: unless-stopped
-    labels:
-      - "autobot.service=npu-worker"
-
-  # Playwright VNC with logging
-  autobot-playwright-vnc:
-    build: ../../playwright-vnc/
-    container_name: autobot-playwright-vnc
-    ports:
-      - "${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}:3000"
-      - "${AUTOBOT_PLAYWRIGHT_VNC_PORT:-6080}:6080"
-    volumes:
-      - ../../../playwright-server.js:/app/playwright-server.js:ro
-    networks:
-      - autobot-logging
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: ${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_FLUENTD_PORT:-24224}
-        tag: autobot.playwright
-    restart: unless-stopped
-    labels:
-      - "autobot.service=playwright"
-
-networks:
-  autobot-logging:
-    driver: bridge
-    name: autobot-logging
+      autobot-log-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
-  seq-data:
-    name: autobot-seq-data
-  redis-data:
-    name: autobot-redis-data
-  ai-models:
-    name: autobot-ai-models
-  npu-models:
-    name: autobot-npu-models
+  # Infrastructure data
+  autobot_redis_data:
+    name: autobot_redis_data
+  autobot_ollama_data:
+    name: autobot_ollama_data
+
+  # Application data
+  autobot_backend_data:
+    name: autobot_backend_data
+  autobot_chat_data:
+    name: autobot_chat_data
+  autobot_rag_data:
+    name: autobot_rag_data
+
+  # CENTRALIZED LOGGING - ALL LOGS IN ONE PLACE
+  autobot_all_logs:
+    name: autobot_all_logs
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs/autobot-centralized
+
+  autobot_log_data:
+    name: autobot_log_data
+
+networks:
+  autobot-network:
+    external: true
+    name: autobot-network

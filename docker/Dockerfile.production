@@ -56,10 +56,10 @@ USER autobot
 
 # Health check - use configurable backend port
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${AUTOBOT_BACKEND_PORT:-8001}/api/system/health || exit 1
+    CMD curl -f http://localhost:${AUTOBOT_BACKEND_INTERNAL_PORT:-8001}/api/system/health || exit 1
 
 # Expose configurable backend port
-EXPOSE ${AUTOBOT_BACKEND_PORT:-8001}
+EXPOSE ${AUTOBOT_BACKEND_INTERNAL_PORT:-8001}
 
 # Environment variables
 ENV PYTHONPATH=/app
@@ -67,4 +67,4 @@ ENV AUTOBOT_ENVIRONMENT=production
 ENV AUTOBOT_LOG_LEVEL=INFO
 
 # Start command
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${AUTOBOT_BACKEND_INTERNAL_PORT:-8001}", "--workers", "1"]
