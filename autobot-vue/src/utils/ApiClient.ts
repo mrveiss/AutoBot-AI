@@ -38,7 +38,8 @@ export class ApiClient {
   settings: any;
 
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL ||
+      `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.3'}:${import.meta.env.VITE_BACKEND_PORT || '8001'}`;
     this.timeout = 30000; // 30 seconds default timeout
     this.settings = this.loadSettings();
 
@@ -64,16 +65,16 @@ export class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const method = options.method || 'GET';
     const startTime = performance.now();
-    
+
     // Track API call start
     if (window.rum) {
-      window.rum.trackUserInteraction('api_call_initiated', null, { 
-        method, 
-        endpoint, 
-        url 
+      window.rum.trackUserInteraction('api_call_initiated', null, {
+        method,
+        endpoint,
+        url
       });
     }
-    
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
@@ -107,10 +108,10 @@ export class ApiClient {
         window.rum.trackApiCall(method, endpoint, startTime, endTime, response.status);
       }
       return response as ApiResponse;
-      
+
     } catch (error: any) {
       const endTime = performance.now();
-      
+
       if (error.name === 'AbortError') {
         const timeoutError = new Error(`Request timeout after ${this.timeout}ms`);
         if (window.rum) {
@@ -125,7 +126,7 @@ export class ApiClient {
         }
         throw timeoutError;
       }
-      
+
       // Track other errors
       if (window.rum) {
         window.rum.trackApiCall(method, endpoint, startTime, endTime, 'error', error);

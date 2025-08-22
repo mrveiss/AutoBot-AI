@@ -11,9 +11,9 @@
     </div>
 
     <div class="rum-tabs">
-      <button 
-        v-for="tab in tabs" 
-        :key="tab" 
+      <button
+        v-for="tab in tabs"
+        :key="tab"
         @click="activeTab = tab"
         :class="{ active: activeTab === tab }"
         class="rum-tab"
@@ -63,13 +63,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr 
-                v-for="call in recentApiCalls" 
+              <tr
+                v-for="call in recentApiCalls"
                 :key="call.timestamp"
-                :class="{ 
-                  slow: call.isSlow, 
+                :class="{
+                  slow: call.isSlow,
                   timeout: call.isTimeout,
-                  error: call.status === 'error' 
+                  error: call.status === 'error'
                 }"
               >
                 <td>{{ formatTime(call.timestamp) }}</td>
@@ -86,8 +86,8 @@
       <!-- Errors Tab -->
       <div v-if="activeTab === 'Errors'" class="rum-section">
         <div class="error-list">
-          <div 
-            v-for="error in recentErrors" 
+          <div
+            v-for="error in recentErrors"
             :key="error.timestamp"
             class="error-item"
           >
@@ -109,6 +109,9 @@
           <div class="ws-indicator" :class="wsStatus">
             {{ wsStatusText }}
           </div>
+          <button @click="testWebSocketConnection" class="test-ws-btn">
+            🔌 Test WebSocket Connection
+          </button>
         </div>
         <div class="rum-table">
           <table>
@@ -133,8 +136,8 @@
       <!-- Critical Issues Tab -->
       <div v-if="activeTab === 'Critical'" class="rum-section">
         <div class="critical-issues">
-          <div 
-            v-for="issue in criticalIssues" 
+          <div
+            v-for="issue in criticalIssues"
             :key="issue.timestamp"
             class="critical-item"
           >
@@ -152,9 +155,9 @@
   </div>
 
   <!-- Floating Toggle Button -->
-  <button 
-    v-if="!isVisible && isDev" 
-    @click="toggleVisibility" 
+  <button
+    v-if="!isVisible && isDev"
+    @click="toggleVisibility"
     class="rum-toggle"
     title="Show RUM Dashboard"
   >
@@ -164,10 +167,14 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket.js'
 
 export default {
   name: 'RumDashboard',
   setup() {
+    // Global WebSocket Service
+    const { isConnected: globalWsConnected, connectionState: globalWsState, testConnection } = useGlobalWebSocket();
+
     const isVisible = ref(false)
     const activeTab = ref('Overview')
     const metrics = ref({
@@ -177,45 +184,45 @@ export default {
       sessionDuration: 0
     })
     const criticalIssues = ref([])
-    
+
     const tabs = ['Overview', 'API Calls', 'Errors', 'WebSocket', 'Critical']
     const isDev = import.meta.env.DEV
-    
+
     let refreshInterval = null
 
     // Computed properties
-    const slowApiCalls = computed(() => 
+    const slowApiCalls = computed(() =>
       metrics.value.apiCalls.filter(call => call.isSlow).length
     )
-    
-    const timeoutApiCalls = computed(() => 
+
+    const timeoutApiCalls = computed(() =>
       metrics.value.apiCalls.filter(call => call.isTimeout).length
     )
-    
-    const recentApiCalls = computed(() => 
+
+    const recentApiCalls = computed(() =>
       metrics.value.apiCalls.slice(-20).reverse()
     )
-    
-    const recentErrors = computed(() => 
+
+    const recentErrors = computed(() =>
       metrics.value.errors.slice(-10).reverse()
     )
-    
-    const recentWsEvents = computed(() => 
+
+    const recentWsEvents = computed(() =>
       metrics.value.webSocketEvents.slice(-20).reverse()
     )
-    
+
     const sessionDuration = computed(() => metrics.value.sessionDuration || 0)
-    
+
     const wsStatus = computed(() => {
-      const recent = metrics.value.webSocketEvents.slice(-5)
-      if (recent.some(e => e.event === 'connection_opened')) return 'connected'
-      if (recent.some(e => e.event === 'error')) return 'error'
+      // Use the real-time global WebSocket service status
+      if (globalWsConnected.value) return 'connected'
+      if (globalWsState.value === 'error') return 'error'
       return 'disconnected'
     })
-    
+
     const wsStatusText = computed(() => {
       const status = wsStatus.value
-      return status === 'connected' ? '🟢 Connected' : 
+      return status === 'connected' ? '🟢 Connected' :
              status === 'error' ? '🔴 Error' : '🟡 Disconnected'
     })
 
@@ -238,6 +245,12 @@ export default {
         window.rum.clear()
         refreshData()
       }
+    }
+
+    const testWebSocketConnection = () => {
+      console.log('🔌 Testing global WebSocket connection, current state:', globalWsState.value)
+      testConnection()
+      refreshData()
     }
 
     const toggleVisibility = () => {
@@ -265,7 +278,7 @@ export default {
       if (isDev) {
         refreshData()
         refreshInterval = setInterval(refreshData, 5000) // Refresh every 5 seconds
-        
+
         // Show dashboard if there are critical issues
         const issues = JSON.parse(localStorage.getItem('rum_critical_issues') || '[]')
         if (issues.length > 0) {
@@ -298,6 +311,7 @@ export default {
       refreshData,
       exportData,
       clearData,
+      testWebSocketConnection,
       toggleVisibility,
       formatTime,
       formatDuration
@@ -510,6 +524,28 @@ export default {
 
 .websocket-status {
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.test-ws-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.test-ws-btn:hover {
+  background: #2563eb;
+}
+
+.test-ws-btn:active {
+  background: #1d4ed8;
 }
 
 .ws-indicator {

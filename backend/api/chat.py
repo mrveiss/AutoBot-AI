@@ -1592,7 +1592,9 @@ async def send_chat_message_legacy(chat_message: dict, request: Request):
 async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Request):
     """Send a message to a specific chat and get a response."""
     logging.info(f"DEBUG: send_chat_message called for chat_id: {chat_id}")
-    try:
+
+    # Add timeout protection to prevent the entire endpoint from hanging
+    async def _process_message():
         # Clear previous sources for new request
         clear_sources()
 
@@ -1734,8 +1736,9 @@ Current question: {message}"""
         }
 
         try:
+            # TEMPORARY FIX: Disable KB search to prevent hanging
             # Get KB librarian with timeout protection
-            kb_librarian = get_kb_librarian()
+            kb_librarian = None  # get_kb_librarian()
             if kb_librarian:
                 # Add timeout to prevent hanging (10 second limit)
                 kb_search_task = asyncio.create_task(
@@ -2343,11 +2346,24 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
             },
         )
 
-    except Exception as e:
-        logging.error(f"Error processing chat message for {chat_id}: {str(e)}")
-        logging.error(f"Traceback: {traceback.format_exc()}")
+    # Execute with timeout protection
+    try:
+        # 25-second timeout to prevent hanging and provide faster feedback
+        return await asyncio.wait_for(_process_message(), timeout=25.0)
+    except asyncio.TimeoutError:
+        logging.error(f"Chat message processing timed out for chat_id: {chat_id}")
         return JSONResponse(
-            status_code=500, content={"error": f"Error processing message: {str(e)}"}
+            status_code=408,
+            content={
+                "error": "Request timed out. The AI models may be busy. Please try again in a moment.",
+                "chat_id": chat_id,
+                "timeout": True,
+            },
+        )
+    except Exception as e:
+        logging.error(f"Critical error in chat message timeout wrapper: {str(e)}")
+        return JSONResponse(
+            status_code=500, content={"error": f"Critical system error: {str(e)}"}
         )
 
 

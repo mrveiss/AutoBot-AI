@@ -16,6 +16,8 @@ from src.config import config
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 
+from ..utils.service_registry import get_service_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +33,8 @@ class ContainerizedLibrarianAssistant:
         # Configuration
         self.enabled = self.config.get_nested("librarian_assistant.enabled", True)
         self.playwright_service_url = self.config.get_nested(
-            "librarian_assistant.playwright_service_url", "http://localhost:3000"
+            "librarian_assistant.playwright_service_url",
+            get_service_url("playwright-vnc"),
         )
         self.max_search_results = self.config.get_nested(
             "librarian_assistant.max_search_results", 5

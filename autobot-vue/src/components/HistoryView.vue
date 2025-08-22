@@ -24,6 +24,7 @@
 
 <script>
 import { ref } from 'vue';
+import { API_CONFIG } from '@/config/environment.js';
 
 export default {
   name: 'HistoryView',
@@ -142,17 +143,18 @@ export default {
       }
     };
 
-    // Settings structure to match ChatInterface
+    // Settings structure using central config
     const settings = ref({
       backend: {
-        api_endpoint: 'http://localhost:8001'
+        api_endpoint: API_CONFIG.BASE_URL
       }
     });
 
     // Load settings from local storage if available
     const savedSettings = localStorage.getItem('chat_settings');
     if (savedSettings) {
-      settings.value = JSON.parse(savedSettings);
+      const parsed = JSON.parse(savedSettings);
+      settings.value.backend.api_endpoint = parsed.backend?.api_endpoint || API_CONFIG.BASE_URL;
     }
 
     // Initial load of history after settings are initialized

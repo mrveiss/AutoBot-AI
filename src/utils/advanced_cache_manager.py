@@ -43,10 +43,11 @@ class AdvancedCacheManager:
     """Enhanced cache manager with intelligent strategies"""
 
     def __init__(self):
-        self.redis_client = get_redis_client(async_client=True)
+        self.redis_client = None  # Will be initialized asynchronously
         self.sync_redis_client = get_redis_client(async_client=False)
         self.cache_prefix = "autobot:cache:"
         self.stats_prefix = "autobot:cache:stats:"
+        self._redis_client_initialized = False
 
         # Cache configurations for different data types
         self.cache_configs = {
@@ -70,12 +71,24 @@ class AdvancedCacheManager:
             "api_rate_limits": CacheConfig(CacheStrategy.TEMPORARY, ttl=60),
         }
 
-        if self.redis_client:
+        if self.sync_redis_client:
             logger.info("AdvancedCacheManager initialized with Redis backend")
         else:
             logger.warning(
                 "AdvancedCacheManager initialized without Redis - caching disabled"
             )
+
+    async def _ensure_redis_client(self):
+        """Ensure async Redis client is initialized"""
+        if not self._redis_client_initialized:
+            try:
+                self.redis_client = await get_redis_client(async_client=True)
+                self._redis_client_initialized = True
+                logger.debug("Async Redis client initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize async Redis client: {e}")
+                self.redis_client = None
+                self._redis_client_initialized = True  # Prevent retry loops
 
     def _make_cache_key(
         self, data_type: str, key: str, user_id: Optional[str] = None
@@ -98,6 +111,7 @@ class AdvancedCacheManager:
         self, data_type: str, key: str, user_id: Optional[str] = None
     ) -> Optional[Any]:
         """Get cached data with automatic deserialization"""
+        await self._ensure_redis_client()
         if not self.redis_client:
             return None
 
@@ -131,6 +145,7 @@ class AdvancedCacheManager:
         custom_ttl: Optional[int] = None,
     ) -> bool:
         """Set cached data with automatic configuration"""
+        await self._ensure_redis_client()
         if not self.redis_client:
             return False
 
@@ -198,6 +213,7 @@ class AdvancedCacheManager:
         self, data_type: str, key: str = "*", user_id: Optional[str] = None
     ) -> int:
         """Invalidate cache entries by pattern"""
+        await self._ensure_redis_client()
         if not self.redis_client:
             return 0
 
@@ -227,6 +243,7 @@ class AdvancedCacheManager:
 
     async def _update_stats(self, data_type: str, hit: bool):
         """Update cache statistics"""
+        await self._ensure_redis_client()
         if not self.redis_client:
             return
 
@@ -252,6 +269,7 @@ class AdvancedCacheManager:
 
     async def get_stats(self, data_type: Optional[str] = None) -> Dict[str, Any]:
         """Get comprehensive cache statistics"""
+        await self._ensure_redis_client()
         if not self.redis_client:
             return {"status": "disabled"}
 
@@ -314,6 +332,7 @@ class AdvancedCacheManager:
 
     async def warm_cache(self, data_type: str, warm_data: Dict[str, Any]):
         """Warm up cache with predefined data"""
+        await self._ensure_redis_client()
         if not self.redis_client:
             return False
 

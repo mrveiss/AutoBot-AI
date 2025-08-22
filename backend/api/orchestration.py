@@ -54,29 +54,53 @@ async def execute_workflow(request: WorkflowRequest):
         # Create and execute workflow
         result = await create_and_execute_workflow(request.goal, request.context)
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success" if result.get("success") else "failed",
-                "workflow_id": result.get("plan_id"),
-                "execution_time": result.get("execution_time"),
-                "strategy_used": result.get("strategy_used"),
-                "results_summary": {
-                    "total_tasks": len(result.get("results", {})),
-                    "completed": sum(
-                        1
-                        for r in result.get("results", {}).values()
-                        if r.get("status") == "completed"
-                    ),
-                    "failed": sum(
-                        1
-                        for r in result.get("results", {}).values()
-                        if r.get("status") == "failed"
-                    ),
+        # Check if workflow was executed (has multiple steps/tasks)
+        has_multiple_tasks = len(result.get("results", {})) > 1
+
+        if has_multiple_tasks:
+            # Format as workflow orchestration response that frontend expects
+            workflow_preview = []
+            for task_id, task_result in result.get("results", {}).items():
+                description = task_result.get("description", f"Task {task_id}")
+                workflow_preview.append(description)
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "type": "workflow_orchestration",
+                    "workflow_id": result.get("plan_id"),
+                    "workflow_response": {
+                        "workflow_preview": workflow_preview,
+                        "strategy_used": result.get("strategy_used"),
+                        "execution_time": result.get("execution_time"),
+                    },
+                    "details": result,
                 },
-                "details": result,
-            },
-        )
+            )
+        else:
+            # Single task execution - return as direct result for simpler processing
+            task_results = list(result.get("results", {}).values())
+            if task_results:
+                task_result = task_results[0]
+                response_text = task_result.get(
+                    "response", task_result.get("result", "Task completed")
+                )
+            else:
+                response_text = "Task completed successfully"
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "type": "direct_execution",
+                    "result": {
+                        "response": response_text,
+                        "response_text": response_text,
+                        "messageType": "response",
+                    },
+                    "workflow_id": result.get("plan_id"),
+                    "details": result,
+                },
+            )
 
     except Exception as e:
         logger.error(f"Workflow execution error: {e}")

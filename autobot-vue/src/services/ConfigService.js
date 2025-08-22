@@ -5,6 +5,8 @@
  * a single source of truth for all configuration parameters.
  */
 
+import { API_CONFIG } from '@/config/environment.js';
+
 export class ConfigService {
   constructor() {
     // Initialize with empty config - all values loaded from external sources
@@ -25,10 +27,10 @@ export class ConfigService {
     // Built-in fallback defaults (only used if no other source provides values)
     const fallbackDefaults = {
       api: {
-        backend_url: 'http://localhost:8001',
-        ollama_url: 'http://localhost:11434',
-        timeout: 30000,
-        retry_attempts: 3
+        backend_url: API_CONFIG.BASE_URL,
+        ollama_url: API_CONFIG.OLLAMA_URL,
+        timeout: API_CONFIG.TIMEOUT,
+        retry_attempts: API_CONFIG.RETRY_ATTEMPTS
       },
       paths: {
         data_directory: 'data',

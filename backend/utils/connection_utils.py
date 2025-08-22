@@ -12,7 +12,7 @@ from typing import Any, Dict
 
 import requests
 
-from src.config import global_config_manager
+from src.config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT, global_config_manager
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -30,8 +30,10 @@ class ConnectionTester:
         try:
             # Check cache first
             current_time = time.time()
-            if (_health_cache["data"] and 
-                current_time - _health_cache["timestamp"] < _health_cache["ttl"]):
+            if (
+                _health_cache["data"]
+                and current_time - _health_cache["timestamp"] < _health_cache["ttl"]
+            ):
                 return _health_cache["data"]
 
             # Quick Redis check
@@ -47,7 +49,10 @@ class ConnectionTester:
             # Quick Ollama availability check (no generation test)
             ollama_status = "disconnected"
             try:
-                ollama_endpoint = os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434")
+                ollama_endpoint = os.getenv(
+                    "AUTOBOT_OLLAMA_HOST",
+                    f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
+                )
                 ollama_check_url = f"{ollama_endpoint}/api/tags"
                 response = requests.get(ollama_check_url, timeout=3)
                 if response.status_code == 200:
@@ -57,11 +62,11 @@ class ConnectionTester:
 
             health_data = {
                 "status": "healthy",
-                "backend": "connected", 
+                "backend": "connected",
                 "ollama": ollama_status,
                 "redis_status": redis_status,
                 "timestamp": datetime.now().isoformat(),
-                "fast_check": True
+                "fast_check": True,
             }
 
             # Cache the result
@@ -75,11 +80,11 @@ class ConnectionTester:
             return {
                 "status": "unhealthy",
                 "backend": "connected",
-                "ollama": "unknown", 
+                "ollama": "unknown",
                 "redis_status": "unknown",
                 "error": str(e),
                 "timestamp": datetime.now().isoformat(),
-                "fast_check": True
+                "fast_check": True,
             }
 
     @staticmethod
@@ -109,7 +114,8 @@ class ConnectionTester:
                 ollama_endpoint = global_config_manager.get_nested(
                     "backend.ollama_endpoint",
                     os.getenv(
-                        "AUTOBOT_OLLAMA_HOST", "http://localhost:11434/api/generate"
+                        "AUTOBOT_OLLAMA_HOST",
+                        f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}/api/generate",
                     ),
                 )
             if not ollama_model:
@@ -120,9 +126,9 @@ class ConnectionTester:
 
             # Default fallbacks with environment variable support
             if not ollama_endpoint:
-                ollama_endpoint = os.getenv(
-                    "AUTOBOT_OLLAMA_HOST", "http://localhost:11434/api/generate"
-                )
+                from src.config import OLLAMA_URL
+
+                ollama_endpoint = f"{OLLAMA_URL}/api/generate"
             if not ollama_model:
                 ollama_model = os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")
 
@@ -302,7 +308,9 @@ class ConnectionTester:
 
             if provider == "ollama":
                 # Test Ollama embedding model
-                ollama_host = provider_config.get("host", "http://localhost:11434")
+                from src.config import OLLAMA_URL
+
+                ollama_host = provider_config.get("host", OLLAMA_URL)
 
                 # Check if model is available
                 tags_url = f"{ollama_host}/api/tags"
@@ -439,9 +447,9 @@ class ModelManager:
         """Get models from Ollama service"""
         try:
             ollama_config = global_config_manager.get_nested("llm_config.ollama", {})
-            ollama_host = ollama_config.get(
-                "host", os.getenv("AUTOBOT_OLLAMA_HOST", "http://localhost:11434")
-            )
+            from src.config import OLLAMA_URL
+
+            ollama_host = ollama_config.get("host", OLLAMA_URL)
             ollama_url = f"{ollama_host}/api/tags"
 
             response = requests.get(ollama_url, timeout=10)

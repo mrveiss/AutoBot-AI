@@ -24,6 +24,7 @@ except ImportError:
 from src.event_manager import event_manager
 from src.knowledge_base import KnowledgeBase
 from src.tools import ToolRegistry
+from src.utils.service_registry import get_service_url
 from src.worker_node import WorkerNode
 
 
@@ -59,7 +60,7 @@ class LangChainAgentOrchestrator:
         # Temporarily hardcode model to rule out config parsing issues
         llm_model = "phi:2.7b"
         llm_base_url = llm_config.get("ollama", {}).get(
-            "base_url", "http://localhost:11434"
+            "base_url", get_service_url("ollama")
         )
 
         logging.info(

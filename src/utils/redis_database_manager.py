@@ -13,6 +13,8 @@ import redis
 import redis.asyncio as aioredis
 import yaml
 
+from .service_registry import get_service_registry
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,9 +46,16 @@ class RedisDatabaseManager:
         self._connections: Dict[str, redis.Redis] = {}
         self._async_connections: Dict[str, aioredis.Redis] = {}
 
-        # Redis connection settings from environment
-        self.host = os.getenv("REDIS_HOST", "autobot-redis")
-        self.port = int(os.getenv("REDIS_PORT", "6379"))
+        # Redis connection settings using service registry
+        registry = get_service_registry()
+        redis_config = registry.get_service_config("redis")
+
+        self.host = (
+            redis_config.host if redis_config else os.getenv("REDIS_HOST", "localhost")
+        )
+        self.port = (
+            redis_config.port if redis_config else int(os.getenv("REDIS_PORT", "6379"))
+        )
         self.password = os.getenv("REDIS_PASSWORD")
         self.max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "20"))
         self.socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "30"))

@@ -7,6 +7,7 @@
 
 import apiClient from '@/utils/ApiClient.js';
 import { reactive } from 'vue';
+import { API_CONFIG } from '@/config/environment.js';
 
 export class SettingsService {
   constructor() {
@@ -26,8 +27,8 @@ export class SettingsService {
       },
       backend: {
         use_phi2: false,
-        api_endpoint: 'http://localhost:8001',
-        ollama_endpoint: 'http://localhost:11434',
+        api_endpoint: API_CONFIG.BASE_URL,
+        ollama_endpoint: API_CONFIG.OLLAMA_URL,
         ollama_model: 'deepseek-r1:14b',
         streaming: false
       },

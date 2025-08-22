@@ -16,17 +16,89 @@ from typing import Any, Dict
 
 import yaml
 
-# Environment-configurable service URLs
-API_BASE_URL = os.getenv("AUTOBOT_API_BASE_URL", "http://localhost:8001")
-REDIS_URL = os.getenv("AUTOBOT_REDIS_URL", "redis://localhost:6379")
-OLLAMA_URL = os.getenv("AUTOBOT_OLLAMA_URL", "http://localhost:11434")
+from .utils.service_registry import get_service_url
+
+# Service Host IP Addresses from environment
+OLLAMA_HOST_IP = os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1")
+LM_STUDIO_HOST_IP = os.getenv("AUTOBOT_LM_STUDIO_HOST", "127.0.0.2")
+BACKEND_HOST_IP = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.3")
+FRONTEND_HOST_IP = os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.3")
+PLAYWRIGHT_HOST_IP = os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "127.0.0.4")
+NPU_WORKER_HOST_IP = os.getenv("AUTOBOT_NPU_WORKER_HOST", "127.0.0.5")
+AI_STACK_HOST_IP = os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.6")
+REDIS_HOST_IP = os.getenv("AUTOBOT_REDIS_HOST", "127.0.0.7")
+LOG_VIEWER_HOST_IP = os.getenv("AUTOBOT_LOG_VIEWER_HOST", "127.0.0.8")
+
+# Service Ports from environment
+BACKEND_PORT = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
+FRONTEND_PORT = int(os.getenv("AUTOBOT_FRONTEND_PORT", "5173"))
+OLLAMA_PORT = int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434"))
+LM_STUDIO_PORT = int(os.getenv("AUTOBOT_LM_STUDIO_PORT", "1234"))
+REDIS_PORT = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+PLAYWRIGHT_API_PORT = int(os.getenv("AUTOBOT_PLAYWRIGHT_API_PORT", "3000"))
+PLAYWRIGHT_VNC_PORT = int(os.getenv("AUTOBOT_PLAYWRIGHT_VNC_PORT", "6080"))
+NPU_WORKER_PORT = int(os.getenv("AUTOBOT_NPU_WORKER_PORT", "8081"))
+AI_STACK_PORT = int(os.getenv("AUTOBOT_AI_STACK_PORT", "8080"))
+LOG_VIEWER_PORT = int(os.getenv("AUTOBOT_LOG_VIEWER_PORT", "5341"))
+FLUENTD_PORT = int(os.getenv("AUTOBOT_FLUENTD_PORT", "24224"))
+CHROME_DEBUG_PORT = int(os.getenv("AUTOBOT_CHROME_DEBUG_PORT", "9222"))
+VNC_DISPLAY_PORT = int(os.getenv("AUTOBOT_VNC_DISPLAY_PORT", "5900"))
+VNC_CONTAINER_PORT = int(os.getenv("AUTOBOT_VNC_CONTAINER_PORT", "5901"))
+
+# Protocols from environment
+HTTP_PROTOCOL = os.getenv("AUTOBOT_HTTP_PROTOCOL", "http")
+WS_PROTOCOL = os.getenv("AUTOBOT_WS_PROTOCOL", "ws")
+REDIS_PROTOCOL = os.getenv("AUTOBOT_REDIS_PROTOCOL", "redis")
+
+# Environment-configurable service URLs (built from components)
+API_BASE_URL = os.getenv(
+    "AUTOBOT_API_BASE_URL", f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
+)
+REDIS_URL = os.getenv(
+    "AUTOBOT_REDIS_URL", f"{REDIS_PROTOCOL}://{REDIS_HOST_IP}:{REDIS_PORT}"
+)
+OLLAMA_URL = os.getenv(
+    "AUTOBOT_OLLAMA_URL", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
+)
 API_TIMEOUT = int(os.getenv("AUTOBOT_API_TIMEOUT", "30000"))
 
-# Additional service ports
-PLAYWRIGHT_API_URL = os.getenv("AUTOBOT_PLAYWRIGHT_API_URL", "http://localhost:3000")
-PLAYWRIGHT_VNC_URL = os.getenv(
-    "AUTOBOT_PLAYWRIGHT_VNC_URL", "http://localhost:6080/vnc.html"
+# AI Services
+LM_STUDIO_URL = os.getenv(
+    "AUTOBOT_LM_STUDIO_URL", f"{HTTP_PROTOCOL}://{LM_STUDIO_HOST_IP}:{LM_STUDIO_PORT}"
 )
+
+# WebSocket URLs
+WS_BASE_URL = os.getenv(
+    "AUTOBOT_WS_BASE_URL", f"{WS_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}/ws"
+)
+
+# Container Services
+PLAYWRIGHT_API_URL = os.getenv(
+    "AUTOBOT_PLAYWRIGHT_API_URL",
+    f"{HTTP_PROTOCOL}://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_API_PORT}",
+)
+PLAYWRIGHT_VNC_URL = os.getenv(
+    "AUTOBOT_PLAYWRIGHT_VNC_URL",
+    f"{HTTP_PROTOCOL}://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html",
+)
+NPU_WORKER_URL = os.getenv(
+    "AUTOBOT_NPU_WORKER_URL",
+    f"{HTTP_PROTOCOL}://{NPU_WORKER_HOST_IP}:{NPU_WORKER_PORT}",
+)
+AI_STACK_URL = os.getenv(
+    "AUTOBOT_AI_STACK_URL", f"{HTTP_PROTOCOL}://{AI_STACK_HOST_IP}:{AI_STACK_PORT}"
+)
+
+# Logging and Monitoring
+LOG_VIEWER_URL = os.getenv(
+    "AUTOBOT_LOG_VIEWER_URL",
+    f"{HTTP_PROTOCOL}://{LOG_VIEWER_HOST_IP}:{LOG_VIEWER_PORT}",
+)
+FLUENTD_ADDRESS = os.getenv(
+    "AUTOBOT_FLUENTD_ADDRESS", f"{LOG_VIEWER_HOST_IP}:{FLUENTD_PORT}"
+)
+
+# Development Settings
 CHROME_DEBUG_PORT = int(os.getenv("AUTOBOT_CHROME_DEBUG_PORT", "9222"))
 
 # VNC Display Port - handles both container and host scenarios
@@ -37,7 +109,33 @@ VNC_DISPLAY_PORT = int(os.getenv("AUTOBOT_VNC_DISPLAY_PORT", "5900"))
 # Container-aware VNC port (for Docker deployments)
 VNC_CONTAINER_PORT = int(os.getenv("AUTOBOT_VNC_CONTAINER_PORT", "5901"))
 
-FRONTEND_URL = os.getenv("AUTOBOT_FRONTEND_URL", "http://localhost:5173")
+
+# Service Registry Integration
+def get_service_urls():
+    """Get service URLs using service registry with fallbacks"""
+    try:
+        urls = {
+            "backend": get_service_url("backend"),
+            "redis": get_service_url("redis"),
+            "ai_stack": get_service_url("ai-stack"),
+            "npu_worker": get_service_url("npu-worker"),
+            "playwright_vnc": get_service_url("playwright-vnc"),
+        }
+        return urls
+    except Exception as e:
+        logging.warning(f"Service registry failed, using static URLs: {e}")
+        return {
+            "backend": API_BASE_URL,
+            "redis": REDIS_URL,
+            "ai_stack": AI_STACK_URL,
+            "npu_worker": NPU_WORKER_URL,
+            "playwright_vnc": PLAYWRIGHT_API_URL,
+        }
+
+
+FRONTEND_URL = os.getenv(
+    "AUTOBOT_FRONTEND_URL", f"{HTTP_PROTOCOL}://{FRONTEND_HOST_IP}:{FRONTEND_PORT}"
+)
 
 
 def get_vnc_display_port():
@@ -57,7 +155,7 @@ def get_vnc_display_port():
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.1)
-        result = sock.connect_ex(("localhost", 5900))
+        result = sock.connect_ex(("127.0.0.1", 5900))
         sock.close()
 
         if result == 0:
@@ -79,7 +177,7 @@ def get_vnc_direct_url():
         str: VNC connection URL
     """
     port = get_vnc_display_port()
-    return f"vnc://localhost:{port}"
+    return f"vnc://127.0.0.1:{port}"
 
 
 # GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when
@@ -431,10 +529,11 @@ class ConfigManager:
                             "ollama": {
                                 "endpoint": self.get_nested(
                                     "backend.ollama_endpoint",
-                                    "http://localhost:11434/api/generate",
+                                    "http://127.0.0.2:11434/api/generate",
                                 ),
                                 "host": os.getenv(
-                                    "AUTOBOT_OLLAMA_HOST", "http://localhost:11434"
+                                    "AUTOBOT_OLLAMA_HOST",
+                                    f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
                                 ),
                                 "models": [],
                                 "selected_model": legacy_ollama_model,
@@ -454,10 +553,11 @@ class ConfigManager:
                     "ollama": {
                         "endpoint": os.getenv(
                             "AUTOBOT_OLLAMA_ENDPOINT",
-                            "http://localhost:11434/api/generate",
+                            "http://127.0.0.2:11434/api/generate",
                         ),
                         "host": os.getenv(
-                            "AUTOBOT_OLLAMA_HOST", "http://localhost:11434"
+                            "AUTOBOT_OLLAMA_HOST",
+                            f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
                         ),
                         "models": [],
                         "selected_model": self._get_default_ollama_model(),
@@ -470,10 +570,11 @@ class ConfigManager:
                     "ollama": {
                         "endpoint": os.getenv(
                             "AUTOBOT_EMBEDDING_ENDPOINT",
-                            "http://localhost:11434/api/embeddings",
+                            f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}/api/embeddings",
                         ),
                         "host": os.getenv(
-                            "AUTOBOT_EMBEDDING_HOST", "http://localhost:11434"
+                            "AUTOBOT_EMBEDDING_HOST",
+                            f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
                         ),
                         "models": [],
                         "selected_model": os.getenv(
@@ -727,7 +828,8 @@ class ConfigManager:
             "server_host": os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0"),
             "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
             "api_endpoint": os.getenv(
-                "AUTOBOT_BACKEND_API_ENDPOINT", "http://localhost:8001"
+                "AUTOBOT_BACKEND_API_ENDPOINT",
+                f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', '8001')}",
             ),
             "cors_origins": [
                 "http://localhost:5173",

@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
 from src.task_execution_tracker import task_tracker
+from src.utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 
@@ -683,7 +684,7 @@ class ModernAIIntegration:
                 provider=AIProvider.LOCAL_MODEL,
                 model_name="local-model",
                 capabilities=[ModelCapability.TEXT_GENERATION],
-                api_endpoint="http://localhost:11434",
+                api_endpoint=get_service_url("ollama"),
                 api_key=None,
                 max_tokens=2048,
                 temperature=0.7,

@@ -4,6 +4,7 @@
  */
 
 import { reactive, ref } from 'vue';
+import { API_CONFIG } from '@/config/environment.js';
 
 // Connection states for state machine
 const CONNECTION_STATES = {
@@ -28,10 +29,9 @@ class TerminalService {
   }
 
   getWebSocketUrl() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.DEV ? 'localhost' : window.location.hostname;
-    const port = import.meta.env.DEV ? '8001' : window.location.port;
-    return `${protocol}//${host}:${port}/api/terminal/consolidated/ws`;
+    // Use centralized configuration
+    const baseWsUrl = API_CONFIG.WS_BASE_URL.replace('/ws', ''); // Remove default /ws suffix
+    return `${baseWsUrl}/api/terminal/consolidated/ws`;
   }
 
   /**
@@ -128,7 +128,7 @@ class TerminalService {
    */
   async createSession() {
     try {
-      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const baseUrl = API_CONFIG.BASE_URL;
       const response = await fetch(`${baseUrl}/api/terminal/consolidated/sessions`, {
         method: 'POST',
         headers: {
@@ -447,7 +447,7 @@ class TerminalService {
 
     // Then close the session on the server
     try {
-      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const baseUrl = API_CONFIG.BASE_URL;
       const response = await fetch(`${baseUrl}/api/terminal/consolidated/sessions/${sessionId}`, {
         method: 'DELETE'
       });
@@ -466,7 +466,7 @@ class TerminalService {
    */
   async getSessions() {
     try {
-      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const baseUrl = API_CONFIG.BASE_URL;
       const response = await fetch(`${baseUrl}/api/terminal/consolidated/sessions`);
       if (!response.ok) {
         throw new Error(`Failed to get sessions: ${response.statusText}`);
@@ -486,7 +486,7 @@ class TerminalService {
    */
   async executeCommand(command, options = {}) {
     try {
-      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const baseUrl = API_CONFIG.BASE_URL;
       const response = await fetch(`${baseUrl}/api/terminal/consolidated/command`, {
         method: 'POST',
         headers: {
@@ -518,7 +518,7 @@ class TerminalService {
    */
   async getSessionInfo(sessionId) {
     try {
-      const baseUrl = import.meta.env.DEV ? 'http://localhost:8001' : '';
+      const baseUrl = API_CONFIG.BASE_URL;
       const response = await fetch(`${baseUrl}/api/terminal/consolidated/sessions/${sessionId}`);
       if (!response.ok) {
         throw new Error(`Failed to get session info: ${response.statusText}`);

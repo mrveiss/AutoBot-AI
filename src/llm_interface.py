@@ -9,6 +9,11 @@ from dotenv import load_dotenv
 
 # Import configuration managers
 from src.circuit_breaker import circuit_breaker_async
+from src.config import (
+    HTTP_PROTOCOL,
+    OLLAMA_HOST_IP,
+    OLLAMA_PORT,
+)
 from src.config import config as global_config_manager
 from src.prompt_manager import prompt_manager
 from src.retry_mechanism import retry_network_operation
@@ -85,7 +90,7 @@ class LLMInterface:
     def __init__(self):
         # Use centralized configuration with fallback to environment variables
         self.ollama_host = config_manager.get(
-            "llm.ollama.base_url", "http://localhost:11434"
+            "llm.ollama.base_url", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
         )
 
         # Try config first, then environment variable
@@ -487,7 +492,7 @@ class LLMInterface:
         data = {
             "model": model,
             "messages": messages,
-            "stream": False,
+            "stream": True,  # Enable streaming for real-time responses
             "temperature": temperature,
             "format": "json" if structured_output else "",
         }
@@ -517,23 +522,58 @@ class LLMInterface:
         try:
             # Use retry mechanism for LLM API calls - PERFORMANCE FIX: Native async HTTP
             async def make_llm_request():
-                timeout = aiohttp.ClientTimeout(total=600)
+                timeout = aiohttp.ClientTimeout(
+                    total=25
+                )  # Reduced from 600s to 25s to prevent hanging
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.post(
                         url, headers=headers, json=data
                     ) as response:
                         response.raise_for_status()
-                        response_text = await response.text()
-                        response_json = await response.json()
 
-                        print(f"Ollama Raw Response Status: {response.status}")
-                        print(f"Ollama Raw Response Headers: {response.headers}")
-                        print(f"Ollama Raw Response Text: {response_text}")
-                        logger.debug(f"Ollama Raw Response Status: {response.status}")
-                        logger.debug(f"Ollama Raw Response Headers: {response.headers}")
-                        logger.debug(f"Ollama Raw Response Text: {response_text}")
+                        # Handle streaming response
+                        full_content = ""
+                        async for line in response.content:
+                            line_text = line.decode("utf-8").strip()
+                            if line_text:
+                                try:
+                                    chunk = json.loads(line_text)
+                                    if (
+                                        "message" in chunk
+                                        and "content" in chunk["message"]
+                                    ):
+                                        content = chunk["message"]["content"]
+                                        full_content += content
+                                        # Yield partial responses for real-time streaming
+                                        print(f"Streaming chunk: {content}")
 
-                        return response_json
+                                    # Check if this is the final chunk
+                                    if chunk.get("done", False):
+                                        print(
+                                            f"Ollama Raw Response Status: {response.status}"
+                                        )
+                                        print(f"Ollama Final Response: {full_content}")
+                                        logger.debug(
+                                            f"Ollama streaming completed with {len(full_content)} characters"
+                                        )
+
+                                        # Return the final complete response
+                                        return {
+                                            "model": chunk.get("model"),
+                                            "message": {
+                                                "role": "assistant",
+                                                "content": full_content,
+                                            },
+                                            "done": True,
+                                        }
+                                except json.JSONDecodeError:
+                                    continue
+
+                        # Fallback if no done chunk received
+                        return {
+                            "message": {"role": "assistant", "content": full_content},
+                            "done": True,
+                        }
 
             return await retry_network_operation(make_llm_request)
         except aiohttp.ClientResponseError as e:

@@ -1,0 +1,33 @@
+# AI Stack (Ollama) Service Only - For distributed deployment
+version: '3.8'
+name: autobot
+
+services:
+  autobot-ai-stack:
+    image: ollama/ollama:latest
+    container_name: autobot-ai-stack
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - autobot_ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  autobot_ollama_data:
+    driver: local
+
+networks:
+  autobot-network:
+    external: false
+    name: autobot-network

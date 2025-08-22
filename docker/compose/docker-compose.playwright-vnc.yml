@@ -1,4 +1,4 @@
-version: '3.8'
+name: autobot
 
 services:
   playwright-vnc:
@@ -15,11 +15,11 @@ services:
       - DEBIAN_FRONTEND=noninteractive
       - TZ=UTC
     volumes:
-      - ./playwright-server.js:/app/server.js
+      - ../../playwright-server.js:/app/server.js
     ports:
-      - "3000:3000"    # Playwright API
-      - "5901:5901"    # VNC port (avoiding Kali's default 5900)
-      - "6080:6080"    # noVNC web interface
+      - "${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}:3000"    # Playwright API
+      - "${AUTOBOT_VNC_DISPLAY_PORT:-5901}:5901"    # VNC port (avoiding Kali's default 5900)
+      - "${AUTOBOT_PLAYWRIGHT_VNC_PORT:-6080}:6080"    # noVNC web interface
     command: >
       bash -c "
         set -e
@@ -55,7 +55,7 @@ services:
         echo 'priority=200' >> /etc/supervisor/conf.d/autobot.conf
         echo '' >> /etc/supervisor/conf.d/autobot.conf
         echo '[program:novnc]' >> /etc/supervisor/conf.d/autobot.conf
-        echo 'command=/usr/share/novnc/utils/launch.sh --vnc localhost:5901 --listen 6080' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/share/novnc/utils/launch.sh --vnc 127.0.0.1:5901 --listen ${AUTOBOT_PLAYWRIGHT_VNC_PORT:-6080}' >> /etc/supervisor/conf.d/autobot.conf
         echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
         echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
         echo 'priority=300' >> /etc/supervisor/conf.d/autobot.conf
@@ -74,7 +74,7 @@ services:
         exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
       "
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/health && curl -f http://localhost:6080/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}/health && curl -f http://127.0.0.1:${AUTOBOT_PLAYWRIGHT_VNC_PORT:-6080}/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

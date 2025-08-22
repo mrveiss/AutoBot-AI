@@ -1134,7 +1134,7 @@ export default {
     // Settings
     const settings = ref({
       backend: {
-        api_endpoint: 'http://localhost:8001'
+        api_endpoint: 'http://127.0.0.3:8001'
       }
     });
 

@@ -281,6 +281,11 @@ async def update_embedding_model(embedding_data: dict):
 async def get_comprehensive_llm_status():
     """Get comprehensive LLM status for GUI settings panel"""
     try:
+        from src.config import (
+            BACKEND_HOST_IP,
+            BACKEND_PORT,
+            HTTP_PROTOCOL,
+        )
         from src.config import config as global_config_manager
 
         llm_config = global_config_manager.get_llm_config()
@@ -290,7 +295,7 @@ async def get_comprehensive_llm_status():
         local_config = llm_config.get("local", {})
         cloud_config = llm_config.get("cloud", {})
 
-        # Build comprehensive status
+        # Build comprehensive status using main AutoBot OS environment configuration
         status = {
             "provider_type": provider_type,
             "providers": {
@@ -307,7 +312,10 @@ async def get_comprehensive_llm_status():
                         .get("selected_model", ""),
                         "endpoint": local_config.get("providers", {})
                         .get("ollama", {})
-                        .get("host", "http://localhost:11434"),
+                        .get(
+                            "host",
+                            f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
+                        ),
                     },
                     "lmstudio": {
                         "configured": bool(
@@ -321,7 +329,10 @@ async def get_comprehensive_llm_status():
                         .get("selected_model", ""),
                         "endpoint": local_config.get("providers", {})
                         .get("lmstudio", {})
-                        .get("endpoint", "http://localhost:1234/v1"),
+                        .get(
+                            "endpoint",
+                            f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}/v1",
+                        ),
                     },
                 },
                 "cloud": {
