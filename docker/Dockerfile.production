@@ -2,11 +2,17 @@
 # Multi-stage build for optimized production deployment
 
 # Build stage
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 COPY autobot-vue/package*.json ./
-RUN npm ci --only=production
+
+# Install system dependencies needed for native compilation
+RUN apk add --no-cache python3 make g++
+
+# Install dependencies but skip Cypress installation for faster builds
+ENV CYPRESS_INSTALL_BINARY=0
+RUN npm ci
 
 COPY autobot-vue/ ./
 RUN npm run build
