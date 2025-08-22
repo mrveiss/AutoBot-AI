@@ -42,6 +42,13 @@ project_root/
 - **CONFIGURATION**: All setup and configuration changes go through `setup_agent.sh`
 - **OPTIONS**: Use `./run_agent.sh --help` to see available runtime options
 
+#### 🔐 **CRITICAL: USER RESTART REQUIRED**
+**When AutoBot needs restart, ALWAYS ask user to manually restart:**
+- `./run_agent.sh` requires sudo password entry for Docker operations
+- Claude Code CANNOT automate password entry for security reasons
+- **ACTION**: Request user to run `./run_agent.sh` in their terminal
+- **REASON**: Docker container management, volume mounting, network setup require elevated privileges
+
 #### 🔴 CRITICAL: STARTUP/SETUP SCRIPT MAINTENANCE
 **ALL IMPLEMENTED CHANGES MUST BE REFLECTED IN STARTUP AND SETUP SCRIPTS**
 
@@ -58,6 +65,86 @@ project_root/
   - Install scripts
   - requirements.txt
   - **SECURITY UPDATES MANDATORY**
+
+#### 🚫 CRITICAL: AVOID HARDCODED VALUES AT ALL COST
+
+**What is a hardcoded value?**
+A hardcoded value is any literal data (strings, numbers, URLs, paths) written directly into source code instead of using variables, configuration files, or environment variables.
+
+**Examples of hardcoded values (❌ BAD):**
+```python
+# ❌ Hardcoded port
+app.run(host="0.0.0.0", port=8001)
+
+# ❌ Hardcoded URL
+api_url = "http://localhost:8001/api/health"
+
+# ❌ Hardcoded file path
+config_file = "/home/user/autobot/config.json"
+
+# ❌ Hardcoded database connection
+conn = "redis://localhost:6379/0"
+
+# ❌ Hardcoded API keys or secrets
+api_key = "sk-1234567890abcdef"
+```
+
+**Correct approach (✅ GOOD):**
+```python
+# ✅ Use environment variables
+port = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
+app.run(host="0.0.0.0", port=port)
+
+# ✅ Use configuration system
+api_url = f"http://{config.get('host')}:{config.get('port')}/api/health"
+
+# ✅ Use relative paths or config
+config_file = os.path.join(config.get_config_dir(), "config.json")
+
+# ✅ Use environment variables
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+# ✅ Use secure configuration
+api_key = os.getenv("OPENAI_API_KEY")
+```
+
+**Why hardcoded values are dangerous:**
+1. **Deployment Issues**: Code breaks when moved between environments (dev/staging/prod)
+2. **Security Risks**: Secrets exposed in source code, version control
+3. **Maintenance Nightmare**: Changes require code modifications instead of config updates
+4. **Testing Problems**: Cannot test different scenarios without code changes
+5. **Flexibility Loss**: Cannot adapt to different deployment scenarios
+6. **Port Conflicts**: Fixed ports cause conflicts with other services
+
+**AutoBot Configuration Hierarchy (use in this order):**
+1. **Environment Variables**: `AUTOBOT_BACKEND_PORT=8003`
+2. **Configuration Files**: `src/config.py`, `.env` files
+3. **Command Line Arguments**: `--port 8003`
+4. **Default Values**: Only as final fallback
+
+**Mandatory Configuration Patterns:**
+```python
+# ✅ Ports - always configurable
+backend_port = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
+
+# ✅ URLs - build from components
+api_base = f"http://{os.getenv('BACKEND_HOST', 'localhost')}:{backend_port}"
+
+# ✅ File paths - relative to project or configurable
+data_dir = os.getenv("AUTOBOT_DATA_DIR", os.path.join(os.getcwd(), "data"))
+
+# ✅ Feature flags - environment controlled
+debug_mode = os.getenv("AUTOBOT_DEBUG", "false").lower() == "true"
+```
+
+**Files that MUST use configuration instead of hardcoded values:**
+- All port numbers (8001, 8080, 6379, etc.)
+- All IP addresses and hostnames
+- All file paths (except relative imports)
+- All URLs and API endpoints
+- All timeout values
+- All database connections
+- All service names and identifiers
 
 #### 💾 Data Safety
 - **CRITICAL**: Backup `data/` before schema changes to:
@@ -291,14 +378,48 @@ If you discover major API duplications:
 5. **🟢 Features** (new functionality)
 6. **⚪ Refactoring** (code improvement)
 
+### 🏗️ Default Deployment Architecture
+
+**AutoBot uses a HYBRID deployment model by default:**
+- **Backend/Frontend**: Run on host system (localhost)
+- **Services**: Run in Docker containers with exposed ports
+- **Connection**: Host processes connect to containerized services via localhost ports
+
+**Default Architecture:**
+```
+Host System (localhost)
+├── Backend API           → http://localhost:8001 (host process)
+├── Frontend UI           → http://localhost:5173 (host process)
+└── Docker Containers     → Exposed on localhost ports
+    ├── Redis             → redis://localhost:6379
+    ├── AI Stack          → http://localhost:8080
+    ├── NPU Worker        → http://localhost:8081
+    └── Playwright VNC    → http://localhost:3000
+```
+
 ### 🛠️ Quick Commands Reference
 
 ```bash
 # APPLICATION LIFECYCLE (USER CONTROLLED)
 ./setup_agent.sh              # Initial setup and configuration
-./run_agent.sh                # Start application (standard mode)
+./run_agent.sh                # Start application (centralized logging by default)
 ./run_agent.sh --test-mode     # Start in test mode
 ./run_agent.sh --help          # Show available options
+
+# CENTRALIZED LOGGING ACCESS
+# Log Viewer (Seq): http://localhost:5341
+# Credentials: admin / Autobot123!
+
+# DISTRIBUTED DEPLOYMENT
+./run_agent.sh --distributed --config=production.yml  # Distributed mode
+export AUTOBOT_DEPLOYMENT_MODE=distributed           # Set deployment mode
+export AUTOBOT_DOMAIN=autobot.prod                  # Set production domain
+
+# SERVICE REGISTRY & DISCOVERY
+# Location: src/utils/service_registry.py
+# Modes: local, docker_local, distributed, kubernetes
+# Health checks: Circuit breakers, automatic failover
+# Config files: config/deployment/{mode}.yml
 
 # DEVELOPMENT & TESTING
 flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503  # Quality check
