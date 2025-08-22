@@ -307,6 +307,7 @@
 
 <script>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket.js';
 import TerminalSidebar from './TerminalSidebar.vue';
 import TerminalWindow from './TerminalWindow.vue';
 import WorkflowApproval from './WorkflowApproval.vue';
@@ -320,6 +321,7 @@ import ResearchBrowser from './ResearchBrowser.vue';
 import ErrorBoundary from './ErrorBoundary.vue';
 import apiClient from '../utils/ApiClient.js';
 import { apiService } from '@/services/api.js';
+import { API_CONFIG } from '@/config/environment.js';
 
 export default {
   name: 'ChatInterface',
@@ -337,6 +339,9 @@ export default {
     ErrorBoundary
   },
   setup() {
+    // Global WebSocket Service
+    const { isConnected: wsConnected, on: wsOn, send: wsSend, state: wsState } = useGlobalWebSocket();
+
     // Reactive state
     const sidebarCollapsed = ref(false);
     const terminalSidebarCollapsed = ref(true);
@@ -362,7 +367,6 @@ export default {
     // Workflow state
     const activeWorkflowId = ref(null);
     const showWorkflowApproval = ref(false);
-    const websocket = ref(null);
 
     // Knowledge management state
     const showKnowledgeDialog = ref(false);
@@ -841,6 +845,19 @@ export default {
 
               // Associate file with current chat
               await associateFileWithChat(result.path || file.name, file.name);
+            } else {
+              // File upload failed - notify user
+              const errorMessage = `Failed to upload file "${file.name}" (${uploadResponse.status}: ${uploadResponse.statusText})`;
+              console.error('File upload failed:', errorMessage);
+
+              messages.value.push({
+                sender: 'system',
+                text: `📎 ❌ ${errorMessage}`,
+                timestamp: new Date().toLocaleTimeString(),
+                type: 'error'
+              });
+
+              // Continue with other files, but note the failure
             }
           }
         }
@@ -891,6 +908,14 @@ export default {
               throw new Error('Parsed response is not a valid object');
             }
 
+            // Debug logging for troubleshooting
+            console.log('✅ Workflow result parsed successfully:', {
+              type: workflowResult.type,
+              hasResult: !!workflowResult.result,
+              hasWorkflowResponse: !!workflowResult.workflow_response,
+              keys: Object.keys(workflowResult)
+            });
+
           } catch (parseError) {
             console.error('Edge browser compatibility error:', parseError);
             console.error('Response status:', workflowResponse.status);
@@ -930,8 +955,8 @@ export default {
                 type: 'planning'
               });
             }
-          } else {
-            // Direct execution
+          } else if (workflowResult.type === 'direct_execution' || !workflowResult.type) {
+            // Direct execution or simple response
             const responseText = workflowResult.result?.response || workflowResult.result?.response_text || 'No response received';
             const responseType = workflowResult.result?.messageType;
 
@@ -968,7 +993,17 @@ export default {
             }
           }
         } else {
-          // Workflow failed, try fallback to regular chat
+          // Workflow failed, show error and try fallback
+          console.warn(`Workflow API failed with status ${workflowResponse.status}: ${workflowResponse.statusText}`);
+
+          // Notify user about workflow failure
+          messages.value.push({
+            sender: 'system',
+            text: `⚠️ Workflow orchestration unavailable (${workflowResponse.status}). Falling back to direct chat...`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'warning'
+          });
+
           // Workflow failed, falling back to regular chat endpoint
           try {
             const chatResponse = await apiClient.sendChatMessage(userInput, {
@@ -1143,8 +1178,13 @@ export default {
     };
 
     const deleteSpecificChat = async (chatId = null) => {
-      const targetChatId = chatId || currentChatId.value;
-      if (!targetChatId) return;
+      // CRITICAL FIX: Validate chatId parameter to prevent PointerEvent objects
+      const isValidChatId = chatId && typeof chatId === 'string' && chatId.length > 0;
+      const targetChatId = isValidChatId ? chatId : currentChatId.value;
+      if (!targetChatId || typeof targetChatId !== 'string') {
+        console.error('Invalid chat ID for deletion:', targetChatId);
+        return;
+      }
 
       try {
         // Delete from backend first
@@ -1225,6 +1265,23 @@ export default {
         chatList.value = data.chats || [];
       } catch (error) {
         console.error('Error loading chat list:', error);
+
+        // Show user-friendly error for chat list loading
+        let errorMessage = 'Failed to load chat history';
+        if (error.message?.includes('timeout')) {
+          errorMessage = '📝 Chat list timeout - using offline mode';
+        } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+          errorMessage = '📝 Network error - chat list unavailable';
+        }
+
+        // Add subtle error notification
+        messages.value.push({
+          sender: 'system',
+          text: errorMessage,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'info'
+        });
+
         // Fallback: create a default chat if list fails to load
         if (chatList.value.length === 0) {
           const fallbackChatId = `fallback-${Date.now()}`;
@@ -1258,7 +1315,21 @@ export default {
         }
       } catch (error) {
         console.error('Error loading chat messages:', error);
-        messages.value = [];
+
+        // Show user-friendly error for message loading
+        let errorMessage = 'Failed to load chat messages';
+        if (error.message?.includes('timeout')) {
+          errorMessage = '💬 Message loading timeout - starting fresh chat';
+        } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+          errorMessage = '💬 Network error - starting new conversation';
+        }
+
+        messages.value = [{
+          sender: 'system',
+          text: errorMessage,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'info'
+        }];
       }
     };
 
@@ -1267,6 +1338,25 @@ export default {
         await apiClient.saveChatMessages(chatId, messages.value);
       } catch (error) {
         console.error('Error saving chat messages:', error);
+
+        // Show user-friendly error message for different types of failures
+        let errorMessage = 'Failed to save chat messages';
+
+        if (error.message?.includes('timeout')) {
+          errorMessage = `💾 Chat save timeout - your messages are preserved locally but couldn't sync to server`;
+        } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+          errorMessage = `💾 Network error - chat messages saved locally only`;
+        } else {
+          errorMessage = `💾 Save error: ${error.message || 'Unknown error'}`;
+        }
+
+        // Add non-intrusive error notification
+        messages.value.push({
+          sender: 'system',
+          text: errorMessage,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'warning'
+        });
       }
     };
 
@@ -1339,82 +1429,10 @@ export default {
       });
     };
 
-    // WebSocket methods
+    // WebSocket methods - now using global WebSocket service
     const connectWebSocket = () => {
-      // Don't create multiple connections
-      if (websocket.value && websocket.value.readyState === WebSocket.OPEN) {
-        return
-      }
-
-      const wsUrl = apiClient.baseUrl.replace('http', 'ws') + '/ws';
-
-      // Track WebSocket events with RUM if available
-      if (window.rum) {
-        window.rum.trackWebSocketEvent('connection_attempt', { url: wsUrl });
-      }
-
-      try {
-        websocket.value = new WebSocket(wsUrl);
-      } catch (error) {
-        console.error('Failed to create WebSocket connection:', error)
-        if (window.rum) {
-          window.rum.trackWebSocketEvent('creation_failed', { url: wsUrl, error: error.message })
-        }
-        // Retry after delay
-        setTimeout(connectWebSocket, 5000)
-        return
-      }
-
-      websocket.value.onopen = () => {
-        if (window.rum) {
-          window.rum.trackWebSocketEvent('connection_opened', { url: wsUrl });
-        }
-      };
-
-      websocket.value.onmessage = (event) => {
-        try {
-          const eventData = JSON.parse(event.data);
-          if (window.rum) {
-            window.rum.trackWebSocketEvent('message_received', {
-              dataSize: event.data.length,
-              eventType: eventData.type || 'unknown'
-            });
-          }
-          handleWebSocketEvent(eventData);
-        } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
-          if (window.rum) {
-            window.rum.trackWebSocketEvent('message_parse_error', { error: error.message || String(error) });
-          }
-        }
-      };
-
-      websocket.value.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        if (window.rum) {
-          window.rum.trackWebSocketEvent('error', { error: error.toString() });
-          window.rum.reportCriticalIssue('websocket_error', {
-            url: wsUrl,
-            error: error.toString(),
-            readyState: websocket.value?.readyState
-          });
-        }
-      };
-
-      websocket.value.onclose = (event) => {
-        if (window.rum) {
-          window.rum.trackWebSocketEvent('connection_closed', {
-            code: event.code,
-            reason: event.reason,
-            wasClean: event.wasClean
-          });
-        }
-
-        // Only reconnect if it wasn't a clean close and component is still mounted
-        if (!event.wasClean && activeTab.value !== 'dashboard') {
-          setTimeout(connectWebSocket, 3000);
-        }
-      };
+      console.log('🔌 Using global WebSocket service, connection state:', wsConnected.value);
+      // Global WebSocket service handles connection automatically
     };
 
     const handleWebSocketEvent = (eventData) => {
@@ -1423,11 +1441,32 @@ export default {
 
       // Handle ping/pong for keepalive
       if (eventType === 'ping') {
-        // Respond with pong
-        if (websocket.value && websocket.value.readyState === WebSocket.OPEN) {
-          websocket.value.send(JSON.stringify({ type: 'pong' }));
-        }
+        // Respond with pong using global WebSocket service
+        wsSend({ type: 'pong' });
         return;
+      }
+
+      if (eventType === 'llm_response') {
+        // Handle LLM responses from WebSocket
+        console.log('📨 Processing LLM response from WebSocket:', payload);
+
+        // Add the response to messages
+        messages.value.push({
+          sender: payload.sender || 'bot',
+          text: payload.response || payload.content || 'No response content',
+          timestamp: new Date().toLocaleTimeString(),
+          type: payload.message_type || 'response',
+          sources: payload.sources || []
+        });
+
+        // Auto-scroll to show new message
+        nextTick(() => {
+          if (chatMessages.value && settings.value.chat.auto_scroll) {
+            chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+          }
+        });
+
+        return; // Early return to avoid duplicate handling
       }
 
       if (eventType.startsWith('workflow_')) {
@@ -1510,23 +1549,52 @@ export default {
         };
       }
 
-      // Connect WebSocket for real-time updates only for chat functionality
-      // Dashboard will have its own independent monitoring
-      setTimeout(() => {
-        if (activeTab.value === 'chat') {
-          connectWebSocket();
-        }
-      }, 2000);
+      // Set up WebSocket event listeners for chat functionality
+      // Global WebSocket service handles the connection automatically
+      console.log('🔌 Setting up chat WebSocket listeners, connection state:', wsState.value.connected);
 
-      // Watch for tab changes to manage WebSocket connection
-      watch(activeTab, (newTab, oldTab) => {
-        if (newTab === 'chat' && (!websocket.value || websocket.value.readyState !== WebSocket.OPEN)) {
-          // Connect when switching to chat
-          setTimeout(connectWebSocket, 500);
-        } else if (oldTab === 'chat' && newTab !== 'chat' && websocket.value && websocket.value.readyState === WebSocket.OPEN) {
-          // Disconnect when leaving chat
-          websocket.value.close(1000, 'leaving chat tab');
+      // Listen for chat-relevant events
+      wsOn('connection_established', (data) => {
+        console.log('✅ Chat interface connected to WebSocket');
+
+        // Show connection restored message if there were previous errors
+        messages.value.push({
+          sender: 'system',
+          text: '🔌 Real-time connection established',
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'success'
+        });
+      });
+
+      wsOn('llm_response', (data) => {
+        console.log('📨 Received LLM response via WebSocket:', data);
+        if (data.payload && data.payload.response) {
+          handleWebSocketEvent(data);
         }
+      });
+
+      wsOn('error', (data) => {
+        console.log('❌ WebSocket error in chat interface:', data);
+
+        // Show user-visible error notification
+        messages.value.push({
+          sender: 'system',
+          text: `🔌 Connection issue: Real-time updates may be delayed. ${data?.message || 'WebSocket error'}`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'error'
+        });
+      });
+
+      wsOn('message', (eventData) => {
+        // Handle all WebSocket messages for chat functionality
+        handleWebSocketEvent(eventData);
+      });
+
+      // Watch for tab changes - WebSocket connection is now global
+      watch(activeTab, (newTab, oldTab) => {
+        console.log('📱 Tab changed from', oldTab, 'to', newTab, 'WebSocket connected:', wsConnected.value);
+        // Global WebSocket service maintains connection across all tabs
+        // No need to manage connection per tab
       });
 
       // Load chat list with timeout protection
@@ -1564,9 +1632,8 @@ export default {
 
     // Cleanup
     onUnmounted(() => {
-      if (websocket.value) {
-        websocket.value.close();
-      }
+      console.log('🔌 ChatInterface unmounted, global WebSocket service continues running');
+      // Global WebSocket service continues running for other components
     });
 
     return {
@@ -1607,8 +1674,9 @@ export default {
       showWorkflowApproval,
       openFullWorkflowView,
       onWorkflowCancelled,
-      // WebSocket
-      connectWebSocket,
+      // WebSocket (using global service)
+      wsConnected,
+      wsState,
       handleWebSocketEvent,
       // Knowledge management
       showKnowledgeDialog,
