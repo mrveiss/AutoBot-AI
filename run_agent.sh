@@ -5,8 +5,10 @@
 # Parse command line arguments
 TEST_MODE=false
 START_ALL_CONTAINERS=false
-CENTRALIZED_LOGGING=false
+CENTRALIZED_LOGGING=true
 REDIS_SEPARATION=false
+DISTRIBUTED_MODE=false
+DEPLOYMENT_CONFIG=""
 DEFAULT_COMPOSE_FILE="docker/compose/docker-compose.hybrid.yml"
 
 while [[ $# -gt 0 ]]; do
@@ -21,7 +23,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --centralized-logs)
             CENTRALIZED_LOGGING=true
-            DEFAULT_COMPOSE_FILE="docker-compose.centralized-logs.yml"
+            DEFAULT_COMPOSE_FILE="docker/compose/docker-compose.centralized-logs.yml"
             shift
             ;;
         --redis-separation)
@@ -30,6 +32,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         --compose-file)
             DEFAULT_COMPOSE_FILE="$2"
+            shift 2
+            ;;
+        --distributed)
+            DISTRIBUTED_MODE=true
+            export AUTOBOT_DEPLOYMENT_MODE=distributed
+            shift
+            ;;
+        --config)
+            DEPLOYMENT_CONFIG="$2"
             shift 2
             ;;
         --help)
@@ -41,6 +52,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --all-containers      Start all containers (Redis, NPU, AI Stack, Playwright)"
             echo "  --centralized-logs    Use centralized logging architecture (ALL logs in one place)"
             echo "  --redis-separation    Enable Redis database separation (11 isolated databases)"
+            echo "  --distributed         Run in distributed deployment mode (services on separate machines)"
+            echo "  --config FILE         Use specific deployment configuration file"
             echo "  --compose-file FILE   Use specific Docker Compose file"
             echo "  --help               Show this help message"
             echo ""
@@ -48,6 +61,7 @@ while [[ $# -gt 0 ]]; do
             echo "  Default:              Standard hybrid mode (Docker + local processes)"
             echo "  --centralized-logs:   ELK stack logging with Fluentd collection"
             echo "  --redis-separation:   Isolated databases (main, knowledge, prompts, agents, etc.)"
+            echo "  --distributed:        Services run on separate machines with service discovery"
             echo ""
             echo "Examples:"
             echo "  $0                              # Standard startup"
@@ -55,6 +69,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 --centralized-logs           # All logs go to single location"
             echo "  $0 --redis-separation           # Use separated Redis databases"
             echo "  $0 --all-containers --centralized-logs  # Full setup with centralized logging"
+            echo "  $0 --distributed --config production.yml # Distributed deployment"
             exit 0
             ;;
         *)
@@ -92,6 +107,16 @@ cleanup() {
         sleep 1
         kill -9 "$FRONTEND_PID" 2>/dev/null
     fi
+
+    if [ ! -z "$LOG_AGGREGATOR_PID" ]; then
+        echo "Terminating log forwarder process (PID: $LOG_AGGREGATOR_PID)..."
+        kill -TERM "$LOG_AGGREGATOR_PID" 2>/dev/null
+        sleep 1
+        kill -9 "$LOG_AGGREGATOR_PID" 2>/dev/null
+    fi
+
+    # Also kill any remaining log forwarders
+    pkill -f "simple_docker_log_forwarder.py" 2>/dev/null || true
 
     # Ensure all processes listening on our ports are killed
     echo "Ensuring all processes on ports 8001 and 5173 are terminated..."
@@ -169,22 +194,37 @@ echo "Starting all required Docker containers..."
 if [ "$CENTRALIZED_LOGGING" = true ]; then
     echo "🚀 Starting AutoBot with CENTRALIZED LOGGING architecture..."
     echo "   All container logs will be collected in a single location"
-    echo "   Log viewer available at http://localhost:5341"
+    echo "   Log viewer available at http://${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_LOG_VIEWER_PORT:-5341}"
 
     # Ensure log directories exist
     mkdir -p logs/autobot-centralized
 
-    # Start centralized logging infrastructure first
-    docker-compose -f "$DEFAULT_COMPOSE_FILE" up -d autobot-log-collector || {
-        echo "❌ Failed to start log collector."
-        exit 1
+    # Start Seq using compose file to ensure it's in the autobot group
+    echo "🚀 Starting Seq centralized log viewer..."
+    docker-compose -f "$DEFAULT_COMPOSE_FILE" up -d autobot-seq || {
+        echo "ℹ️  Seq container might already be running or failed to start"
     }
 
-    # Wait for log collector to be ready
-    echo "⏳ Waiting for log collector to be ready..."
-    sleep 5
+    # Wait for Seq to be ready
+    echo "⏳ Waiting for Seq to be ready..."
+    for i in {1..30}; do
+        if curl -sf http://${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_LOG_VIEWER_PORT:-5341}/api >/dev/null 2>&1; then
+            echo "✅ Seq is ready at http://${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_LOG_VIEWER_PORT:-5341}"
+            echo "   Username: admin | Password: autobot123 (change to Autobot123! on first login)"
+            break
+        fi
+        sleep 2
+    done
+
+    # Start simple Docker log forwarder in background
+    echo "📡 Starting AutoBot log forwarder to Seq..."
+    python scripts/simple_docker_log_forwarder.py &
+    LOG_AGGREGATOR_PID=$!
 
     echo "✅ Centralized logging infrastructure started"
+    echo "📊 Log forwarder PID: $LOG_AGGREGATOR_PID"
+    echo "   🌐 Seq Dashboard: http://${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_LOG_VIEWER_PORT:-5341}"
+    echo "   📊 Login: admin / autobot123 (change to Autobot123! on first login)"
 
 elif [ "$START_ALL_CONTAINERS" = true ]; then
     echo "🚀 Starting ALL containers (Redis, NPU, AI Stack, Playwright)..."
@@ -290,6 +330,18 @@ fi
 echo "⏳ Waiting for containers to be ready..."
 sleep 5
 
+# Start automatic log forwarding to Seq (if Seq is available)
+if docker ps --format '{{.Names}}' | grep -q 'autobot-log-viewer'; then
+    echo "📡 Starting automatic log forwarding to Seq..."
+    python scripts/simple_docker_log_forwarder.py &
+    LOG_AGGREGATOR_PID=$!
+    echo "✅ Log forwarder started (PID: $LOG_AGGREGATOR_PID)"
+    echo "   🌐 Seq Dashboard: http://${AUTOBOT_LOG_VIEWER_HOST:-127.0.0.8}:${AUTOBOT_LOG_VIEWER_PORT:-5341}"
+elif [ "$CENTRALIZED_LOGGING" != true ]; then
+    echo "ℹ️  Seq container not found - skipping automatic log forwarding"
+    echo "   To enable: run with --centralized-logs or start Seq manually"
+fi
+
 # Check Redis health and database separation
 echo "🔍 Checking Redis health..."
 for i in {1..10}; do
@@ -327,7 +379,7 @@ done
 if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
     echo "🔍 Checking NPU Worker health..."
     for i in {1..10}; do
-        if curl -sf http://localhost:8081/health >/dev/null 2>&1; then
+        if curl -sf http://${AUTOBOT_NPU_WORKER_HOST:-127.0.0.5}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health >/dev/null 2>&1; then
             echo "✅ NPU Worker is ready."
             break
         fi
@@ -376,7 +428,7 @@ if [ -n "$PLAYWRIGHT_CONTAINER" ]; then
         # Wait for service to be ready
         echo "⏳ Waiting for Playwright service to be ready..."
         for i in {1..15}; do
-            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+            if curl -sf http://${AUTOBOT_PLAYWRIGHT_HOST:-127.0.0.4}:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}/health > /dev/null 2>&1; then
                 echo "✅ Playwright service is ready."
                 break
             fi
@@ -391,10 +443,46 @@ else
     exit 1
 fi
 
+# Setup logging directory and configuration
+LOGS_DIR="data/logs"
+mkdir -p "$LOGS_DIR"
+
+# Configure logging based on mode
+if [ "$CENTRALIZED_LOGGING" = true ]; then
+    echo "📊 Configuring centralized logging..."
+
+    # Setup Python logging configuration
+    export AUTOBOT_LOG_CONFIG="config/logging.yml"
+
+    # Create backend log file with rotation
+    BACKEND_LOG="$LOGS_DIR/backend.log"
+    FRONTEND_LOG="$LOGS_DIR/frontend.log"
+
+    # Ensure log files exist
+    touch "$BACKEND_LOG"
+    touch "$FRONTEND_LOG"
+
+    # Start log aggregator in background if requested
+    if [ -f "scripts/log_aggregator.py" ]; then
+        echo "🔄 Starting log aggregator service..."
+        python scripts/log_aggregator.py --setup 2>/dev/null || echo "⚠️  Log aggregator setup failed"
+    fi
+fi
+
 # Start backend (FastAPI) in background using uvicorn
 echo "Starting FastAPI backend on port 8001..."
-uvicorn main:app --host 0.0.0.0 --port 8001 --log-level debug &
-BACKEND_PID=$!
+if [ "$CENTRALIZED_LOGGING" = true ]; then
+    # With centralized logging, redirect output to log files
+    uvicorn main:app --host 0.0.0.0 --port 8001 --log-level debug \
+        --log-config config/logging.yml \
+        >> "$BACKEND_LOG" 2>&1 &
+    BACKEND_PID=$!
+    echo "📝 Backend logs: $BACKEND_LOG"
+else
+    # Standard output without centralized logging
+    uvicorn main:app --host 0.0.0.0 --port 8001 --log-level debug &
+    BACKEND_PID=$!
+fi
 
 # Give backend time to start and bind to port
 sleep 5 # Increased sleep to allow more time for startup
@@ -442,9 +530,19 @@ echo "Existing Vite server terminated."
 echo "Starting Vite frontend server..."
 echo "Cleaning frontend build artifacts and cache..."
 rm -rf /home/kali/Desktop/AutoBot/autobot-vue/node_modules /home/kali/Desktop/AutoBot/autobot-vue/.vite
-cd /home/kali/Desktop/AutoBot/autobot-vue && npm install --force && npm run build && npm run dev &
-FRONTEND_PID=$!
-cd /home/kali/Desktop/AutoBot
+
+if [ "$CENTRALIZED_LOGGING" = true ]; then
+    # With centralized logging, redirect output to log files
+    cd /home/kali/Desktop/AutoBot/autobot-vue && npm install --force && npm run build && npm run dev >> "$FRONTEND_LOG" 2>&1 &
+    FRONTEND_PID=$!
+    cd /home/kali/Desktop/AutoBot
+    echo "📝 Frontend logs: $FRONTEND_LOG"
+else
+    # Standard output without centralized logging
+    cd /home/kali/Desktop/AutoBot/autobot-vue && npm install --force && npm run build && npm run dev &
+    FRONTEND_PID=$!
+    cd /home/kali/Desktop/AutoBot
+fi
 
 # Check if frontend started successfully
 sleep 5
@@ -455,24 +553,40 @@ if ! ps -p $FRONTEND_PID > /dev/null; then
 fi
 
 echo "AutoBot application started."
-echo "Backend available at http://localhost:8001/ (PID: $BACKEND_PID)"
-echo "Frontend available at http://localhost:5173/ (PID: $FRONTEND_PID)"
+echo "Backend available at http://${AUTOBOT_BACKEND_HOST:-127.0.0.3}:${AUTOBOT_BACKEND_PORT:-8001}/ (PID: $BACKEND_PID)"
+echo "Frontend available at http://${AUTOBOT_FRONTEND_HOST:-127.0.0.3}:${AUTOBOT_FRONTEND_PORT:-5173}/ (PID: $FRONTEND_PID)"
 echo ""
 echo "🚀 Additional Services:"
 if [ "$CENTRALIZED_LOGGING" = true ]; then
-    echo "📊 Centralized Logs: http://localhost:5341 (Seq log viewer)"
-    echo "🔍 Log Aggregator: http://localhost:9200 (Elasticsearch)"
-    echo "📋 All logs location: ./logs/autobot-centralized/"
+    echo "📊 Centralized Logging Active:"
+    echo "   📝 Backend logs: $BACKEND_LOG"
+    echo "   📝 Frontend logs: $FRONTEND_LOG"
+    echo "   📋 All logs location: ./$LOGS_DIR/"
+    echo ""
+    echo "   Log Aggregation Commands:"
+    echo "   - Tail all logs:     python scripts/log_aggregator.py --tail"
+    echo "   - Search logs:       python scripts/log_aggregator.py --search 'ERROR'"
+    echo "   - Analyze logs:      python scripts/log_aggregator.py --analyze"
+    echo "   - Export logs:       python scripts/log_aggregator.py --export --format json"
+fi
+
+if [ ! -z "$LOG_AGGREGATOR_PID" ]; then
+    echo "📊 Seq Log Analytics:"
+    echo "   🌐 Dashboard: http://localhost:5341"
+    echo "   📊 Forwarder PID: $LOG_AGGREGATOR_PID"
+    echo "   📡 Real-time log streaming from all containers + backend"
+    echo "   💡 View comprehensive system analytics in Seq"
+fi
+echo "🐳 Docker Containers:"
+if [ "$REDIS_SEPARATION" = true ]; then
+    echo "   💾 Redis: ${AUTOBOT_REDIS_HOST:-127.0.0.7}:${AUTOBOT_REDIS_PORT:-6379} (11 separated databases)"
+else
+    echo "   💾 Redis: ${AUTOBOT_REDIS_HOST:-127.0.0.7}:${AUTOBOT_REDIS_PORT:-6379}"
 fi
 if docker ps --format '{{.Names}}' | grep -q '^autobot-npu-worker$'; then
-    echo "⚡ NPU Worker: http://localhost:8081 (Code search acceleration)"
+    echo "   ⚡ NPU Worker: http://${AUTOBOT_NPU_WORKER_HOST:-127.0.0.5}:${AUTOBOT_NPU_WORKER_PORT:-8081} (Code search acceleration)"
 fi
-if [ "$REDIS_SEPARATION" = true ]; then
-    echo "💾 Redis: localhost:6379 (11 separated databases)"
-else
-    echo "💾 Redis: localhost:6379"
-fi
-echo "🎭 Playwright: http://localhost:3000 (Browser automation)"
+echo "   🎭 Playwright: http://${AUTOBOT_PLAYWRIGHT_HOST:-127.0.0.4}:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000} (Browser automation)"
 echo ""
 echo "Press Ctrl+C to stop all processes."
 
