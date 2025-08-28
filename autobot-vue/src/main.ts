@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
-import router from './router'
+import router from './router/index'
 
 import './assets/tailwind.css'
 import './assets/vue-notus.css'
@@ -29,6 +30,9 @@ if (import.meta.env.DEV) {
 }
 
 const app = createApp(App)
+const pinia = createPinia()
+
+app.use(pinia)
 app.use(router)
 
 // Install plugins in order: RUM first, then error handler

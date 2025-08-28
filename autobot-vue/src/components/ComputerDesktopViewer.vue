@@ -11,7 +11,7 @@
           <strong>🎭 Active:</strong> Browser automation desktop available
         </p>
         <p class="text-xs text-blue-600">
-          Access: http://localhost:6080/vnc.html
+          Access: {{ vncUrl }}
         </p>
       </div>
       <div class="mt-4 text-xs text-gray-400">
@@ -22,10 +22,28 @@
 </template>
 
 <script>
+import { ref, onMounted } from 'vue';
+import { API_CONFIG } from '@/config/environment.js';
+
 export default {
   name: 'ComputerDesktopViewer',
   setup() {
-    return {};
+    const vncUrl = ref('Loading...');
+
+    onMounted(async () => {
+      try {
+        // Use environment configuration or fallback to dynamic URL
+        vncUrl.value = API_CONFIG.PLAYWRIGHT_VNC_URL || 
+                      `${window.location.protocol}//${window.location.hostname}:6080/vnc.html`;
+      } catch (error) {
+        console.error('Error loading VNC URL:', error);
+        vncUrl.value = 'Configuration unavailable';
+      }
+    });
+
+    return {
+      vncUrl
+    };
   }
 };
 </script>
