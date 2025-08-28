@@ -77,7 +77,7 @@ services:
     ports:
       - "${BROWSER_PORT:-3000}:3000"
 
-  # Frontend
+  # Frontend - Remove invalid backend dependency since backend runs on host
   frontend:
     build:
       context: ./autobot-vue
@@ -88,8 +88,7 @@ services:
     container_name: autobot-frontend
     restart: unless-stopped
     depends_on:
-      backend:
-        condition: service_healthy
+      - redis
     volumes:
       - ./autobot-vue:/app
       - /app/node_modules  # Anonymous volume for node_modules
