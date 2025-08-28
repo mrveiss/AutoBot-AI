@@ -138,7 +138,7 @@ services:
       - OLLAMA_HOST=${OLLAMA_HOST:-127.0.0.1:11434}
       - CHROMA_DB_PATH=/app/data/chroma_db
       - DISABLE_EXTERNAL_APIS=${DISABLE_EXTERNAL_APIS:-true}
-    command: python -m uvicorn src.ai_server:app --host 0.0.0.0 --port ${AI_SERVER_PORT:-8080}
+    command: python -m uvicorn ai_api_server:app --host 0.0.0.0 --port ${AI_SERVER_PORT:-8080}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${AI_SERVER_PORT:-8080}/health"]
       interval: 30s
