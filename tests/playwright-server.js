@@ -1,6 +1,28 @@
 const { chromium } = require('playwright');
 const express = require('express');
+const winston = require('winston');
 const app = express();
+
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'playwright-server' },
+  transports: [
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' }),
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
+    })
+  ]
+});
 
 app.use(express.json({ limit: '50mb' }));
 
@@ -9,11 +31,14 @@ let browser = null;
 async function initBrowser() {
   try {
     if (!browser || !browser.isConnected()) {
-      console.log('🚀 Launching Chromium browser...');
+      logger.info('Launching Chromium browser', { action: 'browser_launch' });
 
       // Check if we should run in headless or headed mode
       const headlessMode = process.env.HEADLESS !== 'false';
-      console.log(`Browser mode: ${headlessMode ? 'headless' : 'headed (visible)'}`);
+      logger.info('Browser mode configured', { 
+        mode: headlessMode ? 'headless' : 'headed', 
+        headless: headlessMode 
+      });
 
       const launchOptions = {
         headless: headlessMode,
@@ -40,11 +65,18 @@ async function initBrowser() {
       }
 
       browser = await chromium.launch(launchOptions);
-      console.log('✅ Browser launched successfully');
+      logger.info('Browser launched successfully', { 
+        action: 'browser_launch_success',
+        options: launchOptions 
+      });
     }
     return browser;
   } catch (error) {
-    console.error('❌ Failed to launch browser:', error);
+    logger.error('Failed to launch browser', { 
+      action: 'browser_launch_error',
+      error: error.message,
+      stack: error.stack 
+    });
     throw error;
   }
 }
@@ -58,7 +90,11 @@ app.get('/health', (req, res) => {
 });
 
 app.post('/search', async (req, res) => {
-  console.log('🔍 Received search request:', req.body);
+  logger.info('Received search request', { 
+    endpoint: '/search',
+    query: req.body.query,
+    search_engine: req.body.search_engine 
+  });
   try {
     const { query, search_engine = 'duckduckgo' } = req.body;
 
@@ -81,7 +117,11 @@ app.post('/search', async (req, res) => {
     };
 
     const searchUrl = searchUrls[search_engine] || searchUrls.duckduckgo;
-    console.log('🌐 Navigating to:', searchUrl);
+    logger.info('Navigating to search URL', { 
+      action: 'navigation',
+      url: searchUrl,
+      search_engine 
+    });
 
     await page.goto(searchUrl, {
       waitUntil: 'domcontentloaded',
@@ -104,7 +144,11 @@ app.post('/search', async (req, res) => {
           await page.waitForSelector(selector, { timeout: 5000 });
           elements = await page.$$(selector);
           if (elements.length > 0) {
-            console.log('✅ Found results with selector:', selector);
+            logger.info('Search results found', { 
+              action: 'results_found',
+              selector,
+              count: elements.length 
+            });
             break;
           }
         } catch (e) {
@@ -130,11 +174,17 @@ app.post('/search', async (req, res) => {
             }
           }
         } catch (e) {
-          console.error('❌ Error extracting result:', e.message);
+          logger.warn('Error extracting search result', { 
+            action: 'result_extraction_error',
+            error: e.message 
+          });
         }
       }
     } catch (e) {
-      console.error('❌ Error with search:', e.message);
+      logger.warn('Error during search operation', { 
+        action: 'search_operation_error',
+        error: e.message 
+      });
     }
 
     await page.close();
@@ -147,7 +197,11 @@ app.post('/search', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Search error:', error);
+    logger.error('Search endpoint error', { 
+      endpoint: '/search',
+      error: error.message,
+      stack: error.stack 
+    });
     res.status(500).json({
       success: false,
       error: error.message
@@ -157,14 +211,21 @@ app.post('/search', async (req, res) => {
 
 // Add comprehensive message testing endpoint
 app.post('/send-test-message', async (req, res) => {
-  console.log('💬 Received message test request:', req.body);
+  logger.info('Received message test request', { 
+    endpoint: '/send-test-message',
+    frontend_url: req.body.frontend_url,
+    message: req.body.message 
+  });
   try {
     const { frontend_url = 'http://localhost:5173', message = 'what network scanning tools do we have available?' } = req.body;
 
     const browser = await initBrowser();
     const page = await browser.newPage();
 
-    console.log('🌐 Navigating to frontend:', frontend_url);
+    logger.info('Navigating to frontend', { 
+      action: 'frontend_navigation',
+      url: frontend_url 
+    });
     await page.goto(frontend_url, { waitUntil: 'networkidle', timeout: 30000 });
 
     // Wait for Vue.js app to fully load
@@ -179,7 +240,9 @@ app.post('/send-test-message', async (req, res) => {
     };
 
     // Step 1: Navigate to AI Assistant
-    console.log('🧭 Clicking AI ASSISTANT navigation...');
+    logger.info('Navigating to AI Assistant', { 
+      action: 'ai_assistant_navigation' 
+    });
     try {
       const aiAssistantButton = page.getByText('AI ASSISTANT');
       await aiAssistantButton.click();
@@ -199,15 +262,22 @@ app.post('/send-test-message', async (req, res) => {
     }
 
     // Step 2: Find message input
-    console.log('🔍 Looking for message input field...');
+    logger.info('Looking for message input field', { 
+      action: 'find_message_input' 
+    });
     try {
       const messageInput = page.locator('textarea[placeholder*="message"], textarea[placeholder*="Type"], textarea').first();
 
       if (await messageInput.count() > 0) {
-        console.log('✅ Message input found');
+        logger.info('Message input found', { 
+          action: 'message_input_found' 
+        });
 
         // Step 3: Type the test message
-        console.log(`💬 Typing message: "${message}"`);
+        logger.info('Typing message', { 
+          action: 'type_message',
+          message 
+        });
         await messageInput.fill(message);
         await page.waitForTimeout(1000);
 
@@ -218,7 +288,9 @@ app.post('/send-test-message', async (req, res) => {
         });
 
         // Step 4: Send the message
-        console.log('📤 Looking for send button...');
+        logger.info('Looking for send button', { 
+          action: 'find_send_button' 
+        });
         const sendSelectors = [
           'text=Send',
           'button[type="submit"]',
@@ -232,7 +304,10 @@ app.post('/send-test-message', async (req, res) => {
           try {
             const sendBtn = page.locator(selector);
             if (await sendBtn.count() > 0) {
-              console.log(`📤 Clicking send button: ${selector}`);
+              logger.info('Clicking send button', { 
+                action: 'click_send_button',
+                selector 
+              });
               await sendBtn.click();
               messageSent = true;
               break;
@@ -252,7 +327,9 @@ app.post('/send-test-message', async (req, res) => {
           });
 
           // Step 5: Check for workflow response
-          console.log('⏳ Waiting for workflow response...');
+          logger.info('Waiting for workflow response', { 
+            action: 'wait_workflow_response' 
+          });
           await page.waitForTimeout(5000);
 
           // Look for workflow indicators
@@ -315,18 +392,29 @@ app.post('/send-test-message', async (req, res) => {
       const screenshot = await page.screenshot({ fullPage: true, type: 'png' });
       results.screenshot_size = screenshot.length;
       results.has_screenshot = true;
-      console.log(`📸 Screenshot captured: ${screenshot.length} bytes`);
+      logger.info('Screenshot captured', { 
+        action: 'screenshot_captured',
+        size_bytes: screenshot.length 
+      });
     } catch (error) {
       results.screenshot_error = error.message;
     }
 
     await page.close();
 
-    console.log('✅ Message test completed');
+    logger.info('Message test completed', { 
+      endpoint: '/send-test-message',
+      action: 'test_completed',
+      success: true 
+    });
     res.json(results);
 
   } catch (error) {
-    console.error('❌ Message test error:', error);
+    logger.error('Message test error', { 
+      endpoint: '/send-test-message',
+      error: error.message,
+      stack: error.stack 
+    });
     res.status(500).json({
       success: false,
       error: error.message,
@@ -337,14 +425,20 @@ app.post('/send-test-message', async (req, res) => {
 
 // Add frontend testing endpoint
 app.post('/test-frontend', async (req, res) => {
-  console.log('🎯 Received frontend test request:', req.body);
+  logger.info('Received frontend test request', { 
+    endpoint: '/test-frontend',
+    frontend_url: req.body.frontend_url 
+  });
   try {
     const { frontend_url = 'http://localhost:5173' } = req.body;
 
     const browser = await initBrowser();
     const page = await browser.newPage();
 
-    console.log('🌐 Navigating to frontend:', frontend_url);
+    logger.info('Navigating to frontend for testing', { 
+      action: 'frontend_test_navigation',
+      url: frontend_url 
+    });
     await page.goto(frontend_url, { waitUntil: 'networkidle', timeout: 30000 });
 
     // Wait for Vue.js app to fully load
@@ -353,9 +447,14 @@ app.post('/test-frontend', async (req, res) => {
     // Wait for Vue app to be mounted
     try {
       await page.waitForSelector('#app', { timeout: 10000 });
-      console.log('✅ Vue app container found');
+      logger.info('Vue app container found', { 
+        action: 'vue_app_found' 
+      });
     } catch (e) {
-      console.log('⚠️ Vue app container not found');
+      logger.warn('Vue app container not found', { 
+        action: 'vue_app_not_found',
+        error: e.message 
+      });
     }
 
     const results = {
@@ -388,7 +487,10 @@ app.post('/test-frontend', async (req, res) => {
         if (isVisible) {
           await element.click();
           await page.waitForTimeout(1000);
-          console.log(`✅ Clicked ${navItem}`);
+          logger.info('Navigation item clicked', { 
+            action: 'nav_item_clicked',
+            item: navItem 
+          });
         }
       } catch (error) {
         results.tests.push({
@@ -401,25 +503,38 @@ app.post('/test-frontend', async (req, res) => {
 
     // Test 3: Check AI Assistant functionality
     try {
-      console.log('🤖 Navigating to AI Assistant...');
+      logger.info('Testing AI Assistant functionality', { 
+        action: 'ai_assistant_test' 
+      });
       const aiAssistantButton = page.getByText('AI ASSISTANT');
       await aiAssistantButton.click();
       await page.waitForTimeout(5000);
 
-      console.log('📍 Current URL after AI Assistant click:', page.url());
+      logger.info('AI Assistant navigation completed', { 
+        action: 'ai_assistant_nav_complete',
+        current_url: page.url() 
+      });
 
       // Wait for ChatInterface component to load
-      console.log('⏳ Waiting for chat interface to load...');
+      logger.info('Waiting for chat interface to load', { 
+        action: 'wait_chat_interface' 
+      });
       await page.waitForTimeout(3000);
 
       // Debug: Check what's actually in the DOM
       const chatSection = page.locator('[key="chat"], .chat-interface, [data-testid="chat"]');
       const chatSectionCount = await chatSection.count();
-      console.log(`🔍 Chat sections found: ${chatSectionCount}`);
+      logger.info('Chat sections analysis', { 
+        action: 'chat_sections_found',
+        count: chatSectionCount 
+      });
 
       if (chatSectionCount > 0) {
         const chatSectionHTML = await chatSection.first().innerHTML();
-        console.log('📝 Chat section HTML preview:', chatSectionHTML.substring(0, 200) + '...');
+        logger.debug('Chat section HTML preview', { 
+          action: 'chat_section_html',
+          html_preview: chatSectionHTML.substring(0, 200) + '...' 
+        });
       }
 
       // Look for chat interface elements with multiple selectors
@@ -610,11 +725,19 @@ app.post('/test-frontend', async (req, res) => {
       success_rate: `${Math.round((passCount / totalTests) * 100)}%`
     };
 
-    console.log('✅ Frontend testing completed:', results.summary);
+    logger.info('Frontend testing completed', { 
+      endpoint: '/test-frontend',
+      action: 'test_completed',
+      summary: results.summary 
+    });
     res.json(results);
 
   } catch (error) {
-    console.error('❌ Frontend test error:', error);
+    logger.error('Frontend test error', { 
+      endpoint: '/test-frontend',
+      error: error.message,
+      stack: error.stack 
+    });
     res.status(500).json({
       success: false,
       error: error.message,
@@ -625,31 +748,51 @@ app.post('/test-frontend', async (req, res) => {
 
 const port = 3000;
 app.listen(port, '0.0.0.0', async () => {
-  console.log('🚀 Playwright service listening on port ' + port);
+  logger.info('Playwright service started', { 
+    action: 'service_start',
+    port,
+    host: '0.0.0.0' 
+  });
 
   try {
     await initBrowser();
-    console.log('✅ Browser pre-initialized and ready');
+    logger.info('Browser pre-initialized and ready', { 
+      action: 'browser_preinitialized' 
+    });
   } catch (error) {
-    console.error('⚠️ Failed to pre-initialize browser:', error);
+    logger.error('Failed to pre-initialize browser', { 
+      action: 'browser_preinit_error',
+      error: error.message,
+      stack: error.stack 
+    });
   }
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('🛑 Shutting down gracefully...');
+  logger.info('Shutting down gracefully', { 
+    action: 'graceful_shutdown',
+    signal: 'SIGTERM' 
+  });
   if (browser) {
     await browser.close();
-    console.log('✅ Browser closed');
+    logger.info('Browser closed successfully', { 
+      action: 'browser_closed' 
+    });
   }
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('🛑 Received SIGINT, shutting down...');
+  logger.info('Received interrupt signal, shutting down', { 
+    action: 'interrupt_shutdown',
+    signal: 'SIGINT' 
+  });
   if (browser) {
     await browser.close();
-    console.log('✅ Browser closed');
+    logger.info('Browser closed successfully', { 
+      action: 'browser_closed' 
+    });
   }
   process.exit(0);
 });

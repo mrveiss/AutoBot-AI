@@ -24,6 +24,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    strictPort: true, // Fail if port 5173 is busy instead of trying alternates
     host: true,
     allowedHosts: ['localhost', '127.0.0.1', 'host.docker.internal'],
     headers: {
@@ -32,12 +33,12 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_BACKEND_HOST || '127.0.0.3'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
+        target: process.env.VITE_API_BASE_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_BACKEND_HOST || '127.0.0.1'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
         changeOrigin: true,
         secure: false
       },
       '/vnc-proxy': {
-        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || '127.0.0.4'}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || '6080'}`,
+        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || '127.0.0.1'}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || '6080'}`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/vnc-proxy/, '')
       }
