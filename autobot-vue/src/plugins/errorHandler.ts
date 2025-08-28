@@ -118,7 +118,11 @@ class GlobalErrorHandler {
 
         return response
       } catch (error) {
-        console.error('Fetch error:', error)
+        // Don't log expected health check failures
+        const isHealthCheck = typeof args[0] === 'string' && args[0].includes('/health')
+        if (!isHealthCheck) {
+          console.error('Fetch error:', error)
+        }
 
         // Track network errors
         rumAgent.trackError('network_error', {
@@ -128,12 +132,15 @@ class GlobalErrorHandler {
           source: 'fetch_interceptor'
         })
 
-        this.addNotification({
-          message: 'Network connection failed. Please check your internet connection.',
-          type: 'error',
-          dismissible: true,
-          stack: (error as Error).stack
-        })
+        // Only show notification for non-health check failures
+        if (!isHealthCheck) {
+          this.addNotification({
+            message: 'Network connection failed. Please check your internet connection.',
+            type: 'error',
+            dismissible: true,
+            stack: (error as Error).stack
+          })
+        }
 
         throw error
       }

@@ -18,9 +18,9 @@ class ApiClient {
     // PERFORMANCE OPTIMIZATION: Add caching layer for frequently accessed data
     this.cache = new Map();
     this.cacheConfig = {
-      defaultTTL: 5 * 60 * 1000, // 5 minutes
-      maxSize: 100,
-      endpoints: {
+      defaultTTL: API_CONFIG.CACHE_DEFAULT_TTL || 5 * 60 * 1000, // 5 minutes
+      maxSize: API_CONFIG.CACHE_MAX_SIZE || 100,
+      endpoints: API_CONFIG.CACHE_ENDPOINTS || {
         '/api/settings/': 10 * 60 * 1000, // 10 minutes for settings
         '/api/system/health': 30 * 1000,   // 30 seconds for health
         '/api/prompts/': 15 * 60 * 1000,   // 15 minutes for prompts (they change rarely)
@@ -29,9 +29,10 @@ class ApiClient {
     };
 
     // Cleanup expired cache entries periodically
+    const cacheCleanupInterval = API_CONFIG.CACHE_CLEANUP_INTERVAL || 2 * 60 * 1000; // Every 2 minutes
     this.cacheCleanupInterval = setInterval(() => {
       this.cleanupCache();
-    }, 2 * 60 * 1000); // Every 2 minutes
+    }, cacheCleanupInterval);
   }
 
   // Cache management methods
@@ -125,11 +126,13 @@ class ApiClient {
       }
     }
 
-    // PERFORMANCE FIX: Dynamic timeout based on endpoint
+    // PERFORMANCE FIX: Dynamic timeout based on endpoint (configurable)
     let requestTimeout = this.timeout;
-    const slowEndpoints = ['/api/prompts/', '/api/settings/config', '/api/system/health'];
+    const slowEndpoints = API_CONFIG.SLOW_ENDPOINTS || ['/api/prompts/', '/api/settings/config', '/api/system/health'];
+    const slowEndpointTimeout = API_CONFIG.SLOW_ENDPOINT_TIMEOUT || 45000;
+    
     if (slowEndpoints.some(slow => endpoint.includes(slow))) {
-      requestTimeout = Math.max(this.timeout, 45000); // 45 seconds for slow endpoints
+      requestTimeout = Math.max(this.timeout, slowEndpointTimeout);
     }
 
     // Track API call start
@@ -386,6 +389,13 @@ class ApiClient {
     this.saveSettingsLocally(settings);
 
     return result;
+  }
+
+  async loadFrontendConfig() {
+    // Load dynamic configuration from backend
+    // This eliminates the need for hardcoded ports and URLs
+    const response = await this.get('/api/system/frontend-config');
+    return response.json();
   }
 
   // Save settings to localStorage only (renamed to avoid recursion)
@@ -687,7 +697,7 @@ class ApiClient {
   // Get API status summary
   async getApiStatus() {
     const endpoints = [
-      '/api/health',
+      '/api/system/health',
       '/api/chats',
       '/api/settings/',
       '/api/prompts'
@@ -746,6 +756,160 @@ class ApiClient {
     }
 
     return stats;
+  }
+
+  // FILE OPERATIONS
+  async listFiles() {
+    return this.get('/api/files/list');
+  }
+
+  async uploadFile(file, options = {}) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    if (options.metadata) {
+      formData.append('metadata', JSON.stringify(options.metadata));
+    }
+
+    return this.request('/api/files/upload', {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - let browser set it with boundary
+      headers: {},
+      cache: 'no-cache'
+    });
+  }
+
+  async viewFile(filePath) {
+    return this.request(`/api/files/view/${encodeURIComponent(filePath)}`, {
+      method: 'GET',
+      // Return raw response for file content
+      parseJson: false
+    });
+  }
+
+  async deleteFile(filePath) {
+    return this.request(`/api/files/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ file_path: filePath }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  async extractFileText(filePath) {
+    return this.get(`/api/files/extract-text/${encodeURIComponent(filePath)}`);
+  }
+
+  // LLM MODEL OPERATIONS  
+  async loadLlmModels() {
+    return this.get('/api/llm/models', { cache: 'medium' });
+  }
+
+  async loadEmbeddingModels() {
+    return this.get('/api/llm/embedding/models', { cache: 'medium' });
+  }
+
+  // WORKFLOW OPERATIONS
+  async executeWorkflow(goal, autoApprove = false) {
+    return this.post('/api/workflow/execute', {
+      goal,
+      auto_approve: autoApprove,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  // KNOWLEDGE BASE OPERATIONS
+  async addUrlToKnowledge(url, method = 'crawl') {
+    return this.post('/api/knowledge_base/crawl_url', {
+      url,
+      method
+    });
+  }
+
+  async crawlUrlForEntry(entryId, url) {
+    return this.post('/api/knowledge_base/crawl_url', {
+      entry_id: entryId,
+      url
+    });
+  }
+
+  async createKnowledgeEntry(entryData) {
+    return this.post('/api/knowledge_base/entries', entryData);
+  }
+
+  async updateKnowledgeEntry(entryId, entryData) {
+    return this.put(`/api/knowledge_base/entries/${entryId}`, entryData);
+  }
+
+  async importSystemDocumentation(forceRefresh = false) {
+    return this.post('/api/knowledge_base/system_knowledge/import_documentation', { 
+      force_refresh: forceRefresh 
+    });
+  }
+
+  async importSystemPrompts(forceRefresh = false) {
+    return this.post('/api/knowledge_base/system_knowledge/import_prompts', { 
+      force_refresh: forceRefresh 
+    });
+  }
+
+  async getKnowledgeEntries() {
+    return this.get('/api/knowledge_base/entries');
+  }
+
+  // VALIDATION OPERATIONS
+  async getValidationReport() {
+    return this.get('/api/validation-dashboard/report');
+  }
+
+  // CHAT OPERATIONS (enhanced)
+  async sendChatMessage(chatId, message, options = {}) {
+    return this.post(`/api/chats/${chatId}/message`, {
+      message,
+      files: options.files || [],
+      timestamp: new Date().toISOString(),
+      ...options
+    });
+  }
+
+  // CONFIGURATION OPERATIONS
+  async loadFrontendConfig() {
+    return this.get('/api/config/frontend', { cache: 'long' });
+  }
+
+  // TERMINAL OPERATIONS
+  async createTerminalSession(options = {}) {
+    return this.post('/api/terminal/consolidated/sessions', {
+      user_id: 'default',
+      security_level: 'standard',
+      enable_logging: false,
+      ...options
+    });
+  }
+
+  async deleteTerminalSession(sessionId) {
+    return this.request(`/api/terminal/consolidated/sessions/${sessionId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async getTerminalSessions() {
+    return this.get('/api/terminal/consolidated/sessions');
+  }
+
+  async executeTerminalCommand(command, options = {}) {
+    const terminalTimeout = API_CONFIG.TERMINAL_TIMEOUT || 30000;
+    return this.post('/api/terminal/consolidated/command', {
+      command: command,
+      timeout: options.timeout || terminalTimeout,
+      working_directory: options.cwd,
+      environment: options.env || {},
+      ...options
+    });
+  }
+
+  async getTerminalSessionInfo(sessionId) {
+    return this.get(`/api/terminal/consolidated/sessions/${sessionId}`);
   }
 }
 

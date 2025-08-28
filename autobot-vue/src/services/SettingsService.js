@@ -8,6 +8,7 @@
 import apiClient from '@/utils/ApiClient.js';
 import { reactive } from 'vue';
 import { API_CONFIG } from '@/config/environment.js';
+import cacheService from './CacheService.js';
 
 export class SettingsService {
   constructor() {
@@ -18,7 +19,8 @@ export class SettingsService {
         show_json: false,
         show_utility: false,
         show_planning: true,
-        show_debug: false
+        show_debug: false,
+        show_sources: true
       },
       chat: {
         auto_scroll: true,
@@ -59,7 +61,18 @@ export class SettingsService {
 
       // Then, try to fetch latest settings from backend and merge
       try {
-        const backendSettings = await apiClient.getSettings();
+        // Check cache first
+        const cacheKey = cacheService.createKey('/api/settings');
+        let backendSettings = cacheService.get(cacheKey);
+        
+        if (!backendSettings) {
+          backendSettings = await apiClient.getSettings();
+          if (backendSettings) {
+            // Cache the settings
+            cacheService.set(cacheKey, backendSettings);
+          }
+        }
+
         if (backendSettings) {
           // Merge backend settings with current settings
           const finalSettings = this.mergeDeep(this.settings, backendSettings);
@@ -90,6 +103,9 @@ export class SettingsService {
 
       // Save to backend for server-side persistence
       await apiClient.saveSettings(this.settings);
+      
+      // Invalidate cache since settings changed
+      cacheService.invalidateCategory('settings');
     } catch (error) {
       console.error('❌ Error saving settings:', error);
       // Even if backend save fails, localStorage save should work

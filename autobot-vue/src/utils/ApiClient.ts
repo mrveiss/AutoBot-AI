@@ -40,7 +40,7 @@ export class ApiClient {
   constructor() {
     this.baseUrl = import.meta.env.VITE_API_BASE_URL ||
       `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.3'}:${import.meta.env.VITE_BACKEND_PORT || '8001'}`;
-    this.timeout = 30000; // 30 seconds default timeout
+    this.timeout = 45000; // 45 seconds default timeout (increased for chat/knowledge operations)
     this.settings = this.loadSettings();
 
     // Update baseUrl from settings if available
@@ -65,6 +65,14 @@ export class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const method = options.method || 'GET';
     const startTime = performance.now();
+    
+    // PERFORMANCE FIX: Use endpoint-specific timeouts for known slow operations
+    let requestTimeout = this.timeout;
+    if (endpoint.includes('knowledge_base/stats') || endpoint.includes('/stats')) {
+      requestTimeout = 10000; // 10 seconds for stats (fast with our optimizations)
+    } else if (endpoint.includes('chat') || endpoint.includes('message')) {
+      requestTimeout = 60000; // 60 seconds for chat operations
+    }
 
     // Track API call start
     if (window.rum) {
@@ -85,7 +93,7 @@ export class ApiClient {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+      const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
 
       const response = await fetch(url, {
         ...config,
@@ -113,7 +121,7 @@ export class ApiClient {
       const endTime = performance.now();
 
       if (error.name === 'AbortError') {
-        const timeoutError = new Error(`Request timeout after ${this.timeout}ms`);
+        const timeoutError = new Error(`Request timeout after ${requestTimeout}ms`);
         if (window.rum) {
           window.rum.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError);
           window.rum.reportCriticalIssue('api_timeout', {
@@ -121,7 +129,7 @@ export class ApiClient {
             endpoint,
             url,
             duration: endTime - startTime,
-            timeout: this.timeout
+            timeout: requestTimeout
           });
         }
         throw timeoutError;
