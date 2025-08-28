@@ -397,35 +397,82 @@ main() {
     if [ "$DEV_MODE" = "true" ] && [ "$NO_BROWSER" = "false" ]; then
         echo -e "${YELLOW}🌐 Opening browser for development...${NC}"
         
+        # Wait a moment for frontend to be fully ready
+        echo "Waiting 3 seconds for frontend to be ready..."
+        sleep 3
+        
         # Try different browser commands in order of preference
         browser_launched=false
+        browser_command=""
         
-        # Try xdg-open (Linux standard)
-        if command -v xdg-open >/dev/null 2>&1; then
-            echo "Opening frontend in default browser..."
-            xdg-open "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
-            browser_launched=true
-        # Try google-chrome
-        elif command -v google-chrome >/dev/null 2>&1; then
-            echo "Opening frontend in Google Chrome..."
-            google-chrome "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
-            browser_launched=true
-        # Try chromium
-        elif command -v chromium-browser >/dev/null 2>&1; then
-            echo "Opening frontend in Chromium..."
-            chromium-browser "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
-            browser_launched=true
-        # Try firefox
-        elif command -v firefox >/dev/null 2>&1; then
-            echo "Opening frontend in Firefox..."
-            firefox "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
-            browser_launched=true
+        # Check if we're in WSL (Windows Subsystem for Linux)
+        if grep -q microsoft /proc/version 2>/dev/null; then
+            echo "Detected WSL environment"
+            # In WSL, try Windows browsers first
+            if command -v explorer.exe >/dev/null 2>&1; then
+                browser_command="explorer.exe"
+                echo "Using Windows default browser via explorer.exe..."
+            elif command -v powershell.exe >/dev/null 2>&1; then
+                browser_command="powershell.exe -Command Start-Process"
+                echo "Using PowerShell to launch browser..."
+            fi
         fi
         
-        if [ "$browser_launched" = "true" ]; then
-            echo -e "${GREEN}✅ Browser launched - you can monitor frontend logs and development${NC}"
-        else
-            echo -e "${YELLOW}⚠️  No browser found. Please manually open: http://localhost:${FRONTEND_PORT:-5173}${NC}"
+        # If not WSL or WSL browser commands not found, try Linux browsers
+        if [ -z "$browser_command" ]; then
+            # Try xdg-open (Linux standard)
+            if command -v xdg-open >/dev/null 2>&1; then
+                browser_command="xdg-open"
+                echo "Using default browser via xdg-open..."
+            # Try firefox
+            elif command -v firefox >/dev/null 2>&1; then
+                browser_command="firefox"
+                echo "Using Firefox..."
+            # Try google-chrome
+            elif command -v google-chrome >/dev/null 2>&1; then
+                browser_command="google-chrome"
+                echo "Using Google Chrome..."
+            # Try chromium
+            elif command -v chromium-browser >/dev/null 2>&1; then
+                browser_command="chromium-browser"
+                echo "Using Chromium..."
+            fi
+        fi
+        
+        # Launch browser if command found
+        if [ ! -z "$browser_command" ]; then
+            frontend_url="http://localhost:${FRONTEND_PORT:-5173}"
+            echo "Launching: $browser_command $frontend_url"
+            
+            # Handle different command formats
+            if [ "$browser_command" = "explorer.exe" ]; then
+                if explorer.exe "$frontend_url" >/dev/null 2>&1; then
+                    browser_launched=true
+                    echo -e "${GREEN}✅ Browser launched via Windows explorer${NC}"
+                else
+                    echo -e "${RED}❌ Failed to launch browser via explorer.exe${NC}"
+                fi
+            elif [[ "$browser_command" == *"powershell.exe"* ]]; then
+                if powershell.exe -Command "Start-Process '$frontend_url'" >/dev/null 2>&1; then
+                    browser_launched=true
+                    echo -e "${GREEN}✅ Browser launched via PowerShell${NC}"
+                else
+                    echo -e "${RED}❌ Failed to launch browser via PowerShell${NC}"
+                fi
+            else
+                # Standard Linux browser command
+                if $browser_command "$frontend_url" >/dev/null 2>&1 &; then
+                    browser_launched=true
+                    echo -e "${GREEN}✅ Browser launched successfully${NC}"
+                else
+                    echo -e "${RED}❌ Failed to launch browser with $browser_command${NC}"
+                fi
+            fi
+        fi
+        
+        if [ "$browser_launched" = "false" ]; then
+            echo -e "${YELLOW}⚠️  No browser found or launch failed.${NC}"
+            echo -e "${YELLOW}   Please manually open: http://localhost:${FRONTEND_PORT:-5173}${NC}"
         fi
         
         echo
