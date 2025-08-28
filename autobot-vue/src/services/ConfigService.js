@@ -6,6 +6,10 @@
  */
 
 import { API_CONFIG } from '@/config/environment.js';
+import { ApiClient } from '@/utils/ApiClient.js';
+
+// Create ApiClient instance for config operations
+const apiClient = new ApiClient();
 
 export class ConfigService {
   constructor() {
@@ -76,14 +80,31 @@ export class ConfigService {
    */
   async loadExternalConfig() {
     try {
-      const response = await fetch(`${this.config.api.backend_url}/api/config/frontend`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (response.ok) {
-        const externalConfig = await response.json();
+      const response = await apiClient.loadFrontendConfig();
+      if (response && response.status === 'success' && response.config) {
+        // The backend provides a complete config structure
+        const backendConfig = response.config;
+        
+        // Transform backend config to match our expected structure
+        const externalConfig = {
+          api: {
+            backend_url: API_CONFIG.BASE_URL, // Keep the bootstrap URL
+            ollama_url: backendConfig.services.ollama.url,
+            timeout: backendConfig.api.timeout,
+            retry_attempts: backendConfig.api.retry_attempts,
+            // Add all service URLs
+            playwright_vnc_url: backendConfig.services.playwright.vnc_url,
+            playwright_api_url: backendConfig.services.playwright.api_url,
+            lmstudio_url: backendConfig.services.lmstudio.url,
+          },
+          defaults: backendConfig.defaults,
+          ui: backendConfig.ui,
+          features: backendConfig.features,
+          services: backendConfig.services, // Keep full service config for reference
+        };
+        
         this.config = this.mergeDeep(this.config, externalConfig);
+        console.log('Loaded dynamic configuration from backend:', externalConfig);
       }
     } catch (error) {
       console.warn('Could not load external configuration from backend:', error.message);

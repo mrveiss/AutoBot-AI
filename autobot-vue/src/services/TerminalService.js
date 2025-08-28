@@ -5,6 +5,10 @@
 
 import { reactive, ref } from 'vue';
 import { API_CONFIG } from '@/config/environment.js';
+import { ApiClient } from '@/utils/ApiClient.js';
+
+// Create ApiClient instance for terminal operations
+const apiClient = new ApiClient();
 
 // Connection states for state machine
 const CONNECTION_STATES = {
@@ -128,27 +132,19 @@ class TerminalService {
    */
   async createSession() {
     try {
-      const baseUrl = API_CONFIG.BASE_URL;
-      const response = await fetch(`${baseUrl}/api/terminal/consolidated/sessions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: 'default',
-          security_level: 'standard',
-          enable_logging: false,
-          enable_workflow_control: true,
-          initial_directory: '/home/kali'
-        }),
+      const result = await apiClient.createTerminalSession({
+        user_id: 'default',
+        security_level: 'standard',
+        enable_logging: false,
+        enable_workflow_control: true,
+        initial_directory: '/home/kali'
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to create session: ${response.statusText}`);
+      if (!result) {
+        throw new Error('Failed to create session');
       }
 
-      const data = await response.json();
-      return data.session_id;
+      return result.session_id;
     } catch (error) {
       console.error('Error creating terminal session:', error);
       throw error;
@@ -447,16 +443,11 @@ class TerminalService {
 
     // Then close the session on the server
     try {
-      const baseUrl = API_CONFIG.BASE_URL;
-      const response = await fetch(`${baseUrl}/api/terminal/consolidated/sessions/${sessionId}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) {
-        console.warn(`Failed to close session on server: ${response.statusText}`);
-      }
+      await apiClient.deleteTerminalSession(sessionId);
     } catch (error) {
-      console.error('Error closing terminal session:', error);
+      console.warn('Failed to close session on server:', error.message);
+    } finally {
+      // Continue cleanup regardless of server response
     }
   }
 
@@ -466,12 +457,8 @@ class TerminalService {
    */
   async getSessions() {
     try {
-      const baseUrl = API_CONFIG.BASE_URL;
-      const response = await fetch(`${baseUrl}/api/terminal/consolidated/sessions`);
-      if (!response.ok) {
-        throw new Error(`Failed to get sessions: ${response.statusText}`);
-      }
-      return await response.json();
+      const result = await apiClient.getTerminalSessions();
+      return result || [];
     } catch (error) {
       console.error('Error getting sessions:', error);
       return [];
@@ -486,25 +473,13 @@ class TerminalService {
    */
   async executeCommand(command, options = {}) {
     try {
-      const baseUrl = API_CONFIG.BASE_URL;
-      const response = await fetch(`${baseUrl}/api/terminal/consolidated/command`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          command: command,
-          timeout: options.timeout || 30000,
-          working_directory: options.cwd,
-          environment: options.env || {}
-        }),
+      const result = await apiClient.executeTerminalCommand(command, {
+        timeout: options.timeout || 30000,
+        cwd: options.cwd,
+        env: options.env || {}
       });
 
-      if (!response.ok) {
-        throw new Error(`Command execution failed: ${response.statusText}`);
-      }
-
-      return await response.json();
+      return result;
     } catch (error) {
       console.error('Error executing command:', error);
       throw error;
@@ -518,12 +493,8 @@ class TerminalService {
    */
   async getSessionInfo(sessionId) {
     try {
-      const baseUrl = API_CONFIG.BASE_URL;
-      const response = await fetch(`${baseUrl}/api/terminal/consolidated/sessions/${sessionId}`);
-      if (!response.ok) {
-        throw new Error(`Failed to get session info: ${response.statusText}`);
-      }
-      return await response.json();
+      const result = await apiClient.getTerminalSessionInfo(sessionId);
+      return result;
     } catch (error) {
       console.error('Error getting session info:', error);
       throw error;

@@ -221,7 +221,11 @@ class RumAgent {
     }
     
     this.metrics.errors.push(error)
-    console.error('💥 Error Tracked:', error)
+    
+    // Reduce noise from expected network errors during backend connection attempts
+    if (type !== 'network_error' && type !== 'http_error') {
+      console.error('💥 Error Tracked:', error)
+    }
     
     this.reportCriticalIssue('error', error)
   }
@@ -296,7 +300,10 @@ class RumAgent {
     criticalIssues.push(issue)
     localStorage.setItem('rum_critical_issues', JSON.stringify(criticalIssues.slice(-50)))
     
-    console.error('🚨🚨🚨 CRITICAL ISSUE:', issue)
+    // Reduce excessive logging for known network issues
+    if (issue.type !== 'network_error' && issue.type !== 'http_error') {
+      console.error('🚨🚨🚨 CRITICAL ISSUE:', issue)
+    }
   }
 
   // Periodic reporting

@@ -1,9 +1,10 @@
 // ChatManager.js - Centralized chat management utility
 import { API_CONFIG } from '@/config/environment.js';
+import apiClient from '@/utils/ApiClient.js';
 
 class ChatManager {
   constructor(apiEndpoint = API_CONFIG.BASE_URL) {
-    this.apiEndpoint = apiEndpoint;
+    this.apiClient = apiClient;
     this.currentChatId = null;
     this.settings = {
       backend: {
@@ -37,7 +38,7 @@ class ChatManager {
 
   // Update API endpoint
   updateApiEndpoint(endpoint) {
-    this.apiEndpoint = endpoint;
+    this.apiClient.setBaseUrl(endpoint);
     this.settings.backend.api_endpoint = endpoint;
     this.saveSettings();
   }
@@ -45,20 +46,9 @@ class ChatManager {
   // Create a new chat
   async createNewChat() {
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/chats/new`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        this.currentChatId = data.chatId;
-        return data;
-      } else {
-        throw new Error(`Failed to create new chat: ${response.statusText}`);
-      }
+      const data = await this.apiClient.createNewChat();
+      this.currentChatId = data.chatId;
+      return data;
     } catch (error) {
       console.error('Error creating new chat:', error);
       throw error;
@@ -68,17 +58,10 @@ class ChatManager {
   // Get list of all chats
   async getChatList() {
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/list_sessions`);
-
-      if (response.ok) {
-        const data = await response.json();
-        const chats = data.sessions || [];
-        // Filter out chats with invalid IDs
-        return chats.filter(chat => chat.chatId && chat.chatId !== 'undefined' && chat.chatId !== 'null');
-      } else {
-        console.error('Failed to get chat list:', response.statusText);
-        return this.getFallbackChatList();
-      }
+      const data = await this.apiClient.getChatList();
+      const chats = data.sessions || data || [];
+      // Filter out chats with invalid IDs
+      return chats.filter(chat => chat.chatId && chat.chatId !== 'undefined' && chat.chatId !== 'null');
     } catch (error) {
       console.error('Error getting chat list:', error);
       return this.getFallbackChatList();
@@ -104,17 +87,11 @@ class ChatManager {
   // Load messages for a specific chat
   async loadChatMessages(chatId) {
     try {
-      // Try backend first
-      const response = await fetch(`${this.apiEndpoint}/api/load_session/${chatId}`);
-
-      if (response.ok) {
-        const messages = await response.json();
-        return messages;
-      } else {
-        console.warn(`Backend failed for chat ${chatId}, falling back to localStorage`);
-        return this.loadMessagesFromLocalStorage(chatId);
-      }
+      // Try backend first using ApiClient
+      const messages = await this.apiClient.getChatMessages(chatId);
+      return messages;
     } catch (error) {
+      console.warn(`Backend failed for chat ${chatId}, falling back to localStorage`);
       console.error(`Error loading messages for chat ${chatId}:`, error);
       return this.loadMessagesFromLocalStorage(chatId);
     }
@@ -140,22 +117,10 @@ class ChatManager {
     // Always save to localStorage first (immediate backup)
     this.saveMessagesToLocalStorage(chatId, messages);
 
-    // Then try to save to backend
+    // Then try to save to backend using ApiClient
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}/save`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ messages })
-      });
-
-      if (response.ok) {
-        return { status: 'success', location: 'backend' };
-      } else {
-        console.warn(`Failed to save to backend for chat ${chatId}:`, response.statusText);
-        return { status: 'success', location: 'localStorage' };
-      }
+      await this.apiClient.saveChatMessages(chatId, messages);
+      return { status: 'success', location: 'backend' };
     } catch (error) {
       console.error(`Error saving to backend for chat ${chatId}:`, error);
       return { status: 'success', location: 'localStorage' };
@@ -182,15 +147,8 @@ class ChatManager {
 
 
     try {
-      // Try to delete from backend first
-      const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-      } else {
-        console.warn(`Failed to delete chat ${chatId} from backend:`, response.statusText);
-      }
+      // Try to delete from backend first using ApiClient
+      await this.apiClient.deleteChat(chatId);
     } catch (error) {
       console.error(`Error deleting chat ${chatId} from backend:`, error);
     }
@@ -219,28 +177,18 @@ class ChatManager {
   // Reset a chat
   async resetChat(chatId) {
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}/reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      await this.apiClient.resetChat();
 
-      if (response.ok) {
+      // Also reset in localStorage
+      const initialMessage = [{
+        sender: 'bot',
+        text: 'Hello! How can I assist you today?',
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'response'
+      }];
+      this.saveMessagesToLocalStorage(chatId, initialMessage);
 
-        // Also reset in localStorage
-        const initialMessage = [{
-          sender: 'bot',
-          text: 'Hello! How can I assist you today?',
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'response'
-        }];
-        this.saveMessagesToLocalStorage(chatId, initialMessage);
-
-        return { status: 'success' };
-      } else {
-        throw new Error(`Failed to reset chat: ${response.statusText}`);
-      }
+      return { status: 'success' };
     } catch (error) {
       console.error(`Error resetting chat ${chatId}:`, error);
       throw error;
@@ -316,7 +264,7 @@ class ChatManager {
   // Check backend connection
   async checkBackendConnection() {
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/health`, {
+      const response = await fetch(`${this.apiEndpoint}/api/system/health`, {
         method: 'GET',
         timeout: 5000
       });

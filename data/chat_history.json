@@ -823,5 +823,75 @@
       }
     },
     "timestamp": "2025-08-11 14:22:51"
+  },
+  {
+    "sender": "bot",
+    "text": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+      "chat_id": "chat-1756018781730",
+      "message_type": "response",
+      "timestamp": "2025-08-24 09:59:41",
+      "sources": [],
+      "sender": "bot"
+    },
+    "timestamp": "2025-08-24 09:59:41"
+  },
+  {
+    "sender": "bot",
+    "text": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+      "chat_id": "chat-1756019267229",
+      "message_type": "response",
+      "timestamp": "2025-08-24 10:08:03",
+      "sources": [],
+      "sender": "bot"
+    },
+    "timestamp": "2025-08-24 10:08:03"
+  },
+  {
+    "sender": "bot",
+    "text": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+      "chat_id": "chat-1756021045565",
+      "message_type": "response",
+      "timestamp": "2025-08-24 10:37:25",
+      "sources": [],
+      "sender": "bot"
+    },
+    "timestamp": "2025-08-24 10:37:25"
+  },
+  {
+    "sender": "bot",
+    "text": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+      "chat_id": "chat-1756029276867",
+      "message_type": "response",
+      "timestamp": "2025-08-24 12:54:36",
+      "sources": [],
+      "sender": "bot"
+    },
+    "timestamp": "2025-08-24 12:54:36"
+  },
+  {
+    "sender": "bot",
+    "text": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{'response_text': 'Hello! How can I help you today?', 'status': 'success', 'routing_method': 'lightweight_pattern_match'}",
+      "chat_id": "chat-1756031846808",
+      "message_type": "response",
+      "timestamp": "2025-08-24 13:37:26",
+      "sources": [],
+      "sender": "bot"
+    },
+    "timestamp": "2025-08-24 13:37:26"
   }
 ]

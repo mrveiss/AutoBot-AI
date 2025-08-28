@@ -1,17 +1,33 @@
 // Centralized Environment Configuration
 // Single source of truth for all API and service URLs
+// 
+// IMPORTANT: These are bootstrap values only! The actual configuration should be
+// loaded from the backend via the /api/config/frontend endpoint.
+// Only the BASE_URL needs to be known at startup to connect to the backend.
 
 export const API_CONFIG = {
-  // API Base URLs
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.3'}:${import.meta.env.VITE_BACKEND_PORT || '8001'}`,
-  WS_BASE_URL: import.meta.env.VITE_WS_BASE_URL || `${import.meta.env.VITE_WS_PROTOCOL || 'ws'}://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.3'}:${import.meta.env.VITE_BACKEND_PORT || '8001'}/ws`,
+  // Bootstrap URL - Only this needs to be configured, everything else comes from backend
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || (() => {
+    // Dynamic detection of backend URL based on current location
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    // If running on a non-standard frontend port, assume backend is on standard port 8001
+    const port = window.location.port === '5173' ? '8001' : window.location.port || '8001';
+    return `${protocol}//${hostname}:${port}`;
+  })(),
+  
+  // WebSocket URL derived from BASE_URL
+  WS_BASE_URL: import.meta.env.VITE_WS_BASE_URL || (() => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:8001`;
+    return baseUrl.replace(/^http/, 'ws') + '/ws';
+  })(),
 
-  // External Service URLs
-  PLAYWRIGHT_VNC_URL: import.meta.env.VITE_PLAYWRIGHT_VNC_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_PLAYWRIGHT_HOST || '127.0.0.4'}:${import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '6080'}/vnc.html`,
-  PLAYWRIGHT_API_URL: import.meta.env.VITE_PLAYWRIGHT_API_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_PLAYWRIGHT_HOST || '127.0.0.4'}:${import.meta.env.VITE_PLAYWRIGHT_API_PORT || '3000'}`,
-  OLLAMA_URL: import.meta.env.VITE_OLLAMA_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_OLLAMA_HOST || '127.0.0.2'}:${import.meta.env.VITE_OLLAMA_PORT || '11434'}`,
-  CHROME_DEBUG_URL: import.meta.env.VITE_CHROME_DEBUG_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_PLAYWRIGHT_HOST || '127.0.0.4'}:${import.meta.env.VITE_CHROME_DEBUG_PORT || '9222'}`,
-  LMSTUDIO_URL: import.meta.env.VITE_LMSTUDIO_URL || `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_LM_STUDIO_HOST || '127.0.0.2'}:${import.meta.env.VITE_LM_STUDIO_PORT || '1234'}`,
+  // These are placeholder values - actual values should come from backend config
+  PLAYWRIGHT_VNC_URL: import.meta.env.VITE_PLAYWRIGHT_VNC_URL || '',
+  PLAYWRIGHT_API_URL: import.meta.env.VITE_PLAYWRIGHT_API_URL || '',
+  OLLAMA_URL: import.meta.env.VITE_OLLAMA_URL || '',
+  CHROME_DEBUG_URL: import.meta.env.VITE_CHROME_DEBUG_URL || '',
+  LMSTUDIO_URL: import.meta.env.VITE_LMSTUDIO_URL || '',
 
   // Timeouts and Limits
   TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),

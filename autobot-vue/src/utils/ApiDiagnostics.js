@@ -56,38 +56,31 @@ class ApiDiagnostics {
 
     try {
       const startTime = performance.now();
-      const response = await fetch(apiClient.getBaseUrl() + '/api/hello', {
-        method: 'GET',
-        timeout: 5000
-      });
-
-      connectivity.responseTime = Math.round(performance.now() - startTime);
-      connectivity.reachable = response.ok;
-      connectivity.status = response.status;
-
-      if (response.ok) {
-        const data = await response.json();
-        connectivity.message = data.message;
+      
+      // Try to use ApiClient's hello method first
+      try {
+        const response = await apiClient.get('/api/hello');
+        connectivity.responseTime = Math.round(performance.now() - startTime);
+        connectivity.reachable = true;
+        connectivity.status = response.status;
+        
+        if (response.data) {
+          connectivity.message = response.data.message;
+        }
+      } catch (helloError) {
+        // Fallback to health endpoint
+        console.log('🔄 Trying alternative health endpoint...');
+        const healthResponse = await apiClient.getSystemHealth();
+        connectivity.responseTime = Math.round(performance.now() - startTime);
+        connectivity.reachable = true;
+        connectivity.alternativeEndpoint = '/api/system/health';
+        connectivity.status = 200;
       }
 
     } catch (error) {
       connectivity.error = error.message;
       connectivity.reachable = false;
-
-      // Try alternative endpoints
-      try {
-        console.log('🔄 Trying alternative health endpoint...');
-        const healthResponse = await fetch(apiClient.getBaseUrl() + '/api/system/health', {
-          method: 'GET',
-          timeout: 3000
-        });
-        if (healthResponse.ok) {
-          connectivity.reachable = true;
-          connectivity.alternativeEndpoint = '/api/system/health';
-        }
-      } catch (altError) {
-        connectivity.alternativeError = altError.message;
-      }
+      connectivity.responseTime = Math.round(performance.now() - startTime);
     }
 
     this.backendStatus = connectivity.reachable ? 'online' : 'offline';
@@ -120,15 +113,14 @@ class ApiDiagnostics {
         const response = await apiClient.get(endpoint);
         testResult.responseTime = Math.round(performance.now() - startTime);
         testResult.success = true;
-        testResult.status = response.status;
+        testResult.status = response.status || 200;
         testResult.cached = response.headers && response.headers.get('x-cache') === 'hit';
 
-        // Try to parse response
-        try {
-          const data = await response.json();
-          testResult.dataKeys = Object.keys(data).slice(0, 5); // First 5 keys for verification
-        } catch (parseError) {
-          testResult.parseError = 'Could not parse JSON response';
+        // ApiClient already parses JSON, so we can access data directly
+        if (response.data) {
+          testResult.dataKeys = Object.keys(response.data).slice(0, 5); // First 5 keys for verification
+        } else if (response.message) {
+          testResult.dataKeys = ['message'];
         }
 
       } catch (error) {
@@ -339,7 +331,7 @@ class ApiDiagnostics {
           endpoint,
           success: true,
           responseTime,
-          status: response.status
+          status: response.status || 200
         });
 
       } catch (error) {
@@ -374,9 +366,9 @@ class ApiDiagnostics {
 
       // Test a few critical endpoints quickly
       const criticalTests = await Promise.allSettled([
-        apiClient.get('/api/system/health').catch(e => ({ error: e.message })),
-        apiClient.get('/api/chats').catch(e => ({ error: e.message })),
-        apiClient.get('/api/settings/').catch(e => ({ error: e.message }))
+        apiClient.getSystemHealth().catch(e => ({ error: e.message })),
+        apiClient.getChatList().catch(e => ({ error: e.message })),
+        apiClient.getSettings().catch(e => ({ error: e.message }))
       ]);
 
       const successfulTests = criticalTests.filter(result =>
