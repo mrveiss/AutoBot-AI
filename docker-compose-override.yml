@@ -1,0 +1,15 @@
+version: '3.8'
+
+# Override to disable proxy for local development
+services:
+  redis:
+    environment:
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+      - NO_PROXY=*
+    
+  seq:
+    environment:
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+      - NO_PROXY=*

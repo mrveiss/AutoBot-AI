@@ -63,6 +63,9 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+    networks:
+      autobot:
+        ipv4_address: ${AUTOBOT_REDIS_IP:-192.168.65.10}
     deploy:
       resources:
         limits:
@@ -79,9 +82,10 @@ services:
     volumes:
       - autobot_ollama_data:/root/.ollama
     environment:
-      - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*
+      - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*,http://192.168.65.0/16
     networks:
-      - autobot
+      autobot:
+        ipv4_address: ${AUTOBOT_OLLAMA_IP:-192.168.65.20}
     logging: *default-logging
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
@@ -108,13 +112,13 @@ services:
       - GROUP_ID=${GROUP_ID:-1000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - REDIS_HOST=autobot-redis
+      - REDIS_HOST=${AUTOBOT_REDIS_IP:-192.168.65.10}
       - REDIS_PORT=6379
-      - REDIS_URL=redis://autobot-redis:6379
+      - REDIS_URL=redis://${AUTOBOT_REDIS_IP:-192.168.65.10}:6379
       - SERVICE_TYPE=backend
       - HEALTH_CHECK_PORT=8001
       - REDIS_DATABASE=main
-      - OLLAMA_HOST=http://autobot-ollama:11434
+      - OLLAMA_HOST=http://${AUTOBOT_OLLAMA_IP:-192.168.65.20}:11434
     volumes:
       - ${VOLUMES_DIR:-./docker/volumes}/prompts:/app/prompts:ro
       - ${VOLUMES_DIR:-./docker/volumes}/knowledge_base:/app/knowledge_base:ro
@@ -133,6 +137,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    networks:
+      autobot:
+        ipv4_address: ${AUTOBOT_BACKEND_IP:-192.168.65.30}
     deploy:
       resources:
         limits:
@@ -396,11 +403,13 @@ volumes:
   autobot_knowledge_logs:
     name: autobot_knowledge_logs
 
-# Centralized network
+# Centralized network with real IP assignments
 networks:
   autobot:
     name: autobot-network
     driver: bridge
     ipam:
+      driver: default
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: ${AUTOBOT_DOCKER_SUBNET:-192.168.65.0/24}
+          gateway: ${AUTOBOT_DOCKER_GATEWAY:-192.168.65.1}

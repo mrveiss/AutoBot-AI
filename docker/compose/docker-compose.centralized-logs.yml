@@ -153,7 +153,7 @@ services:
       autobot-log-collector:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/api/system/health"]
+      test: ["CMD", "curl", "-f", "http://${AUTOBOT_BACKEND_HOST:-127.0.0.3}:${AUTOBOT_BACKEND_PORT:-8001}/api/system/health"]
       interval: 30s
       timeout: 10s
       retries: 3
