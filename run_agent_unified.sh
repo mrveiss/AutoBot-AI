@@ -15,6 +15,7 @@ DEV_MODE=false
 TEST_MODE=false
 FORCE_ENV=""
 NO_BUILD=false
+BACKEND_PID=""
 
 print_help() {
     echo "AutoBot - Unified Docker Deployment"
@@ -173,14 +174,22 @@ EOF
 cleanup() {
     echo -e "\n${RED}🛑 Stopping AutoBot...${NC}"
     
-    if [ "$compose_cmd" = "docker compose" ]; then
-        docker compose -f docker-compose.unified.yml down
-    else
-        docker-compose -f docker-compose.unified.yml down
+    # Stop backend process if running
+    if [ ! -z "$BACKEND_PID" ] && kill -0 $BACKEND_PID 2>/dev/null; then
+        echo "Stopping backend process (PID: $BACKEND_PID)..."
+        kill $BACKEND_PID 2>/dev/null || true
+        wait $BACKEND_PID 2>/dev/null || true
     fi
     
-    # Stop any orphaned processes
-    pkill -f "uvicorn.*backend" 2>/dev/null || true
+    # Stop Docker services
+    if [ "$compose_cmd" = "docker compose" ]; then
+        docker compose -f $COMPOSE_FILE down
+    else
+        docker-compose -f $COMPOSE_FILE down
+    fi
+    
+    # Stop any remaining orphaned processes
+    pkill -f "uvicorn.*main:app" 2>/dev/null || true
     pkill -f "playwright-server" 2>/dev/null || true
     pkill -f "npm run" 2>/dev/null || true
     
@@ -255,8 +264,31 @@ main() {
         # Start only essential services in test mode
         $compose_cmd -f $COMPOSE_FILE up -d redis seq
     else
-        # Start all services
+        # Start all Docker services
         $compose_cmd -f $COMPOSE_FILE up -d
+    fi
+    
+    # Start backend on host (needed for system access)
+    if [ "$TEST_MODE" != "true" ]; then
+        echo -e "${YELLOW}🖥️  Starting backend on host...${NC}"
+        
+        # Ensure backend dependencies are available
+        cd backend || { echo "Backend directory not found"; exit 1; }
+        
+        # Start backend in background
+        if [ "$DEV_MODE" = "true" ]; then
+            echo "Starting backend in development mode..."
+            python -m uvicorn main:app --host 0.0.0.0 --port ${API_PORT:-8001} --reload &
+        else
+            echo "Starting backend in production mode..."
+            python -m uvicorn main:app --host 0.0.0.0 --port ${API_PORT:-8001} &
+        fi
+        
+        BACKEND_PID=$!
+        echo "Backend started with PID: $BACKEND_PID"
+        
+        # Return to original directory
+        cd ..
     fi
     
     # Wait for services to be ready
@@ -265,11 +297,13 @@ main() {
     # Check Redis
     echo -n "   Redis: "
     for i in {1..30}; do
-        if redis-cli -h ${REDIS_HOST:-localhost} -p ${REDIS_PORT:-6379} ping >/dev/null 2>&1; then
+        if docker exec autobot-redis redis-cli ping >/dev/null 2>&1; then
             echo -e "${GREEN}✅ Ready${NC}"
             break
         elif [ $i -eq 30 ]; then
             echo -e "${RED}❌ Failed${NC}"
+            echo "Redis container logs:"
+            docker logs autobot-redis --tail 10
             exit 1
         fi
         sleep 2
@@ -288,7 +322,7 @@ main() {
     done
     
     if [ "$TEST_MODE" != "true" ]; then
-        # Check Backend
+        # Check Backend (runs on host, not in container)
         echo -n "   Backend: "
         for i in {1..30}; do
             if curl -s http://localhost:${API_PORT:-8001}/api/system/health >/dev/null 2>&1; then
@@ -296,7 +330,8 @@ main() {
                 break
             elif [ $i -eq 30 ]; then
                 echo -e "${RED}❌ Failed${NC}"
-                docker logs autobot-backend
+                echo "Backend is not running on port ${API_PORT:-8001}"
+                echo "Start backend manually with: ./run_agent.sh or python backend/main.py"
                 exit 1
             fi
             sleep 2
