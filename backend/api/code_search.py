@@ -633,9 +633,11 @@ async def find_code_duplicates(request: AnalyticsRequest):
                         {
                             "file_path": result.file_path,
                             "line_number": result.line_number,
-                            "content": result.content[:200] + "..."
-                            if len(result.content) > 200
-                            else result.content,
+                            "content": (
+                                result.content[:200] + "..."
+                                if len(result.content) > 200
+                                else result.content
+                            ),
                             "confidence": result.confidence,
                             "context": result.context_lines[
                                 :3
@@ -669,9 +671,11 @@ async def find_code_duplicates(request: AnalyticsRequest):
                         len(candidate["similar_blocks"])
                         for candidate in duplicate_candidates
                     ),
-                    "highest_priority_pattern": duplicate_candidates[0]["pattern"]
-                    if duplicate_candidates
-                    else None,
+                    "highest_priority_pattern": (
+                        duplicate_candidates[0]["pattern"]
+                        if duplicate_candidates
+                        else None
+                    ),
                 },
                 "duplicate_candidates": duplicate_candidates[:10],  # Top 10 candidates
                 "recommendations": [

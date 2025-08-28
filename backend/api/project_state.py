@@ -61,18 +61,18 @@ class PhaseValidationModel(BaseModel):
 @router.get("/status", response_model=ProjectStatus)
 @smart_cache(
     data_type="project_status",
-    key_func=lambda detailed=False: f"status:{'detailed' if detailed else 'fast'}"
+    key_func=lambda detailed=False: f"status:{'detailed' if detailed else 'fast'}",
 )
 async def get_project_status(detailed: bool = False):
     """Get overall project development status
-    
+
     Args:
         detailed: If True, performs full validation checks (slower)
                  If False, uses cached data and estimates (default, faster)
     """
     try:
         manager = get_project_state_manager()
-        
+
         if detailed:
             status = manager.get_project_status(use_cache=False)
         else:

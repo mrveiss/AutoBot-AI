@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 import aiohttp
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -23,6 +23,29 @@ logger = logging.getLogger(__name__)
 knowledge_base: KnowledgeBase | None = None
 system_knowledge_manager: SystemKnowledgeManager | None = None
 fact_extraction_service: FactExtractionService | None = None
+
+
+async def get_knowledge_base_instance(request: Request = None) -> KnowledgeBase | None:
+    """PERFORMANCE OPTIMIZATION: Get knowledge base instance, preferring pre-initialized app.state"""
+    global knowledge_base
+
+    # Try to use pre-initialized knowledge base from app state first
+    if request is not None:
+        app_kb = getattr(request.app.state, "knowledge_base", None)
+        if app_kb is not None:
+            logger.debug("Using pre-initialized knowledge base from app.state")
+            return app_kb
+
+    # Fallback to global variable initialization
+    if knowledge_base is None:
+        await init_knowledge_base()
+
+    if knowledge_base is None:
+        logger.warning("Knowledge base not available after initialization attempt")
+        return None
+
+    logger.debug("Using fallback knowledge base initialization")
+    return knowledge_base
 
 
 class GetFactRequest(BaseModel):
@@ -81,13 +104,11 @@ async def get_fact_api(fact_id: Optional[int] = None, query: Optional[str] = Non
 
 
 @router.post("/search")
-async def search_knowledge(request: dict):
+async def search_knowledge(request: dict, req: Request = None):
     """Search knowledge base"""
     try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
+        kb_to_use = await get_knowledge_base_instance(req)
+        if kb_to_use is None:
             return {
                 "results": [],
                 "message": "Knowledge base not available",
@@ -100,7 +121,7 @@ async def search_knowledge(request: dict):
 
         logger.info(f"Knowledge search request: {query} (limit: {limit})")
 
-        results = await knowledge_base.search(query, limit)
+        results = await kb_to_use.search(query, limit)
 
         return {
             "results": results,
@@ -371,13 +392,11 @@ async def add_file_to_knowledge(file: UploadFile = File(...)):
 
 
 @router.get("/export")
-async def export_knowledge():
+async def export_knowledge(request: Request = None):
     """Export knowledge base"""
     try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
+        kb_to_use = await get_knowledge_base_instance(request)
+        if kb_to_use is None:
             return JSONResponse(
                 content={"message": "Knowledge base not available"},
                 media_type="application/json",
@@ -386,7 +405,7 @@ async def export_knowledge():
         logger.info("Knowledge export request")
 
         # Get all facts and data
-        export_data = await knowledge_base.export_all_data()
+        export_data = await kb_to_use.export_all_data()
 
         # Create export object with metadata
         export_object = {
@@ -434,13 +453,11 @@ async def cleanup_knowledge():
 
 
 @router.get("/stats")
-async def get_knowledge_stats():
+async def get_knowledge_stats(request: Request):
     """Get knowledge base statistics"""
     try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
+        kb_to_use = await get_knowledge_base_instance(request)
+        if kb_to_use is None:
             return {
                 "total_facts": 0,
                 "total_documents": 0,
@@ -450,9 +467,7 @@ async def get_knowledge_stats():
             }
 
         logger.info("Knowledge stats request")
-
-        stats = await knowledge_base.get_stats()
-
+        stats = await kb_to_use.get_stats()
         return stats
     except Exception as e:
         logger.error(f"Error getting knowledge stats: {str(e)}")
@@ -462,22 +477,18 @@ async def get_knowledge_stats():
 
 
 @router.get("/detailed_stats")
-async def get_detailed_knowledge_stats():
+async def get_detailed_knowledge_stats(request: Request):
     """Get detailed knowledge base statistics"""
     try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
+        kb_to_use = await get_knowledge_base_instance(request)
+        if kb_to_use is None:
             return {
                 "message": "Knowledge base not available",
                 "implementation_status": "unavailable",
             }
 
         logger.info("Detailed knowledge stats request")
-
-        detailed_stats = await knowledge_base.get_detailed_stats()
-
+        detailed_stats = await kb_to_use.get_detailed_stats()
         return detailed_stats
     except Exception as e:
         logger.error(f"Error getting detailed knowledge stats: {str(e)}")
@@ -487,19 +498,17 @@ async def get_detailed_knowledge_stats():
 
 
 @router.get("/entries")
-async def get_all_entries(collection: Optional[str] = None):
+async def get_all_entries(request: Request, collection: Optional[str] = None):
     """Get all knowledge entries, optionally filtered by collection"""
     try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
+        kb_to_use = await get_knowledge_base_instance(request)
+        if kb_to_use is None:
             return {"success": True, "entries": []}
 
         if collection:
-            entries = await knowledge_base.get_all_facts(collection)
+            entries = await kb_to_use.get_all_facts(collection)
         else:
-            entries = await knowledge_base.get_all_facts("all")
+            entries = await kb_to_use.get_all_facts("all")
 
         return {"success": True, "entries": entries}
     except Exception as e:
@@ -508,13 +517,11 @@ async def get_all_entries(collection: Optional[str] = None):
 
 
 @router.post("/entries")
-async def create_knowledge_entry(entry: dict):
+async def create_knowledge_entry(entry: dict, request: Request = None):
     """Create a new knowledge entry"""
     try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
+        kb_to_use = await get_knowledge_base_instance(request)
+        if kb_to_use is None:
             raise HTTPException(status_code=503, detail="Knowledge base not available")
 
         # Support both old and new formats
@@ -538,7 +545,7 @@ async def create_knowledge_entry(entry: dict):
         metadata["collection"] = collection
 
         # Store the fact
-        result = await knowledge_base.store_fact(content, metadata)
+        result = await kb_to_use.store_fact(content, metadata)
 
         # Get the fact_id - try both possible keys
         fact_id = result.get("fact_id") or result.get("id")
@@ -804,13 +811,11 @@ async def crawl_url(request: dict):
 
 
 @router.get("/categories")
-async def get_knowledge_categories():
+async def get_knowledge_categories(request: Request):
     """Get knowledge base categories with statistics"""
     try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
+        kb_to_use = await get_knowledge_base_instance(request)
+        if kb_to_use is None:
             return {
                 "categories": [],
                 "count": 0,
@@ -821,7 +826,7 @@ async def get_knowledge_categories():
         logger.info("Knowledge categories request")
 
         # Get all entries and categorize them
-        entries = await knowledge_base.get_all_facts("all")
+        entries = await kb_to_use.get_all_facts("all")
         categories = {}
 
         for entry in entries:
@@ -1013,8 +1018,8 @@ async def get_system_prompts():
 
 
 @router.post("/system_knowledge/import_documentation")
-async def import_system_documentation():
-    """Import system documentation from templates and files"""
+async def import_system_documentation(force_refresh: bool = False):
+    """Import system documentation from templates and files with intelligent caching"""
     try:
         if knowledge_base is None or system_knowledge_manager is None:
             await init_knowledge_base()
@@ -1026,17 +1031,30 @@ async def import_system_documentation():
                 "count": 0,
             }
 
-        logger.info("System documentation import request")
+        logger.info(
+            f"System documentation import request (force_refresh={force_refresh})"
+        )
 
-        # Initialize system knowledge (this will import documentation)
+        # Flush system knowledge cache if force refresh is requested
+        if force_refresh:
+            await _flush_system_knowledge_cache()
+            logger.info("Flushed system knowledge cache for fresh import")
+
+        # Initialize system knowledge with intelligent change detection
         await system_knowledge_manager.initialize_system_knowledge(
-            force_reinstall=False
+            force_reinstall=force_refresh
+        )
+
+        # Get actual count of imported files
+        file_count = len(
+            await system_knowledge_manager._get_system_knowledge_file_state()
         )
 
         return {
             "status": "success",
-            "message": "System documentation imported successfully",
-            "count": 1,
+            "message": f"System documentation {'refreshed' if force_refresh else 'imported'} successfully",
+            "count": file_count,
+            "force_refresh": force_refresh,
         }
 
     except Exception as e:
@@ -1048,31 +1066,82 @@ async def import_system_documentation():
         }
 
 
-@router.post("/system_knowledge/import_prompts")
-async def import_system_prompts():
-    """Import system prompts from templates and files"""
+async def _flush_system_knowledge_cache():
+    """Flush system knowledge cache from Redis KNOWLEDGE database"""
     try:
-        if knowledge_base is None or system_knowledge_manager is None:
-            await init_knowledge_base()
+        from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
 
-        if system_knowledge_manager is None:
-            return {
-                "status": "error",
-                "message": "System knowledge manager not available",
-                "count": 0,
-            }
+        db_manager = RedisDatabaseManager()
+        redis_client = db_manager.get_connection(RedisDatabase.KNOWLEDGE)
 
-        logger.info("System prompts import request")
+        if redis_client:
+            # Delete system knowledge file states cache
+            cache_key = "autobot:system_knowledge:file_states"
+            deleted = redis_client.delete(cache_key)
+            logger.info(f"Flushed system knowledge cache (deleted {deleted} keys)")
 
-        # Initialize system knowledge (this will import prompts)
-        await system_knowledge_manager.initialize_system_knowledge(
-            force_reinstall=False
-        )
+    except Exception as e:
+        logger.warning(f"Failed to flush system knowledge cache: {e}")
+
+
+async def _flush_prompts_cache():
+    """Flush prompts cache from Redis PROMPTS database"""
+    try:
+        from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
+
+        db_manager = RedisDatabaseManager()
+        redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+
+        if redis_client:
+            # Delete all prompt-related cache keys
+            keys_to_delete = [
+                "autobot:prompts:file_states",
+                "autobot:prompts:cache:*",  # All prompt cache keys
+            ]
+
+            deleted_count = 0
+            for pattern in keys_to_delete:
+                if "*" in pattern:
+                    # Handle pattern matching
+                    keys = redis_client.keys(pattern)
+                    if keys:
+                        deleted_count += redis_client.delete(*keys)
+                else:
+                    deleted_count += redis_client.delete(pattern)
+
+            logger.info(f"Flushed prompts cache (deleted {deleted_count} keys)")
+
+    except Exception as e:
+        logger.warning(f"Failed to flush prompts cache: {e}")
+
+
+@router.post("/system_knowledge/import_prompts")
+async def import_system_prompts(force_refresh: bool = False):
+    """Import system prompts from templates and files with intelligent caching"""
+    try:
+        # Flush prompts cache if force refresh is requested
+        if force_refresh:
+            await _flush_prompts_cache()
+            logger.info("Flushed prompts cache for fresh import")
+
+        # Force reload prompts from the global prompt manager
+        from src.prompt_manager import prompt_manager
+
+        if force_refresh:
+            # Clear in-memory cache and reload
+            prompt_manager.prompts.clear()
+            prompt_manager.templates.clear()
+
+        # Reload all prompts (will use intelligent change detection)
+        prompt_manager.load_all_prompts()
+
+        prompt_count = len(prompt_manager.prompts)
 
         return {
             "status": "success",
-            "message": "System prompts imported successfully",
-            "count": 1,
+            "message": f"System prompts {'refreshed' if force_refresh else 'imported'} successfully",
+            "count": prompt_count,
+            "force_refresh": force_refresh,
         }
 
     except Exception as e:
@@ -1363,15 +1432,17 @@ async def add_text_with_automatic_fact_extraction(request: dict):
                 "semantic_chunking": kb_result.get("semantic_chunking", False),
             },
             # Fact extraction results
-            "fact_extraction": {
-                "enabled": extract_facts,
-                "facts_extracted": fact_result.get("facts_extracted", 0),
-                "facts_stored": fact_result.get("facts_stored", 0),
-                "processing_time": fact_result.get("processing_time", 0),
-                "average_confidence": fact_result.get("average_confidence", 0),
-            }
-            if extract_facts
-            else {"enabled": False},
+            "fact_extraction": (
+                {
+                    "enabled": extract_facts,
+                    "facts_extracted": fact_result.get("facts_extracted", 0),
+                    "facts_stored": fact_result.get("facts_stored", 0),
+                    "processing_time": fact_result.get("processing_time", 0),
+                    "average_confidence": fact_result.get("average_confidence", 0),
+                }
+                if extract_facts
+                else {"enabled": False}
+            ),
         }
     except HTTPException:
         raise
@@ -1541,14 +1612,16 @@ async def resolve_entities_in_facts(request: dict):
             "entities_before": len(original_entities),
             "entities_after": len(resolved_entities),
             "entities_resolved": len(original_entities) - len(resolved_entities),
-            "resolution_rate": round(
-                (len(original_entities) - len(resolved_entities))
-                / len(original_entities)
-                * 100,
-                1,
-            )
-            if original_entities
-            else 0,
+            "resolution_rate": (
+                round(
+                    (len(original_entities) - len(resolved_entities))
+                    / len(original_entities)
+                    * 100,
+                    1,
+                )
+                if original_entities
+                else 0
+            ),
             "filters": {
                 "source": source,
                 "min_confidence": min_confidence,

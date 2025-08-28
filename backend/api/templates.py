@@ -37,10 +37,13 @@ def _generate_templates_cache_key(category, tags, complexity):
         key_parts.append(f"comp:{complexity}")
     return "list:" + (":".join(key_parts) if key_parts else "all")
 
+
 @router.get("/templates")
 @smart_cache(
     data_type="templates",
-    key_func=lambda category=None, tags=None, complexity=None: _generate_templates_cache_key(category, tags, complexity)
+    key_func=lambda category=None, tags=None, complexity=None: _generate_templates_cache_key(
+        category, tags, complexity
+    ),
 )
 async def list_workflow_templates(
     category: Optional[str] = Query(None, description="Filter by template category"),
@@ -116,8 +119,7 @@ async def list_workflow_templates(
 
 @router.get("/templates/{template_id}")
 @smart_cache(
-    data_type="templates",
-    key_func=lambda template_id: f"detail:{template_id}"
+    data_type="templates", key_func=lambda template_id: f"detail:{template_id}"
 )
 async def get_template_details(template_id: str):
     """Get detailed information about a specific template"""

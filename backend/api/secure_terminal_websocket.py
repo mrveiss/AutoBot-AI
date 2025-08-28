@@ -147,7 +147,10 @@ class SecureTerminalSession(BaseTerminalWebSocket):
                 standardized_message = message.copy()
 
                 # Convert "data" field to "content" for consistency
-                if "data" in standardized_message and "content" not in standardized_message:
+                if (
+                    "data" in standardized_message
+                    and "content" not in standardized_message
+                ):
                     standardized_message["content"] = standardized_message.pop("data")
 
                 # Add metadata if not present
@@ -156,7 +159,7 @@ class SecureTerminalSession(BaseTerminalWebSocket):
                         "session_id": self.session_id,
                         "timestamp": time.time(),
                         "terminal_type": "secure",
-                        "user_role": self.user_role
+                        "user_role": self.user_role,
                     }
 
                 await self.websocket.send_text(json.dumps(standardized_message))
@@ -220,7 +223,9 @@ async def handle_secure_terminal_websocket(
 
                 if message_type == "input":
                     # Send input to PTY - support multiple input field formats
-                    text = message.get("content", message.get("text", message.get("data", "")))
+                    text = message.get(
+                        "content", message.get("text", message.get("data", ""))
+                    )
                     if text:
                         await session.send_input(text)
 

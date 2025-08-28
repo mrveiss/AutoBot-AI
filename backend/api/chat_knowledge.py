@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from src.chat_history_manager import ChatHistoryManager
@@ -26,6 +26,36 @@ from src.llm_interface import LLMInterface
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat_knowledge"])
+
+
+async def get_chat_knowledge_manager_instance(request: Request = None):
+    """PERFORMANCE OPTIMIZATION: Get chat knowledge manager instance, preferring pre-initialized app.state"""
+    global chat_knowledge_manager
+
+    # Try to use pre-initialized manager from app state first
+    if request is not None:
+        app_manager = getattr(request.app.state, "chat_knowledge_manager", None)
+        if app_manager is not None:
+            logger.debug("Using pre-initialized chat knowledge manager from app.state")
+            return app_manager
+
+    # Try to use global instance
+    if chat_knowledge_manager is not None:
+        logger.debug("Using global chat knowledge manager instance")
+        return chat_knowledge_manager
+
+    # Create new instance as last resort
+    logger.info("Creating new ChatKnowledgeManager instance (expensive operation)")
+    new_manager = ChatKnowledgeManager()
+
+    # Cache in app state if request available
+    if request is not None:
+        request.app.state.chat_knowledge_manager = new_manager
+        logger.info(
+            "Cached new chat knowledge manager in app.state for future requests"
+        )
+
+    return new_manager
 
 
 class KnowledgeDecision(str, Enum):
@@ -406,8 +436,8 @@ class ChatKnowledgeManager:
         return results[:20]  # Limit to top 20 results
 
 
-# Global manager instance
-chat_knowledge_manager = ChatKnowledgeManager()
+# Global manager instance - initialized lazily to avoid expensive startup
+chat_knowledge_manager = None
 
 
 # API Endpoints
@@ -420,11 +450,14 @@ class CreateContextRequest(BaseModel):
 
 
 @router.post("/context/create")
-async def create_chat_context(request: CreateContextRequest):
+async def create_chat_context(request_data: CreateContextRequest, request: Request):
     """Create or update knowledge context for a chat"""
     try:
-        context = await chat_knowledge_manager.create_or_update_context(
-            chat_id=request.chat_id, topic=request.topic, keywords=request.keywords
+        manager = await get_chat_knowledge_manager_instance(request)
+        context = await manager.create_or_update_context(
+            chat_id=request_data.chat_id,
+            topic=request_data.topic,
+            keywords=request_data.keywords,
         )
 
         return {
@@ -451,14 +484,17 @@ class AssociateFileRequest(BaseModel):
 
 
 @router.post("/files/associate")
-async def associate_file_with_chat(request: AssociateFileRequest):
+async def associate_file_with_chat(
+    request_data: AssociateFileRequest, request: Request
+):
     """Associate a file with a chat session"""
     try:
-        association = await chat_knowledge_manager.associate_file(
-            chat_id=request.chat_id,
-            file_path=request.file_path,
-            association_type=request.association_type,
-            metadata=request.metadata,
+        manager = await get_chat_knowledge_manager_instance(request)
+        association = await manager.associate_file(
+            chat_id=request_data.chat_id,
+            file_path=request_data.file_path,
+            association_type=request_data.association_type,
+            metadata=request_data.metadata,
         )
 
         return {
@@ -579,13 +615,14 @@ class CompileChatRequest(BaseModel):
 
 
 @router.post("/compile")
-async def compile_chat_to_knowledge(request: CompileChatRequest):
+async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: Request):
     """Compile entire chat conversation to knowledge base"""
     try:
-        compiled = await chat_knowledge_manager.compile_chat_to_knowledge(
-            chat_id=request.chat_id,
-            title=request.title,
-            include_system_messages=request.include_system_messages,
+        manager = await get_chat_knowledge_manager_instance(request)
+        compiled = await manager.compile_chat_to_knowledge(
+            chat_id=request_data.chat_id,
+            title=request_data.title,
+            include_system_messages=request_data.include_system_messages,
         )
 
         return {"success": True, "compiled": compiled}

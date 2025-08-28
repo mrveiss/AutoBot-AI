@@ -23,7 +23,9 @@ logger = logging.getLogger(__name__)
 
 class AnalysisRequest(BaseModel):
     root_path: str
-    analysis_type: str = "comprehensive"  # comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality
+    analysis_type: str = (
+        "comprehensive"  # comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality
+    )
 
 
 @router.post("/analyze")

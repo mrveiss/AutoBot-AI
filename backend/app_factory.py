@@ -450,10 +450,23 @@ def add_middleware(app: FastAPI) -> None:
     # Use fallback if cors_origins is empty
     # (since get() returns [] when key exists but is empty)
     if not cors_origins:
+        # Build CORS origins dynamically from configuration
         cors_origins = [
             f"{HTTP_PROTOCOL}://{FRONTEND_HOST_IP}:{FRONTEND_PORT}",
             f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
         ]
+
+        # Add development server origins from configuration
+        dev_origins = backend_config.get(
+            "dev_origins",
+            [
+                "http://127.0.0.1:5173",  # Vite dev server
+                "http://localhost:5173",  # Alternative localhost
+                "http://127.0.0.1:3000",  # Alternative dev port
+                "http://localhost:3000",  # Alternative localhost dev port
+            ],
+        )
+        cors_origins.extend(dev_origins)
 
     app.add_middleware(
         CORSMiddleware,
@@ -843,3 +856,7 @@ def create_app() -> FastAPI:
 
     logger.info("FastAPI application created and configured")
     return app
+
+
+# Create the app instance for uvicorn
+app = create_app()

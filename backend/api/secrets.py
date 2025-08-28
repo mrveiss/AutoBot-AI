@@ -31,12 +31,14 @@ router = APIRouter()
 
 class SecretScope(str, Enum):
     """Secret scope enumeration"""
+
     CHAT = "chat"
     GENERAL = "general"
 
 
 class SecretType(str, Enum):
     """Secret type enumeration"""
+
     SSH_KEY = "ssh_key"
     PASSWORD = "password"
     API_KEY = "api_key"
@@ -48,6 +50,7 @@ class SecretType(str, Enum):
 
 class SecretModel(BaseModel):
     """Secret data model"""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     type: SecretType
@@ -63,6 +66,7 @@ class SecretModel(BaseModel):
 
 class SecretCreateRequest(BaseModel):
     """Request model for creating secrets"""
+
     name: str
     type: SecretType
     scope: SecretScope
@@ -76,6 +80,7 @@ class SecretCreateRequest(BaseModel):
 
 class SecretUpdateRequest(BaseModel):
     """Request model for updating secrets"""
+
     name: Optional[str] = None
     description: Optional[str] = None
     tags: Optional[List[str]] = None
@@ -85,6 +90,7 @@ class SecretUpdateRequest(BaseModel):
 
 class SecretTransferRequest(BaseModel):
     """Request model for transferring secrets between scopes"""
+
     secret_ids: List[str]
     target_scope: SecretScope
     target_chat_id: Optional[str] = None
@@ -106,11 +112,11 @@ class SecretsManager:
     def _initialize_encryption(self):
         """Initialize or load encryption key"""
         if os.path.exists(self.key_file):
-            with open(self.key_file, 'rb') as f:
+            with open(self.key_file, "rb") as f:
                 key = f.read()
         else:
             key = Fernet.generate_key()
-            with open(self.key_file, 'wb') as f:
+            with open(self.key_file, "wb") as f:
                 f.write(key)
             os.chmod(self.key_file, 0o600)  # Restrict permissions
 
@@ -130,7 +136,7 @@ class SecretsManager:
             return {}
 
         try:
-            with open(self.secrets_file, 'r') as f:
+            with open(self.secrets_file, "r") as f:
                 return json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
             logger.warning("Secrets file corrupted or missing, initializing empty")
@@ -138,12 +144,13 @@ class SecretsManager:
 
     def _save_secrets(self, secrets: Dict[str, Dict]):
         """Save secrets to encrypted storage"""
+
         def json_serializer(obj):
-            if hasattr(obj, 'isoformat'):
+            if hasattr(obj, "isoformat"):
                 return obj.isoformat()
             return str(obj)
 
-        with open(self.secrets_file, 'w') as f:
+        with open(self.secrets_file, "w") as f:
             json.dump(secrets, f, indent=2, default=json_serializer)
         os.chmod(self.secrets_file, 0o600)  # Restrict permissions
 
@@ -166,13 +173,13 @@ class SecretsManager:
             description=request.description,
             tags=request.tags,
             expires_at=request.expires_at,
-            metadata=request.metadata
+            metadata=request.metadata,
         )
 
         # Encrypt and store the secret value
         encrypted_value = self._encrypt_value(request.value)
         secret_data = secret.dict()
-        secret_data['encrypted_value'] = encrypted_value
+        secret_data["encrypted_value"] = encrypted_value
 
         secrets[secret.id] = secret_data
         self._save_secrets(secrets)
@@ -193,23 +200,21 @@ class SecretsManager:
             return None
 
         # Check access permissions
-        if secret_data['scope'] == SecretScope.CHAT:
-            if not chat_id or secret_data['chat_id'] != chat_id:
+        if secret_data["scope"] == SecretScope.CHAT:
+            if not chat_id or secret_data["chat_id"] != chat_id:
                 raise PermissionError(
                     "Access denied: Chat-scoped secret from different chat"
                 )
 
         # Return secret with decrypted value
         secret_data = secret_data.copy()
-        secret_data['value'] = self._decrypt_value(secret_data['encrypted_value'])
-        del secret_data['encrypted_value']
+        secret_data["value"] = self._decrypt_value(secret_data["encrypted_value"])
+        del secret_data["encrypted_value"]
 
         return secret_data
 
     def list_secrets(
-        self,
-        chat_id: Optional[str] = None,
-        scope: Optional[SecretScope] = None
+        self, chat_id: Optional[str] = None, scope: Optional[SecretScope] = None
     ) -> List[Dict]:
         """List secrets with access control"""
         secrets = self._load_secrets()
@@ -217,18 +222,18 @@ class SecretsManager:
 
         for secret_id, secret_data in secrets.items():
             # Apply scope filter
-            if scope and secret_data['scope'] != scope:
+            if scope and secret_data["scope"] != scope:
                 continue
 
             # Apply access control
-            if secret_data['scope'] == SecretScope.CHAT:
-                if not chat_id or secret_data['chat_id'] != chat_id:
+            if secret_data["scope"] == SecretScope.CHAT:
+                if not chat_id or secret_data["chat_id"] != chat_id:
                     continue
 
             # Return metadata without encrypted value
             safe_data = secret_data.copy()
-            del safe_data['encrypted_value']
-            safe_data['has_value'] = True
+            del safe_data["encrypted_value"]
+            safe_data["has_value"] = True
             result.append(safe_data)
 
         return result
@@ -237,7 +242,7 @@ class SecretsManager:
         self,
         secret_id: str,
         request: SecretUpdateRequest,
-        chat_id: Optional[str] = None
+        chat_id: Optional[str] = None,
     ) -> Optional[SecretModel]:
         """Update a secret with access control"""
         secrets = self._load_secrets()
@@ -247,8 +252,8 @@ class SecretsManager:
             return None
 
         # Check access permissions
-        if secret_data['scope'] == SecretScope.CHAT:
-            if not chat_id or secret_data['chat_id'] != chat_id:
+        if secret_data["scope"] == SecretScope.CHAT:
+            if not chat_id or secret_data["chat_id"] != chat_id:
                 raise PermissionError(
                     "Access denied: Cannot modify chat-scoped secret from "
                     "different chat"
@@ -256,19 +261,19 @@ class SecretsManager:
 
         # Update fields
         if request.name is not None:
-            secret_data['name'] = request.name
+            secret_data["name"] = request.name
         if request.description is not None:
-            secret_data['description'] = request.description
+            secret_data["description"] = request.description
         if request.tags is not None:
-            secret_data['tags'] = request.tags
+            secret_data["tags"] = request.tags
         if request.expires_at is not None:
-            secret_data['expires_at'] = (
+            secret_data["expires_at"] = (
                 request.expires_at.isoformat() if request.expires_at else None
             )
         if request.metadata is not None:
-            secret_data['metadata'] = request.metadata
+            secret_data["metadata"] = request.metadata
 
-        secret_data['updated_at'] = datetime.now().isoformat()
+        secret_data["updated_at"] = datetime.now().isoformat()
 
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
@@ -277,7 +282,7 @@ class SecretsManager:
 
         # Return updated secret model
         safe_data = secret_data.copy()
-        del safe_data['encrypted_value']
+        del safe_data["encrypted_value"]
         return SecretModel(**safe_data)
 
     def delete_secret(self, secret_id: str, chat_id: Optional[str] = None) -> bool:
@@ -289,8 +294,8 @@ class SecretsManager:
             return False
 
         # Check access permissions
-        if secret_data['scope'] == SecretScope.CHAT:
-            if not chat_id or secret_data['chat_id'] != chat_id:
+        if secret_data["scope"] == SecretScope.CHAT:
+            if not chat_id or secret_data["chat_id"] != chat_id:
                 raise PermissionError(
                     "Access denied: Cannot delete chat-scoped secret from "
                     "different chat"
@@ -303,9 +308,7 @@ class SecretsManager:
         return True
 
     def transfer_secrets(
-        self,
-        request: SecretTransferRequest,
-        chat_id: Optional[str] = None
+        self, request: SecretTransferRequest, chat_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Transfer secrets between scopes"""
         secrets = self._load_secrets()
@@ -315,43 +318,45 @@ class SecretsManager:
         for secret_id in request.secret_ids:
             secret_data = secrets.get(secret_id)
             if not secret_data:
-                failed.append(
-                    {"secret_id": secret_id, "reason": "Secret not found"}
-                )
+                failed.append({"secret_id": secret_id, "reason": "Secret not found"})
                 continue
 
             # Check access permissions for source
-            if secret_data['scope'] == SecretScope.CHAT:
-                if not chat_id or secret_data['chat_id'] != chat_id:
+            if secret_data["scope"] == SecretScope.CHAT:
+                if not chat_id or secret_data["chat_id"] != chat_id:
                     failed.append({"secret_id": secret_id, "reason": "Access denied"})
                     continue
 
             # Validate target scope
             if request.target_scope == SecretScope.CHAT and not request.target_chat_id:
-                failed.append({
-                    "secret_id": secret_id,
-                    "reason": "Target chat_id required for chat scope"
-                })
+                failed.append(
+                    {
+                        "secret_id": secret_id,
+                        "reason": "Target chat_id required for chat scope",
+                    }
+                )
                 continue
 
             # Perform transfer
-            secret_data['scope'] = request.target_scope
+            secret_data["scope"] = request.target_scope
             if request.target_scope == SecretScope.CHAT:
-                secret_data['chat_id'] = request.target_chat_id
+                secret_data["chat_id"] = request.target_chat_id
             else:
-                secret_data['chat_id'] = None
+                secret_data["chat_id"] = None
 
-            secret_data['updated_at'] = datetime.now().isoformat()
-            secret_data['metadata']['transfer_history'] = (
-                secret_data['metadata'].get('transfer_history', [])
+            secret_data["updated_at"] = datetime.now().isoformat()
+            secret_data["metadata"]["transfer_history"] = secret_data["metadata"].get(
+                "transfer_history", []
             )
-            secret_data['metadata']['transfer_history'].append({
-                "timestamp": datetime.now().isoformat(),
-                "from_scope": secret_data.get('original_scope', 'unknown'),
-                "to_scope": request.target_scope,
-                "from_chat_id": chat_id,
-                "to_chat_id": request.target_chat_id
-            })
+            secret_data["metadata"]["transfer_history"].append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "from_scope": secret_data.get("original_scope", "unknown"),
+                    "to_scope": request.target_scope,
+                    "from_chat_id": chat_id,
+                    "to_chat_id": request.target_chat_id,
+                }
+            )
 
             secrets[secret_id] = secret_data
             transferred.append(secret_id)
@@ -362,7 +367,7 @@ class SecretsManager:
         return {
             "transferred": transferred,
             "failed": failed,
-            "total_requested": len(request.secret_ids)
+            "total_requested": len(request.secret_ids),
         }
 
     def cleanup_chat_secrets(self, chat_id: str) -> Dict[str, Any]:
@@ -373,20 +378,22 @@ class SecretsManager:
         # Find all secrets for this chat
         for secret_id, secret_data in secrets.items():
             if (
-                secret_data['scope'] == SecretScope.CHAT
-                and secret_data['chat_id'] == chat_id
+                secret_data["scope"] == SecretScope.CHAT
+                and secret_data["chat_id"] == chat_id
             ):
-                chat_secrets.append({
-                    "id": secret_id,
-                    "name": secret_data['name'],
-                    "type": secret_data['type'],
-                    "description": secret_data['description']
-                })
+                chat_secrets.append(
+                    {
+                        "id": secret_id,
+                        "name": secret_data["name"],
+                        "type": secret_data["type"],
+                        "description": secret_data["description"],
+                    }
+                )
 
         return {
             "chat_id": chat_id,
             "secrets_found": chat_secrets,
-            "total_count": len(chat_secrets)
+            "total_count": len(chat_secrets),
         }
 
     def delete_chat_secrets(
@@ -398,15 +405,12 @@ class SecretsManager:
 
         for secret_id, secret_data in list(secrets.items()):
             if (
-                secret_data['scope'] == SecretScope.CHAT
-                and secret_data['chat_id'] == chat_id
+                secret_data["scope"] == SecretScope.CHAT
+                and secret_data["chat_id"] == chat_id
             ):
                 if secret_ids is None or secret_id in secret_ids:
                     del secrets[secret_id]
-                    deleted.append({
-                        "id": secret_id,
-                        "name": secret_data['name']
-                    })
+                    deleted.append({"id": secret_id, "name": secret_data["name"]})
 
         self._save_secrets(secrets)
 
@@ -414,7 +418,7 @@ class SecretsManager:
         return {
             "chat_id": chat_id,
             "deleted_secrets": deleted,
-            "total_deleted": len(deleted)
+            "total_deleted": len(deleted),
         }
 
 
@@ -424,6 +428,7 @@ secrets_manager = SecretsManager()
 
 # API Endpoints
 
+
 @router.post("/secrets")
 async def create_secret(request: SecretCreateRequest):
     """Create a new secret"""
@@ -431,18 +436,21 @@ async def create_secret(request: SecretCreateRequest):
         secret = secrets_manager.create_secret(request)
         # Convert datetime objects to strings for JSON serialization
         secret_data = secret.dict()
-        if secret_data.get('created_at'):
-            secret_data['created_at'] = secret_data['created_at'].isoformat()
-        if secret_data.get('updated_at'):
-            secret_data['updated_at'] = secret_data['updated_at'].isoformat()
-        if secret_data.get('expires_at'):
-            secret_data['expires_at'] = secret_data['expires_at'].isoformat()
+        if secret_data.get("created_at"):
+            secret_data["created_at"] = secret_data["created_at"].isoformat()
+        if secret_data.get("updated_at"):
+            secret_data["updated_at"] = secret_data["updated_at"].isoformat()
+        if secret_data.get("expires_at"):
+            secret_data["expires_at"] = secret_data["expires_at"].isoformat()
 
-        return JSONResponse(status_code=201, content={
-            "status": "success",
-            "message": "Secret created successfully",
-            "secret": secret_data
-        })
+        return JSONResponse(
+            status_code=201,
+            content={
+                "status": "success",
+                "message": "Secret created successfully",
+                "secret": secret_data,
+            },
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -454,31 +462,26 @@ async def create_secret(request: SecretCreateRequest):
 
 @router.get("/secrets")
 async def list_secrets(
-    chat_id: Optional[str] = Query(None),
-    scope: Optional[SecretScope] = Query(None)
+    chat_id: Optional[str] = Query(None), scope: Optional[SecretScope] = Query(None)
 ):
     """List secrets with optional filtering"""
     try:
         secrets = secrets_manager.list_secrets(chat_id=chat_id, scope=scope)
-        return JSONResponse(status_code=200, content={
-            "secrets": secrets,
-            "total_count": len(secrets),
-            "filters": {
-                "chat_id": chat_id,
-                "scope": scope
-            }
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "secrets": secrets,
+                "total_count": len(secrets),
+                "filters": {"chat_id": chat_id, "scope": scope},
+            },
+        )
     except Exception as e:
         logger.error(f"Failed to list secrets: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list secrets: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to list secrets: {str(e)}")
 
 
 @router.get("/secrets/{secret_id}")
-async def get_secret(
-    secret_id: str, chat_id: Optional[str] = Query(None)
-):
+async def get_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
     """Get a specific secret with its value"""
     try:
         secret = secrets_manager.get_secret(secret_id, chat_id=chat_id)
@@ -490,16 +493,12 @@ async def get_secret(
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get secret: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get secret: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get secret: {str(e)}")
 
 
 @router.put("/secrets/{secret_id}")
 async def update_secret(
-    secret_id: str,
-    request: SecretUpdateRequest,
-    chat_id: Optional[str] = Query(None)
+    secret_id: str, request: SecretUpdateRequest, chat_id: Optional[str] = Query(None)
 ):
     """Update a secret's metadata"""
     try:
@@ -509,18 +508,21 @@ async def update_secret(
 
         # Convert datetime objects to strings for JSON serialization
         secret_data = secret.dict()
-        if secret_data.get('created_at'):
-            secret_data['created_at'] = secret_data['created_at'].isoformat()
-        if secret_data.get('updated_at'):
-            secret_data['updated_at'] = secret_data['updated_at'].isoformat()
-        if secret_data.get('expires_at'):
-            secret_data['expires_at'] = secret_data['expires_at'].isoformat()
+        if secret_data.get("created_at"):
+            secret_data["created_at"] = secret_data["created_at"].isoformat()
+        if secret_data.get("updated_at"):
+            secret_data["updated_at"] = secret_data["updated_at"].isoformat()
+        if secret_data.get("expires_at"):
+            secret_data["expires_at"] = secret_data["expires_at"].isoformat()
 
-        return JSONResponse(status_code=200, content={
-            "status": "success",
-            "message": "Secret updated successfully",
-            "secret": secret_data
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "Secret updated successfully",
+                "secret": secret_data,
+            },
+        )
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
@@ -531,19 +533,17 @@ async def update_secret(
 
 
 @router.delete("/secrets/{secret_id}")
-async def delete_secret(
-    secret_id: str, chat_id: Optional[str] = Query(None)
-):
+async def delete_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
     """Delete a secret"""
     try:
         success = secrets_manager.delete_secret(secret_id, chat_id=chat_id)
         if not success:
             raise HTTPException(status_code=404, detail="Secret not found")
 
-        return JSONResponse(status_code=200, content={
-            "status": "success",
-            "message": "Secret deleted successfully"
-        })
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "message": "Secret deleted successfully"},
+        )
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
@@ -560,14 +560,17 @@ async def transfer_secrets(
     """Transfer secrets between scopes"""
     try:
         result = secrets_manager.transfer_secrets(request, chat_id=chat_id)
-        return JSONResponse(status_code=200, content={
-            "status": "success",
-            "message": (
-                f"Transfer completed: {result['total_requested']} requested, "
-                f"{len(result['transferred'])} transferred"
-            ),
-            "result": result
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": (
+                    f"Transfer completed: {result['total_requested']} requested, "
+                    f"{len(result['transferred'])} transferred"
+                ),
+                "result": result,
+            },
+        )
     except Exception as e:
         logger.error(f"Failed to transfer secrets: {e}")
         raise HTTPException(
@@ -595,31 +598,38 @@ async def delete_chat_secrets(
     """Delete secrets for a specific chat (used during chat cleanup)"""
     try:
         result = secrets_manager.delete_chat_secrets(chat_id, secret_ids)
-        return JSONResponse(status_code=200, content={
-            "status": "success",
-            "message": (
-                f"Deleted {result['total_deleted']} secrets for chat {chat_id}"
-            ),
-            "result": result
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": (
+                    f"Deleted {result['total_deleted']} secrets for chat {chat_id}"
+                ),
+                "result": result,
+            },
+        )
     except Exception as e:
         logger.error(f"Failed to delete chat secrets: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete chat secrets: {str(e)}"
+            status_code=500, detail=f"Failed to delete chat secrets: {str(e)}"
         )
 
 
 @router.get("/secrets/types")
 async def get_secret_types():
     """Get available secret types"""
-    return JSONResponse(status_code=200, content={
-        "types": [
-            {"value": t.value, "label": t.value.replace("_", " ").title()}
-            for t in SecretType
-        ],
-        "scopes": [{"value": s.value, "label": s.value.title()} for s in SecretScope]
-    })
+    return JSONResponse(
+        status_code=200,
+        content={
+            "types": [
+                {"value": t.value, "label": t.value.replace("_", " ").title()}
+                for t in SecretType
+            ],
+            "scopes": [
+                {"value": s.value, "label": s.value.title()} for s in SecretScope
+            ],
+        },
+    )
 
 
 @router.get("/secrets/stats")
@@ -633,7 +643,7 @@ async def get_secrets_stats():
             "by_scope": {"chat": 0, "general": 0},
             "by_type": {},
             "by_chat": {},
-            "expired_count": 0
+            "expired_count": 0,
         }
 
         now = datetime.now()
@@ -644,16 +654,12 @@ async def get_secrets_stats():
 
             # Count by type
             secret_type = secret_data["type"]
-            stats["by_type"][secret_type] = (
-                stats["by_type"].get(secret_type, 0) + 1
-            )
+            stats["by_type"][secret_type] = stats["by_type"].get(secret_type, 0) + 1
 
             # Count by chat (for chat-scoped secrets)
             if secret_data["scope"] == "chat" and secret_data.get("chat_id"):
                 chat_id = secret_data["chat_id"]
-                stats["by_chat"][chat_id] = (
-                    stats["by_chat"].get(chat_id, 0) + 1
-                )
+                stats["by_chat"][chat_id] = stats["by_chat"].get(chat_id, 0) + 1
 
             # Count expired secrets
             if secret_data.get("expires_at"):
@@ -664,6 +670,4 @@ async def get_secrets_stats():
         return JSONResponse(status_code=200, content=stats)
     except Exception as e:
         logger.error(f"Failed to get secrets stats: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get stats: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")

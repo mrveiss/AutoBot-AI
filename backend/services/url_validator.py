@@ -1,6 +1,7 @@
 """
 URL validation service for preventing SSRF attacks
 """
+
 import ipaddress
 import socket
 from typing import List, Optional

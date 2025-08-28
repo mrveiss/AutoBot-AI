@@ -52,9 +52,11 @@ async def get_state_tracking_status():
             "tracking_active": True,
             "snapshot_count": summary["snapshot_count"],
             "change_count": summary["change_count"],
-            "latest_snapshot": summary["current_state"]["validation_results"]
-            if summary["current_state"]
-            else None,
+            "latest_snapshot": (
+                summary["current_state"]["validation_results"]
+                if summary["current_state"]
+                else None
+            ),
         }
     except (ImportError, AttributeError) as e:
         logger.error(
