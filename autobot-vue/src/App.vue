@@ -4,13 +4,13 @@
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 bg-indigo-600 text-white px-4 py-2 rounded-br-lg z-[100000] focus:outline-none focus:ring-2 focus:ring-white">
       Skip to main content
     </a>
-    
+
     <div class="min-h-screen bg-blueGray-50">
       <!-- Main content -->
-      <div class="relative bg-blueGray-50" :class="activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
+      <div class="relative bg-blueGray-50" :class="appStore?.activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
 
-      <!-- Header gradient with navigation -->
-      <div class="relative bg-gradient-to-br from-indigo-600 to-indigo-800 z-40">
+      <!-- Header gradient with navigation - Always visible sticky header -->
+      <div class="sticky top-0 bg-gradient-to-br from-indigo-600 to-indigo-800 z-50 shadow-lg">
         <div class="px-4 md:px-6 mx-auto w-full">
           <div class="flex flex-row items-center justify-between py-3">
             <!-- Brand (Left side) -->
@@ -27,95 +27,88 @@
               <div class="hidden md:flex">
                 <ul class="flex flex-row list-none space-x-1" role="menubar">
                   <li role="none">
-                    <button
-                      @click="updateRoute('dashboard')"
-                      :class="[activeTab === 'dashboard' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      :aria-pressed="activeTab === 'dashboard'"
+                    <router-link
+                      to="/dashboard"
+                      :class="[$route.name === 'dashboard' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                       role="menuitem"
                       aria-label="Go to Dashboard"
                     >
                       <i class="fas fa-tachometer-alt mr-2 text-sm" aria-hidden="true"></i>
                       Dashboard
-                    </button>
+                    </router-link>
                   </li>
                   <li role="none">
-                    <button
-                      @click="updateRoute('chat')"
-                      :class="[activeTab === 'chat' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      :aria-pressed="activeTab === 'chat'"
+                    <router-link
+                      to="/chat"
+                      :class="[$route.name?.startsWith('chat') ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                       role="menuitem"
                       aria-label="Go to AI Assistant Chat"
                     >
                       <i class="fas fa-comments mr-2 text-sm" aria-hidden="true"></i>
                       AI Assistant
-                    </button>
+                    </router-link>
                   </li>
                   <li role="none">
-                    <button
-                      @click="updateRoute('knowledge')"
-                      :class="[activeTab === 'knowledge' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      :aria-pressed="activeTab === 'knowledge'"
+                    <router-link
+                      to="/knowledge"
+                      :class="[$route.name?.startsWith('knowledge') ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                       role="menuitem"
                       aria-label="Go to Knowledge Base"
                     >
                       <i class="fas fa-brain mr-2 text-sm" aria-hidden="true"></i>
                       Knowledge Base
-                    </button>
+                    </router-link>
                   </li>
                   <li role="none">
-                    <button
-                      @click="updateRoute('tools')"
-                      :class="[activeTab === 'tools' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      :aria-pressed="activeTab === 'tools'"
+                    <router-link
+                      to="/tools"
+                      :class="[$route.name?.startsWith('tools') ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                       role="menuitem"
                       aria-label="Go to Tools"
                     >
                       <i class="fas fa-tools mr-2 text-sm" aria-hidden="true"></i>
                       Tools
-                    </button>
+                    </router-link>
                   </li>
                   <li role="none">
-                    <button
-                      @click="updateRoute('monitoring')"
-                      :class="[activeTab === 'monitoring' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      :aria-pressed="activeTab === 'monitoring'"
+                    <router-link
+                      to="/monitoring"
+                      :class="[$route.name?.startsWith('monitoring') ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                       role="menuitem"
                       aria-label="Go to Monitoring"
                     >
                       <i class="fas fa-chart-bar mr-2 text-sm" aria-hidden="true"></i>
                       Monitoring
-                    </button>
+                    </router-link>
                   </li>
                   <li role="none">
-                    <button
-                      @click="updateRoute('secrets')"
-                      :class="[activeTab === 'secrets' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      :aria-pressed="activeTab === 'secrets'"
+                    <router-link
+                      to="/secrets"
+                      :class="[$route.name === 'secrets' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                       role="menuitem"
                       aria-label="Go to Secrets Manager"
                     >
                       <i class="fas fa-key mr-2 text-sm" aria-hidden="true"></i>
                       Secrets
-                    </button>
+                    </router-link>
                   </li>
                   <li role="none">
-                    <button
-                      @click="updateRoute('settings')"
-                      :class="[activeTab === 'settings' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
-                      :aria-pressed="activeTab === 'settings'"
+                    <router-link
+                      to="/settings"
+                      :class="[$route.name === 'settings' ? 'text-white bg-indigo-500' : 'text-indigo-200 hover:text-white hover:bg-white hover:bg-opacity-10']"
                       class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                       role="menuitem"
                       aria-label="Go to Settings"
                     >
                       <i class="fas fa-cog mr-2 text-sm" aria-hidden="true"></i>
                       Settings
-                    </button>
+                    </router-link>
                   </li>
                 </ul>
               </div>
@@ -137,15 +130,15 @@
                   class="cursor-pointer text-white px-3 py-1 text-xl leading-none bg-transparent rounded border border-solid border-transparent focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
                   type="button"
                   @click="toggleNavbar"
-                  :aria-label="navbarOpen ? 'Close navigation menu' : 'Open navigation menu'"
-                  :aria-expanded="navbarOpen"
+                  :aria-label="appStore?.navbarOpen ? 'Close navigation menu' : 'Open navigation menu'"
+                  :aria-expanded="appStore?.navbarOpen"
                   aria-controls="mobile-menu">
-                  <i class="fas" :class="navbarOpen ? 'fa-times' : 'fa-bars'" aria-hidden="true"></i>
+                  <i class="fas" :class="appStore?.navbarOpen ? 'fa-times' : 'fa-bars'" aria-hidden="true"></i>
                 </button>
 
                 <!-- Mobile Navigation Menu -->
                 <nav
-                  v-if="navbarOpen"
+                  v-if="appStore?.navbarOpen"
                   id="mobile-menu"
                   class="fixed top-16 right-4 z-[99999] w-64"
                   role="navigation"
@@ -154,84 +147,74 @@
                   <div class="mt-2 bg-white rounded-lg p-4 shadow-xl border border-blueGray-200" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
                     <ul class="flex flex-col space-y-2" role="menu">
                       <li>
-                        <a
-                          @click="updateRoute('dashboard')"
-                          :class="[activeTab === 'dashboard' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        <router-link
+                          to="/dashboard"
+                          :class="[$route.name === 'dashboard' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
                         >
                           <i class="fas fa-tachometer-alt mr-2 text-sm"></i>
                           Dashboard
-                        </a>
+                        </router-link>
                       </li>
                       <li>
-                        <a
-                          @click="updateRoute('chat')"
-                          :class="[activeTab === 'chat' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        <router-link
+                          to="/chat"
+                          :class="[$route.name?.startsWith('chat') ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
                         >
                           <i class="fas fa-comments mr-2 text-sm"></i>
                           AI Assistant
-                        </a>
+                        </router-link>
                       </li>
                       <li>
-                        <a
-                          @click="updateRoute('knowledge')"
-                          :class="[activeTab === 'knowledge' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        <router-link
+                          to="/knowledge"
+                          :class="[$route.name?.startsWith('knowledge') ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
                         >
                           <i class="fas fa-brain mr-2 text-sm"></i>
                           Knowledge Base
-                        </a>
+                        </router-link>
                       </li>
                       <li>
-                        <a
-                          @click="updateRoute('tools')"
-                          :class="[activeTab === 'tools' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        <router-link
+                          to="/tools"
+                          :class="[$route.name?.startsWith('tools') ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
                         >
                           <i class="fas fa-tools mr-2 text-sm"></i>
                           Tools
-                        </a>
+                        </router-link>
                       </li>
                       <li>
-                        <a
-                          @click="updateRoute('monitoring')"
-                          :class="[activeTab === 'monitoring' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        <router-link
+                          to="/monitoring"
+                          :class="[$route.name?.startsWith('monitoring') ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
                         >
                           <i class="fas fa-chart-bar mr-2 text-sm"></i>
                           Monitoring
-                        </a>
+                        </router-link>
                       </li>
                       <li>
-                        <a
-                          @click="updateRoute('validation')"
-                          :class="[activeTab === 'validation' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
-                        >
-                          <i class="fas fa-check-circle mr-2 text-sm"></i>
-                          Validation
-                        </a>
-                      </li>
-                      <li>
-                        <a
-                          @click="updateRoute('secrets')"
-                          :class="[activeTab === 'secrets' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        <router-link
+                          to="/secrets"
+                          :class="[$route.name === 'secrets' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
                         >
                           <i class="fas fa-key mr-2 text-sm"></i>
                           Secrets
-                        </a>
+                        </router-link>
                       </li>
                       <li>
-                        <a
-                          @click="updateRoute('settings')"
-                          :class="[activeTab === 'settings' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
-                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full"
+                        <router-link
+                          to="/settings"
+                          :class="[$route.name === 'settings' ? 'text-indigo-600 bg-indigo-100' : 'text-blueGray-700 hover:text-indigo-600 hover:bg-indigo-50']"
+                          class="text-xs uppercase py-2 px-3 font-bold inline-flex items-center rounded-lg cursor-pointer transition-all duration-150 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
                         >
                           <i class="fas fa-cog mr-2 text-sm"></i>
                           Settings
-                        </a>
+                        </router-link>
                       </li>
                       <li class="border-t border-gray-200 pt-2 mt-2">
                         <div class="text-xs uppercase text-gray-500 font-bold px-3 py-1">
@@ -241,7 +224,7 @@
                       </li>
                     </ul>
                   </div>
-                </div>
+                </nav>
               </div>
             </div>
           </div>
@@ -249,356 +232,16 @@
       </div>
 
       <!-- Content area -->
-      <main id="main-content" class="px-4 md:px-10 mx-auto w-full" :class="activeTab === 'chat' ? 'flex-1 flex flex-col' : ''" role="main">
-        <div class="flex flex-wrap" :class="activeTab === 'chat' ? 'flex-1 h-full' : 'mt-6'">
-          <div class="w-full px-4" :class="activeTab === 'chat' ? 'flex-1 h-full flex flex-col' : 'mb-12'">
-            <!-- Remove Transition for debugging -->
-            <div>
-              <!-- Dashboard View -->
-              <div v-if="activeTab === 'dashboard'" key="dashboard">
-                <!-- Phase Progression Indicator -->
-                <div class="w-full mb-6">
-                  <PhaseProgressionIndicator
-                    @success="onPhaseSuccess"
-                    @error="onPhaseError"
-                    @validation-complete="onValidationComplete"
-                    @phase-validated="onPhaseValidated"
-                  />
-                </div>
-
-                <div class="relative flex flex-col min-w-0 break-words w-full mb-6 shadow-lg rounded-lg bg-white">
-                  <div class="rounded-t mb-0 px-6 py-6">
-                    <div class="text-center flex justify-between">
-                      <h6 class="text-blueGray-700 text-xl font-bold">System Overview</h6>
-                      <button class="bg-indigo-500 text-white active:bg-indigo-600 text-xs font-bold uppercase px-3 py-1 rounded outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150" type="button" aria-label="Refresh system overview">
-                        <i class="fas fa-sync mr-1"></i> Refresh
-                      </button>
-                    </div>
-                  </div>
-                  <div class="flex-auto px-6 py-6">
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-blueGray-50 rounded-lg p-6">
-                      <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Recent Activity</h3>
-                      <div class="space-y-3">
-                        <div class="flex items-center">
-                          <div class="w-2 h-2 bg-emerald-500 rounded-full mr-3"></div>
-                          <span class="text-sm text-blueGray-600">New knowledge item added</span>
-                          <span class="ml-auto text-xs text-blueGray-400">2 min ago</span>
-                        </div>
-                        <div class="flex items-center">
-                          <div class="w-2 h-2 bg-lightBlue-500 rounded-full mr-3"></div>
-                          <span class="text-sm text-blueGray-600">Voice command processed</span>
-                          <span class="ml-auto text-xs text-blueGray-400">5 min ago</span>
-                        </div>
-                        <div class="flex items-center">
-                          <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
-                          <span class="text-sm text-blueGray-600">File uploaded successfully</span>
-                          <span class="ml-auto text-xs text-blueGray-400">12 min ago</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="bg-blueGray-50 rounded-lg p-6">
-                      <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Quick Actions</h3>
-                      <div class="grid grid-cols-2 gap-3">
-                        <button @click="updateRoute('chat')" class="btn btn-primary text-sm" aria-label="Start new chat conversation">
-                          <i class="fas fa-comments mr-2"></i>
-                          New Chat
-                        </button>
-                        <button @click="updateRoute('knowledge')" class="btn btn-secondary text-sm" aria-label="Add new knowledge entry">
-                          <i class="fas fa-plus mr-2"></i>
-                          Add Knowledge
-                        </button>
-                        <button @click="updateRoute('tools')" class="btn btn-secondary text-sm" aria-label="Access development tools">
-                          <i class="fas fa-tools mr-2"></i>
-                          Tools
-                        </button>
-                        <button @click="updateRoute('monitoring')" class="btn btn-outline text-sm" aria-label="View system monitoring dashboard">
-                          <i class="fas fa-chart-bar mr-2"></i>
-                          Monitoring
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Stats Cards Section -->
-                  <div class="mt-6">
-                    <h3 class="text-lg font-semibold text-blueGray-700 mb-4 px-6">System Statistics</h3>
-                    <div class="grid grid-cols-2 gap-4 px-8">
-                      <!-- Active Sessions Card -->
-                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
-                        <div class="flex-auto p-3">
-                          <div class="flex flex-wrap">
-                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
-                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Active Sessions</h5>
-                              <span class="font-semibold text-xl text-blueGray-700">{{ activeSessions }}</span>
-                            </div>
-                            <div class="relative w-auto pl-4 flex-initial">
-                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-red-500">
-                                <i class="fas fa-users"></i>
-                              </div>
-                            </div>
-                          </div>
-                          <p class="text-sm text-blueGray-400 mt-4">
-                            <span class="text-emerald-500 mr-2">
-                              <i class="fas fa-arrow-up"></i> 3.48%
-                            </span>
-                            <span class="whitespace-nowrap">Since last month</span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- Knowledge Items Card -->
-                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
-                        <div class="flex-auto p-3">
-                          <div class="flex flex-wrap">
-                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
-                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Knowledge Items</h5>
-                              <span class="font-semibold text-xl text-blueGray-700">{{ knowledgeItems }}</span>
-                            </div>
-                            <div class="relative w-auto pl-4 flex-initial">
-                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-orange-500">
-                                <i class="fas fa-database"></i>
-                              </div>
-                            </div>
-                          </div>
-                          <p class="text-sm text-blueGray-400 mt-4">
-                            <span class="text-emerald-500 mr-2">
-                              <i class="fas fa-arrow-up"></i> 12%
-                            </span>
-                            <span class="whitespace-nowrap">Since last week</span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- Tasks Completed Card -->
-                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
-                        <div class="flex-auto p-3">
-                          <div class="flex flex-wrap">
-                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
-                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Tasks Completed</h5>
-                              <span class="font-semibold text-xl text-blueGray-700">{{ tasksCompleted }}</span>
-                            </div>
-                            <div class="relative w-auto pl-4 flex-initial">
-                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-emerald-500">
-                                <i class="fas fa-check-circle"></i>
-                              </div>
-                            </div>
-                          </div>
-                          <p class="text-sm text-blueGray-400 mt-4">
-                            <span class="text-orange-500 mr-2">
-                              <i class="fas fa-arrow-down"></i> 1.10%
-                            </span>
-                            <span class="whitespace-nowrap">Since yesterday</span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- Performance Card -->
-                      <div class="relative flex flex-col min-w-0 break-words bg-blueGray-50 rounded-lg shadow-sm">
-                        <div class="flex-auto p-3">
-                          <div class="flex flex-wrap">
-                            <div class="relative w-full pr-4 max-w-full flex-grow flex-1">
-                              <h5 class="text-blueGray-400 uppercase font-bold text-xs">Performance</h5>
-                              <span class="font-semibold text-xl text-blueGray-700">{{ performance }}%</span>
-                            </div>
-                            <div class="relative w-auto pl-4 flex-initial">
-                              <div class="text-white p-3 text-center inline-flex items-center justify-center w-12 h-12 shadow-lg rounded-full bg-lightBlue-500">
-                                <i class="fas fa-tachometer-alt"></i>
-                              </div>
-                            </div>
-                          </div>
-                          <p class="text-sm text-blueGray-400 mt-4">
-                            <span class="text-emerald-500 mr-2">
-                              <i class="fas fa-arrow-up"></i> 12%
-                            </span>
-                            <span class="whitespace-nowrap">Since last month</span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Chat View -->
-              <div v-else-if="activeTab === 'chat'" key="chat" class="w-full flex-1 flex justify-start">
-                <div class="w-full flex-1">
-                  <ChatInterface :key="activeChatId" />
-                </div>
-              </div>
-
-              <!-- Knowledge View -->
-              <section v-else-if="activeTab === 'knowledge'" key="knowledge" class="card">
-                <div class="card-body p-0">
-                  <KnowledgeManager />
-                </div>
-              </section>
-
-              <!-- Tools View -->
-              <section v-else-if="activeTab === 'tools'" key="tools" class="card">
-                <div class="card-body">
-                  <div class="mb-6">
-                    <h3 class="text-xl font-semibold text-blueGray-700 mb-4">Tools</h3>
-                    <div class="flex flex-wrap gap-2 mb-6">
-                      <button
-                        @click="activeToolTab = 'terminal'"
-                        :class="[activeToolTab === 'terminal' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
-                        class="px-4 py-2 rounded font-medium transition-colors"
-                      >
-                        <i class="fas fa-terminal mr-2"></i>Terminal
-                      </button>
-                      <button
-                        @click="activeToolTab = 'files'"
-                        :class="[activeToolTab === 'files' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
-                        class="px-4 py-2 rounded font-medium transition-colors"
-                      >
-                        <i class="fas fa-folder mr-2"></i>File Manager
-                      </button>
-                      <button
-                        @click="activeToolTab = 'workflows'"
-                        :class="[activeToolTab === 'workflows' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
-                        class="px-4 py-2 rounded font-medium transition-colors"
-                      >
-                        <i class="fas fa-project-diagram mr-2"></i>Workflows
-                      </button>
-                      <button
-                        @click="activeToolTab = 'analytics'"
-                        :class="[activeToolTab === 'analytics' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
-                        class="px-4 py-2 rounded font-medium transition-colors"
-                      >
-                        <i class="fas fa-chart-line mr-2"></i>Codebase Analytics
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Terminal Tab -->
-                  <div v-if="activeToolTab === 'terminal'" class="tools-content bg-blueGray-900 rounded">
-                    <TerminalWindow />
-                  </div>
-
-                  <!-- File Manager Tab -->
-                  <div v-else-if="activeToolTab === 'files'" class="tools-content">
-                    <FileBrowser />
-                  </div>
-
-                  <!-- Workflows Tab -->
-                  <div v-else-if="activeToolTab === 'workflows'" class="tools-content">
-                    <WorkflowApproval />
-                  </div>
-
-                  <!-- Codebase Analytics Tab -->
-                  <div v-else-if="activeToolTab === 'analytics'" class="tools-content">
-                    <CodebaseAnalytics />
-                  </div>
-                </div>
-              </section>
-
-              <!-- Monitoring View -->
-              <section v-else-if="activeTab === 'monitoring'" key="monitoring" class="card">
-                <div class="card-body">
-                  <div class="mb-6">
-                    <h3 class="text-xl font-semibold text-blueGray-700 mb-4">Monitoring</h3>
-                    <div class="flex flex-wrap gap-2 mb-6">
-                      <button
-                        @click="activeMonitoringTab = 'voice'"
-                        :class="[activeMonitoringTab === 'voice' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
-                        class="px-4 py-2 rounded font-medium transition-colors"
-                      >
-                        <i class="fas fa-microphone mr-2"></i>Voice Interface
-                      </button>
-                      <button
-                        @click="activeMonitoringTab = 'system'"
-                        :class="[activeMonitoringTab === 'system' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
-                        class="px-4 py-2 rounded font-medium transition-colors"
-                      >
-                        <i class="fas fa-chart-line mr-2"></i>System Monitor
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Voice Interface Tab -->
-                  <div v-if="activeMonitoringTab === 'voice'" class="monitoring-content">
-                    <VoiceInterface />
-                  </div>
-
-                  <!-- System Monitor Tab -->
-                  <div v-else-if="activeMonitoringTab === 'system'" class="monitoring-content">
-                    <div class="mb-4">
-                      <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh system statistics">
-                        <i class="fas fa-sync mr-2"></i>
-                        Refresh
-                      </button>
-                    </div>
-                    <SystemMonitor />
-                  </div>
-                </div>
-              </section>
-
-              <!-- Validation Dashboard View -->
-              <section v-else-if="activeTab === 'validation'" key="validation" class="card">
-                <div class="card-body p-0">
-                  <ValidationDashboard />
-                </div>
-              </section>
-
-              <!-- Workflows View -->
-              <section v-else-if="activeTab === 'workflows'" key="workflows" class="card">
-                <div class="card-body p-0">
-                  <WorkflowApproval />
-                </div>
-              </section>
-              <!-- Secrets View -->
-              <section v-else-if="activeTab === 'secrets'" key="secrets" class="card">
-                <div class="card-body p-0">
-                  <SecretsManager />
-                </div>
-              </section>
-
-              <!-- Settings View -->
-              <section v-else-if="activeTab === 'settings'" key="settings" class="card">
-                <div class="card-body">
-                  <SettingsPanel />
-                </div>
-              </section>
-
-              <!-- Legacy routes for backward compatibility -->
-              <section v-else-if="activeTab === 'files'" key="files" class="card">
-                <div class="card-body p-0">
-                  <FileBrowser />
-                </div>
-              </section>
-
-              <section v-else-if="activeTab === 'terminal'" key="terminal" class="card bg-blueGray-900">
-                <div class="card-body p-0">
-                  <TerminalWindow />
-                </div>
-              </section>
-
-              <section v-else-if="activeTab === 'voice'" key="voice" class="card">
-                <div class="card-body">
-                  <VoiceInterface />
-                </div>
-              </section>
-
-              <section v-else-if="activeTab === 'monitor'" key="monitor" class="card">
-                <div class="card-body p-0">
-                  <div class="mb-4 px-6 pt-6">
-                    <button @click="refreshStats" class="btn btn-primary text-sm" aria-label="Refresh monitoring data">
-                      <i class="fas fa-sync mr-2"></i>
-                      Refresh
-                    </button>
-                  </div>
-                  <SystemMonitor />
-                </div>
-              </section>
-            </div>
+      <main id="main-content" class="px-4 md:px-10 mx-auto w-full" :class="appStore?.activeTab === 'chat' ? 'flex-1 flex flex-col' : ''" role="main">
+        <div class="flex flex-wrap" :class="appStore?.activeTab === 'chat' ? 'flex-1 h-full' : 'mt-6'">
+          <div class="w-full px-4" :class="appStore?.activeTab === 'chat' ? 'flex-1 h-full flex flex-col' : 'mb-12'">
+            <!-- Router view for MVC navigation -->
+            <router-view />
           </div>
         </div>
       </main>
+      </div>
     </div>
-
-  </div>
 
   <!-- Global Elevation Dialog -->
   <ElevationDialog
@@ -624,84 +267,18 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import ApiClient from './utils/ApiClient.js';
-// PERFORMANCE OPTIMIZATION: Lazy load components to reduce initial bundle size
-import { defineAsyncComponent } from 'vue';
-
+import { useAppStore } from '@/stores/useAppStore'
+import { useChatStore } from '@/stores/useChatStore'
+import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { ApiClient } from './utils/ApiClient.js';
 // Core components loaded immediately (small and always needed)
 import PhaseProgressionIndicator from './components/PhaseProgressionIndicator.vue';
 import ElevationDialog from './components/ElevationDialog.vue';
 import ErrorNotifications from './components/ErrorNotifications.vue';
 import ErrorBoundary from './components/ErrorBoundary.vue';
 
-// Lazy-loaded components (loaded only when needed)
-const ChatInterface = defineAsyncComponent({
-  loader: () => import('./components/ChatInterface.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Chat...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Chat component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
-const VoiceInterface = defineAsyncComponent({
-  loader: () => import('./components/VoiceInterface.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-4"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div><span class="ml-2">Loading Voice...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Voice component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
-const KnowledgeManager = defineAsyncComponent({
-  loader: () => import('./components/KnowledgeManager.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Knowledge Base...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Knowledge Base component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
-import TerminalWindow from './components/TerminalWindow.vue';
-
-const SettingsPanel = defineAsyncComponent({
-  loader: () => import('./components/SettingsPanel.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Settings...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Settings component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
-const SecretsManager = defineAsyncComponent({
-  loader: () => import('./components/SecretsManager.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Secrets...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Secrets component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
-const FileBrowser = defineAsyncComponent({
-  loader: () => import('./components/FileBrowser.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading File Browser...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load File Browser component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
-const SystemMonitor = defineAsyncComponent({
-  loader: () => import('./components/SystemMonitor.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading System Monitor...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load System Monitor component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
-import WorkflowApproval from './components/WorkflowApproval.vue';
-
-const ValidationDashboard = defineAsyncComponent({
-  loader: () => import('./components/ValidationDashboard.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Validation Dashboard...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Validation Dashboard component</div>' },
-  delay: 100,
-  timeout: 10000
-});
+// Import async RUM Dashboard component
+import { defineAsyncComponent } from 'vue';
 
 const RumDashboard = defineAsyncComponent({
   loader: () => import('./components/RumDashboard.vue'),
@@ -711,58 +288,40 @@ const RumDashboard = defineAsyncComponent({
   timeout: 10000
 });
 
-const CodebaseAnalytics = defineAsyncComponent({
-  loader: () => import('./components/CodebaseAnalytics.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading Codebase Analytics...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load Codebase Analytics component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
-import elevationService from './services/elevationService';
 
 export default {
   name: 'App',
   components: {
-    ChatInterface,
-    VoiceInterface,
-    KnowledgeManager,
-    TerminalWindow,
-    SettingsPanel,
-    SecretsManager,
-    FileBrowser,
-    SystemMonitor,
-    WorkflowApproval,
     PhaseProgressionIndicator,
-    ValidationDashboard,
     ElevationDialog,
     RumDashboard,
-    CodebaseAnalytics,
     ErrorNotifications,
     ErrorBoundary
   },
   setup() {
-    const activeTab = ref('dashboard');
-    const activeChatId = ref(`chat-${Date.now()}`);
-    const navbarOpen = ref(false);
+    // Use Pinia stores instead of local refs
+    const appStore = useAppStore()
+    const chatStore = useChatStore()
+    const knowledgeStore = useKnowledgeStore()
+
     const mobileMenuContainer = ref(null);
 
-    // Sub-tab states for new grouped sections
+    // Sub-tab states for new grouped sections (kept local as they're UI-only)
     const activeToolTab = ref('terminal');
     const activeMonitoringTab = ref('voice');
-    // Simple tab switching without router
+
+    // Simple tab switching using store
     const updateRoute = (tab) => {
-      activeTab.value = tab;
-      navbarOpen.value = false; // Close mobile menu
+      appStore.updateRoute(tab);
     };
 
-    // Dashboard stats
-    const activeSessions = ref(3);
-    const knowledgeItems = ref(1247);
-    const tasksCompleted = ref(89);
-    const performance = ref(92);
+    // Dashboard stats (computed from stores)
+    const activeSessions = ref(1);
+    const knowledgeItems = computed(() => knowledgeStore.documentCount);
+    const tasksCompleted = ref(89); // This could come from a tasks store later
+    const performance = ref(92); // This could come from system metrics
 
-    // Connection statuses
+    // Connection statuses from store
     const backendStatus = ref({ text: 'Checking...', class: 'warning', message: 'Connecting to backend...' });
     const llmStatus = ref({ text: 'Checking...', class: 'warning', message: 'Connecting to LLM...' });
     const redisStatus = ref({ text: 'Checking...', class: 'warning', message: 'Connecting to Redis...' });
@@ -778,21 +337,21 @@ export default {
         files: 'File Manager',
         monitor: 'System Monitor'
       };
-      return titles[activeTab.value] || 'AutoBot';
+      return titles[appStore.activeTab] || 'AutoBot';
     });
 
     const toggleNavbar = () => {
-      navbarOpen.value = !navbarOpen.value;
+      appStore.toggleNavbar();
     };
 
     const closeNavbarOnClickOutside = (event) => {
-      if (navbarOpen.value && mobileMenuContainer.value && !mobileMenuContainer.value.contains(event.target)) {
-        navbarOpen.value = false;
+      if (appStore?.navbarOpen && mobileMenuContainer.value && !mobileMenuContainer.value.contains(event.target)) {
+        appStore.navbarOpen = false;
       }
     };
 
     const newChat = () => {
-      activeChatId.value = `chat-${Date.now()}`;
+      appStore.generateNewChatId();
     };
 
 
@@ -855,9 +414,10 @@ export default {
           { text: 'Connected', class: 'connected', message: 'Redis is running' } :
           { text: 'Error', class: 'error', message: 'Redis connection failed' };
       } catch (error) {
-        backendStatus.value = { text: 'Offline', class: 'error', message: 'Cannot reach backend' };
-        llmStatus.value = { text: 'Unknown', class: 'warning', message: 'Status unknown' };
-        redisStatus.value = { text: 'Unknown', class: 'warning', message: 'Status unknown' };
+        // Backend not running - this is expected in frontend-only mode
+        backendStatus.value = { text: 'Frontend Only', class: 'warning', message: 'Backend not connected (demo mode)' };
+        llmStatus.value = { text: 'Demo Mode', class: 'warning', message: 'Backend required for LLM' };
+        redisStatus.value = { text: 'Demo Mode', class: 'warning', message: 'Backend required for Redis' };
       }
     };
 
@@ -869,11 +429,6 @@ export default {
 
       // Add click-outside listener for mobile menu
       document.addEventListener('click', closeNavbarOnClickOutside);
-
-      // Register elevation dialog with service
-      if (elevationDialog.value) {
-        elevationService.registerDialog(elevationDialog.value);
-      }
 
       // Simulate dashboard updates
       setInterval(() => {
@@ -898,12 +453,15 @@ export default {
     };
 
     return {
-      activeTab,
-      activeChatId,
-      navbarOpen,
+      // Store instances for template access
+      appStore,
+      chatStore,
+      knowledgeStore,
+      // Local reactive refs
       mobileMenuContainer,
       activeToolTab,
       activeMonitoringTab,
+      // Computed values
       backendStatus,
       llmStatus,
       redisStatus,
@@ -912,6 +470,7 @@ export default {
       knowledgeItems,
       tasksCompleted,
       performance,
+      // Methods
       toggleNavbar,
       updateRoute,
       newChat,

@@ -322,6 +322,7 @@
 <script>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { secretsApiClient } from '../utils/SecretsApiClient';
+import { useAppStore } from '../stores/useAppStore.ts';
 
 export default {
   name: 'SecretsManager',
@@ -561,8 +562,9 @@ export default {
     };
     
     const getCurrentChatId = () => {
-      // TODO: Get actual current chat ID from the application state
-      return 'current-chat-' + Date.now();
+      // Use actual current chat ID from app store
+      const appStore = useAppStore();
+      return appStore.activeChatId;
     };
     
     const copySecretValue = async () => {
