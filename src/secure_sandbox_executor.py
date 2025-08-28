@@ -590,7 +590,9 @@ class SecureSandboxExecutor:
 
 
 # Global instance for easy access
-secure_sandbox = SecureSandboxExecutor()
+# Disable Docker initialization during startup to prevent blocking
+# secure_sandbox = SecureSandboxExecutor()
+secure_sandbox = None
 
 
 async def execute_in_sandbox(

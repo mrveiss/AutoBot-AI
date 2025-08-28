@@ -7,6 +7,7 @@ and degraded operation modes.
 """
 
 import asyncio
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -140,6 +141,89 @@ class LLMFailsafeAgent:
             "status": f"AutoBot Emergency Status - {time.strftime('%Y-%m-%d %H:%M:%S')}: Basic functions operational, primary LLM systems unavailable.",
         }
 
+    def _create_structured_messages(
+        self, prompt: str, context: Optional[Dict[str, Any]] = None
+    ) -> list:
+        """
+        Create structured JSON messages for better LLM understanding.
+
+        Args:
+            prompt: User input/request
+            context: Optional context information
+
+        Returns:
+            List of properly structured message objects
+        """
+        messages = []
+
+        # Add system message with structured instructions
+        system_content = {
+            "role": "system",
+            "instructions": "You are AutoBot, an AI assistant that provides helpful, accurate, and contextual responses.",
+            "response_format": {
+                "type": "conversational",
+                "style": "professional but friendly",
+                "include_sources": (
+                    True if context and context.get("kb_context") else False
+                ),
+            },
+            "capabilities": [
+                "general knowledge",
+                "technical assistance",
+                "code help",
+                "analysis and problem solving",
+            ],
+        }
+
+        # Add context-specific instructions if available
+        if context:
+            system_content["context_info"] = {}
+
+            if context.get("chat_id"):
+                system_content["context_info"]["chat_session"] = context["chat_id"]
+
+            if context.get("kb_documents_found", 0) > 0:
+                system_content["context_info"]["knowledge_base"] = {
+                    "documents_found": context["kb_documents_found"],
+                    "has_context": True,
+                    "instruction": "Use the provided knowledge base context to inform your response. Cite sources when using KB information.",
+                }
+
+            if context.get("response_type"):
+                system_content["context_info"]["expected_response_type"] = context[
+                    "response_type"
+                ]
+
+            if context.get("instructions"):
+                system_content["context_info"]["special_instructions"] = context[
+                    "instructions"
+                ]
+
+        messages.append(
+            {"role": "system", "content": json.dumps(system_content, indent=2)}
+        )
+
+        # Add knowledge base context if available
+        if context and context.get("kb_context"):
+            messages.append(
+                {
+                    "role": "system",
+                    "content": f"Knowledge Base Context:\n{context['kb_context']}",
+                }
+            )
+
+        # Add user message with structured format
+        user_message = {
+            "role": "user",
+            "content": prompt,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "request_type": "chat_completion",
+        }
+
+        messages.append(user_message)
+
+        return messages
+
     async def get_response(
         self, prompt: str, context: Optional[Dict[str, Any]] = None
     ) -> LLMResponse:
@@ -204,8 +288,8 @@ class LLMFailsafeAgent:
             # Try each primary model
             for model in self.primary_models:
                 try:
-                    # Create timeout wrapper
-                    messages = [{"role": "user", "content": prompt}]
+                    # Create structured JSON messages with enhanced context
+                    messages = self._create_structured_messages(prompt, context)
                     response_task = llm.chat_completion(messages, llm_type="task")
                     response_data = await asyncio.wait_for(
                         response_task, timeout=self.timeouts[LLMTier.PRIMARY]

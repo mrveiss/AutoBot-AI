@@ -132,24 +132,36 @@ class DevelopmentSpeedupAgent:
         report = {
             "analysis_timestamp": asyncio.get_event_loop().time(),
             "root_path": root_path,
-            "duplicate_code": results[0]
-            if not isinstance(results[0], Exception)
-            else {"error": str(results[0])},
-            "code_patterns": results[1]
-            if not isinstance(results[1], Exception)
-            else {"error": str(results[1])},
-            "import_analysis": results[2]
-            if not isinstance(results[2], Exception)
-            else {"error": str(results[2])},
-            "dead_code": results[3]
-            if not isinstance(results[3], Exception)
-            else {"error": str(results[3])},
-            "refactoring_opportunities": results[4]
-            if not isinstance(results[4], Exception)
-            else {"error": str(results[4])},
-            "quality_issues": results[5]
-            if not isinstance(results[5], Exception)
-            else {"error": str(results[5])},
+            "duplicate_code": (
+                results[0]
+                if not isinstance(results[0], Exception)
+                else {"error": str(results[0])}
+            ),
+            "code_patterns": (
+                results[1]
+                if not isinstance(results[1], Exception)
+                else {"error": str(results[1])}
+            ),
+            "import_analysis": (
+                results[2]
+                if not isinstance(results[2], Exception)
+                else {"error": str(results[2])}
+            ),
+            "dead_code": (
+                results[3]
+                if not isinstance(results[3], Exception)
+                else {"error": str(results[3])}
+            ),
+            "refactoring_opportunities": (
+                results[4]
+                if not isinstance(results[4], Exception)
+                else {"error": str(results[4])}
+            ),
+            "quality_issues": (
+                results[5]
+                if not isinstance(results[5], Exception)
+                else {"error": str(results[5])}
+            ),
         }
 
         # Generate actionable recommendations
@@ -744,9 +756,11 @@ class DevelopmentSpeedupAgent:
     # Conversion methods for serialization
     def _duplicate_to_dict(self, duplicate: DuplicateCode) -> Dict[str, Any]:
         return {
-            "content_preview": duplicate.content[:200] + "..."
-            if len(duplicate.content) > 200
-            else duplicate.content,
+            "content_preview": (
+                duplicate.content[:200] + "..."
+                if len(duplicate.content) > 200
+                else duplicate.content
+            ),
             "locations": duplicate.locations,
             "similarity_score": duplicate.similarity_score,
             "size_lines": duplicate.size_lines,

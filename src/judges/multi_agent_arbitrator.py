@@ -128,11 +128,11 @@ class MultiAgentArbitrator(BaseLLMJudge):
             return {
                 "has_conflicts": has_conflicts,
                 "consistency_score": consistency_score,
-                "conflict_severity": "high"
-                if consistency_score < 0.5
-                else "medium"
-                if consistency_score < 0.7
-                else "low",
+                "conflict_severity": (
+                    "high"
+                    if consistency_score < 0.5
+                    else "medium" if consistency_score < 0.7 else "low"
+                ),
                 "conflicting_areas": self._identify_conflicting_areas(judgment),
                 "resolution_suggestions": judgment.improvement_suggestions,
                 "detailed_analysis": judgment.reasoning,

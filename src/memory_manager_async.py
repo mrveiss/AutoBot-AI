@@ -76,11 +76,11 @@ class AsyncLongTermMemoryManager:
         """Initialize async SQLite database with comprehensive memory tables"""
         if self._initialized:
             return
-            
+
         async with self._init_lock:
             if self._initialized:
                 return
-                
+
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
             async with aiosqlite.connect(self.db_path) as conn:
@@ -194,7 +194,7 @@ class AsyncLongTermMemoryManager:
                     await conn.execute(index_query)
 
                 await conn.commit()
-            
+
             self._initialized = True
             self.logger.info("Async memory database initialization completed")
 
@@ -208,10 +208,10 @@ class AsyncLongTermMemoryManager:
     ) -> int:
         """Store a memory entry with async performance"""
         await self._init_memory_db()
-        
+
         # Generate content hash for duplicate detection
         content_hash = hashlib.sha256(content.encode()).hexdigest()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
@@ -243,7 +243,7 @@ class AsyncLongTermMemoryManager:
     ) -> List[MemoryEntry]:
         """Retrieve memory entries with async querying"""
         await self._init_memory_db()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             if category:
                 query = f"""
@@ -294,7 +294,7 @@ class AsyncLongTermMemoryManager:
     ) -> int:
         """Log task execution with async performance"""
         await self._init_memory_db()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
@@ -311,7 +311,11 @@ class AsyncLongTermMemoryManager:
                     result,
                     execution_time_ms,
                     error_message,
-                    datetime.now() if status in ["IN_PROGRESS", "DONE", "FAILED"] else None,
+                    (
+                        datetime.now()
+                        if status in ["IN_PROGRESS", "DONE", "FAILED"]
+                        else None
+                    ),
                     datetime.now() if status in ["DONE", "FAILED"] else None,
                     json.dumps(metadata or {}),
                 ),
@@ -331,7 +335,7 @@ class AsyncLongTermMemoryManager:
     ) -> int:
         """Store agent state snapshot with async performance"""
         await self._init_memory_db()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
@@ -365,7 +369,7 @@ class AsyncLongTermMemoryManager:
     ) -> int:
         """Log conversation message with async performance"""
         await self._init_memory_db()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
@@ -398,7 +402,7 @@ class AsyncLongTermMemoryManager:
     ) -> int:
         """Log configuration changes with async performance"""
         await self._init_memory_db()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
@@ -422,40 +426,39 @@ class AsyncLongTermMemoryManager:
     async def cleanup_old_entries(self):
         """Clean up old entries based on retention policies"""
         await self._init_memory_db()
-        
-        cutoff_timestamp = (datetime.now() - timedelta(days=self.retention_days)).timestamp()
-        
+
+        cutoff_timestamp = (
+            datetime.now() - timedelta(days=self.retention_days)
+        ).timestamp()
+
         async with aiosqlite.connect(self.db_path) as conn:
             # Clean up old memory entries
             cursor = await conn.execute(
-                "DELETE FROM memory_entries WHERE timestamp < ?",
-                (cutoff_timestamp,)
+                "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff_timestamp,)
             )
             deleted_memory = cursor.rowcount
-            
+
             # Clean up old task logs
             cursor = await conn.execute(
-                "DELETE FROM task_logs WHERE started_at < ?",
-                (cutoff_timestamp,)
+                "DELETE FROM task_logs WHERE started_at < ?", (cutoff_timestamp,)
             )
             deleted_tasks = cursor.rowcount
-            
+
             # Clean up old agent states
             cursor = await conn.execute(
-                "DELETE FROM agent_states WHERE timestamp < ?",
-                (cutoff_timestamp,)
+                "DELETE FROM agent_states WHERE timestamp < ?", (cutoff_timestamp,)
             )
             deleted_states = cursor.rowcount
-            
+
             # Clean up old conversations
             cursor = await conn.execute(
                 "DELETE FROM conversation_history WHERE timestamp < ?",
-                (cutoff_timestamp,)
+                (cutoff_timestamp,),
             )
             deleted_conversations = cursor.rowcount
-            
+
             await conn.commit()
-            
+
             self.logger.info(
                 f"Cleanup completed: {deleted_memory} memories, {deleted_tasks} tasks, "
                 f"{deleted_states} states, {deleted_conversations} conversations"
@@ -464,36 +467,36 @@ class AsyncLongTermMemoryManager:
     async def get_statistics(self) -> Dict[str, Any]:
         """Get database statistics with async performance"""
         await self._init_memory_db()
-        
+
         async with aiosqlite.connect(self.db_path) as conn:
             stats = {}
-            
+
             # Memory entries by category
             cursor = await conn.execute(
                 "SELECT category, COUNT(*) FROM memory_entries GROUP BY category"
             )
             stats["memory_by_category"] = dict(await cursor.fetchall())
-            
+
             # Task status distribution
             cursor = await conn.execute(
                 "SELECT status, COUNT(*) FROM task_logs GROUP BY status"
             )
             stats["tasks_by_status"] = dict(await cursor.fetchall())
-            
+
             # Recent activity (last 24 hours)
             recent_timestamp = (datetime.now() - timedelta(hours=24)).timestamp()
             cursor = await conn.execute(
                 "SELECT COUNT(*) FROM memory_entries WHERE timestamp > ?",
-                (recent_timestamp,)
+                (recent_timestamp,),
             )
             stats["recent_memories"] = (await cursor.fetchone())[0]
-            
+
             cursor = await conn.execute(
                 "SELECT COUNT(*) FROM conversation_history WHERE timestamp > ?",
-                (recent_timestamp,)
+                (recent_timestamp,),
             )
             stats["recent_conversations"] = (await cursor.fetchone())[0]
-            
+
             return stats
 
     async def close(self):
@@ -504,6 +507,7 @@ class AsyncLongTermMemoryManager:
 
 # Global async memory manager instance
 _async_memory_manager = None
+
 
 def get_async_memory_manager() -> AsyncLongTermMemoryManager:
     """Get global async memory manager instance"""

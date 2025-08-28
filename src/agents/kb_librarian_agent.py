@@ -91,11 +91,114 @@ class KBLibrarianAgent:
                 f"KB Librarian found {len(results)} relevant documents "
                 f"for query: {query}"
             )
-            return results
 
+            # LEARNING TRIGGER: If no results found, trigger knowledge base population
+            if len(results) == 0:
+                logger.info(
+                    "DEBUG: No documents found in KB - triggering auto-population..."
+                )
+                await self._trigger_knowledge_base_population()
+
+                # After population, search again
+                results = await self.knowledge_base.search(
+                    query, n_results=self.max_results
+                )
+                logger.info(
+                    f"KB Librarian found {len(results)} documents after auto-population"
+                )
+
+            return results
         except Exception as e:
             logger.error(f"Error searching knowledge base: {e}")
             return []
+
+    async def _trigger_knowledge_base_population(self):
+        """Trigger automatic population of knowledge base with system documentation and prompts."""
+        try:
+            logger.info("AUTO-LEARNING: Starting knowledge base population...")
+
+            # Use the existing knowledge base import endpoints
+            from backend.api.knowledge import router as knowledge_router
+
+            # Import system documentation
+            logger.info("AUTO-LEARNING: Importing system documentation...")
+            try:
+                # Import documentation files (README, docs/, etc.)
+                import os
+
+                docs_to_import = [
+                    "README.md",
+                    "EXECUTIVE_SUMMARY.md",
+                    "CLAUDE.md",
+                    "docs/INDEX.md",
+                ]
+
+                for doc_path in docs_to_import:
+                    if os.path.exists(doc_path):
+                        logger.info(f"AUTO-LEARNING: Importing {doc_path}")
+                        await self._import_document(doc_path)
+
+                # Import prompts
+                logger.info("AUTO-LEARNING: Importing system prompts...")
+                await self._import_prompts_directory()
+
+                logger.info("AUTO-LEARNING: Knowledge base population completed")
+
+            except Exception as e:
+                logger.error(f"AUTO-LEARNING: Error during population: {e}")
+
+        except Exception as e:
+            logger.error(f"AUTO-LEARNING: Failed to trigger population: {e}")
+
+    async def _import_document(self, file_path: str):
+        """Import a single document into the knowledge base."""
+        try:
+            import os
+
+            if not os.path.exists(file_path):
+                return
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Add to knowledge base
+            await self.knowledge_base.add_text(
+                content,
+                title=os.path.basename(file_path),
+                source=f"AutoBot Documentation: {file_path}",
+            )
+            logger.info(f"AUTO-LEARNING: Added {file_path} to knowledge base")
+
+        except Exception as e:
+            logger.error(f"AUTO-LEARNING: Failed to import {file_path}: {e}")
+
+    async def _import_prompts_directory(self):
+        """Import prompts directory into knowledge base."""
+        try:
+            import os
+            import glob
+
+            prompts_dir = "prompts"
+            if not os.path.exists(prompts_dir):
+                return
+
+            # Find all text files in prompts directory
+            prompt_files = glob.glob(
+                os.path.join(prompts_dir, "**/*.txt"), recursive=True
+            )
+            prompt_files.extend(
+                glob.glob(os.path.join(prompts_dir, "**/*.md"), recursive=True)
+            )
+
+            for prompt_file in prompt_files[:20]:  # Limit to first 20 to avoid overload
+                await self._import_document(prompt_file)
+
+            logger.info(
+                f"AUTO-LEARNING: Imported {len(prompt_files[:20])} prompt files"
+            )
+
+        except Exception as e:
+            logger.error(f"AUTO-LEARNING: Failed to import prompts: {e}")
 
     async def summarize_findings(
         self, query: str, documents: List[Dict[str, Any]]

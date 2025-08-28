@@ -509,9 +509,9 @@ class PhaseProgressionManager:
                 )
 
                 progression_result["status"] = PhasePromotionStatus.PROMOTED
-                progression_result[
-                    "reason"
-                ] = "Phase progression completed successfully"
+                progression_result["reason"] = (
+                    "Phase progression completed successfully"
+                )
             else:
                 progression_result["reason"] = "Failed to create phase infrastructure"
 
@@ -675,9 +675,11 @@ class PhaseProgressionManager:
             "progression_history": self.progression_history[
                 -10:
             ],  # Last 10 progressions
-            "last_progression_check": self.last_progression_check.isoformat()
-            if self.last_progression_check
-            else None,
+            "last_progression_check": (
+                self.last_progression_check.isoformat()
+                if self.last_progression_check
+                else None
+            ),
             "auto_progression_enabled": self.config["auto_progression_enabled"],
             "system_maturity": len(self.current_capabilities)
             * 10,  # Rough maturity score
@@ -717,9 +719,11 @@ class PhaseProgressionManager:
         )
 
         return {
-            "status": "success"
-            if progression_result["status"] == PhasePromotionStatus.PROMOTED
-            else "failed",
+            "status": (
+                "success"
+                if progression_result["status"] == PhasePromotionStatus.PROMOTED
+                else "failed"
+            ),
             "message": progression_result["reason"],
             "capabilities_unlocked": progression_result.get(
                 "capabilities_unlocked", []

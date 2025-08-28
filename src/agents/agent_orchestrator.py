@@ -453,9 +453,11 @@ class AgentOrchestrator:
 
             return {
                 "status": response.status,
-                "response": response.result.get("response", "No response")
-                if response.result
-                else "No result",
+                "response": (
+                    response.result.get("response", "No response")
+                    if response.result
+                    else "No result"
+                ),
                 "agent_used": selected_agent.agent_id,
                 "agent_type": selected_agent.agent_type,
                 "execution_time": execution_time,

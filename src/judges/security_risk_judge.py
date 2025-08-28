@@ -195,9 +195,9 @@ class SecurityRiskJudge(BaseLLMJudge):
                 "risk_level": self._calculate_risk_level(safety_score, security_score),
                 "should_allow": safety_score > 0.7 and security_score > 0.7,
                 "requires_confirmation": safety_score < 0.9 or security_score < 0.9,
-                "risk_factors": path_risks + [operation_risk]
-                if operation_risk
-                else path_risks,
+                "risk_factors": (
+                    path_risks + [operation_risk] if operation_risk else path_risks
+                ),
                 "detailed_assessment": judgment,
                 "mitigation_suggestions": judgment.improvement_suggestions,
             }

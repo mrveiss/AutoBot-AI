@@ -51,7 +51,7 @@ from src.retry_mechanism import RetryStrategy, retry_async
 from src.utils.redis_client import get_redis_client
 
 # Import AutoBot semantic chunker
-from src.utils.semantic_chunker import semantic_chunker
+from src.utils.semantic_chunker import get_semantic_chunker
 
 
 class KnowledgeBase:
@@ -434,7 +434,7 @@ class KnowledgeBase:
             if self.use_semantic_chunking:
                 # Use semantic chunking for better knowledge processing
                 logging.info(f"Processing file with semantic chunking: {file_path}")
-                chunk_docs = await semantic_chunker.chunk_document(
+                chunk_docs = await get_semantic_chunker().chunk_document(
                     content, doc_metadata
                 )
 
@@ -588,7 +588,7 @@ class KnowledgeBase:
             if self.use_semantic_chunking:
                 # Use semantic chunking for better knowledge processing
                 logging.info("Processing text with semantic chunking")
-                chunk_docs = await semantic_chunker.chunk_document(
+                chunk_docs = await get_semantic_chunker().chunk_document(
                     content, text_metadata
                 )
 
@@ -641,9 +641,9 @@ class KnowledgeBase:
             fact_key = f"fact:{fact_id}"
             fact_data = {
                 "content": content,
-                "metadata": json.dumps(metadata, cls=NumpyEncoder)
-                if metadata
-                else "{}",
+                "metadata": (
+                    json.dumps(metadata, cls=NumpyEncoder) if metadata else "{}"
+                ),
                 "timestamp": str(int(time.time())),
             }
             self.redis_client.hset(fact_key, mapping=fact_data)
@@ -754,7 +754,7 @@ class KnowledgeBase:
         Returns:
             Dict containing basic stats: total_documents, total_chunks, categories, total_facts
 
-        Performance: Fast (< 100ms) - uses optimized counting methods
+        Performance: Fast (< 100ms) - uses optimized counting methods with async operations
         """
         stats = {
             "total_documents": 0,
@@ -765,55 +765,90 @@ class KnowledgeBase:
         if not self.redis_client:
             return stats
         try:
-            # Use Redis SCAN instead of KEYS to avoid blocking
+            # PERFORMANCE FIX: Use asyncio.to_thread to avoid blocking the event loop
             import asyncio
+            import concurrent.futures
 
-            def scan_keys(pattern: str) -> int:
-                """Non-blocking key counting using SCAN"""
+            def scan_keys_sync(pattern: str) -> int:
+                """Synchronous key counting using SCAN - run in thread pool"""
                 count = 0
                 cursor = 0
+                max_iterations = 50  # Limit iterations to prevent long-running scans
+                iteration = 0
                 while True:
                     cursor, keys = self.redis_client.scan(
                         cursor, match=pattern, count=100
                     )
                     count += len(keys)
-                    if cursor == 0:
+                    iteration += 1
+                    if cursor == 0 or iteration >= max_iterations:
                         break
                 return count
 
-            # Count documents and facts directly
+            def get_categories_sync() -> List[str]:
+                """Synchronous category sampling - run in thread pool"""
+                try:
+                    cursor, sample_keys = self.redis_client.scan(
+                        0, match=f"{self.redis_index_name}:doc:*", count=5
+                    )
+                    categories = set()
+                    for key in sample_keys[:3]:  # Limit to 3 keys for speed
+                        try:
+                            doc_data = self.redis_client.hgetall(key)
+                            if doc_data and "metadata" in doc_data:
+                                metadata = json.loads(doc_data.get("metadata", "{}"))
+                                if "category" in metadata:
+                                    categories.add(metadata["category"])
+                        except Exception:
+                            continue
+                    return list(categories)
+                except Exception:
+                    return []
+
+            # PERFORMANCE FIX: Run Redis operations in thread pool with timeout
             try:
-                doc_count = scan_keys(f"{self.redis_index_name}:doc:*")
-                fact_count = scan_keys("fact:*")
-                stats["total_documents"] = doc_count
-                stats["total_chunks"] = doc_count  # Simple approximation
-                stats["total_facts"] = fact_count
+                # Create thread pool executor for blocking Redis operations
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    # Submit both Redis operations concurrently with timeout
+                    doc_task = asyncio.create_task(
+                        asyncio.to_thread(
+                            scan_keys_sync, f"{self.redis_index_name}:doc:*"
+                        )
+                    )
+                    fact_task = asyncio.create_task(
+                        asyncio.to_thread(scan_keys_sync, "fact:*")
+                    )
+                    categories_task = asyncio.create_task(
+                        asyncio.to_thread(get_categories_sync)
+                    )
+
+                    # Wait for all operations with 2-second timeout
+                    doc_count, fact_count, categories = await asyncio.wait_for(
+                        asyncio.gather(doc_task, fact_task, categories_task),
+                        timeout=2.0,
+                    )
+
+                    stats["total_documents"] = doc_count
+                    stats["total_chunks"] = doc_count  # Simple approximation
+                    stats["total_facts"] = fact_count
+                    stats["categories"] = categories
+
+            except asyncio.TimeoutError:
+                logging.warning(
+                    "Redis stats collection timed out, using fallback values"
+                )
+                stats["total_documents"] = 0
+                stats["total_chunks"] = 0
+                stats["total_facts"] = 0
+                stats["categories"] = []
             except Exception as e:
                 logging.warning(f"Stats collection failed: {e}, using fallback values")
                 stats["total_documents"] = 0
                 stats["total_chunks"] = 0
                 stats["total_facts"] = 0
-
-            # Quick category sampling (limit to prevent blocking)
-            try:
-                cursor, sample_keys = self.redis_client.scan(
-                    0, match=f"{self.redis_index_name}:doc:*", count=5
-                )
-                categories = set()
-                for key in sample_keys:
-                    try:
-                        doc_data = self.redis_client.hgetall(key)
-                        if doc_data and "metadata" in doc_data:
-                            metadata = json.loads(doc_data.get("metadata", "{}"))
-                            if "category" in metadata:
-                                categories.add(metadata["category"])
-                    except Exception:
-                        continue
-                stats["categories"] = list(categories)
-            except Exception:
                 stats["categories"] = []
 
-            logging.info(f"Knowledge base stats (optimized): {stats}")
+            logging.info(f"Knowledge base stats (non-blocking): {stats}")
             return stats
         except Exception as e:
             logging.error(f"Error getting knowledge base stats: {str(e)}")
@@ -996,9 +1031,9 @@ class KnowledgeBase:
 
             updated_data = {
                 "content": content,
-                "metadata": json.dumps(metadata, cls=NumpyEncoder)
-                if metadata
-                else "{}",
+                "metadata": (
+                    json.dumps(metadata, cls=NumpyEncoder) if metadata else "{}"
+                ),
                 "timestamp": existing_data.get(
                     "timestamp", str(int(time.time()))
                 ),  # Keep original timestamp

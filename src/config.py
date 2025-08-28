@@ -6,6 +6,12 @@ This module provides a unified configuration system that:
 - Allows overrides from config/settings.json
 - Supports environment variable overrides
 - Provides a single source of truth for all configuration
+
+IMPORTANT: The global variables below (like OLLAMA_HOST_IP) are legacy and should be
+replaced with config_manager.get() calls. They exist for backward compatibility only.
+The proper way to get configuration values is:
+  config_manager = ConfigManager.get_instance()
+  ollama_host = config_manager.get_ollama_url()
 """
 
 import json
@@ -19,15 +25,17 @@ import yaml
 from .utils.service_registry import get_service_url
 
 # Service Host IP Addresses from environment
+# NOTE: These defaults should match what's in config.yaml and settings.json
+# Using localhost (127.0.0.1) as the default for all services
 OLLAMA_HOST_IP = os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1")
-LM_STUDIO_HOST_IP = os.getenv("AUTOBOT_LM_STUDIO_HOST", "127.0.0.2")
-BACKEND_HOST_IP = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.3")
-FRONTEND_HOST_IP = os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.3")
-PLAYWRIGHT_HOST_IP = os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "127.0.0.4")
-NPU_WORKER_HOST_IP = os.getenv("AUTOBOT_NPU_WORKER_HOST", "127.0.0.5")
-AI_STACK_HOST_IP = os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.6")
-REDIS_HOST_IP = os.getenv("AUTOBOT_REDIS_HOST", "127.0.0.7")
-LOG_VIEWER_HOST_IP = os.getenv("AUTOBOT_LOG_VIEWER_HOST", "127.0.0.8")
+LM_STUDIO_HOST_IP = os.getenv("AUTOBOT_LM_STUDIO_HOST", "127.0.0.1")
+BACKEND_HOST_IP = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.1")
+FRONTEND_HOST_IP = os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.1")
+PLAYWRIGHT_HOST_IP = os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "127.0.0.1")
+NPU_WORKER_HOST_IP = os.getenv("AUTOBOT_NPU_WORKER_HOST", "127.0.0.1")
+AI_STACK_HOST_IP = os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.1")
+REDIS_HOST_IP = os.getenv("AUTOBOT_REDIS_HOST", "127.0.0.1")
+LOG_VIEWER_HOST_IP = os.getenv("AUTOBOT_LOG_VIEWER_HOST", "127.0.0.1")
 
 # Service Ports from environment
 BACKEND_PORT = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
@@ -57,6 +65,7 @@ API_BASE_URL = os.getenv(
 REDIS_URL = os.getenv(
     "AUTOBOT_REDIS_URL", f"{REDIS_PROTOCOL}://{REDIS_HOST_IP}:{REDIS_PORT}"
 )
+# DEPRECATED: Use config.get_ollama_url() instead
 OLLAMA_URL = os.getenv(
     "AUTOBOT_OLLAMA_URL", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
 )
@@ -155,7 +164,8 @@ def get_vnc_display_port():
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.1)
-        result = sock.connect_ex(("127.0.0.1", 5900))
+        vnc_host = os.getenv("AUTOBOT_VNC_HOST", "127.0.0.1")
+        result = sock.connect_ex((vnc_host, 5900))
         sock.close()
 
         if result == 0:
@@ -164,7 +174,7 @@ def get_vnc_display_port():
         else:
             # Port 5900 is free, use it
             return VNC_DISPLAY_PORT
-    except:
+    except Exception:
         # Default to host port if detection fails
         return VNC_DISPLAY_PORT
 
@@ -177,7 +187,8 @@ def get_vnc_direct_url():
         str: VNC connection URL
     """
     port = get_vnc_display_port()
-    return f"vnc://127.0.0.1:{port}"
+    host = os.getenv("AUTOBOT_VNC_HOST", "127.0.0.1")
+    return f"vnc://{host}:{port}"
 
 
 # GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when
@@ -440,8 +451,8 @@ class ConfigManager:
             "UNIFIED CONFIG: Skipping Ollama auto-detection during startup to prevent blocking"
         )
 
-        # Fallback to hardcoded default - use available model
-        return "llama3.2:3b"
+        # Fallback to environment or config default
+        return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:3b")
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key"""
@@ -529,7 +540,7 @@ class ConfigManager:
                             "ollama": {
                                 "endpoint": self.get_nested(
                                     "backend.ollama_endpoint",
-                                    "http://127.0.0.2:11434/api/generate",
+                                    f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}/api/generate",
                                 ),
                                 "host": os.getenv(
                                     "AUTOBOT_OLLAMA_HOST",
@@ -553,7 +564,7 @@ class ConfigManager:
                     "ollama": {
                         "endpoint": os.getenv(
                             "AUTOBOT_OLLAMA_ENDPOINT",
-                            "http://127.0.0.2:11434/api/generate",
+                            f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}/api/generate",
                         ),
                         "host": os.getenv(
                             "AUTOBOT_OLLAMA_HOST",
@@ -624,27 +635,36 @@ class ConfigManager:
         Returns:
             Model name for the specified agent
         """
-        # Multi-agent model configuration with available uncensored models for unrestricted capabilities
-        agent_models = {
-            # Core Orchestration - use available model for flexible reasoning
-            "orchestrator": "llama3.2:3b",  # Main coordinator - 3B model
-            "default": "llama3.2:3b",  # Fallback to orchestrator model
-            # Specialized Agents - optimized for task complexity
-            "chat": "llama3.2:1b",  # 1B for fast conversations
-            "system_commands": "llama3.2:1b",  # 1B for command generation
-            "rag": "dolphin-llama3:8b",  # Uncensored for document synthesis
-            "knowledge_retrieval": "llama3.2:1b",  # 1B for fast fact lookup
-            "research": "dolphin-llama3:8b",  # Uncensored for web research
-            # Legacy compatibility - use available models
-            "search": "llama3.2:1b",  # Fast search queries
-            "code": "llama3.2:1b",  # Code understanding
-            "analysis": "dolphin-llama3:8b",  # Analysis tasks - uncensored
-            "planning": "dolphin-llama3:8b",  # Task planning - uncensored
-            # Fallback models for when uncensored is not needed
-            "orchestrator_fallback": "llama3.2:3b",  # Standard 3B
-            "chat_fallback": "llama3.2:1b",  # Standard 1B
-            "fallback": "dolphin-llama3:8b",  # General fallback - uncensored
-        }
+        # Multi-agent model configuration - configurable via environment or LLM detection
+        agent_models = self.get_nested(
+            "llm.agent_models",
+            {
+                # Core Orchestration - use available model for flexible reasoning
+                "orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:3b"),
+                "default": os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:3b"),
+                # Specialized Agents - optimized for task complexity
+                "chat": os.getenv("AUTOBOT_CHAT_MODEL", "llama3.2:1b"),
+                "system_commands": os.getenv("AUTOBOT_SYSTEM_CMD_MODEL", "llama3.2:1b"),
+                "rag": os.getenv("AUTOBOT_RAG_MODEL", "dolphin-llama3:8b"),
+                "knowledge_retrieval": os.getenv(
+                    "AUTOBOT_KNOWLEDGE_MODEL", "llama3.2:1b"
+                ),
+                "research": os.getenv("AUTOBOT_RESEARCH_MODEL", "dolphin-llama3:8b"),
+                # Legacy compatibility - use available models
+                "search": os.getenv("AUTOBOT_SEARCH_MODEL", "llama3.2:1b"),
+                "code": os.getenv("AUTOBOT_CODE_MODEL", "llama3.2:1b"),
+                "analysis": os.getenv("AUTOBOT_ANALYSIS_MODEL", "dolphin-llama3:8b"),
+                "planning": os.getenv("AUTOBOT_PLANNING_MODEL", "dolphin-llama3:8b"),
+                # Fallback models for when uncensored is not needed
+                "orchestrator_fallback": os.getenv(
+                    "AUTOBOT_ORCHESTRATOR_FALLBACK_MODEL", "llama3.2:3b"
+                ),
+                "chat_fallback": os.getenv(
+                    "AUTOBOT_CHAT_FALLBACK_MODEL", "llama3.2:1b"
+                ),
+                "fallback": os.getenv("AUTOBOT_FALLBACK_MODEL", "dolphin-llama3:8b"),
+            },
+        )
 
         # Allow environment override for specific tasks
         env_key = f"AUTOBOT_MODEL_{task_type.upper()}"
@@ -831,13 +851,26 @@ class ConfigManager:
                 "AUTOBOT_BACKEND_API_ENDPOINT",
                 f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', '8001')}",
             ),
-            "cors_origins": [
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-            ],  # Vue frontend only
+            "cors_origins": self._get_cors_origins(),
         }
 
         return self._deep_merge(defaults, backend_config)
+
+    def _get_cors_origins(self):
+        """Get CORS origins from environment or defaults"""
+        cors_origins_env = os.getenv("AUTOBOT_CORS_ORIGINS")
+        if cors_origins_env:
+            return cors_origins_env.split(",")
+
+        # Dynamic default CORS origins based on frontend configuration
+        frontend_host = os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.1")
+        frontend_port = os.getenv("AUTOBOT_FRONTEND_PORT", "5173")
+
+        return [
+            f"http://{frontend_host}:{frontend_port}",
+            f"http://localhost:{frontend_port}",
+            f"http://127.0.0.1:{frontend_port}",
+        ]
 
     def update_llm_model(self, model_name: str) -> None:
         """Update the selected LLM model using unified configuration"""
@@ -936,12 +969,59 @@ class ConfigManager:
             f"Embedding model updated to '{model_name}' in unified configuration"
         )
 
+    def get_ollama_url(self) -> str:
+        """Get the Ollama service URL from configuration, with proper fallbacks"""
+        # First check environment variable
+        env_url = os.getenv("AUTOBOT_OLLAMA_URL")
+        if env_url:
+            return env_url
+
+        # Then check configuration
+        # Try the endpoint first
+        endpoint = self.get_nested("backend.llm.local.providers.ollama.endpoint")
+        if endpoint:
+            return endpoint.replace("/api/generate", "")  # Get base URL
+
+        # Then try host
+        host = self.get_nested("backend.llm.local.providers.ollama.host")
+        if host:
+            return host
+
+        # Finally fall back to configured host
+        host = os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1")
+        port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
+        return f"http://{host}:{port}"
+
+    def get_redis_url(self) -> str:
+        """Get the Redis service URL from configuration"""
+        # First check environment variable
+        env_url = os.getenv("AUTOBOT_REDIS_URL")
+        if env_url:
+            return env_url
+
+        # Then check configuration
+        host = self.get_nested("memory.redis.host", "localhost")
+        port = self.get_nested("memory.redis.port", 6379)
+
+        return f"redis://{host}:{port}"
+
 
 # Global configuration instance
 config = ConfigManager()
 
 # Alias for backward compatibility and consistent naming
 global_config_manager = config
+
+# NOTE: After config is loaded, update the legacy variables with proper values
+# This ensures backward compatibility while using the configuration system
+try:
+    # Update OLLAMA_URL to use the configuration
+    _ollama_url = config.get_ollama_url()
+    if _ollama_url != OLLAMA_URL:
+        OLLAMA_URL = _ollama_url
+        logger.info(f"Updated OLLAMA_URL from config: {OLLAMA_URL}")
+except Exception as e:
+    logger.warning(f"Failed to update OLLAMA_URL from config: {e}")
 
 
 # Convenience functions for backward compatibility
