@@ -225,7 +225,7 @@ test.describe('Terminal Workflow E2E Tests', () => {
     await page.keyboard.press('Tab')
 
     // Should be able to navigate to terminal controls
-    let focusedElement = page.locator(':focus')
+    const focusedElement = page.locator(':focus')
     await expect(focusedElement).toBeVisible()
 
     // Navigate to command input
