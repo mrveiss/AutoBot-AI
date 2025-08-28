@@ -393,88 +393,25 @@ main() {
     echo "   Status:       $compose_cmd -f $COMPOSE_FILE ps"
     echo
     
-    # Launch browser in development mode
+    # Auto-launch browser in dev mode for error monitoring
     if [ "$DEV_MODE" = "true" ] && [ "$NO_BROWSER" = "false" ]; then
-        echo -e "${YELLOW}🌐 Opening browser for development...${NC}"
+        echo -e "${YELLOW}🖥️  Launching browser for frontend error monitoring...${NC}"
+        sleep 3  # Give frontend a moment to fully load
         
-        # Wait a moment for frontend to be fully ready
-        echo "Waiting 3 seconds for frontend to be ready..."
-        sleep 3
-        
-        # Try different browser commands in order of preference
-        browser_launched=false
-        browser_command=""
-        
-        # Check if we're in WSL (Windows Subsystem for Linux)
-        if grep -q microsoft /proc/version 2>/dev/null; then
-            echo "Detected WSL environment"
-            # In WSL, try Windows browsers first
-            if command -v explorer.exe >/dev/null 2>&1; then
-                browser_command="explorer.exe"
-                echo "Using Windows default browser via explorer.exe..."
-            elif command -v powershell.exe >/dev/null 2>&1; then
-                browser_command="powershell.exe -Command Start-Process"
-                echo "Using PowerShell to launch browser..."
-            fi
+        # Try different browser commands (copied from proven run_agent.sh logic)
+        if command -v google-chrome >/dev/null 2>&1; then
+            google-chrome --new-window --auto-open-devtools-for-tabs "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
+            echo -e "${GREEN}   ✅ Chrome launched with DevTools open${NC}"
+        elif command -v chromium-browser >/dev/null 2>&1; then
+            chromium-browser --new-window --auto-open-devtools-for-tabs "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
+            echo -e "${GREEN}   ✅ Chromium launched with DevTools open${NC}"
+        elif command -v firefox >/dev/null 2>&1; then
+            firefox --new-window "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
+            echo -e "${GREEN}   ✅ Firefox launched (open F12 for DevTools)${NC}"
+        else
+            echo -e "${YELLOW}   ⚠️  No browser found - manually open: http://localhost:${FRONTEND_PORT:-5173}${NC}"
+            echo -e "${YELLOW}   💡 Press F12 to open DevTools for error monitoring${NC}"
         fi
-        
-        # If not WSL or WSL browser commands not found, try Linux browsers
-        if [ -z "$browser_command" ]; then
-            # Try xdg-open (Linux standard)
-            if command -v xdg-open >/dev/null 2>&1; then
-                browser_command="xdg-open"
-                echo "Using default browser via xdg-open..."
-            # Try firefox
-            elif command -v firefox >/dev/null 2>&1; then
-                browser_command="firefox"
-                echo "Using Firefox..."
-            # Try google-chrome
-            elif command -v google-chrome >/dev/null 2>&1; then
-                browser_command="google-chrome"
-                echo "Using Google Chrome..."
-            # Try chromium
-            elif command -v chromium-browser >/dev/null 2>&1; then
-                browser_command="chromium-browser"
-                echo "Using Chromium..."
-            fi
-        fi
-        
-        # Launch browser if command found
-        if [ ! -z "$browser_command" ]; then
-            frontend_url="http://localhost:${FRONTEND_PORT:-5173}"
-            echo "Launching: $browser_command $frontend_url"
-            
-            # Handle different command formats
-            if [ "$browser_command" = "explorer.exe" ]; then
-                if explorer.exe "$frontend_url" >/dev/null 2>&1; then
-                    browser_launched=true
-                    echo -e "${GREEN}✅ Browser launched via Windows explorer${NC}"
-                else
-                    echo -e "${RED}❌ Failed to launch browser via explorer.exe${NC}"
-                fi
-            elif [[ "$browser_command" == *"powershell.exe"* ]]; then
-                if powershell.exe -Command "Start-Process '$frontend_url'" >/dev/null 2>&1; then
-                    browser_launched=true
-                    echo -e "${GREEN}✅ Browser launched via PowerShell${NC}"
-                else
-                    echo -e "${RED}❌ Failed to launch browser via PowerShell${NC}"
-                fi
-            else
-                # Standard Linux browser command
-                if $browser_command "$frontend_url" >/dev/null 2>&1 &; then
-                    browser_launched=true
-                    echo -e "${GREEN}✅ Browser launched successfully${NC}"
-                else
-                    echo -e "${RED}❌ Failed to launch browser with $browser_command${NC}"
-                fi
-            fi
-        fi
-        
-        if [ "$browser_launched" = "false" ]; then
-            echo -e "${YELLOW}⚠️  No browser found or launch failed.${NC}"
-            echo -e "${YELLOW}   Please manually open: http://localhost:${FRONTEND_PORT:-5173}${NC}"
-        fi
-        
         echo
     fi
     
