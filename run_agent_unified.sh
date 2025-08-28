@@ -14,6 +14,7 @@ NC='\033[0m' # No Color
 DEV_MODE=false
 TEST_MODE=false
 FORCE_ENV=""
+NO_BUILD=false
 
 print_help() {
     echo "AutoBot - Unified Docker Deployment"
@@ -22,6 +23,7 @@ print_help() {
     echo "Options:"
     echo "  --dev         Development mode (hot reload, source mounting)"
     echo "  --test-mode   Test mode (minimal services)" 
+    echo "  --no-build    Skip building Docker images (use existing)"
     echo "  --force-env   Force specific environment (docker-desktop|wsl|native|host-network)"
     echo "  --help        Show this help"
     echo ""
@@ -36,6 +38,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --test-mode)
             TEST_MODE=true
+            shift
+            ;;
+        --no-build)
+            NO_BUILD=true
             shift
             ;;
         --force-env)
@@ -212,8 +218,33 @@ main() {
     fi
     
     # Build images if needed
-    if [ "$DEV_MODE" = "true" ] || [ ! -z "$(docker images -q autobot-backend:latest 2>/dev/null)" ]; then
-        echo -e "${YELLOW}🔨 Building Docker images...${NC}"
+    build_needed=false
+    
+    # Skip build if --no-build flag is used
+    if [ "$NO_BUILD" = "true" ]; then
+        echo -e "${GREEN}⏭️  Skipping Docker build (--no-build flag)${NC}"
+    # Always build in dev mode for latest changes
+    elif [ "$DEV_MODE" = "true" ]; then
+        echo -e "${YELLOW}🔨 Building Docker images (dev mode)...${NC}"
+        build_needed=true
+    else
+        # Check if images exist for production mode
+        missing_images=""
+        for image in "autobot-frontend:latest" "autobot-browser:latest" "autobot-ai-stack:latest" "autobot-npu-worker:latest"; do
+            if [ -z "$(docker images -q $image 2>/dev/null)" ]; then
+                missing_images="$missing_images $image"
+                build_needed=true
+            fi
+        done
+        
+        if [ "$build_needed" = "true" ]; then
+            echo -e "${YELLOW}🔨 Building missing Docker images:$missing_images${NC}"
+        else
+            echo -e "${GREEN}✅ All Docker images exist, skipping build${NC}"
+        fi
+    fi
+    
+    if [ "$build_needed" = "true" ]; then
         $compose_cmd -f $COMPOSE_FILE build
     fi
     
