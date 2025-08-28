@@ -71,7 +71,9 @@ class GUIController:
         }
 
     async def bring_window_to_front(self, app_title: str) -> Dict[str, Any]:
-        logger.debug(f"Dummy GUIController: bring_window_to_front('{app_title}') skipped.")
+        logger.debug(
+            f"Dummy GUIController: bring_window_to_front('{app_title}') skipped."
+        )
         await asyncio.sleep(0)
         return {
             "status": "success",

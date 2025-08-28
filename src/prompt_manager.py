@@ -7,6 +7,9 @@ across the AutoBot application, eliminating hardcoded prompts in Python code.
 
 import logging
 import re
+import json
+import hashlib
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -46,11 +49,36 @@ class PromptManager:
         """
         Discover and load all prompt files from the prompts directory.
         Supports .md, .txt, and .prompt files.
+        Uses Redis caching for faster loading.
         """
         if not self.prompts_dir.exists():
             logger.warning(f"Prompts directory '{self.prompts_dir}' not found")
             return
 
+        # Check if prompts need updating based on file changes
+        needs_update, changed_files = self._check_prompt_changes()
+
+        if not needs_update:
+            # Try Redis cache first
+            cache_key = self._get_cache_key()
+            cached_data = self._load_from_redis_cache(cache_key)
+
+            if cached_data:
+                self.prompts = cached_data["prompts"]
+                # Recreate templates from cached prompts
+                for key, content in self.prompts.items():
+                    self.templates[key] = self.jinja_env.from_string(content)
+                logger.info(
+                    f"Loaded {len(self.prompts)} prompts from Redis cache (FAST)"
+                )
+                return
+
+        if changed_files:
+            logger.info(
+                f"Detected prompt changes in {len(changed_files)} files: {changed_files[:3]}{'...' if len(changed_files) > 3 else ''}"
+            )
+
+        # Fallback to file loading
         supported_extensions = {".md", ".txt", ".prompt"}
 
         for file_path in self.prompts_dir.rglob("*"):
@@ -77,6 +105,13 @@ class PromptManager:
 
                 except Exception as e:
                     logger.error(f"Error loading prompt from {file_path}: {e}")
+
+        # Cache to Redis for next time
+        cache_key = self._get_cache_key()
+        self._save_to_redis_cache(cache_key, {"prompts": self.prompts})
+
+        # Update change tracking cache
+        self._update_prompt_change_cache()
 
         logger.info(f"Loaded {len(self.prompts)} prompts from {self.prompts_dir}")
 
@@ -278,6 +313,196 @@ class PromptManager:
             for key, content in self.prompts.items()
             if key.startswith(prefix)
         }
+
+    def _check_prompt_changes(self) -> tuple[bool, List[str]]:
+        """Check if prompt files have changed since last load"""
+        try:
+            # Get current file states
+            current_state = self._get_prompt_file_state()
+
+            # Load cached state from Redis
+            cached_state = self._load_prompt_change_cache()
+
+            if not cached_state:
+                logger.debug("No cached prompt state found - first load needed")
+                return True, list(current_state.keys())
+
+            # Compare states to find changes
+            changed_files = []
+
+            # Check for modified or new files
+            for file_path, current_hash in current_state.items():
+                if file_path not in cached_state:
+                    changed_files.append(f"{file_path} (new)")
+                elif cached_state[file_path] != current_hash:
+                    changed_files.append(f"{file_path} (modified)")
+
+            # Check for deleted files
+            for file_path in cached_state:
+                if file_path not in current_state:
+                    changed_files.append(f"{file_path} (deleted)")
+
+            needs_update = len(changed_files) > 0
+            return needs_update, changed_files
+
+        except Exception as e:
+            logger.debug(f"Error checking prompt changes: {e}")
+            # On error, assume update is needed
+            return True, ["error-triggered-update"]
+
+    def _get_prompt_file_state(self) -> Dict[str, str]:
+        """Get current state (hash) of all prompt files"""
+        file_states = {}
+
+        if not self.prompts_dir.exists():
+            return file_states
+
+        supported_extensions = {".md", ".txt", ".prompt"}
+
+        for file_path in self.prompts_dir.rglob("*"):
+            if file_path.is_file() and file_path.suffix in supported_extensions:
+                # Skip hidden files and special files
+                if file_path.name.startswith(".") or file_path.name.startswith("_"):
+                    continue
+
+                try:
+                    # Get file content hash
+                    content = file_path.read_text(encoding="utf-8")
+                    file_hash = hashlib.md5(content.encode()).hexdigest()
+
+                    # Use relative path as key
+                    relative_path = str(file_path.relative_to(self.prompts_dir))
+                    file_states[relative_path] = file_hash
+
+                except Exception as e:
+                    logger.warning(f"Error processing prompt file {file_path}: {e}")
+
+        return file_states
+
+    def _load_prompt_change_cache(self) -> Optional[Dict[str, str]]:
+        """Load cached prompt file states from Redis"""
+        try:
+            from src.utils.redis_database_manager import (
+                RedisDatabaseManager,
+                RedisDatabase,
+            )
+
+            db_manager = RedisDatabaseManager()
+            redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+
+            if not redis_client:
+                return None
+
+            cache_key = "autobot:prompts:file_states"
+            cached_data = redis_client.get(cache_key)
+
+            if cached_data:
+                data = json.loads(cached_data)
+                return data.get("file_states", data)
+
+        except Exception as e:
+            logger.debug(f"Redis prompt change cache load failed: {e}")
+
+        return None
+
+    def _update_prompt_change_cache(self):
+        """Update the cached prompt file states in Redis"""
+        try:
+            from src.utils.redis_database_manager import (
+                RedisDatabaseManager,
+                RedisDatabase,
+            )
+
+            db_manager = RedisDatabaseManager()
+            redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+
+            if not redis_client:
+                return
+
+            # Get current file states
+            current_state = self._get_prompt_file_state()
+
+            # Cache for 24 hours (prompts might change during development)
+            cache_key = "autobot:prompts:file_states"
+            ttl_seconds = 24 * 60 * 60  # 24 hours
+
+            redis_client.setex(
+                cache_key,
+                ttl_seconds,
+                json.dumps(
+                    {
+                        "file_states": current_state,
+                        "last_updated": datetime.now().isoformat(),
+                        "file_count": len(current_state),
+                    }
+                ),
+            )
+
+            logger.debug(f"Updated prompt change cache with {len(current_state)} files")
+
+        except Exception as e:
+            logger.debug(f"Failed to update prompt change cache: {e}")
+
+    def _get_cache_key(self) -> str:
+        """Generate cache key based on prompts directory content hash"""
+        try:
+            # Get all prompt file paths and their modification times
+            files_info = []
+            for file_path in self.prompts_dir.rglob("*"):
+                if file_path.is_file() and file_path.suffix in {
+                    ".md",
+                    ".txt",
+                    ".prompt",
+                }:
+                    files_info.append(f"{file_path}:{file_path.stat().st_mtime}")
+
+            # Create hash of file info
+            content = "\n".join(sorted(files_info))
+            cache_hash = hashlib.md5(content.encode()).hexdigest()[:12]
+            return f"autobot:prompts:cache:{cache_hash}"
+        except Exception as e:
+            logger.warning(f"Failed to generate cache key: {e}")
+            return "autobot:prompts:cache:default"
+
+    def _load_from_redis_cache(self, cache_key: str) -> Optional[Dict]:
+        """Load prompts from Redis cache using dedicated prompts database"""
+        try:
+            from src.utils.redis_database_manager import (
+                RedisDatabaseManager,
+                RedisDatabase,
+            )
+
+            db_manager = RedisDatabaseManager()
+            redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+            if not redis_client:
+                return None
+
+            cached_data = redis_client.get(cache_key)
+            if cached_data:
+                logger.debug(f"Loading prompts from Redis prompts database (DB 2)")
+                return json.loads(cached_data)
+        except Exception as e:
+            logger.debug(f"Redis prompts cache load failed: {e}")
+        return None
+
+    def _save_to_redis_cache(self, cache_key: str, data: Dict) -> None:
+        """Save prompts to Redis cache using dedicated prompts database"""
+        try:
+            from src.utils.redis_database_manager import (
+                RedisDatabaseManager,
+                RedisDatabase,
+            )
+
+            db_manager = RedisDatabaseManager()
+            redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+            if not redis_client:
+                return
+
+            # Cache for 24 hours in dedicated prompts database (DB 2)
+            redis_client.setex(cache_key, 86400, json.dumps(data))
+            logger.debug(f"Saved prompts to Redis prompts database (DB 2): {cache_key}")
+        except Exception as e:
+            logger.debug(f"Redis prompts cache save failed: {e}")
 
 
 # Global prompt manager instance

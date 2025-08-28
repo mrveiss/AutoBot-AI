@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import pickle  # Still imported for backward compatibility, but using JSON for new data
+import sqlite3
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -80,11 +81,11 @@ class LongTermMemoryManager:
         """Initialize async SQLite database with comprehensive memory tables"""
         if self._initialized:
             return
-            
+
         async with self._init_lock:
             if self._initialized:
                 return
-                
+
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
             async with aiosqlite.connect(self.db_path) as conn:

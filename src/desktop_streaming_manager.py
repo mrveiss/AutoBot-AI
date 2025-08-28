@@ -325,9 +325,9 @@ class DesktopStreamingManager:
     def __init__(self):
         self.vnc_manager = VNCServerManager()
         self.websocket_clients: Dict[str, websockets.WebSocketServerProtocol] = {}
-        self.session_clients: Dict[
-            str, List[str]
-        ] = {}  # session_id -> list of client_ids
+        self.session_clients: Dict[str, List[str]] = (
+            {}
+        )  # session_id -> list of client_ids
 
         logger.info("Desktop Streaming Manager initialized")
 
@@ -462,7 +462,10 @@ class DesktopStreamingManager:
                         "click",
                         str(button),
                     ],
-                    env={**config_manager.get("system.environment", os.environ), "DISPLAY": f":{display}"},
+                    env={
+                        **config_manager.get("system.environment", os.environ),
+                        "DISPLAY": f":{display}",
+                    },
                 )
 
             elif control_type == "key_press":
@@ -470,7 +473,10 @@ class DesktopStreamingManager:
                 if key:
                     subprocess.run(
                         ["xdotool", "key", key],
-                        env={**config_manager.get("system.environment", os.environ), "DISPLAY": f":{display}"},
+                        env={
+                            **config_manager.get("system.environment", os.environ),
+                            "DISPLAY": f":{display}",
+                        },
                     )
 
             elif control_type == "type_text":
@@ -478,7 +484,10 @@ class DesktopStreamingManager:
                 if text:
                     subprocess.run(
                         ["xdotool", "type", text],
-                        env={**config_manager.get("system.environment", os.environ), "DISPLAY": f":{display}"},
+                        env={
+                            **config_manager.get("system.environment", os.environ),
+                            "DISPLAY": f":{display}",
+                        },
                     )
 
         except Exception as e:

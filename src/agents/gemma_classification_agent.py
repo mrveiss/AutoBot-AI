@@ -11,6 +11,7 @@ import requests
 
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
+from src.config import config as global_config_manager
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
 
@@ -26,9 +27,10 @@ logger = logging.getLogger(__name__)
 class GemmaClassificationAgent(StandardizedAgent):
     """Ultra-fast classification agent using Google's Gemma models."""
 
-    def __init__(self, ollama_host: str = "http://127.0.0.2:11434"):
+    def __init__(self, ollama_host: str = None):
         super().__init__("gemma_classification")
-        self.ollama_host = ollama_host
+        # Get Ollama URL from configuration instead of hardcoding
+        self.ollama_host = ollama_host or global_config_manager.get_ollama_url()
         self.redis_client = get_redis_client()
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
 

@@ -3,12 +3,13 @@ System Knowledge Manager for AutoBot
 Manages immutable system knowledge templates and their runtime copies
 """
 
+import hashlib
 import json
 import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -35,23 +36,30 @@ class SystemKnowledgeManager:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
     async def initialize_system_knowledge(self, force_reinstall: bool = False):
-        """Initialize system knowledge from templates"""
+        """Initialize system knowledge from templates with intelligent change detection"""
         logger.info("Initializing system knowledge...")
 
         if force_reinstall:
             await self._backup_current_knowledge()
             await self._clear_system_knowledge()
 
-        # Check if system knowledge is already imported
-        if not force_reinstall and await self._is_system_knowledge_imported():
-            logger.info("System knowledge already imported, skipping initialization")
+        # Check if system knowledge needs updating based on file changes
+        needs_update, changed_files = await self._check_system_knowledge_changes()
+
+        if not force_reinstall and not needs_update:
+            logger.info("System knowledge is up-to-date, skipping initialization")
             return
+
+        if changed_files:
+            logger.info(
+                f"Detected changes in {len(changed_files)} files: {changed_files[:3]}{'...' if len(changed_files) > 3 else ''}"
+            )
 
         # Import all system knowledge
         await self._import_system_knowledge()
 
-        # Mark as imported
-        await self._mark_system_knowledge_imported()
+        # Update the change tracking cache
+        await self._update_system_knowledge_cache()
 
         logger.info("System knowledge initialization completed")
 
@@ -60,8 +68,134 @@ class SystemKnowledgeManager:
         marker_file = self.runtime_knowledge_dir / ".imported"
         return marker_file.exists()
 
+    async def _check_system_knowledge_changes(self) -> tuple[bool, List[str]]:
+        """Check if system knowledge files have changed since last import"""
+        try:
+            # Get current file states
+            current_state = await self._get_system_knowledge_file_state()
+
+            # Load cached state from Redis
+            cached_state = await self._load_file_state_cache()
+
+            if not cached_state:
+                logger.info("No cached file state found - first import needed")
+                return True, list(current_state.keys())
+
+            # Compare states to find changes
+            changed_files = []
+
+            # Check for modified or new files
+            for file_path, current_hash in current_state.items():
+                if file_path not in cached_state:
+                    changed_files.append(f"{file_path} (new)")
+                elif cached_state[file_path] != current_hash:
+                    changed_files.append(f"{file_path} (modified)")
+
+            # Check for deleted files
+            for file_path in cached_state:
+                if file_path not in current_state:
+                    changed_files.append(f"{file_path} (deleted)")
+
+            needs_update = len(changed_files) > 0
+            return needs_update, changed_files
+
+        except Exception as e:
+            logger.warning(f"Error checking system knowledge changes: {e}")
+            # On error, assume update is needed
+            return True, ["error-triggered-update"]
+
+    async def _get_system_knowledge_file_state(self) -> Dict[str, str]:
+        """Get current state (hash) of all system knowledge files"""
+        file_states = {}
+
+        if not self.system_knowledge_dir.exists():
+            return file_states
+
+        for file_path in self.system_knowledge_dir.rglob("*.yaml"):
+            try:
+                # Get file content hash
+                content = file_path.read_text(encoding="utf-8")
+                file_hash = hashlib.md5(content.encode()).hexdigest()
+
+                # Use relative path as key
+                relative_path = str(file_path.relative_to(self.system_knowledge_dir))
+                file_states[relative_path] = file_hash
+
+            except Exception as e:
+                logger.warning(f"Error processing file {file_path}: {e}")
+
+        return file_states
+
+    async def _load_file_state_cache(self) -> Optional[Dict[str, str]]:
+        """Load cached file states from Redis"""
+        try:
+            from src.utils.redis_database_manager import (
+                RedisDatabaseManager,
+                RedisDatabase,
+            )
+
+            db_manager = RedisDatabaseManager()
+            redis_client = db_manager.get_connection(RedisDatabase.KNOWLEDGE)
+
+            if not redis_client:
+                return None
+
+            cache_key = "autobot:system_knowledge:file_states"
+            cached_data = redis_client.get(cache_key)
+
+            if cached_data:
+                data = json.loads(cached_data)
+                # Extract file_states from the wrapper if it exists
+                return data.get("file_states", data)
+
+        except Exception as e:
+            logger.debug(f"Redis cache load failed for system knowledge: {e}")
+
+        return None
+
+    async def _update_system_knowledge_cache(self):
+        """Update the cached file states in Redis"""
+        try:
+            from src.utils.redis_database_manager import (
+                RedisDatabaseManager,
+                RedisDatabase,
+            )
+
+            db_manager = RedisDatabaseManager()
+            redis_client = db_manager.get_connection(RedisDatabase.KNOWLEDGE)
+
+            if not redis_client:
+                logger.warning("Redis not available for system knowledge caching")
+                return
+
+            # Get current file states
+            current_state = await self._get_system_knowledge_file_state()
+
+            # Cache for 30 days (system knowledge doesn't change often)
+            cache_key = "autobot:system_knowledge:file_states"
+            ttl_seconds = 30 * 24 * 60 * 60  # 30 days
+
+            redis_client.setex(
+                cache_key,
+                ttl_seconds,
+                json.dumps(
+                    {
+                        "file_states": current_state,
+                        "last_updated": datetime.now().isoformat(),
+                        "file_count": len(current_state),
+                    }
+                ),
+            )
+
+            logger.info(
+                f"Updated system knowledge cache with {len(current_state)} files"
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to update system knowledge cache: {e}")
+
     async def _mark_system_knowledge_imported(self):
-        """Mark system knowledge as imported"""
+        """Mark system knowledge as imported (legacy method)"""
         marker_file = self.runtime_knowledge_dir / ".imported"
         with open(marker_file, "w") as f:
             json.dump(

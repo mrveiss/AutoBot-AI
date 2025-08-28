@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class SourceType(Enum):
     """Types of information sources"""
+
     KNOWLEDGE_BASE = "knowledge_base"
     WEB_SEARCH = "web_search"
     SYSTEM_STATE = "system_state"
@@ -29,16 +30,18 @@ class SourceType(Enum):
 
 class SourceReliability(Enum):
     """Reliability levels for sources"""
-    VERIFIED = "verified"      # System state, tool output
-    HIGH = "high"             # KB, official docs
-    MEDIUM = "medium"         # Web search, API responses
-    LOW = "low"              # User input, unverified sources
-    UNKNOWN = "unknown"       # Cannot determine reliability
+
+    VERIFIED = "verified"  # System state, tool output
+    HIGH = "high"  # KB, official docs
+    MEDIUM = "medium"  # Web search, API responses
+    LOW = "low"  # User input, unverified sources
+    UNKNOWN = "unknown"  # Cannot determine reliability
 
 
 @dataclass
 class Source:
     """Represents a single information source"""
+
     type: SourceType
     reliability: SourceReliability
     content: str
@@ -52,7 +55,7 @@ class Source:
             "reliability": self.reliability.value,
             "content": self.content,
             "timestamp": self.timestamp.isoformat(),
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
     def format_citation(self) -> str:
@@ -67,7 +70,7 @@ class Source:
             SourceType.CONFIGURATION: "⚙️",
             SourceType.DOCUMENTATION: "📖",
             SourceType.API_RESPONSE: "🔌",
-            SourceType.FILE_CONTENT: "📄"
+            SourceType.FILE_CONTENT: "📄",
         }
 
         icon = source_icon.get(self.type, "📋")
@@ -110,7 +113,7 @@ class SourceAttributionManager:
         source_type: Union[SourceType, str],
         content: str,
         reliability: Union[SourceReliability, str] = SourceReliability.UNKNOWN,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Source:
         """Add a new source to the current response"""
         # Handle string inputs
@@ -124,7 +127,7 @@ class SourceAttributionManager:
             reliability=reliability,
             content=content[:500],  # Limit content length
             timestamp=datetime.now(),
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         self.current_response_sources.append(source)
@@ -138,20 +141,17 @@ class SourceAttributionManager:
         content: str,
         entry_id: str,
         confidence: float = 1.0,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Source:
         """Add a Knowledge Base source"""
         kb_metadata = {
             "kb_entry_id": entry_id,
             "confidence": confidence,
-            **(metadata or {})
+            **(metadata or {}),
         }
 
         return self.add_source(
-            SourceType.KNOWLEDGE_BASE,
-            content,
-            SourceReliability.HIGH,
-            kb_metadata
+            SourceType.KNOWLEDGE_BASE, content, SourceReliability.HIGH, kb_metadata
         )
 
     def add_web_source(
@@ -159,7 +159,7 @@ class SourceAttributionManager:
         content: str,
         url: str,
         title: Optional[str] = None,
-        domain_reliability: Optional[str] = None
+        domain_reliability: Optional[str] = None,
     ) -> Source:
         """Add a web search source"""
         reliability = SourceReliability.MEDIUM
@@ -171,34 +171,30 @@ class SourceAttributionManager:
         web_metadata = {
             "url": url,
             "title": title or url,
-            "domain_reliability": domain_reliability
+            "domain_reliability": domain_reliability,
         }
 
         return self.add_source(
-            SourceType.WEB_SEARCH,
-            content,
-            reliability,
-            web_metadata
+            SourceType.WEB_SEARCH, content, reliability, web_metadata
         )
 
     def add_system_source(
-        self,
-        content: str,
-        command: Optional[str] = None,
-        output_type: str = "command"
+        self, content: str, command: Optional[str] = None, output_type: str = "command"
     ) -> Source:
         """Add a system/tool output source"""
-        system_metadata = {
-            "output_type": output_type
-        }
+        system_metadata = {"output_type": output_type}
         if command:
             system_metadata["command"] = command
 
         return self.add_source(
-            SourceType.SYSTEM_STATE if output_type == "state" else SourceType.TOOL_OUTPUT,
+            (
+                SourceType.SYSTEM_STATE
+                if output_type == "state"
+                else SourceType.TOOL_OUTPUT
+            ),
             content,
             SourceReliability.VERIFIED,
-            system_metadata
+            system_metadata,
         )
 
     def format_attribution_block(self) -> str:
@@ -237,8 +233,7 @@ class SourceAttributionManager:
     def to_json(self) -> str:
         """Export current sources as JSON"""
         return json.dumps(
-            [s.to_dict() for s in self.current_response_sources],
-            indent=2
+            [s.to_dict() for s in self.current_response_sources], indent=2
         )
 
 
@@ -246,11 +241,7 @@ class SourceAttributionManager:
 source_manager = SourceAttributionManager()
 
 
-def track_source(
-    source_type: Union[SourceType, str],
-    content: str,
-    **kwargs
-) -> Source:
+def track_source(source_type: Union[SourceType, str], content: str, **kwargs) -> Source:
     """Convenience function to track a source"""
     return source_manager.add_source(source_type, content, **kwargs)
 

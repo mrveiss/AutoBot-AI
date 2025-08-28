@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import sqlite3
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -19,6 +20,14 @@ from scripts.phase_validation_system import PhaseValidator
 from src.phase_progression_manager import PhasePromotionStatus, get_progression_manager
 from src.project_state_manager import ProjectStateManager
 from src.utils.redis_client import get_redis_client
+
+try:
+    from src.utils.error_boundaries import get_error_boundary_manager
+except ImportError:
+
+    def get_error_boundary_manager():
+        return None
+
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +116,26 @@ class EnhancedProjectStateTracker:
         # Metrics tracking
         self.metrics_history: Dict[TrackingMetric, List[Tuple[datetime, float]]] = {
             metric: [] for metric in TrackingMetric
+        }
+
+        # Redis client for real-time metrics
+        self.redis_client = get_redis_client()
+
+        # Error tracking
+        self.error_boundary_manager = get_error_boundary_manager()
+
+        # Tracking state
+        self._last_snapshot_time = datetime.now()
+        self._api_call_count = 0
+        self._user_interaction_count = 0
+        self._error_count = 0
+
+        # Metric keys for Redis
+        self.REDIS_KEYS = {
+            "error_count": "autobot:metrics:error_count",
+            "api_calls": "autobot:metrics:api_calls",
+            "user_interactions": "autobot:metrics:user_interactions",
+            "error_rate": "autobot:metrics:error_rate",
         }
 
         # Initialize database and load state
@@ -355,10 +384,10 @@ class EnhancedProjectStateTracker:
                     "overall_assessment"
                 ]["system_maturity_score"],
                 TrackingMetric.SYSTEM_MATURITY: capabilities["system_maturity"],
-                TrackingMetric.ERROR_RATE: 0.0,  # TODO: Implement error tracking
+                TrackingMetric.ERROR_RATE: await self._get_error_rate(),
                 TrackingMetric.PROGRESSION_VELOCITY: self._calculate_progression_velocity(),
-                TrackingMetric.USER_INTERACTIONS: 0,  # TODO: Track user interactions
-                TrackingMetric.API_CALLS: 0,  # TODO: Track API calls
+                TrackingMetric.USER_INTERACTIONS: await self._get_user_interactions_count(),
+                TrackingMetric.API_CALLS: await self._get_api_calls_count(),
             }
 
             # Get configuration
@@ -477,9 +506,11 @@ class EnhancedProjectStateTracker:
                     (
                         change.timestamp.isoformat(),
                         change.change_type.value,
-                        json.dumps(change.before_state)
-                        if change.before_state
-                        else None,
+                        (
+                            json.dumps(change.before_state)
+                            if change.before_state
+                            else None
+                        ),
                         json.dumps(change.after_state),
                         change.description,
                         change.user_id,
@@ -570,9 +601,11 @@ class EnhancedProjectStateTracker:
                         milestone.description,
                         json.dumps(milestone.criteria),
                         milestone.achieved,
-                        milestone.achieved_at.isoformat()
-                        if milestone.achieved_at
-                        else None,
+                        (
+                            milestone.achieved_at.isoformat()
+                            if milestone.achieved_at
+                            else None
+                        ),
                         json.dumps(milestone.evidence),
                         datetime.now().isoformat(),
                     ),
@@ -611,6 +644,242 @@ class EnhancedProjectStateTracker:
 
         return (last_completion - first_completion) / days_elapsed
 
+    async def _get_error_rate(self) -> float:
+        """Calculate current error rate based on recent error data"""
+        try:
+            if not self.redis_client:
+                return 0.0
+
+            # Get error count from last hour
+            current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+            hour_ago = current_hour - timedelta(hours=1)
+
+            error_key = f"{self.REDIS_KEYS['error_count']}:{current_hour.timestamp()}"
+            error_count = await self._get_redis_metric(error_key, 0)
+
+            # Get total API calls from last hour for rate calculation
+            api_key = f"{self.REDIS_KEYS['api_calls']}:{current_hour.timestamp()}"
+            api_calls = await self._get_redis_metric(
+                api_key, 1
+            )  # Avoid division by zero
+
+            # Calculate error rate as percentage
+            error_rate = (error_count / api_calls) * 100 if api_calls > 0 else 0.0
+
+            return round(error_rate, 2)
+
+        except Exception as e:
+            logger.warning(f"Error calculating error rate: {e}")
+            return 0.0
+
+    async def _get_user_interactions_count(self) -> int:
+        """Get current user interactions count"""
+        try:
+            if not self.redis_client:
+                return self._user_interaction_count
+
+            # Get user interactions from last 24 hours
+            total_interactions = 0
+            now = datetime.now()
+
+            for i in range(24):  # Last 24 hours
+                hour = now - timedelta(hours=i)
+                hour_key = hour.replace(minute=0, second=0, microsecond=0)
+                key = f"{self.REDIS_KEYS['user_interactions']}:{hour_key.timestamp()}"
+                interactions = await self._get_redis_metric(key, 0)
+                total_interactions += interactions
+
+            return total_interactions
+
+        except Exception as e:
+            logger.warning(f"Error getting user interactions count: {e}")
+            return self._user_interaction_count
+
+    async def _get_api_calls_count(self) -> int:
+        """Get current API calls count"""
+        try:
+            if not self.redis_client:
+                return self._api_call_count
+
+            # Get API calls from last 24 hours
+            total_calls = 0
+            now = datetime.now()
+
+            for i in range(24):  # Last 24 hours
+                hour = now - timedelta(hours=i)
+                hour_key = hour.replace(minute=0, second=0, microsecond=0)
+                key = f"{self.REDIS_KEYS['api_calls']}:{hour_key.timestamp()}"
+                calls = await self._get_redis_metric(key, 0)
+                total_calls += calls
+
+            return total_calls
+
+        except Exception as e:
+            logger.warning(f"Error getting API calls count: {e}")
+            return self._api_call_count
+
+    async def _get_redis_metric(self, key: str, default: int = 0) -> int:
+        """Helper to get metric from Redis with fallback"""
+        try:
+            if not self.redis_client:
+                return default
+
+            value = await self.redis_client.get(key)
+            return int(value) if value else default
+
+        except Exception as e:
+            logger.debug(f"Redis metric fetch failed for {key}: {e}")
+            return default
+
+    async def track_error(
+        self, error: Exception, context: Optional[Dict[str, Any]] = None
+    ):
+        """Track an error occurrence for error rate calculation"""
+        try:
+            self._error_count += 1
+
+            # Store in Redis for hourly aggregation
+            if self.redis_client:
+                current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+                error_key = (
+                    f"{self.REDIS_KEYS['error_count']}:{current_hour.timestamp()}"
+                )
+
+                # Increment error count for this hour
+                await self.redis_client.incr(error_key)
+                await self.redis_client.expire(
+                    error_key, 86400
+                )  # Expire after 24 hours
+
+            # Record state change
+            await self.record_state_change(
+                StateChangeType.ERROR_OCCURRED,
+                f"Error tracked: {type(error).__name__}: {str(error)[:100]}",
+                {
+                    "error_type": type(error).__name__,
+                    "error_message": str(error),
+                    "context": context or {},
+                    "timestamp": datetime.now().isoformat(),
+                },
+                metadata={
+                    "severity": "error",
+                    "tracking_source": "enhanced_state_tracker",
+                },
+            )
+
+            logger.debug(f"Error tracked: {type(error).__name__}")
+
+        except Exception as e:
+            logger.error(f"Failed to track error: {e}")
+
+    async def track_api_call(
+        self, endpoint: str, method: str = "GET", response_status: Optional[int] = None
+    ):
+        """Track an API call for metrics"""
+        try:
+            self._api_call_count += 1
+
+            # Store in Redis for hourly aggregation
+            if self.redis_client:
+                current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+                api_key = f"{self.REDIS_KEYS['api_calls']}:{current_hour.timestamp()}"
+
+                # Increment API call count for this hour
+                await self.redis_client.incr(api_key)
+                await self.redis_client.expire(api_key, 86400)  # Expire after 24 hours
+
+                # Track specific endpoint stats
+                endpoint_key = f"autobot:metrics:endpoints:{endpoint}:calls"
+                await self.redis_client.incr(endpoint_key)
+                await self.redis_client.expire(endpoint_key, 86400)
+
+            logger.debug(f"API call tracked: {method} {endpoint} -> {response_status}")
+
+        except Exception as e:
+            logger.error(f"Failed to track API call: {e}")
+
+    async def track_user_interaction(
+        self,
+        interaction_type: str,
+        user_id: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ):
+        """Track a user interaction for metrics"""
+        try:
+            self._user_interaction_count += 1
+
+            # Store in Redis for hourly aggregation
+            if self.redis_client:
+                current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+                interaction_key = (
+                    f"{self.REDIS_KEYS['user_interactions']}:{current_hour.timestamp()}"
+                )
+
+                # Increment user interaction count for this hour
+                await self.redis_client.incr(interaction_key)
+                await self.redis_client.expire(
+                    interaction_key, 86400
+                )  # Expire after 24 hours
+
+                # Track interaction types
+                type_key = f"autobot:metrics:interaction_types:{interaction_type}:count"
+                await self.redis_client.incr(type_key)
+                await self.redis_client.expire(type_key, 86400)
+
+            # Record state change for significant interactions
+            if interaction_type in [
+                "login",
+                "logout",
+                "settings_change",
+                "agent_switch",
+            ]:
+                await self.record_state_change(
+                    StateChangeType.USER_ACTION,
+                    f"User interaction: {interaction_type}",
+                    {
+                        "interaction_type": interaction_type,
+                        "user_id": user_id,
+                        "context": context or {},
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                    user_id=user_id,
+                    metadata={"tracking_source": "enhanced_state_tracker"},
+                )
+
+            logger.debug(f"User interaction tracked: {interaction_type} by {user_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to track user interaction: {e}")
+
+    async def get_metrics_summary(self) -> Dict[str, Any]:
+        """Get a comprehensive summary of tracked metrics"""
+        try:
+            return {
+                "error_tracking": {
+                    "current_error_rate": await self._get_error_rate(),
+                    "total_errors_tracked": self._error_count,
+                    "last_update": datetime.now().isoformat(),
+                },
+                "api_tracking": {
+                    "total_api_calls_24h": await self._get_api_calls_count(),
+                    "current_session_calls": self._api_call_count,
+                    "last_update": datetime.now().isoformat(),
+                },
+                "user_interactions": {
+                    "total_interactions_24h": await self._get_user_interactions_count(),
+                    "current_session_interactions": self._user_interaction_count,
+                    "last_update": datetime.now().isoformat(),
+                },
+                "system_health": {
+                    "redis_connected": self.redis_client is not None,
+                    "error_boundary_available": self.error_boundary_manager is not None,
+                    "tracking_active": True,
+                },
+            }
+        except Exception as e:
+            logger.error(f"Error getting metrics summary: {e}")
+            return {"error": str(e)}
+
     def _start_background_tracking(self):
         """Start background tracking tasks"""
 
@@ -641,9 +910,9 @@ class EnhancedProjectStateTracker:
         milestone_status = {
             name: {
                 "achieved": milestone.achieved,
-                "achieved_at": milestone.achieved_at.isoformat()
-                if milestone.achieved_at
-                else None,
+                "achieved_at": (
+                    milestone.achieved_at.isoformat() if milestone.achieved_at else None
+                ),
                 "description": milestone.description,
             }
             for name, milestone in self.milestones.items()
@@ -664,9 +933,7 @@ class EnhancedProjectStateTracker:
                 trend = (
                     "increasing"
                     if last_value > first_value
-                    else "decreasing"
-                    if last_value < first_value
-                    else "stable"
+                    else "decreasing" if last_value < first_value else "stable"
                 )
                 trends[metric.value] = {
                     "current": last_value,
@@ -697,6 +964,7 @@ class EnhancedProjectStateTracker:
             "trends": trends,
             "snapshot_count": len(self.state_history),
             "change_count": len(self.change_log),
+            "tracking_metrics": await self.get_metrics_summary(),
         }
 
     async def generate_state_report(self) -> str:
@@ -753,15 +1021,55 @@ class EnhancedProjectStateTracker:
             )
         report.append("")
 
+        # Tracking Metrics
+        report.append("## System Tracking Metrics")
+        tracking_metrics = summary.get("tracking_metrics", {})
+
+        if "error_tracking" in tracking_metrics:
+            error_data = tracking_metrics["error_tracking"]
+            report.append(
+                f"- **Error Rate**: {error_data.get('current_error_rate', 0)}%"
+            )
+            report.append(
+                f"- **Total Errors**: {error_data.get('total_errors_tracked', 0)}"
+            )
+
+        if "api_tracking" in tracking_metrics:
+            api_data = tracking_metrics["api_tracking"]
+            report.append(
+                f"- **API Calls (24h)**: {api_data.get('total_api_calls_24h', 0)}"
+            )
+            report.append(
+                f"- **Session API Calls**: {api_data.get('current_session_calls', 0)}"
+            )
+
+        if "user_interactions" in tracking_metrics:
+            interaction_data = tracking_metrics["user_interactions"]
+            report.append(
+                f"- **User Interactions (24h)**: {interaction_data.get('total_interactions_24h', 0)}"
+            )
+            report.append(
+                f"- **Session Interactions**: {interaction_data.get('current_session_interactions', 0)}"
+            )
+
+        if "system_health" in tracking_metrics:
+            health_data = tracking_metrics["system_health"]
+            redis_status = (
+                "✅ Connected"
+                if health_data.get("redis_connected")
+                else "❌ Disconnected"
+            )
+            report.append(f"- **Redis Status**: {redis_status}")
+
+        report.append("")
+
         # Phase Details
         report.append("## Phase Status")
         for phase_name, phase_data in current["phase_states"].items():
             status_icon = (
                 "✅"
                 if phase_data["completion_percentage"] >= 95
-                else "🔄"
-                if phase_data["completion_percentage"] >= 50
-                else "⏳"
+                else "🔄" if phase_data["completion_percentage"] >= 50 else "⏳"
             )
             report.append(
                 f"- {status_icon} **{phase_name}**: {phase_data['completion_percentage']:.1f}% ({phase_data['status']})"
@@ -805,6 +1113,109 @@ def get_state_tracker() -> EnhancedProjectStateTracker:
     return _state_tracker
 
 
+# Convenience functions for easy integration
+async def track_system_error(
+    error: Exception, context: Optional[Dict[str, Any]] = None
+):
+    """Convenience function to track system errors from anywhere in the codebase"""
+    try:
+        tracker = get_state_tracker()
+        await tracker.track_error(error, context)
+    except Exception as e:
+        logger.error(f"Failed to track system error: {e}")
+
+
+async def track_api_request(
+    endpoint: str, method: str = "GET", status_code: Optional[int] = None
+):
+    """Convenience function to track API requests from middleware or endpoints"""
+    try:
+        tracker = get_state_tracker()
+        await tracker.track_api_call(endpoint, method, status_code)
+    except Exception as e:
+        logger.error(f"Failed to track API request: {e}")
+
+
+async def track_user_action(
+    action_type: str,
+    user_id: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None,
+):
+    """Convenience function to track user actions from frontend or API"""
+    try:
+        tracker = get_state_tracker()
+        await tracker.track_user_interaction(action_type, user_id, context)
+    except Exception as e:
+        logger.error(f"Failed to track user action: {e}")
+
+
+def error_tracking_decorator(func):
+    """Decorator to automatically track errors in functions"""
+    import functools
+
+    if asyncio.iscoroutinefunction(func):
+
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                await track_system_error(
+                    e,
+                    {
+                        "function": func.__name__,
+                        "module": func.__module__,
+                        "args": str(args)[:200],  # Limit size
+                        "kwargs": str(kwargs)[:200],
+                    },
+                )
+                raise
+
+        return async_wrapper
+    else:
+
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                # For sync functions, we need to run the tracking in an event loop
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # If we're in an async context, schedule the tracking
+                        asyncio.create_task(
+                            track_system_error(
+                                e,
+                                {
+                                    "function": func.__name__,
+                                    "module": func.__module__,
+                                    "args": str(args)[:200],
+                                    "kwargs": str(kwargs)[:200],
+                                },
+                            )
+                        )
+                    else:
+                        # If no loop is running, run it
+                        asyncio.run(
+                            track_system_error(
+                                e,
+                                {
+                                    "function": func.__name__,
+                                    "module": func.__module__,
+                                    "args": str(args)[:200],
+                                    "kwargs": str(kwargs)[:200],
+                                },
+                            )
+                        )
+                except Exception:
+                    # If we can't track the error, just log it
+                    logger.error(f"Error in {func.__name__}: {e}")
+                raise
+
+        return sync_wrapper
+
+
 # Example usage and testing
 if __name__ == "__main__":
     import sys
@@ -831,6 +1242,33 @@ if __name__ == "__main__":
                 report = await tracker.generate_state_report()
                 print(report)
 
+            elif command == "metrics":
+                metrics = await tracker.get_metrics_summary()
+                print(json.dumps(metrics, indent=2, default=str))
+
+            elif command == "test-tracking":
+                print("Testing tracking functionality...")
+
+                # Test error tracking
+                test_error = ValueError("Test error for tracking")
+                await tracker.track_error(test_error, {"test": True})
+                print("✅ Error tracking tested")
+
+                # Test API call tracking
+                await tracker.track_api_call("/api/test", "POST", 200)
+                print("✅ API call tracking tested")
+
+                # Test user interaction tracking
+                await tracker.track_user_interaction(
+                    "test_interaction", "test_user", {"test": True}
+                )
+                print("✅ User interaction tracking tested")
+
+                # Show updated metrics
+                metrics = await tracker.get_metrics_summary()
+                print("\nUpdated metrics:")
+                print(json.dumps(metrics, indent=2, default=str))
+
             elif command == "export":
                 output_path = (
                     sys.argv[2]
@@ -842,7 +1280,9 @@ if __name__ == "__main__":
 
             else:
                 print(f"Unknown command: {command}")
-                print("Available commands: snapshot, summary, report, export")
+                print(
+                    "Available commands: snapshot, summary, report, metrics, test-tracking, export"
+                )
         else:
             # Default: show summary
             summary = await tracker.get_state_summary()

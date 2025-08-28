@@ -172,6 +172,7 @@ class ResearchAgent:
                 "detailed_info": tools_data,
                 "research_results": [r.dict() for r in research_results],
                 "recommendation": "nmap is the most versatile and widely-used network scanning tool",
+                "summary": f"Found {len(tools_data)} network scanning tools: {', '.join(tools_data.keys())}. Recommendation: nmap is the most versatile and widely-used network scanning tool.",
             }
 
         # Fallback to general research

@@ -495,21 +495,28 @@ class LLMInterface:
             "stream": True,  # Enable streaming for real-time responses
             "temperature": temperature,
             "format": "json" if structured_output else "",
+            "options": {
+                "seed": 42,  # For reproducible responses when needed
+                "top_k": 40,
+                "top_p": 0.9,
+                "repeat_penalty": 1.1,
+                "num_ctx": 4096,  # Context window
+            },
         }
         if "device" in kwargs:
             device_value = kwargs.pop("device")
             if device_value.startswith("cuda"):
-                data["options"] = {"num_gpu": device_value.split(":")[-1]}
+                data["options"].update({"num_gpu": device_value.split(":")[-1]})
             else:
-                data["options"] = {"device": device_value}
+                data["options"].update({"device": device_value})
         else:
             selected_backend = self._select_backend()
             if selected_backend == "openvino_npu":
-                data["options"] = {"device": "NPU"}
+                data["options"].update({"device": "NPU"})
             elif selected_backend == "openvino_gpu":
-                data["options"] = {"device": "GPU"}
+                data["options"].update({"device": "GPU"})
             elif selected_backend == "cuda":
-                data["options"] = {"num_gpu": 1}
+                data["options"].update({"num_gpu": 1})
         data.update(kwargs)
 
         print(f"Ollama Request URL: {url}")

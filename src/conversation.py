@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ConversationMessage:
     """Individual message in a conversation"""
+
     message_id: str
     role: str  # 'user', 'assistant', 'system'
     content: str
@@ -48,6 +49,7 @@ class ConversationMessage:
 @dataclass
 class ConversationState:
     """Current state of conversation processing"""
+
     conversation_id: str
     classification: Optional[ClassificationResult] = None
     kb_context: List[Dict[str, Any]] = None
@@ -90,12 +92,17 @@ class Conversation:
         """Initialize the appropriate classification agent based on configuration."""
         try:
             # Check if Gemma classification is enabled
-            use_gemma = global_config_manager.get_nested("classification.use_gemma", False)
+            use_gemma = global_config_manager.get_nested(
+                "classification.use_gemma", False
+            )
 
             if use_gemma:
                 try:
                     # Try to import and use Gemma classification agent
-                    from src.agents.gemma_classification_agent import GemmaClassificationAgent
+                    from src.agents.gemma_classification_agent import (
+                        GemmaClassificationAgent,
+                    )
+
                     self.classification_agent = GemmaClassificationAgent()
                     logger.info("Using Gemma-powered classification agent")
                     return
@@ -113,9 +120,7 @@ class Conversation:
             # Ultimate fallback
             self.classification_agent = ClassificationAgent()
 
-    async def process_user_message(
-        self, user_message: str, **kwargs
-    ) -> Dict[str, Any]:
+    async def process_user_message(self, user_message: str, **kwargs) -> Dict[str, Any]:
         """
         Process a user message with full KB integration and source tracking
 
@@ -134,7 +139,7 @@ class Conversation:
                 role="user",
                 content=user_message,
                 timestamp=datetime.now(),
-                message_type="chat"
+                message_type="chat",
             )
             self.messages.append(user_msg)
 
@@ -146,13 +151,17 @@ class Conversation:
 
             # Step 3: Check if research is needed based on classification
             research_results = None
-            if (self.state.classification and
-                self.state.classification.complexity == TaskComplexity.COMPLEX and
-                self._needs_external_research(user_message, kb_results)):
+            if (
+                self.state.classification
+                and self.state.classification.complexity == TaskComplexity.COMPLEX
+                and self._needs_external_research(user_message, kb_results)
+            ):
                 research_results = await self._conduct_research(user_message)
 
             # Step 4: Generate response with KB context and research
-            response = await self._generate_response(user_message, kb_results, research_results)
+            response = await self._generate_response(
+                user_message, kb_results, research_results
+            )
 
             # Step 5: Add source attribution
             sources_block = get_attribution()
@@ -164,7 +173,7 @@ class Conversation:
                 content=response,
                 timestamp=datetime.now(),
                 message_type="chat",
-                sources=source_manager.current_response_sources
+                sources=source_manager.current_response_sources,
             )
             self.messages.append(assistant_msg)
 
@@ -175,25 +184,31 @@ class Conversation:
                     role="system",
                     content=sources_block,
                     timestamp=datetime.now(),
-                    message_type="source"
+                    message_type="source",
                 )
                 self.messages.append(source_msg)
 
             # Update conversation state
             processing_time = asyncio.get_event_loop().time() - start_time
             self.state.processing_time = processing_time
-            self.state.sources_used = [s.to_dict() for s in source_manager.current_response_sources]
+            self.state.sources_used = [
+                s.to_dict() for s in source_manager.current_response_sources
+            ]
             self.updated_at = datetime.now()
 
             # Return comprehensive response
             result = {
                 "response": response,
                 "sources": sources_block,
-                "classification": asdict(self.state.classification) if self.state.classification else None,
+                "classification": (
+                    asdict(self.state.classification)
+                    if self.state.classification
+                    else None
+                ),
                 "kb_results_count": len(kb_results),
                 "processing_time": processing_time,
                 "conversation_id": self.conversation_id,
-                "message_id": assistant_msg.message_id
+                "message_id": assistant_msg.message_id,
             }
 
             # Add research information if available
@@ -203,7 +218,9 @@ class Conversation:
             return result
 
         except Exception as e:
-            logger.error(f"Error processing message in conversation {self.conversation_id}: {e}")
+            logger.error(
+                f"Error processing message in conversation {self.conversation_id}: {e}"
+            )
             self.state.status = "error"
 
             # Add error message
@@ -213,38 +230,42 @@ class Conversation:
                 content=f"Error processing request: {str(e)}",
                 timestamp=datetime.now(),
                 message_type="debug",
-                metadata={"error": True}
+                metadata={"error": True},
             )
             self.messages.append(error_msg)
 
             return {
                 "response": "I encountered an error processing your request. Please try again.",
                 "error": str(e),
-                "conversation_id": self.conversation_id
+                "conversation_id": self.conversation_id,
             }
 
     async def _classify_message(self, message: str):
         """Classify the user message for workflow routing"""
         try:
-            self.state.classification = await self.classification_agent.classify_request(message)
+            self.state.classification = (
+                await self.classification_agent.classify_request(message)
+            )
 
             # Add classification as a thought message
             classification_msg = ConversationMessage(
                 message_id=str(uuid.uuid4()),
                 role="system",
                 content=f"Classified as: {self.state.classification.complexity.value} "
-                       f"(confidence: {self.state.classification.confidence:.2f})",
+                f"(confidence: {self.state.classification.confidence:.2f})",
                 timestamp=datetime.now(),
                 message_type="thought",
                 metadata={
                     "classification": asdict(self.state.classification),
-                    "reasoning": self.state.classification.reasoning
-                }
+                    "reasoning": self.state.classification.reasoning,
+                },
             )
             self.messages.append(classification_msg)
 
-            logger.info(f"Message classified as {self.state.classification.complexity.value} "
-                       f"with {self.state.classification.confidence:.2f} confidence")
+            logger.info(
+                f"Message classified as {self.state.classification.complexity.value} "
+                f"with {self.state.classification.confidence:.2f} confidence"
+            )
 
         except Exception as e:
             logger.error(f"Classification failed: {e}")
@@ -256,7 +277,7 @@ class Conversation:
                 suggested_agents=["chat_responder"],
                 estimated_steps=1,
                 user_approval_needed=False,
-                context_analysis={"error": str(e)}
+                context_analysis={"error": str(e)},
             )
 
     async def _search_knowledge_base(self, query: str) -> List[Dict[str, Any]]:
@@ -271,35 +292,32 @@ class Conversation:
                 role="system",
                 content=f"Searching Knowledge Base for: '{query}'",
                 timestamp=datetime.now(),
-                message_type="planning"
+                message_type="planning",
             )
             self.messages.append(planning_msg)
 
             # Search with timeout protection
             search_task = asyncio.create_task(
-                self.kb_librarian.search_knowledge_base(
-                    query=query,
-                    max_results=self.max_kb_results,
-                    threshold=0.1
-                )
+                self.kb_librarian.search_knowledge_base(query)
             )
 
             kb_result = await asyncio.wait_for(search_task, timeout=self.kb_timeout)
 
-            if kb_result and kb_result.get('documents'):
-                results = kb_result['documents']
+            if kb_result:
+                # KB librarian returns a list directly
+                results = kb_result
                 self.state.kb_context = results
 
                 # Track KB sources
                 for i, doc in enumerate(results):
                     source_manager.add_kb_source(
-                        content=doc.get('content', '')[:200] + "...",
-                        entry_id=str(doc.get('id', f'kb_{i}')),
-                        confidence=doc.get('score', 0.5),
+                        content=doc.get("content", "")[:200] + "...",
+                        entry_id=str(doc.get("id", f"kb_{i}")),
+                        confidence=doc.get("score", 0.5),
                         metadata={
-                            'title': doc.get('title', 'Knowledge Base Entry'),
-                            'source_file': doc.get('source_file', 'unknown')
-                        }
+                            "title": doc.get("title", "Knowledge Base Entry"),
+                            "source_file": doc.get("source_file", "unknown"),
+                        },
                     )
 
                 # Add utility message about KB results
@@ -309,7 +327,7 @@ class Conversation:
                     content=f"Found {len(results)} relevant knowledge base entries",
                     timestamp=datetime.now(),
                     message_type="utility",
-                    metadata={"kb_results": len(results)}
+                    metadata={"kb_results": len(results)},
                 )
                 self.messages.append(utility_msg)
 
@@ -328,7 +346,7 @@ class Conversation:
                 content="Knowledge base search timed out, proceeding without KB context",
                 timestamp=datetime.now(),
                 message_type="utility",
-                metadata={"timeout": True}
+                metadata={"timeout": True},
             )
             self.messages.append(timeout_msg)
             return []
@@ -342,37 +360,56 @@ class Conversation:
                 content=f"Knowledge base search failed: {str(e)}",
                 timestamp=datetime.now(),
                 message_type="debug",
-                metadata={"error": True}
+                metadata={"error": True},
             )
             self.messages.append(error_msg)
             return []
 
-    async def _generate_response(self, user_message: str, kb_results: List[Dict[str, Any]], research_results: Optional[Dict[str, Any]] = None) -> str:
+    async def _generate_response(
+        self,
+        user_message: str,
+        kb_results: List[Dict[str, Any]],
+        research_results: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """Generate response with KB context and source attribution"""
         try:
             # Build context from KB results
             kb_context = ""
             if kb_results:
                 kb_context = "\n\nRELEVANT KNOWLEDGE BASE INFORMATION:\n"
-                for i, doc in enumerate(kb_results[:3], 1):  # Limit to top 3 for context
-                    title = doc.get('title', f'Document {i}')
-                    content = doc.get('content', '')[:300]  # Limit content length
+                for i, doc in enumerate(
+                    kb_results[:3], 1
+                ):  # Limit to top 3 for context
+                    title = doc.get("title", f"Document {i}")
+                    content = doc.get("content", "")[:300]  # Limit content length
                     kb_context += f"\n{i}. {title}:\n{content}...\n"
 
             # Build context from research results
             research_context = ""
-            if research_results and research_results.get("success") and research_results.get("results"):
+            if (
+                research_results
+                and research_results.get("success")
+                and research_results.get("results")
+            ):
                 research_context = "\n\nEXTERNAL RESEARCH RESULTS:\n"
-                for i, result in enumerate(research_results["results"][:2], 1):  # Limit to top 2
+                for i, result in enumerate(
+                    research_results["results"][:2], 1
+                ):  # Limit to top 2
                     content_data = result.get("content", {})
                     if content_data.get("success"):
-                        text_content = content_data.get("text_content", "")[:400]  # Limit length
-                        research_context += f"\n{i}. Research Query: {result.get('query', 'Unknown')}\n"
+                        text_content = content_data.get("text_content", "")[
+                            :400
+                        ]  # Limit length
+                        research_context += (
+                            f"\n{i}. Research Query: {result.get('query', 'Unknown')}\n"
+                        )
                         research_context += f"   Content: {text_content}...\n"
 
                         if result.get("interaction_required"):
                             research_context += f"   ⚠️ Browser session available for manual verification\n"
-                            research_context += f"   🌐 Browser URL: {result.get('browser_url', '')}\n"
+                            research_context += (
+                                f"   🌐 Browser URL: {result.get('browser_url', '')}\n"
+                            )
 
             # Create enhanced prompt with KB and research context
             system_prompt = """You are AutoBot, an intelligent AI assistant. You have access to a knowledge base and can conduct external research.
@@ -399,7 +436,7 @@ Please provide a helpful, accurate response based on the available information. 
                 role="system",
                 content="Generating response with KB context and LLM",
                 timestamp=datetime.now(),
-                message_type="planning"
+                message_type="planning",
             )
             self.messages.append(planning_msg)
 
@@ -408,9 +445,13 @@ Please provide a helpful, accurate response based on the available information. 
                 f"{system_prompt}\n\n{user_prompt}",
                 context={
                     "conversation_id": self.conversation_id,
-                    "classification": self.state.classification.complexity.value if self.state.classification else "simple",
-                    "kb_results_count": len(kb_results)
-                }
+                    "classification": (
+                        self.state.classification.complexity.value
+                        if self.state.classification
+                        else "simple"
+                    ),
+                    "kb_results_count": len(kb_results),
+                },
             )
 
             # Track LLM as a source
@@ -420,9 +461,9 @@ Please provide a helpful, accurate response based on the available information. 
                 reliability="medium",
                 metadata={
                     "tier_used": llm_response.tier_used.value,
-                    "model": getattr(llm_response, 'model_used', 'unknown'),
-                    "warnings": llm_response.warnings
-                }
+                    "model": getattr(llm_response, "model_used", "unknown"),
+                    "warnings": llm_response.warnings,
+                },
             )
 
             response_content = llm_response.content
@@ -436,8 +477,8 @@ Please provide a helpful, accurate response based on the available information. 
                 message_type="utility",
                 metadata={
                     "tier_used": llm_response.tier_used.value,
-                    "warnings": llm_response.warnings
-                }
+                    "warnings": llm_response.warnings,
+                },
             )
             self.messages.append(utility_msg)
 
@@ -446,19 +487,43 @@ Please provide a helpful, accurate response based on the available information. 
 
         except Exception as e:
             logger.error(f"Response generation failed: {e}")
-            return "I'm having trouble generating a response right now. Please try again."
+            return (
+                "I'm having trouble generating a response right now. Please try again."
+            )
 
-    def _needs_external_research(self, user_message: str, kb_results: List[Dict[str, Any]]) -> bool:
+    def _needs_external_research(
+        self, user_message: str, kb_results: List[Dict[str, Any]]
+    ) -> bool:
         """Determine if external research is needed"""
         # Check if KB results are insufficient
         if not kb_results or len(kb_results) < 2:
             # Check for research keywords
             research_keywords = [
-                "latest", "current", "recent", "new", "today", "2024", "2025",
-                "what's happening", "news", "trends", "update", "status",
-                "compare", "vs", "versus", "difference between",
-                "how to", "tutorial", "guide", "step by step",
-                "price", "cost", "buy", "purchase", "review"
+                "latest",
+                "current",
+                "recent",
+                "new",
+                "today",
+                "2024",
+                "2025",
+                "what's happening",
+                "news",
+                "trends",
+                "update",
+                "status",
+                "compare",
+                "vs",
+                "versus",
+                "difference between",
+                "how to",
+                "tutorial",
+                "guide",
+                "step by step",
+                "price",
+                "cost",
+                "buy",
+                "purchase",
+                "review",
             ]
 
             user_lower = user_message.lower()
@@ -475,7 +540,7 @@ Please provide a helpful, accurate response based on the available information. 
                 role="system",
                 content="Conducting external research with browser automation",
                 timestamp=datetime.now(),
-                message_type="planning"
+                message_type="planning",
             )
             self.messages.append(planning_msg)
 
@@ -485,22 +550,27 @@ Please provide a helpful, accurate response based on the available information. 
 
             for query in search_queries[:2]:  # Limit to 2 queries
                 # Try researching with search engine
-                search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+                search_url = (
+                    f"https://www.google.com/search?q={query.replace(' ', '+')}"
+                )
 
                 research_result = await research_browser_manager.research_url(
                     self.conversation_id, search_url, extract_content=True
                 )
 
                 if research_result.get("success"):
-                    research_results.append({
-                        "query": query,
-                        "url": search_url,
-                        "status": research_result.get("status"),
-                        "content": research_result.get("content", {}),
-                        "session_id": research_result.get("session_id"),
-                        "browser_url": research_result.get("browser_url"),
-                        "interaction_required": research_result.get("status") == "interaction_required"
-                    })
+                    research_results.append(
+                        {
+                            "query": query,
+                            "url": search_url,
+                            "status": research_result.get("status"),
+                            "content": research_result.get("content", {}),
+                            "session_id": research_result.get("session_id"),
+                            "browser_url": research_result.get("browser_url"),
+                            "interaction_required": research_result.get("status")
+                            == "interaction_required",
+                        }
+                    )
 
                     # Track research source
                     track_source(
@@ -511,8 +581,9 @@ Please provide a helpful, accurate response based on the available information. 
                             "query": query,
                             "url": search_url,
                             "research_session": research_result.get("session_id"),
-                            "interaction_required": research_result.get("status") == "interaction_required"
-                        }
+                            "interaction_required": research_result.get("status")
+                            == "interaction_required",
+                        },
                     )
 
             if research_results:
@@ -523,7 +594,7 @@ Please provide a helpful, accurate response based on the available information. 
                     content=f"Completed external research with {len(research_results)} queries",
                     timestamp=datetime.now(),
                     message_type="utility",
-                    metadata={"research_queries": len(research_results)}
+                    metadata={"research_queries": len(research_results)},
                 )
                 self.messages.append(utility_msg)
 
@@ -531,7 +602,7 @@ Please provide a helpful, accurate response based on the available information. 
                 "success": True,
                 "queries": search_queries,
                 "results": research_results,
-                "total_results": len(research_results)
+                "total_results": len(research_results),
             }
 
         except Exception as e:
@@ -543,7 +614,7 @@ Please provide a helpful, accurate response based on the available information. 
                 content=f"External research failed: {str(e)}",
                 timestamp=datetime.now(),
                 message_type="debug",
-                metadata={"error": True}
+                metadata={"error": True},
             )
             self.messages.append(error_msg)
 
@@ -572,7 +643,9 @@ Please provide a helpful, accurate response based on the available information. 
 
     async def get_research_session(self) -> Optional[str]:
         """Get the current research session ID for this conversation"""
-        session = research_browser_manager.get_session_by_conversation(self.conversation_id)
+        session = research_browser_manager.get_session_by_conversation(
+            self.conversation_id
+        )
         return session.session_id if session else None
 
     def get_messages(self, message_types: List[str] = None) -> List[Dict[str, Any]]:
@@ -595,10 +668,12 @@ Please provide a helpful, accurate response based on the available information. 
             "updated_at": self.updated_at.isoformat(),
             "message_count": len(self.messages),
             "status": self.state.status,
-            "classification": asdict(self.state.classification) if self.state.classification else None,
+            "classification": (
+                asdict(self.state.classification) if self.state.classification else None
+            ),
             "kb_context_count": len(self.state.kb_context),
             "sources_used": len(self.state.sources_used),
-            "total_processing_time": self.state.processing_time
+            "total_processing_time": self.state.processing_time,
         }
 
     def export_conversation(self) -> Dict[str, Any]:
@@ -609,7 +684,7 @@ Please provide a helpful, accurate response based on the available information. 
             "updated_at": self.updated_at.isoformat(),
             "messages": [asdict(msg) for msg in self.messages],
             "state": asdict(self.state),
-            "summary": self.get_conversation_summary()
+            "summary": self.get_conversation_summary(),
         }
 
     async def cleanup(self):
@@ -632,8 +707,10 @@ class ConversationManager:
 
         # Clean up old conversations if at limit
         if len(self.conversations) >= self.max_conversations:
-            oldest_id = min(self.conversations.keys(),
-                          key=lambda x: self.conversations[x].created_at)
+            oldest_id = min(
+                self.conversations.keys(),
+                key=lambda x: self.conversations[x].created_at,
+            )
             # Note: cleanup will be called when conversation is replaced
             del self.conversations[oldest_id]
             logger.info(f"Cleaned up oldest conversation {oldest_id}")

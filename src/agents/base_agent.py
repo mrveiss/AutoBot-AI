@@ -16,14 +16,14 @@ from typing import Any, Dict, List, Optional, Union
 
 # Import communication protocol
 from src.protocols.agent_communication import (
-    AgentIdentity, 
+    AgentIdentity,
     AgentCommunicationManager,
     get_communication_manager,
     MessageType,
     MessagePriority,
     StandardMessage,
     MessageHeader,
-    MessagePayload
+    MessagePayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,6 +98,7 @@ class AgentHealth:
     error_count: int
     resource_usage: Dict[str, Any]
     capabilities: List[str]
+    details: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -111,6 +112,7 @@ class AgentHealth:
             "error_count": self.error_count,
             "resource_usage": self.resource_usage,
             "capabilities": self.capabilities,
+            "details": self.details or {},
         }
 
 
@@ -191,6 +193,7 @@ class BaseAgent(ABC):
                 error_count=self.error_count,
                 resource_usage=await self._get_resource_usage(),
                 capabilities=self.get_capabilities(),
+                details={},
             )
 
         except Exception as e:
@@ -205,6 +208,7 @@ class BaseAgent(ABC):
                 error_count=self.error_count + 1,
                 resource_usage={},
                 capabilities=[],
+                details={},
             )
 
     async def _ping(self) -> bool:
@@ -279,31 +283,35 @@ class BaseAgent(ABC):
                 agent_type=self.agent_type,
                 capabilities=capabilities or self.capabilities,
                 supported_patterns=[],
-                health_status="healthy"
+                health_status="healthy",
             )
 
             # Register with communication manager
             manager = get_communication_manager()
             channel_configs = [
                 {"type": "direct", "id": f"{self.agent_id}_direct"},
-                {"type": "redis", "id": f"{self.agent_id}_redis"}
+                {"type": "redis", "id": f"{self.agent_id}_redis"},
             ]
-            
-            self.communication_protocol = await manager.register_agent(identity, channel_configs)
-            
+
+            self.communication_protocol = await manager.register_agent(
+                identity, channel_configs
+            )
+
             # Register default message handlers
             self.communication_protocol.register_message_handler(
                 MessageType.REQUEST, self._handle_communication_request
             )
-            
+
             logger.info(f"Agent {self.agent_id} communication initialized")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize communication for {self.agent_id}: {e}")
             return False
 
-    async def _handle_communication_request(self, message: StandardMessage) -> Optional[StandardMessage]:
+    async def _handle_communication_request(
+        self, message: StandardMessage
+    ) -> Optional[StandardMessage]:
         """Handle incoming communication requests"""
         try:
             # Convert communication message to AgentRequest
@@ -311,10 +319,10 @@ class BaseAgent(ABC):
             agent_request = AgentRequest(
                 request_id=message.header.message_id,
                 agent_type=self.agent_type,
-                action=request_data.get('action', 'process'),
-                payload=request_data.get('payload', {}),
-                context=request_data.get('context', {}),
-                priority=request_data.get('priority', 'normal')
+                action=request_data.get("action", "process"),
+                payload=request_data.get("payload", {}),
+                context=request_data.get("context", {}),
+                priority=request_data.get("priority", "normal"),
             )
 
             # Process the request
@@ -323,12 +331,14 @@ class BaseAgent(ABC):
             # Convert AgentResponse back to communication message
             response_message = StandardMessage(
                 header=MessageHeader(message_type=MessageType.RESPONSE),
-                payload=MessagePayload(content={
-                    'status': response.status,
-                    'result': response.result,
-                    'error': response.error,
-                    'execution_time': response.execution_time
-                })
+                payload=MessagePayload(
+                    content={
+                        "status": response.status,
+                        "result": response.result,
+                        "error": response.error,
+                        "execution_time": response.execution_time,
+                    }
+                ),
             )
 
             return response_message
@@ -338,14 +348,14 @@ class BaseAgent(ABC):
             # Return error response
             return StandardMessage(
                 header=MessageHeader(message_type=MessageType.ERROR),
-                payload=MessagePayload(content={
-                    'error': str(e),
-                    'error_type': type(e).__name__
-                })
+                payload=MessagePayload(
+                    content={"error": str(e), "error_type": type(e).__name__}
+                ),
             )
 
-    async def send_message_to_agent(self, recipient_id: str, message_data: Any, 
-                                   timeout: float = 30.0) -> Optional[Any]:
+    async def send_message_to_agent(
+        self, recipient_id: str, message_data: Any, timeout: float = 30.0
+    ) -> Optional[Any]:
         """Send a message to another agent"""
         if not self.communication_protocol:
             logger.error(f"Communication not initialized for agent {self.agent_id}")
@@ -353,7 +363,10 @@ class BaseAgent(ABC):
 
         try:
             from src.protocols.agent_communication import send_agent_request
-            return await send_agent_request(self.agent_id, recipient_id, message_data, timeout)
+
+            return await send_agent_request(
+                self.agent_id, recipient_id, message_data, timeout
+            )
         except Exception as e:
             logger.error(f"Error sending message to {recipient_id}: {e}")
             return None
@@ -366,6 +379,7 @@ class BaseAgent(ABC):
 
         try:
             from src.protocols.agent_communication import broadcast_to_all_agents
+
             return await broadcast_to_all_agents(self.agent_id, message_data)
         except Exception as e:
             logger.error(f"Error broadcasting message: {e}")
