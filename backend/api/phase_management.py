@@ -265,9 +265,11 @@ async def phase_management_health():
             "auto_progression": progression_manager.config.get(
                 "auto_progression_enabled", False
             ),
-            "last_check": progression_manager.last_progression_check.isoformat()
-            if progression_manager.last_progression_check
-            else None,
+            "last_check": (
+                progression_manager.last_progression_check.isoformat()
+                if progression_manager.last_progression_check
+                else None
+            ),
         }
 
         return {

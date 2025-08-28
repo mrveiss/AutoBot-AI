@@ -12,7 +12,7 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-# from src.agents import get_kb_librarian  # Currently not used
+from src.agents.kb_librarian_agent import get_kb_librarian
 from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.conversation import conversation_manager
@@ -1736,41 +1736,61 @@ Current question: {message}"""
         }
 
         try:
-            # TEMPORARY FIX: Disable KB search to prevent hanging
             # Get KB librarian with timeout protection
-            kb_librarian = None  # get_kb_librarian()
+            kb_librarian = get_kb_librarian()
             if kb_librarian:
                 # Add timeout to prevent hanging (10 second limit)
                 kb_search_task = asyncio.create_task(
                     kb_librarian.process_query(enhanced_message)
                 )
                 kb_result = await asyncio.wait_for(kb_search_task, timeout=10.0)
+                logger.info(
+                    "DEBUG: KB search completed successfully, proceeding to source attribution..."
+                )
 
                 # Add source attribution with tracking
+                logger.info("DEBUG: About to process source attribution...")
                 if kb_result.get("documents_found", 0) > 0:
+                    logger.info("DEBUG: Processing KB sources for attribution...")
                     # Track KB sources
                     kb_docs = kb_result.get("documents", [])
                     for doc in kb_docs[:3]:  # Track top 3 relevant docs
-                        source_manager.add_kb_source(
-                            content=doc.get("content", "")[:200],
-                            entry_id=doc.get("id", "unknown"),
-                            confidence=doc.get("score", 0.8),
-                            metadata={
-                                "category": doc.get("category"),
-                                "title": doc.get("title"),
-                            },
-                        )
+                        try:
+                            source_manager.add_kb_source(
+                                content=doc.get("content", "")[:200],
+                                entry_id=doc.get("id", "unknown"),
+                                confidence=doc.get("score", 0.8),
+                                metadata={
+                                    "category": doc.get("category"),
+                                    "title": doc.get("title"),
+                                },
+                            )
+                        except Exception as e:
+                            logger.error(f"DEBUG: Error adding KB source: {e}")
 
                     # Send attribution message if sources toggle is on
-                    attribution_msg = source_manager.format_attribution_block()
-                    if attribution_msg:
-                        await _send_typed_message(
-                            existing_history,
-                            "source",
-                            attribution_msg,
-                            chat_history_manager,
-                            chat_id,
-                        )
+                    logger.info("DEBUG: About to format attribution block...")
+                    try:
+                        attribution_msg = source_manager.format_attribution_block()
+                        if attribution_msg:
+                            logger.info("DEBUG: About to send typed message...")
+                            await _send_typed_message(
+                                existing_history,
+                                "source",
+                                attribution_msg,
+                                chat_history_manager,
+                                chat_id,
+                            )
+                            logger.info("DEBUG: Typed message sent successfully")
+                        else:
+                            logger.info("DEBUG: No attribution message to send")
+                    except Exception as e:
+                        logger.error(f"DEBUG: Error in attribution messaging: {e}")
+                else:
+                    logger.info(
+                        "DEBUG: No documents found, skipping source attribution"
+                    )
+
                 logger.info(
                     f"DEBUG: KB search completed - found "
                     f"{kb_result.get('documents_found', 0)} documents"
@@ -1802,6 +1822,8 @@ Current question: {message}"""
         #     except Exception as e:
         #         logger.error(f"Web research failed: {e}")
         #         web_research_result = {"error": str(e)}
+
+        logger.info("DEBUG: About to enter LightweightOrchestrator section...")
 
         # USE LIGHTWEIGHT ORCHESTRATOR for intelligent routing without blocking
         logger.info("DEBUG: Using LightweightOrchestrator for request routing...")
@@ -1857,18 +1879,17 @@ Current question: {message}"""
                         f"{kb_result.get('answer', 'Relevant information found in knowledge base.')}"
                     )
 
-                enhanced_context = f"""Chat ID: {chat_id}
-Knowledge Base documents found: {kb_result.get('documents_found', 0)}
-{kb_context}
-
-IMPORTANT: Always cite sources when using information from the Knowledge Base.
-If no KB documents were found, clearly state this and provide general "
-"knowledge responses."""
+                # Build enhanced context as dict for the LLM failsafe agent
+                enhanced_context = {
+                    "chat_id": chat_id,
+                    "kb_documents_found": kb_result.get("documents_found", 0),
+                    "kb_context": kb_context if kb_context else None,
+                    "instructions": "Always cite sources when using information from the Knowledge Base. If no KB documents were found, clearly state this and provide general knowledge responses.",
+                    "response_type": "chat",
+                }
 
                 response = await get_robust_llm_response(
-                    user_input=enhanced_message,
-                    context=enhanced_context,
-                    response_type="chat",
+                    prompt=enhanced_message, context=enhanced_context
                 )
 
                 # Track LLM source
@@ -1882,17 +1903,35 @@ If no KB documents were found, clearly state this and provide general "
                             "model": os.getenv(
                                 "AUTOBOT_DEFAULT_LLM_MODEL",
                                 "artifish/llama3.2-uncensored:latest",
-                            )
+                            ),
+                            "tier_used": (
+                                str(response.tier_used)
+                                if hasattr(response, "tier_used")
+                                else "unknown"
+                            ),
                         },
                     )
 
                 orchestrator_result = {
-                    "response_text": response.get(
-                        "response",
-                        "I'm processing your request. Please wait a moment...",
+                    "response_text": (
+                        response.content
+                        if hasattr(response, "content")
+                        else str(response)
                     ),
-                    "status": "success",
+                    "status": (
+                        "success"
+                        if (hasattr(response, "success") and response.success)
+                        else "partial"
+                    ),
                     "routing_method": "llm_failsafe_temporary",
+                    "llm_tier": (
+                        str(response.tier_used)
+                        if hasattr(response, "tier_used")
+                        else "unknown"
+                    ),
+                    "confidence": (
+                        response.confidence if hasattr(response, "confidence") else 0.5
+                    ),
                 }
             except Exception as e:
                 logger.error(f"LLM failsafe failed: {e}")
@@ -2323,11 +2362,11 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
                     "chat_id": chat_id,
                     "message_type": "response",
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "sources": [
-                        s.to_dict() for s in source_manager.current_response_sources
-                    ]
-                    if source_manager.current_response_sources
-                    else [],
+                    "sources": (
+                        [s.to_dict() for s in source_manager.current_response_sources]
+                        if source_manager.current_response_sources
+                        else []
+                    ),
                     "sender": "bot",
                 },
             )
@@ -2974,9 +3013,11 @@ async def _parallel_chat_history_operations(
         )
 
         return {
-            "loaded_history": existing_history[: -len(save_messages)]
-            if save_messages
-            else existing_history,
+            "loaded_history": (
+                existing_history[: -len(save_messages)]
+                if save_messages
+                else existing_history
+            ),
             "saved_messages": save_messages,
             "total_messages": len(existing_history),
         }

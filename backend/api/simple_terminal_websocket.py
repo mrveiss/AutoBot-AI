@@ -73,10 +73,11 @@ class SimpleTerminalSession(BaseTerminalWebSocket):
                 # Add metadata if not present
                 if "metadata" not in standardized_data:
                     import time
+
                     standardized_data["metadata"] = {
                         "session_id": self.session_id,
                         "timestamp": time.time(),
-                        "terminal_type": "simple"
+                        "terminal_type": "simple",
                     }
 
                 await self.websocket.send_text(json.dumps(standardized_data))
@@ -178,7 +179,9 @@ class SimpleTerminalHandler:
 
                     if message_type == "input":
                         # Send input to PTY shell - support both legacy and new formats
-                        text = message.get("content", message.get("text", message.get("data", "")))
+                        text = message.get(
+                            "content", message.get("text", message.get("data", ""))
+                        )
                         if text:
                             await session.send_input(text)
 

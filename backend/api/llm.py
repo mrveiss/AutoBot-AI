@@ -342,11 +342,13 @@ async def get_comprehensive_llm_status():
                             .get("openai", {})
                             .get("api_key")
                         ),
-                        "status": "disconnected"
-                        if not cloud_config.get("providers", {})
-                        .get("openai", {})
-                        .get("api_key")
-                        else "connected",
+                        "status": (
+                            "disconnected"
+                            if not cloud_config.get("providers", {})
+                            .get("openai", {})
+                            .get("api_key")
+                            else "connected"
+                        ),
                         "model": cloud_config.get("providers", {})
                         .get("openai", {})
                         .get("selected_model", ""),
@@ -360,11 +362,13 @@ async def get_comprehensive_llm_status():
                             .get("anthropic", {})
                             .get("api_key")
                         ),
-                        "status": "disconnected"
-                        if not cloud_config.get("providers", {})
-                        .get("anthropic", {})
-                        .get("api_key")
-                        else "connected",
+                        "status": (
+                            "disconnected"
+                            if not cloud_config.get("providers", {})
+                            .get("anthropic", {})
+                            .get("api_key")
+                            else "connected"
+                        ),
                         "model": cloud_config.get("providers", {})
                         .get("anthropic", {})
                         .get("selected_model", ""),
@@ -376,9 +380,11 @@ async def get_comprehensive_llm_status():
             },
             "active_provider": {
                 "type": provider_type,
-                "name": local_config.get("provider", "ollama")
-                if provider_type == "local"
-                else cloud_config.get("provider", "openai"),
+                "name": (
+                    local_config.get("provider", "ollama")
+                    if provider_type == "local"
+                    else cloud_config.get("provider", "openai")
+                ),
                 "model": (
                     local_config.get("providers", {})
                     .get("ollama", {})

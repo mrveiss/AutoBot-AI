@@ -145,9 +145,9 @@ class HardwareMonitor:
                     version_info = f.read()
                     if "WSL" in version_info or "Microsoft" in version_info:
                         npu_status["wsl_limitation"] = True
-                        npu_status[
-                            "recommendation"
-                        ] = "NPU requires native Windows or Linux for hardware access"
+                        npu_status["recommendation"] = (
+                            "NPU requires native Windows or Linux for hardware access"
+                        )
             except Exception:
                 pass
 

@@ -480,9 +480,9 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
                     query="network security scanning tools", focus="tools"
                 )
                 result = await research_agent.research_specific_tools(request)
-                step[
-                    "result"
-                ] = f"Research completed: {result.get('summary', 'Tools researched')}"
+                step["result"] = (
+                    f"Research completed: {result.get('summary', 'Tools researched')}"
+                )
             elif "installation guide" in action.lower():
                 result = await research_agent.get_tool_installation_guide("nmap")
                 guide = result.get("installation_guide", "Guide obtained")
@@ -588,30 +588,30 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
                 # Use the agent's install_tool method
                 tool_info = {"name": "nmap", "package_name": "nmap"}
                 result = await cmd_agent.install_tool(tool_info, workflow_id)
-                step[
-                    "result"
-                ] = f"Installation result: {result.get('response', 'Tool installed')}"
+                step["result"] = (
+                    f"Installation result: {result.get('response', 'Tool installed')}"
+                )
             elif "verify installation" in action.lower():
                 result = await cmd_agent.execute_command_with_output(
                     "nmap --version", workflow_id
                 )
-                step[
-                    "result"
-                ] = f"Verification result: {result.get('output', 'Tool verified')}"
+                step["result"] = (
+                    f"Verification result: {result.get('output', 'Tool verified')}"
+                )
             else:
                 result = await cmd_agent.execute_command_with_output(
                     action, workflow_id
                 )
-                step[
-                    "result"
-                ] = f"Command executed: {result.get('output', 'Command completed')}"
+                step["result"] = (
+                    f"Command executed: {result.get('output', 'Command completed')}"
+                )
 
         else:
             # Fallback to orchestrator for unknown agent types
             result = await orchestrator.execute_goal(f"{agent_type}: {action}")
-            step[
-                "result"
-            ] = f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
+            step["result"] = (
+                f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
+            )
 
     except Exception as e:
         step["result"] = f"Error executing step: {str(e)}"

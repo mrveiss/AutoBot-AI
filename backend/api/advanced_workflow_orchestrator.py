@@ -13,7 +13,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 # Import existing components
 from backend.api.workflow_automation import (
@@ -28,6 +28,40 @@ from src.llm_interface import LLMInterface
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/advanced_workflow", tags=["advanced_workflow"])
+
+
+async def get_advanced_orchestrator_instance(request: Request = None):
+    """PERFORMANCE OPTIMIZATION: Get orchestrator instance, preferring pre-initialized app.state"""
+    global advanced_orchestrator
+
+    # Try to use pre-initialized orchestrator from app state first
+    if request is not None:
+        app_orchestrator = getattr(
+            request.app.state, "advanced_workflow_orchestrator", None
+        )
+        if app_orchestrator is not None:
+            logger.debug(
+                "Using pre-initialized advanced workflow orchestrator from app.state"
+            )
+            return app_orchestrator
+
+    # Try to use global instance
+    if advanced_orchestrator is not None:
+        logger.debug("Using global advanced workflow orchestrator instance")
+        return advanced_orchestrator
+
+    # Create new instance as last resort
+    logger.info(
+        "Creating new AdvancedWorkflowOrchestrator instance (expensive operation)"
+    )
+    new_orchestrator = AdvancedWorkflowOrchestrator()
+
+    # Cache in app state if request available
+    if request is not None:
+        request.app.state.advanced_workflow_orchestrator = new_orchestrator
+        logger.info("Cached new orchestrator in app.state for future requests")
+
+    return new_orchestrator
 
 
 class WorkflowComplexity(Enum):
@@ -1150,14 +1184,14 @@ class WorkflowLearningEngine:
 
 # API Endpoints for Advanced Workflow Orchestration
 @router.post("/generate_intelligent")
-async def generate_intelligent_workflow(request: dict):
+async def generate_intelligent_workflow(request_data: dict, request: Request):
     """Generate AI-optimized workflow from user request"""
     try:
-        orchestrator = AdvancedWorkflowOrchestrator()
+        orchestrator = await get_advanced_orchestrator_instance(request)
 
-        user_request = request.get("user_request", "")
-        session_id = request.get("session_id", "")
-        context = request.get("context", {})
+        user_request = request_data.get("user_request", "")
+        session_id = request_data.get("session_id", "")
+        context = request_data.get("context", {})
 
         if not user_request or not session_id:
             raise HTTPException(
@@ -1180,10 +1214,10 @@ async def generate_intelligent_workflow(request: dict):
 
 
 @router.get("/intelligence/{workflow_id}")
-async def get_workflow_intelligence(workflow_id: str):
+async def get_workflow_intelligence(workflow_id: str, request: Request):
     """Get AI intelligence data for workflow"""
     try:
-        orchestrator = AdvancedWorkflowOrchestrator()
+        orchestrator = await get_advanced_orchestrator_instance(request)
 
         if workflow_id not in orchestrator.workflow_intelligence:
             raise HTTPException(
@@ -1209,10 +1243,10 @@ async def get_workflow_intelligence(workflow_id: str):
 
 
 @router.get("/analytics")
-async def get_advanced_analytics():
+async def get_advanced_analytics(request: Request):
     """Get advanced workflow analytics"""
     try:
-        orchestrator = AdvancedWorkflowOrchestrator()
+        orchestrator = await get_advanced_orchestrator_instance(request)
 
         return {
             "success": True,
@@ -1239,10 +1273,10 @@ async def get_advanced_analytics():
 
 
 @router.get("/templates")
-async def get_workflow_templates():
+async def get_workflow_templates(request: Request):
     """Get all available intelligent workflow templates"""
     try:
-        orchestrator = AdvancedWorkflowOrchestrator()
+        orchestrator = await get_advanced_orchestrator_instance(request)
 
         templates = []
         for template_id, template in orchestrator.workflow_templates.items():
@@ -1270,18 +1304,20 @@ async def get_workflow_templates():
 
 
 @router.post("/templates/{template_id}/execute")
-async def execute_workflow_template(template_id: str, request: dict):
+async def execute_workflow_template(
+    template_id: str, request_data: dict, request: Request
+):
     """Execute a workflow template with customizations"""
     try:
-        orchestrator = AdvancedWorkflowOrchestrator()
+        orchestrator = await get_advanced_orchestrator_instance(request)
 
         if template_id not in orchestrator.workflow_templates:
             raise HTTPException(
                 status_code=404, detail=f"Template {template_id} not found"
             )
 
-        session_id = request.get("session_id", "")
-        customizations = request.get("customizations", {})
+        session_id = request_data.get("session_id", "")
+        customizations = request_data.get("customizations", {})
 
         if not session_id:
             raise HTTPException(status_code=400, detail="session_id required")
@@ -1309,7 +1345,7 @@ async def execute_workflow_template(template_id: str, request: dict):
 
 
 # Global instance
-advanced_orchestrator = AdvancedWorkflowOrchestrator()
+advanced_orchestrator = None  # Will be initialized lazily or from app.state
 
 
 if __name__ == "__main__":
