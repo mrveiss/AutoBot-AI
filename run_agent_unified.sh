@@ -1,0 +1,314 @@
+#!/bin/bash
+# AutoBot - Unified Docker Deployment
+# Automatically detects and configures for your environment
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Parse command line arguments  
+DEV_MODE=false
+TEST_MODE=false
+FORCE_ENV=""
+
+print_help() {
+    echo "AutoBot - Unified Docker Deployment"
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  --dev         Development mode (hot reload, source mounting)"
+    echo "  --test-mode   Test mode (minimal services)" 
+    echo "  --force-env   Force specific environment (docker-desktop|wsl|native|host-network)"
+    echo "  --help        Show this help"
+    echo ""
+    echo "Environment is auto-detected if not forced."
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dev)
+            DEV_MODE=true
+            shift
+            ;;
+        --test-mode)
+            TEST_MODE=true
+            shift
+            ;;
+        --force-env)
+            FORCE_ENV="$2"
+            shift 2
+            ;;
+        --help|-h)
+            print_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            print_help
+            exit 1
+            ;;
+    esac
+done
+
+echo -e "${GREEN}🚀 Starting AutoBot${NC}"
+echo "=================="
+echo "Mode: $([ "$DEV_MODE" = "true" ] && echo "Development" || ([ "$TEST_MODE" = "true" ] && echo "Test" || echo "Production"))"
+echo "Time: $(date)"
+echo
+
+# Load Docker API compatibility helper
+source ./scripts/docker_api_helper.sh
+
+# Detect Docker environment
+detect_environment() {
+    echo -e "${YELLOW}🔍 Detecting environment...${NC}"
+    
+    # Check Docker API compatibility
+    local api_version=$(get_compatible_api_version)
+    if [ -n "$api_version" ]; then
+        export DOCKER_API_VERSION="$api_version"
+        echo -e "   ${GREEN}✅${NC} Docker API version: $api_version"
+    fi
+    
+    # Check Docker Compose version
+    local compose_version=$(check_docker_compose_v2)
+    echo -e "   ${GREEN}✅${NC} Docker Compose: $compose_version"
+    
+    # Detect environment type
+    local env_type="native"
+    
+    if [ -n "$FORCE_ENV" ]; then
+        env_type="$FORCE_ENV"
+        echo -e "   ${YELLOW}⚠️${NC}  Forced environment: $env_type"
+    elif grep -q microsoft /proc/version 2>/dev/null; then
+        env_type="wsl"
+        # Check if Docker Desktop is running
+        if docker context ls | grep -q "desktop-linux"; then
+            env_type="docker-desktop"
+        fi
+    fi
+    
+    echo -e "   ${GREEN}✅${NC} Environment: $env_type"
+    echo "$env_type"
+}
+
+# Load environment configuration
+load_environment() {
+    local env_type="$1"
+    local env_file=""
+    
+    case "$env_type" in
+        docker-desktop)
+            env_file=".env.docker-desktop"
+            ;;
+        wsl)
+            env_file=".env.wsl-host-network"
+            ;;
+        host-network)
+            env_file=".env.wsl-host-network"
+            ;;
+        native|*)
+            env_file=".env.localhost"
+            ;;
+    esac
+    
+    # Create default env if it doesn't exist
+    if [ ! -f "$env_file" ]; then
+        echo -e "${YELLOW}Creating default environment file: $env_file${NC}"
+        cat > "$env_file" << EOF
+# AutoBot Environment Configuration
+# Generated on $(date)
+
+# Network Configuration
+DOCKER_SUBNET=172.18.0.0/16
+
+# Service Ports
+REDIS_PORT=6379
+REDISINSIGHT_PORT=8002
+SEQ_PORT=5341
+API_PORT=8001
+FRONTEND_PORT=5173
+BROWSER_PORT=3001
+
+# Service Hosts
+REDIS_HOST=localhost
+SEQ_URL=http://localhost:5341
+
+# API Configuration
+VITE_API_URL=http://localhost:8001
+DEBUG_MODE=false
+
+# Development Options
+NODE_ENV=production
+BACKEND_EXTRA_ARGS=
+FRONTEND_COMMAND=npm run preview -- --host 0.0.0.0
+EOF
+    fi
+    
+    echo -e "${GREEN}📋 Loading configuration: $env_file${NC}"
+    set -a
+    source "$env_file"
+    set +a
+    
+    # Override for development mode
+    if [ "$DEV_MODE" = "true" ]; then
+        export NODE_ENV=development
+        export DEBUG_MODE=true
+        export BACKEND_EXTRA_ARGS="--reload"
+        export FRONTEND_COMMAND="npm run dev -- --host 0.0.0.0"
+    fi
+}
+
+# Cleanup function
+cleanup() {
+    echo -e "\n${RED}🛑 Stopping AutoBot...${NC}"
+    
+    if [ "$compose_cmd" = "docker compose" ]; then
+        docker compose -f docker-compose.unified.yml down
+    else
+        docker-compose -f docker-compose.unified.yml down
+    fi
+    
+    # Stop any orphaned processes
+    pkill -f "uvicorn.*backend" 2>/dev/null || true
+    pkill -f "playwright-server" 2>/dev/null || true
+    pkill -f "npm run" 2>/dev/null || true
+    
+    echo -e "${GREEN}✅ AutoBot stopped${NC}"
+    exit 0
+}
+
+# Main execution
+main() {
+    # Detect environment
+    env_type=$(detect_environment)
+    
+    # Load configuration
+    load_environment "$env_type"
+    
+    # Determine docker-compose command
+    compose_cmd="docker-compose"
+    if [ "$(check_docker_compose_v2)" = "v2" ]; then
+        compose_cmd="docker compose"
+    fi
+    
+    # Set up cleanup trap
+    trap cleanup INT TERM
+    
+    # Stop existing services
+    echo -e "${YELLOW}🧹 Cleaning up previous services...${NC}"
+    $compose_cmd -f docker-compose.unified.yml down 2>/dev/null || true
+    
+    # Handle special networking cases
+    if [ "$env_type" = "host-network" ] || [ "$env_type" = "wsl" ]; then
+        echo -e "${YELLOW}📌 Using host networking mode${NC}"
+        export COMPOSE_FILE=docker-compose.unified.yml:docker/compose/docker-compose.host-network-override.yml
+    else
+        export COMPOSE_FILE=docker-compose.unified.yml
+    fi
+    
+    # Build images if needed
+    if [ "$DEV_MODE" = "true" ] || [ ! -z "$(docker images -q autobot-backend:latest 2>/dev/null)" ]; then
+        echo -e "${YELLOW}🔨 Building Docker images...${NC}"
+        $compose_cmd -f $COMPOSE_FILE build
+    fi
+    
+    # Start services
+    echo -e "${GREEN}🚀 Starting services...${NC}"
+    
+    if [ "$TEST_MODE" = "true" ]; then
+        # Start only essential services in test mode
+        $compose_cmd -f $COMPOSE_FILE up -d redis seq
+    else
+        # Start all services
+        $compose_cmd -f $COMPOSE_FILE up -d
+    fi
+    
+    # Wait for services to be ready
+    echo -e "${YELLOW}⏳ Waiting for services to be ready...${NC}"
+    
+    # Check Redis
+    echo -n "   Redis: "
+    for i in {1..30}; do
+        if redis-cli -h ${REDIS_HOST:-localhost} -p ${REDIS_PORT:-6379} ping >/dev/null 2>&1; then
+            echo -e "${GREEN}✅ Ready${NC}"
+            break
+        elif [ $i -eq 30 ]; then
+            echo -e "${RED}❌ Failed${NC}"
+            exit 1
+        fi
+        sleep 2
+    done
+    
+    # Check Seq
+    echo -n "   Seq: "
+    for i in {1..30}; do
+        if curl -s http://${SEQ_HOST:-localhost}:${SEQ_PORT:-5341}/ >/dev/null 2>&1; then
+            echo -e "${GREEN}✅ Ready${NC}"
+            break
+        elif [ $i -eq 30 ]; then
+            echo -e "${YELLOW}⚠️  Timeout${NC}"
+        fi
+        sleep 2
+    done
+    
+    if [ "$TEST_MODE" != "true" ]; then
+        # Check Backend
+        echo -n "   Backend: "
+        for i in {1..30}; do
+            if curl -s http://localhost:${API_PORT:-8001}/api/system/health >/dev/null 2>&1; then
+                echo -e "${GREEN}✅ Ready${NC}"
+                break
+            elif [ $i -eq 30 ]; then
+                echo -e "${RED}❌ Failed${NC}"
+                docker logs autobot-backend
+                exit 1
+            fi
+            sleep 2
+        done
+        
+        # Check Frontend
+        echo -n "   Frontend: "
+        for i in {1..30}; do
+            if curl -s http://localhost:${FRONTEND_PORT:-5173}/ >/dev/null 2>&1; then
+                echo -e "${GREEN}✅ Ready${NC}"
+                break
+            elif [ $i -eq 30 ]; then
+                echo -e "${YELLOW}⚠️  Timeout${NC}"
+            fi
+            sleep 2
+        done
+    fi
+    
+    # Display access information
+    echo
+    echo -e "${GREEN}🎉 AutoBot Started Successfully!${NC}"
+    echo "==============================="
+    echo "📍 Services:"
+    echo "   🌐 Frontend:  http://localhost:${FRONTEND_PORT:-5173}"
+    echo "   🖥️  Backend:   http://localhost:${API_PORT:-8001}"
+    echo "   📊 Logs:      http://localhost:${SEQ_PORT:-5341}"
+    echo "   🔍 Redis:     http://localhost:${REDISINSIGHT_PORT:-8002}"
+    echo
+    echo "🔧 Configuration:"
+    echo "   Environment: $env_type"
+    echo "   Mode: $([ "$DEV_MODE" = "true" ] && echo "Development" || echo "Production")"
+    echo "   Compose: $COMPOSE_FILE"
+    echo
+    echo -e "${YELLOW}💡 Commands:${NC}"
+    echo "   View logs:    $compose_cmd -f $COMPOSE_FILE logs -f"
+    echo "   Stop:         Press Ctrl+C"
+    echo "   Status:       $compose_cmd -f $COMPOSE_FILE ps"
+    echo
+    
+    # Keep running and show logs
+    echo -e "${GREEN}📋 Following logs (Ctrl+C to stop)...${NC}"
+    $compose_cmd -f $COMPOSE_FILE logs -f
+}
+
+# Run main function
+main
