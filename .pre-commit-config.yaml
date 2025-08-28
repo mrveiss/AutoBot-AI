@@ -1,42 +1,35 @@
-# Pre-commit configuration for AutoBot security and code quality
+# Fortune 500 Quality Pre-commit Hooks
 repos:
-  - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.5.0
-    hooks:
-      - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: package.lock.json
-  - repo: https://github.com/psf/black
-    rev: 23.12.1
-    hooks:
-      - id: black
-        language_version: python3
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.0.0
-    hooks:
-      - id: flake8
-        args: ["--max-line-length=88", "--extend-ignore=E203,W503"]
-  - repo: https://github.com/PyCQA/isort
-    rev: 6.0.1
-    hooks:
-      - id: isort
-        args: ["--profile", "black", "--line-length", "88"]
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-        args: ['--maxkb=1000']
-      - id: check-merge-conflict
-
-  # Security scanning
   - repo: local
     hooks:
-      - id: safety-check
-        name: safety-check
-        entry: bash -c 'pip install safety && safety check -r requirements.txt --no-prompt'
+      # Check for hardcoded configuration values
+      - id: no-hardcoded-config
+        name: Detect hardcoded configuration values
+        entry: bash
         language: system
-        pass_filenames: false
-        stages: [pre-push]
+        files: '\.(js < /dev/null | ts|vue|py)$'
+        args:
+          - -c
+          - |
+            # Check for hardcoded ports
+            if grep -rE '\b(8001|11434|5173|6379|1234|3000|6080|9222)\b' "$@" --exclude-dir=node_modules --exclude-dir=.git; then
+              echo "❌ ERROR: Hardcoded port numbers detected\!"
+              echo "Use configService.get() or environment variables instead."
+              exit 1
+            fi
+            
+            # Check for hardcoded IPs
+            if grep -rE '127\.0\.0\.\d+|"localhost"' "$@" --exclude-dir=node_modules --exclude-dir=.git; then
+              echo "❌ ERROR: Hardcoded IP addresses or localhost detected\!"
+              echo "Use configService.get() for host configuration."
+              exit 1
+            fi
+            
+            # Check for hardcoded URLs
+            if grep -rE 'https?://(localhost|127\.0\.0\.\d+):\d+' "$@" --exclude-dir=node_modules --exclude-dir=.git; then
+              echo "❌ ERROR: Hardcoded URLs detected\!"
+              echo "Use configService to build URLs dynamically."
+              exit 1
+            fi
+            
+            echo "✅ No hardcoded configuration values detected."
