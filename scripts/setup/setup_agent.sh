@@ -44,12 +44,22 @@ pyenv() {
 }
 
 # === AutoBot Setup Script ===
-# Get the directory where this script is located (project root)
+# Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-echo "🔍 Detected project root: $SCRIPT_DIR"
+# Go to project root (two levels up from scripts/setup/)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+echo "🔍 Detected project root: $PROJECT_ROOT"
 
 # Change to project root directory
-cd "$SCRIPT_DIR"
+cd "$PROJECT_ROOT"
+
+# Detect deployment environment and load appropriate configuration
+if [ -f "./detect-environment.sh" ]; then
+    echo "🔍 Detecting deployment environment..."
+    source ./detect-environment.sh
+else
+    echo "⚠️  Environment detection script not found, using defaults"
+fi
 
 PYTHON_VERSION="3.10.13"
 VENV_DIR="."
@@ -140,31 +150,38 @@ if ! id -nG "$USER" | grep -qw "docker"; then
     exit 1 # Exit to prompt user to re-login for group changes to apply
 fi
 
-# Start Docker daemon (if not running)
-echo "🔄 Starting Docker daemon in WSL2..."
-if ! pgrep dockerd >/dev/null; then
-    # Ensure the Docker socket directory exists and has correct permissions
-    sudo mkdir -p /var/run/docker || { echo "❌ Failed to create /var/run/docker."; exit 1; }
-    sudo chmod 755 /var/run/docker || { echo "❌ Failed to set permissions on /var/run/docker."; exit 1; }
-
-    # Start dockerd in the background
-    sudo dockerd > /dev/null 2>&1 &
-    DOCKERD_PID=$!
-    echo "✅ Docker daemon started (PID: $DOCKERD_PID)."
-
-    # Give dockerd some time to initialize
-    echo "Waiting for Docker daemon to be ready..."
-    sleep 5
-
-    # Verify Docker daemon is responsive
-    if ! docker info >/dev/null 2>&1; then
-        echo "❌ Docker daemon is not responsive after startup. Please check Docker logs."
-        exit 1
-    else
-        echo "✅ Docker daemon is responsive."
-    fi
+# Check if we're using Docker Desktop (no need to start daemon)
+if [[ "$AUTOBOT_ENVIRONMENT" == "wsl-docker-desktop" ]]; then
+    echo "🐳 Using Docker Desktop - daemon already managed by Windows"
+    # Set Docker API version for compatibility
+    export DOCKER_API_VERSION=1.43
 else
-    echo "✅ Docker daemon is already running."
+    # Start Docker daemon (if not running) for native Linux environments
+    echo "🔄 Starting Docker daemon..."
+    if ! pgrep dockerd >/dev/null; then
+        # Ensure the Docker socket directory exists and has correct permissions
+        sudo mkdir -p /var/run/docker || { echo "❌ Failed to create /var/run/docker."; exit 1; }
+        sudo chmod 755 /var/run/docker || { echo "❌ Failed to set permissions on /var/run/docker."; exit 1; }
+
+        # Start dockerd in the background
+        sudo dockerd > /dev/null 2>&1 &
+        DOCKERD_PID=$!
+        echo "✅ Docker daemon started (PID: $DOCKERD_PID)."
+
+        # Give dockerd some time to initialize
+        echo "Waiting for Docker daemon to be ready..."
+        sleep 5
+
+        # Verify Docker daemon is responsive
+        if ! docker info >/dev/null 2>&1; then
+            echo "❌ Docker daemon is not responsive after startup. Please check Docker logs."
+            exit 1
+        else
+            echo "✅ Docker daemon is responsive."
+        fi
+    else
+        echo "✅ Docker daemon is already running."
+    fi
 fi
 
 # --- 3. Deploy/Start Redis Stack Docker Container (using local Docker) ---
@@ -195,7 +212,7 @@ else
 fi
 
 # Assume Redis Stack is ready if Docker command succeeded
-echo "Assuming Redis Stack is ready and accessible via ${AUTOBOT_REDIS_HOST:-127.0.0.7}:${AUTOBOT_REDIS_PORT:-6379} from within WSL2."
+echo "Assuming Redis Stack is ready and accessible via ${AUTOBOT_REDIS_HOST:-192.168.65.10}:${AUTOBOT_REDIS_PORT:-6379} from within WSL2."
 echo "Please ensure the 'redis-stack' Docker container is running and healthy."
 
 # --- 3.5. GUI Testing Setup ---
@@ -246,7 +263,7 @@ else
     # Wait for service to be healthy
     echo "⏳ Waiting for Playwright service to be ready..."
     for i in {1..30}; do
-        if curl -sf http://${AUTOBOT_PLAYWRIGHT_HOST:-127.0.0.4}:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}/health > /dev/null 2>&1; then
+        if curl -sf http://${AUTOBOT_PLAYWRIGHT_HOST:-192.168.65.80}:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}/health > /dev/null 2>&1; then
             echo "✅ Playwright service is healthy and ready."
             break
         fi
@@ -254,7 +271,7 @@ else
         sleep 2
     done
 
-    if ! curl -sf http://${AUTOBOT_PLAYWRIGHT_HOST:-127.0.0.4}:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}/health > /dev/null 2>&1; then
+    if ! curl -sf http://${AUTOBOT_PLAYWRIGHT_HOST:-192.168.65.80}:${AUTOBOT_PLAYWRIGHT_API_PORT:-3000}/health > /dev/null 2>&1; then
         echo "⚠️ Playwright service health check failed, but continuing setup..."
     fi
 fi
@@ -784,8 +801,8 @@ else
 fi
 
 echo "✅ Frontend setup complete!"
-echo "Access the Vue app at http://${AUTOBOT_FRONTEND_HOST:-127.0.0.3}:${AUTOBOT_FRONTEND_PORT:-5173} (development)"
-echo "The built files are served from the backend at http://${AUTOBOT_BACKEND_HOST:-127.0.0.3}:${AUTOBOT_BACKEND_PORT:-8001}"
+echo "Access the Vue app at http://${AUTOBOT_FRONTEND_HOST:-127.0.0.1}:${AUTOBOT_FRONTEND_PORT:-5173} (development)"
+echo "The built files are served from the backend at http://${AUTOBOT_BACKEND_HOST:-127.0.0.1}:${AUTOBOT_BACKEND_PORT:-8001}"
 
 # --- 6. Copy default config if needed ---
 # Use the project root directory detected at script start
@@ -1029,7 +1046,7 @@ echo "   ./run_agent.sh --all-containers      # Full Docker setup"
 echo "   ./run_agent.sh --help               # Show all options"
 echo ""
 echo "📊 Analytics Features:"
-echo "   Frontend: http://${AUTOBOT_FRONTEND_HOST:-127.0.0.3}:${AUTOBOT_FRONTEND_PORT:-5173} → Analytics tab"
+echo "   Frontend: http://${AUTOBOT_FRONTEND_HOST:-127.0.0.1}:${AUTOBOT_FRONTEND_PORT:-5173} → Analytics tab"
 echo "   API: /api/code_search/analytics/ endpoints"
 echo "   NPU acceleration: Available when hardware supports"
 echo ""

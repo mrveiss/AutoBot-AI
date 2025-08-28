@@ -18,6 +18,10 @@ import aiohttp
 import psutil
 import requests
 
+# Import centralized Redis client
+sys.path.append(str(Path(__file__).parent.parent))
+from src.utils.redis_client import get_redis_client
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -586,13 +590,22 @@ class PhaseValidator:
                 return False
 
             elif service == "redis":
-                # Check if Redis is accessible
+                # Check if Redis is accessible using centralized client
                 try:
-                    import redis
-
-                    r = redis.Redis(host="localhost", port=6379, decode_responses=True)
-                    r.ping()
-                    return True
+                    # Use asyncio to get the Redis client
+                    async def check_redis():
+                        redis_client = await get_redis_client('main')
+                        if redis_client:
+                            await redis_client.ping()
+                            return True
+                        return False
+                    
+                    # Run the async check
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    result = loop.run_until_complete(check_redis())
+                    loop.close()
+                    return result
                 except Exception:
                     return False
 

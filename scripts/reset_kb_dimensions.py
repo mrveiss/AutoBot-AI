@@ -12,10 +12,11 @@ import asyncio
 import os
 import sys
 
-import redis
-
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import centralized Redis client
+from src.utils.redis_client import get_redis_client
 
 
 async def reset_knowledge_base():
@@ -24,9 +25,11 @@ async def reset_knowledge_base():
     print("🔧 AutoBot Knowledge Base Reset Tool")
     print("=" * 50)
 
-    # Connect to Redis
+    # Connect to Redis using centralized client
     try:
-        r = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+        r = get_redis_client(database="main")
+        if r is None:
+            raise Exception("Redis client is None")
         r.ping()
         print("✅ Connected to Redis")
     except Exception as e:
@@ -42,18 +45,23 @@ async def reset_knowledge_base():
     except Exception as e:
         print(f"⚠️  Index drop: {e} (may not exist)")
 
-    # Clean all databases for any related keys
+    # Clean specific databases using centralized client
     cleanup_count = 0
-    for db in range(16):
-        r_db = redis.Redis(host="localhost", port=6379, db=db, decode_responses=True)
+    database_names = ["main", "knowledge", "prompts", "agents", "metrics", "logs", "sessions", "workflows", "vectors", "models"]
+    
+    for db_name in database_names:
         try:
+            r_db = get_redis_client(database=db_name)
+            if r_db is None:
+                continue
+                
             # Delete any llama_index related keys
             keys = r_db.keys("llama_index:*")
             if keys:
                 for key in keys:
                     r_db.delete(key)
                 cleanup_count += len(keys)
-                print(f"✅ Cleaned {len(keys)} llama_index keys from DB {db}")
+                print(f"✅ Cleaned {len(keys)} llama_index keys from {db_name} database")
 
             # Also look for doc: prefixed keys
             doc_keys = r_db.keys("doc:*")
@@ -61,7 +69,7 @@ async def reset_knowledge_base():
                 for key in doc_keys:
                     r_db.delete(key)
                 cleanup_count += len(doc_keys)
-                print(f"✅ Cleaned {len(doc_keys)} doc keys from DB {db}")
+                print(f"✅ Cleaned {len(doc_keys)} doc keys from {db_name} database")
 
             # Clean any vector index keys
             vector_keys = r_db.keys("*vector*")
@@ -69,10 +77,10 @@ async def reset_knowledge_base():
                 for key in vector_keys:
                     r_db.delete(key)
                 cleanup_count += len(vector_keys)
-                print(f"✅ Cleaned {len(vector_keys)} vector keys from DB {db}")
+                print(f"✅ Cleaned {len(vector_keys)} vector keys from {db_name} database")
 
         except Exception as e:
-            print(f"⚠️  DB {db}: {e}")
+            print(f"⚠️  Database {db_name}: {e}")
 
     print(f"\n2. Total cleanup: {cleanup_count} keys removed")
 

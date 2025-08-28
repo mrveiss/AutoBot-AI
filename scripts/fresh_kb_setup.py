@@ -6,10 +6,12 @@ Fresh knowledge base setup - let llama_index create everything from scratch.
 import asyncio
 import os
 import sys
-import redis
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import centralized Redis client
+from src.utils.redis_client import get_redis_client
 
 
 async def fresh_setup():
@@ -19,7 +21,7 @@ async def fresh_setup():
 
     # Step 1: Clean Redis completely
     print("\n1. Cleaning Redis...")
-    r = redis.Redis(host="localhost", port=6379, db=0)
+    r = get_redis_client(database="main")
 
     # Drop any existing indexes
     try:
@@ -31,11 +33,17 @@ async def fresh_setup():
     except Exception as e:
         print(f"   No indexes to drop: {e}")
 
-    # Clean all databases
-    for db in range(16):
-        r_db = redis.Redis(host="localhost", port=6379, db=db)
-        r_db.flushdb()
-        print(f"   Flushed database {db}")
+    # Clean specific databases using centralized client
+    database_names = ["main", "knowledge", "prompts", "agents", "metrics", "logs", "sessions", "workflows", "vectors", "models"]
+    
+    for db_name in database_names:
+        try:
+            r_db = get_redis_client(database=db_name)
+            if r_db is not None:
+                r_db.flushdb()
+                print(f"   Flushed {db_name} database")
+        except Exception as e:
+            print(f"   Could not flush {db_name}: {e}")
 
     print("   Redis cleaned!")
 
