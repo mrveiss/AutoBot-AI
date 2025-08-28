@@ -16,6 +16,7 @@ TEST_MODE=false
 FORCE_ENV=""
 NO_BUILD=false
 NO_BROWSER=false
+CLEAN_SHUTDOWN=false
 BACKEND_PID=""
 
 print_help() {
@@ -27,6 +28,7 @@ print_help() {
     echo "  --test-mode   Test mode (minimal services)" 
     echo "  --no-build    Skip building Docker images (use existing)"
     echo "  --no-browser  Don't auto-launch browser in dev mode"
+    echo "  --clean       Remove containers on shutdown (default: just stop)"
     echo "  --force-env   Force specific environment (docker-desktop|wsl|native|host-network)"
     echo "  --help        Show this help"
     echo ""
@@ -49,6 +51,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-browser)
             NO_BROWSER=true
+            shift
+            ;;
+        --clean)
+            CLEAN_SHUTDOWN=true
             shift
             ;;
         --force-env)
@@ -188,10 +194,20 @@ cleanup() {
     fi
     
     # Stop Docker services
-    if [ "$compose_cmd" = "docker compose" ]; then
-        docker compose -f $COMPOSE_FILE down
+    if [ "$CLEAN_SHUTDOWN" = "true" ]; then
+        echo "Removing containers and cleaning up..."
+        if [ "$compose_cmd" = "docker compose" ]; then
+            docker compose -f $COMPOSE_FILE down
+        else
+            docker-compose -f $COMPOSE_FILE down
+        fi
     else
-        docker-compose -f $COMPOSE_FILE down
+        echo "Stopping containers (preserving data)..."
+        if [ "$compose_cmd" = "docker compose" ]; then
+            docker compose -f $COMPOSE_FILE stop
+        else
+            docker-compose -f $COMPOSE_FILE stop
+        fi
     fi
     
     # Stop any remaining orphaned processes
