@@ -21,7 +21,8 @@ services:
       timeout: 3s
       retries: 3
     networks:
-      - autobot-network
+      autobot-network:
+        ipv4_address: ${AUTOBOT_REDIS_IP:-192.168.65.10}
     deploy:
       resources:
         limits:
@@ -38,14 +39,15 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*
+      - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*,http://192.168.65.0/24
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${AUTOBOT_OLLAMA_INTERNAL_PORT:-11434}/api/tags"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
-      - autobot-network
+      autobot-network:
+        ipv4_address: ${AUTOBOT_OLLAMA_IP:-192.168.65.20}
     deploy:
       resources:
         limits:
@@ -69,9 +71,9 @@ services:
       - ./config:/app/config
     environment:
       - AUTOBOT_ENVIRONMENT=production
-      - AUTOBOT_REDIS_HOST=redis
+      - AUTOBOT_REDIS_HOST=${AUTOBOT_REDIS_IP:-192.168.65.10}
       - AUTOBOT_REDIS_PORT=${AUTOBOT_REDIS_INTERNAL_PORT:-6379}
-      - AUTOBOT_OLLAMA_HOST=http://ollama:${AUTOBOT_OLLAMA_INTERNAL_PORT:-11434}
+      - AUTOBOT_OLLAMA_HOST=http://${AUTOBOT_OLLAMA_IP:-192.168.65.20}:${AUTOBOT_OLLAMA_INTERNAL_PORT:-11434}
       - AUTOBOT_LOG_LEVEL=INFO
       - AUTOBOT_SECURITY_ENABLED=true
       - AUTOBOT_MONITORING_ENABLED=true
@@ -87,7 +89,8 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - autobot-network
+      autobot-network:
+        ipv4_address: ${AUTOBOT_BACKEND_IP:-192.168.65.30}
     deploy:
       resources:
         limits:
@@ -114,7 +117,8 @@ services:
       timeout: 10s
       retries: 3
     networks:
-      - autobot-network
+      autobot-network:
+        ipv4_address: ${AUTOBOT_FRONTEND_IP:-192.168.65.40}
     deploy:
       resources:
         limits:
@@ -138,7 +142,8 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.enable-lifecycle'
     networks:
-      - autobot-network
+      autobot-network:
+        ipv4_address: ${AUTOBOT_PROMETHEUS_IP:-192.168.65.50}
     deploy:
       resources:
         limits:
@@ -163,7 +168,8 @@ services:
     depends_on:
       - prometheus
     networks:
-      - autobot-network
+      autobot-network:
+        ipv4_address: ${AUTOBOT_GRAFANA_IP:-192.168.65.60}
     deploy:
       resources:
         limits:
@@ -183,10 +189,12 @@ volumes:
   grafana_data:
     driver: local
 
-# Network configuration
+# Network configuration with real IP assignments
 networks:
   autobot-network:
     driver: bridge
     ipam:
+      driver: default
       config:
-        - subnet: ${AUTOBOT_DOCKER_SUBNET:-172.20.0.0/16}
+        - subnet: ${AUTOBOT_DOCKER_SUBNET:-192.168.65.0/24}
+          gateway: ${AUTOBOT_DOCKER_GATEWAY:-192.168.65.1}

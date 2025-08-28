@@ -1,0 +1,36 @@
+# Host network override for docker-compose.unified.yml
+# This override file converts services to use host networking
+
+services:
+  redis:
+    network_mode: host
+    ports: []  # Remove port mappings with host network
+    
+  seq:
+    network_mode: host
+    ports: []
+    environment:
+      - SEQ_LISTEN_URL=http://0.0.0.0:${SEQ_PORT:-5341}
+    
+  backend:
+    network_mode: host
+    ports: []
+    environment:
+      - REDIS_HOST=127.0.0.1
+      - SEQ_URL=http://127.0.0.1:${SEQ_PORT:-5341}
+    
+  frontend:
+    network_mode: host
+    ports: []
+    environment:
+      - VITE_API_URL=http://127.0.0.1:${API_PORT:-8001}
+    
+  browser-service:
+    network_mode: host
+    ports: []
+
+# Disable network creation with host mode
+networks:
+  autobot:
+    external: true
+    name: host
