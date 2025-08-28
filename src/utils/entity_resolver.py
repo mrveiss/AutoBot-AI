@@ -14,7 +14,6 @@ from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.models.atomic_fact import AtomicFact
@@ -71,6 +70,9 @@ class EntityResolver:
         """Lazy load the sentence transformer model."""
         if self.embedding_model is None and self.enable_semantic_similarity:
             try:
+                # Import only when needed to avoid startup delay
+                from sentence_transformers import SentenceTransformer
+
                 model_name = config_manager.get(
                     "entity_resolution.embedding_model", "all-MiniLM-L6-v2"
                 )

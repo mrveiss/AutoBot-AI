@@ -69,21 +69,30 @@ class ConfigManager:
                 "orchestrator_llm": "ollama",
                 "task_llm": "ollama",
                 "ollama": {
-                    "model": "llama3.2",
+                    "model": os.getenv("AUTOBOT_OLLAMA_MODEL", "llama3.2"),
                     "base_url": f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
-                    "timeout": 30,
-                    "port": 11434,
+                    "timeout": int(os.getenv("AUTOBOT_OLLAMA_TIMEOUT", "30")),
+                    "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
                 },
                 "openai": {"api_key": ""},
             },
-            "deployment": {"mode": "local", "host": REDIS_HOST_IP, "port": 8001},
+            "deployment": {
+                "mode": "local",
+                "host": REDIS_HOST_IP,
+                "port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
+            },
             "data": {
                 "reliability_stats_file": "data/reliability_stats.json",
                 "long_term_db_path": "data/agent_memory.db",
                 "chat_history_file": "data/chat_history.json",
                 "chats_directory": "data/chats",
             },
-            "redis": {"host": REDIS_HOST_IP, "port": 6379, "db": 0, "password": None},
+            "redis": {
+                "host": REDIS_HOST_IP,
+                "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+                "db": int(os.getenv("AUTOBOT_REDIS_DB", "0")),
+                "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
+            },
             "multimodal": {
                 "vision": {
                     "enabled": True,
@@ -128,9 +137,13 @@ class ConfigManager:
             "system": {
                 "environment": {"DISPLAY": ":0", "USER": "unknown", "SHELL": "unknown"},
                 "desktop_streaming": {
-                    "default_resolution": "1024x768",
-                    "default_depth": 24,
-                    "max_sessions": 10,
+                    "default_resolution": os.getenv(
+                        "AUTOBOT_DESKTOP_RESOLUTION", "1024x768"
+                    ),
+                    "default_depth": int(os.getenv("AUTOBOT_DESKTOP_DEPTH", "24")),
+                    "max_sessions": int(
+                        os.getenv("AUTOBOT_DESKTOP_MAX_SESSIONS", "10")
+                    ),
                 },
             },
             "network": {"share": {"username": None, "password": None}},
@@ -138,18 +151,18 @@ class ConfigManager:
                 "redis": {
                     "enabled": True,
                     "host": REDIS_HOST_IP,
-                    "port": 6379,
-                    "db": 0,
-                    "password": None,
+                    "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+                    "db": int(os.getenv("AUTOBOT_REDIS_MEMORY_DB", "0")),
+                    "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
                 }
             },
             "task_transport": {
                 "type": "redis",
                 "redis": {
                     "host": REDIS_HOST_IP,
-                    "port": 6379,
-                    "password": None,
-                    "db": 0,
+                    "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+                    "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
+                    "db": int(os.getenv("AUTOBOT_REDIS_TASK_DB", "0")),
                 },
             },
             "security": {
@@ -169,7 +182,12 @@ class ConfigManager:
                     "debug": "logs/debug.log",
                     "audit": "logs/audit.log",
                 },
-                "rotation": {"max_bytes": 10485760, "backup_count": 5},  # 10MB
+                "rotation": {
+                    "max_bytes": int(
+                        os.getenv("AUTOBOT_LOG_MAX_BYTES", "10485760")
+                    ),  # 10MB default
+                    "backup_count": int(os.getenv("AUTOBOT_LOG_BACKUP_COUNT", "5")),
+                },
             },
         }
 

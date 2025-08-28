@@ -2,6 +2,7 @@
 Secure command validation to prevent prompt injection attacks.
 This module replaces LLM-based command extraction with a safelist approach.
 """
+
 import json
 import logging
 import os
@@ -84,9 +85,9 @@ class CommandValidator:
             "command": command,
             "description": config["description"],
             "risk_level": config["risk_level"],
-            "alternatives": config["commands"][1:]
-            if len(config["commands"]) > 1
-            else [],
+            "alternatives": (
+                config["commands"][1:] if len(config["commands"]) > 1 else []
+            ),
         }
 
     def detect_query_type(self, message: str) -> Optional[str]:

@@ -128,14 +128,14 @@ class ServiceRegistry:
         DeploymentMode.LOCAL: {
             # DEFAULT HYBRID: Backend/frontend on localhost, Docker services on localhost ports
             "default": os.getenv("AUTOBOT_DEFAULT_HOST", "localhost"),
-            "redis": os.getenv("AUTOBOT_REDIS_HOST", "127.0.0.7"),
-            "backend": os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.3"),
-            "frontend": os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.3"),
-            "ai-stack": os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.6"),
-            "npu-worker": os.getenv("AUTOBOT_NPU_WORKER_HOST", "127.0.0.5"),
-            "playwright-vnc": os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "127.0.0.4"),
+            "redis": os.getenv("AUTOBOT_REDIS_HOST", "127.0.0.1"),
+            "backend": os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.1"),
+            "frontend": os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.1"),
+            "ai-stack": os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.1"),
+            "npu-worker": os.getenv("AUTOBOT_NPU_WORKER_HOST", "127.0.0.1"),
+            "playwright-vnc": os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "127.0.0.1"),
             "ollama": os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1"),
-            "lmstudio": os.getenv("AUTOBOT_LM_STUDIO_HOST", "127.0.0.2"),
+            "lmstudio": os.getenv("AUTOBOT_LM_STUDIO_HOST", "127.0.0.1"),
         },
         DeploymentMode.DOCKER_LOCAL: {
             "default": "autobot-{service}",
@@ -232,7 +232,9 @@ class ServiceRegistry:
         if service_name in patterns:
             pattern = patterns[service_name]
         else:
-            pattern = patterns.get("default", "localhost")
+            pattern = patterns.get(
+                "default", os.getenv("AUTOBOT_DEFAULT_HOST", "localhost")
+            )
 
         # Replace placeholders
         return pattern.format(service=service_name, domain=self.domain)
@@ -261,10 +263,19 @@ class ServiceRegistry:
                     # Add new service
                     self.services[service_name] = ServiceConfig(
                         name=service_name,
-                        host=service_data.get("host", "localhost"),
-                        port=service_data.get("port", 80),
-                        scheme=service_data.get("scheme", "http"),
-                        health_endpoint=service_data.get("health_endpoint", "/health"),
+                        host=service_data.get(
+                            "host", os.getenv("AUTOBOT_DEFAULT_HOST", "localhost")
+                        ),
+                        port=service_data.get(
+                            "port", int(os.getenv("AUTOBOT_DEFAULT_PORT", "80"))
+                        ),
+                        scheme=service_data.get(
+                            "scheme", os.getenv("AUTOBOT_DEFAULT_SCHEME", "http")
+                        ),
+                        health_endpoint=service_data.get(
+                            "health_endpoint",
+                            os.getenv("AUTOBOT_DEFAULT_HEALTH_ENDPOINT", "/health"),
+                        ),
                     )
 
         except Exception as e:
