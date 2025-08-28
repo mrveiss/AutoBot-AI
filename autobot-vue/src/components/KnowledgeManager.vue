@@ -469,8 +469,11 @@
         <h3>System Knowledge & Documentation</h3>
         <div class="header-actions">
           <button @click="refreshSystemKnowledge" class="refresh-btn" aria-label="Refresh">Refresh</button>
-          <button @click="importSystemDocs" class="import-btn" :disabled="importingDocs" aria-label="{{ importingdocs ? 'importing...' : 'import documentation' }}">
+          <button @click="importSystemDocs(false)" class="import-btn" :disabled="importingDocs" aria-label="{{ importingdocs ? 'importing...' : 'import documentation' }}">
             {{ importingDocs ? 'Importing...' : 'Import Documentation' }}
+          </button>
+          <button @click="importSystemDocs(true)" class="import-btn force-refresh" :disabled="importingDocs" aria-label="{{ importingdocs ? 'force refreshing...' : 'force refresh all' }}" title="Force refresh - clears cache and reimports all files">
+            {{ importingDocs ? 'Force Refreshing...' : '🔄 Force Refresh' }}
           </button>
         </div>
       </div>
@@ -537,8 +540,11 @@
         <div class="header-actions">
           <button @click="refreshSystemPrompts" class="refresh-btn" aria-label="Refresh">Refresh</button>
           <button @click="createSystemPrompt" class="create-btn" aria-label="+ create prompt">+ Create Prompt</button>
-          <button @click="importSystemPrompts" class="import-btn" :disabled="importingPrompts" aria-label="{{ importingprompts ? 'importing...' : 'import prompts' }}">
+          <button @click="importSystemPrompts(false)" class="import-btn" :disabled="importingPrompts" aria-label="{{ importingprompts ? 'importing...' : 'import prompts' }}">
             {{ importingPrompts ? 'Importing...' : 'Import Prompts' }}
+          </button>
+          <button @click="importSystemPrompts(true)" class="import-btn force-refresh" :disabled="importingPrompts" aria-label="{{ importingprompts ? 'force refreshing...' : 'force refresh prompts' }}" title="Force refresh - clears prompt cache and reloads all prompt files">
+            {{ importingPrompts ? 'Force Refreshing...' : '🔄 Force Refresh' }}
           </button>
         </div>
       </div>
@@ -1001,6 +1007,7 @@
 <script>
 import { ref, onMounted, watch, computed } from 'vue';
 import apiClient from '../utils/ApiClient.js';
+import { API_CONFIG } from '@/config/environment.js';
 import ErrorBoundary from './ErrorBoundary.vue';
 
 export default {
@@ -1134,7 +1141,7 @@ export default {
     // Settings
     const settings = ref({
       backend: {
-        api_endpoint: 'http://127.0.0.3:8001'
+        api_endpoint: API_CONFIG.BASE_URL
       }
     });
 
@@ -1655,11 +1662,8 @@ export default {
     // File integration functions
     const loadAvailableFiles = async () => {
       try {
-        const response = await fetch(`${apiClient.baseUrl}/api/files/list`);
-        if (response.ok) {
-          const data = await response.json();
-          availableFiles.value = data.files || [];
-        }
+        const data = await apiClient.listFiles();
+        availableFiles.value = data.files || [];
       } catch (error) {
         console.error('Error loading files:', error);
         availableFiles.value = [];
@@ -1672,16 +1676,8 @@ export default {
 
       try {
 
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`${apiClient.baseUrl}/api/files/upload`, {
-          method: 'POST',
-          body: formData
-        });
-
-        if (response.ok) {
-          const result = await response.json();
+        const result = await apiClient.uploadFile(file);
+        if (result) {
           selectedFile.value = { name: file.name, path: result.path };
           currentEntry.value.source = file.name;
 
@@ -1725,9 +1721,9 @@ export default {
 
     const extractFileContent = async (filePath) => {
       try {
-        const response = await fetch(`${apiClient.baseUrl}/api/files/view/${encodeURIComponent(filePath)}`);
-        if (response.ok) {
-          const contentType = response.headers.get('content-type');
+        const response = await apiClient.viewFile(filePath);
+        if (response) {
+          const contentType = response.headers?.get('content-type');
 
           // Handle different file types
           if (contentType && (contentType.includes('text') || contentType.includes('application/json'))) {
@@ -1745,16 +1741,12 @@ export default {
           } else if (contentType && contentType.includes('pdf')) {
             // For PDF files, try to extract text via backend
             try {
-              const pdfResponse = await fetch(`${apiClient.baseUrl}/api/files/extract-text/${encodeURIComponent(filePath)}`);
-              if (pdfResponse.ok) {
-                const pdfData = await pdfResponse.json();
-                currentEntry.value.content = pdfData.text || '';
-                showSuccess(`Successfully extracted ${pdfData.text?.length || 0} characters from PDF`);
-              } else {
-                showError('Could not extract text from PDF file');
-              }
+              const pdfData = await apiClient.extractFileText(filePath);
+              currentEntry.value.content = pdfData.text || '';
+              showSuccess(`Successfully extracted ${pdfData.text?.length || 0} characters from PDF`);
             } catch (pdfError) {
               console.error('PDF extraction error:', pdfError);
+              showError('Could not extract text from PDF file');
               showError('PDF text extraction is not available');
             }
           } else {
@@ -1866,22 +1858,13 @@ export default {
         }
 
         // Call backend to crawl URL and extract content
-        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/crawl_url`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            entry_id: entry.id,
-            url: url
-          })
-        });
+        const result = await apiClient.crawlUrlForEntry(entry.id, url);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to crawl URL');
+        if (!result) {
+          throw new Error('Failed to crawl URL');
         }
 
-        const result = await response.json();
-        showSuccess(`URL content crawled successfully! Extracted ${result.content_length} characters.`);
+        showSuccess(`URL content crawled successfully! Extracted ${result.content_length || 0} characters.`);
         await loadKnowledgeEntries(); // Refresh the list
       } catch (error) {
         console.error('Error crawling URL:', error);
@@ -1968,21 +1951,12 @@ export default {
 
       crawlingInModal.value = true;
       try {
-        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/crawl_url`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            entry_id: currentEntry.value.id,
-            url: currentEntry.value.source
-          })
-        });
+        const result = await apiClient.crawlUrlForEntry(currentEntry.value.id, currentEntry.value.source);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to crawl URL');
+        if (!result) {
+          throw new Error('Failed to crawl URL');
         }
 
-        const result = await response.json();
         currentEntry.value.content = result.content || result.extracted_content || '';
         showSuccess(`Content crawled successfully! Extracted ${result.content_length || currentEntry.value.content.length} characters.`);
       } catch (error) {
@@ -2054,44 +2028,26 @@ export default {
         };
 
 
-        let response;
+        let result;
         if (showEditModal.value) {
-          response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/entries/${currentEntry.value.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(entryData)
-          });
+          result = await apiClient.updateKnowledgeEntry(currentEntry.value.id, entryData);
         } else {
-          response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/entries`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(entryData)
-          });
+          result = await apiClient.createKnowledgeEntry(entryData);
         }
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('API Response:', response.status, response.statusText, errorText);
-          throw new Error(`Failed to ${showEditModal.value ? 'update' : 'create'} entry: ${response.status} ${response.statusText}`);
+        if (!result) {
+          console.error('Failed to save knowledge entry');
+          throw new Error(`Failed to ${showEditModal.value ? 'update' : 'create'} entry`);
         }
 
         // If it's a new URL entry with no content, auto-crawl it
         if (!showEditModal.value && isUrlSource(currentEntry.value.source) && !currentEntry.value.content) {
-          const result = await response.json();
           if (result.id) {
             try {
-              const crawlResponse = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/crawl_url`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  entry_id: result.id,
-                  url: currentEntry.value.source
-                })
-              });
+              const crawlResult = await apiClient.crawlUrlForEntry(result.id, currentEntry.value.source);
 
-              if (crawlResponse.ok) {
-                const crawlResult = await crawlResponse.json();
-                showSuccess(`Entry created and URL content crawled! Extracted ${crawlResult.content_length} characters.`);
+              if (crawlResult) {
+                showSuccess(`Entry created and URL content crawled! Extracted ${crawlResult.content_length || 0} characters.`);
               } else {
                 showSuccess('Entry created successfully, but URL crawling failed.');
               }
@@ -2327,24 +2283,21 @@ export default {
       loadSystemKnowledge();
     };
 
-    const importSystemDocs = async () => {
+    const importSystemDocs = async (forceRefresh = false) => {
       try {
         importingDocs.value = true;
-        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/system_knowledge/import_documentation`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
+        const result = await apiClient.importSystemDocumentation(forceRefresh);
 
-        if (!response.ok) {
+        if (!result) {
           throw new Error('Failed to import documentation');
         }
-
-        const result = await response.json();
-        showSuccess(`Documentation imported successfully! Imported ${result.count || 0} documents.`);
+        const action = forceRefresh ? 'refreshed' : 'imported';
+        const cacheInfo = forceRefresh ? ' (cache cleared)' : '';
+        showSuccess(`Documentation ${action} successfully! Processed ${result.count || 0} documents${cacheInfo}.`);
         await loadSystemKnowledge();
       } catch (error) {
         console.error('Error importing documentation:', error);
-        showError('Failed to import documentation: ' + error.message);
+        showError(`Failed to ${forceRefresh ? 'refresh' : 'import'} documentation: ` + error.message);
       } finally {
         importingDocs.value = false;
       }
@@ -2407,24 +2360,21 @@ export default {
       loadSystemPrompts();
     };
 
-    const importSystemPrompts = async () => {
+    const importSystemPrompts = async (forceRefresh = false) => {
       try {
         importingPrompts.value = true;
-        const response = await fetch(`${apiClient.getBaseUrl()}/api/knowledge_base/system_knowledge/import_prompts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
+        const result = await apiClient.importSystemPrompts(forceRefresh);
 
-        if (!response.ok) {
+        if (!result) {
           throw new Error('Failed to import prompts');
         }
-
-        const result = await response.json();
-        showSuccess(`Prompts imported successfully! Imported ${result.count || 0} prompts.`);
+        const action = forceRefresh ? 'refreshed' : 'imported';
+        const cacheInfo = forceRefresh ? ' (cache cleared)' : '';
+        showSuccess(`Prompts ${action} successfully! Processed ${result.count || 0} prompts${cacheInfo}.`);
         await loadSystemPrompts();
       } catch (error) {
         console.error('Error importing prompts:', error);
-        showError('Failed to import prompts: ' + error.message);
+        showError(`Failed to ${forceRefresh ? 'refresh' : 'import'} prompts: ` + error.message);
       } finally {
         importingPrompts.value = false;
       }
@@ -3762,6 +3712,25 @@ export default {
   background: #007bff;
   padding: 12px 24px;
   font-size: 16px;
+}
+
+.import-btn.force-refresh {
+  background: #dc3545;
+  border: 2px solid #dc3545;
+  font-weight: 600;
+}
+
+.import-btn.force-refresh:hover:not(:disabled) {
+  background: #c82333;
+  border-color: #bd2130;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+.import-btn.force-refresh:disabled {
+  background: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
 }
 
 .import-btn.primary:hover:not(:disabled) {

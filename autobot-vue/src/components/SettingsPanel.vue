@@ -8,7 +8,7 @@
         :key="tab.id"
         :class="{ active: activeTab === tab.id }"
         @click="activeTab = tab.id"
-       aria-label="{{ tab.label }}">
+       :aria-label="tab.label">
         {{ tab.label }}
       </button>
     </div>
@@ -319,7 +319,7 @@
           </div>
           <div class="setting-item" v-if="settings.memory && settings.memory.chromadb">
             <label>ChromaDB Path</label>
-            <input type="text" v-model="settings.memory.chromadb.path" :disabled="!settings.memory.chromadb.enabled" placeholder="data/chromadb/chroma.sqlite3" />
+            <input type="text" v-model="settings.memory.chromadb.path" :disabled="!settings.memory.chromadb.enabled" :placeholder="getPlaceholder('memory.chromadb.path')" />
           </div>
           <div class="setting-item" v-if="settings.memory && settings.memory.chromadb">
             <label>ChromaDB Collection Name</label>
@@ -337,7 +337,7 @@
           </div>
           <div class="setting-item" v-if="settings.memory && settings.memory.redis">
             <label>Redis Port</label>
-            <input type="number" v-model="settings.memory.redis.port" min="1" max="65535" :disabled="!settings.memory.redis.enabled" placeholder="6379" />
+            <input type="number" v-model="settings.memory.redis.port" min="1" max="65535" :disabled="!settings.memory.redis.enabled" :placeholder="getPlaceholder('memory.redis.port')" />
           </div>
         </div>
       </div>
@@ -551,133 +551,31 @@ export default {
     const activeTab = ref('backend');
     const activeBackendSubTab = ref('memory');
 
-    // Default settings structure if backend or local storage fails
-    const defaultSettings = () => ({
-      message_display: {
-        show_thoughts: true,
-        show_json: false,
-        show_utility: false,
-        show_planning: true,
-        show_debug: false
-      },
-      chat: {
-        auto_scroll: true,
-        max_messages: 100,
-        message_retention_days: 30
-      },
+    // Empty settings structure - all values MUST come from backend configuration
+    // NO HARDCODED DEFAULTS ALLOWED - see DEVELOPMENT_STANDARDS.md
+    const createEmptySettings = () => ({
+      message_display: {},
+      chat: {},
       backend: {
-        api_endpoint: API_CONFIG.BASE_URL,
-        server_host: '0.0.0.0',
-        server_port: 8001,
-        chat_data_dir: '',
-        chat_history_file: '',
-        knowledge_base_db: '',
-        reliability_stats_file: '',
-        audit_log_file: '',
-        cors_origins: [],
-        timeout: 60,
-        max_retries: 3,
-        streaming: false,
+        api_endpoint: API_CONFIG.BASE_URL, // Only bootstrap URL allowed
         llm: {
-          provider_type: 'local',
-          local: {
-            provider: 'ollama',
-            providers: {
-              ollama: {
-                endpoint: `${API_CONFIG.OLLAMA_URL}/api/generate`,
-                models: [],
-                selected_model: ''
-              },
-              lmstudio: {
-                endpoint: `${API_CONFIG.LMSTUDIO_URL}/v1/chat/completions`,
-                models: [],
-                selected_model: ''
-              }
-            }
-          },
-          cloud: {
-            provider: 'openai',
-            providers: {
-              openai: {
-                api_key: '',
-                endpoint: '',
-                models: [],
-                selected_model: ''
-              },
-              anthropic: {
-                api_key: '',
-                endpoint: '',
-                models: [],
-                selected_model: ''
-              }
-            }
-          },
-          embedding: {
-            provider: 'ollama',
-            providers: {
-              ollama: {
-                endpoint: `${API_CONFIG.OLLAMA_URL}/api/embeddings`,
-                models: [],
-                selected_model: 'nomic-embed-text'
-              },
-              openai: {
-                api_key: '',
-                endpoint: 'https://api.openai.com/v1/embeddings',
-                models: ['text-embedding-ada-002', 'text-embedding-3-small', 'text-embedding-3-large'],
-                selected_model: 'text-embedding-ada-002'
-              }
-            }
-          }
+          provider_type: null,
+          local: { provider: null, providers: {} },
+          cloud: { provider: null, providers: {} },
+          embedding: { provider: null, providers: {} }
         }
       },
-      ui: {
-        theme: 'light',
-        font_size: 'medium',
-        language: 'en',
-        animations: true,
-        developer_mode: false
-      },
-      security: {
-        enable_encryption: false,
-        session_timeout_minutes: 30
-      },
-      logging: {
-        log_level: 'info',
-        log_to_file: false,
-        log_file_path: ''
-      },
-      knowledge_base: {
-        enabled: true,
-        update_frequency_days: 7
-      },
-      voice_interface: {
-        enabled: false,
-        voice: 'default',
-        speech_rate: 1.0
-      },
+      ui: {},
+      security: {},
+      logging: {},
+      knowledge_base: {},
+      voice_interface: {},
       memory: {
-        long_term: {
-          enabled: true,
-          retention_days: 30
-        },
-        short_term: {
-          enabled: true,
-          duration_minutes: 30
-        },
-        vector_storage: {
-          enabled: true,
-          update_frequency_days: 7
-        },
-        chromadb: {
-          enabled: true,
-          path: '',
-          collection_name: ''
-        },
-        redis: {
-          enabled: false,
-          host: 'localhost',
-          port: 6379
-        }
+        long_term: {},
+        short_term: {},
+        vector_storage: {},
+        chromadb: {},
+        redis: {}
       },
       prompts: {
         list: [],
@@ -685,16 +583,11 @@ export default {
         editedContent: '',
         defaults: {}
       },
-      developer: {
-        enabled: false,
-        enhanced_errors: true,
-        endpoint_suggestions: true,
-        debug_logging: false
-      }
+      developer: {}
     });
 
     // Settings structure will be populated from backend or local storage
-    const settings = ref(defaultSettings());
+    const settings = ref(createEmptySettings());
     const isSettingsLoaded = ref(false);
     const settingsLoadingStatus = ref('loading'); // 'loading', 'loaded', 'error', 'offline'
     const developerInfo = ref(null);
@@ -727,20 +620,17 @@ export default {
     // Function to check health status
     const checkHealthStatus = async () => {
       try {
-        const response = await fetch(`${apiClient.baseUrl}/api/system/health`);
-        if (response.ok) {
-          const data = await response.json();
-          healthStatus.value = {
-            llm: {
-              connected: data.llm_status || false,
-              current_model: data.current_model || null
-            },
-            embedding: {
-              connected: data.embedding_status || false,
-              current_model: data.current_embedding_model || null
-            }
-          };
-        }
+        const data = await apiClient.checkHealth();
+        healthStatus.value = {
+          llm: {
+            connected: data.llm_status || false,
+            current_model: data.current_model || null
+          },
+          embedding: {
+            connected: data.embedding_status || false,
+            current_model: data.current_embedding_model || null
+          }
+        };
       } catch (error) {
         console.error('Error checking health status:', error);
       }
@@ -920,6 +810,21 @@ export default {
       }
     };
 
+    /**
+     * Get placeholder text from configuration, not hardcoded values
+     * This ensures no hardcoded configuration values per DEVELOPMENT_STANDARDS.md
+     * @param {string} path - The configuration path (e.g., 'memory.redis.port')
+     * @returns {string} - The placeholder text from configuration or empty string
+     */
+    const getPlaceholder = (path) => {
+      // Get placeholder from loaded configuration
+      // NEVER return hardcoded values here
+      if (!configService) return '';
+      
+      const placeholders = configService.get('ui.placeholders', {});
+      return placeholders[path] || '';
+    };
+
     // Function to save settings to config.yaml via backend
     const saveSettings = async () => {
       isSaving.value = true;
@@ -1007,8 +912,7 @@ export default {
     // Function to dynamically load models from the selected provider
     const loadModels = async () => {
       try {
-        const response = await fetch(`${apiClient.baseUrl}/api/llm/models`);
-        const data = await response.json();
+        const data = await apiClient.loadLlmModels();
 
         if (settings.value.backend.llm.provider_type === 'local') {
           const provider = settings.value.backend.llm.local.provider;
@@ -1277,8 +1181,7 @@ export default {
 
         if (provider === 'ollama') {
           // Load Ollama embedding models
-          const response = await fetch(`${apiClient.baseUrl}/api/llm/embedding/models`);
-          const data = await response.json();
+          const data = await apiClient.loadEmbeddingModels();
 
           if (data.models && Array.isArray(data.models)) {
             settings.value.backend.llm.embedding.providers.ollama.models = data.models;

@@ -178,7 +178,8 @@
 </template>
 
 <script>
-import ApiClient from '../utils/ApiClient.js';
+import apiClient from '../utils/ApiClient.js';
+import errorHandler from '../utils/ErrorHandler.js';
 
 export default {
   name: 'ValidationDashboard',
@@ -209,14 +210,8 @@ export default {
       this.error = null;
 
       try {
-        const apiClient = new ApiClient();
-        const response = await fetch(`${apiClient.baseUrl}/api/validation-dashboard/report`);
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const data = await response.json();
+        // Use singleton ApiClient instance
+        const data = await apiClient.get('/api/validation-dashboard/report');
 
         if (data.status === 'success') {
           this.reportData = data.report;
@@ -226,8 +221,8 @@ export default {
         }
 
       } catch (err) {
-        console.error('Dashboard load error:', err);
-        this.error = err.message;
+        const errorResult = errorHandler.handleApiError(err, 'ValidationDashboard.loadDashboardData');
+        this.error = errorResult.error;
       } finally {
         this.loading = false;
       }

@@ -25,6 +25,7 @@
 <script>
 import { ref } from 'vue';
 import { API_CONFIG } from '@/config/environment.js';
+import apiClient from '../utils/ApiClient.js';
 
 export default {
   name: 'HistoryView',
@@ -34,42 +35,32 @@ export default {
     // Function to fetch chat history from backend
     const refreshHistory = async () => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats`);
-        if (response.ok) {
-          const data = await response.json();
-          const chats = data.chats || [];
-          history.value = await Promise.all(chats.map(async (chat) => {
-            try {
-              const messagesResponse = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chat.chatId}`);
-              if (messagesResponse.ok) {
-                const data = await messagesResponse.json();
-                const messages = data.history || [];
-                // Look for the first user message to use as a preview or subject
-                const userMessage = messages.find(msg => msg.sender === 'user');
-                // If there's a user message, use it as the subject/preview
-                let subject = userMessage ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 'No subject';
-                return {
-                  id: chat.chatId,
-                  date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
-                  preview: subject,
-                  name: chat.name || ''
-                };
-              }
-            } catch (error) {
-              console.error(`Error loading messages for chat ${chat.chatId}:`, error);
-            }
+        const response = await apiClient.getChatList();
+        const chats = response.chats || [];
+        history.value = await Promise.all(chats.map(async (chat) => {
+          try {
+            const messagesResponse = await apiClient.getChatHistory(chat.chatId);
+            const messages = messagesResponse.history || [];
+            // Look for the first user message to use as a preview or subject
+            const userMessage = messages.find(msg => msg.sender === 'user');
+            // If there's a user message, use it as the subject/preview
+            const subject = userMessage ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 'No subject';
+            return {
+              id: chat.chatId,
+              date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
+              preview: subject,
+              name: chat.name || ''
+            };
+          } catch (error) {
+            console.error(`Error loading messages for chat ${chat.chatId}:`, error);
             return {
               id: chat.chatId,
               date: 'Unknown date',
               preview: 'Error loading chat',
               name: chat.name || ''
             };
-          }));
-        } else {
-          console.error('Failed to load chat history from backend:', response.statusText);
-          // Fallback to local storage
-          loadHistoryFromLocalStorage();
-        }
+          }
+        }));
       } catch (error) {
         console.error('Error loading chat history from backend:', error);
         // Fallback to local storage
@@ -91,7 +82,7 @@ export default {
               // Look for the first user message to use as a preview or subject
               const userMessage = messages.find(msg => msg.sender === 'user');
               // If there's a user message, use it as the subject/preview
-              let subject = userMessage ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 'No subject';
+              const subject = userMessage ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 'No subject';
               localChats.push({
                 id: chatId,
                 date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
@@ -124,20 +115,11 @@ export default {
 
     const deleteHistoryEntry = async (entry) => {
       try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${entry.id}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        if (response.ok) {
-          // Remove from local storage
-          localStorage.removeItem(`chat_${entry.id}_messages`);
-          // Remove from history list
-          history.value = history.value.filter(e => e.id !== entry.id);
-        } else {
-          console.error('Failed to delete chat history entry:', response.statusText);
-        }
+        await apiClient.deleteChat(entry.id);
+        // Remove from local storage
+        localStorage.removeItem(`chat_${entry.id}_messages`);
+        // Remove from history list
+        history.value = history.value.filter(e => e.id !== entry.id);
       } catch (error) {
         console.error('Error deleting chat history entry:', error);
       }

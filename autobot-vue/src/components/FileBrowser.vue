@@ -114,7 +114,8 @@
 
 <script>
 import { ref } from 'vue';
-import ApiClient from '../utils/ApiClient.js';
+import apiClient from '../utils/ApiClient.js';
+import { useUserStore } from '../stores/useUserStore.ts';
 
 export default {
   name: 'FileBrowser',
@@ -127,11 +128,11 @@ export default {
 
     const refreshFiles = async () => {
       try {
-        const apiClient = new ApiClient();
+        // Use singleton ApiClient instance
         const data = await apiClient.get('/api/files/list');
         files.value = data.files || [];
       } catch (error) {
-        console.error('Error fetching files:', error);
+        console.warn('Backend not available - using demo files:', error.message);
         // Use mock data when there's a network error or JSON parsing fails
         files.value = [
           { name: 'sample.txt', size: 1024, type: 'file', modified: new Date().toISOString() },
@@ -169,12 +170,13 @@ export default {
       formData.append('file', file);
 
       try {
-        // Add user role header for permissions (temporary auth mechanism)
+        // Add user role header for permissions using user store
+        const userStore = useUserStore();
         const headers = {
-          'X-User-Role': 'admin' // TODO: Replace with proper authentication
+          'X-User-Role': userStore.currentUser?.role || 'user'
         };
 
-        const apiClient = new ApiClient();
+        // Use singleton ApiClient instance
         const response = await fetch(`${apiClient.baseUrl}/api/files/upload`, {
           method: 'POST',
           headers: headers,
@@ -213,7 +215,7 @@ export default {
         const fileType = determineFileType(extension);
 
         // Build file URL for preview
-        const apiClient = new ApiClient();
+        // Use singleton ApiClient instance
         const fileUrl = `${apiClient.baseUrl}/api/files/view/${encodeURIComponent(file.path || file.name)}`;
 
         if (fileType === 'html') {
@@ -329,7 +331,7 @@ export default {
 
     const deleteFile = async (file) => {
       try {
-        const apiClient = new ApiClient();
+        // Use singleton ApiClient instance
         const response = await fetch(`${apiClient.baseUrl}/api/files/delete`, {
           method: 'DELETE',
           headers: {
@@ -351,7 +353,7 @@ export default {
           refreshFiles();
         }
       } catch (error) {
-        console.error('Error deleting file:', error);
+        console.warn('Backend not available - simulating delete:', error.message);
         alert(`File ${file.name} would be deleted (API integration pending).`);
         refreshFiles();
       }

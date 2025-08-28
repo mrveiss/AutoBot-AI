@@ -249,6 +249,24 @@ export interface DiagnosticIssue {
 // ============================================================================
 
 export interface ApiResponse<T = any> {
+  data: T
+  ok: boolean
+  status: number
+  statusText: string
+  headers: Headers
+}
+
+export interface RequestOptions {
+  method?: string
+  headers?: Record<string, string>
+  body?: string | FormData
+  signal?: AbortSignal
+  timeout?: number
+  skipCache?: boolean
+  params?: Record<string, any>
+}
+
+export interface LegacyApiResponse<T = any> {
   success: boolean
   data?: T
   message?: string
