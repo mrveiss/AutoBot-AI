@@ -745,7 +745,7 @@ export default {
       // Set up ResizeObserver for container changes
       if (window.ResizeObserver) {
         resizeObserver.value = new ResizeObserver(entries => {
-          for (let entry of entries) {
+          for (const entry of entries) {
             handleResize()
           }
         })

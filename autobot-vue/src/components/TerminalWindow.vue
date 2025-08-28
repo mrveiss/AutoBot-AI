@@ -581,7 +581,7 @@ export default {
       ];
 
       let risk = 'low';
-      let reasons = [];
+      const reasons = [];
 
       // Check for critical patterns
       for (const pattern of criticalPatterns) {
@@ -1100,6 +1100,11 @@ export default {
             url: url
           });
         } catch (error) {
+          // User cancelled the share or sharing failed
+          // This is not necessarily an error condition, just log for debugging
+          if (error.name !== 'AbortError') {
+            console.warn('Share operation failed:', error);
+          }
         }
       } else {
         // Fallback: copy to clipboard

@@ -339,8 +339,12 @@ export default {
     ErrorBoundary
   },
   setup() {
-    // Global WebSocket Service
-    const { isConnected: wsConnected, on: wsOn, send: wsSend, state: wsState } = useGlobalWebSocket();
+    // Global WebSocket Service with error handling
+    const wsService = useGlobalWebSocket();
+    const wsConnected = wsService?.isConnected || ref(false);
+    const wsOn = wsService?.on || (() => () => {});
+    const wsSend = wsService?.send || (() => false);
+    const wsState = wsService?.state || ref({});
 
     // Reactive state
     const sidebarCollapsed = ref(false);
@@ -831,23 +835,15 @@ export default {
         let uploadedFilePaths = [];
         if (filesToUpload.length > 0) {
           for (const file of filesToUpload) {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const uploadResponse = await fetch(`${apiClient.baseUrl}/api/files/upload`, {
-              method: 'POST',
-              body: formData
-            });
-
-            if (uploadResponse.ok) {
-              const result = await uploadResponse.json();
+            try {
+              const result = await apiClient.uploadFile(file);
               uploadedFilePaths.push(result.path || file.name);
 
               // Associate file with current chat
               await associateFileWithChat(result.path || file.name, file.name);
-            } else {
+            } catch (uploadError) {
               // File upload failed - notify user
-              const errorMessage = `Failed to upload file "${file.name}" (${uploadResponse.status}: ${uploadResponse.statusText})`;
+              const errorMessage = `Failed to upload file "${file.name}": ${uploadError.message}`;
               console.error('File upload failed:', errorMessage);
 
               messages.value.push({
@@ -874,81 +870,30 @@ export default {
         // Try direct chat endpoint first for faster responses
         let chatResponse;
         try {
-          chatResponse = await fetch(`${apiClient.baseUrl}/api/chats/${this.currentChatId}/message`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              message: userInput,
-              ...messageData
-            }),
-            signal: AbortSignal.timeout(30000) // 30 second timeout
-          });
+          chatResponse = await apiClient.sendChatMessage(this.currentChatId, userInput, messageData);
         } catch (error) {
           console.warn('🔄 Direct chat failed, falling back to workflow orchestration:', error.message);
           // Fallback to workflow orchestration if direct chat fails
-          chatResponse = await fetch(`${apiClient.baseUrl}/api/workflow/execute`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              goal: userInput,
-              auto_approve: false
-            }),
-          });
+          try {
+            chatResponse = await apiClient.executeWorkflow(`Please respond to: ${userInput}`, false);
+          } catch (workflowError) {
+            console.error('Both chat and workflow failed:', workflowError);
+            throw new Error('Unable to send message - both chat and workflow endpoints failed');
+          }
         }
 
-        const workflowResponse = chatResponse;
+        // Process response data (ApiClient returns data directly, not response objects)
+        if (chatResponse) {
+          // ApiClient already handles JSON parsing and validation
+          let workflowResult = chatResponse;
 
-        if (workflowResponse.ok) {
-          // Enhanced Edge browser compatibility: validate response before parsing
-          let workflowResult;
-          try {
-            const responseText = await workflowResponse.text();
-
-            // Edge browser compatibility: validate response content
-            if (!responseText || responseText.trim() === '') {
-              throw new Error('Empty response received from server');
-            }
-
-            // Edge browser compatibility: check for valid JSON structure
-            if (!responseText.includes('{') || !responseText.includes('}')) {
-              throw new Error('Invalid JSON response format received');
-            }
-
-            // Log for debugging in Edge browser
-
-            workflowResult = JSON.parse(responseText);
-
-            // Edge browser compatibility: validate parsed result structure
-            if (!workflowResult || typeof workflowResult !== 'object') {
-              throw new Error('Parsed response is not a valid object');
-            }
-
-            // Debug logging for troubleshooting
-            console.log('✅ Workflow result parsed successfully:', {
-              type: workflowResult.type,
+          // Debug logging for troubleshooting
+          console.log('✅ Chat/Workflow result received:', {
+            type: workflowResult.type,
               hasResult: !!workflowResult.result,
               hasWorkflowResponse: !!workflowResult.workflow_response,
               keys: Object.keys(workflowResult)
             });
-
-          } catch (parseError) {
-            console.error('Edge browser compatibility error:', parseError);
-            console.error('Response status:', workflowResponse.status);
-            console.error('Response headers:', Object.fromEntries(workflowResponse.headers.entries()));
-
-            // Show user-friendly error message for Edge browser
-            messages.value.push({
-              sender: 'bot',
-              text: 'I encountered a compatibility issue processing your request. This sometimes happens in Microsoft Edge browser. Please try refreshing the page or using Chrome/Firefox. If the issue persists, please contact support.',
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'error'
-            });
-            return;
-          }
 
           if (workflowResult.type === 'workflow_orchestration') {
             // Workflow orchestration triggered
