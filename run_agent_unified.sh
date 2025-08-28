@@ -189,7 +189,7 @@ cleanup() {
     fi
     
     # Stop any remaining orphaned processes
-    pkill -f "uvicorn.*main:app" 2>/dev/null || true
+    pkill -f "uvicorn.*backend.main:app" 2>/dev/null || true
     pkill -f "playwright-server" 2>/dev/null || true
     pkill -f "npm run" 2>/dev/null || true
     
@@ -272,23 +272,23 @@ main() {
     if [ "$TEST_MODE" != "true" ]; then
         echo -e "${YELLOW}🖥️  Starting backend on host...${NC}"
         
-        # Ensure backend dependencies are available
-        cd backend || { echo "Backend directory not found"; exit 1; }
+        # Ensure we're in project root for proper module imports
+        if [ ! -f "backend/main.py" ]; then
+            echo "Error: backend/main.py not found. Make sure you're in the project root."
+            exit 1
+        fi
         
-        # Start backend in background
+        # Start backend in background from project root
         if [ "$DEV_MODE" = "true" ]; then
             echo "Starting backend in development mode..."
-            python -m uvicorn main:app --host 0.0.0.0 --port ${API_PORT:-8001} --reload &
+            python -m uvicorn backend.main:app --host 0.0.0.0 --port ${API_PORT:-8001} --reload &
         else
             echo "Starting backend in production mode..."
-            python -m uvicorn main:app --host 0.0.0.0 --port ${API_PORT:-8001} &
+            python -m uvicorn backend.main:app --host 0.0.0.0 --port ${API_PORT:-8001} &
         fi
         
         BACKEND_PID=$!
         echo "Backend started with PID: $BACKEND_PID"
-        
-        # Return to original directory
-        cd ..
     fi
     
     # Wait for services to be ready
