@@ -15,6 +15,7 @@ DEV_MODE=false
 TEST_MODE=false
 FORCE_ENV=""
 NO_BUILD=false
+NO_BROWSER=false
 BACKEND_PID=""
 
 print_help() {
@@ -22,9 +23,10 @@ print_help() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  --dev         Development mode (hot reload, source mounting)"
+    echo "  --dev         Development mode (hot reload, source mounting, auto-browser)"
     echo "  --test-mode   Test mode (minimal services)" 
     echo "  --no-build    Skip building Docker images (use existing)"
+    echo "  --no-browser  Don't auto-launch browser in dev mode"
     echo "  --force-env   Force specific environment (docker-desktop|wsl|native|host-network)"
     echo "  --help        Show this help"
     echo ""
@@ -43,6 +45,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-build)
             NO_BUILD=true
+            shift
+            ;;
+        --no-browser)
+            NO_BROWSER=true
             shift
             ;;
         --force-env)
@@ -370,6 +376,44 @@ main() {
     echo "   Stop:         Press Ctrl+C"
     echo "   Status:       $compose_cmd -f $COMPOSE_FILE ps"
     echo
+    
+    # Launch browser in development mode
+    if [ "$DEV_MODE" = "true" ] && [ "$NO_BROWSER" = "false" ]; then
+        echo -e "${YELLOW}🌐 Opening browser for development...${NC}"
+        
+        # Try different browser commands in order of preference
+        browser_launched=false
+        
+        # Try xdg-open (Linux standard)
+        if command -v xdg-open >/dev/null 2>&1; then
+            echo "Opening frontend in default browser..."
+            xdg-open "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
+            browser_launched=true
+        # Try google-chrome
+        elif command -v google-chrome >/dev/null 2>&1; then
+            echo "Opening frontend in Google Chrome..."
+            google-chrome "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
+            browser_launched=true
+        # Try chromium
+        elif command -v chromium-browser >/dev/null 2>&1; then
+            echo "Opening frontend in Chromium..."
+            chromium-browser "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
+            browser_launched=true
+        # Try firefox
+        elif command -v firefox >/dev/null 2>&1; then
+            echo "Opening frontend in Firefox..."
+            firefox "http://localhost:${FRONTEND_PORT:-5173}" >/dev/null 2>&1 &
+            browser_launched=true
+        fi
+        
+        if [ "$browser_launched" = "true" ]; then
+            echo -e "${GREEN}✅ Browser launched - you can monitor frontend logs and development${NC}"
+        else
+            echo -e "${YELLOW}⚠️  No browser found. Please manually open: http://localhost:${FRONTEND_PORT:-5173}${NC}"
+        fi
+        
+        echo
+    fi
     
     # Keep running and show logs
     echo -e "${GREEN}📋 Following logs (Ctrl+C to stop)...${NC}"
