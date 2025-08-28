@@ -9,10 +9,15 @@ import json
 import logging
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict, List
 
 import aiohttp
 import requests
+
+# Import centralized Redis client
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from src.utils.redis_client import get_redis_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -138,32 +143,34 @@ class AutoBotFunctionalityTest:
             return False
 
     def test_redis_connectivity(self) -> bool:
-        """Test Redis connectivity"""
+        """Test Redis connectivity using centralized client"""
         try:
             logger.info("📊 Testing Redis Connectivity...")
-            import redis
+            
+            async def test_redis():
+                redis_client = await get_redis_client('main')
+                if not redis_client:
+                    return False
+                
+                # Test basic operations
+                await redis_client.ping()
+                await redis_client.set("autobot_test_key", "test_value", ex=10)
+                value = await redis_client.get("autobot_test_key")
+                await redis_client.delete("autobot_test_key")
+                
+                return value == "test_value"
+            
+            # Run async test
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(test_redis())
+            loop.close()
 
-            r = redis.Redis(
-                host="localhost", port=6379, decode_responses=True, socket_timeout=5
-            )
-
-            # Test basic operations
-            r.ping()
-            r.set("autobot_test_key", "test_value", ex=10)
-            value = r.get("autobot_test_key")
-            r.delete("autobot_test_key")
-
-            if value == "test_value":
+            if result:
                 logger.info("✅ Redis: Connection and operations successful")
-
-                # Get Redis info
-                info = r.info("server")
-                redis_version = info.get("redis_version", "unknown")
-                logger.info(f"📋 Redis Version: {redis_version}")
-
                 return True
             else:
-                logger.error("❌ Redis: Set/get operation failed")
+                logger.error("❌ Redis: Test operations failed")
                 return False
 
         except Exception as e:

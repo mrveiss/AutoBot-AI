@@ -24,15 +24,16 @@ from src.config import API_BASE_URL
 
 try:
     import aiohttp
-    import redis
 except ImportError:
     print("Installing required packages...")
     import subprocess
     import sys
 
-    subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp", "redis"])
+    subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp"])
     import aiohttp
-    import redis
+
+# Import centralized Redis client
+from src.utils.redis_client import get_redis_client
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

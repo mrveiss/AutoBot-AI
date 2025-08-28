@@ -2,6 +2,18 @@
 """
 Example usage of the circuit breaker pattern in AutoBot
 Demonstrates protection against cascading failures and service degradation
+
+SECURITY NOTE: This example demonstrates secure database query practices:
+- Uses parameterized queries to prevent SQL injection attacks
+- Avoids string interpolation/concatenation for SQL queries
+- Safely logs query structure without exposing sensitive parameter values
+
+For production use, always:
+1. Use parameterized queries with proper database drivers (e.g., asyncpg, SQLAlchemy)
+2. Validate and sanitize all user inputs
+3. Implement proper access controls and authentication
+4. Use connection pooling and prepared statements
+5. Never log sensitive parameter values in production
 """
 
 import asyncio
@@ -83,12 +95,20 @@ class AutoBotServiceWithCircuitBreaker:
         }
     
     @circuit_breaker_async("database_service", failure_threshold=5, recovery_timeout=10.0, timeout=5.0)
-    async def query_database_with_protection(self, query: str) -> List[Dict[str, Any]]:
+    async def query_database_with_protection(self, query: str, *params) -> List[Dict[str, Any]]:
         """
         Database query with circuit breaker protection
         Fast timeout and recovery for database operations
+        
+        Args:
+            query: SQL query with parameter placeholders (? for positional parameters)
+            params: Query parameters to be safely bound to the query
         """
-        logger.info(f"Querying database: {query}")
+        # Log query safely without exposing parameter values in production
+        if params:
+            logger.info(f"Querying database: {query} with {len(params)} parameter(s)")
+        else:
+            logger.info(f"Querying database: {query}")
         
         # Simulate database operations with occasional failures
         failure_rate = 0.2  # 20% chance of failure
@@ -103,8 +123,12 @@ class AutoBotServiceWithCircuitBreaker:
         else:
             await asyncio.sleep(0.05)  # Fast query
         
+        # Simulate parameterized query execution
+        # In a real implementation, this would use proper database parameterized queries
+        safe_query_description = query.replace('?', '<param>') if params else query
+        
         return [
-            {"id": i, "data": f"Result {i} for query: {query}"}
+            {"id": i, "data": f"Result {i} for query: {safe_query_description}"}
             for i in range(3)
         ]
     
@@ -166,7 +190,8 @@ class AutoBotServiceWithCircuitBreaker:
         
         # Step 2: Try database query with protection
         try:
-            db_result = await self.query_database_with_protection(f"SELECT * FROM operations WHERE id='{operation_id}'")
+            # Using parameterized query to prevent SQL injection
+            db_result = await self.query_database_with_protection("SELECT * FROM operations WHERE id=?", operation_id)
             result["results"]["database"] = db_result
             logger.info("✅ Database query successful")
             

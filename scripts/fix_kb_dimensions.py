@@ -6,17 +6,19 @@ Fix knowledge base dimension mismatch by recreating with correct settings.
 import asyncio
 import os
 import sys
-import redis
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import centralized Redis client
+from src.utils.redis_client import get_redis_client
 
 
 async def fix_dimensions():
     """Drop all llama_index traces and let it recreate properly."""
 
-    # Connect to Redis
-    r = redis.Redis(host="localhost", port=6379, db=0)
+    # Connect to Redis using centralized client
+    r = get_redis_client(database="main")
 
     print("Cleaning up Redis...")
 
@@ -27,25 +29,30 @@ async def fix_dimensions():
     except Exception as e:
         print(f"Index drop: {e}")
 
-    # Clean all databases
-    for db in range(16):
-        r_db = redis.Redis(host="localhost", port=6379, db=db)
+    # Clean specific databases using centralized client
+    database_names = ["main", "knowledge", "prompts", "agents", "metrics", "logs", "sessions", "workflows", "vectors", "models"]
+    
+    for db_name in database_names:
         try:
+            r_db = get_redis_client(database=db_name)
+            if r_db is None:
+                continue
+                
             # Delete any llama_index related keys
             keys = r_db.keys("llama_index:*")
             if keys:
                 for key in keys:
                     r_db.delete(key)
-                print(f"Cleaned {len(keys)} keys from DB {db}")
+                print(f"Cleaned {len(keys)} keys from {db_name} database")
 
             # Also look for doc: prefixed keys
             doc_keys = r_db.keys("doc:*")
             if doc_keys:
                 for key in doc_keys:
                     r_db.delete(key)
-                print(f"Cleaned {len(doc_keys)} doc keys from DB {db}")
+                print(f"Cleaned {len(doc_keys)} doc keys from {db_name} database")
         except Exception as e:
-            print(f"DB {db}: {e}")
+            print(f"Database {db_name}: {e}")
 
     print("\nRedis cleanup complete!")
     print("\nNow testing with correct embedding model...")

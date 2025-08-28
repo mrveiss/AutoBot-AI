@@ -12,10 +12,15 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 import aiohttp
-import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
+
+# Import centralized Redis client
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+from src.utils.redis_client import get_redis_client
 
 # Configure logging
 logging.basicConfig(
@@ -153,13 +158,13 @@ class NPUWorker:
         self.start_time = time.time()
         logger.info(f"🚀 Starting NPU Worker {self.worker_id}")
 
-        # Initialize Redis connection
+        # Initialize Redis connection using centralized client
         try:
-            self.redis_client = redis.Redis(
-                host=self.redis_host, port=self.redis_port, decode_responses=True
-            )
-            await self.redis_client.ping()
-            logger.info("✅ Connected to Redis")
+            self.redis_client = await get_redis_client('main')
+            if self.redis_client:
+                logger.info("✅ Connected to Redis via centralized client")
+            else:
+                logger.warning("⚠️ Redis client not available, continuing without Redis")
         except Exception as e:
             logger.error(f"❌ Redis connection failed: {e}")
             self.redis_client = None
@@ -478,8 +483,8 @@ class NPUWorker:
     async def cleanup(self):
         """Cleanup resources."""
         logger.info("🧹 Cleaning up NPU worker resources")
-        if self.redis_client:
-            await self.redis_client.close()
+        # Note: Centralized Redis client handles its own cleanup
+        # No need to manually close the connection
 
 
 def main():

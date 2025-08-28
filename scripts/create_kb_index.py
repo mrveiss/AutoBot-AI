@@ -5,18 +5,23 @@ Create knowledge base index with correct dimensions using redisvl directly.
 
 import os
 import sys
-import redis
 from redisvl.schema import IndexSchema
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import centralized Redis client
+from src.utils.redis_client import get_redis_client
+
 
 def create_index_with_correct_dimensions():
     """Create Redis index with 768 dimensions for nomic-embed-text."""
 
-    # Connect to Redis
-    r = redis.Redis(host="localhost", port=6379, db=0, decode_responses=False)
+    # Connect to Redis using centralized client
+    r = get_redis_client(database="main")
+    if r is None:
+        print("Error: Could not connect to Redis")
+        return False
 
     # First, drop any existing indexes
     try:
