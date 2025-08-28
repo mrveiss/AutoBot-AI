@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PoolStats:
     """Connection pool statistics"""
+
     connections_created: int = 0
     connections_reused: int = 0
     total_wait_time: float = 0.0
@@ -66,18 +67,20 @@ class AsyncSQLiteConnectionPool:
             self._created_connections += 1
             self._stats.connections_created += 1
 
-        logger.debug(f"Created new async SQLite connection #{self._created_connections}")
+        logger.debug(
+            f"Created new async SQLite connection #{self._created_connections}"
+        )
         return conn
 
     async def _initialize_pool(self):
         """Initialize the connection pool with pre-created connections."""
         if self._initialized:
             return
-            
+
         async with self._lock:
             if self._initialized:
                 return
-                
+
             # Pre-create initial connections
             initial_size = min(5, self.pool_size)  # Start with 5 connections
             for _ in range(initial_size):
@@ -86,9 +89,11 @@ class AsyncSQLiteConnectionPool:
                     await self._pool.put(conn)
                 except Exception as e:
                     logger.error(f"Failed to create initial async connection: {e}")
-                    
+
             self._initialized = True
-            logger.info(f"Async connection pool initialized with {initial_size} connections")
+            logger.info(
+                f"Async connection pool initialized with {initial_size} connections"
+            )
 
     @asynccontextmanager
     async def get_connection(self):
@@ -100,7 +105,7 @@ class AsyncSQLiteConnectionPool:
         """
         if not self._initialized:
             await self._initialize_pool()
-            
+
         start_time = datetime.now()
         conn = None
 
@@ -118,7 +123,9 @@ class AsyncSQLiteConnectionPool:
                     else:
                         self._stats.max_connections_reached += 1
                         logger.warning("Async connection pool exhausted, waiting...")
-                        conn = await asyncio.wait_for(self._pool.get(), timeout=self.timeout)
+                        conn = await asyncio.wait_for(
+                            self._pool.get(), timeout=self.timeout
+                        )
 
             # Record wait time
             wait_time = (datetime.now() - start_time).total_seconds()
@@ -190,7 +197,9 @@ class AsyncSQLiteConnectionPool:
             "total_connections_created": self._created_connections,
             "average_wait_time": (
                 self._stats.total_wait_time
-                / max(1, self._stats.connections_reused + self._stats.connections_created)
+                / max(
+                    1, self._stats.connections_reused + self._stats.connections_created
+                )
             ),
         }
 
@@ -200,7 +209,9 @@ _async_connection_pools: Dict[str, AsyncSQLiteConnectionPool] = {}
 _async_pools_lock = asyncio.Lock()
 
 
-async def get_async_connection_pool(db_path: str, pool_size: int = 20) -> AsyncSQLiteConnectionPool:
+async def get_async_connection_pool(
+    db_path: str, pool_size: int = 20
+) -> AsyncSQLiteConnectionPool:
     """
     Get or create an async connection pool for a database.
 
@@ -228,7 +239,9 @@ async def get_async_connection_pool(db_path: str, pool_size: int = 20) -> AsyncS
         pool = AsyncSQLiteConnectionPool(db_path, pool_size)
         await pool._initialize_pool()
         _async_connection_pools[db_path] = pool
-        logger.info(f"Created async connection pool for {db_path} with size {pool_size}")
+        logger.info(
+            f"Created async connection pool for {db_path} with size {pool_size}"
+        )
         return pool
 
 
@@ -242,6 +255,7 @@ async def close_all_async_pools():
 
 
 # Async N+1 Query Prevention Helpers
+
 
 class AsyncEagerLoader:
     """Helper class to prevent N+1 queries with async eager loading patterns."""
@@ -349,10 +363,10 @@ async def optimize_async_knowledge_base_queries():
 async def async_transaction(pool: AsyncSQLiteConnectionPool):
     """
     Context manager for async database transactions.
-    
+
     Args:
         pool: Async connection pool
-        
+
     Yields:
         aiosqlite.Connection: Connection with transaction started
     """
@@ -369,18 +383,18 @@ async def async_transaction(pool: AsyncSQLiteConnectionPool):
 # Batch operation helpers
 class AsyncBatchOperations:
     """Helper class for efficient batch database operations."""
-    
+
     @staticmethod
     async def batch_insert(
         conn: aiosqlite.Connection,
         table: str,
         columns: list,
         data: list,
-        batch_size: int = 1000
+        batch_size: int = 1000,
     ):
         """
         Perform batch insert operations with async.
-        
+
         Args:
             conn: Async database connection
             table: Table name
@@ -391,12 +405,12 @@ class AsyncBatchOperations:
         placeholders = ", ".join(["?" for _ in columns])
         column_names = ", ".join(columns)
         query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"
-        
+
         for i in range(0, len(data), batch_size):
-            batch = data[i:i + batch_size]
+            batch = data[i : i + batch_size]
             await conn.executemany(query, batch)
             logger.debug(f"Inserted batch {i//batch_size + 1}: {len(batch)} records")
-    
+
     @staticmethod
     async def batch_update(
         conn: aiosqlite.Connection,
@@ -404,11 +418,11 @@ class AsyncBatchOperations:
         set_columns: list,
         where_column: str,
         data: list,
-        batch_size: int = 1000
+        batch_size: int = 1000,
     ):
         """
         Perform batch update operations with async.
-        
+
         Args:
             conn: Async database connection
             table: Table name
@@ -419,8 +433,8 @@ class AsyncBatchOperations:
         """
         set_clause = ", ".join([f"{col} = ?" for col in set_columns])
         query = f"UPDATE {table} SET {set_clause} WHERE {where_column} = ?"
-        
+
         for i in range(0, len(data), batch_size):
-            batch = data[i:i + batch_size]
+            batch = data[i : i + batch_size]
             await conn.executemany(query, batch)
             logger.debug(f"Updated batch {i//batch_size + 1}: {len(batch)} records")

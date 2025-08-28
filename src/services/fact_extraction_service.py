@@ -646,9 +646,11 @@ class FactExtractionService:
                 "fact_type_distribution": fact_type_totals,
                 "temporal_type_distribution": temporal_type_totals,
                 "extraction_success_rate": round(
-                    (total_facts_stored / total_facts_extracted * 100)
-                    if total_facts_extracted > 0
-                    else 0,
+                    (
+                        (total_facts_stored / total_facts_extracted * 100)
+                        if total_facts_extracted > 0
+                        else 0
+                    ),
                     1,
                 ),
             }

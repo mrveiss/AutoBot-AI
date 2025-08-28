@@ -29,8 +29,10 @@ class MemoryOptimizedLogging:
         name: str,
         log_file: Union[str, Path],
         level: int = logging.INFO,
-        max_bytes: int = 50 * 1024 * 1024,  # 50MB
-        backup_count: int = 5,
+        max_bytes: int = int(
+            os.getenv("AUTOBOT_LOG_MAX_BYTES", "52428800")
+        ),  # 50MB default
+        backup_count: int = int(os.getenv("AUTOBOT_LOG_BACKUP_COUNT", "5")),
         console_output: bool = True,
     ) -> logging.Logger:
         """
@@ -85,7 +87,7 @@ class MemoryOptimizedLogging:
         level: int = logging.INFO,
         when: str = "midnight",
         interval: int = 1,
-        backup_count: int = 7,
+        backup_count: int = int(os.getenv("AUTOBOT_LOG_BACKUP_COUNT", "7")),
         console_output: bool = True,
     ) -> logging.Logger:
         """
@@ -142,7 +144,11 @@ class MemoryOptimizedLogging:
 class MemoryPool:
     """Object pooling for frequently created/destroyed objects"""
 
-    def __init__(self, factory: Callable[[], T], max_size: int = 100):
+    def __init__(
+        self,
+        factory: Callable[[], T],
+        max_size: int = int(os.getenv("AUTOBOT_MEMORY_POOL_SIZE", "100")),
+    ):
         self.factory = factory
         self.max_size = max_size
         self._pool: List[T] = []
@@ -179,7 +185,7 @@ class MemoryPool:
 class WeakCache:
     """Cache using weak references to prevent memory leaks"""
 
-    def __init__(self, maxsize: int = 128):
+    def __init__(self, maxsize: int = int(os.getenv("AUTOBOT_WEAK_CACHE_SIZE", "128"))):
         self.maxsize = maxsize
         self._cache: Dict[Any, Any] = {}
         self._weak_refs: Dict[Any, weakref.ReferenceType] = {}
@@ -227,7 +233,9 @@ class WeakCache:
         self._weak_refs.clear()
 
 
-def memory_efficient_cache(maxsize: int = 128, typed: bool = False):
+def memory_efficient_cache(
+    maxsize: int = int(os.getenv("AUTOBOT_CACHE_SIZE", "128")), typed: bool = False
+):
     """
     Decorator for memory-efficient caching with weak references
 
@@ -279,7 +287,10 @@ def memory_efficient_cache(maxsize: int = 128, typed: bool = False):
 class MemoryMonitor:
     """Real-time memory usage monitoring"""
 
-    def __init__(self, threshold_mb: float = 500.0):
+    def __init__(
+        self,
+        threshold_mb: float = float(os.getenv("AUTOBOT_MEMORY_THRESHOLD_MB", "500.0")),
+    ):
         self.threshold_mb = threshold_mb
         self.process = psutil.Process()
         self.peak_memory = 0.0
@@ -355,7 +366,10 @@ def optimize_memory_usage():
     # Configure garbage collection thresholds for better performance
     # (threshold0, threshold1, threshold2)
     # More aggressive collection for generation 0 (short-lived objects)
-    gc.set_threshold(700, 10, 10)  # Default is (700, 10, 10)
+    gc_threshold0 = int(os.getenv("AUTOBOT_GC_THRESHOLD_0", "700"))
+    gc_threshold1 = int(os.getenv("AUTOBOT_GC_THRESHOLD_1", "10"))
+    gc_threshold2 = int(os.getenv("AUTOBOT_GC_THRESHOLD_2", "10"))
+    gc.set_threshold(gc_threshold0, gc_threshold1, gc_threshold2)
 
     # Log current object counts
     object_counts = {}
@@ -396,7 +410,10 @@ def memory_usage_decorator(func: Callable) -> Callable:
             mem_after = process.memory_info().rss / (1024**2)
             mem_diff = mem_after - mem_before
 
-            if abs(mem_diff) > 1.0:  # Log if change > 1MB
+            memory_log_threshold = float(
+                os.getenv("AUTOBOT_MEMORY_LOG_THRESHOLD_MB", "1.0")
+            )
+            if abs(mem_diff) > memory_log_threshold:  # Log if change > threshold MB
                 logger.debug(
                     f"{func.__name__} memory usage: "
                     f"{mem_before:.1f}MB → {mem_after:.1f}MB "
@@ -410,7 +427,9 @@ def memory_usage_decorator(func: Callable) -> Callable:
 _memory_monitor = None
 
 
-def get_memory_monitor(threshold_mb: float = 500.0) -> MemoryMonitor:
+def get_memory_monitor(
+    threshold_mb: float = float(os.getenv("AUTOBOT_MEMORY_THRESHOLD_MB", "500.0"))
+) -> MemoryMonitor:
     """Get global memory monitor instance"""
     global _memory_monitor
     if _memory_monitor is None:

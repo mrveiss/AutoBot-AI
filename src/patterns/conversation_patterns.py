@@ -12,6 +12,7 @@ from enum import Enum
 
 class ConversationType(Enum):
     """Types of conversational messages."""
+
     GREETING = "greeting"
     FAREWELL = "farewell"
     GRATITUDE = "gratitude"
@@ -28,11 +29,17 @@ class ConversationPatterns:
         self.patterns: Dict[ConversationType, List[Pattern]] = {
             ConversationType.GREETING: [
                 re.compile(r"^(hello|hi|hey|greetings?)!?$", re.IGNORECASE),
-                re.compile(r"^(good\s+(morning|afternoon|evening|day))!?$", re.IGNORECASE),
+                re.compile(
+                    r"^(good\s+(morning|afternoon|evening|day))!?$", re.IGNORECASE
+                ),
             ],
             ConversationType.STATUS_INQUIRY: [
-                re.compile(r"^(how\s+are\s+you|how\s+are\s+things)[\?!]?$", re.IGNORECASE),
-                re.compile(r"^(how\s+are\s+you)$", re.IGNORECASE),  # Without punctuation
+                re.compile(
+                    r"^(how\s+are\s+you|how\s+are\s+things)[\?!]?$", re.IGNORECASE
+                ),
+                re.compile(
+                    r"^(how\s+are\s+you)$", re.IGNORECASE
+                ),  # Without punctuation
                 re.compile(r"^(what'?s\s+up|wassup)[\?!]?$", re.IGNORECASE),
             ],
             ConversationType.GRATITUDE: [
@@ -41,7 +48,9 @@ class ConversationPatterns:
             ],
             ConversationType.FAREWELL: [
                 re.compile(r"^(bye|goodbye|see\s+you)!?$", re.IGNORECASE),
-                re.compile(r"^(catch\s+you\s+later|talk\s+later|ttyl)!?$", re.IGNORECASE),
+                re.compile(
+                    r"^(catch\s+you\s+later|talk\s+later|ttyl)!?$", re.IGNORECASE
+                ),
             ],
             ConversationType.AFFIRMATION: [
                 re.compile(r"^(yes|yeah|yep|y|ok|okay|sure|alright)!?$", re.IGNORECASE),
@@ -106,7 +115,10 @@ class ConversationPatterns:
             ConversationType.AFFIRMATION: "Great! How can I assist you?",
             ConversationType.NEGATION: "No problem! Let me know if you need help with anything else.",
         }
-        return templates.get(conversation_type, "I'm here to help! What would you like me to assist you with today?")
+        return templates.get(
+            conversation_type,
+            "I'm here to help! What would you like me to assist you with today?",
+        )
 
 
 # Global instance for easy access

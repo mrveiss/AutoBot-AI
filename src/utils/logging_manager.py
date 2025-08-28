@@ -16,130 +16,136 @@ class LoggingManager:
     """
     Centralized logging manager that standardizes logging across all components
     """
-    
+
     _initialized = False
     _loggers = {}
-    
+
     @classmethod
     def get_logger(cls, name: str, log_type: str = "backend") -> logging.Logger:
         """
         Get a configured logger instance
-        
+
         Args:
             name: Logger name (usually __name__)
             log_type: Type of log (backend, frontend, llm, debug, audit)
-            
+
         Returns:
             Configured logger instance
         """
         if not cls._initialized:
             cls._setup_logging()
-        
+
         logger_key = f"{log_type}:{name}"
         if logger_key in cls._loggers:
             return cls._loggers[logger_key]
-        
+
         logger = logging.getLogger(name)
-        
+
         # Don't add handlers if already configured
         if not logger.handlers:
             handler = cls._get_file_handler(log_type)
             if handler:
                 logger.addHandler(handler)
-            
+
             # Add console handler for development
             if config_manager.get("deployment.mode", "local") == "local":
                 console_handler = logging.StreamHandler()
                 console_handler.setFormatter(cls._get_formatter())
                 logger.addHandler(console_handler)
-        
+
         # Set log level
-        log_level = getattr(logging, 
-                           config_manager.get("logging.level", "INFO").upper())
+        log_level = getattr(
+            logging, config_manager.get("logging.level", "INFO").upper()
+        )
         logger.setLevel(log_level)
-        
+
         cls._loggers[logger_key] = logger
         return logger
-    
+
     @classmethod
     def _setup_logging(cls):
         """Setup basic logging configuration"""
         # Create logs directory if it doesn't exist
-        logs_dir = Path("logs")
+        logs_dir_path = os.getenv("AUTOBOT_LOGS_DIR", "logs")
+        logs_dir = Path(logs_dir_path)
         logs_dir.mkdir(exist_ok=True)
-        
+
         # Create backup directory
-        backup_dir = logs_dir / "backup"
+        backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
+        backup_dir = logs_dir / backup_dir_name
         backup_dir.mkdir(exist_ok=True)
-        
+
         cls._initialized = True
-    
+
     @classmethod
     def _get_file_handler(cls, log_type: str) -> Optional[logging.Handler]:
         """Get file handler for specific log type"""
         log_file = config_manager.get(f"logging.file_handlers.{log_type}")
         if not log_file:
-            # Fallback to default path
-            log_file = f"logs/{log_type}.log"
-        
+            # Fallback to default path using environment-configurable logs directory
+            logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
+            log_file = f"{logs_dir}/{log_type}.log"
+
         # Create directory if needed
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Use rotating file handler to prevent large log files
         max_bytes = config_manager.get("logging.rotation.max_bytes", 10485760)  # 10MB
         backup_count = config_manager.get("logging.rotation.backup_count", 5)
-        
+
         handler = logging.handlers.RotatingFileHandler(
-            log_file, 
-            maxBytes=max_bytes, 
-            backupCount=backup_count
+            log_file, maxBytes=max_bytes, backupCount=backup_count
         )
         handler.setFormatter(cls._get_formatter())
-        
+
         return handler
-    
+
     @classmethod
     def _get_formatter(cls) -> logging.Formatter:
         """Get log formatter"""
         log_format = config_manager.get(
-            "logging.format", 
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "logging.format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
         return logging.Formatter(log_format)
-    
+
     @classmethod
-    def setup_component_logging(cls, component_name: str, 
-                               log_type: str = "backend") -> logging.Logger:
+    def setup_component_logging(
+        cls, component_name: str, log_type: str = "backend"
+    ) -> logging.Logger:
         """
         Setup logging for a specific component
-        
+
         Args:
             component_name: Name of the component
             log_type: Type of logging (backend, frontend, llm, etc.)
-            
+
         Returns:
             Configured logger
         """
         return cls.get_logger(component_name, log_type)
-    
+
     @classmethod
     def rotate_logs(cls, log_type: Optional[str] = None):
         """
         Manually rotate log files
-        
+
         Args:
             log_type: Specific log type to rotate, or None for all
         """
         log_types = ["backend", "frontend", "llm", "debug", "audit"]
         if log_type:
             log_types = [log_type]
-        
+
         for lt in log_types:
             log_file = config_manager.get(f"logging.file_handlers.{lt}")
             if log_file and os.path.exists(log_file):
-                # Create backup
-                backup_path = f"logs/backup/{lt}_{int(__import__('time').time())}.log"
+                # Create backup using environment-configurable paths
+                logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
+                backup_dir = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
+                backup_path = (
+                    f"{logs_dir}/{backup_dir}/{lt}_{int(__import__('time').time())}.log"
+                )
                 try:
                     os.rename(log_file, backup_path)
                     print(f"Rotated {log_file} to {backup_path}")
@@ -154,7 +160,7 @@ def get_backend_logger(name: str) -> logging.Logger:
 
 
 def get_frontend_logger(name: str) -> logging.Logger:
-    """Get frontend logger"""  
+    """Get frontend logger"""
     return LoggingManager.get_logger(name, "frontend")
 
 

@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 # Import centralized logging
 from src.utils.logging_manager import get_llm_logger
@@ -65,15 +64,20 @@ class AutoBotSemanticChunker:
         self.max_chunk_size = max_chunk_size
         self.overlap_sentences = overlap_sentences
 
-        # Initialize embedding model
+        # Initialize embedding model placeholder - will be loaded lazily
         self._embedding_model = None
-        self._initialize_model()
 
         logger.info(f"SemanticChunker initialized with model: {embedding_model}")
 
     def _initialize_model(self):
-        """Initialize the sentence transformer model."""
+        """Lazy initialize the sentence transformer model on first use."""
+        if self._embedding_model is not None:
+            return
+
         try:
+            # Import only when needed to avoid startup delay
+            from sentence_transformers import SentenceTransformer
+
             self._embedding_model = SentenceTransformer(self.embedding_model_name)
             logger.info(f"Loaded embedding model: {self.embedding_model_name}")
         except Exception as e:
@@ -82,6 +86,8 @@ class AutoBotSemanticChunker:
             )
             # Fallback to a more basic model
             try:
+                from sentence_transformers import SentenceTransformer
+
                 self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
                 logger.warning("Fallback to all-mpnet-base-v2 embedding model")
             except Exception as fallback_error:
@@ -139,6 +145,9 @@ class AutoBotSemanticChunker:
         Returns:
             numpy array of embeddings
         """
+        # Ensure model is loaded before use
+        self._initialize_model()
+
         try:
             embeddings = self._embedding_model.encode(
                 sentences, convert_to_tensor=False
@@ -535,5 +544,13 @@ class AutoBotSemanticChunker:
         return documents
 
 
-# Global instance for easy access
-semantic_chunker = AutoBotSemanticChunker()
+# Global instance placeholder - will be created lazily
+_semantic_chunker_instance = None
+
+
+def get_semantic_chunker():
+    """Get the global semantic chunker instance (lazy initialization)."""
+    global _semantic_chunker_instance
+    if _semantic_chunker_instance is None:
+        _semantic_chunker_instance = AutoBotSemanticChunker()
+    return _semantic_chunker_instance

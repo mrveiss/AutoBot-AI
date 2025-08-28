@@ -95,9 +95,9 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
                                     # Update the request
                                     request_data[field] = enhanced_message
                                     request_data["_awareness_injected"] = True
-                                    request_data[
-                                        "_awareness_timestamp"
-                                    ] = datetime.now().isoformat()
+                                    request_data["_awareness_timestamp"] = (
+                                        datetime.now().isoformat()
+                                    )
 
                                     # Create new request with modified body
                                     modified_body = json.dumps(request_data).encode()
@@ -105,11 +105,13 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
                                     # Replace the request body
                                     request._body = modified_body
                                     request.headers.__dict__["_list"] = [
-                                        (k.encode(), v.encode())
-                                        if k.lower() != "content-length"
-                                        else (
-                                            k.encode(),
-                                            str(len(modified_body)).encode(),
+                                        (
+                                            (k.encode(), v.encode())
+                                            if k.lower() != "content-length"
+                                            else (
+                                                k.encode(),
+                                                str(len(modified_body)).encode(),
+                                            )
                                         )
                                         for k, v in request.headers.items()
                                     ]

@@ -21,17 +21,17 @@ logger = logging.getLogger(__name__)
 class RedisDatabase(Enum):
     """Enumeration of Redis databases for type safety"""
 
-    MAIN = 0
-    KNOWLEDGE = 1
-    PROMPTS = 2
-    AGENTS = 3
-    METRICS = 4
-    LOGS = 5
-    SESSIONS = 6
-    WORKFLOWS = 7
-    VECTORS = 8
-    MODELS = 9
-    TESTING = 15
+    MAIN = int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0"))
+    KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
+    PROMPTS = int(os.getenv("AUTOBOT_REDIS_DB_PROMPTS", "2"))
+    AGENTS = int(os.getenv("AUTOBOT_REDIS_DB_AGENTS", "3"))
+    METRICS = int(os.getenv("AUTOBOT_REDIS_DB_METRICS", "4"))
+    LOGS = int(os.getenv("AUTOBOT_REDIS_DB_LOGS", "5"))
+    SESSIONS = int(os.getenv("AUTOBOT_REDIS_DB_SESSIONS", "6"))
+    WORKFLOWS = int(os.getenv("AUTOBOT_REDIS_DB_WORKFLOWS", "7"))
+    VECTORS = int(os.getenv("AUTOBOT_REDIS_DB_VECTORS", "8"))
+    MODELS = int(os.getenv("AUTOBOT_REDIS_DB_MODELS", "9"))
+    TESTING = int(os.getenv("AUTOBOT_REDIS_DB_TESTING", "15"))
 
 
 class RedisDatabaseManager:
@@ -41,7 +41,9 @@ class RedisDatabaseManager:
     """
 
     def __init__(self, config_path: Optional[str] = None):
-        self.config_path = config_path or "/app/config/redis-databases.yaml"
+        self.config_path = config_path or os.getenv(
+            "AUTOBOT_REDIS_CONFIG_PATH", "/app/config/redis-databases.yaml"
+        )
         self.config = self._load_config()
         self._connections: Dict[str, redis.Redis] = {}
         self._async_connections: Dict[str, aioredis.Redis] = {}
@@ -51,16 +53,20 @@ class RedisDatabaseManager:
         redis_config = registry.get_service_config("redis")
 
         self.host = (
-            redis_config.host if redis_config else os.getenv("REDIS_HOST", "localhost")
+            redis_config.host
+            if redis_config
+            else os.getenv("AUTOBOT_REDIS_HOST", "localhost")
         )
         self.port = (
-            redis_config.port if redis_config else int(os.getenv("REDIS_PORT", "6379"))
+            redis_config.port
+            if redis_config
+            else int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
         )
-        self.password = os.getenv("REDIS_PASSWORD")
-        self.max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "20"))
-        self.socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "30"))
+        self.password = os.getenv("AUTOBOT_REDIS_PASSWORD")
+        self.max_connections = int(os.getenv("AUTOBOT_REDIS_MAX_CONNECTIONS", "20"))
+        self.socket_timeout = int(os.getenv("AUTOBOT_REDIS_SOCKET_TIMEOUT", "30"))
         self.socket_keepalive = (
-            os.getenv("REDIS_SOCKET_KEEPALIVE", "true").lower() == "true"
+            os.getenv("AUTOBOT_REDIS_SOCKET_KEEPALIVE", "true").lower() == "true"
         )
 
     def _load_config(self) -> Dict[str, Any]:
@@ -80,17 +86,50 @@ class RedisDatabaseManager:
         """Default configuration if config file is not available"""
         return {
             "redis_databases": {
-                "main": {"db": 0, "description": "Main application data"},
-                "knowledge": {"db": 1, "description": "Knowledge base documents"},
-                "prompts": {"db": 2, "description": "Prompt templates"},
-                "agents": {"db": 3, "description": "Agent communication"},
-                "metrics": {"db": 4, "description": "Performance metrics"},
-                "logs": {"db": 5, "description": "Structured logs"},
-                "sessions": {"db": 6, "description": "User sessions"},
-                "workflows": {"db": 7, "description": "Workflow state"},
-                "vectors": {"db": 8, "description": "Vector embeddings"},
-                "models": {"db": 9, "description": "Model metadata"},
-                "testing": {"db": 15, "description": "Test data"},
+                "main": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0")),
+                    "description": "Main application data",
+                },
+                "knowledge": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1")),
+                    "description": "Knowledge base documents",
+                },
+                "prompts": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_PROMPTS", "2")),
+                    "description": "Prompt templates",
+                },
+                "agents": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_AGENTS", "3")),
+                    "description": "Agent communication",
+                },
+                "metrics": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_METRICS", "4")),
+                    "description": "Performance metrics",
+                },
+                "logs": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_LOGS", "5")),
+                    "description": "Structured logs",
+                },
+                "sessions": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_SESSIONS", "6")),
+                    "description": "User sessions",
+                },
+                "workflows": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_WORKFLOWS", "7")),
+                    "description": "Workflow state",
+                },
+                "vectors": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_VECTORS", "8")),
+                    "description": "Vector embeddings",
+                },
+                "models": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_MODELS", "9")),
+                    "description": "Model metadata",
+                },
+                "testing": {
+                    "db": int(os.getenv("AUTOBOT_REDIS_DB_TESTING", "15")),
+                    "description": "Test data",
+                },
             }
         }
 
@@ -273,10 +312,12 @@ class RedisDatabaseManager:
         databases = self.config.get("redis_databases", {})
         db_numbers = set()
 
-        for name, config in databases.items():
-            db_num = config.get("db")
+        for db_name, db_config in databases.items():
+            db_num = db_config.get("db")
             if db_num in db_numbers:
-                logger.error(f"Database number {db_num} is used by multiple databases")
+                logger.error(
+                    f"Database number {db_num} is used by multiple databases including '{db_name}'"
+                )
                 return False
             db_numbers.add(db_num)
 

@@ -77,14 +77,14 @@ class TerminalInputHandler:
         self._mock_index = 0
 
     def get_input(
-        self, prompt: str = "", timeout: float = 30.0, default: str = ""
+        self, prompt: str = "", timeout: float = None, default: str = ""
     ) -> str:
         """
         Get input from user with timeout and testing support.
 
         Args:
             prompt: Prompt to display to user
-            timeout: Timeout in seconds (ignored in testing)
+            timeout: Timeout in seconds (ignored in testing, uses environment default if None)
             default: Default value to return if no input
 
         Returns:
@@ -93,6 +93,10 @@ class TerminalInputHandler:
         Raises:
             InputTimeoutError: If timeout exceeded in interactive mode
         """
+        # Use environment default for timeout if not specified
+        if timeout is None:
+            timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", "30.0"))
+
         # In testing mode, return mock or default responses
         if self.is_testing:
             return self._get_testing_response(prompt, default)
@@ -138,17 +142,17 @@ class TerminalInputHandler:
         elif "choice" in prompt_lower and any(char.isdigit() for char in prompt):
             # Extract numbers from prompt and return the first one
             numbers = [char for char in prompt if char.isdigit()]
-            return numbers[0] if numbers else "1"
+            return numbers[0] if numbers else os.getenv("AUTOBOT_DEFAULT_CHOICE", "1")
         elif "enter" in prompt_lower and "command" in prompt_lower:
             return "help"
         elif "file" in prompt_lower or "path" in prompt_lower:
-            return "/tmp/test_file"
+            return os.getenv("AUTOBOT_TEST_FILE_PATH", "/tmp/test_file")
         elif "name" in prompt_lower:
-            return "test_user"
+            return os.getenv("AUTOBOT_TEST_USER_NAME", "test_user")
         elif "port" in prompt_lower:
-            return "8080"
+            return os.getenv("AUTOBOT_DEFAULT_PORT", "8080")
         elif "host" in prompt_lower:
-            return "localhost"
+            return os.getenv("AUTOBOT_DEFAULT_HOST", "localhost")
         else:
             return ""  # Empty string for unknown prompts
 
@@ -190,19 +194,23 @@ class TerminalInputHandler:
             raise InputTimeoutError(f"Input timeout after {timeout} seconds")
 
     async def get_input_async(
-        self, prompt: str = "", timeout: float = 30.0, default: str = ""
+        self, prompt: str = "", timeout: float = None, default: str = ""
     ) -> str:
         """
         Asynchronous version of get_input.
 
         Args:
             prompt: Prompt to display
-            timeout: Timeout in seconds
+            timeout: Timeout in seconds (uses environment default if None)
             default: Default response
 
         Returns:
             User input string
         """
+        # Use environment default for timeout if not specified
+        if timeout is None:
+            timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", "30.0"))
+
         if self.is_testing:
             return self._get_testing_response(prompt, default)
 
@@ -267,7 +275,7 @@ def get_terminal_input_handler() -> TerminalInputHandler:
     return _terminal_input_handler
 
 
-def safe_input(prompt: str = "", timeout: float = 30.0, default: str = "") -> str:
+def safe_input(prompt: str = "", timeout: float = None, default: str = "") -> str:
     """
     Safe input function that works in both interactive and testing environments.
 
@@ -276,12 +284,16 @@ def safe_input(prompt: str = "", timeout: float = 30.0, default: str = "") -> st
 
     Args:
         prompt: Prompt to display to user
-        timeout: Timeout in seconds (ignored in testing environments)
+        timeout: Timeout in seconds (ignored in testing environments, uses environment default if None)
         default: Default value to return if no input or timeout
 
     Returns:
         User input string or default
     """
+    # Use environment default for timeout if not specified
+    if timeout is None:
+        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", "30.0"))
+
     handler = get_terminal_input_handler()
     try:
         return handler.get_input(prompt, timeout, default)
@@ -291,19 +303,23 @@ def safe_input(prompt: str = "", timeout: float = 30.0, default: str = "") -> st
 
 
 async def safe_input_async(
-    prompt: str = "", timeout: float = 30.0, default: str = ""
+    prompt: str = "", timeout: float = None, default: str = ""
 ) -> str:
     """
     Asynchronous safe input function.
 
     Args:
         prompt: Prompt to display
-        timeout: Timeout in seconds
+        timeout: Timeout in seconds (uses environment default if None)
         default: Default response
 
     Returns:
         User input string or default
     """
+    # Use environment default for timeout if not specified
+    if timeout is None:
+        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", "30.0"))
+
     handler = get_terminal_input_handler()
     return await handler.get_input_async(prompt, timeout, default)
 
@@ -332,20 +348,20 @@ def configure_testing_defaults():
 
     # Common testing defaults
     testing_defaults = {
-        "yes/no": "y",
-        "y/n": "y",
-        "continue": "y",
-        "choice": "1",
-        "select": "1",
-        "enter your choice": "1",
-        "command": "help",
-        "filename": "test_file.txt",
-        "path": "/tmp/test",
-        "name": "test_user",
+        "yes/no": os.getenv("AUTOBOT_DEFAULT_YES_NO", "y"),
+        "y/n": os.getenv("AUTOBOT_DEFAULT_YES_NO", "y"),
+        "continue": os.getenv("AUTOBOT_DEFAULT_CONTINUE", "y"),
+        "choice": os.getenv("AUTOBOT_DEFAULT_CHOICE", "1"),
+        "select": os.getenv("AUTOBOT_DEFAULT_CHOICE", "1"),
+        "enter your choice": os.getenv("AUTOBOT_DEFAULT_CHOICE", "1"),
+        "command": os.getenv("AUTOBOT_DEFAULT_COMMAND", "help"),
+        "filename": os.getenv("AUTOBOT_TEST_FILENAME", "test_file.txt"),
+        "path": os.getenv("AUTOBOT_TEST_PATH", "/tmp/test"),
+        "name": os.getenv("AUTOBOT_TEST_USER_NAME", "test_user"),
         "port": os.getenv("AUTOBOT_AI_STACK_PORT", "8080"),
-        "host": os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.6"),
+        "host": os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.1"),
         "url": get_service_url("ai-stack"),
-        "email": "test@example.com",
+        "email": os.getenv("AUTOBOT_TEST_EMAIL", "test@example.com"),
     }
 
     handler.default_responses.update(testing_defaults)
@@ -364,7 +380,8 @@ def patch_builtin_input():
     original_input = builtins.input
 
     def patched_input(prompt=""):
-        return safe_input(prompt, timeout=30.0, default="")
+        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", "30.0"))
+        return safe_input(prompt, timeout=timeout, default="")
 
     builtins.input = patched_input
     return original_input
