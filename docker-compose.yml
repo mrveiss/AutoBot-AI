@@ -51,31 +51,28 @@ services:
   # Backend API - Runs on HOST for system access (desktop, network, files)
   # Started by unified script, not Docker
 
-  # Browser Automation Service - Containerized for dependency management
+  # Browser Service with Playwright automation
   browser-service:
-    build:
-      context: .
-      dockerfile: docker/browser/Dockerfile
+    build: 
+      context: ./docker/browser
     image: autobot-browser:latest
     container_name: autobot-browser
     restart: unless-stopped
-    volumes:
-      - ./scripts:/app/scripts
-      - browser_data:/app/data
     environment:
+      - BROWSER_PORT=3000
       - PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
-      - BROWSER_PORT=${BROWSER_PORT:-3000}
-    command: node /app/playwright-server.js
+    volumes:
+      - browser_data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
       start_period: 20s
+      retries: 3
+    ports:
+      - "${BROWSER_PORT:-3000}:3000"    # Playwright API
     networks:
       - autobot
-    ports:
-      - "${BROWSER_PORT:-3000}:3000"
 
   # Frontend - Remove invalid backend dependency since backend runs on host
   frontend:
@@ -162,9 +159,8 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./src:/app/src
+      - .:/app/autobot_codebase:ro  # Mount entire AutoBot codebase for analysis
       - ./config:/app/config
-      - ./prompts:/app/prompts
       - models:/app/models
       - npu_logs:/app/logs
       # Hardware access for NPU
