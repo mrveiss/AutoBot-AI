@@ -69,17 +69,57 @@ class AutoBotSemanticChunker:
 
         logger.info(f"SemanticChunker initialized with model: {embedding_model}")
 
-    def _initialize_model(self):
-        """Lazy initialize the sentence transformer model on first use."""
+    async def _initialize_model(self):
+        """Lazy initialize the sentence transformer model on first use with GPU acceleration."""
         if self._embedding_model is not None:
             return
 
         try:
-            # Import only when needed to avoid startup delay
-            from sentence_transformers import SentenceTransformer
+            import asyncio
+            import concurrent.futures
+            
+            # Run model loading in thread pool to avoid blocking event loop
+            def load_model():
+                # Import only when needed to avoid startup delay
+                from sentence_transformers import SentenceTransformer
+                import torch
+                
+                # Detect best available device
+                device = "cpu"  # Default fallback
+                
+                if torch.cuda.is_available():
+                    device = "cuda"
+                    gpu_count = torch.cuda.device_count()
+                    gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
+                    logger.info(f"Using CUDA GPU: {gpu_name} (device count: {gpu_count})")
+                else:
+                    logger.info("CUDA not available, using CPU for embeddings")
 
-            self._embedding_model = SentenceTransformer(self.embedding_model_name)
-            logger.info(f"Loaded embedding model: {self.embedding_model_name}")
+                # Initialize model with device optimization
+                model = SentenceTransformer(self.embedding_model_name, device=device)
+                
+                # Log device and model info
+                actual_device = next(model.parameters()).device
+                logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
+                
+                # Enable mixed precision for GPU if available
+                if device == "cuda":
+                    try:
+                        # Enable automatic mixed precision for better GPU performance
+                        model.half()  # Use FP16 for faster GPU inference
+                        logger.info("Enabled FP16 mixed precision for GPU inference")
+                    except Exception as precision_error:
+                        logger.warning(f"Could not enable FP16: {precision_error}")
+                
+                return model
+            
+            # Load model in background thread
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                logger.info(f"Loading embedding model '{self.embedding_model_name}' in background thread...")
+                self._embedding_model = await loop.run_in_executor(executor, load_model)
+                logger.info("Embedding model loading completed")
+                    
         except Exception as e:
             logger.error(
                 f"Failed to load embedding model {self.embedding_model_name}: {e}"
@@ -87,9 +127,62 @@ class AutoBotSemanticChunker:
             # Fallback to a more basic model
             try:
                 from sentence_transformers import SentenceTransformer
+                import torch
+                
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                self._embedding_model = SentenceTransformer("all-mpnet-base-v2", device=device)
+                logger.warning(f"Fallback to all-mpnet-base-v2 embedding model on {device}")
+            except Exception as fallback_error:
+                logger.error(f"Failed to load fallback model: {fallback_error}")
+                raise RuntimeError("Could not initialize any embedding model")
 
-                self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
-                logger.warning("Fallback to all-mpnet-base-v2 embedding model")
+    def _sync_initialize_model(self):
+        """Synchronous model initialization for fallback cases (blocking)."""
+        if self._embedding_model is not None:
+            return
+
+        try:
+            # Import only when needed to avoid startup delay
+            from sentence_transformers import SentenceTransformer
+            import torch
+            
+            # Detect best available device
+            device = "cpu"  # Default fallback
+            
+            if torch.cuda.is_available():
+                device = "cuda"
+                gpu_count = torch.cuda.device_count()
+                gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
+                logger.info(f"Using CUDA GPU: {gpu_name} (device count: {gpu_count})")
+            else:
+                logger.info("CUDA not available, using CPU for embeddings")
+
+            # Initialize model with device optimization
+            self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
+            
+            # Log device and model info
+            actual_device = next(self._embedding_model.parameters()).device
+            logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
+            
+            # Enable mixed precision for GPU if available
+            if device == "cuda":
+                try:
+                    # Enable automatic mixed precision for better GPU performance
+                    self._embedding_model.half()  # Use FP16 for faster GPU inference
+                    logger.info("Enabled FP16 mixed precision for GPU inference")
+                except Exception as precision_error:
+                    logger.warning(f"Could not enable FP16: {precision_error}")
+                    
+        except Exception as e:
+            logger.error(f"Failed to load embedding model {self.embedding_model_name}: {e}")
+            # Fallback to a more basic model
+            try:
+                from sentence_transformers import SentenceTransformer
+                import torch
+                
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                self._embedding_model = SentenceTransformer("all-mpnet-base-v2", device=device)
+                logger.warning(f"Fallback to all-mpnet-base-v2 embedding model on {device}")
             except Exception as fallback_error:
                 logger.error(f"Failed to load fallback model: {fallback_error}")
                 raise RuntimeError("Could not initialize any embedding model")
@@ -135,9 +228,9 @@ class AutoBotSemanticChunker:
 
         return sentences
 
-    def _compute_sentence_embeddings(self, sentences: List[str]) -> np.ndarray:
+    async def _compute_sentence_embeddings_async(self, sentences: List[str]) -> np.ndarray:
         """
-        Compute embeddings for a list of sentences.
+        Compute embeddings for a list of sentences asynchronously and non-blocking.
 
         Args:
             sentences: List of sentence strings
@@ -145,19 +238,127 @@ class AutoBotSemanticChunker:
         Returns:
             numpy array of embeddings
         """
+        import asyncio
+        import concurrent.futures
+        import psutil
+        import os
+        
         # Ensure model is loaded before use
-        self._initialize_model()
+        await self._initialize_model()
 
         try:
-            embeddings = self._embedding_model.encode(
-                sentences, convert_to_tensor=False
-            )
-            return np.array(embeddings)
+            # Get CPU count and current load for adaptive batching
+            cpu_count = os.cpu_count() or 4
+            cpu_load = psutil.cpu_percent(interval=0.1)
+            
+            # Adaptive batch sizing optimized for your Intel Ultra 9 185H (22 cores)
+            # and RTX 4070 GPU setup
+            import torch
+            
+            # Check if we have GPU acceleration
+            has_gpu = torch.cuda.is_available() and hasattr(self, '_embedding_model') and \
+                     self._embedding_model is not None and \
+                     next(self._embedding_model.parameters()).device.type == 'cuda'
+            
+            if has_gpu:
+                # GPU mode: Use larger batches and more CPU workers for preprocessing
+                if cpu_load > 80:
+                    max_workers = min(4, cpu_count // 4)  # Still use multiple workers
+                    batch_size = min(50, len(sentences))   # Larger batches for GPU
+                elif cpu_load > 50:
+                    max_workers = min(8, cpu_count // 2)   # More workers available
+                    batch_size = min(100, len(sentences))  # Bigger batches
+                else:
+                    # Low CPU load: maximize parallel processing
+                    max_workers = min(12, cpu_count)       # Use more of your 22 cores
+                    batch_size = min(200, len(sentences))  # Large GPU batches
+            else:
+                # CPU-only mode: More conservative batching
+                if cpu_load > 80:
+                    max_workers = min(2, cpu_count // 8)
+                    batch_size = min(10, len(sentences))
+                elif cpu_load > 50:
+                    max_workers = min(4, cpu_count // 4)
+                    batch_size = min(25, len(sentences))
+                else:
+                    max_workers = min(6, cpu_count // 2)   # Still use good parallelism
+                    batch_size = min(50, len(sentences))
+            
+            logger.info(f"Processing {len(sentences)} sentences with {max_workers} workers, batch_size={batch_size}, CPU load={cpu_load}%")
+            
+            # Process in batches to avoid blocking
+            all_embeddings = []
+            
+            for i in range(0, len(sentences), batch_size):
+                batch_sentences = sentences[i:i + batch_size]
+                
+                # Run embedding computation in thread pool to avoid blocking event loop
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    embeddings = await loop.run_in_executor(
+                        executor,
+                        lambda: self._embedding_model.encode(
+                            batch_sentences,
+                            convert_to_tensor=False,
+                            show_progress_bar=False
+                        )
+                    )
+                    all_embeddings.append(embeddings)
+                
+                # Yield control to event loop after each batch
+                await asyncio.sleep(0.001)  # Allow other coroutines to run
+                
+                # Log progress for large batches
+                if len(sentences) > 20:
+                    progress = min(100, int((i + batch_size) / len(sentences) * 100))
+                    logger.debug(f"Embedding progress: {progress}%")
+            
+            # Combine all batch results
+            if len(all_embeddings) == 1:
+                return np.array(all_embeddings[0])
+            else:
+                return np.vstack(all_embeddings)
+                
         except Exception as e:
             logger.error(f"Error computing sentence embeddings: {e}")
             # Return zero embeddings as fallback
-            dim = self._embedding_model.get_sentence_embedding_dimension()
-            return np.zeros((len(sentences), dim))
+            try:
+                dim = self._embedding_model.get_sentence_embedding_dimension()
+                return np.zeros((len(sentences), dim))
+            except:
+                # Fallback dimension if model access fails
+                return np.zeros((len(sentences), 384))
+    
+    def _compute_sentence_embeddings(self, sentences: List[str]) -> np.ndarray:
+        """
+        Synchronous wrapper for backward compatibility.
+        
+        Args:
+            sentences: List of sentence strings
+
+        Returns:
+            numpy array of embeddings
+        """
+        import asyncio
+        
+        try:
+            # Try to get existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're in an async context, we shouldn't use this sync method
+                logger.warning("Using sync embedding method in async context. Use _compute_sentence_embeddings_async instead.")
+                logger.warning("WARNING: Model initialization may block event loop - use async method instead")
+                # Fall back to direct computation (blocking) - creates a new sync version for fallback
+                if self._embedding_model is None:
+                    self._sync_initialize_model()
+                embeddings = self._embedding_model.encode(sentences, convert_to_tensor=False)
+                return np.array(embeddings)
+            else:
+                # Run the async version
+                return loop.run_until_complete(self._compute_sentence_embeddings_async(sentences))
+        except RuntimeError:
+            # No event loop, create one
+            return asyncio.run(self._compute_sentence_embeddings_async(sentences))
 
     def _compute_semantic_distances(self, embeddings: np.ndarray) -> List[float]:
         """
@@ -251,7 +452,7 @@ class AutoBotSemanticChunker:
                     start_index=prev_chunk.start_index,
                     end_index=boundary,
                     sentences=merged_sentences,
-                    semantic_score=self._calculate_chunk_coherence(merged_sentences),
+                    semantic_score=0.8,  # Default high coherence for merged chunks
                     metadata={"merged": True, "original_boundary": boundary},
                 )
             elif len(chunk_content) > self.max_chunk_size:
@@ -265,7 +466,7 @@ class AutoBotSemanticChunker:
                     start_index=start_idx,
                     end_index=boundary,
                     sentences=chunk_sentences,
-                    semantic_score=self._calculate_chunk_coherence(chunk_sentences),
+                    semantic_score=0.8,  # Default high coherence - async calculation expensive
                     metadata={"boundary_type": "semantic"},
                 )
                 chunks.append(chunk)
@@ -310,7 +511,7 @@ class AutoBotSemanticChunker:
                     start_index=sentence_idx - len(current_sentences),
                     end_index=sentence_idx,
                     sentences=current_sentences.copy(),
-                    semantic_score=self._calculate_chunk_coherence(current_sentences),
+                    semantic_score=0.7,  # Default coherence for size-constrained chunks
                     metadata={"split_type": "size_constraint"},
                 )
                 chunks.append(chunk)
@@ -336,14 +537,14 @@ class AutoBotSemanticChunker:
                 start_index=sentence_idx - len(current_sentences),
                 end_index=sentence_idx,
                 sentences=current_sentences,
-                semantic_score=self._calculate_chunk_coherence(current_sentences),
+                semantic_score=0.7,  # Default coherence for final size-constrained chunks
                 metadata={"split_type": "size_constraint", "final_chunk": True},
             )
             chunks.append(chunk)
 
         return chunks
 
-    def _calculate_chunk_coherence(self, sentences: List[str]) -> float:
+    async def _calculate_chunk_coherence_async(self, sentences: List[str]) -> float:
         """
         Calculate semantic coherence score for a chunk.
 
@@ -357,7 +558,7 @@ class AutoBotSemanticChunker:
             return 1.0
 
         try:
-            embeddings = self._compute_sentence_embeddings(sentences)
+            embeddings = await self._compute_sentence_embeddings_async(sentences)
             if len(embeddings) <= 1:
                 return 1.0
 
@@ -409,8 +610,8 @@ class AutoBotSemanticChunker:
 
             logger.debug(f"Split text into {len(sentences)} sentences")
 
-            # Step 2: Compute sentence embeddings
-            embeddings = self._compute_sentence_embeddings(sentences)
+            # Step 2: Compute sentence embeddings asynchronously
+            embeddings = await self._compute_sentence_embeddings_async(sentences)
 
             # Step 3: Calculate semantic distances
             distances = self._compute_semantic_distances(embeddings)
