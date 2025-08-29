@@ -128,6 +128,7 @@ class KnowledgeBase:
         # Initialize Redis client for direct use (e.g., for facts/logs)
         # Use sync Redis client for direct operations
         self.redis_client = get_redis_client(async_client=False)
+        self._async_redis_client = None  # Will be initialized lazily
         if self.redis_client:
             logging.info("Redis client initialized via centralized utility")
         else:
@@ -141,6 +142,16 @@ class KnowledgeBase:
         self.storage_context = None
         self.index = None
         self.query_engine = None
+
+    async def _get_async_redis_client(self):
+        """Get or initialize the async Redis client."""
+        if self._async_redis_client is None:
+            async_client_factory = get_redis_client(async_client=True)
+            if asyncio.iscoroutine(async_client_factory):
+                self._async_redis_client = await async_client_factory
+            else:
+                self._async_redis_client = async_client_factory
+        return self._async_redis_client
 
     def _resolve_path(self, configured_path: str) -> str:
         if self.network_share_path and not os.path.isabs(configured_path):
@@ -169,8 +180,21 @@ class KnowledgeBase:
         )
 
         if llm_provider == "ollama":
-            # Try to initialize with configured model, with fallback handling
+            # Try to initialize with configured model, with fallback handling and timeout
             try:
+                # Add timeout to prevent blocking
+                import httpx
+                import asyncio
+                
+                # Test Ollama availability with short timeout first
+                try:
+                    with httpx.Client(timeout=5.0) as client:
+                        response = client.get(f"{llm_base_url}/api/tags")
+                        if response.status_code != 200:
+                            raise Exception(f"Ollama not responding properly: {response.status_code}")
+                except (httpx.TimeoutException, httpx.ConnectError) as e:
+                    raise Exception(f"Ollama not available at {llm_base_url}: {e}")
+                
                 self.llm = LlamaIndexOllamaLLM(model=llm_model, base_url=llm_base_url)
                 logging.info(
                     f"KnowledgeBase: Successfully initialized with model '{llm_model}'"
@@ -219,6 +243,17 @@ class KnowledgeBase:
                     )
 
             try:
+                # Test embedding model availability with timeout
+                try:
+                    with httpx.Client(timeout=5.0) as client:
+                        # Test if embedding model exists
+                        response = client.post(f"{llm_base_url}/api/show", 
+                                             json={"name": self.embedding_model_name})
+                        if response.status_code != 200:
+                            raise Exception(f"Embedding model {self.embedding_model_name} not found")
+                except (httpx.TimeoutException, httpx.ConnectError) as e:
+                    raise Exception(f"Cannot verify embedding model: {e}")
+                    
                 self.embed_model = LlamaIndexOllamaEmbedding(
                     model_name=self.embedding_model_name, base_url=llm_base_url
                 )
@@ -267,11 +302,22 @@ class KnowledgeBase:
             # Get the actual embedding dimension from the model
             embedding_dim = 768  # Default for nomic-embed-text
 
-            # Try to get the actual dimension by creating a test embedding
+            # Try to get the actual dimension by creating a test embedding with timeout
             try:
-                test_embedding = self.embed_model.get_text_embedding("test")
-                embedding_dim = len(test_embedding)
-                logging.info(f"Detected embedding dimension: {embedding_dim}")
+                import asyncio
+                import concurrent.futures
+                
+                # Run embedding with timeout to prevent blocking
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(self.embed_model.get_text_embedding, "test")
+                    try:
+                        test_embedding = future.result(timeout=10)  # 10 second timeout
+                        embedding_dim = len(test_embedding)
+                        logging.info(f"Detected embedding dimension: {embedding_dim}")
+                    except concurrent.futures.TimeoutError:
+                        logging.warning(f"Embedding test timed out after 10s, using default dimension {embedding_dim}")
+                    except Exception as e:
+                        logging.warning(f"Embedding test failed: {e}, using default dimension {embedding_dim}")
             except Exception as e:
                 logging.warning(
                     "Could not detect embedding dimension, using default "
@@ -355,7 +401,7 @@ class KnowledgeBase:
             self.query_engine = self.index.as_query_engine(llm=self.llm)
             logging.info("In-memory VectorStoreIndex and QueryEngine initialized.")
 
-    def _scan_redis_keys(self, pattern: str) -> List[str]:
+    async def _scan_redis_keys(self, pattern: str) -> List[str]:
         """Non-blocking Redis key scanning to replace KEYS operations.
 
         Args:
@@ -364,10 +410,15 @@ class KnowledgeBase:
         Returns:
             List of matching keys
         """
+        async_redis = await self._get_async_redis_client()
+        if not async_redis:
+            logging.error("Async Redis client not available")
+            return []
+            
         all_keys: List[str] = []
         cursor = 0
         while True:
-            cursor, batch = self.redis_client.scan(cursor, match=pattern, count=100)
+            cursor, batch = await async_redis.scan(cursor, match=pattern, count=100)
             all_keys.extend(batch)
             if cursor == 0:
                 break
@@ -472,7 +523,7 @@ class KnowledgeBase:
         "knowledge_base_service",
         failure_threshold=5,
         recovery_timeout=15.0,
-        timeout=30.0,
+        timeout=5.0,  # Reduced from 30s to 5s for faster failure
     )
     @retry_async(
         max_attempts=3, base_delay=0.5, strategy=RetryStrategy.EXPONENTIAL_BACKOFF
@@ -550,6 +601,88 @@ class KnowledgeBase:
                 logging.error(f"Fact search also failed: {fact_error}")
                 return []
 
+    def _clean_numpy_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert numpy types and complex objects in metadata to Redis-compatible types"""
+        if not metadata:
+            return {}
+        
+        def clean_value(value):
+            """Recursively clean values for Redis compatibility"""
+            if isinstance(value, (np.integer, np.floating)):
+                return value.item()
+            elif isinstance(value, np.ndarray):
+                return value.tolist()
+            elif isinstance(value, dict):
+                # Convert nested dictionaries to JSON strings for Redis
+                try:
+                    return json.dumps(value, cls=NumpyEncoder)
+                except (TypeError, ValueError):
+                    return str(value)
+            elif isinstance(value, (list, tuple)):
+                # Clean list/tuple elements
+                try:
+                    return [clean_value(item) for item in value]
+                except Exception:
+                    return str(value)
+            elif hasattr(value, "__float__"):
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return str(value)
+            elif hasattr(value, "__int__"):
+                try:
+                    return int(value)
+                except (ValueError, TypeError):
+                    return str(value)
+            elif isinstance(value, (str, int, float, bool)):
+                return value
+            else:
+                # Convert any other complex types to strings
+                return str(value)
+        
+        clean_metadata = {}
+        for key, value in metadata.items():
+            try:
+                clean_metadata[str(key)] = clean_value(value)
+            except Exception as e:
+                # If all else fails, convert to string
+                logging.warning(f"Failed to clean metadata key {key}: {e}")
+                clean_metadata[str(key)] = str(value)
+                
+        return clean_metadata
+    
+    async def _safe_insert_document(self, document: Document):
+        """Safely insert document with numpy type conversion"""
+        try:
+            # First, ensure any numpy types in the document metadata are cleaned
+            if document.metadata:
+                document.metadata = self._clean_numpy_metadata(document.metadata)
+            
+            # Insert the document
+            self.index.insert(document)
+            logging.debug(f"Successfully inserted document into index")
+            
+        except Exception as e:
+            # If we still get numpy serialization errors, try alternative approaches
+            if "numpy.float32" in str(e) or "Unable to serialize" in str(e):
+                logging.warning(f"Numpy serialization error, attempting fallback: {e}")
+                
+                # Try converting document text to ensure no numpy types
+                try:
+                    # Create a completely clean document
+                    clean_doc = Document(
+                        text=str(document.text),
+                        metadata=self._clean_numpy_metadata(document.metadata or {})
+                    )
+                    self.index.insert(clean_doc)
+                    logging.info("Successfully inserted document using fallback method")
+                except Exception as fallback_error:
+                    logging.error(f"Even fallback insertion failed: {fallback_error}")
+                    raise fallback_error
+            else:
+                logging.error(f"Document insertion failed: {e}")
+                raise e
+
     async def add_text_with_semantic_chunking(
         self, content: str, metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -594,10 +727,14 @@ class KnowledgeBase:
 
                 # Insert each semantic chunk as a separate document
                 for chunk_data in chunk_docs:
+                    # Convert any numpy types in metadata to native Python types
+                    clean_metadata = self._clean_numpy_metadata(chunk_data["metadata"])
+                    
                     chunk_document = Document(
-                        text=chunk_data["text"], metadata=chunk_data["metadata"]
+                        text=chunk_data["text"], metadata=clean_metadata
                     )
-                    self.index.insert(chunk_document)
+                    # Use safe insert method that handles numpy conversion
+                    await self._safe_insert_document(chunk_document)
 
                 logging.info(
                     f"Added {len(chunk_docs)} semantic chunks to knowledge base"
@@ -610,8 +747,9 @@ class KnowledgeBase:
                 }
             else:
                 # Use traditional processing
-                document = Document(text=content, metadata=text_metadata)
-                self.index.insert(document)
+                clean_metadata = self._clean_numpy_metadata(text_metadata)
+                document = Document(text=content, metadata=clean_metadata)
+                await self._safe_insert_document(document)
                 return {
                     "status": "success",
                     "message": "Text added to knowledge base",
@@ -629,7 +767,8 @@ class KnowledgeBase:
     async def store_fact(
         self, content: str, metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        if not self.redis_client:
+        async_redis = await self._get_async_redis_client()
+        if not async_redis:
             return {
                 "status": "error",
                 "message": "Redis client not available - Redis may be disabled",
@@ -637,7 +776,7 @@ class KnowledgeBase:
         try:
             import time
 
-            fact_id = self.redis_client.incr("fact_id_counter")
+            fact_id = await async_redis.incr("fact_id_counter")
             fact_key = f"fact:{fact_id}"
             fact_data = {
                 "content": content,
@@ -646,7 +785,7 @@ class KnowledgeBase:
                 ),
                 "timestamp": str(int(time.time())),
             }
-            self.redis_client.hset(fact_key, mapping=fact_data)
+            await async_redis.hset(fact_key, mapping=fact_data)
             logging.info(f"Fact stored in Redis with ID: {fact_id}")
             return {
                 "status": "success",
@@ -660,18 +799,15 @@ class KnowledgeBase:
     async def get_fact(
         self, fact_id: Optional[int] = None, query: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        if not self.redis_client:
-            return []
-
-        # Use sync Redis operations for fact retrieval
-        if not self.redis_client:
-            logging.warning("Redis client not available")
+        async_redis = await self._get_async_redis_client()
+        if not async_redis:
+            logging.warning("Async Redis client not available")
             return []
 
         facts = []
         try:
             if fact_id:
-                fact_data: Dict[str, str] = self.redis_client.hgetall(f"fact:{fact_id}")
+                fact_data: Dict[str, str] = await async_redis.hgetall(f"fact:{fact_id}")
                 if fact_data:
                     facts.append(
                         {
@@ -683,14 +819,14 @@ class KnowledgeBase:
                     )
             elif query:
                 # Use non-blocking SCAN instead of blocking KEYS operation
-                all_keys = self._scan_redis_keys("fact:*")
+                all_keys = await self._scan_redis_keys("fact:*")
 
                 if all_keys:
                     # PERFORMANCE OPTIMIZATION: Use Redis pipeline for batch operations
-                    pipe = self.redis_client.pipeline()
+                    pipe = async_redis.pipeline()
                     for key in all_keys:
                         pipe.hgetall(key)
-                    results = pipe.execute()
+                    results = await pipe.execute()
 
                     for key, fact_data in zip(all_keys, results):
                         if fact_data:
@@ -1020,8 +1156,13 @@ class KnowledgeBase:
     ) -> bool:
         """Update an existing fact"""
         try:
+            async_redis = await self._get_async_redis_client()
+            if not async_redis:
+                logging.error("Async Redis client not available")
+                return False
+                
             fact_key = f"fact:{fact_id}"
-            existing_data = self.redis_client.hgetall(fact_key)
+            existing_data = await async_redis.hgetall(fact_key)
 
             if not existing_data:
                 return False
@@ -1039,7 +1180,7 @@ class KnowledgeBase:
                 ),  # Keep original timestamp
             }
 
-            self.redis_client.hset(fact_key, mapping=updated_data)
+            await async_redis.hset(fact_key, mapping=updated_data)
             logging.info(f"Fact {fact_id} updated successfully.")
             return True
         except Exception as e:
@@ -1049,8 +1190,13 @@ class KnowledgeBase:
     async def delete_fact(self, fact_id: int) -> bool:
         """Delete a fact by ID"""
         try:
+            async_redis = await self._get_async_redis_client()
+            if not async_redis:
+                logging.error("Async Redis client not available")
+                return False
+                
             fact_key = f"fact:{fact_id}"
-            result = self.redis_client.delete(fact_key)
+            result = await async_redis.delete(fact_key)
 
             if result:
                 logging.info(f"Fact {fact_id} deleted successfully.")
@@ -1067,17 +1213,22 @@ class KnowledgeBase:
         number of days."""
         removed_count = 0
         try:
+            async_redis = await self._get_async_redis_client()
+            if not async_redis:
+                logging.error("Async Redis client not available")
+                return {"status": "error", "message": "Redis client not available", "removed_count": 0}
+                
             cutoff_timestamp = int(datetime.now().timestamp()) - (
                 days_to_keep * 24 * 3600
             )
-            all_fact_keys = self._scan_redis_keys("fact:*")
+            all_fact_keys = await self._scan_redis_keys("fact:*")
 
             for key in all_fact_keys:
-                fact_data: Dict[str, str] = self.redis_client.hgetall(key)
+                fact_data: Dict[str, str] = await async_redis.hgetall(key)
                 if fact_data:
                     timestamp = int(fact_data.get("timestamp", "0"))
                     if timestamp < cutoff_timestamp:
-                        self.redis_client.delete(key)
+                        await async_redis.delete(key)
                         removed_count += 1
 
             logging.info(

@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import aiohttp
 
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
@@ -158,49 +158,47 @@ Respond with valid JSON:
                 # Format prompt
                 prompt = self.classification_prompt.format(user_message=user_message)
 
-                # Call Ollama API
-                response = requests.post(
-                    f"{self.ollama_host}/api/generate",
-                    json={
-                        "model": model,
-                        "prompt": prompt,
-                        "stream": True,
-                        "options": {
-                            "temperature": 0.3,  # Low temperature for consistent classification
-                            "top_p": 0.9,
-                            "num_predict": 200,  # Limit response length
+                # Call Ollama API with async HTTP
+                timeout = aiohttp.ClientTimeout(total=10)  # Fast timeout for lightweight models
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(
+                        f"{self.ollama_host}/api/generate",
+                        json={
+                            "model": model,
+                            "prompt": prompt,
+                            "stream": True,
+                            "options": {
+                                "temperature": 0.3,  # Low temperature for consistent classification
+                                "top_p": 0.9,
+                                "num_predict": 200,  # Limit response length
+                            },
                         },
-                    },
-                    timeout=10,  # Fast timeout for lightweight models
-                    stream=True,  # Enable streaming in requests
-                )
+                    ) as response:
+                        if response.status == 200:
+                            # Handle streaming response
+                            full_response = ""
+                            async for line in response.content:
+                                if line:
+                                    try:
+                                        chunk_data = json.loads(line.decode("utf-8"))
+                                        if "response" in chunk_data:
+                                            full_response += chunk_data["response"]
+                                        if chunk_data.get("done", False):
+                                            break
+                                    except json.JSONDecodeError:
+                                        continue
 
-                if response.status_code == 200:
-                    # Handle streaming response
-                    full_response = ""
-                    for line in response.iter_lines():
-                        if line:
-                            try:
-                                chunk_data = json.loads(line.decode("utf-8"))
-                                if "response" in chunk_data:
-                                    full_response += chunk_data["response"]
-                                if chunk_data.get("done", False):
-                                    break
-                            except json.JSONDecodeError:
-                                continue
+                            response_text = full_response.strip()
 
-                    response_text = full_response.strip()
-
-                    # Parse JSON response
-                    parsed_result = self._parse_json_response(response_text)
-                    if parsed_result:
-                        parsed_result["_model_used"] = model
-                        return parsed_result
-
-                else:
-                    logger.warning(
-                        f"Gemma model {model} returned status {response.status_code}"
-                    )
+                            # Parse JSON response
+                            parsed_result = self._parse_json_response(response_text)
+                            if parsed_result:
+                                parsed_result["_model_used"] = model
+                                return parsed_result
+                        else:
+                            logger.warning(
+                                f"Gemma model {model} returned status {response.status}"
+                            )
 
             except Exception as e:
                 logger.warning(f"Failed to use Gemma model {model}: {e}")
@@ -211,10 +209,12 @@ Respond with valid JSON:
     async def _get_available_models(self) -> List[str]:
         """Get list of available Ollama models."""
         try:
-            response = requests.get(f"{self.ollama_host}/api/tags", timeout=5)
-            if response.status_code == 200:
-                models_data = response.json()
-                return [model["name"] for model in models_data.get("models", [])]
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(f"{self.ollama_host}/api/tags") as response:
+                    if response.status == 200:
+                        models_data = await response.json()
+                        return [model["name"] for model in models_data.get("models", [])]
         except Exception as e:
             logger.warning(f"Failed to get available models: {e}")
         return []
