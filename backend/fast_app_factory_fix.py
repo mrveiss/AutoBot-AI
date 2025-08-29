@@ -104,6 +104,29 @@ async def get_or_create_orchestrator(app):
         app.state.orchestrator = minimal_orchestrator
         return minimal_orchestrator
 
+async def get_or_create_knowledge_base(app):
+    """Lazy load knowledge base when needed"""
+    if hasattr(app.state, 'knowledge_base') and app.state.knowledge_base is not None:
+        return app.state.knowledge_base
+    
+    try:
+        logger.info("Lazy loading knowledge base for search functionality...")
+        from src.knowledge_base import KnowledgeBase
+        knowledge_base = KnowledgeBase()
+        # Initialize with minimal setup
+        app.state.knowledge_base = knowledge_base
+        logger.info("Knowledge base lazy loaded successfully")
+        return knowledge_base
+    except Exception as e:
+        logger.error(f"Failed to lazy load knowledge base: {e}")
+        # Return a minimal knowledge base
+        from types import SimpleNamespace
+        minimal_kb = SimpleNamespace()
+        minimal_kb.search = lambda query, **kwargs: []
+        minimal_kb.add_entry = lambda *args, **kwargs: {"error": "Knowledge base unavailable"}
+        app.state.knowledge_base = minimal_kb
+        return minimal_kb
+
 
 @asynccontextmanager
 async def create_lifespan_manager(app: FastAPI):

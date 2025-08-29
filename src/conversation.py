@@ -83,7 +83,7 @@ class Conversation:
 
         # Conversation settings
         self.max_kb_results = 5
-        self.kb_timeout = 10.0
+        self.kb_timeout = 8.0  # Reduced from 10s to 8s - should be longer than KB circuit breaker (5s)
         self.include_sources = True
 
         logger.info(f"Created conversation {self.conversation_id}")

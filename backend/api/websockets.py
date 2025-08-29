@@ -203,8 +203,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.error(f"Failed to add message to chat history: {e}")
 
         except RuntimeError as e:
-            logger.error(f"Error sending to WebSocket: {e}")
-            # Connection may have been closed, continue silently
+            if "websocket" in str(e).lower() or "connection" in str(e).lower():
+                logger.info(f"WebSocket connection lost during broadcast: {e}")
+            else:
+                logger.error(f"Runtime error in WebSocket broadcast: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error in WebSocket broadcast: {e}")
 
     # Register the broadcast function with the event manager
     try:
@@ -221,20 +225,39 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         # Keep connection alive and handle incoming messages
-        while websocket.client_state == WebSocketState.CONNECTED:
+        while True:
+            # Check connection state before each operation
+            if websocket.client_state != WebSocketState.CONNECTED:
+                logger.info(f"WebSocket state changed to {websocket.client_state}, ending loop")
+                break
+                
             try:
                 message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
             except asyncio.TimeoutError:
                 # Send ping to keep connection alive
                 try:
-                    await websocket.send_text(json.dumps({"type": "ping"}))
+                    if websocket.client_state == WebSocketState.CONNECTED:
+                        await websocket.send_text(json.dumps({"type": "ping"}))
+                        logger.debug("Sent keepalive ping")
+                    else:
+                        logger.info("Connection lost during ping attempt")
+                        break
                 except Exception as e:
-                    logger.error(f"Failed to send ping: {e}")
+                    logger.warning(f"Failed to send ping, connection likely closed: {e}")
                     break
                 continue
+            except WebSocketDisconnect as e:
+                logger.info(f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'")
+                break
             except Exception as e:
                 logger.error(f"Error receiving message: {e}")
-                break
+                # Check if it's a connection error vs other error
+                if "connection" in str(e).lower() or "closed" in str(e).lower():
+                    logger.info("Connection-related error detected, ending WebSocket loop")
+                    break
+                else:
+                    # Other errors, continue trying
+                    continue
 
             try:
                 data = json.loads(message)

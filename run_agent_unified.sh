@@ -15,6 +15,7 @@ DEV_MODE=false
 TEST_MODE=false
 FORCE_ENV=""
 NO_BUILD=false
+REBUILD=false
 NO_BROWSER=false
 CLEAN_SHUTDOWN=false
 BACKEND_PID=""
@@ -27,6 +28,7 @@ print_help() {
     echo "  --dev         Development mode (hot reload, source mounting, auto-browser)"
     echo "  --test-mode   Test mode (minimal services)" 
     echo "  --no-build    Skip building Docker images (use existing)"
+    echo "  --rebuild     Force rebuild of all Docker images"
     echo "  --no-browser  Don't auto-launch browser in dev mode"
     echo "  --clean       Remove containers on shutdown (default: just stop)"
     echo "  --force-env   Force specific environment (docker-desktop|wsl|native|host-network)"
@@ -47,6 +49,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-build)
             NO_BUILD=true
+            shift
+            ;;
+        --rebuild)
+            REBUILD=true
             shift
             ;;
         --no-browser)
@@ -189,7 +195,13 @@ cleanup() {
     # Stop backend process if running
     if [ ! -z "$BACKEND_PID" ] && kill -0 $BACKEND_PID 2>/dev/null; then
         echo "Stopping backend process (PID: $BACKEND_PID)..."
-        kill $BACKEND_PID 2>/dev/null || true
+        kill -TERM $BACKEND_PID 2>/dev/null || true
+        sleep 2
+        # Force kill if still running
+        if kill -0 $BACKEND_PID 2>/dev/null; then
+            echo "Force killing backend process..."
+            kill -KILL $BACKEND_PID 2>/dev/null || true
+        fi
         wait $BACKEND_PID 2>/dev/null || true
     fi
     
@@ -210,10 +222,49 @@ cleanup() {
         fi
     fi
     
-    # Stop any remaining orphaned processes
+    # Kill remaining processes more aggressively
+    echo "Cleaning up any remaining processes..."
+    
+    # Kill uvicorn processes
+    pkill -f "uvicorn.*backend" 2>/dev/null || true
+    pkill -f "uvicorn.*fast_app_factory_fix" 2>/dev/null || true
     pkill -f "uvicorn.*backend.main:app" 2>/dev/null || true
     pkill -f "playwright-server" 2>/dev/null || true
     pkill -f "npm run" 2>/dev/null || true
+    
+    # Force kill processes on specific ports
+    echo "Killing processes on ports ${API_PORT:-8001}, ${FRONTEND_PORT:-5173}..."
+    
+    # Kill backend port
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -k ${API_PORT:-8001}/tcp 2>/dev/null || true
+        fuser -k ${FRONTEND_PORT:-5173}/tcp 2>/dev/null || true
+    elif command -v lsof >/dev/null 2>&1; then
+        # Alternative using lsof + kill
+        for port in ${API_PORT:-8001} ${FRONTEND_PORT:-5173}; do
+            pids=$(lsof -t -i:$port 2>/dev/null || true)
+            if [ ! -z "$pids" ]; then
+                echo "Killing processes on port $port: $pids"
+                kill -TERM $pids 2>/dev/null || true
+                sleep 1
+                kill -KILL $pids 2>/dev/null || true
+            fi
+        done
+    else
+        echo "Warning: Neither fuser nor lsof available for port cleanup"
+    fi
+    
+    # Give processes time to shut down
+    sleep 1
+    
+    # Final check and report
+    if command -v lsof >/dev/null 2>&1; then
+        remaining=$(lsof -t -i:${API_PORT:-8001} -i:${FRONTEND_PORT:-5173} 2>/dev/null || true)
+        if [ ! -z "$remaining" ]; then
+            echo -e "${YELLOW}⚠️  Some processes might still be running on ports ${API_PORT:-8001}, ${FRONTEND_PORT:-5173}${NC}"
+            echo "   If needed, run: sudo fuser -k ${API_PORT:-8001}/tcp"
+        fi
+    fi
     
     echo -e "${GREEN}✅ AutoBot stopped${NC}"
     exit 0
@@ -254,12 +305,12 @@ main() {
     # Skip build if --no-build flag is used
     if [ "$NO_BUILD" = "true" ]; then
         echo -e "${GREEN}⏭️  Skipping Docker build (--no-build flag)${NC}"
-    # Always build in dev mode for latest changes
-    elif [ "$DEV_MODE" = "true" ]; then
-        echo -e "${YELLOW}🔨 Building Docker images (dev mode)...${NC}"
+    # Force rebuild if --rebuild flag is used
+    elif [ "$REBUILD" = "true" ]; then
+        echo -e "${YELLOW}🔨 Force rebuilding all Docker images (--rebuild flag)...${NC}"
         build_needed=true
     else
-        # Check if images exist for production mode
+        # Check if images exist
         missing_images=""
         for image in "autobot-frontend:latest" "autobot-browser:latest" "autobot-ai-stack:latest" "autobot-npu-worker:latest"; do
             if [ -z "$(docker images -q $image 2>/dev/null)" ]; then
@@ -272,6 +323,7 @@ main() {
             echo -e "${YELLOW}🔨 Building missing Docker images:$missing_images${NC}"
         else
             echo -e "${GREEN}✅ All Docker images exist, skipping build${NC}"
+            echo -e "   ${YELLOW}ℹ️  Use --rebuild to force rebuild${NC}"
         fi
     fi
     
@@ -301,12 +353,13 @@ main() {
         fi
         
         # Start backend in background from project root
+        # Use fast backend to avoid Redis timeout issues
         if [ "$DEV_MODE" = "true" ]; then
-            echo "Starting backend in development mode..."
-            python -m uvicorn backend.main:app --host 0.0.0.0 --port ${API_PORT:-8001} --reload &
+            echo "Starting backend in development mode (fast startup)..."
+            python -m uvicorn backend.fast_app_factory_fix:app --host 0.0.0.0 --port ${API_PORT:-8001} --reload &
         else
-            echo "Starting backend in production mode..."
-            python -m uvicorn backend.main:app --host 0.0.0.0 --port ${API_PORT:-8001} &
+            echo "Starting backend in production mode (fast startup)..."
+            python -m uvicorn backend.fast_app_factory_fix:app --host 0.0.0.0 --port ${API_PORT:-8001} &
         fi
         
         BACKEND_PID=$!

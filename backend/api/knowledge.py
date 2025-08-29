@@ -1,10 +1,14 @@
+import asyncio
 import logging
+import os
 import os as os_module
 import tempfile
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import aiohttp
+import yaml
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -26,15 +30,23 @@ fact_extraction_service: FactExtractionService | None = None
 
 
 async def get_knowledge_base_instance(request: Request = None) -> KnowledgeBase | None:
-    """PERFORMANCE OPTIMIZATION: Get knowledge base instance, preferring pre-initialized app.state"""
+    """PERFORMANCE OPTIMIZATION: Get knowledge base instance with lazy loading support"""
     global knowledge_base
 
-    # Try to use pre-initialized knowledge base from app state first
+    # Try lazy loading if using fast backend
     if request is not None:
-        app_kb = getattr(request.app.state, "knowledge_base", None)
-        if app_kb is not None:
-            logger.debug("Using pre-initialized knowledge base from app.state")
-            return app_kb
+        try:
+            from backend.fast_app_factory_fix import get_or_create_knowledge_base
+            app_kb = await get_or_create_knowledge_base(request.app)
+            if app_kb is not None:
+                logger.debug("Using lazy-loaded knowledge base from fast backend")
+                return app_kb
+        except ImportError:
+            # Fall back to regular app state for non-fast backend
+            app_kb = getattr(request.app.state, "knowledge_base", None)
+            if app_kb is not None:
+                logger.debug("Using pre-initialized knowledge base from app.state")
+                return app_kb
 
     # Fallback to global variable initialization
     if knowledge_base is None:
@@ -121,13 +133,37 @@ async def search_knowledge(request: dict, req: Request = None):
 
         logger.info(f"Knowledge search request: {query} (limit: {limit})")
 
-        results = await kb_to_use.search(query, limit)
+        # Add timeout protection to prevent hanging (5 seconds max)
+        try:
+            search_task = asyncio.create_task(kb_to_use.search(query, limit))
+            results = await asyncio.wait_for(search_task, timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"Knowledge search timed out for query: {query}")
+            search_task.cancel()  # Cancel the hanging task
+            results = []  # Return empty results instead of error
 
+        # Transform results to match frontend expectations
+        transformed_results = []
+        for idx, result in enumerate(results):
+            transformed_results.append({
+                "document": {
+                    "id": f"doc_{idx}_{hash(result.get('content', ''))}",
+                    "title": result.get('metadata', {}).get('filename', 'Knowledge Document'),
+                    "content": result.get('content', ''),
+                    "type": result.get('metadata', {}).get('type', 'text'),
+                    "category": result.get('metadata', {}).get('category', 'general'),
+                    "updatedAt": result.get('metadata', {}).get('updated_at', ''),
+                    "tags": result.get('metadata', {}).get('tags', [])
+                },
+                "score": result.get('score', 0.0),
+                "highlights": [result.get('content', '')[:200] + '...'] if result.get('content', '') else []
+            })
+        
         return {
-            "results": results,
+            "results": transformed_results,
             "query": query,
             "limit": limit,
-            "total_results": len(results),
+            "total_results": len(transformed_results),
         }
     except Exception as e:
         logger.error(f"Error in knowledge search: {str(e)}")
@@ -452,6 +488,39 @@ async def cleanup_knowledge():
         )
 
 
+@router.get("/suggestions")
+async def get_knowledge_suggestions(query: str, limit: int = 8):
+    """Get search suggestions for knowledge base queries"""
+    logger.info(f"Knowledge suggestions request: {query} (limit: {limit})")
+    
+    try:
+        if not query or len(query.strip()) < 2:
+            return {"suggestions": []}
+        
+        # Simple keyword-based suggestions from existing knowledge
+        suggestions = []
+        
+        # For now, return some basic suggestions
+        # TODO: Implement proper suggestion logic based on existing documents
+        if "auto" in query.lower():
+            suggestions.extend(["autobot", "automation", "auto-detection", "auto-launch"])
+        if "config" in query.lower():
+            suggestions.extend(["configuration", "config file", "config settings"])
+        if "docker" in query.lower():
+            suggestions.extend(["docker compose", "docker container", "dockerfile"])
+        if "browser" in query.lower():
+            suggestions.extend(["browser automation", "chromium", "playwright"])
+        if "vnc" in query.lower():
+            suggestions.extend(["vnc server", "remote desktop", "screen sharing"])
+            
+        # Filter suggestions to match query and limit results
+        filtered_suggestions = [s for s in suggestions if query.lower() in s.lower()]
+        return {"suggestions": filtered_suggestions[:limit]}
+        
+    except Exception as e:
+        logger.error(f"Error getting knowledge suggestions: {str(e)}")
+        return {"suggestions": []}
+
 @router.get("/stats")
 async def get_knowledge_stats(request: Request):
     """Get knowledge base statistics"""
@@ -474,6 +543,28 @@ async def get_knowledge_stats(request: Request):
         raise HTTPException(
             status_code=500, detail=f"Error getting knowledge stats: {str(e)}"
         )
+
+
+@router.get("/stats/basic")
+async def get_basic_knowledge_stats(request: Request):
+    """Get basic knowledge base statistics (lightweight)"""
+    try:
+        # Return minimal stats without heavy knowledge base initialization
+        return {
+            "total_entries": 0,
+            "categories": [],
+            "status": "online",
+            "message": "Basic stats endpoint - knowledge base available",
+            "last_updated": None,
+        }
+    except Exception as e:
+        logger.error(f"Error getting basic knowledge stats: {str(e)}")
+        return {
+            "total_entries": 0,
+            "categories": [],
+            "status": "error",
+            "message": f"Error getting stats: {str(e)}"
+        }
 
 
 @router.get("/detailed_stats")
@@ -810,64 +901,6 @@ async def crawl_url(request: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/categories")
-async def get_knowledge_categories(request: Request):
-    """Get knowledge base categories with statistics"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
-        if kb_to_use is None:
-            return {
-                "categories": [],
-                "count": 0,
-                "status": "error",
-                "message": "Knowledge base not available",
-            }
-
-        logger.info("Knowledge categories request")
-
-        # Get all entries and categorize them
-        entries = await kb_to_use.get_all_facts("all")
-        categories = {}
-
-        for entry in entries:
-            metadata = entry.get("metadata", {})
-            collection = entry.get("collection", metadata.get("collection", "default"))
-
-            if collection not in categories:
-                categories[collection] = {
-                    "name": collection,
-                    "description": f"Entries in {collection} category",
-                    "icon": "📁",
-                    "count": 0,
-                    "last_updated": None,
-                    "metadata": {},
-                }
-
-            categories[collection]["count"] += 1
-
-            # Update last_updated with most recent entry
-            entry_date = metadata.get("created_at") or metadata.get("updated_at")
-            if entry_date:
-                if (
-                    not categories[collection]["last_updated"]
-                    or entry_date > categories[collection]["last_updated"]
-                ):
-                    categories[collection]["last_updated"] = entry_date
-
-        # Convert to list format expected by frontend
-        categories_list = list(categories.values())
-
-        return {
-            "categories": categories_list,
-            "count": len(categories_list),
-            "status": "success",
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting knowledge categories: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting knowledge categories: {str(e)}"
-        )
 
 
 @router.get("/system_knowledge/documentation")
@@ -1752,6 +1785,791 @@ async def initialize_temporal_invalidation_rules():
             status_code=500,
             detail=f"Error initializing temporal invalidation rules: {str(e)}",
         )
+
+
+class PopulateRequest(BaseModel):
+    category: Optional[str] = None
+
+
+@router.get("/categories")
+async def get_knowledge_categories():
+    """Get the hierarchical category structure for the knowledge base"""
+    
+    # Helper function to generate docs categories dynamically
+    def get_docs_categories():
+        """Generate documentation categories from actual docs folder structure"""
+        docs_path = Path("/home/kali/Desktop/AutoBot/docs")
+        categories = {}
+        
+        try:
+            if not docs_path.exists():
+                return {}
+                
+            for root, dirs, files in os.walk(docs_path):
+                # Skip hidden directories and __pycache__
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
+                
+                md_files = [f for f in files if f.endswith('.md')]
+                if not md_files:
+                    continue
+                    
+                # Get relative path from docs root
+                rel_path = os.path.relpath(root, docs_path)
+                
+                if rel_path == '.':
+                    # Root docs folder
+                    category_key = 'root'
+                    label = 'Documentation Root'
+                    description = 'Main documentation files'
+                else:
+                    # Subdirectory
+                    category_key = os.path.basename(root)
+                    label = category_key.replace('_', ' ').replace('-', ' ').title()
+                    description = f"{label} documentation"
+                
+                categories[category_key] = {
+                    "label": label,
+                    "description": description
+                }
+                
+            # Add project root documentation
+            categories["project-root"] = {
+                "label": "Project Documentation",
+                "description": "Main project files (README, CLAUDE.md, etc.)"
+            }
+                
+        except Exception as e:
+            logger.error(f"Error scanning docs categories: {e}")
+            
+        return categories
+    
+    # Define the three main category structure
+    categories = {
+        "system": {
+            "label": "System Knowledge",
+            "description": "Environment, tools, and capabilities",
+            "children": {
+                "environment": {
+                    "label": "Environment",
+                    "children": {
+                        "hardware": {"label": "Hardware", "description": "Hardware specifications and capabilities"},
+                        "software": {"label": "Software", "description": "Software environment and dependencies"},
+                        "performance": {"label": "Performance", "description": "Performance optimization and monitoring"}
+                    }
+                },
+                "tools": {
+                    "label": "Tools",
+                    "children": {
+                        "development": {"label": "Development Tools", "description": "Development and debugging tools"},
+                        "deployment": {"label": "Deployment Tools", "description": "Deployment tools and scripts"},
+                        "configuration": {"label": "Configuration", "description": "System configuration files"}
+                    }
+                },
+                "capabilities": {
+                    "label": "Capabilities",
+                    "children": {
+                        "ai": {"label": "AI & ML", "description": "AI and ML capabilities"},
+                        "automation": {"label": "Automation", "description": "Automation and workflow capabilities"}
+                    }
+                }
+            }
+        },
+        "documentation": {
+            "label": "AutoBot Documentation",
+            "description": "AutoBot-specific documentation from docs folder",
+            "children": get_docs_categories()
+        }
+    }
+    
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "categories": categories
+        }
+    )
+
+@router.post("/populate_documentation")
+async def populate_documentation(request: Request, populate_request: PopulateRequest = None):
+    """Populate knowledge base with project documentation"""
+    try:
+        # Use app lazy loading method if available
+        if hasattr(request.app, 'get_knowledge_base_lazy'):
+            kb = await request.app.get_knowledge_base_lazy()
+        else:
+            kb = await get_knowledge_base_instance(request)
+        
+        if kb is None:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "Knowledge base not available"
+                }
+            )
+
+        logger.info("Starting documentation population...")
+        
+        # Simple population without complex chunking
+        from pathlib import Path
+        import os
+        
+        project_root = Path("/home/kali/Desktop/AutoBot")
+        added_count = 0
+        error_count = 0
+        details = []
+        
+        # Helper function to scan docs folder and create dynamic categories
+        def scan_docs_folder(docs_path):
+            """Dynamically scan docs folder and create category structure"""
+            categories = {}
+            
+            try:
+                if not docs_path.exists():
+                    logger.warning(f"Docs folder not found: {docs_path}")
+                    return {}
+                    
+                for root, dirs, files in os.walk(docs_path):
+                    # Skip hidden directories and __pycache__
+                    dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
+                    
+                    md_files = [f for f in files if f.endswith('.md')]
+                    if not md_files:
+                        continue
+                        
+                    # Get relative path from docs root
+                    rel_path = os.path.relpath(root, docs_path)
+                    
+                    if rel_path == '.':
+                        # Root docs folder
+                        category_key = 'root'
+                    else:
+                        # Subdirectory - use folder name as category key
+                        category_key = os.path.basename(root)
+                    
+                    # Create file paths relative to project root
+                    file_paths = []
+                    for md_file in md_files:
+                        full_file_path = os.path.join(root, md_file)
+                        rel_to_project = os.path.relpath(full_file_path, project_root)
+                        file_paths.append(rel_to_project)
+                    
+                    if file_paths:
+                        categories[category_key] = file_paths
+                        logger.info(f"Found {len(file_paths)} files in docs/{category_key}")
+                        
+                return categories
+                
+            except Exception as e:
+                logger.error(f"Error scanning docs folder: {e}")
+                return {}
+        
+        # Define hierarchical document categories
+        document_categories = {
+            "system": {
+                "environment": {
+                    "hardware": {
+                        "files": [
+                            "docs/system/hardware-specs.md",
+                            "docs/system/gpu-acceleration.md"
+                        ],
+                        "description": "Hardware specifications and capabilities"
+                    },
+                    "software": {
+                        "files": [
+                            "docs/system/software-stack.md",
+                            "docs/system/dependencies.md"
+                        ],
+                        "description": "Software environment and dependencies"
+                    },
+                    "performance": {
+                        "files": [
+                            "docs/system/performance-tuning.md",
+                            "docs/system/monitoring.md"
+                        ],
+                        "description": "Performance optimization and monitoring"
+                    }
+                },
+                "tools": {
+                    "development": {
+                        "files": [
+                            "docs/tools/development-tools.md",
+                            "docs/tools/debugging.md"
+                        ],
+                        "description": "Development and debugging tools"
+                    },
+                    "deployment": {
+                        "files": [
+                            "docker-compose.yml",
+                            "docker-compose.dev.yml",
+                            "docker-compose.test.yml",
+                            "run_agent_unified.sh"
+                        ],
+                        "description": "Deployment tools and scripts"
+                    },
+                    "configuration": {
+                        "files": [
+                            "config/config.yaml",
+                            "config/redis-databases.yaml",
+                            ".env.localhost"
+                        ],
+                        "description": "System configuration files"
+                    }
+                },
+                "capabilities": {
+                    "ai": {
+                        "files": [
+                            "docs/capabilities/llm-integration.md",
+                            "docs/capabilities/embedding-models.md"
+                        ],
+                        "description": "AI and ML capabilities"
+                    },
+                    "automation": {
+                        "files": [
+                            "docs/capabilities/automation-features.md",
+                            "docs/capabilities/workflows.md"
+                        ],
+                        "description": "Automation and workflow capabilities"
+                    }
+                }
+            },
+            "documentation": {
+                # Include main project documentation
+                "project-root": [
+                    "README.md",
+                    "CLAUDE.md", 
+                    "DEVELOPMENT_STANDARDS.md"
+                ],
+                # Include all docs folder content
+                **scan_docs_folder(project_root / "docs")
+            }
+        }
+        
+        # Helper function to flatten category tree and collect files
+        def flatten_categories(tree, parent_path=""):
+            result = {}
+            
+            # Handle case where tree is a list (files directly)
+            if isinstance(tree, list):
+                result[parent_path] = tree
+                return result
+            
+            # Handle dictionary case
+            for key, value in tree.items():
+                current_path = f"{parent_path}/{key}" if parent_path else key
+                
+                if "files" in value:
+                    # This is a leaf node with files
+                    result[current_path] = value["files"]
+                else:
+                    # This is a branch node, recurse
+                    nested_result = flatten_categories(value, current_path)
+                    result.update(nested_result)
+            
+            return result
+        
+        # Helper function to get files for a specific category path
+        def get_category_files(tree, category_path):
+            parts = category_path.split('/')
+            current = tree
+            
+            for part in parts:
+                if part in current:
+                    current = current[part]
+                else:
+                    return None
+            
+            # If this is a leaf node with files, return them
+            if "files" in current:
+                return {category_path: current["files"]}
+            else:
+                # If this is a branch, return all nested files
+                return flatten_categories(current, category_path)
+        
+        # Determine which files to process
+        if populate_request and populate_request.category:
+            # Process only files from the selected category
+            selected_category = populate_request.category
+            files_to_process = get_category_files(document_categories, selected_category)
+            
+            if files_to_process is None:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": f"Invalid category: {selected_category}",
+                        "available_categories": flatten_categories(document_categories).keys()
+                    }
+                )
+        else:
+            # Process all categories
+            files_to_process = flatten_categories(document_categories)
+        
+        for category, file_list in files_to_process.items():
+            logger.info(f"Processing category: {category}")
+            
+            for file_path in file_list:
+                full_path = project_root / file_path
+                if full_path.exists():
+                    try:
+                        # Handle different file types
+                        if file_path.endswith('.yaml') or file_path.endswith('.yml'):
+                            with open(full_path, 'r', encoding='utf-8') as f:
+                                import yaml
+                                data = yaml.safe_load(f)
+                                content = yaml.dump(data, default_flow_style=False)
+                        else:
+                            with open(full_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                        
+                        logger.info(f"Adding {file_path} ({len(content)} chars) to category: {category}")
+                        
+                        # Use add_text_with_semantic_chunking method
+                        result = await kb.add_text_with_semantic_chunking(
+                            content=content,
+                            metadata={
+                                "source": str(file_path),
+                                "type": "documentation",
+                                "category": category
+                            }
+                        )
+                        
+                        logger.info(f"Result for {file_path}: {result}")
+                        
+                        if result.get("status") == "success":
+                            added_count += 1
+                            details.append(f"✅ {file_path} [{category}]")
+                            logger.info(f"Successfully added: {file_path} to {category}")
+                        else:
+                            error_count += 1
+                            error_msg = result.get("message", "Unknown error")
+                            details.append(f"❌ {file_path} [{category}]: {error_msg}")
+                            logger.error(f"Failed to add {file_path} to {category}: {error_msg}")
+                            
+                    except Exception as e:
+                        error_count += 1
+                        error_msg = str(e)
+                        details.append(f"❌ {file_path} [{category}]: {error_msg}")
+                        logger.error(f"Exception processing {file_path} in {category}: {error_msg}")
+                else:
+                    # Don't count missing files as errors, just info
+                    details.append(f"⏭️ {file_path} [{category}]: File not found (skipped)")
+                    logger.info(f"File not found (skipped): {file_path}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "added_count": added_count,
+                "error_count": error_count,
+                "details": details,
+                "message": f"Populated knowledge base with {added_count} documents ({error_count} errors)",
+                "category": populate_request.category if populate_request else "all"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error populating documentation: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e)
+            }
+        )
+
+
+@router.get("/available_documentation")
+async def get_available_documentation():
+    """Get list of available documentation files without loading them into KB"""
+    try:
+        from pathlib import Path
+        
+        project_root = Path("/home/kali/Desktop/AutoBot")
+        available_files = []
+        
+        # Key documentation files
+        key_files = [
+            ("CLAUDE.md", "Claude Instructions"),
+            ("docs/user_guide/01-installation.md", "Installation Guide"),
+            ("docs/user_guide/02-quickstart.md", "Quick Start Guide"),
+            ("docs/user_guide/03-configuration.md", "Configuration Guide"),
+            ("docs/developer/01-architecture.md", "Architecture Overview"),
+            ("docs/GETTING_STARTED_COMPLETE.md", "Complete Getting Started"),
+            ("prompts/default/_context.md", "Default Agent Context"),
+            ("prompts/default/agent.system.main.role.md", "Agent System Role")
+        ]
+        
+        for file_path, title in key_files:
+            full_path = project_root / file_path
+            if full_path.exists():
+                try:
+                    stat = full_path.stat()
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    available_files.append({
+                        "path": file_path,
+                        "title": title,
+                        "size_bytes": stat.st_size,
+                        "size_chars": len(content),
+                        "modified": stat.st_mtime,
+                        "exists": True,
+                        "preview": content[:200] + "..." if len(content) > 200 else content
+                    })
+                except Exception as e:
+                    available_files.append({
+                        "path": file_path,
+                        "title": title,
+                        "exists": False,
+                        "error": str(e)
+                    })
+            else:
+                available_files.append({
+                    "path": file_path, 
+                    "title": title,
+                    "exists": False,
+                    "error": "File not found"
+                })
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "files": available_files,
+                "total_files": len([f for f in available_files if f.get("exists", False)]),
+                "note": "Knowledge base vector storage has serialization issues. Working on fix."
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting available documentation: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e)
+            }
+        )
+
+
+@router.post("/debug_population")
+async def debug_population(request: Request):
+    """Debug version of population with detailed tracing"""
+    import time
+    import tracemalloc
+    
+    # Start tracing
+    tracemalloc.start()
+    start_time = time.time()
+    
+    debug_log = []
+    
+    def log_step(step_name: str, elapsed: float = None):
+        if elapsed is None:
+            elapsed = time.time() - start_time
+        debug_log.append(f"{elapsed:.2f}s: {step_name}")
+        logger.info(f"DEBUG POPULATION {elapsed:.2f}s: {step_name}")
+    
+    try:
+        log_step("Starting debug population")
+        
+        # Step 1: Get knowledge base instance
+        log_step("Getting knowledge base instance")
+        if hasattr(request.app, 'get_knowledge_base_lazy'):
+            kb = await request.app.get_knowledge_base_lazy()
+        else:
+            kb = await get_knowledge_base_instance(request)
+        
+        log_step(f"Knowledge base obtained: {kb is not None}")
+        
+        if kb is None:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "Knowledge base not available",
+                    "debug_log": debug_log
+                }
+            )
+
+        # Step 2: Read file
+        from pathlib import Path
+        project_root = Path("/home/kali/Desktop/AutoBot")
+        file_path = "CLAUDE.md"
+        full_path = project_root / file_path
+        
+        log_step("Reading file")
+        with open(full_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        log_step(f"File read: {len(content)} characters")
+        
+        # Step 3: Call add_text_with_semantic_chunking with tracing
+        log_step("Starting add_text_with_semantic_chunking")
+        
+        # Patch the semantic chunker to add more logging
+        from src.utils.semantic_chunker import get_semantic_chunker
+        chunker = get_semantic_chunker()
+        
+        # Add tracing to the chunker
+        original_chunk_text = chunker.chunk_text
+        
+        async def traced_chunk_text(text, metadata=None):
+            log_step("Chunker: Starting chunk_text")
+            sentences = chunker._split_into_sentences(text)
+            log_step(f"Chunker: Split into {len(sentences)} sentences")
+            
+            if len(sentences) <= 1:
+                log_step("Chunker: Single sentence, returning early")
+                return await original_chunk_text(text, metadata)
+            
+            log_step("Chunker: Starting embedding computation")
+            try:
+                embeddings = await chunker._compute_sentence_embeddings_async(sentences)
+                log_step(f"Chunker: Computed embeddings: {embeddings.shape}")
+            except Exception as e:
+                log_step(f"Chunker: Embedding failed: {str(e)}")
+                raise
+            
+            log_step("Chunker: Computing distances")
+            distances = chunker._compute_semantic_distances(embeddings)
+            log_step(f"Chunker: Computed {len(distances)} distances")
+            
+            log_step("Chunker: Finding boundaries")
+            boundaries = chunker._find_chunk_boundaries(distances)
+            log_step(f"Chunker: Found {len(boundaries)} boundaries")
+            
+            log_step("Chunker: Creating chunks")
+            chunks = chunker._create_chunks_with_boundaries(sentences, boundaries, distances)
+            log_step(f"Chunker: Created {len(chunks)} chunks")
+            
+            return chunks
+        
+        # Temporarily replace the method
+        chunker.chunk_text = traced_chunk_text
+        
+        try:
+            result = await kb.add_text_with_semantic_chunking(
+                content=content,
+                metadata={
+                    "source": str(file_path),
+                    "type": "documentation",
+                    "category": "project-docs"
+                }
+            )
+            log_step("add_text_with_semantic_chunking completed")
+        except Exception as e:
+            log_step(f"add_text_with_semantic_chunking failed: {str(e)}")
+            raise
+        finally:
+            # Restore original method
+            chunker.chunk_text = original_chunk_text
+        
+        end_time = time.time()
+        total_time = end_time - start_time
+        
+        # Get memory usage
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "result": result,
+                "debug_log": debug_log,
+                "total_time": f"{total_time:.2f}s",
+                "memory_current": f"{current / 1024 / 1024:.1f}MB",
+                "memory_peak": f"{peak / 1024 / 1024:.1f}MB"
+            }
+        )
+        
+    except Exception as e:
+        end_time = time.time()
+        total_time = end_time - start_time
+        
+        log_step(f"ERROR: {str(e)}")
+        logger.error(f"Debug population failed: {str(e)}", exc_info=True)
+        
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "debug_log": debug_log,
+                "total_time": f"{total_time:.2f}s"
+            }
+        )
+
+
+@router.post("/simple_test")
+async def simple_test():
+    """Simple test to verify async functionality works"""
+    import asyncio
+    import time
+    
+    async def cpu_intensive_task(n: int):
+        """Simulate CPU intensive work in thread pool"""
+        import concurrent.futures
+        import os
+        
+        def compute():
+            # Simulate some CPU work
+            total = 0
+            for i in range(n):
+                total += i * i
+            return total
+        
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            result = await loop.run_in_executor(executor, compute)
+            return result
+    
+    start_time = time.time()
+    
+    # Test async execution
+    tasks = []
+    for i in range(3):
+        task = cpu_intensive_task(100000)  # Small CPU task
+        tasks.append(task)
+        # Yield between tasks
+        await asyncio.sleep(0.001)
+    
+    results = await asyncio.gather(*tasks)
+    
+    end_time = time.time()
+    
+    return {
+        "success": True,
+        "results": results,
+        "time_taken": f"{end_time - start_time:.2f}s",
+        "message": "Async thread pool execution successful"
+    }
+
+
+@router.post("/gpu_embedding_test")
+async def gpu_embedding_test():
+    """Test embedding computation with fresh GPU-optimized model"""
+    import time
+    import torch
+    
+    start_time = time.time()
+    
+    try:
+        # Check GPU availability first
+        gpu_info = {
+            "cuda_available": torch.cuda.is_available(),
+            "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+            "gpu_names": [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())] if torch.cuda.is_available() else []
+        }
+        
+        # Test sentences
+        test_sentences = [
+            "This is a test sentence for GPU acceleration testing.",
+            "Another test sentence to evaluate embedding performance on GPU.",
+            "Third sentence for testing GPU vs CPU embedding speed.",
+            "Fourth sentence to test batch processing on GPU hardware.",
+            "Fifth sentence to evaluate mixed precision performance benefits."
+        ]
+        
+        # Create a fresh semantic chunker instance to force GPU initialization
+        from src.utils.semantic_chunker import AutoBotSemanticChunker
+        
+        # Create new instance (not the global singleton)
+        chunker = AutoBotSemanticChunker(
+            embedding_model="all-MiniLM-L6-v2",
+            min_chunk_size=100,
+            max_chunk_size=1000
+        )
+        
+        # Force model initialization with GPU detection
+        chunker._initialize_model()
+        
+        # Get actual device info
+        device_info = "CPU"
+        if chunker._embedding_model is not None:
+            try:
+                actual_device = next(chunker._embedding_model.parameters()).device
+                device_info = str(actual_device)
+            except:
+                device_info = "Unknown"
+        
+        # Test async embedding computation
+        embeddings = await chunker._compute_sentence_embeddings_async(test_sentences)
+        
+        end_time = time.time()
+        
+        return {
+            "success": True,
+            "gpu_info": gpu_info,
+            "model_device": device_info,
+            "sentences_count": len(test_sentences),
+            "embeddings_shape": list(embeddings.shape),
+            "time_taken": f"{end_time - start_time:.2f}s"
+        }
+        
+    except Exception as e:
+        end_time = time.time()
+        return {
+            "success": False,
+            "error": str(e),
+            "gpu_info": gpu_info if 'gpu_info' in locals() else {},
+            "time_taken": f"{end_time - start_time:.2f}s"
+        }
+
+
+@router.post("/embedding_test")
+async def embedding_test():
+    """Test just the embedding computation part"""
+    import time
+    import asyncio
+    import concurrent.futures
+    import psutil
+    import os
+    
+    start_time = time.time()
+    
+    try:
+        # Get CPU info
+        cpu_count = os.cpu_count() or 4
+        cpu_load = psutil.cpu_percent(interval=0.1)
+        
+        # Test sentences
+        test_sentences = [
+            "This is a test sentence.",
+            "Another test sentence here.",
+            "Third sentence for testing."
+        ]
+        
+        # Initialize semantic chunker
+        from src.utils.semantic_chunker import get_semantic_chunker
+        chunker = get_semantic_chunker()
+        
+        # Force model initialization
+        chunker._initialize_model()
+        
+        # Test async embedding computation
+        embeddings = await chunker._compute_sentence_embeddings_async(test_sentences)
+        
+        end_time = time.time()
+        
+        return {
+            "success": True,
+            "cpu_count": cpu_count,
+            "cpu_load": cpu_load,
+            "sentences_count": len(test_sentences),
+            "embeddings_shape": list(embeddings.shape),
+            "time_taken": f"{end_time - start_time:.2f}s"
+        }
+        
+    except Exception as e:
+        end_time = time.time()
+        return {
+            "success": False,
+            "error": str(e),
+            "time_taken": f"{end_time - start_time:.2f}s"
+        }
 
 
 @router.post("/temporal/invalidation/contradiction_check")

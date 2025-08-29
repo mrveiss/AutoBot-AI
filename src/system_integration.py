@@ -4,7 +4,7 @@ import platform
 import subprocess
 from typing import Any, Dict, List, Optional
 
-import requests  # Import requests for web fetching
+import aiohttp  # Import aiohttp for async web fetching
 from markdownify import (
     markdownify as md,  # Import markdownify for HTML to Markdown conversion
 )
@@ -368,7 +368,7 @@ class SystemIntegration:
                 "message": f"Error terminating process {pid}: {e}",
             }
 
-    def web_fetch(self, url: str) -> Dict[str, Any]:
+    async def web_fetch(self, url: str) -> Dict[str, Any]:
         """
         Fetches content from a specified URL and processes it into markdown.
         """
@@ -377,37 +377,40 @@ class SystemIntegration:
             if not url.startswith("http://") and not url.startswith("https://"):
                 url = "https://" + url  # Default to HTTPS
 
-            response = requests.get(url, timeout=10)
-            # Raise an exception for HTTP errors (4xx or 5xx)
-            response.raise_for_status()
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as response:
+                    # Raise an exception for HTTP errors (4xx or 5xx)
+                    response.raise_for_status()
+                    
+                    content_type = response.headers.get("Content-Type", "").lower()
+                    content = await response.text()
 
-            content_type = response.headers.get("Content-Type", "").lower()
+                    if "text/html" in content_type:
+                        markdown_content = md(content)
+                        return {
+                            "status": "success",
+                            "url": url,
+                            "content_type": "text/markdown",
+                            "content": markdown_content,
+                        }
+                    elif "text/plain" in content_type or "application/json" in content_type:
+                        return {
+                            "status": "success",
+                            "url": url,
+                            "content_type": content_type,
+                            "content": content,
+                        }
+                    else:
+                        # For other content types, return a message indicating it's not text
+                        return {
+                            "status": "error",
+                            "message": "Unsupported content type for direct text "
+                            f"extraction: {content_type}",
+                            "url": url,
+                        }
 
-            if "text/html" in content_type:
-                markdown_content = md(response.text)
-                return {
-                    "status": "success",
-                    "url": url,
-                    "content_type": "text/markdown",
-                    "content": markdown_content,
-                }
-            elif "text/plain" in content_type or "application/json" in content_type:
-                return {
-                    "status": "success",
-                    "url": url,
-                    "content_type": content_type,
-                    "content": response.text,
-                }
-            else:
-                # For other content types, return a message indicating it's not text
-                return {
-                    "status": "error",
-                    "message": "Unsupported content type for direct text "
-                    f"extraction: {content_type}",
-                    "url": url,
-                }
-
-        except requests.exceptions.RequestException as e:
+        except aiohttp.ClientError as e:
             return {
                 "status": "error",
                 "message": f"Failed to fetch URL {url}: {e}",

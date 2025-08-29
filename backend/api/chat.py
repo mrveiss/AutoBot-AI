@@ -202,10 +202,8 @@ async def _send_typed_message(
     }
     existing_history.append(typed_message)
     # Save immediately to ensure message appears
-    # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-    await asyncio.to_thread(
-        chat_history_manager.save_session, chat_id, messages=existing_history
-    )
+    # PERFORMANCE FIX: Use async method to prevent blocking
+    await chat_history_manager.save_session(chat_id, messages=existing_history)
 
 
 async def _enhanced_knowledge_search(
@@ -594,8 +592,7 @@ async def create_new_chat(request: Request):
         }
         name = f"Chat {chat_id[:8]}"
         # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-        await asyncio.to_thread(
-            chat_history_manager.save_session,
+        await chat_history_manager.save_session(
             chat_id,
             messages=[initial_message],
             name=name,
@@ -626,7 +623,7 @@ async def list_chats(request: Request):
 
         try:
             # PERFORMANCE FIX: Use fast method that doesn't decrypt all files
-            sessions = await asyncio.to_thread(chat_history_manager.list_sessions_fast)
+            sessions = await chat_history_manager.list_sessions_fast()
             return JSONResponse(status_code=200, content=sessions)
         except AttributeError as e:
             raise InternalError(
@@ -676,9 +673,7 @@ async def get_chat(chat_id: str, request: Request):
 
         try:
             # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-            history = await asyncio.to_thread(
-                chat_history_manager.load_session, chat_id
-            )
+            history = await chat_history_manager.load_session(chat_id)
 
             if history is None:
                 raise ResourceNotFoundError(
@@ -732,17 +727,13 @@ async def delete_chat(chat_id: str, request: Request):
         # Attempt deletion with specific error handling
         try:
             # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-            success = await asyncio.to_thread(
-                chat_history_manager.delete_session, chat_id
-            )
+            success = await chat_history_manager.delete_session(chat_id)
 
             if not success:
                 # Try legacy format matching before giving up
                 try:
                     # PERFORMANCE FIX: Convert blocking file I/O to async
-                    all_sessions = await asyncio.to_thread(
-                        chat_history_manager.list_sessions
-                    )
+                    all_sessions = await chat_history_manager.list_sessions()
                     matching_session = None
 
                     for session in all_sessions:
@@ -753,9 +744,7 @@ async def delete_chat(chat_id: str, request: Request):
                             matching_session = session_id
                             break
 
-                    if matching_session and await asyncio.to_thread(
-                        chat_history_manager.delete_session, matching_session
-                    ):
+                    if matching_session and await chat_history_manager.delete_session(matching_session):
                         success = True
                     else:
                         # Session not found
@@ -807,9 +796,7 @@ async def save_chat_messages(chat_id: str, messages: list, request: Request):
     chat_history_manager = request.app.state.chat_history_manager
     try:
         # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-        await asyncio.to_thread(
-            chat_history_manager.save_session, chat_id, messages=messages
-        )
+        await chat_history_manager.save_session(chat_id, messages=messages)
         return JSONResponse(status_code=200, content={"status": "success"})
     except Exception as e:
         logger.error(f"Error saving chat messages for {chat_id}: {str(e)}")
@@ -824,9 +811,7 @@ async def save_chat(chat_id: str, chat_data: ChatSave, request: Request):
     chat_history_manager = request.app.state.chat_history_manager
     try:
         # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-        await asyncio.to_thread(
-            chat_history_manager.save_session, chat_id, messages=chat_data.messages
-        )
+        await chat_history_manager.save_session(chat_id, messages=chat_data.messages)
         return JSONResponse(status_code=200, content={"status": "success"})
     except Exception as e:
         logger.error(f"Error saving chat data for {chat_id}: {str(e)}")
@@ -848,9 +833,7 @@ async def reset_chat(chat_id: str, request: Request):
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-        await asyncio.to_thread(
-            chat_history_manager.save_session, chat_id, messages=[initial_message]
-        )
+        await chat_history_manager.save_session(chat_id, messages=[initial_message])
         return JSONResponse(status_code=200, content={"status": "success"})
     except Exception as e:
         logger.error(f"Error resetting chat {chat_id}: {str(e)}")
@@ -1059,10 +1042,9 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
         existing_history = []
         if chat_history_manager:
             try:
-                # PERFORMANCE FIX: Convert blocking file I/O to async to prevent
-                # timeouts
+                # PERFORMANCE FIX: Use async method to prevent blocking
                 existing_history = (
-                    await asyncio.to_thread(chat_history_manager.load_session, chat_id)
+                    await chat_history_manager.load_session(chat_id)
                     or []
                 )
                 logger.error(
@@ -1314,8 +1296,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
             if chat_history_manager:
                 # PERFORMANCE FIX: Convert blocking file I/O to async to prevent
                 # timeouts
-                await asyncio.to_thread(
-                    chat_history_manager.save_session,
+                await chat_history_manager.save_session(
                     chat_id,
                     messages=existing_history,
                 )
@@ -1510,9 +1491,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
 
                     # Load existing history - PERFORMANCE FIX: Convert to async
                     existing_history = (
-                        await asyncio.to_thread(
-                            chat_history_manager.load_session, chat_id
-                        )
+                        await chat_history_manager.load_session(chat_id)
                         or []
                     )
 
@@ -1520,8 +1499,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                     existing_history.extend([user_message, assistant_message])
 
                     # Save updated history - PERFORMANCE FIX: Convert to async
-                    await asyncio.to_thread(
-                        chat_history_manager.save_session,
+                    await chat_history_manager.save_session(
                         chat_id,
                         messages=existing_history,
                     )
@@ -1655,7 +1633,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
 
         # Load existing chat history - PERFORMANCE FIX: Convert to async
         existing_history = (
-            await asyncio.to_thread(chat_history_manager.load_session, chat_id) or []
+            await chat_history_manager.load_session(chat_id) or []
         )
         existing_history.append(user_message)
 
@@ -1751,7 +1729,7 @@ Current question: {message}"""
                 kb_search_task = asyncio.create_task(
                     kb_librarian.process_query(enhanced_message)
                 )
-                kb_result = await asyncio.wait_for(kb_search_task, timeout=10.0)
+                kb_result = await asyncio.wait_for(kb_search_task, timeout=15.0)  # Increased from 10s
                 logger.info(
                     "DEBUG: KB search completed successfully, proceeding to source attribution..."
                 )
@@ -2355,9 +2333,7 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
             existing_history.append(bot_message)
 
         # Save updated chat history - PERFORMANCE FIX: Convert to async
-        await asyncio.to_thread(
-            chat_history_manager.save_session, chat_id, messages=existing_history
-        )
+        await chat_history_manager.save_session(chat_id, messages=existing_history)
 
         # Broadcast response via WebSocket for real-time updates
         try:
@@ -2395,8 +2371,8 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
 
     # Execute with timeout protection
     try:
-        # 25-second timeout to prevent hanging and provide faster feedback
-        return await asyncio.wait_for(_process_message(), timeout=25.0)
+        # 60-second timeout to account for slow Ollama model loading (observed 6+ seconds)
+        return await asyncio.wait_for(_process_message(), timeout=60.0)
     except asyncio.TimeoutError:
         logging.error(f"Chat message processing timed out for chat_id: {chat_id}")
         return JSONResponse(
@@ -2736,7 +2712,7 @@ async def list_chat_sessions_api(request: Request, user_role: str = Query("user"
         )
 
     # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-    sessions = await asyncio.to_thread(chat_history_manager.list_sessions)
+    sessions = await chat_history_manager.list_sessions()
     return {"sessions": sessions}
 
 
@@ -2759,8 +2735,8 @@ async def load_chat_session_api(
             content={"message": "Permission denied to load chat session."},
         )
 
-    # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-    history = await asyncio.to_thread(chat_history_manager.load_session, session_id)
+    # PERFORMANCE FIX: Use async method to prevent blocking
+    history = await chat_history_manager.load_session(session_id)
     if history:
         from src.event_manager import event_manager
 
@@ -2799,8 +2775,8 @@ async def save_chat_session_api(
             content={"message": "Permission denied to save chat session."},
         )
 
-    # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-    await asyncio.to_thread(chat_history_manager.save_session, session_id)
+    # PERFORMANCE FIX: Use async method to prevent blocking
+    await chat_history_manager.save_session(session_id)
     from src.event_manager import event_manager
 
     await event_manager.publish(
@@ -2918,7 +2894,7 @@ async def _execute_single_chat_operation(
     try:
         if op_type == "list_chats":
             # List all chat sessions
-            sessions = await asyncio.to_thread(chat_history_manager.list_sessions)
+            sessions = await chat_history_manager.list_sessions()
             return {
                 "operation": operation,
                 "success": True,
@@ -2932,9 +2908,7 @@ async def _execute_single_chat_operation(
             if not chat_id:
                 raise ValueError("chat_id is required for get_chat operation")
 
-            history = await asyncio.to_thread(
-                chat_history_manager.load_session, chat_id
-            )
+            history = await chat_history_manager.load_session(chat_id)
             return {
                 "operation": operation,
                 "success": True,
@@ -2948,9 +2922,7 @@ async def _execute_single_chat_operation(
             if not chat_id:
                 raise ValueError("chat_id is required for delete_chat operation")
 
-            success = await asyncio.to_thread(
-                chat_history_manager.delete_session, chat_id
-            )
+            success = await chat_history_manager.delete_session(chat_id)
             return {
                 "operation": operation,
                 "success": success,
@@ -2967,9 +2939,7 @@ async def _execute_single_chat_operation(
             if not chat_id:
                 raise ValueError("chat_id is required for save_chat operation")
 
-            await asyncio.to_thread(
-                chat_history_manager.save_session, chat_id, messages=messages, name=name
-            )
+            await chat_history_manager.save_session(chat_id, messages=messages, name=name)
             return {
                 "operation": operation,
                 "success": True,
@@ -3013,12 +2983,10 @@ async def _parallel_chat_history_operations(
     if load_history and save_messages is not None:
         # Load first, then save (sequential due to dependency)
         existing_history = (
-            await asyncio.to_thread(chat_history_manager.load_session, chat_id) or []
+            await chat_history_manager.load_session(chat_id) or []
         )
         existing_history.extend(save_messages)
-        await asyncio.to_thread(
-            chat_history_manager.save_session, chat_id, messages=existing_history
-        )
+        await chat_history_manager.save_session(chat_id, messages=existing_history)
 
         return {
             "loaded_history": (
@@ -3033,15 +3001,13 @@ async def _parallel_chat_history_operations(
     elif load_history:
         # Just load history
         history = (
-            await asyncio.to_thread(chat_history_manager.load_session, chat_id) or []
+            await chat_history_manager.load_session(chat_id) or []
         )
         return {"loaded_history": history, "total_messages": len(history)}
 
     elif save_messages is not None:
         # Just save messages
-        await asyncio.to_thread(
-            chat_history_manager.save_session, chat_id, messages=save_messages
-        )
+        await chat_history_manager.save_session(chat_id, messages=save_messages)
         return {"saved_messages": save_messages, "total_messages": len(save_messages)}
 
     return {}
