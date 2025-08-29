@@ -29,6 +29,25 @@
           <button @click="showDevTools = !showDevTools" class="browser-btn" title="Developer Tools">
             <i class="fas fa-code"></i>
           </button>
+
+          <button @click="openVncPopout" class="browser-btn text-blue-600" title="Open VNC Browser (Visual Control)">
+            <i class="fas fa-desktop"></i>
+          </button>
+        </div>
+
+        <!-- Playwright Automation Controls -->
+        <div class="border-l border-gray-300 pl-2 flex items-center space-x-1">
+          <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" title="Playwright Automation">
+            <i class="fas fa-robot" :class="{ 'text-blue-600': showPlaywrightPanel }"></i>
+          </button>
+          
+          <button @click="runFrontendTest" class="browser-btn" :disabled="playwrightLoading" title="Test Frontend">
+            <i class="fas fa-vials" :class="{ 'fa-spin': playwrightLoading }"></i>
+          </button>
+          
+          <button @click="performWebSearch" class="browser-btn" :disabled="playwrightLoading" title="Web Search">
+            <i class="fas fa-search" :class="{ 'fa-spin': playwrightLoading }"></i>
+          </button>
         </div>
 
         <div class="border-l border-gray-300 pl-2 flex items-center space-x-1">
@@ -79,52 +98,169 @@
       </div>
     </div>
 
+    <!-- Playwright Automation Panel -->
+    <div v-if="showPlaywrightPanel" class="playwright-panel bg-blue-50 border-b border-blue-200 p-3">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center space-x-2">
+          <i class="fas fa-robot text-blue-600"></i>
+          <h3 class="text-sm font-medium text-blue-800">Browser Automation</h3>
+        </div>
+        <div class="flex items-center space-x-1 text-xs">
+          <span class="status-indicator" :class="playwrightStatus === 'healthy' ? 'bg-green-400' : 'bg-red-400'"></span>
+          <span class="text-gray-600">{{ playwrightStatus }}</span>
+        </div>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <!-- Web Search -->
+        <div class="automation-card">
+          <div class="flex items-center space-x-2 mb-2">
+            <i class="fas fa-search text-blue-500"></i>
+            <span class="text-sm font-medium">Web Search</span>
+          </div>
+          <input 
+            v-model="searchQuery" 
+            @keyup.enter="performWebSearch"
+            placeholder="Enter search query..."
+            class="w-full px-2 py-1 text-xs border rounded"
+          >
+          <button @click="performWebSearch" :disabled="playwrightLoading" class="w-full mt-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">
+            Search
+          </button>
+        </div>
+
+        <!-- Frontend Testing -->
+        <div class="automation-card">
+          <div class="flex items-center space-x-2 mb-2">
+            <i class="fas fa-vials text-green-500"></i>
+            <span class="text-sm font-medium">Frontend Tests</span>
+          </div>
+          <button @click="runFrontendTest" :disabled="playwrightLoading" class="w-full px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 mb-1">
+            Test Interface
+          </button>
+          <button @click="sendTestMessage" :disabled="playwrightLoading" class="w-full px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600">
+            Send Test Message
+          </button>
+        </div>
+
+        <!-- Automation Results -->
+        <div class="automation-card">
+          <div class="flex items-center space-x-2 mb-2">
+            <i class="fas fa-chart-bar text-purple-500"></i>
+            <span class="text-sm font-medium">Results</span>
+          </div>
+          <div class="text-xs text-gray-600 space-y-1">
+            <div v-if="automationResults.lastSearch">
+              Search: {{ automationResults.lastSearch.results?.length || 0 }} results
+            </div>
+            <div v-if="automationResults.lastTest">
+              Tests: {{ automationResults.lastTest.passed || 0 }}/{{ automationResults.lastTest.total || 0 }} passed
+            </div>
+            <div v-if="playwrightLoading" class="text-blue-600">
+              <i class="fas fa-spinner fa-spin mr-1"></i>Running...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Browser Content Area -->
     <div class="browser-content flex-1 relative" :style="browserContentStyle">
-      <!-- VNC Viewer for Remote Browser -->
+      <!-- VNC Browser with Playwright Integration -->
       <div v-if="browserMode === 'vnc'" class="w-full h-full relative">
-        <!-- VNC Connection Status Overlay -->
+        <!-- API Connection Status Overlay -->
         <div v-if="browserStatus === 'connecting'" class="absolute inset-0 bg-gray-100 flex items-center justify-center z-10">
           <div class="text-center">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            <p class="text-sm text-gray-600">Connecting to browser...</p>
+            <p class="text-sm text-gray-600">Connecting to Playwright service...</p>
           </div>
         </div>
 
-        <!-- VNC Error Overlay -->
+        <!-- API Error Overlay -->
         <div v-if="browserStatus === 'error'" class="absolute inset-0 bg-red-50 flex items-center justify-center z-10">
           <div class="text-center p-4">
             <i class="fas fa-exclamation-triangle text-red-500 text-2xl mb-2"></i>
-            <p class="text-sm text-red-600 mb-2">Browser connection failed</p>
+            <p class="text-sm text-red-600 mb-2">Playwright service connection failed</p>
             <button @click="initializeBrowser" class="btn btn-primary btn-sm">
               <i class="fas fa-redo mr-1"></i>Retry Connection
             </button>
           </div>
         </div>
 
-        <!-- VNC Browser Instructions -->
-        <div v-if="(sessionId === 'unified-browser' || sessionId === 'manual-browser')"
-             class="absolute top-4 left-4 right-4 bg-blue-900 bg-opacity-90 text-white p-3 rounded-lg z-20">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <i class="fas fa-mouse-pointer text-blue-300"></i>
-              <div>
-                <p class="text-sm font-medium">VNC Browser Control</p>
-                <p class="text-xs text-blue-200">Click and interact directly in the browser below</p>
+        <!-- Playwright Browser Interface (Headless API Control) -->
+        <div v-if="browserStatus === 'ready'" class="w-full h-full bg-white">
+          <div class="h-full flex flex-col">
+            <!-- Browser simulation area -->
+            <div class="flex-1 p-6 bg-gray-50">
+              <div class="text-center">
+                <div class="mb-4">
+                  <i class="fas fa-robot text-blue-500 text-4xl mb-2"></i>
+                  <h3 class="text-lg font-medium text-gray-800">Headless Browser Control</h3>
+                  <p class="text-sm text-gray-600 mt-1">Control the browser programmatically. Use the <i class="fas fa-desktop text-blue-500"></i> VNC button for visual control.</p>
+                </div>
+                
+                <!-- Current page info -->
+                <div v-if="currentUrl && currentUrl !== 'about:blank'" class="bg-white rounded-lg p-4 shadow-sm border mb-4">
+                  <div class="flex items-center justify-center space-x-2">
+                    <i class="fas fa-globe text-green-500"></i>
+                    <span class="text-sm font-medium">Current Page:</span>
+                    <span class="text-sm text-blue-600">{{ currentUrl }}</span>
+                  </div>
+                </div>
+
+                <!-- Recent results -->
+                <div v-if="automationResults.lastSearch || automationResults.lastTest" class="bg-white rounded-lg p-4 shadow-sm border">
+                  <h4 class="text-sm font-medium text-gray-700 mb-3">Recent Automation Results</h4>
+                  
+                  <div v-if="automationResults.lastSearch" class="mb-3 p-3 bg-blue-50 rounded">
+                    <div class="flex items-center space-x-2 mb-1">
+                      <i class="fas fa-search text-blue-500"></i>
+                      <span class="text-sm font-medium">Web Search</span>
+                    </div>
+                    <p class="text-xs text-gray-600">Found {{ automationResults.lastSearch.results?.length || 0 }} results</p>
+                  </div>
+
+                  <div v-if="automationResults.lastTest" class="p-3 bg-green-50 rounded">
+                    <div class="flex items-center space-x-2 mb-1">
+                      <i class="fas fa-vials text-green-500"></i>
+                      <span class="text-sm font-medium">Frontend Test</span>
+                    </div>
+                    <p class="text-xs text-gray-600">{{ automationResults.lastTest.passed }}/{{ automationResults.lastTest.total }} tests passed</p>
+                  </div>
+                </div>
+
+                <!-- Getting started -->
+                <div v-else class="text-center">
+                  <p class="text-gray-500 text-sm mb-4">Click the robot icon above to start browser automation</p>
+                  <div class="flex justify-center space-x-3">
+                    <button @click="showPlaywrightPanel = true" class="btn btn-primary btn-sm">
+                      <i class="fas fa-robot mr-1"></i>Open Automation Panel
+                    </button>
+                    <button @click="checkPlaywrightStatus" class="btn btn-outline btn-sm">
+                      <i class="fas fa-heart mr-1"></i>Check Status
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="text-xs text-blue-200">
-              Right-click for menu • Scroll to navigate
+
+            <!-- Status footer -->
+            <div class="border-t bg-gray-50 px-4 py-2 text-xs text-gray-500">
+              <div class="flex items-center justify-between">
+                <span>Playwright Service: {{ playwrightStatus }}</span>
+                <span>Mode: Headless Browser API</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <iframe
+        <!-- VNC iframe hidden - use VNC popout button instead -->
+        <!-- <iframe
           :src="vncUrl"
           class="w-full h-full border-0"
           @load="onVncLoad"
           ref="vncIframe"
-        />
+        /> -->
       </div>
 
       <!-- Native Browser Embed (if available) -->
@@ -273,10 +409,22 @@ export default {
     const showDevTools = ref(false)
     const showInteractionOverlay = ref(false)
     const interactionMessage = ref('')
+    
+    // Playwright API integration state
+    const showPlaywrightPanel = ref(false)
+    const playwrightLoading = ref(false)
+    const playwrightStatus = ref('checking')
+    const searchQuery = ref('')
+    const automationResults = ref({
+      lastSearch: null,
+      lastTest: null,
+      lastMessage: null
+    })
 
-    // Browser modes
-    const browserMode = ref('vnc') // 'vnc', 'native', 'remote'
-    const vncUrl = ref(`${API_CONFIG.PLAYWRIGHT_VNC_URL}?autoconnect=true&resize=scale&reconnect=true&quality=6&view_only=false`)
+    // Browser modes - VNC for actual browser display and takeover
+    const browserMode = ref('vnc') // 'vnc', 'api', 'native', 'remote'  
+    const vncUrl = ref(`${API_CONFIG.PLAYWRIGHT_VNC_URL}?autoconnect=true&resize=remote&reconnect=true&quality=9&compression=9`)
+    const playwrightApiUrl = ref('/api/playwright') // Use relative path to avoid double base URL
     const remoteDebugUrl = ref(API_CONFIG.CHROME_DEBUG_URL)
 
     // Resize observer
@@ -418,16 +566,27 @@ export default {
             console.warn('API navigation failed, continuing with local navigation:', apiError)
           }
         } else if (props.sessionId === 'manual-browser' || props.sessionId === 'unified-browser') {
-          // For manual browser, attempt to launch browser in VNC container
+          // For manual browser, control the VNC browser via Playwright API
           if (browserMode.value === 'vnc') {
             try {
-              // For VNC browser, just update the status and URL display
-              // The VNC iframe will show whatever is running in the container
-              addConsoleLog('info', `Manual navigation requested: ${targetUrl}`)
+              addConsoleLog('info', `Navigating VNC browser to: ${targetUrl}`)
+              
+              // Use Playwright API to navigate the browser in VNC container
+              const response = await apiClient.post('/api/playwright/navigate', {
+                url: targetUrl,
+                wait_for: 'domcontentloaded'
+              })
+              
+              if (response.ok) {
+                const result = await response.json()
+                addConsoleLog('success', `Navigation completed: ${result.final_url || targetUrl}`)
+                currentUrl.value = result.final_url || targetUrl
+                addressBarUrl.value = result.final_url || targetUrl
+              } else {
+                throw new Error('Navigation API call failed')
+              }
+              
               browserStatus.value = 'ready'
-
-              // The actual browser will be controlled manually by the user through VNC
-              // This gives the user full control over the browser in the VNC session
 
             } catch (vncError) {
               console.warn('VNC manual navigation failed:', vncError)
@@ -454,16 +613,46 @@ export default {
       }
     }
 
-    const goBack = () => {
-      if (webview.value && webview.value.canGoBack()) {
+    const goBack = async () => {
+      if (browserMode.value === 'vnc') {
+        try {
+          loading.value = true
+          const response = await apiClient.post('/api/playwright/back')
+          if (response.ok) {
+            const result = await response.json()
+            currentUrl.value = result.final_url
+            addressBarUrl.value = result.final_url
+            addConsoleLog('info', `Navigated back to: ${result.final_url}`)
+          }
+        } catch (error) {
+          addConsoleLog('error', `Back navigation failed: ${error.message}`)
+        } finally {
+          loading.value = false
+        }
+      } else if (webview.value && webview.value.canGoBack()) {
         webview.value.goBack()
         canGoBack.value = webview.value.canGoBack()
         canGoForward.value = webview.value.canGoForward()
       }
     }
 
-    const goForward = () => {
-      if (webview.value && webview.value.canGoForward()) {
+    const goForward = async () => {
+      if (browserMode.value === 'vnc') {
+        try {
+          loading.value = true
+          const response = await apiClient.post('/api/playwright/forward')
+          if (response.ok) {
+            const result = await response.json()
+            currentUrl.value = result.final_url
+            addressBarUrl.value = result.final_url
+            addConsoleLog('info', `Navigated forward to: ${result.final_url}`)
+          }
+        } catch (error) {
+          addConsoleLog('error', `Forward navigation failed: ${error.message}`)
+        } finally {
+          loading.value = false
+        }
+      } else if (webview.value && webview.value.canGoForward()) {
         webview.value.goForward()
         canGoBack.value = webview.value.canGoBack()
         canGoForward.value = webview.value.canGoForward()
@@ -471,7 +660,22 @@ export default {
     }
 
     const refreshBrowser = async () => {
-      if (webview.value) {
+      if (browserMode.value === 'vnc') {
+        try {
+          loading.value = true
+          const response = await apiClient.post('/api/playwright/reload')
+          if (response.ok) {
+            const result = await response.json()
+            currentUrl.value = result.final_url
+            addressBarUrl.value = result.final_url
+            addConsoleLog('info', `Page refreshed: ${result.final_url}`)
+          }
+        } catch (error) {
+          addConsoleLog('error', `Refresh failed: ${error.message}`)
+        } finally {
+          loading.value = false
+        }
+      } else if (webview.value) {
         webview.value.reload()
       } else {
         // Refresh VNC or remote session
@@ -481,6 +685,130 @@ export default {
 
     const navigateHome = () => {
       navigateToUrl('about:blank')
+    }
+
+    const createVncPopupHtml = () => {
+      // Build HTML content using dynamic string construction to avoid Vue parser issues
+      const lt = '<'
+      const gt = '>'
+      const slash = '/'
+      
+      // Helper function to create closing tags
+      const closeTag = (tagName: string) => lt + slash + tagName + gt
+      
+      let html = '<!DOCTYPE html>\n'
+      html += lt + 'html' + gt + '\n'
+      html += lt + 'head' + gt + '\n'
+      html += lt + 'title' + gt + 'AutoBot VNC Browser' + closeTag('title') + '\n'
+      html += lt + 'meta charset="utf-8"' + gt + '\n'
+      html += lt + 'style' + gt + '\n'
+      html += '* { margin: 0; padding: 0; box-sizing: border-box; }\n'
+      html += 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }\n'
+      html += '.browser-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n'
+      html += '.browser-controls { display: flex; gap: 8px; align-items: center; }\n'
+      html += '.control-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }\n'
+      html += '.control-btn:hover { background: rgba(255,255,255,0.3); transform: translateY(-1px); }\n'
+      html += '.control-btn:disabled { opacity: 0.5; cursor: not-allowed; }\n'
+      html += '.address-bar { flex: 1; background: white; border: none; padding: 10px 16px; border-radius: 25px; font-size: 14px; outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }\n'
+      html += '.vnc-container { flex: 1; background: white; border: 2px solid #e1e5e9; border-radius: 8px; margin: 12px; overflow: hidden; position: relative; }\n'
+      html += '.vnc-iframe { width: 100%; height: 100%; border: none; }\n'
+      html += '.status-bar { background: #2c3e50; color: white; padding: 8px 16px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }\n'
+      html += '.loading { opacity: 0.6; pointer-events: none; }\n'
+      html += closeTag('style') + '\n'
+      html += closeTag('head') + '\n'
+      html += lt + 'body' + gt + '\n'
+      
+      // Browser header
+      html += lt + 'div class="browser-header"' + gt + '\n'
+      html += lt + 'div class="browser-controls"' + gt + '\n'
+      html += lt + 'button class="control-btn" onclick="goBack()" title="Back"' + gt + '← Back' + closeTag('button') + '\n'
+      html += lt + 'button class="control-btn" onclick="goForward()" title="Forward"' + gt + 'Forward →' + closeTag('button') + '\n'
+      html += lt + 'button class="control-btn" onclick="refresh()" title="Refresh"' + gt + '⟳ Refresh' + closeTag('button') + '\n'
+      html += closeTag('div') + '\n'
+      
+      // Address bar
+      html += lt + 'input class="address-bar" id="addressBar" placeholder="Enter URL or search terms..." onkeydown="if(event.key===\'Enter\') navigateToUrl()"' + gt + '\n'
+      
+      // Right controls
+      html += lt + 'div class="browser-controls"' + gt + '\n'
+      html += lt + 'button class="control-btn" onclick="navigateToUrl()" title="Navigate"' + gt + 'Go →' + closeTag('button') + '\n'
+      html += lt + 'button class="control-btn" onclick="window.close()" title="Close"' + gt + '✕ Close' + closeTag('button') + '\n'
+      html += closeTag('div') + '\n'
+      html += closeTag('div') + '\n'
+      
+      // VNC container
+      html += lt + 'div class="vnc-container"' + gt + '\n'
+      html += lt + 'iframe src="' + vncUrl.value + '" class="vnc-iframe" title="VNC Browser Session"' + gt + closeTag('iframe') + '\n'
+      html += closeTag('div') + '\n'
+      
+      // Status bar
+      html += lt + 'div class="status-bar"' + gt + '\n'
+      html += lt + 'span' + gt + 'VNC Browser - Full Visual Control' + closeTag('span') + '\n'
+      html += lt + 'span id="currentUrl"' + gt + 'Ready' + closeTag('span') + '\n'
+      html += closeTag('div') + '\n'
+      
+      // JavaScript
+      html += lt + 'script' + gt + '\n'
+      html += 'let isLoading = false;\n'
+      html += 'function setLoading(loading) { isLoading = loading; document.body.classList.toggle("loading", loading); }\n'
+      html += 'function updateStatus(message) { document.getElementById("currentUrl").textContent = message; }\n'
+      html += 'async function apiCall(endpoint, method = "POST", data = null) {\n'
+      html += 'try { setLoading(true);\n'
+      html += 'const options = { method: method, headers: { "Content-Type": "application/json" } };\n'
+      html += 'if (data) options.body = JSON.stringify(data);\n'
+      html += 'try {\n'
+      html += 'const response = await fetch("' + API_CONFIG.BASE_URL + '/api/playwright" + endpoint, options);\n'
+      html += 'const result = await response.json();\n'
+      html += 'if (result.success) {\n'
+      html += 'updateStatus(result.final_url || result.url || "Success");\n'
+      html += 'if (result.final_url) document.getElementById("addressBar").value = result.final_url;\n'
+      html += 'return result;\n'
+      html += '} else { throw new Error(result.error || "API call failed"); }\n'
+      html += '} catch (apiError) {\n'
+      html += 'updateStatus("API unavailable - use VNC interface below for manual control");\n'
+      html += 'console.log("API fallback:", apiError.message);\n'
+      html += 'return { success: false, fallback: true };\n'
+      html += '}\n'
+      html += '} catch (error) { updateStatus("Error: " + error.message); console.error("API call failed:", error); }\n'
+      html += 'finally { setLoading(false); } }\n'
+      html += 'function navigateToUrl() {\n'
+      html += 'const url = document.getElementById("addressBar").value.trim();\n'
+      html += 'if (!url) return;\n'
+      html += 'let targetUrl = url;\n'
+      html += 'if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("about:")) targetUrl = "https://" + url;\n'
+      html += 'apiCall("/navigate", "POST", { url: targetUrl }); }\n'
+      html += 'function goBack() { apiCall("/back"); }\n'
+      html += 'function goForward() { apiCall("/forward"); }\n'
+      html += 'function refresh() { apiCall("/reload"); }\n'
+      html += 'document.getElementById("addressBar").value = "https://example.com";\n'
+      html += 'updateStatus("VNC Browser Ready - Click and interact directly in the VNC window below");\n'
+      html += 'setTimeout(() => { document.getElementById("addressBar").focus(); }, 1000);\n'
+      html += 'setTimeout(() => { updateStatus("💡 Type URL above or interact directly with the browser in VNC window"); }, 3000);\n'
+      html += closeTag('script') + '\n'
+      html += closeTag('body') + '\n'
+      html += closeTag('html') + '\n'
+      
+      return html
+    }
+
+    const openVncPopout = () => {
+      addConsoleLog('info', 'Opening VNC browser with controls in new window')
+      
+      // Create a custom HTML page with VNC viewer and browser controls
+      const vncWindow = window.open(
+        '',
+        'vnc-browser',
+        'width=1300,height=800,scrollbars=yes,resizable=yes,status=no,location=no,toolbar=no,menubar=no'
+      )
+      
+      if (vncWindow) {
+        vncWindow.document.write(createVncPopupHtml())
+        vncWindow.document.close()
+        vncWindow.focus()
+        addConsoleLog('success', 'VNC browser window opened with full controls!')
+      } else {
+        addConsoleLog('error', 'Failed to open VNC popup - please check popup blocker settings')
+      }
     }
 
     // Browser control methods
@@ -659,6 +987,42 @@ export default {
     const onVncLoad = () => {
       browserStatus.value = 'ready'
       addConsoleLog('info', `VNC browser connection established for session: ${props.sessionId || 'manual'}`)
+      
+      // Set up automatic VNC scaling based on iframe dimensions
+      nextTick(() => {
+        const iframe = vncIframe.value
+        if (iframe) {
+          const updateVncScaling = () => {
+            const rect = iframe.getBoundingClientRect()
+            const width = Math.floor(rect.width)
+            const height = Math.floor(rect.height)
+            
+            if (width > 0 && height > 0) {
+              // Send a message to the VNC to adjust scaling
+              try {
+                iframe.contentWindow?.postMessage({
+                  type: 'resize',
+                  width: width,
+                  height: height
+                }, '*')
+                
+                addConsoleLog('info', `VNC scaling adjusted to: ${width}x${height}`)
+              } catch (e) {
+                console.log('VNC scaling adjustment not available:', e.message)
+              }
+            }
+          }
+          
+          // Initial scaling adjustment
+          setTimeout(updateVncScaling, 1000)
+          
+          // Set up resize observer for dynamic scaling
+          if (window.ResizeObserver) {
+            const resizeObserver = new ResizeObserver(updateVncScaling)
+            resizeObserver.observe(iframe)
+          }
+        }
+      })
     }
 
     const onWebviewReady = () => {
@@ -679,6 +1043,83 @@ export default {
     const onRemoteDebugLoad = () => {
       browserStatus.value = 'ready'
       addConsoleLog('info', 'Remote debugging interface loaded')
+    }
+
+    // Playwright API integration methods
+    const checkPlaywrightStatus = async () => {
+      try {
+        playwrightLoading.value = true
+        const data = await apiClient.get(`${playwrightApiUrl.value}/health`)
+        playwrightStatus.value = data.status === 'healthy' ? 'healthy' : 'unhealthy'
+        addConsoleLog('info', `Playwright status: ${playwrightStatus.value}`)
+      } catch (error) {
+        playwrightStatus.value = 'error'
+        addConsoleLog('error', `Playwright status check failed: ${error.message}`)
+      } finally {
+        playwrightLoading.value = false
+      }
+    }
+
+    const performWebSearch = async () => {
+      if (!searchQuery.value.trim()) return
+
+      try {
+        playwrightLoading.value = true
+        addConsoleLog('info', `Performing web search: ${searchQuery.value}`)
+        
+        const data = await apiClient.post(`${playwrightApiUrl.value}/search`, {
+          query: searchQuery.value,
+          search_engine: 'duckduckgo'
+        })
+        
+        automationResults.value.lastSearch = data
+        addConsoleLog('info', `Search completed: ${data.results?.length || 0} results found`)
+      } catch (error) {
+        addConsoleLog('error', `Web search failed: ${error.message}`)
+      } finally {
+        playwrightLoading.value = false
+      }
+    }
+
+    const runFrontendTest = async () => {
+      try {
+        playwrightLoading.value = true
+        addConsoleLog('info', 'Running frontend test suite')
+        
+        const data = await apiClient.post(`${playwrightApiUrl.value}/test-frontend`, {
+          frontend_url: window.location.origin
+        })
+        
+        const passed = data.tests?.filter(t => t.status === 'PASS').length || 0
+        const total = data.tests?.length || 0
+        
+        automationResults.value.lastTest = { passed, total, data }
+        addConsoleLog('info', `Frontend test completed: ${passed}/${total} tests passed`)
+      } catch (error) {
+        addConsoleLog('error', `Frontend test failed: ${error.message}`)
+      } finally {
+        playwrightLoading.value = false
+      }
+    }
+
+    const sendTestMessage = async () => {
+      try {
+        playwrightLoading.value = true
+        addConsoleLog('info', 'Sending test message via Playwright')
+        
+        const data = await apiClient.post(`${playwrightApiUrl.value}/send-test-message`, {
+          message: 'Test message from browser automation',
+          frontend_url: window.location.origin
+        })
+        
+        automationResults.value.lastMessage = data
+        const successSteps = data.steps?.filter(s => s.status === 'SUCCESS').length || 0
+        addConsoleLog('info', `Test message completed: ${successSteps} steps successful`)
+      } catch (error) {
+        addConsoleLog('error', `Test message failed: ${error.message}`)
+      } finally {
+        playwrightLoading.value = false
+      }
     }
 
     // Window resize handler
@@ -738,6 +1179,7 @@ export default {
     // Lifecycle
     onMounted(() => {
       initializeBrowser()
+      checkPlaywrightStatus() // Check Playwright service on mount
 
       // Add resize listener
       window.addEventListener('resize', handleResize)
@@ -828,6 +1270,14 @@ export default {
       // Computed
       browserContentStyle,
 
+      // Playwright state
+      showPlaywrightPanel,
+      playwrightLoading,
+      playwrightStatus,
+      searchQuery,
+      automationResults,
+      playwrightApiUrl,
+
       // Methods
       initializeBrowser,
       navigateToUrl,
@@ -835,6 +1285,7 @@ export default {
       goForward,
       refreshBrowser,
       navigateHome,
+      openVncPopout,
       togglePopout,
       toggleFullscreen,
       closeBrowser,
@@ -849,7 +1300,13 @@ export default {
       onWebviewReady,
       onNavigate,
       onTitleUpdate,
-      onRemoteDebugLoad
+      onRemoteDebugLoad,
+
+      // Playwright methods
+      checkPlaywrightStatus,
+      performWebSearch,
+      runFrontendTest,
+      sendTestMessage
     }
   }
 }
@@ -938,5 +1395,18 @@ iframe {
   border: none;
   display: block;
   object-fit: contain;
+}
+
+/* Playwright automation panel styles */
+.playwright-panel {
+  @apply flex-shrink-0;
+}
+
+.automation-card {
+  @apply bg-white rounded-lg p-3 border shadow-sm;
+}
+
+.status-indicator {
+  @apply w-2 h-2 rounded-full;
 }
 </style>

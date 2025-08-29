@@ -162,7 +162,7 @@ class ApiClient {
       // Set up timeout with clear reason
       timeoutId = setTimeout(() => {
         isTimedOut = true;
-        controller.abort();
+        controller.abort(new Error(`Request timeout after ${requestTimeout}ms`));
       }, requestTimeout);
 
       const response = await fetch(url, {

@@ -567,7 +567,7 @@ class WorkerNode:
                 )
             elif task_type == "web_fetch":
                 url = task_payload["url"]
-                result = self.system_integration.web_fetch(url)
+                result = await self.system_integration.web_fetch(url)
                 self.security_layer.audit_log(
                     "web_fetch",
                     user_role,

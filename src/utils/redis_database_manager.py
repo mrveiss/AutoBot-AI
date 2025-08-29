@@ -41,8 +41,18 @@ class RedisDatabaseManager:
     """
 
     def __init__(self, config_path: Optional[str] = None):
+        # PERFORMANCE FIX: Use correct config path for host-based backend
+        default_config_path = "/app/config/redis-databases.yaml"  # Container path
+        host_config_path = "config/redis-databases.yaml"  # Host path (relative to project root)
+        
+        # Auto-detect if we're running on host vs container
+        if os.path.exists(host_config_path):
+            default_config_path = host_config_path
+        elif os.path.exists("/home/kali/Desktop/AutoBot/config/redis-databases.yaml"):
+            default_config_path = "/home/kali/Desktop/AutoBot/config/redis-databases.yaml"
+        
         self.config_path = config_path or os.getenv(
-            "AUTOBOT_REDIS_CONFIG_PATH", "/app/config/redis-databases.yaml"
+            "AUTOBOT_REDIS_CONFIG_PATH", default_config_path
         )
         self.config = self._load_config()
         self._connections: Dict[str, redis.Redis] = {}

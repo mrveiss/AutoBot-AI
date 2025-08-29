@@ -163,6 +163,10 @@ All services now start cleanly and maintain stable operations.
 - **Non-blocking**: Async operation maintains API responsiveness
 - **Error Recovery**: Robust error handling with detailed logging
 
+## Development Guidelines
+
+**CRITICAL**: Ignore any assumptions and reason from facts only. If something is not working, look into logs for clues. Timeout is not a solution to problem.
+
 ## Future Improvements
 
 1. Full backend functionality needs to be restored after fast startup

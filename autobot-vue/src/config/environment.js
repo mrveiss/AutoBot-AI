@@ -22,9 +22,9 @@ export const API_CONFIG = {
     return baseUrl.replace(/^http/, 'ws') + '/ws';
   })(),
 
-  // These are placeholder values - actual values should come from backend config
-  PLAYWRIGHT_VNC_URL: import.meta.env.VITE_PLAYWRIGHT_VNC_URL || '',
-  PLAYWRIGHT_API_URL: import.meta.env.VITE_PLAYWRIGHT_API_URL || '',
+  // VNC URL for browser takeover - point to noVNC web interface with remote scaling
+  PLAYWRIGHT_VNC_URL: import.meta.env.VITE_PLAYWRIGHT_VNC_URL || 'http://localhost:6080/vnc.html?autoconnect=true&resize=remote&reconnect=true&quality=9&compression=9',
+  PLAYWRIGHT_API_URL: import.meta.env.VITE_PLAYWRIGHT_API_URL || '/api/playwright',
   OLLAMA_URL: import.meta.env.VITE_OLLAMA_URL || '',
   CHROME_DEBUG_URL: import.meta.env.VITE_CHROME_DEBUG_URL || '',
   LMSTUDIO_URL: import.meta.env.VITE_LMSTUDIO_URL || '',

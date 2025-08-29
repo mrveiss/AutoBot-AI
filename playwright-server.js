@@ -1,28 +1,14 @@
 const { chromium } = require('playwright');
 const express = require('express');
-const winston = require('winston');
 const app = express();
 
-// Configure Winston logger
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
-  defaultMeta: { service: 'playwright-server' },
-  transports: [
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' }),
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    })
-  ]
-});
+// Simple console logger to replace winston initially
+const logger = {
+  info: (msg, meta = {}) => console.log('[INFO]', msg, meta ? JSON.stringify(meta) : ''),
+  warn: (msg, meta = {}) => console.warn('[WARN]', msg, meta ? JSON.stringify(meta) : ''),
+  error: (msg, meta = {}) => console.error('[ERROR]', msg, meta ? JSON.stringify(meta) : ''),
+  debug: (msg, meta = {}) => console.log('[DEBUG]', msg, meta ? JSON.stringify(meta) : '')
+};
 
 app.use(express.json({ limit: '50mb' }));
 
@@ -87,6 +73,204 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     browser_connected: browser ? browser.isConnected() : false
   });
+});
+
+app.post('/navigate', async (req, res) => {
+  logger.info('Received navigation request', { 
+    endpoint: '/navigate',
+    url: req.body.url,
+    wait_for: req.body.wait_for 
+  });
+  
+  try {
+    const { url, wait_for = 'domcontentloaded' } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        error: 'URL parameter is required'
+      });
+    }
+
+    const browser = await initBrowser();
+    
+    // Get or create a page (reuse existing page for VNC visibility)
+    let pages = await browser.pages();
+    let page = pages.length > 0 ? pages[0] : await browser.newPage();
+
+    // Set user agent for better compatibility
+    await page.setExtraHTTPHeaders({
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+
+    logger.info('Navigating to URL', { 
+      action: 'navigation',
+      url: url,
+      wait_for: wait_for 
+    });
+
+    // Navigate to the URL
+    const response = await page.goto(url, {
+      waitUntil: wait_for,
+      timeout: 30000
+    });
+
+    // Get final URL after redirects
+    const finalUrl = page.url();
+    const title = await page.title();
+
+    logger.info('Navigation completed', { 
+      action: 'navigation_complete',
+      final_url: finalUrl,
+      title: title,
+      status: response?.status()
+    });
+
+    res.json({
+      success: true,
+      url: url,
+      final_url: finalUrl,
+      title: title,
+      status: response?.status(),
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Navigation error', { 
+      endpoint: '/navigate',
+      error: error.message,
+      stack: error.stack 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+app.post('/back', async (req, res) => {
+  logger.info('Received back navigation request', { endpoint: '/back' });
+  
+  try {
+    const browser = await initBrowser();
+    let pages = await browser.pages();
+    let page = pages.length > 0 ? pages[0] : await browser.newPage();
+
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    const finalUrl = page.url();
+    const title = await page.title();
+
+    logger.info('Back navigation completed', { final_url: finalUrl, title: title });
+
+    res.json({
+      success: true,
+      final_url: finalUrl,
+      title: title,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Back navigation error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post('/forward', async (req, res) => {
+  logger.info('Received forward navigation request', { endpoint: '/forward' });
+  
+  try {
+    const browser = await initBrowser();
+    let pages = await browser.pages();
+    let page = pages.length > 0 ? pages[0] : await browser.newPage();
+
+    await page.goForward({ waitUntil: 'domcontentloaded' });
+    const finalUrl = page.url();
+    const title = await page.title();
+
+    logger.info('Forward navigation completed', { final_url: finalUrl, title: title });
+
+    res.json({
+      success: true,
+      final_url: finalUrl,
+      title: title,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Forward navigation error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post('/reload', async (req, res) => {
+  logger.info('Received reload request', { endpoint: '/reload' });
+  
+  try {
+    const browser = await initBrowser();
+    let pages = await browser.pages();
+    let page = pages.length > 0 ? pages[0] : await browser.newPage();
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const finalUrl = page.url();
+    const title = await page.title();
+
+    logger.info('Reload completed', { final_url: finalUrl, title: title });
+
+    res.json({
+      success: true,
+      final_url: finalUrl,
+      title: title,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Reload error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.get('/current', async (req, res) => {
+  logger.info('Received current page info request', { endpoint: '/current' });
+  
+  try {
+    const browser = await initBrowser();
+    let pages = await browser.pages();
+    let page = pages.length > 0 ? pages[0] : await browser.newPage();
+
+    const url = page.url();
+    const title = await page.title();
+    
+    // Check navigation history
+    let canGoBack = false;
+    let canGoForward = false;
+    try {
+      // These will throw if navigation is not possible
+      await page.evaluate(() => window.history.length > 1);
+      canGoBack = true;
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      url: url,
+      title: title,
+      can_go_back: canGoBack,
+      can_go_forward: canGoForward,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Current page info error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 app.post('/search', async (req, res) => {

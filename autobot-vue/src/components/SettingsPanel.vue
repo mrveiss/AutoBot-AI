@@ -414,18 +414,6 @@
         </div>
       </div>
 
-      <!-- Knowledge Base Settings -->
-      <div v-if="activeTab === 'knowledgeBase' && isSettingsLoaded" class="settings-section">
-        <h3>Knowledge Base</h3>
-        <div class="setting-item">
-          <label>Enable Knowledge Base</label>
-          <input type="checkbox" v-model="settings.knowledge_base.enabled" />
-        </div>
-        <div class="setting-item">
-          <label>Update Frequency (Days)</label>
-          <input type="number" v-model="settings.knowledge_base.update_frequency_days" min="1" max="30" :disabled="!settings.knowledge_base.enabled" />
-        </div>
-      </div>
 
       <!-- Voice Interface Settings -->
       <div v-if="activeTab === 'voiceInterface' && isSettingsLoaded" class="settings-section">
@@ -484,6 +472,90 @@
         </div>
       </div>
 
+      <!-- Agent Settings -->
+      <div v-if="activeTab === 'agents' && isSettingsLoaded" class="settings-section">
+        <h3>AI Agent Configuration</h3>
+        <div class="agents-overview" v-if="agentsList">
+          <div class="agents-summary">
+            <div class="summary-item">
+              <span class="summary-label">Total Agents:</span>
+              <span class="summary-value">{{ agentsList.total_count || 0 }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Enabled:</span>
+              <span class="summary-value">{{ enabledAgentsCount }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Health Status:</span>
+              <span :class="['summary-value', getOverallHealthClass()]">{{ getOverallHealthStatus() }}</span>
+            </div>
+          </div>
+          <div class="agents-list">
+            <div v-for="agent in agentsList.agents" :key="agent.id" class="agent-card">
+              <div class="agent-header">
+                <h4>{{ agent.name }}</h4>
+                <div class="agent-controls">
+                  <label class="toggle-switch">
+                    <input type="checkbox" :checked="agent.enabled" @change="toggleAgent(agent.id, $event.target.checked)" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <span :class="['agent-status', agent.status]">{{ agent.status }}</span>
+                </div>
+              </div>
+              <p class="agent-description">{{ agent.description }}</p>
+              <div class="agent-config">
+                <div class="config-item">
+                  <label>Model:</label>
+                  <select v-model="agent.current_model" @change="updateAgentModel(agent.id, agent.current_model)" :disabled="!agent.enabled">
+                    <option v-for="model in availableModels" :key="model" :value="model">{{ model }}</option>
+                  </select>
+                </div>
+                <div class="config-item">
+                  <label>Provider:</label>
+                  <select v-model="agent.provider" @change="updateAgentProvider(agent.id, agent.provider)" :disabled="!agent.enabled">
+                    <option value="ollama">Ollama</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                  </select>
+                </div>
+                <div class="config-item">
+                  <label>Priority:</label>
+                  <input type="number" v-model="agent.priority" @change="updateAgentPriority(agent.id, agent.priority)" min="1" max="10" :disabled="!agent.enabled" />
+                </div>
+              </div>
+              <div class="agent-tasks" v-if="agent.tasks && agent.tasks.length > 0">
+                <span class="tasks-label">Tasks:</span>
+                <div class="tasks-tags">
+                  <span v-for="task in agent.tasks" :key="task" class="task-tag">{{ task }}</span>
+                </div>
+              </div>
+              <div class="agent-performance" v-if="agent.performance">
+                <div class="performance-item">
+                  <span class="perf-label">Success Rate:</span>
+                  <span class="perf-value">{{ (agent.performance.success_rate * 100).toFixed(1) }}%</span>
+                </div>
+                <div class="performance-item">
+                  <span class="perf-label">Avg Response:</span>
+                  <span class="perf-value">{{ agent.performance.avg_response_time ? agent.performance.avg_response_time.toFixed(2) + 's' : 'N/A' }}</span>
+                </div>
+                <div class="performance-item">
+                  <span class="perf-label">Total Requests:</span>
+                  <span class="perf-value">{{ agent.performance.total_requests || 0 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="agents-actions">
+            <button @click="refreshAgents" class="refresh-button">Refresh Agent Status</button>
+            <button @click="testAllAgents" class="test-button">Test All Agents</button>
+          </div>
+        </div>
+        <div v-else class="agents-loading">
+          <div class="loading-spinner"></div>
+          <p>Loading agent configurations...</p>
+        </div>
+      </div>
+
       <!-- System Prompts Settings -->
       <div v-if="activeTab === 'prompts' && isSettingsLoaded" class="settings-section">
         <h3>System Prompts</h3>
@@ -511,7 +583,7 @@
       </div>
     </div>
     <div class="settings-actions">
-      <button @click="saveSettings" :disabled="isSaving" class="save-button" aria-label="{{ issaving ? 'saving...' : 'save settings' }}">
+      <button @click="saveSettings" :disabled="isSaving" class="save-button" :aria-label="isSaving ? 'Saving...' : 'Save Settings'">
         {{ isSaving ? 'Saving...' : 'Save Settings' }}
       </button>
       <div v-if="saveMessage" :class="['save-message', saveMessageType]">
@@ -540,10 +612,10 @@ export default {
     const tabs = [
       { id: 'chat', label: 'Chat' },
       { id: 'backend', label: 'Backend' },
+      { id: 'agents', label: 'Agents' },
       { id: 'ui', label: 'UI' },
       { id: 'security', label: 'Security' },
       { id: 'logging', label: 'Logging' },
-      { id: 'knowledgeBase', label: 'Knowledge Base' },
       { id: 'voiceInterface', label: 'Voice Interface' },
       { id: 'prompts', label: 'System Prompts' },
       { id: 'developer', label: 'Developer' }
@@ -601,6 +673,10 @@ export default {
         current_model: null
       }
     });
+    
+    // Agent management state
+    const agentsList = ref(null);
+    const availableModels = ref([]);
 
     // Save state management
     const isSaving = ref(false);
@@ -646,6 +722,8 @@ export default {
       // Load models after settings are loaded
       await loadModels();
       await loadEmbeddingModels();
+      // Load agent configurations
+      await loadAgents();
       // Check health status
       await checkHealthStatus();
       // Set up periodic health checks
@@ -685,7 +763,7 @@ export default {
       try {
         const response = await apiClient.get('/api/settings/config');
         const configSettings = await response.json();
-        settings.value = deepMerge(defaultSettings(), configSettings);
+        settings.value = deepMerge(createEmptySettings(), configSettings);
 
         // SYNC WITH AGENT CONFIG: Ensure settings match actual agent status
         await syncSettingsWithAgentConfig();
@@ -708,15 +786,15 @@ export default {
         if (savedSettings) {
           try {
             const parsedSettings = JSON.parse(savedSettings);
-            settings.value = deepMerge(defaultSettings(), parsedSettings);
+            settings.value = deepMerge(createEmptySettings(), parsedSettings);
             settingsSource = 'local';
           } catch (e) {
             console.error('Error parsing saved settings:', e);
-            settings.value = defaultSettings();
+            settings.value = createEmptySettings();
             settingsSource = 'default';
           }
         } else {
-          settings.value = defaultSettings();
+          settings.value = createEmptySettings();
           settingsSource = 'default';
         }
 
@@ -1201,6 +1279,101 @@ export default {
       }
     };
 
+    // Agent management functions
+    const loadAgents = async () => {
+      try {
+        const response = await apiClient.get('/api/agent-config/agents');
+        const agentsData = await response.json();
+        agentsList.value = agentsData;
+        
+        // Extract available models from current settings
+        if (settings.value.backend?.llm?.local?.providers?.ollama?.models) {
+          availableModels.value = settings.value.backend.llm.local.providers.ollama.models;
+        }
+      } catch (error) {
+        console.error('Error loading agents:', error);
+        agentsList.value = { agents: [], total_count: 0 };
+      }
+    };
+
+    const refreshAgents = async () => {
+      await loadAgents();
+    };
+
+    const toggleAgent = async (agentId, enabled) => {
+      try {
+        const endpoint = enabled ? `/api/agent-config/agents/${agentId}/enable` : `/api/agent-config/agents/${agentId}/disable`;
+        await apiClient.post(endpoint, {});
+        await loadAgents(); // Refresh the list
+      } catch (error) {
+        console.error(`Error ${enabled ? 'enabling' : 'disabling'} agent:`, error);
+      }
+    };
+
+    const updateAgentModel = async (agentId, model) => {
+      try {
+        await apiClient.post(`/api/agent-config/agents/${agentId}/model`, {
+          agent_id: agentId,
+          model: model,
+          provider: 'ollama'
+        });
+        await loadAgents(); // Refresh the list
+      } catch (error) {
+        console.error('Error updating agent model:', error);
+      }
+    };
+
+    const updateAgentProvider = async (agentId, provider) => {
+      // For now, we'll just update the model since provider change requires more complex logic
+      console.log(`Provider change for ${agentId} to ${provider} - requires model reload`);
+    };
+
+    const updateAgentPriority = async (agentId, priority) => {
+      // TODO: Implement priority update endpoint
+      console.log(`Priority change for ${agentId} to ${priority}`);
+    };
+
+    const testAllAgents = async () => {
+      if (!agentsList.value?.agents) return;
+      
+      for (const agent of agentsList.value.agents) {
+        if (agent.enabled) {
+          try {
+            await apiClient.get(`/api/agent-config/agents/${agent.id}/health`);
+          } catch (error) {
+            console.error(`Health check failed for agent ${agent.id}:`, error);
+          }
+        }
+      }
+      await loadAgents(); // Refresh after testing
+    };
+
+    // Computed properties for agent overview
+    const enabledAgentsCount = computed(() => {
+      if (!agentsList.value?.agents) return 0;
+      return agentsList.value.agents.filter(agent => agent.enabled).length;
+    });
+
+    const getOverallHealthStatus = () => {
+      if (!agentsList.value?.agents) return 'Unknown';
+      const enabledAgents = agentsList.value.agents.filter(agent => agent.enabled);
+      const healthyAgents = enabledAgents.filter(agent => agent.status === 'connected');
+      
+      if (enabledAgents.length === 0) return 'No agents enabled';
+      if (healthyAgents.length === enabledAgents.length) return 'All healthy';
+      if (healthyAgents.length === 0) return 'All unhealthy';
+      return `${healthyAgents.length}/${enabledAgents.length} healthy`;
+    };
+
+    const getOverallHealthClass = () => {
+      if (!agentsList.value?.agents) return 'unknown';
+      const status = getOverallHealthStatus();
+      if (status.includes('All healthy')) return 'healthy';
+      if (status.includes('All unhealthy')) return 'unhealthy';
+      if (status.includes('No agents')) return 'warning';
+      return 'partial';
+    };
+
     return {
       settings,
       saveSettings,
@@ -1233,7 +1406,20 @@ export default {
       showApiEndpoints,
       isSaving,
       saveMessage,
-      saveMessageType
+      saveMessageType,
+      // Agent management
+      agentsList,
+      availableModels,
+      loadAgents,
+      refreshAgents,
+      toggleAgent,
+      updateAgentModel,
+      updateAgentProvider,
+      updateAgentPriority,
+      testAllAgents,
+      enabledAgentsCount,
+      getOverallHealthStatus,
+      getOverallHealthClass
     };
   }
 };
@@ -1628,6 +1814,7 @@ export default {
   border: 1px solid #f5c6cb;
 }
 
+
 .settings-actions {
   flex-direction: column;
   align-items: flex-end;
@@ -1715,5 +1902,270 @@ export default {
 
 .settings-status i {
   margin-right: 8px;
+}
+
+/* Agent Settings Styles */
+.agents-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.agents-summary {
+  display: flex;
+  gap: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.summary-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.summary-value.healthy { color: #28a745; }
+.summary-value.unhealthy { color: #dc3545; }
+.summary-value.partial { color: #ffc107; }
+.summary-value.warning { color: #fd7e14; }
+.summary-value.unknown { color: #6c757d; }
+
+.agents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.agent-card {
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.agent-header h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #343a40;
+}
+
+.agent-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: #007bff;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.agent-status {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+.agent-status.connected {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.agent-status.disconnected {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.agent-description {
+  font-size: 14px;
+  color: #6c757d;
+  margin: 10px 0;
+}
+
+.agent-config {
+  display: grid;
+  grid-template-columns: 1fr 1fr 120px;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.config-item label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.config-item select,
+.config-item input {
+  padding: 6px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.agent-tasks {
+  margin: 10px 0;
+}
+
+.tasks-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #495057;
+  margin-right: 8px;
+}
+
+.tasks-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.task-tag {
+  font-size: 11px;
+  background-color: #e7f3ff;
+  color: #0066cc;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid #b3d9ff;
+}
+
+.agent-performance {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.performance-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.perf-label {
+  font-size: 11px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.perf-value {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  color: #495057;
+}
+
+.agents-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  padding: 15px;
+  border-top: 1px solid #e9ecef;
+}
+
+.agents-actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.refresh-button {
+  background-color: #007bff;
+  color: white;
+}
+
+.refresh-button:hover {
+  background-color: #0056b3;
+}
+
+.test-button {
+  background-color: #28a745;
+  color: white;
+}
+
+.test-button:hover {
+  background-color: #218838;
+}
+
+.agents-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  color: #6c757d;
 }
 </style>

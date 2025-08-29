@@ -9,8 +9,8 @@ services:
       - DISPLAY=:99
       - HEADLESS=false
       - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-autobot123}
-      - SCREEN_WIDTH=1920
-      - SCREEN_HEIGHT=1080
+      - SCREEN_WIDTH=1200
+      - SCREEN_HEIGHT=600
       - SCREEN_DEPTH=24
       - DEBIAN_FRONTEND=noninteractive
       - TZ=UTC
@@ -43,13 +43,13 @@ services:
         echo 'pidfile=/tmp/supervisord.pid' >> /etc/supervisor/conf.d/autobot.conf
         echo '' >> /etc/supervisor/conf.d/autobot.conf
         echo '[program:xvfb]' >> /etc/supervisor/conf.d/autobot.conf
-        echo 'command=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -ac -nolisten tcp' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/bin/Xvfb :99 -screen 0 1200x600x24 -ac -nolisten tcp' >> /etc/supervisor/conf.d/autobot.conf
         echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
         echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
         echo 'priority=100' >> /etc/supervisor/conf.d/autobot.conf
         echo '' >> /etc/supervisor/conf.d/autobot.conf
         echo '[program:x11vnc]' >> /etc/supervisor/conf.d/autobot.conf
-        echo 'command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -ncache 10 -forever -shared -rfbport 5901' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -forever -shared -rfbport 5901 -noxrecord -noxfixes -noxdamage -deferupdate 16' >> /etc/supervisor/conf.d/autobot.conf
         echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
         echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
         echo 'priority=200' >> /etc/supervisor/conf.d/autobot.conf

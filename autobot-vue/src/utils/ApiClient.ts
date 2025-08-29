@@ -45,7 +45,18 @@ export class ApiClient {
 
     // Update baseUrl from settings if available
     if (this.settings?.backend?.api_endpoint) {
-      this.baseUrl = this.settings.backend.api_endpoint;
+      // Ensure we don't get URL duplication from corrupted settings
+      let settingsUrl = this.settings.backend.api_endpoint;
+      if (settingsUrl.includes(this.baseUrl)) {
+        // Settings URL already contains the base URL, use as-is
+        this.baseUrl = settingsUrl;
+      } else if (!settingsUrl.startsWith('http')) {
+        // Relative URL, prepend base
+        this.baseUrl = `${this.baseUrl}${settingsUrl}`;
+      } else {
+        // Absolute URL, use as-is
+        this.baseUrl = settingsUrl;
+      }
     }
   }
 
@@ -62,8 +73,16 @@ export class ApiClient {
 
   // Generic request method with error handling and timeout
   async request(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Handle absolute URLs vs relative endpoints
+    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
     const method = options.method || 'GET';
+    
+    // Debug URL construction
+    if (url.includes('http://') && url.lastIndexOf('http://') > 0) {
+      console.error('DUPLICATE URL DETECTED:', url);
+      console.error('Base URL:', this.baseUrl);
+      console.error('Endpoint:', endpoint);
+    }
     const startTime = performance.now();
     
     // PERFORMANCE FIX: Use endpoint-specific timeouts for known slow operations
@@ -93,7 +112,9 @@ export class ApiClient {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
+      const timeoutId = setTimeout(() => {
+        controller.abort(new Error(`Request timeout after ${requestTimeout}ms`));
+      }, requestTimeout);
 
       const response = await fetch(url, {
         ...config,
@@ -121,7 +142,8 @@ export class ApiClient {
       const endTime = performance.now();
 
       if (error.name === 'AbortError') {
-        const timeoutError = new Error(`Request timeout after ${requestTimeout}ms`);
+        // Use the abort reason if available, otherwise create a generic timeout error
+        const timeoutError = error.cause || error.reason || new Error(`Request timeout after ${requestTimeout}ms`);
         if (window.rum) {
           window.rum.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError);
           window.rum.reportCriticalIssue('api_timeout', {

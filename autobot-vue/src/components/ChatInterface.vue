@@ -79,6 +79,10 @@
               <span class="text-sm text-blueGray-600" for="show-utility">Show Utility Messages</span>
             </label>
             <label class="flex items-center">
+              <input type="checkbox" v-model="settings.browser_integration.enabled" class="mr-2" id="browser-enabled" />
+              <span class="text-sm text-blueGray-600" for="browser-enabled">Enable Browser Automation</span>
+            </label>
+            <label class="flex items-center">
               <input type="checkbox" v-model="settings.message_display.show_planning" class="mr-2" id="show-planning" />
               <span class="text-sm text-blueGray-600" for="show-planning">Show Planning Messages</span>
             </label>
@@ -395,6 +399,12 @@ export default {
         show_thoughts: true,
         show_utility: false,
         show_sources: true  // Default on for source attribution
+      },
+      browser_integration: {
+        enabled: false,
+        auto_search: false,
+        auto_screenshot: false,
+        show_browser_actions: true
       },
       chat: {
         auto_scroll: true
