@@ -627,7 +627,7 @@ async def list_chats(request: Request):
         try:
             # PERFORMANCE FIX: Use fast method that doesn't decrypt all files
             sessions = await asyncio.to_thread(chat_history_manager.list_sessions_fast)
-            return JSONResponse(status_code=200, content={"chats": sessions})
+            return JSONResponse(status_code=200, content=sessions)
         except AttributeError as e:
             raise InternalError(
                 "Chat history manager is misconfigured",
@@ -1602,7 +1602,15 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         logging.info(
             "DEBUG: Getting orchestrator and chat_history_manager from app " "state..."
         )
-        orchestrator = getattr(request.app.state, "orchestrator", None)
+        
+        # Lazy load orchestrator if needed
+        try:
+            from backend.fast_app_factory_fix import get_or_create_orchestrator
+            orchestrator = await get_or_create_orchestrator(request.app)
+        except ImportError:
+            # Fall back to direct access for non-fast backend
+            orchestrator = getattr(request.app.state, "orchestrator", None)
+        
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
         logging.info(
             f"DEBUG: Got orchestrator: {orchestrator is not None}, "
@@ -1621,7 +1629,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
             logging.info("Chat knowledge manager not available")
 
         if orchestrator is None:
-            logging.error("orchestrator not found in app.state")
+            logging.error("orchestrator not found in app.state after lazy loading attempt")
             return JSONResponse(
                 status_code=500, content={"error": "Orchestrator not initialized"}
             )
