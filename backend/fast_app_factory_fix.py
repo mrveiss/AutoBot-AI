@@ -13,71 +13,52 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# Import API routers with minimal dependencies
-from backend.api.system import router as system_router
-from backend.api.chat import router as chat_router
-from backend.api.settings import router as settings_router
-from backend.api.websockets import router as websockets_router
+# Import centralized router registry
+from backend.api.registry import get_router_configs, RouterStatus
 
 # Configure logging first
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# PERFORMANCE FIX: Import routers with lazy initialization approach
-# Set environment variable to prevent immediate knowledge base initialization
+# PERFORMANCE FIX: Set environment variable to prevent immediate knowledge base initialization
 os.environ["AUTOBOT_LAZY_INIT"] = "true"  # Signal to delay heavy initialization
 
-additional_routers = {}
+# Load routers from centralized registry
+router_registry = get_router_configs()
+loaded_routers = {}
 
-# Core functionality routers - import but with lazy initialization
-try:
-    from backend.api.files import router as files_router
-    additional_routers['files'] = {'router': files_router, 'prefix': '/api/files', 'tags': ['files']}
-    logger.info("Files router will be mounted")
-except ImportError as e:
-    logger.warning(f"Could not import files router: {e}")
+logger.info(f"Loading {len(router_registry)} routers from centralized registry...")
 
-try:
-    from backend.api.secrets import router as secrets_router
-    additional_routers['secrets'] = {'router': secrets_router, 'prefix': '/api/secrets', 'tags': ['secrets']}
-    logger.info("Secrets router will be mounted")  
-except ImportError as e:
-    logger.warning(f"Could not import secrets router: {e}")
+# Dynamically import and configure routers based on registry
+for router_name, config in router_registry.items():
+    try:
+        # Dynamic import based on module path
+        module_parts = config.module_path.split('.')
+        module_name = module_parts[-1]
+        module_path = '.'.join(module_parts)
+        
+        # Import the module and get the router
+        module = __import__(module_path, fromlist=['router'])
+        router = getattr(module, 'router')
+        
+        loaded_routers[router_name] = {
+            'router': router,
+            'prefix': config.prefix,
+            'tags': config.tags,
+            'config': config
+        }
+        
+        status_msg = f"({config.status.value})" if config.status != RouterStatus.ENABLED else ""
+        logger.info(f"{config.name.title()} router will be mounted at {config.prefix} {status_msg}")
+        
+    except ImportError as e:
+        logger.warning(f"Could not import {config.name} router from {config.module_path}: {e}")
+    except AttributeError as e:
+        logger.warning(f"Module {config.module_path} does not have 'router' attribute: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error loading {config.name} router: {e}")
 
-# Re-enable essential routers with lazy loading approach
-try:
-    # Knowledge base router with lazy initialization
-    from backend.api.knowledge import router as knowledge_router
-    additional_routers['knowledge'] = {'router': knowledge_router, 'prefix': '/api/knowledge_base', 'tags': ['knowledge']}
-    logger.info("Knowledge router will be mounted (lazy initialization enabled)")
-except ImportError as e:
-    logger.warning(f"Could not import knowledge router: {e}")
-
-try:
-    # LLM router with lazy initialization  
-    from backend.api.llm import router as llm_router
-    additional_routers['llm'] = {'router': llm_router, 'prefix': '/api/llm', 'tags': ['llm']}
-    logger.info("LLM router will be mounted (lazy initialization enabled)")
-except ImportError as e:
-    logger.warning(f"Could not import LLM router: {e}")
-
-try:
-    # Templates router
-    from backend.api.templates import router as templates_router  
-    additional_routers['templates'] = {'router': templates_router, 'prefix': '/api/templates', 'tags': ['templates']}
-    logger.info("Templates router will be mounted")
-except ImportError as e:
-    logger.warning(f"Could not import templates router: {e}")
-
-try:
-    # Playwright router - embedded Docker integration
-    from backend.api.playwright import router as playwright_router
-    additional_routers['playwright'] = {'router': playwright_router, 'prefix': '/api/playwright', 'tags': ['playwright']}
-    logger.info("Playwright router will be mounted (embedded Docker integration)")
-except ImportError as e:
-    logger.warning(f"Could not import Playwright router: {e}")
-
-logger.info("Core routers enabled with lazy initialization to prevent startup blocking")
+logger.info(f"Successfully loaded {len(loaded_routers)}/{len(router_registry)} routers from registry")
 
 # Override Redis timeout
 os.environ["AUTOBOT_REDIS_SOCKET_TIMEOUT"] = "2"  # 2 second timeout instead of 30
@@ -164,6 +145,57 @@ async def create_lifespan_manager(app: FastAPI):
         logger.warning(f"Redis connection failed (non-blocking): {e}")
         # Continue without Redis - app will still work for basic operations
     
+    # CRITICAL FIX: Move LLM configuration synchronization to background task
+    # This was blocking startup with synchronous imports and operations
+    async def background_llm_sync():
+        """Background task to perform LLM configuration synchronization"""
+        try:
+            from backend.utils.llm_config_sync import LLMConfigurationSynchronizer
+            logger.info("Starting background LLM configuration synchronization...")
+            
+            # Synchronize LLM config with agents (now in background)
+            sync_result = LLMConfigurationSynchronizer.sync_llm_config_with_agents()
+            
+            if sync_result["status"] == "synchronized":
+                logger.info(f"✅ LLM config synchronized: {sync_result['previous_model']} → {sync_result['new_model']}")
+            elif sync_result["status"] == "already_synchronized":
+                logger.info(f"✅ LLM config already synchronized: {sync_result['current_model']}")
+            else:
+                logger.warning(f"⚠️ LLM config sync result: {sync_result}")
+            
+            # Also populate models list in configuration for Settings Panel
+            try:
+                from backend.utils.connection_utils import ModelManager
+                from src.config import config as global_config_manager
+                
+                result = await ModelManager.get_available_models()
+                if result["status"] == "success":
+                    model_names = [
+                        model.get("name", "") if isinstance(model, dict) else str(model)
+                        for model in result["models"]
+                    ]
+                    global_config_manager.set_nested(
+                        "backend.llm.local.providers.ollama.models", 
+                        model_names
+                    )
+                    logger.info(f"✅ Populated {len(model_names)} models in configuration")
+                else:
+                    logger.warning(f"⚠️ Failed to get models for config: {result.get('error')}")
+                    
+            except Exception as e:
+                logger.warning(f"Models population failed: {e}")
+                
+        except Exception as e:
+            logger.warning(f"Background LLM configuration synchronization failed: {e}")
+    
+    # Run LLM sync in background without blocking startup
+    try:
+        import asyncio
+        asyncio.create_task(background_llm_sync())
+        logger.info("LLM configuration synchronization started in background")
+    except Exception as e:
+        logger.warning(f"Failed to start background LLM sync task: {e}")
+    
     logger.info("Application startup completed (minimal mode)")
     
     yield
@@ -190,21 +222,20 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     
-    # Mount essential routers only
-    app.include_router(system_router, prefix="/api/system", tags=["system"])
-    app.include_router(chat_router, prefix="/api", tags=["chat"]) 
-    app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
-    app.include_router(websockets_router, tags=["websockets"])
-    
-    # Mount additional routers if available
-    for name, config in additional_routers.items():
+    # Mount routers from centralized registry
+    for name, config in loaded_routers.items():
         try:
-            app.include_router(
-                config['router'], 
-                prefix=config['prefix'], 
-                tags=config['tags']
-            )
-            logger.info(f"{name.capitalize()} router mounted successfully at {config['prefix']}")
+            # Handle WebSocket routers differently (no prefix)
+            if config['prefix']:
+                app.include_router(
+                    config['router'], 
+                    prefix=config['prefix'], 
+                    tags=config['tags']
+                )
+            else:
+                app.include_router(config['router'], tags=config['tags'])
+            
+            logger.info(f"{name.capitalize()} router mounted successfully at {config['prefix'] or '(websocket)'}")
         except Exception as e:
             logger.warning(f"Failed to mount {name} router: {e}")
     
@@ -212,6 +243,17 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health_check():
         return {"status": "ok", "mode": "fast", "redis": app.state.main_redis_client is not None}
+    
+    # Add endpoint registry information
+    @app.get("/api/endpoints")
+    async def list_endpoints():
+        """Get list of all available API endpoints"""
+        from backend.api.registry import get_endpoint_documentation
+        return {
+            "endpoints": get_endpoint_documentation(),
+            "loaded_routers": len(loaded_routers),
+            "total_registered": len(router_registry)
+        }
     
     # Override system health endpoint to avoid knowledge base initialization
     @app.get("/api/system/health")

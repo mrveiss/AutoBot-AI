@@ -3,6 +3,7 @@ Source Attribution and Transparency System
 Tracks and formats information sources for all responses
 """
 
+import gc
 import json
 import logging
 from dataclasses import dataclass, asdict
@@ -107,6 +108,9 @@ class SourceAttributionManager:
     def __init__(self):
         self.sources: List[Source] = []
         self.current_response_sources: List[Source] = []
+        # Memory leak protection - configurable limits
+        self.max_sources = 1000  # Maximum total sources to keep
+        self.cleanup_threshold = 1200  # Trigger cleanup at 120% of limit
 
     def add_source(
         self,
@@ -132,9 +136,22 @@ class SourceAttributionManager:
 
         self.current_response_sources.append(source)
         self.sources.append(source)
+        
+        # Prevent memory leak by cleaning up old sources
+        self._cleanup_sources_if_needed()
 
         logger.debug(f"Added source: {source.format_citation()}")
         return source
+    
+    def _cleanup_sources_if_needed(self):
+        """Clean up old sources to prevent memory leaks"""
+        if len(self.sources) > self.cleanup_threshold:
+            # Keep most recent sources within the limit
+            old_count = len(self.sources)
+            self.sources = self.sources[-self.max_sources:]
+            # Force garbage collection to free memory immediately
+            gc.collect()
+            logger.info(f"SOURCE CLEANUP: Trimmed sources from {old_count} to {len(self.sources)} (limit: {self.max_sources}) and freed memory")
 
     def add_kb_source(
         self,
