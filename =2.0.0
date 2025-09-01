@@ -1,0 +1,7 @@
+Collecting aioredis
+  Downloading aioredis-2.0.1-py3-none-any.whl (71 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 71.2/71.2 kB 2.5 MB/s eta 0:00:00
+Requirement already satisfied: async-timeout in ./venv/lib/python3.10/site-packages (from aioredis) (4.0.3)
+Requirement already satisfied: typing-extensions in ./venv/lib/python3.10/site-packages (from aioredis) (4.14.1)
+Installing collected packages: aioredis
+Successfully installed aioredis-2.0.1
