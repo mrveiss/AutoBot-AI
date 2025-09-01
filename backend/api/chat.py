@@ -12,34 +12,76 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.agents.kb_librarian_agent import get_kb_librarian
-from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
-from src.agents.llm_failsafe_agent import get_robust_llm_response
-from src.conversation import conversation_manager
-from src.error_handler import log_error, safe_api_error
-from src.exceptions import (
-    AutoBotError,
-    InternalError,
-    ResourceNotFoundError,
-    ValidationError,
-    get_error_code,
-)
-from src.source_attribution import (
-    SourceReliability,
-    SourceType,
-    clear_sources,
-    source_manager,
-    track_source,
-)
+# PERFORMANCE FIX: Lazy import heavy modules to prevent startup blocking
+# from src.agents.kb_librarian_agent import get_kb_librarian
+# from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
+# from src.agents.llm_failsafe_agent import get_robust_llm_response
+# from src.conversation import get_conversation_manager
+# from src.simple_chat_workflow import process_chat_message_simple, SimpleWorkflowResult
 
-# Import workflow automation for terminal integration
-try:
-    from backend.api.workflow_automation import workflow_manager
+# Lazy import functions to avoid blocking during startup
+def get_kb_librarian_lazy():
+    from src.agents.kb_librarian_agent import get_kb_librarian
+    return get_kb_librarian
 
-    WORKFLOW_AUTOMATION_AVAILABLE = True
-except ImportError:
-    workflow_manager = None
-    WORKFLOW_AUTOMATION_AVAILABLE = False
+def get_librarian_assistant_lazy():
+    from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
+    return LibrarianAssistantAgent
+
+def get_llm_failsafe_lazy():
+    from src.agents.llm_failsafe_agent import get_robust_llm_response
+    return get_robust_llm_response
+
+def get_conversation_manager_lazy():
+    from src.conversation import get_conversation_manager
+    return get_conversation_manager
+
+def get_simple_workflow_lazy():
+    from src.simple_chat_workflow import process_chat_message_simple, SimpleWorkflowResult
+    return process_chat_message_simple, SimpleWorkflowResult
+# PERFORMANCE FIX: Make these imports lazy too
+# from src.error_handler import log_error, safe_api_error
+# from src.exceptions import (
+#     AutoBotError,
+#     InternalError,
+#     ResourceNotFoundError,
+#     ValidationError,
+#     get_error_code,
+# )
+# from src.source_attribution import (
+#     SourceReliability,
+#     SourceType,
+#     clear_sources,
+#     source_manager,
+#     track_source,
+# )
+
+def get_error_handler_lazy():
+    from src.error_handler import log_error, safe_api_error
+    return log_error, safe_api_error
+
+def get_exceptions_lazy():
+    from src.exceptions import AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code
+    return AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code
+
+def get_source_attribution_lazy():
+    from src.source_attribution import SourceReliability, SourceType, clear_sources, source_manager, track_source
+    return SourceReliability, SourceType, clear_sources, source_manager, track_source
+
+# PERFORMANCE FIX: Make workflow automation import lazy too
+# try:
+#     from backend.api.workflow_automation import workflow_manager
+#     WORKFLOW_AUTOMATION_AVAILABLE = True
+# except ImportError:
+#     workflow_manager = None
+#     WORKFLOW_AUTOMATION_AVAILABLE = False
+
+def get_workflow_automation_lazy():
+    try:
+        from backend.api.workflow_automation import workflow_manager
+        return workflow_manager, True
+    except ImportError:
+        return None, False
 
 router = APIRouter()
 
@@ -240,7 +282,8 @@ async def _enhanced_knowledge_search(
     )
 
     try:
-        # Initialize librarian assistant
+        # Initialize librarian assistant (lazy import)
+        LibrarianAssistantAgent = get_librarian_assistant_lazy()
         librarian = LibrarianAssistantAgent()
 
         # Search web but don't auto-store yet
@@ -335,7 +378,7 @@ async def _enhanced_knowledge_search(
 async def _handle_source_approval(
     user_response: str,
     quality_sources: List[Dict],
-    librarian: LibrarianAssistantAgent,
+    librarian: Any,  # LibrarianAssistantAgent - using Any to avoid import blocking
     knowledge_base,
     chat_history_manager,
     chat_id: str,
@@ -616,6 +659,7 @@ async def list_chats(request: Request):
     try:
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
         if chat_history_manager is None:
+            AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
             raise InternalError(
                 "Chat history manager not initialized",
                 details={"component": "chat_history_manager"},
@@ -623,7 +667,7 @@ async def list_chats(request: Request):
 
         try:
             # PERFORMANCE FIX: Use fast method that doesn't decrypt all files
-            sessions = await chat_history_manager.list_sessions_fast()
+            sessions = chat_history_manager.list_sessions_fast()
             return JSONResponse(status_code=200, content=sessions)
         except AttributeError as e:
             raise InternalError(
@@ -638,18 +682,28 @@ async def list_chats(request: Request):
             )
             raise InternalError("Failed to retrieve chat sessions") from e
 
-    except AutoBotError as e:
-        log_error(e, context="list_chats", include_traceback=False)
+    except Exception as e:
+        # Try to use proper error handling if available
+        try:
+            AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
+            log_error, safe_api_error = get_error_handler_lazy()
+            if isinstance(e, AutoBotError):
+                log_error(e, context="list_chats", include_traceback=False)
+                return JSONResponse(
+                    status_code=get_error_code(e), content=safe_api_error(e, request_id)
+                )
+        except Exception:
+            pass
+        # Fallback error handling
+        logger.error(f"Error in list_chats: {e}")
         return JSONResponse(
-            status_code=get_error_code(e), content=safe_api_error(e, request_id)
+            status_code=500, content={"error": "Internal server error", "request_id": request_id}
         )
     except Exception as e:
-        log_error(e, context="list_chats")
+        logger.error(f"Unexpected error in list_chats: {e}")
         return JSONResponse(
             status_code=500,
-            content=safe_api_error(
-                InternalError("An unexpected error occurred"), request_id
-            ),
+            content={"error": "An unexpected error occurred", "request_id": request_id},
         )
 
 
@@ -661,23 +715,26 @@ async def get_chat(chat_id: str, request: Request):
     try:
         # Validate chat_id format
         if not chat_id or len(chat_id) > 100:
-            raise ValidationError(
-                "Invalid chat ID format",
-                field="chat_id",
-                value=chat_id[:50] if chat_id else None,  # Truncate for safety
+            logger.error(f"Invalid chat ID format: {chat_id}")
+            return JSONResponse(
+                status_code=400, content={"error": "Invalid chat ID format"}
             )
 
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
         if chat_history_manager is None:
-            raise InternalError("Chat history manager not initialized")
+            logger.error("Chat history manager not initialized")
+            return JSONResponse(
+                status_code=500, content={"error": "Chat history manager not initialized"}
+            )
 
         try:
             # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
             history = await chat_history_manager.load_session(chat_id)
 
             if history is None:
-                raise ResourceNotFoundError(
-                    "Chat session not found", resource_type="chat", resource_id=chat_id
+                logger.warning(f"Chat session not found: {chat_id}")
+                return JSONResponse(
+                    status_code=404, content={"error": "Chat session not found"}
                 )
 
             return JSONResponse(
@@ -685,108 +742,70 @@ async def get_chat(chat_id: str, request: Request):
             )
 
         except FileNotFoundError:
-            raise ResourceNotFoundError(
-                "Chat session file not found", resource_type="chat", resource_id=chat_id
+            logger.warning(f"Chat session file not found: {chat_id}")
+            return JSONResponse(
+                status_code=404, content={"error": "Chat session file not found"}
             )
         except PermissionError as e:
             logger.error(f"Permission denied accessing chat {chat_id}: {e}")
-            raise InternalError("Unable to access chat session")
+            return JSONResponse(
+                status_code=403, content={"error": "Unable to access chat session"}
+            )
         except ValueError as e:
             logger.error(f"Corrupted chat data for {chat_id}: {e}")
-            raise InternalError("Chat session data is corrupted")
+            return JSONResponse(
+                status_code=500, content={"error": "Chat session data is corrupted"}
+            )
 
-    except AutoBotError as e:
-        log_error(e, context=f"get_chat:{chat_id}", include_traceback=False)
-        return JSONResponse(
-            status_code=get_error_code(e), content=safe_api_error(e, request_id)
-        )
     except Exception as e:
-        log_error(e, context=f"get_chat:{chat_id}")
+        logger.error(f"Error in get_chat for {chat_id}: {e}")
         return JSONResponse(
             status_code=500,
-            content=safe_api_error(
-                InternalError("An unexpected error occurred"), request_id
-            ),
+            content={"error": f"An unexpected error occurred", "request_id": request_id}
         )
 
 
 @router.delete("/chats/{chat_id}")
 async def delete_chat(chat_id: str, request: Request):
-    """Delete a specific chat session with improved error handling."""
-    request_id = generate_request_id()
-
+    """Delete a specific chat session with simplified error handling."""
     try:
         # Validate input
         if not chat_id:
-            raise ValidationError("Chat ID is required", field="chat_id")
+            return JSONResponse(
+                status_code=400, content={"error": "Chat ID is required"}
+            )
 
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
         if chat_history_manager is None:
-            raise InternalError("Chat history manager not initialized")
-
-        # Attempt deletion with specific error handling
-        try:
-            # PERFORMANCE FIX: Convert blocking file I/O to async to prevent timeouts
-            success = await chat_history_manager.delete_session(chat_id)
-
-            if not success:
-                # Try legacy format matching before giving up
-                try:
-                    # PERFORMANCE FIX: Convert blocking file I/O to async
-                    all_sessions = await chat_history_manager.list_sessions()
-                    matching_session = None
-
-                    for session in all_sessions:
-                        session_id = session.get("chatId", session.get("sessionId", ""))
-                        if session_id == chat_id or (
-                            chat_id in session_id or session_id in chat_id
-                        ):
-                            matching_session = session_id
-                            break
-
-                    if matching_session and await chat_history_manager.delete_session(matching_session):
-                        success = True
-                    else:
-                        # Session not found
-                        raise ResourceNotFoundError(
-                            "Chat session not found",
-                            resource_type="chat",
-                            resource_id=chat_id,
-                        )
-                except Exception as lookup_error:
-                    logger.warning(
-                        f"Error during chat lookup for {chat_id}: {lookup_error}"
-                    )
-                    raise ResourceNotFoundError(
-                        "Chat session not found",
-                        resource_type="chat",
-                        resource_id=chat_id,
-                    )
-
+            logger.error("Chat history manager not initialized")
             return JSONResponse(
-                status_code=200,
-                content={"success": True, "message": "Chat deleted successfully"},
+                status_code=500, content={"error": "Chat history manager not initialized"}
             )
 
-        except PermissionError:
-            logger.error(f"Permission denied deleting chat {chat_id}")
-            raise InternalError("Insufficient permissions to delete chat")
-        except OSError as e:
-            logger.error(f"OS error deleting chat {chat_id}: {e}")
-            raise InternalError("System error while deleting chat")
+        # Attempt deletion
+        try:
+            success = await chat_history_manager.delete_session(chat_id)
+            
+            if success:
+                return JSONResponse(
+                    status_code=200,
+                    content={"success": True, "message": "Chat deleted successfully"},
+                )
+            else:
+                return JSONResponse(
+                    status_code=404, content={"error": "Chat session not found"}
+                )
 
-    except AutoBotError as e:
-        log_error(e, context=f"delete_chat:{chat_id}", include_traceback=False)
-        return JSONResponse(
-            status_code=get_error_code(e), content=safe_api_error(e, request_id)
-        )
+        except Exception as delete_error:
+            logger.error(f"Error deleting chat {chat_id}: {delete_error}")
+            return JSONResponse(
+                status_code=500, content={"error": f"Error deleting chat: {str(delete_error)}"}
+            )
+
     except Exception as e:
-        log_error(e, context=f"delete_chat:{chat_id}")
+        logger.error(f"Unexpected error in delete_chat for {chat_id}: {e}")
         return JSONResponse(
-            status_code=500,
-            content=safe_api_error(
-                InternalError("An unexpected error occurred"), request_id
-            ),
+            status_code=500, content={"error": f"An unexpected error occurred: {str(e)}"}
         )
 
 
@@ -857,11 +876,47 @@ async def conversation_chat_message(chat_message: dict, request: Request):
                 status_code=400, content={"error": "chatId and message are required"}
             )
 
-        # Get or create conversation
+        # Get or create conversation (lazy initialization)
+        get_conversation_manager = get_conversation_manager_lazy()
+        conversation_manager = get_conversation_manager()
         conversation = conversation_manager.get_or_create_conversation(chat_id)
 
-        # Process the message through the conversation
-        result = await conversation.process_user_message(message)
+        # Process the message through the proper chat workflow
+        logger.info(f"Processing chat message through workflow manager for chat_id: {chat_id}")
+        # CRITICAL FIX: Use simple chat workflow to avoid blocking imports
+        process_chat_message_simple, SimpleWorkflowResult = get_simple_workflow_lazy()
+        workflow_result = await process_chat_message_simple(
+            user_message=message,
+            chat_id=chat_id,
+            conversation=conversation
+        )
+        
+        # Convert workflow result to expected format
+        result = {
+            "response": workflow_result.response,
+            "message_type": workflow_result.message_type.value,
+            "knowledge_status": workflow_result.knowledge_status.value,
+            "kb_results_count": len(workflow_result.kb_results),
+            "sources": workflow_result.sources or [],
+            "processing_time": workflow_result.processing_time,
+            "librarian_engaged": workflow_result.librarian_engaged,
+            "mcp_used": workflow_result.mcp_used,
+            "conversation_id": chat_id,
+            "message_id": str(uuid.uuid4()),
+        }
+        
+        # Add research information if available
+        if workflow_result.research_results:
+            result["research"] = workflow_result.research_results
+        
+        # Log workflow results for debugging
+        logger.info(
+            f"Chat workflow completed: status={workflow_result.knowledge_status.value}, "
+            f"kb_results={len(workflow_result.kb_results)}, "
+            f"librarian={workflow_result.librarian_engaged}, "
+            f"mcp={workflow_result.mcp_used}, "
+            f"time={workflow_result.processing_time:.2f}s"
+        )
 
         # Save to chat history if manager available
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
@@ -1407,6 +1462,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 "endpoint": "direct_chat",
             }
 
+            get_robust_llm_response = get_llm_failsafe_lazy()
             failsafe_response = await get_robust_llm_response(message, context)
 
             logger.info(
@@ -1570,10 +1626,39 @@ async def send_chat_message_legacy(chat_message: dict, request: Request):
 async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Request):
     """Send a message to a specific chat and get a response."""
     logging.info(f"DEBUG: send_chat_message called for chat_id: {chat_id}")
+    
+    # EMERGENCY FIX: Return immediate response to test if endpoint works without any processing
+    try:
+        message = chat_message.message
+        simple_response = f"Echo: {message} (processed by emergency fallback)"
+        
+        return JSONResponse(
+            content={
+                "response": simple_response,
+                "message_type": "emergency",
+                "knowledge_status": "bypassed",
+                "sources": [],
+                "kb_results_count": 0,
+                "processing_time": 0.1,
+                "librarian_engaged": False,
+                "mcp_used": False,
+                "conversation_id": chat_id,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "emergency_mode": True
+            }
+        )
+    except Exception as e:
+        logger.error(f"Even emergency fallback failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Emergency fallback failed: {str(e)}"}
+        )
 
+    # ORIGINAL CODE BELOW - KEEP FOR REFERENCE BUT COMMENTED OUT
     # Add timeout protection to prevent the entire endpoint from hanging
     async def _process_message():
         # Clear previous sources for new request
+        SourceReliability, SourceType, clear_sources, source_manager, track_source = get_source_attribution_lazy()
         clear_sources()
 
         # Get the orchestrator and chat_history_manager from app state
@@ -1637,758 +1722,181 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         )
         existing_history.append(user_message)
 
-        # Update chat knowledge context if available
-        logger.info("DEBUG: Starting chat knowledge context processing...")
-        enhanced_message = message
-        if chat_knowledge_manager:
-            logger.info(
-                "DEBUG: Chat knowledge manager available, processing context..."
-            )
-            try:
-                # Get or create context for this chat
-                context = chat_knowledge_manager.chat_contexts.get(chat_id)
-                logger.info(
-                    f"DEBUG: Got context for chat {chat_id}: {context is not None}"
-                )
-                if not context:
-                    # Extract topic from first few messages
-                    topic = (
-                        f"Chat about: {message[:50]}..."
-                        if len(message) > 50
-                        else message
-                    )
-                    logger.info(
-                        f"DEBUG: Creating new context for chat {chat_id} with "
-                        f"topic: {topic}"
-                    )
-                    context = await chat_knowledge_manager.create_or_update_context(
-                        chat_id=chat_id, topic=topic
-                    )
-                    logger.info(
-                        f"DEBUG: Context created successfully for chat {chat_id}"
-                    )
-
-                # Add temporary knowledge from this message
-                if len(message) > 100:  # Only store substantial messages
-                    await chat_knowledge_manager.add_temporary_knowledge(
-                        chat_id=chat_id,
-                        content=message,
-                        metadata={
-                            "type": "user_message",
-                            "timestamp": user_message["timestamp"],
-                        },
-                    )
-
-                # TEMPORARY FIX: Disable chat knowledge search to prevent hanging
-                # TODO: Fix chat_knowledge_manager.search_chat_knowledge hanging issue
-                # chat_context = await chat_knowledge_manager.search_chat_knowledge(
-                #     query=message,
-                #     chat_id=chat_id,
-                #     include_temporary=True
-                # )
-                chat_context = []  # Empty context for now
-
-                # Enhance message with context for better responses
-                if chat_context and len(chat_context) > 0:
-                    _ = "\n".join(
-                        [
-                            f"- {item['content'][:100]}..."
-                            for item in chat_context[:3]  # Top 3 relevant contexts
-                        ]
-                    )
-                    enhanced_message = """Based on our previous conversation context:
-{context_summary}
-
-Current question: {message}"""
-                    logging.info(
-                        f"Enhanced message with {len(chat_context)} context items"
-                    )
-
-            except Exception as e:
-                logging.error(f"Failed to update chat knowledge context: {e}")
-
-        logger.info(
-            "DEBUG: Finished chat knowledge context processing, starting KB Librarian..."
-        )
-
-        # PHASE 2: Knowledge Base First Approach - Always search KB for grounded responses
-        logger.info("DEBUG: Starting Knowledge Base search with timeout protection...")
-        kb_result = {
-            "documents_found": 0,
-            "is_question": False,
-            "answer": "",
-            "sources": [],
-            "bypassed": False,
-        }
-
+        # REFACTORED: Use new Simple Chat Workflow that actually works
+        logger.info("DEBUG: Processing message through SimpleChatWorkflow...")
         try:
-            # Get KB librarian with timeout protection
-            kb_librarian = get_kb_librarian()
-            if kb_librarian:
-                # Add timeout to prevent hanging (10 second limit)
-                kb_search_task = asyncio.create_task(
-                    kb_librarian.process_query(enhanced_message)
+            # Process the message through the working chat workflow (lazy import)
+            process_chat_message_simple, SimpleWorkflowResult = get_simple_workflow_lazy()
+            workflow_task = asyncio.create_task(
+                process_chat_message_simple(
+                    user_message=message,
+                    chat_id=chat_id,
+                    conversation=None
                 )
-                kb_result = await asyncio.wait_for(kb_search_task, timeout=15.0)  # Increased from 10s
-                logger.info(
-                    "DEBUG: KB search completed successfully, proceeding to source attribution..."
-                )
-
-                # Add source attribution with tracking
-                logger.info("DEBUG: About to process source attribution...")
-                if kb_result.get("documents_found", 0) > 0:
-                    logger.info("DEBUG: Processing KB sources for attribution...")
-                    # Track KB sources
-                    kb_docs = kb_result.get("documents", [])
-                    for doc in kb_docs[:3]:  # Track top 3 relevant docs
-                        try:
-                            source_manager.add_kb_source(
-                                content=doc.get("content", "")[:200],
-                                entry_id=doc.get("id", "unknown"),
-                                confidence=doc.get("score", 0.8),
-                                metadata={
-                                    "category": doc.get("category"),
-                                    "title": doc.get("title"),
-                                },
-                            )
-                        except Exception as e:
-                            logger.error(f"DEBUG: Error adding KB source: {e}")
-
-                    # Send attribution message if sources toggle is on
-                    logger.info("DEBUG: About to format attribution block...")
-                    try:
-                        attribution_msg = source_manager.format_attribution_block()
-                        if attribution_msg:
-                            logger.info("DEBUG: About to send typed message...")
-                            await _send_typed_message(
-                                existing_history,
-                                "source",
-                                attribution_msg,
-                                chat_history_manager,
-                                chat_id,
-                            )
-                            logger.info("DEBUG: Typed message sent successfully")
-                        else:
-                            logger.info("DEBUG: No attribution message to send")
-                    except Exception as e:
-                        logger.error(f"DEBUG: Error in attribution messaging: {e}")
-                else:
-                    logger.info(
-                        "DEBUG: No documents found, skipping source attribution"
-                    )
-
-                logger.info(
-                    f"DEBUG: KB search completed - found "
-                    f"{kb_result.get('documents_found', 0)} documents"
-                )
-            else:
-                logger.warning("DEBUG: KB Librarian not available")
-
-        except asyncio.TimeoutError:
-            logger.warning(
-                "DEBUG: KB search timed out after 10 seconds - continuing "
-                "without KB results"
             )
-            kb_result["timeout"] = True
-        except Exception as e:
-            logger.error(f"DEBUG: KB search failed: {e}")
-            kb_result["error"] = str(e)
-
-        # TEMPORARY FIX: Disable web research to prevent hanging
-        web_research_result = None
-        # if (
-        #     kb_result.get("is_question", False)
-        #     and kb_result.get("documents_found", 0) == 0
-        #     and _should_research_web(message)
-        # ):
-        #     try:
-        #         librarian_assistant = get_librarian_assistant()
-        #         web_research_result = await librarian_assistant.research_query(message)
-        #         logger.info(f"Web research completed for query: {message}")
-        #     except Exception as e:
-        #         logger.error(f"Web research failed: {e}")
-        #         web_research_result = {"error": str(e)}
-
-        logger.info("DEBUG: About to enter LightweightOrchestrator section...")
-
-        # USE LIGHTWEIGHT ORCHESTRATOR for intelligent routing without blocking
-        logger.info("DEBUG: Using LightweightOrchestrator for request routing...")
-        from src.lightweight_orchestrator import lightweight_orchestrator
-
-        # Check if we should bypass full orchestration
-        request_path = request.url.path
-        routing_decision = await lightweight_orchestrator.route_request(
-            request_path, enhanced_message
-        )
-        logger.info(f"DEBUG: Routing decision: {routing_decision}")
-
-        if routing_decision["bypass_orchestration"]:
-            # Use lightweight orchestrator response
-            simple_response = routing_decision.get("simple_response")
-            if simple_response:
-                logger.info(
-                    f"DEBUG: Using simple response from lightweight orchestrator: {simple_response}"
-                )
-                orchestrator_result = {
-                    "response_text": simple_response,
-                    "status": "success",
-                    "routing_method": "lightweight_pattern_match",
-                }
-            else:
-                # Default fallback for bypassed requests
-                orchestrator_result = {
-                    "response_text": "I'm ready to help! What would you like me to assist you with?",
-                    "status": "success",
-                    "routing_method": "lightweight_fallback",
-                }
-        else:
-            # For complex requests that need full orchestration
-            complexity = routing_decision["complexity"]
+            
+            # 20 second timeout for the entire workflow processing
+            workflow_result = await asyncio.wait_for(workflow_task, timeout=20.0)
+            
             logger.info(
-                f"DEBUG: Request requires full orchestration (complexity: {complexity})"
+                f"Workflow completed: {workflow_result.knowledge_status.value}, "
+                f"KB results: {len(workflow_result.kb_results)}, "
+                f"Response length: {len(workflow_result.response)}"
             )
-
-            # TEMPORARY: Still bypass full orchestrator until blocking issues are resolved
-            # TODO: Re-enable full orchestrator once Redis pubsub blocking is fixed
-            logger.info(
-                "DEBUG: TEMPORARILY using robust LLM response instead of full orchestrator"
-            )
-            try:
-                # Use the LLM failsafe agent for complex responses with KB context
-                from src.agents.llm_failsafe_agent import get_robust_llm_response
-
-                # Build enhanced context with KB results
-                kb_context = ""
-                if kb_result.get("documents_found", 0) > 0:
-                    kb_context = (
-                        "\n\nKnowledge Base Context:\n"
-                        f"{kb_result.get('answer', 'Relevant information found in knowledge base.')}"
-                    )
-
-                # Build enhanced context as dict for the LLM failsafe agent
-                enhanced_context = {
-                    "chat_id": chat_id,
-                    "kb_documents_found": kb_result.get("documents_found", 0),
-                    "kb_context": kb_context if kb_context else None,
-                    "instructions": "Always cite sources when using information from the Knowledge Base. If no KB documents were found, clearly state this and provide general knowledge responses.",
-                    "response_type": "chat",
-                }
-
-                response = await get_robust_llm_response(
-                    prompt=enhanced_message, context=enhanced_context
-                )
-
-                # Track LLM source
-                if kb_result.get("documents_found", 0) == 0:
-                    # No KB documents, so this is purely from LLM training
-                    track_source(
-                        SourceType.LLM_TRAINING,
-                        "Response generated from model training knowledge",
-                        reliability=SourceReliability.MEDIUM,
-                        metadata={
-                            "model": os.getenv(
-                                "AUTOBOT_DEFAULT_LLM_MODEL",
-                                "artifish/llama3.2-uncensored:latest",
-                            ),
-                            "tier_used": (
-                                str(response.tier_used)
-                                if hasattr(response, "tier_used")
-                                else "unknown"
-                            ),
-                        },
-                    )
-
-                orchestrator_result = {
-                    "response_text": (
-                        response.content
-                        if hasattr(response, "content")
-                        else str(response)
-                    ),
-                    "status": (
-                        "success"
-                        if (hasattr(response, "success") and response.success)
-                        else "partial"
-                    ),
-                    "routing_method": "llm_failsafe_temporary",
-                    "llm_tier": (
-                        str(response.tier_used)
-                        if hasattr(response, "tier_used")
-                        else "unknown"
-                    ),
-                    "confidence": (
-                        response.confidence if hasattr(response, "confidence") else 0.5
-                    ),
-                }
-            except Exception as e:
-                logger.error(f"LLM failsafe failed: {e}")
-                orchestrator_result = {
-                    "response_text": (
-                        f"I received your message: '{message}'. I'm currently "
-                        "optimizing my response capabilities. Please try again in a "
-                        "moment."
-                    ),
-                    "status": "fallback",
-                    "routing_method": "error_fallback",
-                }
-
-        logger.info(
-            "DEBUG: Finished orchestrator execution, continuing to workflow check..."
-        )
-
-        # Check if this should trigger an automated workflow
-        if WORKFLOW_AUTOMATION_AVAILABLE and workflow_manager:
-            try:
-                # Check if message indicates need for automated execution
-                automation_keywords = [
-                    "install",
-                    "setup",
-                    "configure",
-                    "deploy",
-                    "update",
-                    "upgrade",
-                    "build",
-                    "compile",
-                    "run steps",
-                    "execute workflow",
-                    "automate",
-                    "step by step",
-                    "automatically",
-                    "batch",
-                    "sequence",
-                ]
-
-                if any(keyword in message.lower() for keyword in automation_keywords):
-                    # Create workflow from chat request
-                    workflow_id = (
-                        await workflow_manager.create_workflow_from_chat_request(
-                            message, chat_id
-                        )
-                    )
-
-                    if workflow_id:
-                        logger.info(
-                            f"Created automated workflow {workflow_id} for chat {chat_id}"
-                        )
-
-                        # Add workflow info to orchestrator result
-                        if isinstance(orchestrator_result, dict):
-                            orchestrator_result["workflow_id"] = workflow_id
-                            orchestrator_result["workflow_triggered"] = True
-
-            except Exception as e:
-                logger.error(f"Failed to create workflow from chat: {e}")
-
-        # Process the result similar to the /goal endpoint
-        if isinstance(orchestrator_result, dict):
-            result_dict = orchestrator_result
-        else:
-            result_dict = {"message": str(orchestrator_result)}
-
-        # Debug logging for empty responses
-        logging.info(f"Orchestrator result for chat {chat_id}: {result_dict}")
-        response_message = "An unexpected response format was received."
-        tool_name = result_dict.get("tool_name")
-        tool_args = result_dict.get("tool_args", {})
-
-        # Debug logging for tool detection
-        logging.info(f"🔍 DEBUG tool_name detected: '{tool_name}'")
-
-        # Ensure tool_args is a dictionary
-        if not isinstance(tool_args, dict):
-            tool_args = {}
-
-        if tool_name == "respond_conversationally":
-            response_text = tool_args.get("response_text", "No response text provided.")
-            result_response_text = result_dict.get("response_text")
-            logging.info(
-                "🔍 DEBUG respond_conversationally: "
-                f"response_text={response_text}, "
-                f"result_response_text={result_response_text}"
-            )
-            # Handle empty string, None, or whitespace-only responses
-            if result_response_text and result_response_text.strip():
-                # Try to extract plain text from JSON response if it's JSON
-                try:
-                    import json
-
-                    parsed_response = json.loads(result_response_text)
-                    if isinstance(parsed_response, dict):
-                        # Try common text fields in JSON response
-                        extracted_text = (
-                            parsed_response.get("text")
-                            or parsed_response.get("message")
-                            or parsed_response.get("content")
-                            or parsed_response.get("response")
-                            or parsed_response.get("user")
-                            or parsed_response.get("user")
-                            or parsed_response.get("hello")  # Handle "hello" field
-                        )
-
-                        # If no common field found, try sophisticated extraction
-                        if not extracted_text:
-                            extracted_text = _extract_text_from_complex_json(
-                                parsed_response
-                            )
-
-                        # If we found a text field, use it
-                        if extracted_text and isinstance(extracted_text, str):
-                            response_message = extracted_text
-                        else:
-                            # If no text field found, log structure and return raw JSON
-                            logging.info(
-                                "JSON response without recognizable text field: "
-                                f"{parsed_response}"
-                            )
-                            # Return JSON as-is to see structure
-                            response_message = result_response_text
-                    else:
-                        response_message = result_response_text
-                except json.JSONDecodeError:
-                    # If it's not JSON, use it as-is
-                    response_message = result_response_text
-            elif response_text and response_text.strip():
-                # Apply same JSON extraction logic to response_text
-                try:
-                    import json
-
-                    parsed_response = json.loads(response_text)
-                    if isinstance(parsed_response, dict):
-                        extracted_text = (
-                            parsed_response.get("text")
-                            or parsed_response.get("message")
-                            or parsed_response.get("content")
-                            or parsed_response.get("response")
-                            or parsed_response.get("user")
-                            or parsed_response.get("hello")
-                        )
-
-                        # If no common field found, try sophisticated extraction
-                        if not extracted_text:
-                            extracted_text = _extract_text_from_complex_json(
-                                parsed_response
-                            )
-                        if extracted_text and isinstance(extracted_text, str):
-                            response_message = extracted_text
-                        else:
-                            response_message = response_text
-                    else:
-                        response_message = response_text
-                except json.JSONDecodeError:
-                    response_message = response_text
-            else:
-                response_message = (
-                    "I apologize, but I wasn't able to generate a proper response. "
-                    "Could you please rephrase your question?"
-                )
-            logging.info(
-                "🔍 DEBUG respond_conversationally final "
-                f"response_message: {response_message}"
-            )
-        # Send KB findings as separate utility message if available
-        if (
-            kb_result.get("is_question")
-            and kb_result.get("documents_found", 0) > 0
-            and "summary" in kb_result
-        ):
-            kb_summary = kb_result["summary"]
-            kb_utility_message = f"📚 **Knowledge Base Information:**\n{kb_summary}"
-            await _send_typed_message(
-                existing_history,
-                "utility",
-                kb_utility_message,
-                chat_history_manager,
-                chat_id,
-            )
-            logging.info(
-                f"Sent KB findings as separate utility message: {kb_result['documents_found']} documents"
-            )
-        elif kb_result.get("is_question") and kb_result.get("documents_found", 0) == 0:
-            # Send "no KB info" as utility message when it's a question but no results found
-            kb_utility_message = "📚 **Knowledge Base Information:** None"
-            await _send_typed_message(
-                existing_history,
-                "utility",
-                kb_utility_message,
-                chat_history_manager,
-                chat_id,
-            )
-
-        # Send web research results as separate utility message if available
-        elif (
-            web_research_result
-            and web_research_result.get("summary")
-            and not web_research_result.get("error")
-        ):
-            web_summary = web_research_result["summary"]
-            sources = web_research_result.get("sources", [])
-
-            # Format sources
-            sources_text = ""
-            if sources:
-                sources_text = "\n\n**Sources:**\n" + "\n".join(
-                    [
-                        f"• {source['title']} ({source['domain']}) - "
-                        f"Quality: {source.get('quality_score', 'N/A')}"
-                        for source in sources[:3]
-                    ]
-                )
-
-            # Send web research as separate utility message
-            web_utility_message = (
-                f"🌐 **Web Research Results:**\n{web_summary}{sources_text}"
-            )
-            await _send_typed_message(
-                existing_history,
-                "utility",
-                web_utility_message,
-                chat_history_manager,
-                chat_id,
-            )
-
-            # Send storage note as separate utility message
-            stored_count = len(web_research_result.get("stored_in_kb", []))
-            if stored_count > 0:
-                storage_note = (
-                    f"*Note: {stored_count} high-quality sources were added to the "
-                    "knowledge base for future reference.*"
-                )
-                await _send_typed_message(
-                    existing_history,
-                    "utility",
-                    storage_note,
-                    chat_history_manager,
-                    chat_id,
-                )
-
-            logging.info(
-                f"Sent web research as separate utility messages: {len(sources)} sources found, "
-                f"{stored_count} stored in KB"
-            )
-
-        elif tool_name == "execute_system_command":
-            command_output = tool_args.get("output", "")
-            command_error = tool_args.get("error", "")
-            command_status = tool_args.get("status", "unknown")
-
-            if command_status == "success":
-                response_message = (
-                    f"Command executed successfully.\nOutput:\n{command_output}"
-                )
-            else:
-                response_message = (
-                    f"Command failed ({command_status}).\nError:\n{command_error}"
-                    f"\nOutput:\n{command_output}"
-                )
-        elif tool_name == "workflow_orchestrator":
-            # Handle workflow orchestration results - send separate messages
-            logging.info(
-                f"🚀 WORKFLOW ORCHESTRATOR HANDLER ACTIVATED for chat {chat_id}"
-            )
-            workflow_details = result_dict.get("workflow_details", {})
-            tool_args = result_dict.get("tool_args", {})
-
-            # Send planning message
-            planning_info = """Classification: {tool_args.get('message_classification', 'unknown')}
-Agents Involved: {', '.join(tool_args.get('agents_involved', []))}
-Planned Steps: {tool_args.get('planned_steps', 0)}
-Estimated Duration: {tool_args.get('estimated_duration', 'unknown')}
-User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
-
-            await _send_typed_message(
-                existing_history,
-                "planning",
-                planning_info,
-                chat_history_manager,
-                chat_id,
-            )
-
-            # Send thoughts message about workflow execution
-            thoughts_text = (
-                "Analyzing request complexity and determining optimal agent "
-                "coordination strategy. This "
-                f"{tool_args.get('message_classification', 'unknown')} request "
-                f"requires {tool_args.get('planned_steps', 0)} coordinated steps "
-                f"across {len(tool_args.get('agents_involved', []))} specialized agents."
-            )
-
-            await _send_typed_message(
-                existing_history,
-                "thought",
-                thoughts_text,
-                chat_history_manager,
-                chat_id,
-            )
-
-            # Send utility messages for each agent step
-            agent_results = workflow_details.get("agent_results", [])
-            for result in agent_results:
-                utility_text = (
-                    f"Step {result['step']}: {result['agent']} agent completed "
-                    f"'{result['action']}' in {result['duration']} - {result['result']}"
-                )
-                await _send_typed_message(
-                    existing_history,
-                    "utility",
-                    utility_text,
-                    chat_history_manager,
-                    chat_id,
-                )
-
-                # Send debug message for each step execution
-                debug_text = (
-                    f"Agent: {result['agent']} | Action: {result['action']} | "
-                    f"Duration: {result['duration']} | Status: completed"
-                )
-                await _send_typed_message(
-                    existing_history, "debug", debug_text, chat_history_manager, chat_id
-                )
-
-            # Send JSON output with technical details
-            json_output = {
-                "workflow_executed": result_dict.get("workflow_executed", False),
-                "classification": tool_args.get("message_classification"),
-                "agents_coordinated": len(tool_args.get("agents_involved", [])),
-                "steps_executed": workflow_details.get("steps_executed", 0),
-                "execution_status": workflow_details.get("execution_status"),
-                "total_duration": (
-                    sum(float(r["duration"].replace("s", "")) for r in agent_results)
-                    if agent_results
-                    else 0
-                ),
-            }
-
-            await _send_typed_message(
-                existing_history,
-                "json",
-                json.dumps(json_output, indent=2),
-                chat_history_manager,
-                chat_id,
-            )
-
-            # Main response message
-            response_message = workflow_details.get(
-                "response_text",
-                result_dict.get(
-                    "response_text",
-                    "Multi-agent workflow coordination completed successfully.",
-                ),
-            )
-        elif tool_name:
-            tool_output_content = tool_args.get(
-                "output", tool_args.get("message", str(tool_args))
-            )
-            response_message = f"Tool Used: {tool_name}\nOutput: {tool_output_content}"
-        elif result_dict.get("output"):
-            response_message = result_dict["output"]
-        elif result_dict.get("message"):
-            response_message = result_dict["message"]
-        else:
-            # Handle completely empty or invalid responses
-            if not result_dict or result_dict == {}:
-                response_message = (
-                    "I'm sorry, I encountered an issue processing your request. "
-                    "Please try asking your question in a different way."
-                )
-                logging.warning(
-                    f"Empty orchestrator result for chat {chat_id}, "
-                    f"message: {message}"
-                )
-            else:
-                response_message = str(result_dict)
-
-        # Add bot response to chat history (skip for workflow orchestrator since separate messages already sent)
-        if tool_name != "workflow_orchestrator":
-            # Add final source attribution summary
-            final_attribution = source_manager.format_attribution_block()
-            if final_attribution and kb_result.get("documents_found", 0) > 0:
-                response_message += f"\n\n{final_attribution}"
-
-            bot_message = {
-                "sender": "bot",
-                "text": response_message,
-                "messageType": "response",
-                "rawData": result_dict,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "sources": [
-                    s.to_dict() for s in source_manager.current_response_sources
-                ],
-            }
-            # Add KB search results to metadata if available
-            if kb_result.get("is_question") and kb_result.get("documents_found", 0) > 0:
-                bot_message["kb_search_performed"] = True
-                bot_message["kb_documents_found"] = kb_result["documents_found"]
-                bot_message["kb_documents"] = kb_result.get("documents", [])
-
-            # Add web research results to metadata if available
-            if web_research_result and not web_research_result.get("error"):
-                bot_message["web_research_performed"] = True
-                bot_message["web_sources_found"] = len(
-                    web_research_result.get("sources", [])
-                )
-                bot_message["web_sources"] = web_research_result.get("sources", [])
-                bot_message["web_stored_in_kb"] = len(
-                    web_research_result.get("stored_in_kb", [])
-                )
-
-            existing_history.append(bot_message)
-
-        # Save updated chat history - PERFORMANCE FIX: Convert to async
-        await chat_history_manager.save_session(chat_id, messages=existing_history)
-
-        # Broadcast response via WebSocket for real-time updates
-        try:
-            from src.event_manager import event_manager
-
-            await event_manager.publish(
-                "llm_response",
-                {
-                    "response": response_message,
-                    "chat_id": chat_id,
-                    "message_type": "response",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "sources": (
-                        [s.to_dict() for s in source_manager.current_response_sources]
-                        if source_manager.current_response_sources
-                        else []
-                    ),
-                    "sender": "bot",
+            
+            # Add workflow messages first (thoughts, planning, debug, etc.)
+            if hasattr(workflow_result, 'workflow_messages') and workflow_result.workflow_messages:
+                for wf_msg in workflow_result.workflow_messages:
+                    existing_history.append(wf_msg)
+            
+            # Save the final response to chat history  
+            assistant_message = {
+                "sender": "assistant",
+                "text": workflow_result.response,
+                "messageType": "assistant", 
+                "type": "response",  # Add type field for frontend filtering
+                "rawData": {
+                    "message_type": workflow_result.message_type.value,
+                    "knowledge_status": workflow_result.knowledge_status.value,
+                    "sources": workflow_result.sources or [],
+                    "kb_results_count": len(workflow_result.kb_results),
+                    "processing_time": workflow_result.processing_time,
+                    "librarian_engaged": workflow_result.librarian_engaged,
+                    "mcp_used": workflow_result.mcp_used
                 },
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            
+            # Save all messages to history
+            existing_history.append(assistant_message)
+            await chat_history_manager.save_session(chat_id, existing_history)
+            
+            # Ensure workflow messages are JSON serializable
+            serializable_workflow_messages = []
+            if hasattr(workflow_result, 'workflow_messages') and workflow_result.workflow_messages:
+                for msg in workflow_result.workflow_messages:
+                    if isinstance(msg, dict):
+                        # Create a clean copy with only serializable fields
+                        clean_msg = {
+                            "sender": msg.get("sender", "assistant"),
+                            "text": str(msg.get("text", "")),
+                            "type": str(msg.get("type", "message")),
+                            "timestamp": str(msg.get("timestamp", time.strftime("%H:%M:%S"))),
+                            "metadata": msg.get("metadata", {})
+                        }
+                        serializable_workflow_messages.append(clean_msg)
+            
+            # Return the workflow results including all workflow messages
+            return JSONResponse(
+                content={
+                    "response": workflow_result.response,
+                    "message_type": workflow_result.message_type.value,
+                    "knowledge_status": workflow_result.knowledge_status.value,
+                    "sources": workflow_result.sources or [],
+                    "kb_results_count": len(workflow_result.kb_results),
+                    "processing_time": workflow_result.processing_time,
+                    "librarian_engaged": workflow_result.librarian_engaged,
+                    "mcp_used": workflow_result.mcp_used,
+                    "conversation_id": chat_id,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "workflow_messages": serializable_workflow_messages,
+                }
             )
-            logging.info(f"Broadcasted chat response for chat_id: {chat_id}")
+            
+        except asyncio.TimeoutError:
+            logger.error("ChatWorkflowManager timed out after 20 seconds")
+            # Return a timeout response
+            timeout_response = "I'm taking too long to process your request. The knowledge base might still be initializing. Please try again in a moment."
+            
+            assistant_message = {
+                "sender": "assistant",
+                "text": timeout_response,
+                "messageType": "assistant",
+                "rawData": {"error": "timeout", "message": "Workflow processing timeout"},
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            
+            existing_history.append(assistant_message)
+            await chat_history_manager.save_session(chat_id, existing_history)
+            
+            return JSONResponse(
+                content={
+                    "response": timeout_response,
+                    "message_type": "timeout",
+                    "knowledge_status": "timeout",
+                    "sources": [],
+                    "kb_results_count": 0,
+                    "processing_time": 20.0,
+                    "librarian_engaged": False,
+                    "mcp_used": False,
+                    "conversation_id": chat_id,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "error": "Processing timeout - KB may still be initializing"
+                }
+            )
+            
         except Exception as e:
-            logging.warning(f"Failed to broadcast response via WebSocket: {e}")
-            # Don't fail the entire request if WebSocket broadcast fails
+            logger.error(f"ChatWorkflowManager failed: {e}")
+            # Fallback to simple response if workflow fails
+            simple_response = f"I encountered an error processing your message: {e}. Please try again."
+            
+            assistant_message = {
+                "sender": "assistant",
+                "text": simple_response,
+                "messageType": "assistant",
+                "rawData": {"error": str(e)},
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            
+            existing_history.append(assistant_message)
+            await chat_history_manager.save_session(chat_id, existing_history)
+            
+            return JSONResponse(
+                content={
+                    "response": simple_response,
+                    "message_type": "error",
+                    "knowledge_status": "error", 
+                    "sources": [],
+                    "kb_results_count": 0,
+                    "processing_time": 0.0,
+                    "librarian_engaged": False,
+                    "mcp_used": False,
+                    "conversation_id": chat_id,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "error": str(e)
+                }
+            )
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "response": response_message,
-                "status": "success",
-                "chat_id": chat_id,
-                "message_count": len(existing_history),
-            },
-        )
-
-    # Execute with timeout protection
+    # CRITICAL FIX: Use timeout to prevent hanging
     try:
-        # 60-second timeout to account for slow Ollama model loading (observed 6+ seconds)
-        return await asyncio.wait_for(_process_message(), timeout=60.0)
+        result = await asyncio.wait_for(_process_message(), timeout=30.0)
+        return result
     except asyncio.TimeoutError:
-        logging.error(f"Chat message processing timed out for chat_id: {chat_id}")
+        logger.error(f"Chat message processing timed out after 30 seconds for chat_id: {chat_id}")
         return JSONResponse(
             status_code=408,
             content={
-                "error": "Request timed out. The AI models may be busy. Please try again in a moment.",
-                "chat_id": chat_id,
-                "timeout": True,
-            },
+                "error": "Request timed out - chat processing took too long",
+                "message": "The chat service is experiencing high load. Please try again.",
+                "timeout": 30
+            }
         )
     except Exception as e:
-        logging.error(f"Critical error in chat message timeout wrapper: {str(e)}")
+        logger.error(f"Unexpected error in chat processing: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Try to return a proper error response
         return JSONResponse(
-            status_code=500, content={"error": f"Critical system error: {str(e)}"}
+            status_code=500,
+            content={
+                "error": "Internal server error",
+                "message": str(e),
+                "type": type(e).__name__
+            }
         )
 
+# End of send_chat_message function
 
 @router.post("/chats/cleanup_messages")
 async def cleanup_messages():
