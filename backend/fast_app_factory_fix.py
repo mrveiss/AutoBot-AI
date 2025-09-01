@@ -3,8 +3,10 @@ Fast App Factory with Redis Connection Fix
 Temporary fix for Redis connection timeout issues
 """
 
+import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import List, Union
 
@@ -20,18 +22,61 @@ from backend.api.registry import get_router_configs, RouterStatus
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Import startup tracking
+try:
+    from backend.api.startup import add_startup_message, StartupPhase
+    startup_available = True
+except ImportError:
+    startup_available = False
+    logger.warning("Startup tracking not available")
+
+def report_startup_progress(phase: str, message: str, progress: int, icon: str = "🚀"):
+    """Report startup progress if startup API is available"""
+    if startup_available:
+        try:
+            phase_enum = StartupPhase(phase)
+            add_startup_message(phase_enum, message, progress, icon)
+        except Exception as e:
+            logger.debug(f"Failed to report startup progress: {e}")
+    else:
+        logger.info(f"[{progress}%] {message}")
+
 # PERFORMANCE FIX: Set environment variable to prevent immediate knowledge base initialization
 os.environ["AUTOBOT_LAZY_INIT"] = "true"  # Signal to delay heavy initialization
+
+# Reset startup state for fresh start
+try:
+    from backend.api.startup import reset_startup_state
+    reset_startup_state()
+except ImportError:
+    logger.debug("Startup state reset not available")
+
+# Report initial startup progress
+report_startup_progress("initializing", "Starting AutoBot backend...", 10, "🚀")
 
 # Load routers from centralized registry
 router_registry = get_router_configs()
 loaded_routers = {}
 
 logger.info(f"Loading {len(router_registry)} routers from centralized registry...")
+report_startup_progress("starting_services", "Loading API routers...", 20, "⚙️")
 
 # Dynamically import and configure routers based on registry
+total_routers = len(router_registry)
+loaded_count = 0
+
 for router_name, config in router_registry.items():
     try:
+        # CRITICAL FIX: Skip specific problematic routers and DISABLED routers  
+        if config.status == RouterStatus.DISABLED:
+            logger.info(f"Skipping {config.name} router (status: {config.status.value})")
+            continue
+            
+        # Skip only the intelligent_agent router to prevent startup deadlock
+        if router_name == "intelligent_agent":
+            logger.info(f"Skipping {config.name} router to prevent blocking initialization during startup")
+            continue
+            
         # Dynamic import based on module path
         module_parts = config.module_path.split('.')
         module_name = module_parts[-1]
@@ -48,6 +93,10 @@ for router_name, config in router_registry.items():
             'config': config
         }
         
+        loaded_count += 1
+        progress = 20 + int((loaded_count / total_routers) * 40)  # 20-60% for router loading
+        report_startup_progress("starting_services", f"Loaded {config.name} router", progress, "✅")
+        
         status_msg = f"({config.status.value})" if config.status != RouterStatus.ENABLED else ""
         logger.info(f"{config.name.title()} router will be mounted at {config.prefix} {status_msg}")
         
@@ -59,6 +108,21 @@ for router_name, config in router_registry.items():
         logger.error(f"Unexpected error loading {config.name} router: {e}")
 
 logger.info(f"Successfully loaded {len(loaded_routers)}/{len(router_registry)} routers from registry")
+report_startup_progress("starting_services", f"Loaded {len(loaded_routers)} API routers", 60, "🎯")
+
+# CRITICAL FIX: Manually ensure WebSocket router is loaded
+try:
+    from backend.api.websockets import router as websocket_router
+    if 'websockets' not in loaded_routers:
+        logger.warning("WebSocket router not loaded from registry, manually importing...")
+        loaded_routers['websockets'] = {
+            'router': websocket_router,
+            'prefix': '',  # WebSocket routes don't use prefix
+            'tags': ['websockets', 'realtime']
+        }
+        logger.info("✅ WebSocket router manually loaded with config")
+except ImportError as e:
+    logger.error(f"❌ Failed to manually load WebSocket router: {e}")
 
 # Override Redis timeout
 os.environ["AUTOBOT_REDIS_SOCKET_TIMEOUT"] = "2"  # 2 second timeout instead of 30
@@ -93,14 +157,24 @@ async def get_or_create_knowledge_base(app):
     try:
         logger.info("Lazy loading knowledge base for search functionality...")
         from src.knowledge_base import KnowledgeBase
-        knowledge_base = KnowledgeBase()
-        # Initialize with minimal setup
+        from src.config import config as global_config
+        
+        knowledge_base = KnowledgeBase(config_manager=global_config)
+        
+        # CRITICAL FIX: Initialize the knowledge base properly
+        logger.info("Initializing knowledge base with existing data...")
+        await knowledge_base.ainit()
+        
         app.state.knowledge_base = knowledge_base
-        logger.info("Knowledge base lazy loaded successfully")
+        logger.info("Knowledge base lazy loaded and initialized successfully")
         return knowledge_base
+        
     except Exception as e:
         logger.error(f"Failed to lazy load knowledge base: {e}")
-        # Return a minimal knowledge base
+        import traceback
+        traceback.print_exc()
+        
+        # Return a minimal knowledge base that returns empty results
         from types import SimpleNamespace
         minimal_kb = SimpleNamespace()
         minimal_kb.search = lambda query, **kwargs: []
@@ -113,6 +187,7 @@ async def get_or_create_knowledge_base(app):
 async def create_lifespan_manager(app: FastAPI):
     """Minimal lifespan manager that doesn't block on Redis"""
     logger.info("Starting application with minimal initialization...")
+    report_startup_progress("connecting_backend", "Initializing backend services...", 70, "🔧")
     
     # PERFORMANCE FIX: Skip ALL heavy initialization during startup
     app.state.knowledge_base = None  # Will be lazy-loaded on first use
@@ -133,16 +208,18 @@ async def create_lifespan_manager(app: FastAPI):
     try:
         import redis
         r = redis.Redis(
-            host=os.getenv("AUTOBOT_REDIS_HOST", "localhost"),
+            host=os.getenv("AUTOBOT_REDIS_HOST", "redis" if (os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER')) else "localhost"),
             port=int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
             socket_timeout=2,
             socket_connect_timeout=2,
         )
         r.ping()
         app.state.main_redis_client = r
+        report_startup_progress("connecting_backend", "Connected to Redis cache", 80, "🔗")
         logger.info("Redis connected successfully")
     except Exception as e:
         logger.warning(f"Redis connection failed (non-blocking): {e}")
+        report_startup_progress("connecting_backend", "Redis unavailable - using fallback mode", 80, "⚠️")
         # Continue without Redis - app will still work for basic operations
     
     # CRITICAL FIX: Move LLM configuration synchronization to background task
@@ -188,14 +265,14 @@ async def create_lifespan_manager(app: FastAPI):
         except Exception as e:
             logger.warning(f"Background LLM configuration synchronization failed: {e}")
     
-    # Run LLM sync in background without blocking startup
+    # Start background LLM configuration synchronization (with non-blocking Redis)
     try:
-        import asyncio
-        asyncio.create_task(background_llm_sync())
-        logger.info("LLM configuration synchronization started in background")
+        await asyncio.create_task(background_llm_sync())
     except Exception as e:
-        logger.warning(f"Failed to start background LLM sync task: {e}")
+        logger.warning(f"Background LLM configuration synchronization failed: {e}")
+        # Continue startup even if LLM sync fails
     
+    report_startup_progress("ready", "AutoBot backend ready!", 100, "🎉")
     logger.info("Application startup completed (minimal mode)")
     
     yield
@@ -213,6 +290,8 @@ def create_app() -> FastAPI:
         lifespan=create_lifespan_manager,
     )
     
+    report_startup_progress("connecting_backend", "Configuring API middleware...", 85, "🔒")
+    
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -221,6 +300,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    report_startup_progress("connecting_backend", "Mounting API endpoints...", 90, "🔌")
     
     # Mount routers from centralized registry
     for name, config in loaded_routers.items():
@@ -239,10 +320,47 @@ def create_app() -> FastAPI:
         except Exception as e:
             logger.warning(f"Failed to mount {name} router: {e}")
     
+    # CRITICAL: Add simple WebSocket test endpoint
+    from fastapi import WebSocket
+    
+    @app.websocket("/ws")
+    async def websocket_test(websocket: WebSocket):
+        await websocket.accept()
+        logger.info("✅ Simple WebSocket connected")
+        try:
+            await websocket.send_json({"type": "connection", "status": "connected"})
+            while True:
+                data = await websocket.receive_text()
+                await websocket.send_json({"type": "echo", "data": data})
+        except Exception as e:
+            logger.info(f"WebSocket disconnected: {e}")
+    
+    logger.info("✅ Simple WebSocket endpoint added at /ws")
+    
+    report_startup_progress("ready", "All endpoints ready", 95, "🚀")
+    
     # Add a simple health check that always works
     @app.get("/api/health")
     async def health_check():
         return {"status": "ok", "mode": "fast", "redis": app.state.main_redis_client is not None}
+    
+    # DIAGNOSTIC: Add minimal test chat endpoint to isolate hanging
+    from pydantic import BaseModel
+    
+    class TestChatMessage(BaseModel):
+        message: str
+    
+    @app.post("/api/debug/chat/test")
+    async def test_chat_minimal(chat_message: TestChatMessage):
+        """Minimal chat endpoint for debugging hanging issues"""
+        logger.info(f"DEBUG: test_chat_minimal received: {chat_message.message}")
+        
+        # Test response without any heavy processing
+        return {
+            "response": f"Echo: {chat_message.message}",
+            "status": "test_success",
+            "timestamp": time.time()
+        }
     
     # Add endpoint registry information
     @app.get("/api/endpoints")
