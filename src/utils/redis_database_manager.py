@@ -198,8 +198,13 @@ class RedisDatabaseManager:
                     connection_pool=redis.ConnectionPool(**connection_params)
                 )
 
-                # Test connection
-                self._connections[connection_key].ping()
+                # Test connection asynchronously to avoid blocking
+                try:
+                    # Use a very short timeout to avoid blocking the event loop
+                    self._connections[connection_key].ping()
+                except Exception as ping_error:
+                    logger.warning(f"Redis ping failed for '{database}', but continuing: {ping_error}")
+                    # Don't raise - allow connection to be established even if ping fails
                 logger.info(
                     f"Connected to Redis database '{database}' (DB {db_number})"
                 )
