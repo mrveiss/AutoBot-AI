@@ -7,9 +7,3 @@ services:
       - HTTP_PROXY=
       - HTTPS_PROXY=
       - NO_PROXY=*
-    
-  seq:
-    environment:
-      - HTTP_PROXY=
-      - HTTPS_PROXY=
-      - NO_PROXY=*

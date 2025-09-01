@@ -26,16 +26,33 @@ from .utils.service_registry import get_service_url
 
 # Service Host IP Addresses from environment
 # NOTE: These defaults should match what's in config.yaml and settings.json
-# Using localhost (127.0.0.1) as the default for all services
-OLLAMA_HOST_IP = os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1")
-LM_STUDIO_HOST_IP = os.getenv("AUTOBOT_LM_STUDIO_HOST", "127.0.0.1")
-BACKEND_HOST_IP = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.1")
-FRONTEND_HOST_IP = os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.1")
-PLAYWRIGHT_HOST_IP = os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "127.0.0.1")
-NPU_WORKER_HOST_IP = os.getenv("AUTOBOT_NPU_WORKER_HOST", "127.0.0.1")
-AI_STACK_HOST_IP = os.getenv("AUTOBOT_AI_STACK_HOST", "127.0.0.1")
-REDIS_HOST_IP = os.getenv("AUTOBOT_REDIS_HOST", "127.0.0.1")
-LOG_VIEWER_HOST_IP = os.getenv("AUTOBOT_LOG_VIEWER_HOST", "127.0.0.1")
+# Smart host detection: use localhost for direct host execution, host.docker.internal for container-to-host
+
+def _get_default_host_for_service(service_type="host"):
+    """Get appropriate default host based on execution environment"""
+    # Check if running in Docker container
+    if os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER'):
+        # Running in container - use appropriate addressing
+        if service_type == "container":
+            return "redis"  # Use service name for container-to-container
+        else:
+            return "host.docker.internal"  # Use host.docker.internal for container-to-host
+    else:
+        # Running on host - use localhost
+        return "127.0.0.1"
+
+# Host service defaults (backend, ollama, etc. run on host)
+OLLAMA_HOST_IP = os.getenv("AUTOBOT_OLLAMA_HOST", _get_default_host_for_service("host"))
+LM_STUDIO_HOST_IP = os.getenv("AUTOBOT_LM_STUDIO_HOST", _get_default_host_for_service("host"))
+BACKEND_HOST_IP = os.getenv("AUTOBOT_BACKEND_HOST", _get_default_host_for_service("host"))
+FRONTEND_HOST_IP = os.getenv("AUTOBOT_FRONTEND_HOST", _get_default_host_for_service("host"))
+PLAYWRIGHT_HOST_IP = os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "browser")  # Container service name
+NPU_WORKER_HOST_IP = os.getenv("AUTOBOT_NPU_WORKER_HOST", "npu-worker")  # Container service name
+AI_STACK_HOST_IP = os.getenv("AUTOBOT_AI_STACK_HOST", "ai-stack")  # Container service name
+
+# Container service defaults (redis, etc. run in containers)
+REDIS_HOST_IP = os.getenv("AUTOBOT_REDIS_HOST", "redis" if (os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER')) else "127.0.0.1")
+LOG_VIEWER_HOST_IP = os.getenv("AUTOBOT_LOG_VIEWER_HOST", "seq" if (os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER')) else "127.0.0.1")
 
 # Service Ports from environment
 BACKEND_PORT = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
@@ -1011,6 +1028,25 @@ config = ConfigManager()
 
 # Alias for backward compatibility and consistent naming
 global_config_manager = config
+
+
+def log_service_configuration():
+    """Log current service configuration for debugging"""
+    logger = logging.getLogger(__name__)
+    try:
+        logger.info(f"OLLAMA_HOST_IP: {OLLAMA_HOST_IP}")
+        logger.info(f"BACKEND_HOST_IP: {BACKEND_HOST_IP}")
+        logger.info(f"REDIS_HOST_IP: {REDIS_HOST_IP}")
+        logger.info(f"Service URLs loaded: {config.config_data.get('services', {}).keys() if config.config_data else 'None'}")
+    except Exception as e:
+        logger.warning(f"Error logging service configuration: {e}")
+
+
+# Log service configuration on startup for debugging
+try:
+    log_service_configuration()
+except Exception as e:
+    logging.getLogger(__name__).warning(f"Could not log service configuration: {e}")
 
 # NOTE: After config is loaded, update the legacy variables with proper values
 # This ensures backward compatibility while using the configuration system
