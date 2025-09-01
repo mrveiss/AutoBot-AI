@@ -4,16 +4,54 @@
 name: autobot
 
 services:
+  # DNS Cache Service - Provides fast DNS resolution for all containers
+  dns-cache:
+    build:
+      context: .
+      dockerfile: docker/dns-cache/Dockerfile
+    image: autobot-dns-cache:latest
+    container_name: autobot-dns-cache
+    restart: unless-stopped
+    volumes:
+      - dns_cache:/var/cache/autobot
+      - ./logs:/shared/logs  # Share logs with host
+    environment:
+      - DNS_REFRESH_INTERVAL=15
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "dns-cache"
+    healthcheck:
+      test: ["CMD", "nslookup", "host.docker.internal", "127.0.0.1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      autobot:
+        ipv4_address: 172.18.0.10
+    ports:
+      - "5353:53/udp"  # Alternative DNS port to avoid conflicts
   # Redis Stack - Core data store
   redis:
     image: redis/redis-stack:7.4.0-v1
     container_name: autobot-redis
+    hostname: redis.autobot
     restart: unless-stopped
     volumes:
       - redis_data:/data
+      - ./logs:/shared/logs  # Share logs with host
     environment:
       - REDIS_ARGS=--appendonly yes --save 60 1
       - REDISINSIGHT_PORT=${REDISINSIGHT_PORT:-8002}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "redis"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -21,32 +59,14 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - autobot
+      autobot:
+        aliases:
+          - redis.autobot
+          - redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
       - "${REDISINSIGHT_PORT:-8002}:8001"
 
-  # Seq - Centralized logging
-  seq:
-    image: datalust/seq:latest
-    container_name: autobot-seq
-    restart: unless-stopped
-    volumes:
-      - seq_data:/data
-    environment:
-      - ACCEPT_EULA=Y
-      - SEQ_FIRSTRUN_ADMINUSERNAME=${SEQ_ADMIN_USER:-admin}
-      - SEQ_FIRSTRUN_ADMINPASSWORD=${SEQ_ADMIN_PASSWORD:-autobot123}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    networks:
-      - autobot
-    ports:
-      - "${SEQ_PORT:-5341}:80"
 
   # Backend API - Runs on HOST for system access (desktop, network, files)
   # Started by unified script, not Docker
@@ -63,8 +83,15 @@ services:
       - PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
     volumes:
       - browser_data:/app/data
+      - ./logs:/shared/logs  # Share logs with host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "browser-service"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       start_period: 20s
@@ -86,21 +113,42 @@ services:
     restart: unless-stopped
     depends_on:
       - redis
+    # Revert to bridge networking with proper host resolution
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "backend.autobot:host-gateway"
     volumes:
       - ./autobot-vue:/app
-      - /app/node_modules  # Anonymous volume for node_modules
+      - frontend_node_modules:/app/node_modules  # Named volume to preserve installed packages
+      - ./docker/dns-sidecar:/opt/autobot-dns:ro
+      - ./logs:/shared/logs  # Share logs with host
     environment:
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:8001}
-      - NODE_ENV=${NODE_ENV:-production}
-    command: ${FRONTEND_COMMAND:-npm run preview -- --host 0.0.0.0}
+      - NODE_ENV=${NODE_ENV:-development}
+      - VITE_BACKEND_HOST=host.docker.internal
+      - VITE_BACKEND_PORT=8001
+      - DOCKER_CONTAINER=true  # Signal that we're running in Docker
+      # Use host.docker.internal for Docker container to WSL communication
+      # Logging configuration
+      - DEBUG_PROXY=${DEBUG_PROXY:-false}   # Only log proxy requests when explicitly enabled
+      - LOG_LEVEL=${FRONTEND_LOG_LEVEL:-info}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "frontend"
+    command: npm run dev -- --host 0.0.0.0 --port 5173
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173/"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5173/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
-      - autobot
+      autobot:
+        aliases:
+          - frontend.autobot
+          - frontend
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
 
@@ -115,8 +163,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      seq:
-        condition: service_healthy
     volumes:
       - ./src:/app/src
       - ./config:/app/config
@@ -124,6 +170,13 @@ services:
       - ./prompts:/app/prompts
       - models:/app/models
       - ai_logs:/app/logs
+      - ./logs:/shared/logs  # Share logs with host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "ai-stack"
     environment:
       - PYTHONPATH=/app
       - AI_SERVER_HOST=0.0.0.0
@@ -131,13 +184,14 @@ services:
       - AI_SERVER_WORKERS=1
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - SEQ_URL=${SEQ_URL:-http://seq:80}
-      - OLLAMA_HOST=${OLLAMA_HOST:-127.0.0.1:11434}
+      - OLLAMA_HOST=${OLLAMA_HOST:-host.docker.internal:11434}
       - CHROMA_DB_PATH=/app/data/chroma_db
       - DISABLE_EXTERNAL_APIS=${DISABLE_EXTERNAL_APIS:-true}
+      - TF_USE_LEGACY_KERAS=1
+      - KERAS_BACKEND=tensorflow
     command: python -m uvicorn ai_api_server:app --host 0.0.0.0 --port ${AI_SERVER_PORT:-8080}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${AI_SERVER_PORT:-8080}/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -163,10 +217,17 @@ services:
       - ./config:/app/config
       - models:/app/models
       - npu_logs:/app/logs
+      - ./logs:/shared/logs  # Share logs with host
       # Hardware access for NPU
       - /dev:/dev:ro
       - /lib/firmware:/lib/firmware:ro
       - /usr/local/lib:/usr/local/lib:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "npu-worker"
     environment:
       - PYTHONPATH=/app
       - NPU_WORKER_HOST=0.0.0.0
@@ -180,6 +241,8 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib:/usr/lib/x86_64-linux-gnu:/usr/local/lib/python3.10
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - TF_USE_LEGACY_KERAS=1
+      - KERAS_BACKEND=tensorflow
     privileged: true
     # GPU support (if available)
     deploy:
@@ -191,7 +254,7 @@ services:
               capabilities: [gpu]
     runtime: nvidia
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${NPU_WORKER_PORT:-8081}/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -202,14 +265,16 @@ services:
       - "${NPU_WORKER_PORT:-8081}:${NPU_WORKER_PORT:-8081}"
 
 volumes:
+  dns_cache:
+    name: autobot_dns_cache
   redis_data:
     name: autobot_redis_data
-  seq_data:
-    name: autobot_seq_data
   models:
     name: autobot_models
   browser_data:
     name: autobot_browser_data
+  frontend_node_modules:
+    name: autobot_frontend_node_modules
   ai_logs:
     name: autobot_ai_logs
   npu_logs:

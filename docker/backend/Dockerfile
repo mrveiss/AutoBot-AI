@@ -26,6 +26,10 @@ RUN mkdir -p /app/data /app/logs /app/models /app/prompts
 # Set Python path
 ENV PYTHONPATH=/app
 
+# CRITICAL FIX: Force tf-keras usage to fix Transformers compatibility with Keras 3
+ENV TF_USE_LEGACY_KERAS=1
+ENV KERAS_BACKEND=tensorflow
+
 # Expose port
 EXPOSE 8001
 
