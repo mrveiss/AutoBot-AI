@@ -112,7 +112,7 @@ export function useChatHistory() {
     }
 
     try {
-      await apiClient.delete(`/api/chats/${chatId}`);
+      await apiClient.delete(`/api/chat/chats/${chatId}`);
 
       // Remove from local storage
       localStorage.removeItem(`chat_${chatId}_messages`);
@@ -136,7 +136,7 @@ export function useChatHistory() {
   // Function to create a new chat
   const createNewChat = async () => {
     try {
-      const newChatData = await apiClient.post('/api/chats/new');
+      const newChatData = await apiClient.post('/api/chat/chats/new');
       const newChatId = newChatData.chat_id;
 
       // Add to chat list
