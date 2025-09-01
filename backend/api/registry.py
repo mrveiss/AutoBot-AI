@@ -1,0 +1,324 @@
+"""
+Unified API Endpoint Registry
+Single source of truth for all API endpoints and routing configuration
+"""
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from enum import Enum
+
+
+class RouterStatus(Enum):
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+    LAZY_LOAD = "lazy_load"
+
+
+@dataclass
+class RouterConfig:
+    """Configuration for a single API router"""
+    name: str
+    module_path: str
+    prefix: str
+    tags: List[str]
+    status: RouterStatus = RouterStatus.ENABLED
+    dependencies: List[str] = field(default_factory=list)
+    description: Optional[str] = None
+    version: str = "v1"
+    requires_auth: bool = False
+    rate_limit: Optional[Dict] = None
+
+
+class APIRegistry:
+    """Central registry for all API endpoints and routers"""
+    
+    def __init__(self):
+        self.routers = self._initialize_routers()
+    
+    def _initialize_routers(self) -> Dict[str, RouterConfig]:
+        """Initialize all router configurations"""
+        return {
+            # Core System Routers
+            "system": RouterConfig(
+                name="system",
+                module_path="backend.api.system",
+                prefix="/api/system",
+                tags=["system", "health"],
+                description="System health, metrics, and information"
+            ),
+            "async_chat": RouterConfig(
+                name="async_chat",
+                module_path="backend.api.async_chat",
+                prefix="/api/chat",
+                tags=["chat", "async"],
+                description="Async chat interface with dependency injection",
+                version="v2"
+            ),
+            "settings": RouterConfig(
+                name="settings",
+                module_path="backend.api.settings",
+                prefix="/api/settings",
+                tags=["settings", "config"],
+                description="Application settings and configuration"
+            ),
+            "cache": RouterConfig(
+                name="cache",
+                module_path="backend.api.cache",
+                prefix="/api/cache",
+                tags=["cache", "management"],
+                description="Cache management and clearing operations"
+            ),
+            "rum": RouterConfig(
+                name="rum",
+                module_path="backend.api.rum",
+                prefix="/api/rum",
+                tags=["rum", "monitoring", "developer"],
+                description="Real User Monitoring (RUM) for frontend event tracking"
+            ),
+            "developer": RouterConfig(
+                name="developer",
+                module_path="backend.api.developer",
+                prefix="/api/developer",
+                tags=["developer", "debug", "config"],
+                description="Developer mode configuration and debugging utilities"
+            ),
+            
+            # Chat and Communication
+            "chat": RouterConfig(
+                name="chat",
+                module_path="backend.api.chat",
+                prefix="/api/chat",
+                tags=["chat", "messaging"],
+                description="Chat interface and message handling"
+            ),
+            "websockets": RouterConfig(
+                name="websockets",
+                module_path="backend.api.websockets",
+                prefix="",  # WebSocket routes don't use prefix
+                tags=["websockets", "realtime"],
+                description="WebSocket endpoints for real-time communication"
+            ),
+            
+            # Knowledge Management
+            "knowledge": RouterConfig(
+                name="knowledge",
+                module_path="backend.api.knowledge",
+                prefix="/api/knowledge_base",
+                tags=["knowledge", "search"],
+                status=RouterStatus.ENABLED,
+                description="Knowledge base operations and search"
+            ),
+            "chat_knowledge": RouterConfig(
+                name="chat_knowledge",
+                module_path="backend.api.chat_knowledge",
+                prefix="/api/chat_knowledge",
+                tags=["knowledge", "chat"],
+                status=RouterStatus.LAZY_LOAD,
+                description="Chat-specific knowledge management"
+            ),
+            
+            # Agent and AI
+            "agent_config": RouterConfig(
+                name="agent_config",
+                module_path="backend.api.agent_config",
+                prefix="/api/agent-config",
+                tags=["agent", "config"],
+                description="Agent configuration and management"
+            ),
+            "prompts": RouterConfig(
+                name="prompts",
+                module_path="backend.api.prompts",
+                prefix="/api/prompts",
+                tags=["prompts", "ai"],
+                description="Prompt templates and management"
+            ),
+            "llm": RouterConfig(
+                name="llm",
+                module_path="backend.api.llm",
+                prefix="/api/llm",
+                tags=["llm", "ai"],
+                status=RouterStatus.LAZY_LOAD,
+                description="LLM integration and management"
+            ),
+            
+            # File and Content Management
+            "files": RouterConfig(
+                name="files",
+                module_path="backend.api.files",
+                prefix="/api/files",
+                tags=["files", "upload"],
+                description="File operations and management"
+            ),
+            "templates": RouterConfig(
+                name="templates",
+                module_path="backend.api.templates",
+                prefix="/api/templates",
+                tags=["templates"],
+                description="Template management and rendering"
+            ),
+            
+            # Security
+            "secrets": RouterConfig(
+                name="secrets",
+                module_path="backend.api.secrets",
+                prefix="/api/secrets",
+                tags=["secrets", "security"],
+                requires_auth=True,
+                description="Secrets and credential management"
+            ),
+            
+            # Development and Automation
+            "playwright": RouterConfig(
+                name="playwright",
+                module_path="backend.api.playwright",
+                prefix="/api/playwright",
+                tags=["automation", "browser"],
+                description="Browser automation via Playwright"
+            ),
+            "terminal": RouterConfig(
+                name="terminal",
+                module_path="backend.api.terminal_consolidated",
+                prefix="/api/terminal",
+                tags=["terminal", "execution"],
+                status=RouterStatus.ENABLED,  # Enable for fast backend
+                description="Terminal execution and management"
+            ),
+            "logs": RouterConfig(
+                name="logs",
+                module_path="backend.api.logs",
+                prefix="/api/logs",
+                tags=["logs", "monitoring"],
+                status=RouterStatus.ENABLED,
+                description="Log viewing and analysis"
+            ),
+            "workflow": RouterConfig(
+                name="workflow",
+                module_path="backend.api.workflow",
+                prefix="/api/workflow",
+                tags=["workflow", "automation"],
+                status=RouterStatus.DISABLED,  # Not in fast backend
+                description="Workflow automation and orchestration"
+            ),
+            
+            # Performance Optimization
+            "batch": RouterConfig(
+                name="batch",
+                module_path="backend.api.batch",
+                prefix="/api/batch",
+                tags=["batch", "optimization"],
+                description="Batch API endpoints for optimized initial loading"
+            ),
+            
+            # Monitoring and Analytics
+            "service_monitor": RouterConfig(
+                name="service_monitor",
+                module_path="backend.api.service_monitor",
+                prefix="/api/monitoring",
+                tags=["monitoring", "services"],
+                description="Real-time service monitoring and health checks"
+            ),
+            "monitoring": RouterConfig(
+                name="monitoring",
+                module_path="backend.api.monitoring",
+                prefix="/api/monitoring/advanced",
+                tags=["monitoring", "metrics"],
+                status=RouterStatus.DISABLED,  # Not in fast backend
+                description="Advanced system monitoring and analytics"
+            ),
+            "validation_dashboard": RouterConfig(
+                name="validation_dashboard",
+                module_path="backend.api.validation_dashboard",
+                prefix="/api/validation",
+                tags=["validation", "testing"],
+                status=RouterStatus.DISABLED,  # Not in fast backend
+                description="Validation and testing dashboard"
+            ),
+            
+            # Intelligence and AI Agent
+            "intelligent_agent": RouterConfig(
+                name="intelligent_agent",
+                module_path="backend.api.intelligent_agent",
+                prefix="/api/intelligent-agent",
+                tags=["ai", "agent", "intelligence"],
+                status=RouterStatus.LAZY_LOAD,  # Lazy load to avoid startup blocking
+                description="Intelligent agent system for goal processing"
+            ),
+            
+            # MCP Bridge for Knowledge Base
+            "knowledge_mcp": RouterConfig(
+                name="knowledge_mcp",
+                module_path="backend.api.knowledge_mcp",
+                prefix="/api/knowledge",
+                tags=["knowledge", "mcp", "llm"],
+                status=RouterStatus.ENABLED,
+                description="MCP bridge for LLM access to knowledge base via LlamaIndex"
+            ),
+            
+            # Startup Status and Messages
+            "startup": RouterConfig(
+                name="startup",
+                module_path="backend.api.startup",
+                prefix="/api/startup",
+                tags=["startup", "status", "websockets"],
+                status=RouterStatus.ENABLED,
+                description="Friendly startup messages and status updates for frontend"
+            ),
+        }
+    
+    def get_enabled_routers(self) -> Dict[str, RouterConfig]:
+        """Get all enabled routers"""
+        return {
+            name: config for name, config in self.routers.items()
+            if config.status in [RouterStatus.ENABLED, RouterStatus.LAZY_LOAD]
+        }
+    
+    def get_router_by_name(self, name: str) -> Optional[RouterConfig]:
+        """Get router configuration by name"""
+        return self.routers.get(name)
+    
+    def get_routers_by_tag(self, tag: str) -> Dict[str, RouterConfig]:
+        """Get all routers with specific tag"""
+        return {
+            name: config for name, config in self.routers.items()
+            if tag in config.tags
+        }
+    
+    def get_endpoint_list(self) -> List[Dict]:
+        """Get list of all endpoints for documentation"""
+        endpoints = []
+        for name, config in self.get_enabled_routers().items():
+            endpoints.append({
+                "name": name,
+                "prefix": config.prefix,
+                "tags": config.tags,
+                "description": config.description,
+                "status": config.status.value,
+                "requires_auth": config.requires_auth,
+                "version": config.version
+            })
+        return endpoints
+    
+    def validate_dependencies(self) -> Dict[str, List[str]]:
+        """Validate router dependencies"""
+        errors = {}
+        for name, config in self.routers.items():
+            missing_deps = []
+            for dep in config.dependencies:
+                if dep not in self.routers:
+                    missing_deps.append(dep)
+            if missing_deps:
+                errors[name] = missing_deps
+        return errors
+
+
+# Global registry instance
+registry = APIRegistry()
+
+
+def get_router_configs() -> Dict[str, RouterConfig]:
+    """Get all router configurations"""
+    return registry.get_enabled_routers()
+
+
+def get_endpoint_documentation() -> List[Dict]:
+    """Get endpoint documentation for API docs"""
+    return registry.get_endpoint_list()
