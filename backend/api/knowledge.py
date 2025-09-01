@@ -145,18 +145,28 @@ async def search_knowledge(request: dict, req: Request = None):
         # Transform results to match frontend expectations
         transformed_results = []
         for idx, result in enumerate(results):
+            source = result.get('source', result.get('metadata', {}).get('source', ''))
+            content = result.get('content', '')
+            
+            # Create a more reliable document identifier
+            doc_id = f"doc_{idx}_{abs(hash(content + source))}"
+            
             transformed_results.append({
                 "document": {
-                    "id": f"doc_{idx}_{hash(result.get('content', ''))}",
-                    "title": result.get('metadata', {}).get('filename', 'Knowledge Document'),
-                    "content": result.get('content', ''),
+                    "id": doc_id,
+                    "title": source.split('/')[-1] if source else 'Knowledge Document',
+                    "content": content[:500] + '...' if len(content) > 500 else content,  # Preview only
+                    "full_content_available": True,
+                    "source": source,
                     "type": result.get('metadata', {}).get('type', 'text'),
                     "category": result.get('metadata', {}).get('category', 'general'),
-                    "updatedAt": result.get('metadata', {}).get('updated_at', ''),
-                    "tags": result.get('metadata', {}).get('tags', [])
+                    "updatedAt": result.get('metadata', {}).get('timestamp', ''),
+                    "tags": result.get('metadata', {}).get('tags', []),
+                    "content_length": len(content),
+                    "metadata": result.get('metadata', {})
                 },
                 "score": result.get('score', 0.0),
-                "highlights": [result.get('content', '')[:200] + '...'] if result.get('content', '') else []
+                "highlights": [content[:200] + '...'] if content else []
             })
         
         return {
@@ -169,6 +179,147 @@ async def search_knowledge(request: dict, req: Request = None):
         logger.error(f"Error in knowledge search: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Error in knowledge search: {str(e)}"
+        )
+
+
+@router.post("/document/content")
+async def get_document_content(request: dict, req: Request = None):
+    """Get full document content by providing search criteria (more flexible than ID-based lookup)"""
+    try:
+        kb_to_use = await get_knowledge_base_instance(req)
+        if kb_to_use is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+
+        # Extract search parameters from request
+        query = request.get("query", "")
+        source_filter = request.get("source", "")
+        content_preview = request.get("content_preview", "")  # First 100 chars to match
+        
+        logger.info(f"Document content request: query='{query}', source='{source_filter}'")
+
+        # Get search results
+        search_results = await kb_to_use.search(query if query else "autobot documentation", top_k=50)
+        
+        for result in search_results:
+            result_source = result.get('source', result.get('metadata', {}).get('source', ''))
+            result_content = result.get('content', '')
+            
+            # Match by source path if provided
+            if source_filter and source_filter in result_source:
+                return {
+                    "title": result_source.split('/')[-1] if result_source else 'Knowledge Document',
+                    "content": result_content,
+                    "source": result_source,
+                    "metadata": result.get('metadata', {}),
+                    "type": result.get('metadata', {}).get('type', 'document'),
+                    "category": result.get('metadata', {}).get('category', 'general'),
+                    "timestamp": result.get('metadata', {}).get('timestamp', ''),
+                    "success": True
+                }
+            
+            # Match by content preview if provided  
+            if content_preview and result_content.startswith(content_preview[:100]):
+                return {
+                    "title": result_source.split('/')[-1] if result_source else 'Knowledge Document',
+                    "content": result_content,
+                    "source": result_source,
+                    "metadata": result.get('metadata', {}),
+                    "type": result.get('metadata', {}).get('type', 'document'),
+                    "category": result.get('metadata', {}).get('category', 'general'),
+                    "timestamp": result.get('metadata', {}).get('timestamp', ''),
+                    "success": True
+                }
+
+        # If no specific match, return first result if available
+        if search_results:
+            result = search_results[0]
+            result_source = result.get('source', result.get('metadata', {}).get('source', ''))
+            return {
+                "title": result_source.split('/')[-1] if result_source else 'Knowledge Document',
+                "content": result.get('content', ''),
+                "source": result_source,
+                "metadata": result.get('metadata', {}),
+                "type": result.get('metadata', {}).get('type', 'document'),
+                "category": result.get('metadata', {}).get('category', 'general'),
+                "timestamp": result.get('metadata', {}).get('timestamp', ''),
+                "success": True
+            }
+
+        raise HTTPException(status_code=404, detail="No matching document found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving document content: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error retrieving document: {str(e)}"
+        )
+
+
+@router.get("/category/{category_path:path}/documents")
+async def get_documents_by_category(category_path: str, limit: int = 50, req: Request = None):
+    """Get documents in a specific category"""
+    try:
+        kb_to_use = await get_knowledge_base_instance(req)
+        if kb_to_use is None:
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
+
+        logger.info(f"Category documents request: {category_path} (limit: {limit})")
+
+        # Map category path to search terms
+        category_mapping = {
+            'documentation/root': 'documentation/root',
+            'documentation/project-root': 'project-root',
+            'documentation/api': 'api documentation',
+            'documentation/guides': 'guides documentation',
+            'documentation/architecture': 'architecture documentation',
+            'system': 'system environment capabilities',
+        }
+        
+        # Get search query for category
+        search_query = category_mapping.get(category_path, category_path.replace('/', ' '))
+        
+        # Search for documents in this category
+        search_results = await kb_to_use.search(search_query, top_k=limit)
+        
+        # Filter results that match the category
+        category_documents = []
+        for result in search_results:
+            result_category = result.get('metadata', {}).get('category', '')
+            result_source = result.get('source', result.get('metadata', {}).get('source', ''))
+            
+            # Check if document belongs to this category
+            if (category_path in result_category or 
+                category_path.replace('/', '') in result_category or
+                (category_path == 'documentation/root' and 'documentation/root' in result_category) or
+                (category_path == 'documentation/project-root' and any(f in result_source for f in ['README.md', 'CLAUDE.md', 'IMPLEMENTATION_PLAN.md']))):
+                
+                category_documents.append({
+                    "id": f"doc_{len(category_documents)}_{abs(hash(result.get('content', '') + result_source))}",
+                    "title": result_source.split('/')[-1] if result_source else 'Knowledge Document',
+                    "source": result_source,
+                    "content_preview": result.get('content', '')[:300] + '...' if len(result.get('content', '')) > 300 else result.get('content', ''),
+                    "content_length": len(result.get('content', '')),
+                    "type": result.get('metadata', {}).get('type', 'document'),
+                    "category": result.get('metadata', {}).get('category', 'general'),
+                    "timestamp": result.get('metadata', {}).get('timestamp', ''),
+                    "score": result.get('score', 0.0),
+                    "metadata": result.get('metadata', {})
+                })
+        
+        return {
+            "documents": category_documents,
+            "category": category_path,
+            "total_count": len(category_documents),
+            "success": True
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting documents for category {category_path}: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting category documents: {str(e)}"
         )
 
 
@@ -549,18 +700,53 @@ async def get_knowledge_stats(request: Request):
 async def get_basic_knowledge_stats(request: Request):
     """Get basic knowledge base statistics (lightweight)"""
     try:
-        # Return minimal stats without heavy knowledge base initialization
-        return {
-            "total_entries": 0,
-            "categories": [],
-            "status": "online",
-            "message": "Basic stats endpoint - knowledge base available",
-            "last_updated": None,
-        }
+        kb_to_use = await get_knowledge_base_instance(request)
+        if kb_to_use is None:
+            return {
+                "total_documents": 0,
+                "total_chunks": 0,
+                "total_facts": 0,
+                "categories": [],
+                "status": "offline",
+                "message": "Knowledge base not available",
+                "last_updated": None,
+            }
+        
+        logger.info("Basic knowledge stats request")
+        
+        # Get basic stats from knowledge base
+        try:
+            stats = await kb_to_use.get_stats()
+            
+            # Map the stats to frontend expected format
+            return {
+                "total_documents": stats.get("total_documents", stats.get("total_facts", 0)),
+                "total_chunks": stats.get("total_chunks", stats.get("total_vectors", 0)), 
+                "total_facts": stats.get("total_facts", stats.get("total_entries", 0)),
+                "categories": stats.get("categories", []),
+                "status": "online",
+                "message": "Knowledge base statistics retrieved successfully",
+                "last_updated": stats.get("last_updated"),
+            }
+        except Exception as e:
+            logger.warning(f"Could not get full stats, returning basic info: {e}")
+            # Fallback to basic availability check
+            return {
+                "total_documents": 0,
+                "total_chunks": 0,
+                "total_facts": 0,
+                "categories": [],
+                "status": "online",
+                "message": "Knowledge base available but stats unavailable",
+                "last_updated": None,
+            }
+            
     except Exception as e:
         logger.error(f"Error getting basic knowledge stats: {str(e)}")
         return {
-            "total_entries": 0,
+            "total_documents": 0,
+            "total_chunks": 0, 
+            "total_facts": 0,
             "categories": [],
             "status": "error",
             "message": f"Error getting stats: {str(e)}"
@@ -586,6 +772,74 @@ async def get_detailed_knowledge_stats(request: Request):
         raise HTTPException(
             status_code=500, detail=f"Error getting detailed knowledge stats: {str(e)}"
         )
+
+
+@router.get("/ingestion/status")
+async def get_ingestion_status(request: Request):
+    """Get knowledge base ingestion status and progress"""
+    try:
+        kb_to_use = await get_knowledge_base_instance(request)
+        if kb_to_use is None:
+            return {
+                "status": "not_available",
+                "message": "Knowledge base not available",
+                "progress": 0,
+                "current_operation": None,
+                "documents_processed": 0,
+                "documents_total": 0,
+                "last_updated": None
+            }
+
+        # Check if knowledge base has ingestion status tracking
+        ingestion_status = {
+            "status": "ready",
+            "message": "Knowledge base is ready for operations",
+            "progress": 100,
+            "current_operation": None,
+            "documents_processed": 0,
+            "documents_total": 0,
+            "last_updated": datetime.now().isoformat()
+        }
+
+        # Try to get actual stats to determine if ingestion is happening
+        try:
+            stats = await kb_to_use.get_stats()
+            ingestion_status.update({
+                "documents_processed": stats.get("total_documents", 0),
+                "total_facts": stats.get("total_facts", 0),
+                "total_vectors": stats.get("total_vectors", 0),
+                "db_size_mb": round(stats.get("db_size", 0) / (1024 * 1024), 2) if stats.get("db_size", 0) > 0 else 0
+            })
+            
+            # If we have documents, show as completed ingestion
+            if stats.get("total_documents", 0) > 0:
+                ingestion_status.update({
+                    "status": "completed",
+                    "message": f"Knowledge base contains {stats.get('total_documents', 0)} documents",
+                    "progress": 100
+                })
+            else:
+                ingestion_status.update({
+                    "status": "empty", 
+                    "message": "Knowledge base is empty - ready for document ingestion",
+                    "progress": 0
+                })
+        except Exception as stats_error:
+            logger.warning(f"Could not get ingestion stats: {stats_error}")
+            
+        return ingestion_status
+        
+    except Exception as e:
+        logger.error(f"Error getting ingestion status: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Error getting ingestion status: {str(e)}",
+            "progress": 0,
+            "current_operation": None,
+            "documents_processed": 0,
+            "documents_total": 0,
+            "last_updated": datetime.now().isoformat()
+        }
 
 
 @router.get("/entries")
@@ -2621,4 +2875,318 @@ async def check_fact_contradictions(request: dict):
         logger.error(f"Error checking fact contradictions: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Error checking fact contradictions: {str(e)}"
+        )
+
+
+@router.get("/documentation_browser")
+async def get_documentation_browser():
+    """Get comprehensive documentation browser with file statistics and content"""
+    try:
+        from pathlib import Path
+        import mimetypes
+        import hashlib
+        
+        project_root = Path("/home/kali/Desktop/AutoBot")
+        
+        # Define comprehensive documentation paths
+        doc_paths = [
+            # Project root documentation
+            ("CLAUDE.md", "Claude Development Instructions", "project-root"),
+            ("README.md", "Project README", "project-root"),
+            ("DEVELOPMENT_STANDARDS.md", "Development Standards", "project-root"),
+            ("IMPLEMENTATION_PLAN.md", "Implementation Plan", "project-root"),
+            ("CHAT_HANG_ANALYSIS.md", "Chat Hang Analysis", "project-root"),
+            ("DESKTOP_ACCESS.md", "Desktop Access Guide", "project-root"),
+            
+            # Main docs folder structure
+            ("docs", "Documentation Root", "docs"),
+        ]
+        
+        documentation_files = []
+        total_size = 0
+        total_docs = 0
+        
+        def scan_directory(dir_path: Path, category_prefix: str = ""):
+            """Recursively scan directory for documentation files"""
+            nonlocal total_size, total_docs
+            files = []
+            
+            if not dir_path.exists() or not dir_path.is_dir():
+                return files
+                
+            try:
+                for item in dir_path.iterdir():
+                    if item.is_file() and item.suffix.lower() in ['.md', '.txt', '.yaml', '.yml', '.json']:
+                        try:
+                            stat = item.stat()
+                            with open(item, 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read()
+                            
+                            # Calculate content hash for unique identification
+                            content_hash = hashlib.md5(content.encode('utf-8')).hexdigest()[:8]
+                            
+                            # Extract first line as title if it's a markdown header
+                            title = item.name
+                            preview = ""
+                            if content:
+                                lines = content.split('\n')
+                                for line in lines:
+                                    if line.strip():
+                                        if line.startswith('# '):
+                                            title = line[2:].strip()
+                                        preview = line.strip()
+                                        break
+                                        
+                            # Get relative path from project root
+                            rel_path = str(item.relative_to(project_root))
+                            
+                            # Determine category
+                            category = category_prefix
+                            if '/docs/' in rel_path:
+                                parts = rel_path.split('/')
+                                if len(parts) > 2:  # docs/subfolder/file.md
+                                    category = f"docs/{parts[1]}"
+                                else:
+                                    category = "docs/root"
+                            
+                            file_info = {
+                                "id": f"doc_{content_hash}_{stat.st_ino}",
+                                "path": rel_path,
+                                "filename": item.name,
+                                "title": title,
+                                "category": category,
+                                "type": item.suffix.lower()[1:],  # Remove the dot
+                                "size_bytes": stat.st_size,
+                                "size_chars": len(content),
+                                "modified": stat.st_mtime,
+                                "created": stat.st_ctime,
+                                "mime_type": mimetypes.guess_type(str(item))[0] or 'text/plain',
+                                "preview": preview[:200] + "..." if len(preview) > 200 else preview,
+                                "content_hash": content_hash,
+                                "exists": True,
+                                "readable": True,
+                                "line_count": len(content.split('\n')) if content else 0,
+                                "word_count": len(content.split()) if content else 0
+                            }
+                            
+                            files.append(file_info)
+                            total_size += stat.st_size
+                            total_docs += 1
+                            
+                        except Exception as e:
+                            logger.warning(f"Error processing file {item}: {e}")
+                            # Add error entry
+                            files.append({
+                                "id": f"error_{item.name}",
+                                "path": str(item.relative_to(project_root)),
+                                "filename": item.name,
+                                "title": f"Error reading {item.name}",
+                                "category": category_prefix,
+                                "type": "error",
+                                "exists": True,
+                                "readable": False,
+                                "error": str(e)
+                            })
+                    
+                    elif item.is_dir() and not item.name.startswith('.') and item.name != '__pycache__':
+                        # Recursively scan subdirectories
+                        subdir_category = f"{category_prefix}/{item.name}" if category_prefix else item.name
+                        subdir_files = scan_directory(item, subdir_category)
+                        files.extend(subdir_files)
+                        
+            except PermissionError as e:
+                logger.warning(f"Permission denied accessing {dir_path}: {e}")
+            except Exception as e:
+                logger.error(f"Error scanning directory {dir_path}: {e}")
+                
+            return files
+        
+        # Scan main documentation areas
+        all_files = []
+        
+        # Add individual root files
+        for file_path, title, category in doc_paths[:-1]:  # Exclude the docs directory entry
+            full_path = project_root / file_path
+            if full_path.exists() and full_path.is_file():
+                try:
+                    stat = full_path.stat()
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    content_hash = hashlib.md5(content.encode('utf-8')).hexdigest()[:8]
+                    
+                    file_info = {
+                        "id": f"root_{content_hash}_{stat.st_ino}",
+                        "path": file_path,
+                        "filename": full_path.name,
+                        "title": title,
+                        "category": category,
+                        "type": full_path.suffix.lower()[1:],
+                        "size_bytes": stat.st_size,
+                        "size_chars": len(content),
+                        "modified": stat.st_mtime,
+                        "created": stat.st_ctime,
+                        "mime_type": mimetypes.guess_type(str(full_path))[0] or 'text/plain',
+                        "preview": content[:200] + "..." if len(content) > 200 else content,
+                        "content_hash": content_hash,
+                        "exists": True,
+                        "readable": True,
+                        "line_count": len(content.split('\n')),
+                        "word_count": len(content.split())
+                    }
+                    
+                    all_files.append(file_info)
+                    total_size += stat.st_size
+                    total_docs += 1
+                    
+                except Exception as e:
+                    logger.warning(f"Error processing root file {file_path}: {e}")
+        
+        # Scan docs directory
+        docs_path = project_root / "docs"
+        if docs_path.exists():
+            docs_files = scan_directory(docs_path, "docs")
+            all_files.extend(docs_files)
+        
+        # Scan data/system_knowledge directory
+        system_knowledge_path = project_root / "data" / "system_knowledge"
+        if system_knowledge_path.exists():
+            system_files = scan_directory(system_knowledge_path, "system-knowledge")
+            all_files.extend(system_files)
+            
+        # Sort files by category and then by name
+        all_files.sort(key=lambda x: (x.get('category', ''), x.get('filename', '')))
+        
+        # Group by category for organized display
+        categories = {}
+        for file_info in all_files:
+            category = file_info.get('category', 'uncategorized')
+            if category not in categories:
+                categories[category] = {
+                    "name": category,
+                    "files": [],
+                    "total_files": 0,
+                    "total_size": 0
+                }
+            categories[category]["files"].append(file_info)
+            categories[category]["total_files"] += 1
+            categories[category]["total_size"] += file_info.get('size_bytes', 0)
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "documentation": {
+                    "files": all_files,
+                    "categories": categories,
+                    "statistics": {
+                        "total_files": total_docs,
+                        "total_size_bytes": total_size,
+                        "total_size_mb": round(total_size / (1024 * 1024), 2),
+                        "categories_count": len(categories),
+                        "file_types": {
+                            file_type: len([f for f in all_files if f.get('type') == file_type])
+                            for file_type in set(f.get('type', 'unknown') for f in all_files)
+                        }
+                    }
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in documentation browser: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e)
+            }
+        )
+
+
+@router.get("/documentation/{file_path:path}")
+async def get_documentation_content(file_path: str):
+    """Get the content of a specific documentation file"""
+    try:
+        from pathlib import Path
+        import mimetypes
+        
+        project_root = Path("/home/kali/Desktop/AutoBot")
+        
+        # Security check: ensure the file is within the project directory
+        full_path = project_root / file_path
+        
+        # Resolve any symbolic links and ensure it's within project root
+        try:
+            resolved_path = full_path.resolve()
+            project_root_resolved = project_root.resolve()
+            
+            # Check if the resolved path is within the project root
+            if not str(resolved_path).startswith(str(project_root_resolved)):
+                raise HTTPException(status_code=403, detail="Access denied: Path outside project directory")
+                
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid path: {e}")
+        
+        if not resolved_path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+            
+        if not resolved_path.is_file():
+            raise HTTPException(status_code=400, detail=f"Path is not a file: {file_path}")
+        
+        # Check if it's a supported documentation file type
+        allowed_extensions = {'.md', '.txt', '.yaml', '.yml', '.json', '.py', '.js', '.ts', '.css', '.html'}
+        if resolved_path.suffix.lower() not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {resolved_path.suffix}")
+        
+        try:
+            # Read file content
+            with open(resolved_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Get file statistics
+            stat = resolved_path.stat()
+            
+            # Get MIME type
+            mime_type, _ = mimetypes.guess_type(str(resolved_path))
+            
+            file_info = {
+                "path": file_path,
+                "filename": resolved_path.name,
+                "content": content,
+                "metadata": {
+                    "size_bytes": stat.st_size,
+                    "size_chars": len(content),
+                    "line_count": len(content.split('\n')),
+                    "word_count": len(content.split()),
+                    "modified": stat.st_mtime,
+                    "created": stat.st_ctime,
+                    "mime_type": mime_type or 'text/plain',
+                    "file_type": resolved_path.suffix.lower()[1:],
+                    "readable": True
+                }
+            }
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "file": file_info,
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+            
+        except UnicodeDecodeError:
+            # File is not text-readable
+            raise HTTPException(status_code=400, detail="File is not text-readable")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Permission denied reading file")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reading documentation file {file_path}: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error reading file: {str(e)}"
         )
