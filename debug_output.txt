@@ -1,0 +1,55 @@
+INFO:__main__:Getting Redis FT.INFO for llama_index...
+INFO:__main__:Index info:
+INFO:__main__:  index_name: llama_index
+INFO:__main__:  index_options: []
+INFO:__main__:  index_definition: ['key_type', 'HASH', 'prefixes', ['llama_index/vector'], 'default_score', '1']
+INFO:__main__:  attributes: [['identifier', 'id', 'attribute', 'id', 'type', 'TAG', 'SEPARATOR', ','], ['identifier', 'doc_id', 'attribute', 'doc_id', 'type', 'TAG', 'SEPARATOR', ','], ['identifier', 'text', 'attribute', 'text', 'type', 'TEXT', 'WEIGHT', '1'], ['identifier', 'vector', 'attribute', 'vector', 'type', 'VECTOR', 'algorithm', 'FLAT', 'data_type', 'FLOAT32', 'dim', 768, 'distance_metric', 'COSINE']]
+INFO:__main__:  num_docs: 13383
+INFO:__main__:  max_doc_id: 13383
+INFO:__main__:  num_terms: 19536
+INFO:__main__:  num_records: 1258009
+INFO:__main__:  inverted_sz_mb: 12.926399230957031
+INFO:__main__:  vector_index_sz_mb: 42.635154724121094
+INFO:__main__:  total_inverted_index_blocks: 54624
+INFO:__main__:  offset_vectors_sz_mb: 1.7656679153442383
+INFO:__main__:  doc_table_size_mb: 1.5698518753051758
+INFO:__main__:  sortable_values_size_mb: 0
+INFO:__main__:  key_table_size_mb: 0.5052576065063477
+INFO:__main__:  tag_overhead_sz_mb: 1.002577781677246
+INFO:__main__:  text_overhead_sz_mb: 0.6520843505859375
+INFO:__main__:  total_index_memory_sz_mb: 18.639137268066406
+INFO:__main__:  geoshapes_sz_mb: 0
+INFO:__main__:  records_per_doc_avg: 94.00052642822266
+INFO:__main__:  bytes_per_record_avg: 10.774415969848633
+INFO:__main__:  offsets_per_term_avg: 1.3981401920318604
+INFO:__main__:  offset_bits_per_record_avg: 8.421014785766602
+INFO:__main__:  hash_indexing_failures: 0
+INFO:__main__:  total_indexing_time: 8337.888671875
+INFO:__main__:  indexing: 0
+INFO:__main__:  percent_indexed: 1
+INFO:__main__:  number_of_uses: 39
+INFO:__main__:  cleaning: 0
+INFO:__main__:  gc_stats: ['bytes_collected', '0', 'total_ms_run', '0', 'total_cycles', '0', 'average_cycle_time_ms', 'nan', 'last_run_time_ms', '0', 'gc_numeric_trees_missed', '0', 'gc_blocks_denied', '0']
+INFO:__main__:  cursor_stats: ['global_idle', 0, 'global_total', 0, 'index_capacity', 128, 'index_total', 0]
+INFO:__main__:  dialect_stats: ['dialect_1', 1, 'dialect_2', 1, 'dialect_3', 0, 'dialect_4', 0]
+INFO:__main__:  Index Errors: ['indexing failures', 0, 'last indexing error', 'N/A', 'last indexing error key', 'N/A']
+INFO:__main__:  field statistics: [['identifier', 'id', 'attribute', 'id', 'Index Errors', ['indexing failures', 0, 'last indexing error', 'N/A', 'last indexing error key', 'N/A']], ['identifier', 'doc_id', 'attribute', 'doc_id', 'Index Errors', ['indexing failures', 0, 'last indexing error', 'N/A', 'last indexing error key', 'N/A']], ['identifier', 'text', 'attribute', 'text', 'Index Errors', ['indexing failures', 0, 'last indexing error', 'N/A', 'last indexing error key', 'N/A']], ['identifier', 'vector', 'attribute', 'vector', 'Index Errors', ['indexing failures', 0, 'last indexing error', 'N/A', 'last indexing error key', 'N/A']]]
+INFO:__main__:
+Getting sample documents...
+INFO:__main__:Search returned 13383 total documents
+INFO:__main__:
+Sample document structures:
+INFO:__main__:
+Document: llama_index/vector_d43d417a-314e-422d-9f2e-03ec86ee8fea
+INFO:__main__:Fields: None
+INFO:__main__:Available field names: Not a list
+INFO:__main__:
+Document: llama_index/vector_97865995-11c9-4389-9698-576f3e8401fb
+INFO:__main__:Fields: None
+INFO:__main__:Available field names: Not a list
+INFO:__main__:
+Document: llama_index/vector_c01ca636-8cdb-45c1-9e3e-596080ab2fed
+INFO:__main__:Fields: None
+INFO:__main__:Available field names: Not a list
+INFO:__main__:
+Checking direct hash access...
