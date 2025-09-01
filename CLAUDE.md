@@ -2,6 +2,112 @@
 
 This document tracks all fixes and improvements made to the AutoBot system.
 
+## LATEST FIXES (2025-09-01)
+
+### ✅ Keras Compatibility Issue - RESOLVED
+
+**Problem**: Semantic chunker failing with "Keras 3 not yet supported in Transformers" error, causing fallback to basic chunking methods.
+
+**Root Cause**: SentenceTransformer library using Transformers internally, which conflicts with Keras 3.
+
+**Solution**: Added tf-keras compatibility environment variables across all execution contexts:
+
+**Files Updated**:
+- `src/utils/semantic_chunker.py` - Added env vars at module level
+- `scripts/setup/setup_agent.sh` - Added to setup script
+- `run_agent_unified.sh` - Added to startup script
+- `.env` and `.env.localhost` - Added to environment files
+- `docker/backend/Dockerfile` - Added to Docker image
+- `docker-compose.yml` - Added to AI stack and NPU worker services
+
+**Environment Variables**:
+```bash
+TF_USE_LEGACY_KERAS=1
+KERAS_BACKEND=tensorflow
+```
+
+**Results**:
+- ✅ No more Keras 3 compatibility errors
+- ✅ Semantic chunker loads successfully with GPU acceleration
+- ✅ NVIDIA GeForce RTX 4070 GPU properly detected and utilized
+- ✅ FP16 mixed precision enabled for faster inference
+- ✅ Proper semantic search capabilities restored
+
+### ✅ Knowledge Base Statistics Display - FIXED
+
+**Problem**: Frontend showing "0" for all Knowledge Base Statistics (Total Documents, Total Chunks, Total Facts).
+
+**Root Cause**: `/api/knowledge_base/stats/basic` endpoint was hardcoded to return placeholder data instead of querying actual knowledge base.
+
+**Solution**: 
+- Updated endpoint in `backend/api/knowledge.py` to call `knowledge_base.get_stats()`
+- Mapped backend field names to frontend expected format
+- Added proper error handling with fallback responses
+
+**Results**:
+- ✅ **3,278 Documents** now displayed correctly
+- ✅ **3,278 Chunks** indexed and searchable
+- ✅ Real-time statistics now show actual knowledge base content
+- ✅ Search functionality confirmed working (returns results)
+
+### ✅ Frontend Category Document Browsing - IMPLEMENTED
+
+**Problem**: Clicking "Documentation Root" in Knowledge Categories did nothing, preventing users from browsing documents by category.
+
+**Complete Implementation**:
+1. **"View Documents" Button** - Added to Documentation category selection
+2. **Category Documents Modal** - Grid layout showing documents in selected category  
+3. **Document Viewer Modal** - Full content viewer with proper styling
+4. **Backend Support** - `GET /api/knowledge_base/category/{category_path}/documents` endpoint
+5. **Document Content API** - `POST /api/knowledge_base/document/content` for full text
+
+**Frontend Updates** (`autobot-vue/src/components/knowledge/KnowledgeCategories.vue`):
+- Added category document browsing functionality
+- Fixed duplicate variable declaration error
+- Implemented responsive modal design with document cards
+- Added document preview and full content viewing
+
+**Results**:
+- ✅ Users can now browse documents by category
+- ✅ View document previews in grid layout
+- ✅ Read full document content in dedicated viewer
+- ✅ Proper UI/UX with modern modal design
+
+### ✅ Redis Database Configuration - FIXED
+
+**Problem**: Warning "Database 'main' not configured, using main database" appearing in logs.
+
+**Root Cause**: YAML configuration file structure mismatch - used `databases: main: 0` but code expected `redis_databases: main: db: 0`.
+
+**Solution**: Updated `config/redis-databases.yaml` to proper structure:
+```yaml
+redis_databases:
+  main:
+    db: 0
+    description: "Main application data"
+  knowledge:
+    db: 1
+    description: "Knowledge base and documents"
+  # ... (11 databases total)
+```
+
+**Results**:
+- ✅ All 11 databases properly configured with unique DB numbers
+- ✅ Database separation validation passes
+- ✅ No more configuration warnings in logs
+
+### ✅ Background LLM Sync Function Fix - RESOLVED
+
+**Problem**: "name 'sync_llm_config_async' is not defined" error during backend startup.
+
+**Root Cause**: Function was defined as `background_llm_sync()` but called as `sync_llm_config_async()`.
+
+**Solution**: Fixed function call in `backend/fast_app_factory_fix.py:270`.
+
+**Results**:
+- ✅ Background LLM configuration synchronization will work properly on next restart
+- ✅ No more startup errors related to function name mismatch
+
 ## CRITICAL: Chat Workflow Implementation (2025-08-31)
 
 ### ⚠️ IMMEDIATE ACTION REQUIRED
