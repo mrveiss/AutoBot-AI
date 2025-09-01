@@ -196,6 +196,29 @@
                     <i class="fas fa-paperclip"></i>
                     <input type="file" @change="handleFileAttachment" multiple style="display: none;" />
                   </label>
+                  <!-- Knowledge Base Status -->
+                  <div class="kb-status-group">
+                    <div class="kb-status-indicator" :title="kbStatus.message">
+                      <div 
+                        class="status-dot" 
+                        :class="{
+                          'status-ready': kbStatus.status === 'ready' || kbStatus.status === 'completed',
+                          'status-loading': kbStatus.status === 'ingesting',
+                          'status-empty': kbStatus.status === 'empty',
+                          'status-error': kbStatus.status === 'error'
+                        }"
+                      ></div>
+                      <span class="status-text">KB: {{ kbStatus.documents_processed }} docs</span>
+                    </div>
+                    <button 
+                      v-if="kbStatus.documents_processed > 0"
+                      @click="browseKnowledgeBase"
+                      class="kb-browse-btn"
+                      title="Browse knowledge base content"
+                    >
+                      <i class="fas fa-book-open"></i>
+                    </button>
+                  </div>
                   <button
                     @click="showKnowledgeManagement"
                     class="btn btn-secondary p-2"
@@ -312,6 +335,7 @@
 <script>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket.js';
+import { generateChatId } from '@/utils/ChatIdGenerator.js';
 import TerminalSidebar from './TerminalSidebar.vue';
 import TerminalWindow from './TerminalWindow.vue';
 import WorkflowApproval from './WorkflowApproval.vue';
@@ -364,6 +388,17 @@ export default {
     const reloadNeeded = ref(false);
     const chatMessages = ref(null);
     const attachedFiles = ref([]);
+
+    // Knowledge Base Status
+    const kbStatus = ref({
+      status: 'loading',
+      message: 'Loading knowledge base status...',
+      progress: 0,
+      current_operation: null,
+      documents_processed: 0,
+      documents_total: 0,
+      last_updated: null
+    });
 
     // Message Display Controls
 
@@ -737,8 +772,41 @@ export default {
       }
     };
 
+    const fetchKnowledgeBaseStatus = async () => {
+      try {
+        const response = await apiClient.get('/api/knowledge_base/ingestion/status');
+        if (response) {
+          kbStatus.value = {
+            status: response.status || 'unknown',
+            message: response.message || 'Status unknown',
+            progress: response.progress || 0,
+            current_operation: response.current_operation,
+            documents_processed: response.documents_processed || 0,
+            documents_total: response.documents_total || 0,
+            last_updated: response.last_updated
+          };
+        }
+      } catch (error) {
+        console.error('Failed to fetch knowledge base status:', error);
+        kbStatus.value = {
+          status: 'error',
+          message: 'Failed to load KB status',
+          progress: 0,
+          current_operation: null,
+          documents_processed: 0,
+          documents_total: 0,
+          last_updated: null
+        };
+      }
+    };
+
     const showKnowledgeManagement = () => {
       showKnowledgeDialog.value = true;
+    };
+
+    const browseKnowledgeBase = () => {
+      // Navigate to the knowledge management page (entries browser)
+      window.open('/knowledge/manage', '_blank');
     };
 
     const onKnowledgeDecisionsApplied = (decisions) => {
@@ -880,7 +948,7 @@ export default {
         // Try direct chat endpoint first for faster responses
         let chatResponse;
         try {
-          chatResponse = await apiClient.sendChatMessage(this.currentChatId, userInput, messageData);
+          chatResponse = await apiClient.sendChatMessage(userInput, { chatId: currentChatId.value, ...messageData });
         } catch (error) {
           console.warn('🔄 Direct chat failed, falling back to workflow orchestration:', error.message);
           // Fallback to workflow orchestration if direct chat fails
@@ -902,10 +970,34 @@ export default {
             type: workflowResult.type,
               hasResult: !!workflowResult.result,
               hasWorkflowResponse: !!workflowResult.workflow_response,
+              hasData: !!workflowResult.data,
               keys: Object.keys(workflowResult)
             });
 
-          if (workflowResult.type === 'workflow_orchestration') {
+          // Handle direct chat response with workflow messages
+          if (workflowResult.type === 'json' && workflowResult.data) {
+            // First, add any workflow messages if present
+            if (workflowResult.data.workflow_messages && Array.isArray(workflowResult.data.workflow_messages)) {
+              for (const wfMsg of workflowResult.data.workflow_messages) {
+                messages.value.push({
+                  sender: wfMsg.sender || 'assistant',
+                  text: wfMsg.text || '',
+                  timestamp: wfMsg.timestamp || new Date().toLocaleTimeString(),
+                  type: wfMsg.type || 'message',
+                  metadata: wfMsg.metadata || {}
+                });
+              }
+            }
+
+            // Then add the main response
+            const responseText = workflowResult.data.response || 'No response received';
+            messages.value.push({
+              sender: 'bot',
+              text: responseText,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'response'
+            });
+          } else if (workflowResult.type === 'workflow_orchestration') {
             // Workflow orchestration triggered
             activeWorkflowId.value = workflowResult.workflow_id;
 
@@ -985,6 +1077,19 @@ export default {
             });
 
             if (chatResponse.type === 'json' && chatResponse.data) {
+              // First, add any workflow messages if present
+              if (chatResponse.data.workflow_messages && Array.isArray(chatResponse.data.workflow_messages)) {
+                for (const wfMsg of chatResponse.data.workflow_messages) {
+                  messages.value.push({
+                    sender: wfMsg.sender || 'assistant',
+                    text: wfMsg.text || '',
+                    timestamp: wfMsg.timestamp || new Date().toLocaleTimeString(),
+                    type: wfMsg.type || 'message',
+                    metadata: wfMsg.metadata || {}
+                  });
+                }
+              }
+
               const responseText = chatResponse.data.content || chatResponse.data.response || 'No response received';
               const responseType = chatResponse.data.messageType;
 
@@ -1112,7 +1217,7 @@ export default {
       try {
         // Create new chat via backend
         const data = await apiClient.createNewChat();
-        const newChatId = data.chatId || `chat-${Date.now()}`;
+        const newChatId = data.chatId || generateChatId();
 
         currentChatId.value = newChatId;
         messages.value = [];
@@ -1132,7 +1237,7 @@ export default {
       } catch (error) {
         console.error('Error creating new chat:', error);
         // Fallback to local chat creation
-        const newChatId = `chat-${Date.now()}`;
+        const newChatId = generateChatId();
         currentChatId.value = newChatId;
         messages.value = [];
         localStorage.setItem('lastChatId', newChatId);
@@ -1147,8 +1252,17 @@ export default {
       }
     };
 
-    const resetChat = () => {
-      messages.value = [];
+    const resetChat = async () => {
+      if (!currentChatId.value) return;
+      
+      try {
+        await apiClient.resetChat(currentChatId.value);
+        messages.value = [];
+        showSuccess('Chat reset successfully');
+      } catch (error) {
+        console.error('Failed to reset chat:', error);
+        showError(`Failed to reset chat: ${error.message}`);
+      }
     };
 
     const deleteSpecificChat = async (chatId = null) => {
@@ -1172,7 +1286,9 @@ export default {
           if (chatList.value.length > 0) {
             switchChat(chatList.value[0].chatId);
           } else {
-            newChat();
+            // Don't auto-create new chat - let user create manually
+            currentChatId.value = null;
+            localStorage.removeItem('lastChatId');
           }
         }
       } catch (error) {
@@ -1194,7 +1310,9 @@ export default {
           if (chatList.value.length > 0) {
             switchChat(chatList.value[0].chatId);
           } else {
-            newChat();
+            // Don't auto-create new chat - let user create manually
+            currentChatId.value = null;
+            localStorage.removeItem('lastChatId');
           }
         }
       }
@@ -1256,17 +1374,8 @@ export default {
           type: 'info'
         });
 
-        // Fallback: create a default chat if list fails to load
-        if (chatList.value.length === 0) {
-          const fallbackChatId = `fallback-${Date.now()}`;
-          chatList.value = [{
-            id: fallbackChatId,
-            chatId: fallbackChatId,
-            name: 'Default Chat',
-            lastMessage: null,
-            timestamp: new Date()
-          }];
-        }
+        // Keep chat list empty if it fails to load - don't create fallback chats
+        console.log('Chat list remains empty - user can create new chat manually');
       }
     };
 
@@ -1595,14 +1704,26 @@ export default {
         }
       } catch (error) {
         console.error('Chat initialization failed:', error);
-        // Ensure we have at least a default chat for the UI to work
-        if (!currentChatId.value) {
-          const defaultChatId = `default-${Date.now()}`;
-          currentChatId.value = defaultChatId;
-          localStorage.setItem('lastChatId', defaultChatId);
-        }
+        // Don't create default chats automatically - user should create manually
+        console.log('User needs to create a new chat manually');
+      }
+
+      // Initialize knowledge base status and set up periodic updates
+      try {
+        await fetchKnowledgeBaseStatus();
+        
+        // Set up periodic status updates every 5 seconds
+        const kbStatusInterval = setInterval(fetchKnowledgeBaseStatus, 5000);
+        
+        // Clean up interval on unmount
+        onUnmounted(() => {
+          clearInterval(kbStatusInterval);
+        });
+      } catch (error) {
+        console.error('Failed to initialize knowledge base status:', error);
       }
     });
+
 
     // Cleanup
     onUnmounted(() => {
@@ -1659,6 +1780,10 @@ export default {
       showKnowledgeManagement,
       onKnowledgeDecisionsApplied,
       onChatCompiled,
+      // Knowledge base status
+      kbStatus,
+      fetchKnowledgeBaseStatus,
+      browseKnowledgeBase,
       // Command permission
       showCommandDialog,
       pendingCommand,
@@ -2018,5 +2143,98 @@ export default {
 .research-summary-message .research-action {
   color: #3b82f6;
   font-style: italic;
+}
+
+/* Knowledge Base Status Group */
+.kb-status-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Knowledge Base Status Indicator */
+.kb-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  cursor: help;
+}
+
+.kb-status-indicator .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.kb-status-indicator .status-dot.status-ready {
+  background-color: #10b981; /* Green for ready/completed */
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.kb-status-indicator .status-dot.status-loading {
+  background-color: #f59e0b; /* Amber for loading */
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+  animation: pulse 1.5s infinite;
+}
+
+.kb-status-indicator .status-dot.status-empty {
+  background-color: #9ca3af; /* Gray for empty */
+  box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.2);
+}
+
+.kb-status-indicator .status-dot.status-error {
+  background-color: #ef4444; /* Red for error */
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.kb-status-indicator .status-text {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Knowledge Base Browse Button */
+.kb-browse-btn {
+  padding: 6px 8px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+  min-width: 28px;
+  height: 28px;
+}
+
+.kb-browse-btn:hover {
+  background: #2563eb;
+}
+
+.kb-browse-btn:active {
+  background: #1d4ed8;
+}
+
+.kb-browse-btn i {
+  font-size: 11px;
 }
 </style>

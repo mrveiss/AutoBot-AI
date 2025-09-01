@@ -138,7 +138,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'terminal',
         name: 'tools-terminal',
-        component: () => import('@/components/TerminalWindow.vue'),
+        component: () => import('@/components/XTerminal.vue'),
         meta: {
           title: 'Terminal',
           parent: 'tools'
@@ -147,7 +147,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'terminal/:sessionId',
         name: 'tools-terminal-session',
-        component: () => import('@/components/TerminalWindow.vue'),
+        component: () => import('@/components/XTerminal.vue'),
         props: true,
         meta: {
           title: 'Terminal Session',
@@ -166,7 +166,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'browser',
         name: 'tools-browser',
-        component: () => import('@/components/PopoutChromiumBrowser.vue'),
+        component: () => import('@/components/ToolsBrowser.vue'),
         meta: {
           title: 'Browser',
           parent: 'tools'
@@ -241,6 +241,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/components/ValidationDashboard.vue'),
         meta: {
           title: 'Validation',
+          parent: 'monitoring'
+        }
+      },
+      {
+        path: 'logs',
+        name: 'monitoring-logs',
+        component: () => import('@/components/LogViewer.vue'),
+        meta: {
+          title: 'Log Viewer',
           parent: 'monitoring'
         }
       }

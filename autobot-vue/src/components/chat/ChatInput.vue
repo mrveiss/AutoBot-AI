@@ -178,6 +178,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
+import globalWebSocketService from '@/services/GlobalWebSocketService'
 
 const store = useChatStore()
 const controller = useChatController()

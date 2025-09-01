@@ -1,11 +1,29 @@
 <template>
   <ErrorBoundary :on-error="handleGlobalError">
+    <!-- Startup Loader -->
+    <StartupLoader 
+      v-if="showStartupLoader"
+      :auto-hide="true"
+      :min-display-time="2000"
+      @ready="onStartupReady"
+      @skip="onStartupSkip"
+    />
+
     <!-- Skip Navigation Link for Accessibility -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 bg-indigo-600 text-white px-4 py-2 rounded-br-lg z-[100000] focus:outline-none focus:ring-2 focus:ring-white">
       Skip to main content
     </a>
 
-    <div class="min-h-screen bg-blueGray-50">
+    <!-- System Down Banner -->
+    <div v-if="isSystemDown && !showStartupLoader" class="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 px-4 z-[99998] shadow-lg">
+      <div class="flex items-center justify-center gap-2">
+        <i class="fas fa-exclamation-triangle animate-pulse"></i>
+        <span class="font-medium">{{ systemDownMessage }}</span>
+        <div class="animate-spin">🔄</div>
+      </div>
+    </div>
+
+    <div class="min-h-screen bg-blueGray-50" :class="{ 'opacity-50': showStartupLoader, 'pt-12': isSystemDown && !showStartupLoader }">
       <!-- Main content -->
       <div class="relative bg-blueGray-50" :class="appStore?.activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
 
@@ -276,6 +294,7 @@ import PhaseProgressionIndicator from './components/PhaseProgressionIndicator.vu
 import ElevationDialog from './components/ElevationDialog.vue';
 import ErrorNotifications from './components/ErrorNotifications.vue';
 import ErrorBoundary from './components/ErrorBoundary.vue';
+import StartupLoader from './components/StartupLoader.vue';
 
 // Import async RUM Dashboard component
 import { defineAsyncComponent } from 'vue';
@@ -296,7 +315,8 @@ export default {
     ElevationDialog,
     RumDashboard,
     ErrorNotifications,
-    ErrorBoundary
+    ErrorBoundary,
+    StartupLoader
   },
   setup() {
     // Use Pinia stores instead of local refs
@@ -388,6 +408,177 @@ export default {
     const elevationRiskLevel = ref('MEDIUM');
     const elevationRequestId = ref('');
 
+    // Startup loader state and system shutdown detection
+    // Only show startup loader if we haven't completed startup in this session
+    const hasCompletedStartup = sessionStorage.getItem('autobot_startup_completed') === 'true'
+    const showStartupLoader = ref(!hasCompletedStartup)
+    const isSystemDown = ref(false)
+    const systemDownMessage = ref('')
+    const lastSuccessfulCheck = ref(Date.now())
+    let systemHealthCheck = null
+    
+    const checkSystemHealth = async () => {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+        
+        const response = await fetch('/api/system/health', {
+          signal: controller.signal,
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        })
+        
+        clearTimeout(timeoutId)
+        
+        if (response.ok) {
+          // System is responding
+          if (isSystemDown.value) {
+            console.log('System is back online - clearing startup flag and reloading page')
+            hideSystemDownOverlay()
+            // Clear startup completed flag so splash screen shows on reload
+            sessionStorage.removeItem('autobot_startup_completed')
+            // System recovered - reload page to get fresh state
+            window.location.reload()
+          }
+          lastSuccessfulCheck.value = Date.now()
+          isSystemDown.value = false
+          systemDownMessage.value = ''
+        } else {
+          throw new Error(`Health check failed with status: ${response.status}`)
+        }
+      } catch (error) {
+        const timeSinceLastCheck = Date.now() - lastSuccessfulCheck.value
+        const consecutiveFailures = Math.floor(timeSinceLastCheck / 10000) // Number of 10-second intervals failed
+        
+        // Only trigger system down after 3 consecutive failures (30+ seconds) AND if this isn't an abort/timeout error
+        if (timeSinceLastCheck > 30000 && consecutiveFailures >= 3 && !isSystemDown.value) {
+          // Additional check: make sure this isn't just a temporary network hiccup
+          // by trying a simpler request
+          try {
+            const simpleCheck = await fetch('/api/health', {
+              method: 'GET',
+              cache: 'no-cache',
+              signal: AbortSignal.timeout(3000)
+            })
+            
+            if (simpleCheck.ok) {
+              // Simple endpoint works, so system is probably fine
+              lastSuccessfulCheck.value = Date.now()
+              return
+            }
+          } catch (simpleError) {
+            // Both health checks failed, system is likely down
+          }
+          
+          console.log('System appears to be down after 30+ seconds of failures:', error.message)
+          console.log(`Debug: timeSinceLastCheck=${timeSinceLastCheck}ms, consecutiveFailures=${consecutiveFailures}`)
+          isSystemDown.value = true
+          systemDownMessage.value = 'AutoBot system is restarting or updating. Please wait...'
+          
+          // Show system down overlay
+          showSystemDownOverlay()
+        } else if (timeSinceLastCheck > 60000) {
+          // After 60 seconds, log but don't show overlay (might be network issue)
+          console.warn(`System health check failing for ${Math.round(timeSinceLastCheck/1000)}s, but not showing overlay`)
+        }
+      }
+    }
+    
+    const showSystemDownOverlay = () => {
+      // Create or update system down overlay
+      let overlay = document.getElementById('system-down-overlay')
+      if (!overlay) {
+        overlay = document.createElement('div')
+        overlay.id = 'system-down-overlay'
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: linear-gradient(135deg, #1e3a8a 0%, #991b1b 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 99999;
+          color: white;
+          font-family: system-ui, -apple-system, sans-serif;
+        `
+        
+        overlay.innerHTML = `
+          <div style="text-align: center; max-width: 500px; padding: 2rem;">
+            <div style="font-size: 4rem; margin-bottom: 1rem; animation: pulse 2s infinite;">🔄</div>
+            <h1 style="font-size: 2rem; font-weight: bold; margin-bottom: 1rem; color: #fbbf24;">AutoBot System Update</h1>
+            <p style="font-size: 1.1rem; margin-bottom: 2rem; opacity: 0.9;">
+              The system is restarting or updating. This usually takes 30-60 seconds.
+            </p>
+            <div style="background: rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 1.5rem; backdrop-filter: blur(10px);">
+              <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: center; margin-bottom: 1rem;">
+                <span style="font-size: 1.2rem;">🤖</span>
+                <span style="font-weight: 500;">Checking system status...</span>
+              </div>
+              <div style="font-size: 0.9rem; opacity: 0.7;">Please keep this page open</div>
+            </div>
+            <style>
+              @keyframes pulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.1); }
+              }
+            </style>
+          </div>
+        `
+        
+        document.body.appendChild(overlay)
+      }
+    }
+    
+    const hideSystemDownOverlay = () => {
+      const overlay = document.getElementById('system-down-overlay')
+      if (overlay) {
+        overlay.remove()
+      }
+    }
+    
+    const startSystemHealthMonitoring = () => {
+      // Start monitoring after a 30-second delay to avoid startup conflicts
+      console.log('Scheduling system health monitoring to start in 30 seconds')
+      setTimeout(() => {
+        if (!isSystemDown.value) {
+          // Check every 15 seconds (less frequent to reduce false positives)
+          systemHealthCheck = setInterval(checkSystemHealth, 15000)
+          console.log('System health monitoring started - checking every 15 seconds')
+        } else {
+          console.log('System health monitoring not started - system already marked as down')
+        }
+      }, 30000)
+    }
+    
+    const stopSystemHealthMonitoring = () => {
+      if (systemHealthCheck) {
+        clearInterval(systemHealthCheck)
+        systemHealthCheck = null
+      }
+    }
+
+    const onStartupReady = () => {
+      console.log('Startup complete - hiding loader')
+      showStartupLoader.value = false
+      // Mark that we've completed startup to prevent showing it again
+      sessionStorage.setItem('autobot_startup_completed', 'true')
+      startSystemHealthMonitoring()
+    }
+
+    const onStartupSkip = () => {
+      console.log('Startup skipped by user')
+      showStartupLoader.value = false
+      // Mark that we've completed startup to prevent showing it again
+      sessionStorage.setItem('autobot_startup_completed', 'true')
+      startSystemHealthMonitoring()
+    }
+
     // Elevation Dialog handlers
     const onElevationApproved = (data) => {
       showElevationDialog.value = false;
@@ -430,6 +621,12 @@ export default {
       // Add click-outside listener for mobile menu
       document.addEventListener('click', closeNavbarOnClickOutside);
 
+      // If startup was already completed, start health monitoring immediately
+      if (hasCompletedStartup) {
+        console.log('Startup already completed, starting health monitoring')
+        startSystemHealthMonitoring()
+      }
+
       // Simulate dashboard updates
       setInterval(() => {
         activeSessions.value = Math.floor(Math.random() * 5) + 1;
@@ -441,6 +638,8 @@ export default {
       if (statusCheckInterval) {
         clearInterval(statusCheckInterval);
       }
+      stopSystemHealthMonitoring();
+      hideSystemDownOverlay();
       // Remove click-outside listener
       document.removeEventListener('click', closeNavbarOnClickOutside);
     });
@@ -491,7 +690,13 @@ export default {
       onPhaseSuccess,
       onPhaseError,
       onValidationComplete,
-      onPhaseValidated
+      onPhaseValidated,
+      // Startup loader and system monitoring
+      showStartupLoader,
+      onStartupReady,
+      onStartupSkip,
+      isSystemDown,
+      systemDownMessage
     };
   }
 };
@@ -636,6 +841,33 @@ a:focus,
 .z-70 { z-index: 70; }
 .overflow-hidden { overflow: hidden; }
 .overflow-y-auto { overflow-y: auto; }
+
+/* Animation classes for system status */
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 .overflow-x-hidden { overflow-x: hidden; }
 .mx-auto { margin-left: auto; margin-right: auto; }
 .mt-auto { margin-top: auto; }

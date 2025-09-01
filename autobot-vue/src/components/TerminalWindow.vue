@@ -73,7 +73,12 @@
           <span>{{ connectionStatusText }}</span>
         </div>
         <div class="session-info">
-          <span>Session: {{ sessionId?.slice(0, 8) }}...</span>
+          <span>Session: {{ sessionId ? sessionId.slice(0, 8) + '...' : 'unknown' }}</span>
+        </div>
+        <div class="debug-info" v-if="!canInput">
+          <span style="color: orange; font-size: 12px;">
+            Debug: Status={{ connectionStatus }}, Connecting={{ connecting }}, CanInput={{ canInput }}
+          </span>
         </div>
       </div>
       <div class="status-right">
@@ -347,7 +352,17 @@ export default {
   components: {
     AdvancedStepConfirmationModal
   },
-  setup() {
+  props: {
+    sessionId: {
+      type: String,
+      default: null
+    },
+    chatContext: {
+      type: Boolean,
+      default: false
+    }
+  },
+  setup(props) {
     const route = useRoute();
     const router = useRouter();
 
@@ -363,31 +378,41 @@ export default {
       closeSession
     } = useTerminalService();
 
-    // Get current chat ID from parent or route params
-    const getCurrentChatId = () => {
-      // Try to get from route params first
-      if (route?.params?.sessionId) {
-        return route.params.sessionId;
-      }
-      if (route?.query?.sessionId) {
-        return route.query.sessionId;
-      }
+    // Terminal session management
+    const sessionId = ref(props.sessionId || null);
+    
+    // Initialize proper terminal session
+    const initializeTerminalSession = async () => {
+      try {
+        // If in chat context and session ID provided via props, use it
+        if (props.chatContext && props.sessionId) {
+          sessionId.value = props.sessionId;
+          return props.sessionId;
+        }
+        
+        // Check if there's an existing terminal session ID in route params (standalone mode)
+        if (route?.params?.sessionId || route?.query?.sessionId) {
+          const existingSessionId = route.params.sessionId || route.query.sessionId;
+          sessionId.value = existingSessionId;
+          return existingSessionId;
+        }
 
-      // Try to get current chat ID from localStorage or session storage
-      const storedChatId = localStorage.getItem('currentChatId');
-      if (storedChatId && storedChatId !== 'null') {
-        return storedChatId;
+        // Create a new terminal session using the API (standalone mode)
+        const newSessionId = await createSession();
+        sessionId.value = newSessionId;
+        return newSessionId;
+      } catch (error) {
+        console.error('Failed to initialize terminal session:', error);
+        // Fallback to a generated session ID if API fails
+        const fallbackId = `terminal_${Date.now()}`;
+        sessionId.value = fallbackId;
+        return fallbackId;
       }
-
-      // Generate a new chat-specific terminal session ID
-      const timestamp = Date.now();
-      const newChatId = `chat_${timestamp}`;
-      localStorage.setItem('currentChatId', newChatId);
-      return newChatId;
     };
-
-    const sessionId = ref(getCurrentChatId());
-    const sessionTitle = ref(route?.query?.title || 'Terminal');
+    const sessionTitle = ref(
+      props.chatContext ? 'Chat Terminal' : 
+      route?.query?.title || 'Terminal'
+    );
     const outputLines = ref([]);
     const currentInput = ref('');
     const currentPrompt = ref('$ ');
@@ -449,8 +474,18 @@ export default {
 
     // Methods
     const connect = async () => {
+      // Initialize terminal session first if not already set
       if (!sessionId.value) {
-        console.error('No session ID provided');
+        try {
+          await initializeTerminalSession();
+        } catch (error) {
+          console.error('Failed to initialize terminal session:', error);
+          return;
+        }
+      }
+
+      if (!sessionId.value) {
+        console.error('No session ID available after initialization');
         return;
       }
 
@@ -1193,14 +1228,33 @@ export default {
     const formatTerminalLine = (line) => {
       let content = line.content || line;
 
-      // Remove ANSI escape sequences
+      // Comprehensive ANSI escape sequence handling
       content = content
-        .replace(/\x1b\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]/g, '')
+        // Remove cursor positioning sequences
+        .replace(/\x1b\[([0-9]+;[0-9]+)?[Hf]/g, '')
+        // Remove cursor movement sequences  
+        .replace(/\x1b\[([0-9]+)?[ABCD]/g, '')
+        // Remove cursor save/restore
+        .replace(/\x1b\[(s|u)/g, '')
+        // Remove erase sequences
+        .replace(/\x1b\[([0-9]+)?[JK]/g, '')
+        // Remove color/formatting sequences (SGR)
+        .replace(/\x1b\[([0-9]{1,3}(;[0-9]{1,3})*)?m/g, '')
+        // Remove private mode sequences (like bracketed paste)
+        .replace(/\x1b\[\?[0-9]+[hl]/g, '')
+        // Remove title/window sequences
+        .replace(/\x1b\][0-9]+;.*?\x07/g, '')
+        // Remove other CSI sequences
+        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+        // Clean up carriage returns and newlines
         .replace(/\r\n/g, '\n')
-        .replace(/\r/g, '\n')
+        .replace(/\r/g, '')
+        // HTML escape for safety
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        // Clean up extra whitespace but preserve intentional spacing
+        .replace(/\n+$/, ''); // Remove trailing newlines
 
       return content;
     };

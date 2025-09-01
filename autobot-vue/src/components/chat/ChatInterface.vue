@@ -112,24 +112,20 @@
 
           <!-- Terminal Tab Content -->
           <div v-else-if="activeTab === 'terminal'" class="flex-1 flex flex-col min-h-0">
-            <!-- Temporarily commented out to fix reactive variable issues -->
-            <div class="flex-1 flex items-center justify-center bg-gray-100">
-              <div class="text-gray-600">Terminal functionality temporarily disabled for debugging</div>
-            </div>
-            <!--
-            <TerminalWindow 
+            <XTerminal 
               :key="store.currentSessionId"
               :session-id="store.currentSessionId"
               :chat-context="true"
+              title="Chat Terminal"
               class="flex-1"
             />
-            -->
           </div>
 
           <!-- Browser Tab Content -->
           <div v-else-if="activeTab === 'browser'" class="flex-1 flex flex-col min-h-0">
             <PopoutChromiumBrowser 
               :key="store.currentSessionId"
+              :session-id="store.currentSessionId || 'chat-browser'"
               :chat-context="true"
               class="flex-1"
             />
@@ -217,6 +213,8 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import { ApiClient } from '@/utils/ApiClient.js'
+import batchApiService from '@/services/BatchApiService.js'
+import { API_CONFIG } from '@/config/environment.js'
 
 // Components
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
@@ -228,8 +226,7 @@ import FileBrowser from '@/components/FileBrowser.vue'
 import PopoutChromiumBrowser from '@/components/PopoutChromiumBrowser.vue'
 // import CommandPermissionDialog from '@/components/CommandPermissionDialog.vue' // Temporarily commented out
 import WorkflowProgressWidget from '@/components/WorkflowProgressWidget.vue'
-// import TerminalWindow from '@/components/TerminalWindow.vue' // Temporarily commented out 
-// import TerminalSidebar from '@/components/TerminalSidebar.vue' // Temporarily commented out
+import XTerminal from '@/components/XTerminal.vue'
 
 // Stores and controller
 const store = useChatStore()
@@ -264,7 +261,7 @@ const isConnected = ref(true)
 const lastHeartbeat = ref(Date.now())
 
 // Tool URLs
-const novncUrl = ref('http://127.0.0.3:6080/vnc.html')
+const novncUrl = ref(API_CONFIG.PLAYWRIGHT_VNC_URL)
 
 // Computed
 const currentSessionTitle = computed(() => {
@@ -447,13 +444,51 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
   }
 }
 
-// Lifecycle
-onMounted(() => {
-  // Initialize chat interface
-  if (store.sessions.length === 0) {
-    controller.loadChatSessions()
-      .catch(error => console.warn('Failed to load chat sessions:', error))
+// Initialize chat interface with batch loading
+const initializeChatInterface = async () => {
+  try {
+    console.log('🚀 Starting batch chat interface initialization')
+    
+    // Use batch API for optimized loading
+    const data = await batchApiService.initializeChatInterface()
+    
+    // Process batch results
+    if (data.chat_sessions && !data.chat_sessions.error) {
+      // Load sessions into store if we got valid data
+      if (Array.isArray(data.chat_sessions)) {
+        data.chat_sessions.forEach(session => {
+          store.importSession(session)
+        })
+      }
+    } else if (store.sessions.length === 0) {
+      // Fallback to individual loading if batch failed
+      console.log('📡 Falling back to individual chat session loading')
+      await controller.loadChatSessions()
+    }
+    
+    // Update connection status from batch data
+    if (data.system_health && !data.system_health.error) {
+      isConnected.value = data.system_health.status === 'healthy'
+      connectionStatus.value = isConnected.value ? 'Connected' : 'Disconnected'
+    }
+    
+    console.log('✅ Batch chat initialization completed')
+    
+  } catch (error) {
+    console.error('❌ Chat initialization failed:', error)
+    // Fallback to traditional loading
+    if (store.sessions.length === 0) {
+      await controller.loadChatSessions().catch(err => 
+        console.warn('Fallback session loading failed:', err)
+      )
+    }
   }
+}
+
+// Lifecycle
+onMounted(async () => {
+  // Initialize chat interface with batch loading
+  await initializeChatInterface()
 
   // Enable auto-save if not disabled
   if (store.settings.autoSave) {
