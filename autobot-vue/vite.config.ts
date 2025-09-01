@@ -10,6 +10,16 @@ export default defineConfig({
     vue(),
     vueDevTools(),
   ],
+  optimizeDeps: {
+    include: [
+      '@xterm/xterm',
+      '@xterm/addon-fit',
+      '@xterm/addon-web-links'
+    ],
+    esbuildOptions: {
+      target: 'es2022'
+    }
+  },
   css: {
     devSourcemap: true,
     postcss: './postcss.config.js',
@@ -31,12 +41,41 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_BACKEND_HOST || '127.0.0.1'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
+        target: `http://${process.env.VITE_BACKEND_HOST || 'host.docker.internal'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
         changeOrigin: true,
-        secure: false
+        secure: false,
+        timeout: 30000,
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.error('Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Only log proxy requests in debug mode to reduce noise
+            if (process.env.NODE_ENV === 'development' && process.env.DEBUG_PROXY === 'true') {
+              console.debug('Proxying request:', req.method, req.url, 'to', options.target);
+            }
+          });
+        }
+      },
+      '/ws': {
+        target: `http://${process.env.VITE_BACKEND_HOST || 'host.docker.internal'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
+        ws: true,
+        changeOrigin: true,
+        timeout: 30000,
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.error('WebSocket proxy error:', err);
+          });
+          proxy.on('proxyReqWs', (proxyReq, req, socket) => {
+            console.log('WebSocket proxy request:', req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('WebSocket proxy response:', proxyRes.statusCode);
+          });
+        }
       },
       '/vnc-proxy': {
-        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || '127.0.0.1'}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || '6080'}`,
+        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || '192.168.168.17'}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || '6080'}`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/vnc-proxy/, '')
       }
