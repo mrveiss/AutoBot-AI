@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { generateChatId } from '@/utils/ChatIdGenerator.js'
 
 export type TabType = 'dashboard' | 'chat' | 'knowledge' | 'tools' | 'monitoring' | 'secrets'
 
@@ -12,7 +13,7 @@ export const useAppStore = defineStore('app', () => {
   // Navigation and UI State
   const activeTab = ref<TabType>('dashboard')
   const navbarOpen = ref(false)
-  const activeChatId = ref(`chat-${Date.now()}`)
+  const activeChatId = ref(generateChatId())
 
   // Backend Status and Health
   const backendStatus = ref<BackendStatus>({
@@ -59,7 +60,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function generateNewChatId() {
-    activeChatId.value = `chat-${Date.now()}`
+    activeChatId.value = generateChatId()
     return activeChatId.value
   }
 
@@ -85,5 +86,13 @@ export const useAppStore = defineStore('app', () => {
     setGlobalError,
     clearGlobalError,
     generateNewChatId
+  }
+}, {
+  persist: {
+    key: 'autobot-app-store',
+    storage: localStorage,
+    // Only persist UI state, not sensitive data
+    paths: ['activeTab', 'activeChatId'],
+    // Exclude backend status, loading states, and errors (they should be fresh on reload)
   }
 })
