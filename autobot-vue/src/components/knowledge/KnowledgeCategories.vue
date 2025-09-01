@@ -115,6 +115,14 @@
           <div v-if="selectedDocumentationCategory" class="selected-category-info">
             <label>Selected Documentation:</label>
             <div class="selected-path">{{ formatCategoryPath(selectedDocumentationCategory) }}</div>
+            <button 
+              @click="loadCategoryDocuments(selectedDocumentationCategory)" 
+              :disabled="isLoadingCategoryDocs"
+              class="view-docs-button"
+            >
+              <i :class="isLoadingCategoryDocs ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>
+              {{ isLoadingCategoryDocs ? 'Loading...' : 'View Documents' }}
+            </button>
           </div>
           
           <div class="action-buttons">
@@ -326,6 +334,70 @@
       </div>
     </div>
     </div>
+
+    <!-- Category Documents Panel -->
+    <div v-if="showCategoryDocuments" class="category-documents-overlay">
+      <div class="category-documents-modal">
+        <div class="modal-header">
+          <h3>{{ formatCategoryPath(selectedCategoryPath) }} - Documents ({{ categoryDocuments.length }})</h3>
+          <button @click="closeCategoryDocuments" class="close-btn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <div class="modal-content">
+          <div v-if="categoryDocuments.length === 0" class="no-documents">
+            <i class="fas fa-folder-open"></i>
+            <p>No documents found in this category</p>
+          </div>
+
+          <div v-else class="documents-grid">
+            <div
+              v-for="doc in categoryDocuments"
+              :key="doc.id"
+              class="document-card"
+              @click="openDocument(doc)"
+            >
+              <div class="doc-header">
+                <div class="doc-icon">
+                  <i :class="getTypeIcon(doc.type)"></i>
+                </div>
+                <div class="doc-title">{{ doc.title }}</div>
+              </div>
+              
+              <div class="doc-info">
+                <div class="doc-source">{{ doc.source }}</div>
+                <div class="doc-preview">{{ doc.content_preview }}</div>
+              </div>
+              
+              <div class="doc-footer">
+                <span class="doc-size">{{ (doc.content_length / 1024).toFixed(1) }} KB</span>
+                <span class="doc-score" v-if="doc.score">Score: {{ doc.score.toFixed(3) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Document Viewer Modal -->
+    <div v-if="showDocumentModal && currentDocument" class="document-viewer-overlay">
+      <div class="document-viewer-modal">
+        <div class="viewer-header">
+          <h3>{{ currentDocument.title }}</h3>
+          <div class="header-actions">
+            <span class="document-source">{{ currentDocument.source }}</span>
+            <button @click="showDocumentModal = false" class="close-btn">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="viewer-content">
+          <pre class="document-content">{{ currentDocument.content }}</pre>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -349,7 +421,6 @@ const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showDocumentsPanel = ref(false)
 const selectedCategory = ref<KnowledgeCategory | null>(null)
-const categoryDocuments = ref<KnowledgeDocument[]>([])
 
 // System categories state
 const selectedSystemCategory = ref('')
@@ -366,6 +437,14 @@ const docPopulateMessageType = ref<'success' | 'error' | ''>('')
 // Shared state
 const isLoadingKBStats = ref(false)
 const kbStats = ref<any>(null)
+
+// Category documents state
+const isLoadingCategoryDocs = ref(false)
+const categoryDocuments = ref<any[]>([])
+const showCategoryDocuments = ref(false)
+const selectedCategoryPath = ref('')
+const showDocumentModal = ref(false)
+const currentDocument = ref<any>(null)
 
 // Form state
 const categoryForm = ref({
@@ -573,6 +652,51 @@ const formatCategoryName = (categoryPath: string) => {
   return parts[parts.length - 1].split('-').map(word => 
     word.charAt(0).toUpperCase() + word.slice(1)
   ).join(' ')
+}
+
+// Category documents methods
+const loadCategoryDocuments = async (categoryPath: string) => {
+  isLoadingCategoryDocs.value = true
+  selectedCategoryPath.value = categoryPath
+  
+  try {
+    const response = await apiClient.get(`/api/knowledge_base/category/${categoryPath}/documents?limit=20`)
+    const result = await response.json()
+    
+    if (result.success) {
+      categoryDocuments.value = result.documents
+      showCategoryDocuments.value = true
+    } else {
+      console.error('Failed to load category documents:', result)
+    }
+  } catch (error) {
+    console.error('Error loading category documents:', error)
+  } finally {
+    isLoadingCategoryDocs.value = false
+  }
+}
+
+const closeCategoryDocuments = () => {
+  showCategoryDocuments.value = false
+  categoryDocuments.value = []
+  selectedCategoryPath.value = ''
+}
+
+const openDocument = async (document: any) => {
+  try {
+    const response = await apiClient.post('/api/knowledge_base/document/content', {
+      source: document.source
+    })
+    const result = await response.json()
+    
+    if (result.success) {
+      // Open document in a modal or new tab
+      showDocumentModal.value = true
+      currentDocument.value = result
+    }
+  } catch (error) {
+    console.error('Error loading document content:', error)
+  }
 }
 
 // Load categories on mount
@@ -1155,5 +1279,258 @@ onMounted(() => {
 .doc-meta {
   font-size: 0.75rem;
   color: #6b7280;
+}
+
+/* View Documents Button */
+.view-docs-button {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.view-docs-button:hover:not(:disabled) {
+  background: #059669;
+}
+
+.view-docs-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Category Documents Modal */
+.category-documents-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 2rem;
+}
+
+.category-documents-modal {
+  background: white;
+  border-radius: 0.75rem;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.modal-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 2rem;
+}
+
+.documents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1rem;
+}
+
+.document-card {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.document-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.doc-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.doc-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: #eff6ff;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+  font-size: 1.125rem;
+}
+
+.doc-title {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 1rem;
+}
+
+.doc-info {
+  margin-bottom: 1rem;
+}
+
+.doc-source {
+  font-size: 0.75rem;
+  color: #3b82f6;
+  margin-bottom: 0.5rem;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.doc-preview {
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.doc-footer {
+  display: flex;
+  justify-content: between;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.doc-size {
+  font-weight: 500;
+}
+
+.doc-score {
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+/* Document Viewer Modal */
+.document-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 1rem;
+}
+
+.document-viewer-modal {
+  background: white;
+  border-radius: 0.75rem;
+  width: 100%;
+  max-width: 1400px;
+  max-height: 95vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+}
+
+.viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.viewer-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.document-source {
+  font-size: 0.875rem;
+  color: #3b82f6;
+  font-family: 'Monaco', 'Menlo', monospace;
+  background: #eff6ff;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+}
+
+.viewer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.document-content {
+  padding: 2rem;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  background: #f8f9fa;
+  color: #2d3748;
+}
+
+.close-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 0.375rem;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
 }
 </style>
