@@ -26,27 +26,6 @@ services:
       - "${REDIS_PORT:-6379}:6379"
       - "${REDISINSIGHT_PORT:-8002}:8001"
 
-  # Seq - Centralized logging
-  seq:
-    image: datalust/seq:latest
-    container_name: autobot-seq
-    restart: unless-stopped
-    volumes:
-      - seq_data:/data
-    environment:
-      - ACCEPT_EULA=Y
-      - SEQ_FIRSTRUN_ADMINUSERNAME=${SEQ_ADMIN_USER:-admin}
-      - SEQ_FIRSTRUN_ADMINPASSWORD=${SEQ_ADMIN_PASSWORD:-autobot123}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    networks:
-      - autobot
-    ports:
-      - "${SEQ_PORT:-5341}:80"
 
   # Backend API - Runs on HOST for system access (desktop, network, files)
   # Started by unified script, not Docker
@@ -94,6 +73,8 @@ services:
       - /app/node_modules  # Anonymous volume for node_modules
     environment:
       - VITE_API_URL=${VITE_API_URL:-http://localhost:8001}
+      - VITE_BACKEND_HOST=host.docker.internal
+      - VITE_BACKEND_PORT=8001
       - NODE_ENV=${NODE_ENV:-production}
     command: ${FRONTEND_COMMAND:-npm run preview -- --host 0.0.0.0}
     healthcheck:
@@ -118,8 +99,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      seq:
-        condition: service_healthy
     volumes:
       - ./src:/app/src
       - ./config:/app/config
@@ -134,7 +113,6 @@ services:
       - AI_SERVER_WORKERS=1
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - SEQ_URL=${SEQ_URL:-http://seq:80}
       - OLLAMA_HOST=${OLLAMA_HOST:-127.0.0.1:11434}
       - CHROMA_DB_PATH=/app/data/chroma_db
       - DISABLE_EXTERNAL_APIS=${DISABLE_EXTERNAL_APIS:-true}
@@ -208,8 +186,6 @@ services:
 volumes:
   redis_data:
     name: autobot_redis_data
-  seq_data:
-    name: autobot_seq_data
   models:
     name: autobot_models
   browser_data:
