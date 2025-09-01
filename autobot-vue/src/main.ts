@@ -1,10 +1,13 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import App from './App.vue'
 import router from './router/index'
 
 import './assets/tailwind.css'
 import './assets/vue-notus.css'
+// Import xterm CSS globally to avoid dependency resolution issues
+import '@xterm/xterm/css/xterm.css'
 
 // Import plugins
 import rumPlugin from './plugins/rum'
@@ -31,6 +34,9 @@ if (import.meta.env.DEV) {
 
 const app = createApp(App)
 const pinia = createPinia()
+
+// Configure pinia persistence plugin
+pinia.use(piniaPluginPersistedstate)
 
 app.use(pinia)
 app.use(router)

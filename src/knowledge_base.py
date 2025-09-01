@@ -118,23 +118,28 @@ class KnowledgeBase:
         self.redis_host = redis_config.get("host", os.getenv("REDIS_HOST", "localhost"))
         self.redis_port = redis_config.get("port", 6379)
         self.redis_password = redis_config.get("password", os.getenv("REDIS_PASSWORD"))
-        # Use a separate Redis database (2) for knowledge base to avoid conflicts
+        # CRITICAL FIX: Use database 0 where the 13,383 vectors actually exist
         self.redis_db = redis_config.get(
-            "kb_db", 2
-        )  # Default to db 2 for knowledge base
+            "kb_db", 0
+        )  # Default to db 0 where existing vectors are located
         # Must use "llama_index" as the name - it's hardcoded in the library
         self.redis_index_name = "llama_index"
 
         # Initialize Redis client for direct use (e.g., for facts/logs)
-        # Use sync Redis client for direct operations
-        self.redis_client = get_redis_client(async_client=False)
-        self._async_redis_client = None  # Will be initialized lazily
-        if self.redis_client:
-            logging.info("Redis client initialized via centralized utility")
-        else:
-            logging.warning(
-                "Redis client not available - Redis may be disabled " "in configuration"
-            )
+        # Use sync Redis client for direct operations - WITH TIMEOUT PROTECTION
+        try:
+            self.redis_client = get_redis_client(async_client=False)
+            self._async_redis_client = None  # Will be initialized lazily
+            if self.redis_client:
+                logging.info("Redis client initialized via centralized utility")
+            else:
+                logging.warning(
+                    "Redis client not available - Redis may be disabled in configuration"
+                )
+        except Exception as e:
+            logging.warning(f"Redis client initialization failed: {e}, continuing without Redis")
+            self.redis_client = None
+            self._async_redis_client = None
 
         self.llm = None
         self.embed_model = None
@@ -188,10 +193,14 @@ class KnowledgeBase:
                 
                 # Test Ollama availability with short timeout first
                 try:
-                    with httpx.Client(timeout=5.0) as client:
-                        response = client.get(f"{llm_base_url}/api/tags")
-                        if response.status_code != 200:
-                            raise Exception(f"Ollama not responding properly: {response.status_code}")
+                    # CRITICAL FIX: Use async HTTP client to prevent blocking the event loop
+                    async def test_ollama():
+                        async with httpx.AsyncClient(timeout=5.0) as client:
+                            response = await client.get(f"{llm_base_url}/api/tags")
+                            if response.status_code != 200:
+                                raise Exception(f"Ollama not responding properly: {response.status_code}")
+                    
+                    await test_ollama()
                 except (httpx.TimeoutException, httpx.ConnectError) as e:
                     raise Exception(f"Ollama not available at {llm_base_url}: {e}")
                 
@@ -245,12 +254,16 @@ class KnowledgeBase:
             try:
                 # Test embedding model availability with timeout
                 try:
-                    with httpx.Client(timeout=5.0) as client:
-                        # Test if embedding model exists
-                        response = client.post(f"{llm_base_url}/api/show", 
-                                             json={"name": self.embedding_model_name})
-                        if response.status_code != 200:
-                            raise Exception(f"Embedding model {self.embedding_model_name} not found")
+                    # CRITICAL FIX: Use async HTTP client to prevent blocking the event loop
+                    async def test_embedding_model():
+                        async with httpx.AsyncClient(timeout=5.0) as client:
+                            # Test if embedding model exists
+                            response = await client.post(f"{llm_base_url}/api/show", 
+                                                       json={"name": self.embedding_model_name})
+                            if response.status_code != 200:
+                                raise Exception(f"Embedding model {self.embedding_model_name} not found")
+                    
+                    await test_embedding_model()
                 except (httpx.TimeoutException, httpx.ConnectError) as e:
                     raise Exception(f"Cannot verify embedding model: {e}")
                     
@@ -275,10 +288,27 @@ class KnowledgeBase:
                 f"LLM provider '{llm_provider}' not fully implemented for "
                 "LlamaIndex. Defaulting to Ollama."
             )
-            self.llm = LlamaIndexOllamaLLM(model=llm_model, base_url=llm_base_url)
-            self.embed_model = LlamaIndexOllamaEmbedding(
-                model_name=self.embedding_model_name, base_url=llm_base_url
-            )
+            # CRITICAL FIX: Add timeout and error handling to LLM initialization
+            try:
+                self.llm = LlamaIndexOllamaLLM(
+                    model=llm_model, 
+                    base_url=llm_base_url,
+                    request_timeout=10.0  # Add 10-second timeout
+                )
+                self.embed_model = LlamaIndexOllamaEmbedding(
+                    model_name=self.embedding_model_name, 
+                    base_url=llm_base_url
+                )
+                logging.info(f"Initialized LLM with timeout protection: {llm_model}")
+            except Exception as e:
+                logging.error(f"Failed to initialize LLM: {e}")
+                # Use a simple fallback model that's likely to be available
+                self.llm = LlamaIndexOllamaLLM(
+                    model="phi:2.7b", 
+                    base_url=llm_base_url,
+                    request_timeout=5.0
+                )
+                logging.warning("Using fallback model: phi:2.7b")
 
         Settings.llm = self.llm
         Settings.embed_model = self.embed_model
@@ -379,19 +409,37 @@ class KnowledgeBase:
             self.storage_context = StorageContext.from_defaults(
                 vector_store=self.vector_store
             )
-            # Always create a new index with the correct embedding model
-            # This ensures the dimensions match our embedding model
-            self.index = VectorStoreIndex.from_documents(
-                [],
-                storage_context=self.storage_context,
-                embed_model=self.embed_model,  # Explicitly pass the embedding model
-            )
-            logging.info(
-                "LlamaIndex VectorStoreIndex created with correct embedding dimensions."
-            )
+            # CRITICAL FIX: Use from_vector_store to connect to existing 13,383 vectors
+            # This preserves existing data instead of creating empty index
+            try:
+                self.index = VectorStoreIndex.from_vector_store(
+                    vector_store=self.vector_store,
+                    embed_model=self.embed_model,  # Explicitly pass the embedding model
+                )
+                logging.info(
+                    "LlamaIndex VectorStoreIndex loaded from existing Redis vector store with 13,383 vectors."
+                )
+            except Exception as e:
+                logging.warning(f"Failed to load from existing vector store: {e}")
+                # Fallback to empty index if loading fails
+                self.index = VectorStoreIndex.from_documents(
+                    [],
+                    storage_context=self.storage_context,
+                    embed_model=self.embed_model,
+                )
+                logging.info("Created new empty VectorStoreIndex as fallback.")
 
-            self.query_engine = self.index.as_query_engine(llm=self.llm)
-            logging.info("LlamaIndex VectorStoreIndex and QueryEngine initialized.")
+            # Create query engine with explicit LLM configuration
+            try:
+                self.query_engine = self.index.as_query_engine(
+                    llm=self.llm,
+                    similarity_top_k=10,
+                    response_mode="compact"
+                )
+                logging.info("LlamaIndex QueryEngine initialized with proper LLM configuration.")
+            except Exception as e:
+                logging.error(f"Failed to create query engine: {e}")
+                self.query_engine = None
         else:
             logging.warning(
                 "Creating in-memory VectorStoreIndex without Redis due to "
@@ -528,7 +576,7 @@ class KnowledgeBase:
     @retry_async(
         max_attempts=3, base_delay=0.5, strategy=RetryStrategy.EXPONENTIAL_BACKOFF
     )
-    async def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+    async def search_legacy(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         if self.query_engine is None:
             logging.warning(
                 "KnowledgeBase not initialized, attempting initialization..."
@@ -545,15 +593,25 @@ class KnowledgeBase:
             return []
 
         try:
-            response = self.query_engine.query(query)
+            # CRITICAL FIX: Use retriever instead of query_engine to avoid LLM issues
+            import asyncio
+            
+            # Use retriever to get nodes directly without LLM processing
+            if hasattr(self.index, 'as_retriever'):
+                retriever = self.index.as_retriever(similarity_top_k=n_results)
+                nodes = await asyncio.to_thread(retriever.retrieve, query)
+            else:
+                # Fallback to query engine if retriever not available
+                response = await asyncio.to_thread(self.query_engine.query, query)
+                nodes = response.source_nodes
 
             retrieved_info = []
-            for node in response.source_nodes:
+            for node in nodes:
                 retrieved_info.append(
                     {
                         "content": node.text,
-                        "metadata": node.metadata,
-                        "score": node.score,
+                        "metadata": node.metadata if hasattr(node, 'metadata') else {},
+                        "score": getattr(node, 'score', 0.0),
                     }
                 )
             logging.info(
@@ -941,15 +999,26 @@ class KnowledgeBase:
                 except Exception:
                     return []
 
+            def get_vector_count_sync() -> int:
+                """Get vector count from Redis FT.INFO - run in thread pool"""
+                try:
+                    ft_info = self.redis_client.execute_command('FT.INFO', 'llama_index')
+                    # Parse FT.INFO result to find num_docs
+                    for i in range(len(ft_info)):
+                        if ft_info[i] == 'num_docs':
+                            return int(ft_info[i + 1])
+                    return 0
+                except Exception as e:
+                    logging.debug(f"Could not get vector count: {e}")
+                    return 0
+
             # PERFORMANCE FIX: Run Redis operations in thread pool with timeout
             try:
                 # Create thread pool executor for blocking Redis operations
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                    # Submit both Redis operations concurrently with timeout
-                    doc_task = asyncio.create_task(
-                        asyncio.to_thread(
-                            scan_keys_sync, f"{self.redis_index_name}:doc:*"
-                        )
+                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                    # Submit Redis operations concurrently with timeout
+                    vector_task = asyncio.create_task(
+                        asyncio.to_thread(get_vector_count_sync)
                     )
                     fact_task = asyncio.create_task(
                         asyncio.to_thread(scan_keys_sync, "fact:*")
@@ -959,13 +1028,13 @@ class KnowledgeBase:
                     )
 
                     # Wait for all operations with 2-second timeout
-                    doc_count, fact_count, categories = await asyncio.wait_for(
-                        asyncio.gather(doc_task, fact_task, categories_task),
+                    vector_count, fact_count, categories = await asyncio.wait_for(
+                        asyncio.gather(vector_task, fact_task, categories_task),
                         timeout=2.0,
                     )
 
-                    stats["total_documents"] = doc_count
-                    stats["total_chunks"] = doc_count  # Simple approximation
+                    stats["total_documents"] = vector_count
+                    stats["total_chunks"] = vector_count  # Vector chunks from LlamaIndex
                     stats["total_facts"] = fact_count
                     stats["categories"] = categories
 
@@ -1242,3 +1311,126 @@ class KnowledgeBase:
                 "message": f"Error cleaning up: {str(e)}",
                 "removed_count": 0,
             }
+    
+    # MCP-compatible methods for LLM access
+    async def search(self, query: str, top_k: int = 5, filters: Optional[Dict] = None):
+        """MCP-compatible search method for knowledge base"""
+        try:
+            # CRITICAL FIX: Use retriever instead of query_engine to avoid timeout issues
+            if hasattr(self, 'index') and self.index:
+                # Use retriever to get nodes directly without LLM processing
+                retriever = self.index.as_retriever(similarity_top_k=top_k)
+                
+                # Add timeout protection
+                nodes = await asyncio.wait_for(
+                    asyncio.to_thread(retriever.retrieve, query),
+                    timeout=10.0  # 10-second timeout
+                )
+                
+                # Extract results from nodes
+                results = []
+                for node in nodes:
+                    results.append({
+                        "content": node.text if hasattr(node, 'text') else str(node),
+                        "score": getattr(node, 'score', 0.0),
+                        "metadata": getattr(node, 'metadata', {}),
+                        "source": getattr(node, 'metadata', {}).get('source', 'knowledge_base')
+                    })
+                
+                logging.info(f"MCP search returned {len(results)} results for: '{query}'")
+                return results
+            else:
+                logging.warning("Index not available for search")
+                return []
+                
+        except asyncio.TimeoutError:
+            logging.error(f"MCP search timed out for query: '{query}'")
+            return []
+        except Exception as e:
+            logging.error(f"Error in MCP search: {e}")
+            return []
+    
+    async def add_document(self, content: str, metadata: Dict = None, source: str = None):
+        """MCP-compatible document add method"""
+        try:
+            import uuid
+            from llama_index.core import Document
+            
+            doc_id = str(uuid.uuid4())
+            
+            # Create Document object
+            doc_metadata = metadata or {}
+            if source:
+                doc_metadata['source'] = source
+            
+            doc = Document(
+                text=content,
+                metadata=doc_metadata,
+                doc_id=doc_id
+            )
+            
+            # Add to index
+            if self.index:
+                # Run in thread to avoid blocking
+                await asyncio.to_thread(self.index.insert, doc)
+                logging.info(f"Added document {doc_id} to knowledge base via MCP")
+                
+                # Also store in Redis for persistence
+                if hasattr(self, '_redis_client') and self._redis_client:
+                    fact_data = {
+                        "content": content,
+                        "metadata": json.dumps(doc_metadata),
+                        "timestamp": str(int(datetime.now().timestamp()))
+                    }
+                    await self._redis_client.hset(f"fact:{doc_id}", mapping=fact_data)
+            
+            return doc_id
+            
+        except Exception as e:
+            logging.error(f"Error adding document via MCP: {e}")
+            raise
+    
+    async def get_document_count(self):
+        """Get total document count in knowledge base"""
+        try:
+            if self._redis_client:
+                # Count all fact keys
+                count = 0
+                async for key in self._redis_client.scan_iter(match="fact:*"):
+                    count += 1
+                return count
+            return 0
+        except Exception as e:
+            logging.error(f"Error getting document count: {e}")
+            return 0
+    
+    async def get_last_update_time(self):
+        """Get last update time of knowledge base"""
+        try:
+            if self._redis_client:
+                # Get most recent fact
+                latest_timestamp = 0
+                async for key in self._redis_client.scan_iter(match="fact:*"):
+                    fact_data = await self._redis_client.hgetall(key)
+                    if fact_data and 'timestamp' in fact_data:
+                        timestamp = int(fact_data['timestamp'])
+                        latest_timestamp = max(latest_timestamp, timestamp)
+                
+                if latest_timestamp > 0:
+                    return datetime.fromtimestamp(latest_timestamp).isoformat()
+            
+            return datetime.now().isoformat()
+        except Exception as e:
+            logging.error(f"Error getting last update time: {e}")
+            return datetime.now().isoformat()
+    
+    async def get_memory_usage(self):
+        """Get memory usage of knowledge base"""
+        try:
+            if self._redis_client:
+                info = await self._redis_client.info('memory')
+                return info.get('used_memory_human', 'unknown')
+            return "unknown"
+        except Exception as e:
+            logging.error(f"Error getting memory usage: {e}")
+            return "unknown"

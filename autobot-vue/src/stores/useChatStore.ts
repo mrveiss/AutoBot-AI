@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
 
 export interface ChatMessage {
   id: string
@@ -7,6 +8,7 @@ export interface ChatMessage {
   sender: 'user' | 'assistant' | 'system'
   timestamp: Date
   status?: 'sending' | 'sent' | 'error'
+  type?: 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' // For filtering
   attachments?: Array<{
     id: string
     name: string
@@ -18,6 +20,7 @@ export interface ChatMessage {
     model?: string
     tokens?: number
     duration?: number
+    [key: string]: any // Allow additional metadata fields
   }
 }
 
@@ -69,7 +72,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // Actions
   function createNewSession(title?: string): string {
-    const sessionId = `chat-${Date.now()}`
+    const sessionId = generateChatId()
     const newSession: ChatSession = {
       id: sessionId,
       title: title || `Chat ${sessions.value.length + 1}`,
@@ -104,7 +107,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     const newMessage: ChatMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateMessageId(),
       timestamp: new Date(),
       ...message
     }
@@ -222,5 +225,36 @@ export const useChatStore = defineStore('chat', () => {
     setTyping,
     exportSession,
     importSession
+  }
+}, {
+  persist: {
+    key: 'autobot-chat-store',
+    storage: localStorage,
+    // Only persist essential chat data, not sensitive information
+    paths: ['sessions', 'currentSessionId', 'settings.autoSave', 'settings.persistHistory', 'sidebarCollapsed'],
+    // Exclude sensitive settings like API keys, system prompts, etc.
+    serializer: {
+      deserialize: (value: string) => {
+        try {
+          const parsed = JSON.parse(value)
+          // Convert timestamp strings back to Date objects
+          if (parsed.sessions) {
+            parsed.sessions = parsed.sessions.map((session: any) => ({
+              ...session,
+              createdAt: new Date(session.createdAt),
+              updatedAt: new Date(session.updatedAt),
+              messages: session.messages.map((msg: any) => ({
+                ...msg,
+                timestamp: new Date(msg.timestamp)
+              }))
+            }))
+          }
+          return parsed
+        } catch {
+          return {}
+        }
+      },
+      serialize: JSON.stringify
+    }
   }
 })

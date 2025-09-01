@@ -159,7 +159,7 @@ class LLMFailsafeAgent:
         # Add system message with structured instructions
         system_content = {
             "role": "system",
-            "instructions": "You are AutoBot, an AI assistant that provides helpful, accurate, and contextual responses.",
+            "instructions": "You are AutoBot, an advanced autonomous AI platform specifically designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers. You are an enterprise-grade automation platform with 20+ specialized AI agents, expert Linux knowledge, and multi-modal processing capabilities.",
             "response_format": {
                 "type": "conversational",
                 "style": "professional but friendly",
@@ -167,11 +167,19 @@ class LLMFailsafeAgent:
                     True if context and context.get("kb_context") else False
                 ),
             },
+            "identity": {
+                "name": "AutoBot",
+                "type": "Autonomous AI Platform",
+                "specialization": "Linux System Administration and Automation",
+                "not_affiliated_with": ["Meta", "Facebook", "Transformers franchise"],
+            },
             "capabilities": [
-                "general knowledge",
-                "technical assistance",
-                "code help",
-                "analysis and problem solving",
+                "Linux system administration expertise",
+                "Multi-agent task orchestration",
+                "Terminal command execution",
+                "GUI automation and desktop control",
+                "Knowledge base management",
+                "Security-first operations",
             ],
         }
 
