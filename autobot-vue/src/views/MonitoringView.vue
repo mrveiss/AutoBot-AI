@@ -37,6 +37,13 @@
           >
             <i class="fas fa-check-circle mr-2"></i>Validation
           </router-link>
+          <router-link
+            to="/monitoring/logs"
+            class="px-3 py-2 text-sm font-medium border-b-2 transition-colors"
+            :class="$route.name === 'monitoring-logs' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-blueGray-500 hover:text-blueGray-700 hover:border-blueGray-300'"
+          >
+            <i class="fas fa-file-alt mr-2"></i>Logs
+          </router-link>
         </nav>
       </div>
 

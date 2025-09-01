@@ -394,26 +394,377 @@
 
       <!-- Logging Settings -->
       <div v-if="activeTab === 'logging' && isSettingsLoaded" class="settings-section">
-        <h3>Logging Settings</h3>
-        <div class="setting-item">
-          <label>Log Level</label>
-          <select v-model="settings.logging.log_level">
-            <option value="debug">Debug</option>
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="error">Error</option>
-          </select>
+        <h3>Logging Configuration</h3>
+        
+        <!-- General Logging Settings -->
+        <div class="logging-section">
+          <h4>General Settings</h4>
+          <div class="setting-item">
+            <label>Global Log Level</label>
+            <select v-model="settings.logging.log_level">
+              <option v-for="level in settings.logging.log_levels" :key="level" :value="level">
+                {{ level.toUpperCase() }}
+              </option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>Log to File</label>
+            <input type="checkbox" v-model="settings.logging.log_to_file" />
+          </div>
+          <div class="setting-item">
+            <label>Separate Log Files by Level</label>
+            <input type="checkbox" v-model="settings.logging.separate_log_files" />
+          </div>
+          <div class="setting-item">
+            <label>Log Directory</label>
+            <input type="text" v-model="settings.logging.log_directory" />
+          </div>
         </div>
-        <div class="setting-item">
-          <label>Log to File</label>
-          <input type="checkbox" v-model="settings.logging.log_to_file" />
+
+        <!-- Log Files Configuration -->
+        <div class="logging-section" v-if="settings.logging.separate_log_files">
+          <h4>System Log Files</h4>
+          <div class="log-files-grid">
+            <div v-for="(path, level) in settings.logging.log_files" :key="`system-${level}`" class="setting-item">
+              <label>{{ level.toUpperCase() }} Log</label>
+              <input type="text" v-model="settings.logging.log_files[level]" />
+            </div>
+          </div>
+          
+          <h4>Backend Log Files</h4>
+          <div class="log-files-grid">
+            <div v-for="(path, level) in settings.logging.backend_log_files" :key="`backend-${level}`" class="setting-item">
+              <label>Backend {{ level.toUpperCase() }}</label>
+              <input type="text" v-model="settings.logging.backend_log_files[level]" />
+            </div>
+          </div>
+          
+          <h4>Frontend Log Files</h4>
+          <div class="log-files-grid">
+            <div v-for="(path, level) in settings.logging.frontend_log_files" :key="`frontend-${level}`" class="setting-item">
+              <label>Frontend {{ level.toUpperCase() }}</label>
+              <input type="text" v-model="settings.logging.frontend_log_files[level]" />
+            </div>
+          </div>
+          
+          <h4>Startup Log Files</h4>
+          <div class="log-files-grid">
+            <div v-for="(path, level) in settings.logging.startup_log_files" :key="`startup-${level}`" class="setting-item">
+              <label>Startup {{ level.toUpperCase() }}</label>
+              <input type="text" v-model="settings.logging.startup_log_files[level]" />
+            </div>
+          </div>
         </div>
-        <div class="setting-item">
-          <label>Log File Path</label>
-          <input type="text" v-model="settings.logging.log_file_path" :disabled="!settings.logging.log_to_file" />
+
+        <!-- Single Log Files (when separate_log_files is false) -->
+        <div class="logging-section" v-else>
+          <h4>Log File Paths</h4>
+          <div class="setting-item">
+            <label>Main Log File</label>
+            <input type="text" v-model="settings.logging.log_file_path" />
+          </div>
+          <div class="setting-item">
+            <label>Backend Log File</label>
+            <input type="text" v-model="settings.logging.backend_log_file" />
+          </div>
+          <div class="setting-item">
+            <label>Frontend Log File</label>
+            <input type="text" v-model="settings.logging.frontend_log_file" />
+          </div>
+          <div class="setting-item">
+            <label>Startup Log File</label>
+            <input type="text" v-model="settings.logging.startup_log_file" />
+          </div>
+        </div>
+
+        <!-- Log Rotation Configuration -->
+        <div class="logging-section">
+          <h4>Log Rotation</h4>
+          <div class="setting-item">
+            <label>Enable Log Rotation</label>
+            <input type="checkbox" v-model="settings.logging.log_rotation.enabled" />
+          </div>
+          <div v-if="settings.logging.log_rotation.enabled" class="rotation-config">
+            <div class="setting-item">
+              <label>Rotation Type</label>
+              <select v-model="settings.logging.log_rotation.rotation_type">
+                <option value="size">Size-based</option>
+                <option value="time">Time-based</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+            <div class="setting-item" v-if="settings.logging.log_rotation.rotation_type === 'size'">
+              <label>Max File Size</label>
+              <input type="text" v-model="settings.logging.log_rotation.max_file_size" placeholder="10MB" />
+            </div>
+            <div class="setting-item" v-if="settings.logging.log_rotation.rotation_type === 'time'">
+              <label>Rotation Interval</label>
+              <select v-model="settings.logging.log_rotation.rotation_interval">
+                <option value="hourly">Hourly</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label>Max Backup Count</label>
+              <input type="number" v-model="settings.logging.log_rotation.max_backup_count" min="1" max="100" />
+            </div>
+            <div class="setting-item">
+              <label>Compress Backups</label>
+              <input type="checkbox" v-model="settings.logging.log_rotation.compress_backups" />
+            </div>
+            <div class="setting-item">
+              <label>Delete Old Logs After (days)</label>
+              <input type="number" v-model="settings.logging.log_rotation.delete_old_logs_after_days" min="1" max="365" />
+            </div>
+            <div class="setting-item">
+              <label>Rotate at Startup</label>
+              <input type="checkbox" v-model="settings.logging.log_rotation.rotation_at_startup" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Startup Log Rotation -->
+        <div class="logging-section">
+          <h4>Startup Log Rotation</h4>
+          <div class="setting-item">
+            <label>Enable Startup Log Rotation</label>
+            <input type="checkbox" v-model="settings.logging.startup_log_rotation.enabled" />
+          </div>
+          <div v-if="settings.logging.startup_log_rotation.enabled" class="startup-rotation-config">
+            <div class="setting-item">
+              <label>Rotate on Every Startup</label>
+              <input type="checkbox" v-model="settings.logging.startup_log_rotation.rotate_on_startup" />
+            </div>
+            <div class="setting-item">
+              <label>Max Backup Count</label>
+              <input type="number" v-model="settings.logging.startup_log_rotation.max_backup_count" min="1" max="50" />
+            </div>
+            <div class="setting-item">
+              <label>Compress Backups</label>
+              <input type="checkbox" v-model="settings.logging.startup_log_rotation.compress_backups" />
+            </div>
+            <div class="setting-item">
+              <label>Delete Old Logs After (days)</label>
+              <input type="number" v-model="settings.logging.startup_log_rotation.delete_old_logs_after_days" min="1" max="365" />
+            </div>
+            <div class="setting-item">
+              <label>Backup Naming</label>
+              <select v-model="settings.logging.startup_log_rotation.backup_naming">
+                <option value="timestamp">Timestamp</option>
+                <option value="sequential">Sequential</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Log File Size Limits -->
+        <div class="logging-section">
+          <h4>Size Limits</h4>
+          <div class="setting-item">
+            <label>Max Log Size (MB)</label>
+            <input type="number" v-model="settings.logging.max_log_size_mb" min="1" max="1000" />
+          </div>
+          <div class="setting-item">
+            <label>Backup Count</label>
+            <input type="number" v-model="settings.logging.backup_count" min="1" max="50" />
+          </div>
         </div>
       </div>
 
+      <!-- Cache Management Settings -->
+      <div v-if="activeTab === 'cache' && isSettingsLoaded" class="settings-section">
+        <h3>Cache Management</h3>
+        
+        <!-- Cache Statistics -->
+        <div class="cache-stats">
+          <h4>Cache Statistics</h4>
+          <div v-if="cacheStats" class="stats-grid">
+            <div class="stat-item">
+              <label>Frontend Cache Entries</label>
+              <span>{{ cacheStats.frontend?.totalEntries || 0 }}</span>
+            </div>
+            <div class="stat-item">
+              <label>Valid Entries</label>
+              <span>{{ cacheStats.frontend?.validEntries || 0 }}</span>
+            </div>
+            <div class="stat-item">
+              <label>Expired Entries</label>
+              <span>{{ cacheStats.frontend?.expiredEntries || 0 }}</span>
+            </div>
+            <div class="stat-item">
+              <label>Estimated Size</label>
+              <span>{{ formatBytes(cacheStats.frontend?.estimatedSizeBytes || 0) }}</span>
+            </div>
+          </div>
+          <button @click="refreshCacheStats" class="refresh-btn">
+            <i class="fas fa-sync-alt"></i> Refresh Stats
+          </button>
+        </div>
+
+        <!-- Clear Cache Options -->
+        <div class="cache-actions">
+          <h4>Clear Cache Options</h4>
+          
+          <div class="cache-action-group">
+            <h5>Frontend Cache</h5>
+            <div class="cache-info">
+              <div class="cache-size-info">
+                <span class="cache-label">Total Size:</span>
+                <span class="cache-size">{{ formatBytes(cacheStats?.frontend?.estimatedSizeBytes || 0) }}</span>
+                <span class="cache-label">Entries:</span>
+                <span class="cache-entries">{{ cacheStats?.frontend?.totalEntries || 0 }}</span>
+              </div>
+            </div>
+            <div class="action-buttons">
+              <button @click="clearFrontendCache" class="clear-btn" :disabled="isClearing">
+                <i class="fas fa-trash-alt"></i> Clear Frontend Cache
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+              <button @click="clearFrontendCacheCategory('settings')" class="clear-btn category-btn" :disabled="isClearing">
+                <i class="fas fa-cog"></i> Clear Settings Cache
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+              <button @click="clearFrontendCacheCategory('chats')" class="clear-btn category-btn" :disabled="isClearing">
+                <i class="fas fa-comments"></i> Clear Chat Cache
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="cache-action-group">
+            <h5>Backend Cache</h5>
+            <div class="cache-info">
+              <div class="cache-size-info">
+                <span class="cache-label">Backend Status:</span>
+                <span class="cache-status" :class="{ 'online': cacheStats?.backend, 'offline': !cacheStats?.backend }">
+                  {{ cacheStats?.backend ? 'Online' : 'Offline' }}
+                </span>
+                <span v-if="cacheStats?.backend?.total_memory" class="cache-label">Memory:</span>
+                <span v-if="cacheStats?.backend?.total_memory" class="cache-size">{{ formatBytes(cacheStats.backend.total_memory) }}</span>
+              </div>
+            </div>
+            <div class="action-buttons">
+              <button @click="clearBackendCache" class="clear-btn" :disabled="isClearing">
+                <i class="fas fa-server"></i> Clear Backend Configuration Cache
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+              <button @click="clearBackendCache('llm')" class="clear-btn category-btn" :disabled="isClearing">
+                <i class="fas fa-brain"></i> Clear LLM Cache
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="cache-action-group">
+            <h5>Browser Storage</h5>
+            <div class="cache-info">
+              <div class="cache-size-info">
+                <span class="cache-label">LocalStorage Items:</span>
+                <span class="cache-entries">{{ Object.keys(localStorage).length }}</span>
+                <span class="cache-label">SessionStorage Items:</span>
+                <span class="cache-entries">{{ Object.keys(sessionStorage).length }}</span>
+              </div>
+            </div>
+            <div class="action-buttons">
+              <button @click="clearLocalStorage" class="clear-btn" :disabled="isClearing">
+                <i class="fas fa-database"></i> Clear Local Storage
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+              <button @click="clearSessionStorage" class="clear-btn" :disabled="isClearing">
+                <i class="fas fa-clock"></i> Clear Session Storage
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="cache-action-group">
+            <h5>Redis Cache</h5>
+            <div class="cache-info">
+              <div class="cache-size-info">
+                <span class="cache-label">Redis Status:</span>
+                <span class="cache-status" :class="{ 'online': cacheStats?.backend?.redis_connected, 'offline': !cacheStats?.backend?.redis_connected }">
+                  {{ cacheStats?.backend?.redis_connected ? 'Connected' : 'Disconnected' }}
+                </span>
+                <span v-if="cacheStats?.backend?.redis_databases" class="cache-label">Databases:</span>
+                <span v-if="cacheStats?.backend?.redis_databases" class="cache-entries">{{ Object.keys(cacheStats.backend.redis_databases || {}).length }}</span>
+              </div>
+            </div>
+            <div class="action-buttons">
+              <button @click="clearRedisCache('all')" class="clear-btn danger" :disabled="isClearing">
+                <i class="fas fa-exclamation-triangle"></i> Clear All Redis Databases
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+              <button @click="clearRedisCache('main')" class="clear-btn category-btn" :disabled="isClearing">
+                <i class="fas fa-home"></i> Clear Main DB (0)
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+              <button @click="clearRedisCache('knowledge')" class="clear-btn category-btn" :disabled="isClearing">
+                <i class="fas fa-book"></i> Clear Knowledge DB (1)
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+              <button @click="clearRedisCache('prompts')" class="clear-btn category-btn" :disabled="isClearing">
+                <i class="fas fa-file-alt"></i> Clear Prompts DB (2)
+                <span v-if="isClearing" class="loading-dots">...</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="cache-action-group">
+            <h5>Complete System Reset</h5>
+            <div class="action-buttons">
+              <button @click="clearAllCaches" class="clear-btn danger-full" :disabled="isClearing">
+                <i class="fas fa-bomb"></i> Clear ALL Caches (System Reset)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cache Configuration -->
+        <div class="cache-config">
+          <h4>Cache Configuration</h4>
+          
+          <div class="setting-item">
+            <label>Default Cache TTL (minutes)</label>
+            <input type="number" v-model="cacheConfig.defaultTTLMinutes" min="1" max="1440" />
+          </div>
+          
+          <div class="setting-item">
+            <label>Settings Cache TTL (minutes)</label>
+            <input type="number" v-model="cacheConfig.settingsTTLMinutes" min="1" max="1440" />
+          </div>
+          
+          <div class="setting-item">
+            <label>Auto Cleanup Enabled</label>
+            <input type="checkbox" v-model="cacheConfig.autoCleanupEnabled" />
+          </div>
+          
+          <div class="setting-item">
+            <label>Max Cache Size (MB)</label>
+            <input type="number" v-model="cacheConfig.maxCacheSizeMB" min="10" max="1000" />
+          </div>
+          
+          <button @click="saveCacheConfig" class="save-btn" :disabled="isSaving">
+            <i class="fas fa-save"></i> Save Cache Configuration
+          </button>
+        </div>
+
+        <!-- Cache Activity Log -->
+        <div v-if="cacheActivityLog.length > 0" class="cache-activity">
+          <h4>Recent Cache Activity</h4>
+          <div class="activity-log">
+            <div v-for="activity in cacheActivityLog" :key="activity.id" class="activity-item">
+              <span class="timestamp">{{ formatTime(activity.timestamp) }}</span>
+              <span class="action" :class="activity.type">{{ activity.message }}</span>
+            </div>
+          </div>
+          <button @click="clearActivityLog" class="clear-log-btn">
+            <i class="fas fa-eraser"></i> Clear Activity Log
+          </button>
+        </div>
+      </div>
 
       <!-- Voice Interface Settings -->
       <div v-if="activeTab === 'voiceInterface' && isSettingsLoaded" class="settings-section">
@@ -456,6 +807,114 @@
             <label>Debug Logging</label>
             <input type="checkbox" v-model="settings.developer.debug_logging" @change="updateDeveloperConfig" />
           </div>
+          
+          <!-- RUM (Real User Monitoring) Settings -->
+          <div class="rum-settings">
+            <h4>Real User Monitoring (RUM)</h4>
+            <div class="setting-item">
+              <label class="with-description">
+                Enable RUM Agent
+                <span class="description">Monitor user interactions, performance metrics, and errors in real-time</span>
+              </label>
+              <input type="checkbox" v-model="settings.developer.rum.enabled" @change="updateRumConfig" />
+            </div>
+            <div class="rum-config" v-if="settings.developer?.rum?.enabled === true">
+              <div class="setting-item">
+                <label class="with-description">
+                  Error Tracking
+                  <span class="description">Capture JavaScript errors and exceptions</span>
+                </label>
+                <input type="checkbox" v-model="settings.developer.rum.error_tracking" @change="updateRumConfig" />
+              </div>
+              <div class="setting-item">
+                <label class="with-description">
+                  Performance Monitoring
+                  <span class="description">Track page load times, API calls, and resource loading</span>
+                </label>
+                <input type="checkbox" v-model="settings.developer.rum.performance_monitoring" @change="updateRumConfig" />
+              </div>
+              <div class="setting-item">
+                <label class="with-description">
+                  User Interaction Tracking
+                  <span class="description">Monitor clicks, form submissions, and navigation</span>
+                </label>
+                <input type="checkbox" v-model="settings.developer.rum.interaction_tracking" @change="updateRumConfig" />
+              </div>
+              <div class="setting-item">
+                <label class="with-description">
+                  Session Recording
+                  <span class="description">Record user sessions for debugging (privacy-aware)</span>
+                </label>
+                <input type="checkbox" v-model="settings.developer.rum.session_recording" @change="updateRumConfig" />
+              </div>
+              <div class="setting-item">
+                <label>Sample Rate (%)</label>
+                <input type="number" v-model="settings.developer.rum.sample_rate" 
+                       min="0" max="100" step="1" @change="updateRumConfig" />
+              </div>
+              <div class="setting-item">
+                <label>Max Events per Session</label>
+                <input type="number" v-model="settings.developer.rum.max_events_per_session" 
+                       min="100" max="10000" step="100" @change="updateRumConfig" />
+              </div>
+              <div class="setting-item">
+                <label class="with-description">
+                  Debug Mode
+                  <span class="description">Enable console logging for RUM events</span>
+                </label>
+                <input type="checkbox" v-model="settings.developer.rum.debug_mode" @change="updateRumConfig" />
+              </div>
+              <div class="setting-item">
+                <label class="with-description">
+                  RUM Log Level
+                  <span class="description">Control verbosity of RUM backend logging</span>
+                </label>
+                <select v-model="settings.developer.rum.log_level" @change="updateRumConfig">
+                  <option v-for="level in settings.logging.log_levels" :key="level" :value="level">
+                    {{ level.toUpperCase() }}
+                  </option>
+                </select>
+              </div>
+              
+              <!-- RUM Status Display -->
+              <div class="rum-status" v-if="settings.developer?.rum?.enabled && rumStatus && rumStatus.active">
+                <h5>RUM Agent Status</h5>
+                <div class="status-grid">
+                  <div class="status-item">
+                    <label>Agent Status</label>
+                    <span :class="['status-value', rumStatus.active ? 'active' : 'inactive']">
+                      {{ rumStatus.active ? 'Active' : 'Inactive' }}
+                    </span>
+                  </div>
+                  <div class="status-item">
+                    <label>Events Collected</label>
+                    <span class="status-value">{{ rumStatus.events_count || 0 }}</span>
+                  </div>
+                  <div class="status-item">
+                    <label>Session Duration</label>
+                    <span class="status-value">{{ formatDuration(rumStatus.session_duration) }}</span>
+                  </div>
+                  <div class="status-item">
+                    <label>Last Event</label>
+                    <span class="status-value">{{ formatTime(rumStatus.last_event_time) }}</span>
+                  </div>
+                </div>
+                
+                <div class="rum-actions">
+                  <button @click="refreshRumStatus" class="refresh-btn">
+                    <i class="fas fa-sync-alt"></i> Refresh Status
+                  </button>
+                  <button @click="clearRumData" class="clear-btn category-btn">
+                    <i class="fas fa-trash-alt"></i> Clear RUM Data
+                  </button>
+                  <button @click="exportRumData" class="export-btn">
+                    <i class="fas fa-download"></i> Export Data
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <div class="developer-info" v-if="developerInfo">
             <h4>System Information</h4>
             <div class="info-item">
@@ -599,6 +1058,7 @@ import { ref, onMounted, watch, computed, onUnmounted } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 import { settingsService } from '../services/SettingsService.js';
 import { healthService } from '../services/HealthService.js';
+import cacheService from '../services/CacheService.js';
 import ErrorBoundary from './ErrorBoundary.vue';
 import { API_CONFIG } from '@/config/environment.js';
 
@@ -616,6 +1076,7 @@ export default {
       { id: 'ui', label: 'UI' },
       { id: 'security', label: 'Security' },
       { id: 'logging', label: 'Logging' },
+      { id: 'cache', label: 'Cache' },
       { id: 'voiceInterface', label: 'Voice Interface' },
       { id: 'prompts', label: 'System Prompts' },
       { id: 'developer', label: 'Developer' }
@@ -639,7 +1100,65 @@ export default {
       },
       ui: {},
       security: {},
-      logging: {},
+      logging: {
+        log_level: 'info',
+        log_levels: ['debug', 'info', 'warning', 'error', 'critical'],
+        log_to_file: true,
+        separate_log_files: true,
+        log_file_path: 'logs/system.log',
+        log_directory: 'logs',
+        log_files: {
+          debug: 'logs/system.debug.log',
+          info: 'logs/system.info.log',
+          warning: 'logs/system.warning.log',
+          error: 'logs/system.error.log',
+          critical: 'logs/system.critical.log'
+        },
+        backend_log_file: 'logs/backend.log',
+        backend_log_files: {
+          debug: 'logs/backend.debug.log',
+          info: 'logs/backend.info.log',
+          warning: 'logs/backend.warning.log',
+          error: 'logs/backend.error.log',
+          critical: 'logs/backend.critical.log'
+        },
+        frontend_log_file: 'logs/frontend.log',
+        frontend_log_files: {
+          debug: 'logs/frontend.debug.log',
+          info: 'logs/frontend.info.log',
+          warning: 'logs/frontend.warning.log',
+          error: 'logs/frontend.error.log',
+          critical: 'logs/frontend.critical.log'
+        },
+        startup_log_file: 'logs/startup.log',
+        startup_log_files: {
+          debug: 'logs/startup.debug.log',
+          info: 'logs/startup.info.log',
+          warning: 'logs/startup.warning.log',
+          error: 'logs/startup.error.log',
+          critical: 'logs/startup.critical.log'
+        },
+        backup_count: 5,
+        max_log_size_mb: 10,
+        log_rotation: {
+          enabled: true,
+          rotation_type: 'size',
+          max_file_size: '10MB',
+          max_backup_count: 7,
+          rotation_interval: 'daily',
+          compress_backups: true,
+          delete_old_logs_after_days: 30,
+          rotation_at_startup: false
+        },
+        startup_log_rotation: {
+          enabled: true,
+          rotate_on_startup: true,
+          max_backup_count: 10,
+          compress_backups: true,
+          delete_old_logs_after_days: 90,
+          backup_naming: 'timestamp'
+        }
+      },
       knowledge_base: {},
       voice_interface: {},
       memory: {
@@ -655,7 +1174,24 @@ export default {
         editedContent: '',
         defaults: {}
       },
-      developer: {}
+      developer: {
+        enabled: false,
+        enhanced_errors: true,
+        endpoint_suggestions: true,
+        debug_logging: false,
+        rum: {
+          enabled: false,
+          error_tracking: true,
+          performance_monitoring: true,
+          interaction_tracking: false,
+          session_recording: false,
+          sample_rate: 100,
+          max_events_per_session: 1000,
+          debug_mode: false,
+          log_to_backend: true,
+          log_level: 'info'
+        }
+      }
     });
 
     // Settings structure will be populated from backend or local storage
@@ -682,6 +1218,20 @@ export default {
     const isSaving = ref(false);
     const saveMessage = ref('');
     const saveMessageType = ref(''); // 'success' or 'error'
+
+    // Cache management state
+    const cacheStats = ref(null);
+    const isClearing = ref(false);
+    const cacheActivityLog = ref([]);
+    const cacheConfig = ref({
+      defaultTTLMinutes: 5,
+      settingsTTLMinutes: 10,
+      autoCleanupEnabled: true,
+      maxCacheSizeMB: 100
+    });
+
+    // RUM (Real User Monitoring) state
+    const rumStatus = ref(null);
 
     // Computed property for CORS origins as a string for input field
     const corsOriginsString = computed({
@@ -897,9 +1447,9 @@ export default {
     const getPlaceholder = (path) => {
       // Get placeholder from loaded configuration
       // NEVER return hardcoded values here
-      if (!configService) return '';
+      if (!settings.value || !settings.value.ui) return '';
       
-      const placeholders = configService.get('ui.placeholders', {});
+      const placeholders = settings.value.ui.placeholders || {};
       return placeholders[path] || '';
     };
 
@@ -910,6 +1460,16 @@ export default {
       saveMessageType.value = '';
 
       try {
+        // FIRST: Save developer settings separately to preserve RUM config
+        if (settings.value.developer) {
+          try {
+            await settingsService.updateDeveloperConfig(settings.value.developer);
+            console.log('Developer config saved successfully');
+          } catch (devError) {
+            console.warn('Could not save developer config:', devError);
+          }
+        }
+        
         // Create a deep copy of settings without prompts data (prompts shouldn't be saved to config.yaml)
         const settingsToSave = JSON.parse(JSON.stringify(settings.value));
         delete settingsToSave.prompts;
@@ -917,8 +1477,18 @@ export default {
         const response = await apiClient.post('/api/settings/config', settingsToSave);
         const result = await response.json();
 
-        // Reload settings from backend after successful save
-        await loadSettingsFromBackend();
+        // Clear frontend cache to ensure fresh data
+        cacheService.invalidateCategory('settings');
+        
+        // Clear backend cache as well
+        try {
+          await apiClient.post('/api/settings/clear-cache');
+        } catch (error) {
+          console.warn('Could not clear backend cache:', error);
+        }
+
+        // Force a complete reload of settings from backend
+        await forceReloadSettings();
 
         // Show success message
         saveMessage.value = 'Settings saved successfully!';
@@ -1374,6 +1944,636 @@ export default {
       return 'partial';
     };
 
+    // Cache management methods
+    const addCacheActivity = (message, type = 'info') => {
+      const activity = {
+        id: Date.now(),
+        timestamp: new Date(),
+        message,
+        type
+      };
+      cacheActivityLog.value.unshift(activity);
+      // Keep only last 20 activities
+      if (cacheActivityLog.value.length > 20) {
+        cacheActivityLog.value = cacheActivityLog.value.slice(0, 20);
+      }
+    };
+
+    const refreshCacheStats = async () => {
+      try {
+        // Get frontend cache stats
+        const frontendStats = cacheService.getStats();
+        
+        // Get backend cache stats (if available)
+        let backendStats = null;
+        try {
+          const response = await apiClient.get('/api/cache/stats');
+          backendStats = await response.json();
+        } catch (error) {
+          console.warn('Backend cache stats not available:', error);
+        }
+
+        cacheStats.value = {
+          frontend: frontendStats,
+          backend: backendStats
+        };
+
+        addCacheActivity('Cache statistics refreshed', 'success');
+      } catch (error) {
+        console.error('Error refreshing cache stats:', error);
+        addCacheActivity('Failed to refresh cache statistics', 'error');
+      }
+    };
+
+    const clearFrontendCache = async () => {
+      if (isClearing.value) return;
+      isClearing.value = true;
+
+      try {
+        cacheService.clear();
+        await refreshCacheStats();
+        addCacheActivity('Frontend cache cleared completely', 'success');
+      } catch (error) {
+        console.error('Error clearing frontend cache:', error);
+        addCacheActivity('Failed to clear frontend cache', 'error');
+      } finally {
+        isClearing.value = false;
+      }
+    };
+
+    const clearFrontendCacheCategory = async (category) => {
+      if (isClearing.value) return;
+      isClearing.value = true;
+
+      try {
+        cacheService.invalidateCategory(category);
+        await refreshCacheStats();
+        addCacheActivity(`Frontend ${category} cache cleared`, 'success');
+      } catch (error) {
+        console.error(`Error clearing frontend ${category} cache:`, error);
+        addCacheActivity(`Failed to clear ${category} cache`, 'error');
+      } finally {
+        isClearing.value = false;
+      }
+    };
+
+    const clearBackendCache = async (type = 'all') => {
+      if (isClearing.value) return;
+      isClearing.value = true;
+
+      try {
+        const endpoint = type === 'all' ? '/api/settings/clear-cache' : `/api/cache/clear/${type}`;
+        await apiClient.post(endpoint, {});
+        await refreshCacheStats();
+        addCacheActivity(`Backend ${type} cache cleared`, 'success');
+      } catch (error) {
+        console.error(`Error clearing backend ${type} cache:`, error);
+        addCacheActivity(`Failed to clear backend ${type} cache`, 'error');
+      } finally {
+        isClearing.value = false;
+      }
+    };
+
+    const clearLocalStorage = async () => {
+      if (isClearing.value) return;
+      isClearing.value = true;
+
+      try {
+        localStorage.clear();
+        addCacheActivity('Local storage cleared', 'success');
+        // Reload settings after clearing localStorage
+        await loadSettingsFromBackend();
+      } catch (error) {
+        console.error('Error clearing local storage:', error);
+        addCacheActivity('Failed to clear local storage', 'error');
+      } finally {
+        isClearing.value = false;
+      }
+    };
+
+    const clearSessionStorage = async () => {
+      if (isClearing.value) return;
+      isClearing.value = true;
+
+      try {
+        sessionStorage.clear();
+        addCacheActivity('Session storage cleared', 'success');
+      } catch (error) {
+        console.error('Error clearing session storage:', error);
+        addCacheActivity('Failed to clear session storage', 'error');
+      } finally {
+        isClearing.value = false;
+      }
+    };
+
+    const clearRedisCache = async (database) => {
+      if (isClearing.value) return;
+      isClearing.value = true;
+
+      try {
+        await apiClient.post(`/api/cache/redis/clear/${database}`, {});
+        await refreshCacheStats();
+        const dbName = database === 'all' ? 'All Redis databases' : `Redis ${database} database`;
+        addCacheActivity(`${dbName} cleared`, 'success');
+      } catch (error) {
+        console.error(`Error clearing Redis ${database} cache:`, error);
+        addCacheActivity(`Failed to clear Redis ${database} cache`, 'error');
+      } finally {
+        isClearing.value = false;
+      }
+    };
+
+    const clearAllCaches = async () => {
+      if (isClearing.value) return;
+      
+      if (!confirm('⚠️ WARNING: This will clear ALL caches and browser storage. This action cannot be undone. Continue?')) {
+        return;
+      }
+
+      isClearing.value = true;
+
+      try {
+        // Clear frontend cache
+        cacheService.clear();
+        
+        // Clear browser storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Clear backend caches
+        await apiClient.post('/api/settings/clear-cache', {});
+        
+        // Clear all Redis databases
+        await apiClient.post('/api/cache/redis/clear/all', {});
+        
+        addCacheActivity('🧹 SYSTEM RESET: All caches cleared', 'warning');
+        await refreshCacheStats();
+        
+        // Reload settings after clearing everything
+        await loadSettingsFromBackend();
+      } catch (error) {
+        console.error('Error during system cache reset:', error);
+        addCacheActivity('❌ System cache reset failed', 'error');
+      } finally {
+        isClearing.value = false;
+      }
+    };
+
+    const saveCacheConfig = async () => {
+      if (isSaving.value) return;
+      isSaving.value = true;
+
+      try {
+        // Update cache service configuration
+        if (cacheConfig.value.defaultTTLMinutes) {
+          cacheService.defaultTTL = cacheConfig.value.defaultTTLMinutes * 60 * 1000;
+        }
+        
+        if (cacheConfig.value.settingsTTLMinutes) {
+          cacheService.strategies['/api/settings'] = cacheConfig.value.settingsTTLMinutes * 60 * 1000;
+          cacheService.strategies['/api/settings/'] = cacheConfig.value.settingsTTLMinutes * 60 * 1000;
+        }
+
+        // Save to backend if available
+        try {
+          await apiClient.post('/api/cache/config', cacheConfig.value);
+        } catch (error) {
+          console.warn('Backend cache config save not available:', error);
+        }
+
+        addCacheActivity('Cache configuration saved', 'success');
+      } catch (error) {
+        console.error('Error saving cache configuration:', error);
+        addCacheActivity('Failed to save cache configuration', 'error');
+      } finally {
+        isSaving.value = false;
+      }
+    };
+
+    const clearActivityLog = () => {
+      cacheActivityLog.value = [];
+    };
+
+    const formatBytes = (bytes) => {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    const formatTime = (date) => {
+      if (!date) return 'Never';
+      
+      // Handle different input types
+      let dateObj;
+      if (typeof date === 'string') {
+        dateObj = new Date(date);
+      } else if (date instanceof Date) {
+        dateObj = date;
+      } else {
+        return 'Invalid date';
+      }
+      
+      // Check if date is valid
+      if (isNaN(dateObj.getTime())) {
+        return 'Invalid date';
+      }
+      
+      return dateObj.toLocaleTimeString();
+    };
+
+    // RUM (Real User Monitoring) methods
+    const updateRumConfig = async () => {
+      if (!settings.value.developer?.rum) return;
+      
+      try {
+        isSaving.value = true;
+        
+        // Initialize or update RUM agent based on new settings FIRST
+        // This ensures RUM is properly enabled/disabled even if backend API fails
+        if (settings.value.developer.rum.enabled) {
+          await initializeRumAgent();
+          addCacheActivity('RUM agent enabled and configured', 'success');
+        } else {
+          await disableRumAgent();
+          // Clear the rum status when disabled
+          rumStatus.value = null;
+          console.log('[DEBUG] RUM disabled - rumStatus set to null:', rumStatus.value);
+          addCacheActivity('RUM agent disabled', 'info');
+        }
+        
+        // Then try to update developer config with RUM settings
+        try {
+          await settingsService.updateDeveloperConfig(settings.value.developer);
+        } catch (configError) {
+          console.warn('Backend developer config update failed (this is expected if backend needs restart):', configError.message);
+          if (configError.message && configError.message.includes('404')) {
+            addCacheActivity('RUM settings applied locally (backend restart required for persistence)', 'warning');
+          } else {
+            addCacheActivity('RUM settings applied locally, backend update failed', 'warning');
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error updating RUM configuration:', error);
+        addCacheActivity('Failed to update RUM configuration', 'error');
+        // Ensure RUM status is cleared if there was an error and RUM should be disabled
+        if (!settings.value.developer?.rum?.enabled) {
+          rumStatus.value = null;
+        }
+      } finally {
+        isSaving.value = false;
+      }
+    };
+
+    const initializeRumAgent = async () => {
+      try {
+        const rumConfig = settings.value.developer.rum;
+        
+        // Send RUM configuration to backend for logging setup
+        await apiClient.post('/api/rum/config', {
+          enabled: rumConfig.enabled,
+          error_tracking: rumConfig.error_tracking,
+          performance_monitoring: rumConfig.performance_monitoring,
+          interaction_tracking: rumConfig.interaction_tracking,
+          session_recording: rumConfig.session_recording,
+          sample_rate: rumConfig.sample_rate,
+          max_events_per_session: rumConfig.max_events_per_session,
+          debug_mode: rumConfig.debug_mode
+        });
+        
+        // Initialize frontend RUM tracking
+        if (typeof window !== 'undefined') {
+          window.rumAgent = {
+            config: rumConfig,
+            sessionId: generateSessionId(),
+            startTime: Date.now(),
+            eventCount: 0,
+            lastEvent: null
+          };
+          
+          // Set up error tracking
+          if (rumConfig.error_tracking) {
+            window.addEventListener('error', logRumError);
+            window.addEventListener('unhandledrejection', logRumPromiseRejection);
+          }
+          
+          // Set up performance monitoring
+          if (rumConfig.performance_monitoring) {
+            // Monitor API calls
+            const originalFetch = window.fetch;
+            window.fetch = async (...args) => {
+              const startTime = performance.now();
+              try {
+                const response = await originalFetch(...args);
+                const endTime = performance.now();
+                logRumPerformance('api_call', {
+                  url: args[0],
+                  method: args[1]?.method || 'GET',
+                  duration: endTime - startTime,
+                  status: response.status
+                });
+                return response;
+              } catch (error) {
+                logRumError({ error, context: 'fetch_api_call', url: args[0] });
+                throw error;
+              }
+            };
+          }
+          
+          // Set up interaction tracking
+          if (rumConfig.interaction_tracking) {
+            document.addEventListener('click', logRumInteraction);
+            document.addEventListener('submit', logRumFormSubmission);
+          }
+          
+          logRumEvent('rum_agent_initialized', { config: rumConfig });
+        }
+        
+        await refreshRumStatus();
+        
+      } catch (error) {
+        console.error('Error initializing RUM agent:', error);
+        // Don't show dashboard if there's an initialization error
+        rumStatus.value = null;
+        logRumError({ error, context: 'rum_initialization' });
+      }
+    };
+
+    const disableRumAgent = async () => {
+      try {
+        // Notify backend that RUM is disabled
+        await apiClient.post('/api/rum/disable');
+        
+        // Clean up frontend RUM tracking
+        if (typeof window !== 'undefined' && window.rumAgent) {
+          // Remove event listeners
+          window.removeEventListener('error', logRumError);
+          window.removeEventListener('unhandledrejection', logRumPromiseRejection);
+          document.removeEventListener('click', logRumInteraction);
+          document.removeEventListener('submit', logRumFormSubmission);
+          
+          // Restore original fetch
+          if (window.originalFetch) {
+            window.fetch = window.originalFetch;
+          }
+          
+          logRumEvent('rum_agent_disabled');
+          delete window.rumAgent;
+        }
+        
+        // Clear the status completely when disabled
+        rumStatus.value = null;
+        
+      } catch (error) {
+        console.error('Error disabling RUM agent:', error);
+        // Even on error, clear the status
+        rumStatus.value = null;
+      }
+    };
+
+    const logRumEvent = async (eventType, data = {}) => {
+      if (!window.rumAgent || window.rumAgent.eventCount >= window.rumAgent.config.max_events_per_session) {
+        return;
+      }
+      
+      // Apply sampling
+      if (Math.random() * 100 > window.rumAgent.config.sample_rate) {
+        return;
+      }
+      
+      const event = {
+        type: eventType,
+        timestamp: new Date().toISOString(),
+        sessionId: window.rumAgent.sessionId,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        data: data
+      };
+      
+      window.rumAgent.eventCount++;
+      window.rumAgent.lastEvent = event.timestamp;
+      
+      if (window.rumAgent.config.debug_mode) {
+        console.log('RUM Event:', event);
+      }
+      
+      try {
+        // Send to backend for logging
+        await apiClient.post('/api/rum/event', event);
+      } catch (error) {
+        console.warn('Failed to send RUM event to backend:', error);
+      }
+    };
+
+    const logRumError = (errorEvent) => {
+      const errorData = {
+        message: errorEvent.message || errorEvent.error?.message || 'Unknown error',
+        filename: errorEvent.filename || 'unknown',
+        lineno: errorEvent.lineno || 0,
+        colno: errorEvent.colno || 0,
+        stack: errorEvent.error?.stack || 'No stack trace',
+        context: errorEvent.context || 'global'
+      };
+      
+      logRumEvent('error', errorData);
+    };
+
+    const logRumPromiseRejection = (promiseRejectionEvent) => {
+      const errorData = {
+        reason: promiseRejectionEvent.reason?.toString() || 'Unknown promise rejection',
+        stack: promiseRejectionEvent.reason?.stack || 'No stack trace'
+      };
+      
+      logRumEvent('promise_rejection', errorData);
+    };
+
+    const logRumPerformance = (metricType, data) => {
+      logRumEvent('performance', {
+        metric_type: metricType,
+        ...data
+      });
+    };
+
+    const logRumInteraction = (event) => {
+      const interactionData = {
+        element: event.target.tagName,
+        id: event.target.id || null,
+        className: event.target.className || null,
+        text: event.target.textContent?.substring(0, 100) || null,
+        coordinates: { x: event.clientX, y: event.clientY }
+      };
+      
+      logRumEvent('interaction', interactionData);
+    };
+
+    const logRumFormSubmission = (event) => {
+      const formData = {
+        action: event.target.action || null,
+        method: event.target.method || 'GET',
+        fieldCount: event.target.elements.length
+      };
+      
+      logRumEvent('form_submission', formData);
+    };
+
+    const refreshRumStatus = async () => {
+      try {
+        // Only show status if RUM is enabled
+        if (!settings.value.developer?.rum?.enabled) {
+          rumStatus.value = null;
+          return;
+        }
+        
+        if (window.rumAgent) {
+          const sessionDuration = Date.now() - window.rumAgent.startTime;
+          rumStatus.value = {
+            active: true,
+            events_count: window.rumAgent.eventCount || 0,
+            session_duration: sessionDuration,
+            last_event_time: window.rumAgent.lastEvent || null
+          };
+        } else {
+          // If RUM is enabled but agent isn't working, don't show dashboard
+          rumStatus.value = null;
+        }
+      } catch (error) {
+        console.error('Error refreshing RUM status:', error);
+        // If RUM is disabled, don't show status even on error
+        if (!settings.value.developer?.rum?.enabled) {
+          rumStatus.value = null;
+        } else {
+          // Even if RUM is enabled, don't show dashboard if there's an error
+          rumStatus.value = null;
+        }
+      }
+    };
+
+    const clearRumData = async () => {
+      if (!confirm('Clear all RUM data? This cannot be undone.')) {
+        return;
+      }
+      
+      try {
+        await apiClient.post('/api/rum/clear');
+        if (window.rumAgent) {
+          window.rumAgent.eventCount = 0;
+          window.rumAgent.lastEvent = null;
+        }
+        await refreshRumStatus();
+        addCacheActivity('RUM data cleared', 'success');
+      } catch (error) {
+        console.error('Error clearing RUM data:', error);
+        addCacheActivity('Failed to clear RUM data', 'error');
+      }
+    };
+
+    const exportRumData = async () => {
+      try {
+        const response = await apiClient.get('/api/rum/export');
+        const blob = new Blob([JSON.stringify(response.data, null, 2)], {
+          type: 'application/json'
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `rum_data_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        addCacheActivity('RUM data exported', 'success');
+      } catch (error) {
+        console.error('Error exporting RUM data:', error);
+        addCacheActivity('Failed to export RUM data', 'error');
+      }
+    };
+
+    const generateSessionId = () => {
+      return 'rum_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+    };
+
+    const formatDuration = (milliseconds) => {
+      if (!milliseconds) return '0s';
+      const seconds = Math.floor(milliseconds / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      
+      if (hours > 0) {
+        return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+      } else {
+        return `${seconds}s`;
+      }
+    };
+
+    const forceReloadSettings = async () => {
+      try {
+        // Force clear all caches
+        cacheService.invalidateCategory('settings');
+        
+        // Get fresh settings from backend without any cache
+        const response = await apiClient.get('/api/settings/config', {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        const freshSettings = await response.json();
+        
+        // Create completely new settings object to trigger Vue reactivity
+        const newSettings = createEmptySettings();
+        
+        // FIRST: Deep merge the fresh settings from backend
+        Object.assign(newSettings, deepMerge(newSettings, freshSettings));
+        
+        // THEN: Get fresh developer config and merge it AFTER to preserve RUM settings
+        try {
+          const developerConfig = await settingsService.getDeveloperConfig();
+          if (developerConfig) {
+            newSettings.developer = developerConfig;
+            console.log('Fresh developer config loaded and preserved:', developerConfig);
+          }
+        } catch (devError) {
+          console.warn('Could not load fresh developer config:', devError);
+        }
+        
+        // Replace the entire settings object to ensure reactivity
+        settings.value = newSettings;
+        
+        // Update localStorage with fresh settings
+        localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+        
+        console.log('Settings force reloaded from backend');
+        
+      } catch (error) {
+        console.error('Error force reloading settings:', error);
+        // Fall back to regular reload
+        await loadSettingsFromBackend();
+      }
+    };
+
+    // Initialize cache stats and RUM on component mount
+    onMounted(() => {
+      refreshCacheStats();
+      
+      // Initialize RUM if enabled
+      console.log('[DEBUG] Component mounted - RUM settings:', {
+        enabled: settings.value.developer?.rum?.enabled,
+        rumStatus: rumStatus.value
+      });
+      if (settings.value.developer?.rum?.enabled) {
+        initializeRumAgent();
+      } else {
+        // Ensure RUM status is null when disabled
+        rumStatus.value = null;
+        console.log('[DEBUG] RUM disabled on mount - rumStatus set to null');
+      }
+    });
+
     return {
       settings,
       saveSettings,
@@ -1419,7 +2619,33 @@ export default {
       testAllAgents,
       enabledAgentsCount,
       getOverallHealthStatus,
-      getOverallHealthClass
+      getOverallHealthClass,
+      getPlaceholder,
+      // Cache management exports
+      cacheStats,
+      isClearing,
+      cacheActivityLog,
+      cacheConfig,
+      refreshCacheStats,
+      clearFrontendCache,
+      clearFrontendCacheCategory,
+      clearBackendCache,
+      clearLocalStorage,
+      clearSessionStorage,
+      clearRedisCache,
+      clearAllCaches,
+      saveCacheConfig,
+      clearActivityLog,
+      formatBytes,
+      formatTime,
+      // RUM management exports
+      rumStatus,
+      updateRumConfig,
+      refreshRumStatus,
+      clearRumData,
+      exportRumData,
+      formatDuration,
+      forceReloadSettings
     };
   }
 };
@@ -2167,5 +3393,453 @@ input:checked + .toggle-slider:before {
   align-items: center;
   padding: 40px;
   color: #6c757d;
+}
+
+/* Cache Management Styles */
+.cache-stats {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.stat-item label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.stat-item span {
+  font-weight: 600;
+  color: #007bff;
+}
+
+.refresh-btn {
+  background-color: #17a2b8;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.refresh-btn:hover {
+  background-color: #138496;
+}
+.cache-info {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+}
+.cache-size-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+.cache-label {
+  font-weight: 500;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+.cache-size,
+.cache-entries {
+  font-weight: 600;
+  color: #007bff;
+  font-size: 0.9rem;
+}
+.cache-status.online {
+  color: #28a745;
+  font-weight: 600;
+}
+.cache-status.offline {
+  color: #dc3545;
+  font-weight: 600;
+}
+.loading-dots {
+  animation: pulse 1s infinite;
+  color: #6c757d;
+  font-size: 0.8rem;
+}
+@keyframes pulse {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0.5; }
+}
+
+.cache-actions {
+  margin-bottom: 2rem;
+}
+
+.cache-action-group {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.cache-action-group h5 {
+  margin: 0 0 1rem 0;
+  color: #495057;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.clear-btn {
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.clear-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.clear-btn.category-btn {
+  background-color: #6c757d;
+  color: white;
+}
+
+.clear-btn.category-btn:hover:not(:disabled) {
+  background-color: #5a6268;
+}
+
+.clear-btn:not(.category-btn):not(.danger):not(.danger-full) {
+  background-color: #007bff;
+  color: white;
+}
+
+.clear-btn:not(.category-btn):not(.danger):not(.danger-full):hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.clear-btn.danger {
+  background-color: #fd7e14;
+  color: white;
+}
+
+.clear-btn.danger:hover:not(:disabled) {
+  background-color: #e8650e;
+}
+
+.clear-btn.danger-full {
+  background-color: #dc3545;
+  color: white;
+  font-weight: 600;
+}
+
+.clear-btn.danger-full:hover:not(:disabled) {
+  background-color: #c82333;
+}
+
+.cache-config {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.save-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cache-activity {
+  padding: 1rem;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.activity-log {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.timestamp {
+  font-size: 0.8rem;
+  color: #6c757d;
+  min-width: 80px;
+}
+
+.action {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.action.success {
+  color: #28a745;
+}
+
+.action.error {
+  color: #dc3545;
+}
+
+.action.warning {
+  color: #fd7e14;
+}
+
+.action.info {
+  color: #17a2b8;
+}
+
+.clear-log-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background-color 0.2s;
+}
+
+.clear-log-btn:hover {
+  background-color: #5a6268;
+}
+
+/* Logging Configuration Styles */
+.logging-section {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.logging-section h4 {
+  margin: 0 0 1rem 0;
+  color: #495057;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 0.5rem;
+}
+
+.log-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.rotation-config,
+.startup-rotation-config {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+}
+
+.rotation-config .setting-item,
+.startup-rotation-config .setting-item {
+  margin-bottom: 0.75rem;
+}
+
+.rotation-config .setting-item:last-child,
+.startup-rotation-config .setting-item:last-child {
+  margin-bottom: 0;
+}
+
+/* RUM Settings Styles */
+.rum-settings {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.rum-settings h4 {
+  margin: 0 0 1rem 0;
+  color: #495057;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 0.5rem;
+}
+
+.rum-config {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+}
+
+.rum-status {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #e8f4f8;
+  border: 1px solid #b8daff;
+  border-radius: 6px;
+}
+
+.rum-status h5 {
+  margin: 0 0 1rem 0;
+  color: #004085;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.status-item label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.status-value {
+  font-weight: 600;
+  color: #007bff;
+}
+
+.status-value.active {
+  color: #28a745;
+}
+
+.status-value.inactive {
+  color: #6c757d;
+}
+
+.rum-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.export-btn {
+  background-color: #17a2b8;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.export-btn:hover {
+  background-color: #138496;
+}
+
+/* Disabled section styles */
+.disabled-section {
+  opacity: 0.6;
+  pointer-events: none;
+  position: relative;
+}
+
+.disabled-section::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.disabled-section input,
+.disabled-section button,
+.disabled-section select {
+  cursor: not-allowed;
+}
+
+.disabled-section label {
+  color: #6c757d;
+}
+
+.disabled-section .description {
+  color: #adb5bd;
 }
 </style>

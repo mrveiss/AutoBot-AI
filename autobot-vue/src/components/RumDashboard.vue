@@ -1,5 +1,5 @@
 <template>
-  <div class="rum-dashboard" v-if="isVisible">
+  <div class="rum-dashboard" v-if="isVisible && rumEnabled">
     <div class="rum-header">
       <h3>🔍 RUM Dashboard (Dev Mode)</h3>
       <div class="rum-controls">
@@ -188,6 +188,17 @@ export default {
     const tabs = ['Overview', 'API Calls', 'Errors', 'WebSocket', 'Critical']
     const isDev = import.meta.env.DEV
 
+    // Check if RUM is enabled in developer settings
+    const rumEnabled = computed(() => {
+      // Get settings from localStorage or a global store
+      try {
+        const settings = JSON.parse(localStorage.getItem('chat_settings') || '{}')
+        return settings.developer?.rum?.enabled === true
+      } catch {
+        return false
+      }
+    })
+
     let refreshInterval = null
 
     // Computed properties
@@ -300,6 +311,7 @@ export default {
       criticalIssues,
       tabs,
       isDev,
+      rumEnabled,
       slowApiCalls,
       timeoutApiCalls,
       recentApiCalls,
