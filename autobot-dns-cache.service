@@ -1,0 +1,25 @@
+[Unit]
+Description=AutoBot DNS Cache Service
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/kali/Desktop/AutoBot
+ExecStart=/usr/bin/python3 /home/kali/Desktop/AutoBot/dns-cache-service.py --interval 15
+ExecStartPre=/usr/bin/python3 /home/kali/Desktop/AutoBot/dns-cache-service.py --once
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-dns-cache
+
+# Security
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
