@@ -23,6 +23,10 @@ fi; done;
 echo "${paths[*]}"')"
 export PATH="${HOME}/.pyenv/shims:${PATH}"
 export PYENV_SHELL=bash
+
+# CRITICAL FIX: Force tf-keras usage to fix Transformers compatibility with Keras 3
+export TF_USE_LEGACY_KERAS=1
+export KERAS_BACKEND=tensorflow
 # Check if pyenv completion file exists before sourcing
 if [ -f "${HOME}/.pyenv/completions/pyenv.bash" ]; then
     source "${HOME}/.pyenv/completions/pyenv.bash"
@@ -443,10 +447,14 @@ EOF
     pip install -r requirements_group_7.txt || { echo "❌ Failed to install Group 7 requirements."; deactivate; exit 1; }
     echo "✅ Group 7 dependencies installed."
 
-    # Group 8: Redis Database Management and Codebase Analytics
-    echo "⬇️ Installing Group 8: Redis Database Management and Codebase Analytics..."
+    # Group 8: Async Architecture Dependencies
+    echo "⬇️ Installing Group 8: Async Architecture Dependencies..."
     cat > requirements_group_8.txt << EOF
 redis>=5.0.0,<6.0
+aioredis>=2.0.0
+pydantic-settings>=2.0.0
+tenacity>=8.0.0
+docker>=7.0.0
 pyyaml>=6.0.1
 jsonschema>=4.20.0
 ast-tools>=0.1.0
@@ -744,6 +752,16 @@ timeout 300s npm install || {
     timeout 300s npm install --force || {
         echo "❌ Failed to install dependencies even with --force. Please check your internet connection and npm registry."
         exit 1
+    }
+}
+
+# Install XTerm.js dependencies for terminal functionality
+echo "📦 Installing XTerm.js dependencies..."
+timeout 300s npm install @xterm/xterm @xterm/addon-fit @xterm/addon-web-links || {
+    echo "❌ Failed to install XTerm.js dependencies. Trying with --force..."
+    timeout 300s npm install --force @xterm/xterm @xterm/addon-fit @xterm/addon-web-links || {
+        echo "⚠️ Warning: Failed to install XTerm.js dependencies. Terminal functionality may be limited."
+        # Don't exit here, continue setup
     }
 }
 
