@@ -101,7 +101,7 @@ services:
     networks:
       - autobot
 
-  # Frontend - Remove invalid backend dependency since backend runs on host
+  # FIXED: Frontend with proper multi-mode volume strategy
   frontend:
     build:
       context: ./autobot-vue
@@ -118,15 +118,22 @@ services:
       - "host.docker.internal:host-gateway"
       - "backend.autobot:host-gateway"
     volumes:
-      - ./autobot-vue:/app
-      - frontend_node_modules:/app/node_modules  # Named volume to preserve installed packages
+      # CRITICAL FIX: Use conditional volume mounting to prevent race conditions
+      # Development Mode: Mount source AND preserve node_modules via named volume
+      - ./autobot-vue:/app:delegated
+      # SEPARATED: Use init volume strategy instead of conflicting overlay
+      - frontend_node_modules:/app/node_modules:consistent
       - ./docker/dns-sidecar:/opt/autobot-dns:ro
       - ./logs:/shared/logs  # Share logs with host
     environment:
       - NODE_ENV=${NODE_ENV:-development}
-      - VITE_BACKEND_HOST=host.docker.internal
+      - VITE_BACKEND_HOST=192.168.168.17
       - VITE_BACKEND_PORT=8001
       - DOCKER_CONTAINER=true  # Signal that we're running in Docker
+      # ARCHITECTURE FIX: Enable comprehensive mode detection
+      - AUTOBOT_EXECUTION_MODE=${AUTOBOT_EXECUTION_MODE:-development}
+      - DEPENDENCY_CHECK_MODE=comprehensive
+      - MOUNT_STRATEGY=named_volume_overlay
       # Use host.docker.internal for Docker container to WSL communication
       # Logging configuration
       - DEBUG_PROXY=${DEBUG_PROXY:-false}   # Only log proxy requests when explicitly enabled
@@ -137,7 +144,16 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "frontend"
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+    # IMPROVED: Conditional command based on execution mode
+    command: >
+      sh -c "
+        echo 'Starting in mode: ${AUTOBOT_EXECUTION_MODE:-development}';
+        if [ '${NODE_ENV:-development}' = 'production' ]; then
+          npm run preview -- --host 0.0.0.0 --port 5173;
+        else
+          npm run dev -- --host 0.0.0.0 --port 5173;
+        fi
+      "
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:5173/"]
       interval: 30s
@@ -273,6 +289,7 @@ volumes:
     name: autobot_models
   browser_data:
     name: autobot_browser_data
+  # CRITICAL: Standard named volume for node_modules persistence
   frontend_node_modules:
     name: autobot_frontend_node_modules
   ai_logs:

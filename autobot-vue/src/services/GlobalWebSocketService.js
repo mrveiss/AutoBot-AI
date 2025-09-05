@@ -36,9 +36,30 @@ class GlobalWebSocketService {
   /**
    * Connect to WebSocket server
    */
-  connect() {
+  async connect() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       console.log('🔌 WebSocket already connected')
+      return
+    }
+
+    // Quick health check before attempting WebSocket connection
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      
+      const healthResponse = await fetch('/api/system/health', { 
+        method: 'GET',
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      if (!healthResponse.ok) {
+        console.warn('🔌 Backend not healthy, skipping WebSocket connection')
+        this.connectionState.value = 'error'
+        return
+      }
+    } catch (error) {
+      console.warn('🔌 Backend health check failed, skipping WebSocket connection:', error.message)
+      this.connectionState.value = 'error'
       return
     }
 
@@ -141,7 +162,24 @@ class GlobalWebSocketService {
     }
 
     this.ws.onerror = (error) => {
-      console.error('❌ Global WebSocket error:', error)
+      // Enhanced error logging with detailed information
+      const errorDetails = {
+        message: error.message || 'No error message provided',
+        reason: error.reason || 'No reason provided',
+        code: error.code || 'No error code',
+        url: this.state.url,
+        readyState: this.ws ? this.ws.readyState : 'No WebSocket instance',
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        connectionState: this.connectionState.value,
+        reconnectAttempts: this.reconnectAttempts
+      }
+      
+      console.error('❌ Global WebSocket error - Enhanced Details:', errorDetails)
+      
+      // Also log the raw error event
+      console.error('❌ Raw WebSocket Error Event:', error)
+      
       this.handleConnectionError(error)
     }
 

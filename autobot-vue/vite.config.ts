@@ -14,7 +14,9 @@ export default defineConfig({
     include: [
       '@xterm/xterm',
       '@xterm/addon-fit',
-      '@xterm/addon-web-links'
+      '@xterm/addon-web-links',
+      '@heroicons/vue/24/outline',
+      '@heroicons/vue/24/solid'
     ],
     esbuildOptions: {
       target: 'es2022'
@@ -36,12 +38,22 @@ export default defineConfig({
     host: true,
     allowedHosts: ['localhost', '127.0.0.1', 'host.docker.internal'],
     headers: {
-      'X-Content-Type-Options': 'nosniff'
-      // Removed Content-Security-Policy to avoid unneeded headers
+      // Prevent caching of API configurations and critical assets
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Content-Type-Options': 'nosniff',
+      // Force browsers to revalidate cached resources
+      'Last-Modified': new Date().toUTCString(),
+      // Prevent proxy caching
+      'Surrogate-Control': 'no-store',
+      // Additional cache-busting headers
+      'X-Cache-Bust': Date.now().toString(),
+      'X-AutoBot-Build': process.env.npm_package_version || 'dev'
     },
     proxy: {
       '/api': {
-        target: `http://${process.env.VITE_BACKEND_HOST || 'host.docker.internal'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
+        target: `http://${process.env.VITE_BACKEND_HOST || '192.168.168.17'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
         changeOrigin: true,
         secure: false,
         timeout: 30000,
@@ -50,15 +62,25 @@ export default defineConfig({
             console.error('Proxy error:', err);
           });
           proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Add cache-busting headers to proxied requests
+            proxyReq.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            proxyReq.setHeader('X-Cache-Bust', Date.now().toString());
+            
             // Only log proxy requests in debug mode to reduce noise
             if (process.env.NODE_ENV === 'development' && process.env.DEBUG_PROXY === 'true') {
               console.debug('Proxying request:', req.method, req.url, 'to', options.target);
             }
           });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            // Force no-cache on API responses
+            proxyRes.headers['cache-control'] = 'no-cache, no-store, must-revalidate';
+            proxyRes.headers['pragma'] = 'no-cache';
+            proxyRes.headers['expires'] = '0';
+          });
         }
       },
       '/ws': {
-        target: `http://${process.env.VITE_BACKEND_HOST || 'host.docker.internal'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
+        target: `http://${process.env.VITE_BACKEND_HOST || '192.168.168.17'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
         ws: true,
         changeOrigin: true,
         timeout: 30000,
@@ -126,10 +148,10 @@ export default defineConfig({
             return 'vendor';
           }
         },
-        // Add cache-busting hash to asset filenames
-        assetFileNames: 'assets/[name]-[hash][extname]',
-        chunkFileNames: 'js/[name]-[hash].js',
-        entryFileNames: 'js/[name]-[hash].js',
+        // Add cache-busting hash to asset filenames with longer hash for better cache invalidation
+        assetFileNames: 'assets/[name]-[hash:16][extname]',
+        chunkFileNames: 'js/[name]-[hash:16].js',
+        entryFileNames: 'js/[name]-[hash:16].js',
       },
     },
   }
