@@ -8,9 +8,21 @@
 export const API_CONFIG = {
   // Bootstrap URL - Use Vite proxy in development, direct URL in production
   BASE_URL: (() => {
+    // Check all possible environment variables that could override proxy behavior
     const viteApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
     const viteApiUrl = import.meta.env.VITE_API_URL;
+    const viteBackendHost = import.meta.env.VITE_BACKEND_HOST;
+    const viteBackendPort = import.meta.env.VITE_BACKEND_PORT;
     
+    console.log('[AutoBot] Environment variables check:');
+    console.log('[AutoBot] - VITE_API_BASE_URL:', viteApiBaseUrl);
+    console.log('[AutoBot] - VITE_API_URL:', viteApiUrl);
+    console.log('[AutoBot] - VITE_BACKEND_HOST:', viteBackendHost);
+    console.log('[AutoBot] - VITE_BACKEND_PORT:', viteBackendPort);
+    console.log('[AutoBot] - window.location.port:', window.location.port);
+    console.log('[AutoBot] - window.location.host:', window.location.host);
+    
+    // Explicit override for specific API base URL
     if (viteApiBaseUrl) {
       console.log('[AutoBot] Using VITE_API_BASE_URL:', viteApiBaseUrl);
       return viteApiBaseUrl;
@@ -21,27 +33,42 @@ export const API_CONFIG = {
       return viteApiUrl;
     }
     
-    // In development mode (port 5173), use relative URLs to go through Vite proxy
+    // FORCE relative URLs when running on port 5173 (Vite dev server)
+    // This is critical to ensure the proxy works correctly
     if (window.location.port === '5173') {
-      console.log('[AutoBot] Using Vite dev proxy for API calls');
-      return ''; // Empty string means relative URLs will use same origin
+      console.log('[AutoBot] FORCE: Using Vite dev proxy for API calls (empty base URL)');
+      console.log('[AutoBot] FORCE: This will make all API calls relative and use proxy');
+      
+      // Check if environment variables would interfere
+      if (viteBackendHost || viteBackendPort) {
+        console.warn('[AutoBot] WARNING: VITE_BACKEND_HOST/PORT detected but ignoring for proxy mode');
+        console.warn('[AutoBot] WARNING: Backend Host:', viteBackendHost, 'Backend Port:', viteBackendPort);
+      }
+      
+      return ''; // Empty string means relative URLs will use same origin + proxy
     }
     
     // In production, construct backend URL dynamically
     // Handle WSL/Docker scenarios intelligently
     const protocol = window.location.protocol;
     let hostname = window.location.hostname;
-    const port = '8001'; // Backend always on 8001
+    const port = viteBackendPort || '8001'; // Use env var if available, default to 8001
     
-    // If accessing from localhost but backend is in WSL, localhost should work
-    // due to WSL2 automatic port forwarding
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      // Keep localhost - WSL2 will forward automatically
-      hostname = 'localhost';
+    // If VITE_BACKEND_HOST is provided and we're not in dev mode, use it
+    if (viteBackendHost && viteBackendHost !== 'host.docker.internal') {
+      hostname = viteBackendHost;
+      console.log('[AutoBot] Using VITE_BACKEND_HOST for production:', hostname);
+    } else {
+      // If accessing from localhost but backend is in WSL, localhost should work
+      // due to WSL2 automatic port forwarding
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // Keep localhost - WSL2 will forward automatically
+        hostname = 'localhost';
+      }
     }
     
     const dynamicUrl = `${protocol}//${hostname}:${port}`;
-    console.log('[AutoBot] Using dynamic URL:', dynamicUrl);
+    console.log('[AutoBot] Using dynamic production URL:', dynamicUrl);
     return dynamicUrl;
   })(),
   
@@ -107,6 +134,10 @@ export const API_CONFIG = {
   // Development Settings
   DEV_MODE: import.meta.env.DEV,
   PROD_MODE: import.meta.env.PROD,
+  
+  // Cache Management Settings
+  CACHE_BUST_VERSION: import.meta.env.VITE_APP_VERSION || Date.now().toString(),
+  DISABLE_CACHE: import.meta.env.VITE_DISABLE_CACHE === 'true',
 };
 
 export const ENDPOINTS = {
@@ -151,9 +182,30 @@ export const ENDPOINTS = {
   WS_MONITORING: '/ws/monitoring',
 };
 
-// Helper function to get full URL
-export function getApiUrl(endpoint = '') {
-  return `${API_CONFIG.BASE_URL}${endpoint}`;
+// Helper function to get full URL with cache-busting
+export function getApiUrl(endpoint = '', options = {}) {
+  let fullUrl = `${API_CONFIG.BASE_URL}${endpoint}`;
+  
+  // Add cache-busting parameters if not disabled
+  if (!API_CONFIG.DISABLE_CACHE && (options.cacheBust !== false)) {
+    const separator = fullUrl.includes('?') ? '&' : '?';
+    const cacheBustParam = `_cb=${API_CONFIG.CACHE_BUST_VERSION}`;
+    const timestampParam = `_t=${Date.now()}`;
+    fullUrl = `${fullUrl}${separator}${cacheBustParam}&${timestampParam}`;
+  }
+  
+  // Log API URL construction for debugging
+  if (API_CONFIG.ENABLE_DEBUG || window.location.port === '5173') {
+    console.log('[AutoBot] getApiUrl:', {
+      baseUrl: API_CONFIG.BASE_URL,
+      endpoint: endpoint,
+      fullUrl: fullUrl,
+      isRelative: !API_CONFIG.BASE_URL,
+      cacheBusted: !API_CONFIG.DISABLE_CACHE && (options.cacheBust !== false)
+    });
+  }
+  
+  return fullUrl;
 }
 
 // Helper function to get WebSocket URL
@@ -166,12 +218,62 @@ export function getWsUrl(endpoint = '') {
   return `${baseUrl}${endpoint}`;
 }
 
+// Enhanced API fetch with cache-busting headers
+export async function fetchApi(endpoint, options = {}) {
+  const url = getApiUrl(endpoint, options);
+  
+  const defaultHeaders = {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'X-Cache-Bust': API_CONFIG.CACHE_BUST_VERSION,
+    'X-Request-Time': Date.now().toString(),
+  };
+  
+  // Merge headers
+  const headers = {
+    ...defaultHeaders,
+    ...options.headers
+  };
+  
+  const fetchOptions = {
+    ...options,
+    headers,
+    cache: 'no-store' // Force no caching at fetch level
+  };
+  
+  // Add timeout handling
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+  fetchOptions.signal = controller.signal;
+  
+  try {
+    const response = await fetch(url, fetchOptions);
+    clearTimeout(timeoutId);
+    
+    // Log response for debugging
+    if (API_CONFIG.ENABLE_DEBUG) {
+      console.log('[AutoBot] API Response:', {
+        url,
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+    }
+    
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error('[AutoBot] API fetch failed:', error);
+    throw error;
+  }
+}
+
 // Validation function to check if API is available
 export async function validateApiConnection() {
   try {
-    const response = await fetch(getApiUrl(ENDPOINTS.HEALTH), {
+    const response = await fetchApi(ENDPOINTS.HEALTH, {
       method: 'GET',
-      timeout: 5000,
+      cacheBust: true // Force cache-busting for health check
     });
     return response.ok;
   } catch (error) {
@@ -180,10 +282,38 @@ export async function validateApiConnection() {
   }
 }
 
+// Cache invalidation function
+export function invalidateApiCache() {
+  console.log('[AutoBot] Invalidating API cache...');
+  
+  // Update cache bust version
+  API_CONFIG.CACHE_BUST_VERSION = Date.now().toString();
+  
+  // Clear localStorage API caches
+  const keys = Object.keys(localStorage);
+  keys.forEach(key => {
+    if (key.startsWith('autobot_api_') || key.startsWith('autobot_config_')) {
+      localStorage.removeItem(key);
+    }
+  });
+  
+  // Clear sessionStorage API caches
+  const sessionKeys = Object.keys(sessionStorage);
+  sessionKeys.forEach(key => {
+    if (key.startsWith('autobot_api_') || key.startsWith('autobot_config_')) {
+      sessionStorage.removeItem(key);
+    }
+  });
+  
+  console.log('[AutoBot] API cache invalidated');
+}
+
 export default {
   API_CONFIG,
   ENDPOINTS,
   getApiUrl,
   getWsUrl,
+  fetchApi,
   validateApiConnection,
+  invalidateApiCache,
 };
