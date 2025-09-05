@@ -1,0 +1,290 @@
+<template>
+  <Teleport to="body">
+    <!-- Toast Notifications -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
+      enter-to-class="translate-y-0 opacity-100 sm:translate-x-0"
+      leave-active-class="transition duration-150 ease-in"
+      leave-from-class="translate-y-0 opacity-100 sm:translate-x-0"
+      leave-to-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
+    >
+      <div
+        v-if="showNotification && notificationLevel === 'toast'"
+        class="fixed top-4 right-4 max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden z-[9999]"
+      >
+        <div class="p-4">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <component
+                :is="statusIcon"
+                :class="[
+                  'h-5 w-5',
+                  severity === 'info' ? 'text-blue-400' : 
+                  severity === 'warning' ? 'text-yellow-400' : 
+                  severity === 'error' ? 'text-red-400' :
+                  'text-gray-400'
+                ]"
+              />
+            </div>
+            <div class="ml-3 w-0 flex-1 pt-0.5">
+              <p class="text-sm font-medium text-gray-900">{{ title }}</p>
+              <p class="mt-1 text-sm text-gray-500">{{ message }}</p>
+            </div>
+            <div class="ml-4 flex-shrink-0 flex">
+              <button
+                @click="dismissNotification"
+                class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <span class="sr-only">Close</span>
+                <XMarkIcon class="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Full Screen Overlay -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="showNotification && notificationLevel === 'overlay'"
+        class="fixed inset-0 z-[9999] bg-black bg-opacity-25 backdrop-blur-sm flex items-center justify-center p-4"
+      >
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto border border-gray-200 dark:border-gray-600 overflow-hidden">
+          <!-- Header -->
+          <div :class="[
+            'px-4 py-3 border-b border-gray-200 dark:border-gray-600',
+            severity === 'error' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' :
+            severity === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' :
+            severity === 'info' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' :
+            'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+          ]">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center">
+                <component
+                  :is="statusIcon"
+                  :class="[
+                    'h-6 w-6 mr-2',
+                    severity === 'error' ? 'text-red-600 dark:text-red-400' :
+                    severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                    severity === 'info' ? 'text-blue-600 dark:text-blue-400' :
+                    'text-green-600 dark:text-green-400'
+                  ]"
+                />
+                <h3 :class="[
+                  'text-lg font-semibold',
+                  severity === 'error' ? 'text-red-900 dark:text-red-100' :
+                  severity === 'warning' ? 'text-yellow-900 dark:text-yellow-100' :
+                  severity === 'info' ? 'text-blue-900 dark:text-blue-100' :
+                  'text-green-900 dark:text-green-100'
+                ]">
+                  {{ title }}
+                </h3>
+              </div>
+              <button
+                v-if="allowDismiss"
+                @click="dismissNotification"
+                :class="[
+                  'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors',
+                  severity === 'error' ? 'hover:text-red-700 dark:hover:text-red-300' :
+                  severity === 'warning' ? 'hover:text-yellow-700 dark:hover:text-yellow-300' :
+                  severity === 'info' ? 'hover:text-blue-700 dark:hover:text-blue-300' :
+                  'hover:text-green-700 dark:hover:text-green-300'
+                ]"
+                aria-label="Close notification"
+              >
+                <XMarkIcon class="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div class="p-4">
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
+              {{ message }}
+            </p>
+
+            <!-- Status Details -->
+            <div v-if="statusDetails && showDetails" class="space-y-3">
+              <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  System Details
+                </h4>
+                <dl class="space-y-1">
+                  <div class="flex justify-between text-sm">
+                    <dt class="text-gray-600 dark:text-gray-400">Status:</dt>
+                    <dd :class="[
+                      'font-medium',
+                      statusDetails.status === 'online' ? 'text-green-600 dark:text-green-400' :
+                      statusDetails.status === 'degraded' ? 'text-yellow-600 dark:text-yellow-400' :
+                      'text-red-600 dark:text-red-400'
+                    ]">
+                      {{ statusDetails.status }}
+                    </dd>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <dt class="text-gray-600 dark:text-gray-400">Last Check:</dt>
+                    <dd class="text-gray-900 dark:text-white font-medium">
+                      {{ formatTimestamp(statusDetails.lastCheck) }}
+                    </dd>
+                  </div>
+                  <div v-if="statusDetails.consecutiveFailures" class="flex justify-between text-sm">
+                    <dt class="text-gray-600 dark:text-gray-400">Consecutive Failures:</dt>
+                    <dd class="text-red-600 dark:text-red-400 font-medium">
+                      {{ statusDetails.consecutiveFailures }}
+                    </dd>
+                  </div>
+                  <div v-if="statusDetails.error" class="mt-2">
+                    <dt class="text-sm text-gray-600 dark:text-gray-400 mb-1">Error Details:</dt>
+                    <dd class="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded font-mono">
+                      {{ statusDetails.error }}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div v-if="allowDismiss" class="px-4 py-3 bg-gray-50 dark:bg-gray-700 flex justify-end">
+            <button
+              @click="dismissNotification"
+              :class="[
+                'px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+                severity === 'error' ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500' :
+                severity === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-yellow-500' :
+                severity === 'info' ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500' :
+                'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500'
+              ]"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { useAppStore } from '@/stores/useAppStore'
+import XMarkIcon from '@heroicons/vue/24/outline/XMarkIcon'
+import ExclamationTriangleIcon from '@heroicons/vue/24/outline/ExclamationTriangleIcon'
+import InformationCircleIcon from '@heroicons/vue/24/outline/InformationCircleIcon'
+import XCircleIcon from '@heroicons/vue/24/outline/XCircleIcon'
+import CheckCircleIcon from '@heroicons/vue/24/outline/CheckCircleIcon'
+
+export interface SystemStatusDetails {
+  status: string
+  lastCheck: number
+  consecutiveFailures?: number
+  error?: string
+}
+
+export interface SystemStatusNotificationProps {
+  visible: boolean
+  severity: 'info' | 'warning' | 'error' | 'success'
+  title: string
+  message: string
+  statusDetails?: SystemStatusDetails
+  allowDismiss?: boolean
+  showDetails?: boolean
+  autoHide?: number // Auto hide after X milliseconds
+}
+
+const props = withDefaults(defineProps<SystemStatusNotificationProps>(), {
+  allowDismiss: true,
+  showDetails: false,
+  autoHide: 0
+})
+
+const emit = defineEmits<{
+  dismiss: []
+  expired: []
+}>()
+
+const appStore = useAppStore()
+
+// Local state
+const showNotification = ref(props.visible)
+const autoHideTimer = ref<NodeJS.Timeout | null>(null)
+
+// Computed properties
+const statusIcon = computed(() => {
+  switch (props.severity) {
+    case 'error':
+      return XCircleIcon
+    case 'warning':
+      return ExclamationTriangleIcon
+    case 'success':
+      return CheckCircleIcon
+    default:
+      return InformationCircleIcon
+  }
+})
+
+const notificationLevel = computed(() => {
+  // Critical errors show as overlay, others as toast
+  if (props.severity === 'error' && props.statusDetails?.consecutiveFailures && props.statusDetails.consecutiveFailures > 3) {
+    return 'overlay'
+  }
+  return 'toast'
+})
+
+// Methods - Define before usage in watchers
+const clearAutoHide = () => {
+  if (autoHideTimer.value) {
+    clearTimeout(autoHideTimer.value)
+    autoHideTimer.value = null
+  }
+}
+
+const setupAutoHide = () => {
+  if (props.autoHide > 0) {
+    clearAutoHide()
+    autoHideTimer.value = setTimeout(() => {
+      showNotification.value = false
+      emit('expired')
+    }, props.autoHide)
+  }
+}
+
+const dismissNotification = () => {
+  showNotification.value = false
+  clearAutoHide()
+  emit('dismiss')
+}
+
+// Watchers
+watch(() => props.visible, (newValue) => {
+  showNotification.value = newValue
+  
+  if (newValue) {
+    setupAutoHide()
+  } else {
+    clearAutoHide()
+  }
+}, { immediate: true })
+
+const formatTimestamp = (timestamp: number): string => {
+  return new Date(timestamp).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+// Cleanup on unmount
+onUnmounted(() => {
+  clearAutoHide()
+})
+</script>
