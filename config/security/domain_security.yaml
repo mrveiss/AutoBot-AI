@@ -1,0 +1,163 @@
+domain_security:
+  enabled: true
+  default_action: block  # block, allow, warn
+  whitelist_mode: false  # Start with blacklist mode, can switch to whitelist for maximum security
+  cache_duration: 3600  # 1 hour cache
+  reputation_threshold: 0.7  # 0.0 = unsafe, 1.0 = safe
+
+  # Domain patterns to block (supports wildcards with *)
+  blacklist:
+    # Known malicious domain patterns
+    - "*.malware.com"
+    - "*.phishing.net" 
+    - "*.spam.org"
+    - "*.scam.info"
+    - "*.suspicious.site"
+    
+    # Suspicious TLDs with high abuse rates
+    - "*.tk"      # Tokelau (free domain, high abuse)
+    - "*.ml"      # Mali (free domain, high abuse)
+    - "*.ga"      # Gabon (free domain, high abuse) 
+    - "*.cf"      # Central African Republic (free domain, high abuse)
+    - "*.pw"      # Palau (often used for malicious sites)
+    
+    # Adult content patterns (basic filtering)
+    - "*adult*"
+    - "*porn*"
+    - "*xxx*"
+    - "*sex*"
+    - "*nude*"
+    
+    # Gambling patterns
+    - "*casino*"
+    - "*betting*"
+    - "*poker*"
+    
+    # Suspicious patterns
+    - "*-free*"     # Often used in scam domains
+    - "*verify-*"   # Phishing pattern
+    - "*secure-*"   # Phishing pattern
+    - "*update-*"   # Phishing pattern
+
+  # Trusted domains for research (high-quality sources)
+  whitelist:
+    # Programming and development
+    - "github.com"
+    - "*.github.com"
+    - "stackoverflow.com"
+    - "*.stackoverflow.com"
+    - "docs.python.org"
+    - "python.org"
+    - "*.python.org"
+    - "fastapi.tiangolo.com"
+    - "vuejs.org"
+    - "*.vuejs.org"
+    - "docker.com"
+    - "*.docker.com"
+    - "redis.io"
+    - "*.redis.io"
+    
+    # Educational and reference
+    - "wikipedia.org"
+    - "*.wikipedia.org"
+    - "edu"  # All .edu domains
+    - "*.edu"
+    - "mit.edu"
+    - "stanford.edu"
+    - "arxiv.org"
+    
+    # Linux and system administration
+    - "archlinux.org"
+    - "*.archlinux.org"
+    - "ubuntu.com"
+    - "*.ubuntu.com"
+    - "debian.org"
+    - "*.debian.org"
+    - "redhat.com"
+    - "*.redhat.com"
+    - "kernel.org"
+    - "*.kernel.org"
+    
+    # Major tech companies (official sites)
+    - "microsoft.com"
+    - "*.microsoft.com"
+    - "google.com"
+    - "*.google.com"
+    - "mozilla.org"
+    - "*.mozilla.org"
+    - "apache.org"
+    - "*.apache.org"
+    - "cloudflare.com"
+    - "*.cloudflare.com"
+    
+    # Documentation sites
+    - "readthedocs.io"
+    - "*.readthedocs.io"
+    - "docs.rs"
+    - "*.docs.rs"
+
+  # External reputation services (require API keys)
+  reputation_services:
+    virustotal:
+      enabled: false  # Enable when API key is available
+      api_key: ""     # Set via environment variable VIRUSTOTAL_API_KEY
+      timeout: 5.0
+      cache_duration: 7200  # 2 hours
+      
+    urlvoid:
+      enabled: false  # Enable when API key is available  
+      api_key: ""     # Set via environment variable URLVOID_API_KEY
+      timeout: 5.0
+      cache_duration: 7200  # 2 hours
+
+  # Threat intelligence feeds (public sources)
+  threat_feeds:
+    - name: "urlhaus"
+      url: "https://urlhaus.abuse.ch/downloads/text/"
+      format: "text"
+      enabled: true
+      update_interval: 3600  # 1 hour
+      timeout: 10.0
+      description: "URLhaus malware URL database"
+      
+    # Additional feeds can be added here
+    # - name: "phishtank"
+    #   url: "http://data.phishtank.com/data/online-valid.csv"
+    #   format: "csv"
+    #   enabled: false
+    #   update_interval: 1800  # 30 minutes
+    #   timeout: 15.0
+
+  # Network-level validation
+  network_validation:
+    block_private_ips: true     # Block RFC 1918 private IPs
+    block_local_ips: true       # Block loopback (127.0.0.0/8)
+    block_cloud_metadata: true  # Block cloud metadata endpoints
+    
+    # Allowed ports for web research
+    allowed_ports: [80, 443, 8080, 8443]
+    
+    # IP ranges to block (CIDR notation)
+    blocked_ip_ranges:
+      - "0.0.0.0/8"        # Current network
+      - "10.0.0.0/8"       # Private (RFC 1918)
+      - "127.0.0.0/8"      # Loopback
+      - "169.254.0.0/16"   # Link-local (RFC 3927)
+      - "172.16.0.0/12"    # Private (RFC 1918)
+      - "192.168.0.0/16"   # Private (RFC 1918)
+      - "224.0.0.0/4"      # Multicast (RFC 5771)
+      - "240.0.0.0/4"      # Reserved (RFC 1112)
+
+# Logging configuration for domain security
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  log_blocked_domains: true
+  log_reputation_checks: true
+  log_cache_operations: false  # Set to true for debugging
+
+# Performance tuning
+performance:
+  max_cache_size: 1000      # Maximum cached domain results
+  cache_cleanup_interval: 300  # Clean cache every 5 minutes
+  concurrent_checks: 5      # Maximum concurrent reputation checks
+  dns_timeout: 3.0         # DNS resolution timeout
