@@ -10,10 +10,34 @@ class ApiClient {
     this.timeout = API_CONFIG.TIMEOUT;
     this.settings = this.loadSettings();
 
-    // Update baseUrl from settings if available, but prefer environment config
-    if (this.settings?.backend?.api_endpoint && !API_CONFIG.DEV_MODE) {
-      this.baseUrl = this.settings.backend.api_endpoint;
+    // Extensive logging for debugging proxy issues
+    console.log('[ApiClient] Constructor initialization:');
+    console.log('[ApiClient] - Initial baseUrl from config:', this.baseUrl);
+    console.log('[ApiClient] - API_CONFIG.DEV_MODE:', API_CONFIG.DEV_MODE);
+    console.log('[ApiClient] - window.location.port:', window.location.port);
+    console.log('[ApiClient] - Settings loaded:', this.settings);
+
+    // CRITICAL: Don't override baseUrl when using Vite proxy (port 5173)
+    // Check if we're running on port 5173 (Vite dev server) 
+    const isViteDevMode = window.location.port === '5173';
+    
+    if (isViteDevMode) {
+      console.log('[ApiClient] PROXY MODE: Running on port 5173, forcing proxy usage');
+      console.log('[ApiClient] PROXY MODE: Ignoring any localStorage settings');
+      // Force empty baseUrl to ensure relative URLs trigger Vite proxy
+      this.baseUrl = '';
+    } else {
+      // Only in production mode, consider localStorage settings override
+      if (this.settings?.backend?.api_endpoint && !API_CONFIG.DEV_MODE) {
+        console.log('[ApiClient] PRODUCTION MODE: Overriding baseUrl with settings:', this.settings.backend.api_endpoint);
+        this.baseUrl = this.settings.backend.api_endpoint;
+      } else {
+        console.log('[ApiClient] PRODUCTION MODE: Using config baseUrl:', this.baseUrl);
+      }
     }
+
+    console.log('[ApiClient] Final baseUrl:', this.baseUrl);
+    console.log('[ApiClient] Proxy mode active:', isViteDevMode);
 
     // PERFORMANCE OPTIMIZATION: Add caching layer for frequently accessed data
     this.cache = new Map();
@@ -24,7 +48,7 @@ class ApiClient {
         '/api/settings/': 10 * 60 * 1000, // 10 minutes for settings
         '/api/system/health': 30 * 1000,   // 30 seconds for health
         '/api/prompts/': 15 * 60 * 1000,   // 15 minutes for prompts (they change rarely)
-        '/api/chats': 2 * 60 * 1000,       // 2 minutes for chat list
+        '/api/chat/chats': 2 * 60 * 1000,  // 2 minutes for chat list
       }
     };
 
@@ -92,6 +116,11 @@ class ApiClient {
     }
   }
 
+  // Alias method for compatibility with ChatController
+  invalidateCache(pattern = null) {
+    this.clearCache(pattern);
+  }
+
   // Load settings from localStorage
   loadSettings() {
     try {
@@ -109,6 +138,19 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const method = options.method || 'GET';
     const startTime = performance.now();
+
+    // Enhanced logging for proxy debugging
+    const isViteDevMode = window.location.port === '5173';
+    if (isViteDevMode) {
+      console.log('[ApiClient] Request details:', {
+        endpoint,
+        baseUrl: this.baseUrl,
+        fullUrl: url,
+        method,
+        isRelative: !this.baseUrl,
+        willUseProxy: !this.baseUrl
+      });
+    }
 
     // PERFORMANCE OPTIMIZATION: Check cache for GET requests
     if (method === 'GET' && !options.skipCache) {
@@ -327,7 +369,7 @@ class ApiClient {
   async sendChatMessage(message, options = {}) {
     // Use the correct endpoint with chat ID
     const chatId = options.chatId || 'default';
-    const response = await this.post(`/api/chats/${chatId}/message`, { message });
+    const response = await this.post(`/api/chat/chats/${chatId}/message`, { message });
 
     // Check if it's a streaming response
     const contentType = response.headers.get('content-type');
@@ -346,27 +388,27 @@ class ApiClient {
   }
 
   async createNewChat() {
-    const response = await this.post('/api/chats/new');
+    const response = await this.post('/api/chat/chats/new');
     return response.json();
   }
 
   async getChatList() {
-    const response = await this.get('/api/chats');
+    const response = await this.get('/api/chat/chats');
     return response.json();
   }
 
   async getChatMessages(chatId) {
-    const response = await this.get(`/api/chats/${chatId}`);
+    const response = await this.get(`/api/chat/chats/${chatId}`);
     return response.json();
   }
 
   async saveChatMessages(chatId, messages) {
-    const response = await this.post(`/api/chats/${chatId}/save`, { messages });
+    const response = await this.post(`/api/chat/chats/${chatId}/save`, { messages });
     return response.json();
   }
 
   async deleteChat(chatId) {
-    const response = await this.delete(`/api/chats/${chatId}`);
+    const response = await this.delete(`/api/chat/chats/${chatId}`);
     return response.json();
   }
 
@@ -404,9 +446,14 @@ class ApiClient {
       localStorage.setItem('chat_settings', JSON.stringify(settings));
       this.settings = settings;
 
-      // Update baseUrl if it changed
-      if (settings?.backend?.api_endpoint) {
+      // CRITICAL: Don't update baseUrl when using Vite proxy
+      const isViteDevMode = window.location.port === '5173';
+      
+      if (!isViteDevMode && settings?.backend?.api_endpoint) {
+        console.log('[ApiClient] Updating baseUrl from settings:', settings.backend.api_endpoint);
         this.baseUrl = settings.backend.api_endpoint;
+      } else if (isViteDevMode) {
+        console.log('[ApiClient] Proxy mode: NOT updating baseUrl from settings');
       }
     } catch (error) {
       console.error('Error saving settings locally:', error);
@@ -495,12 +542,12 @@ class ApiClient {
 
   // Cleanup methods (integrating chat_api functionality)
   async cleanupMessages() {
-    const response = await this.post('/api/chats/cleanup_messages');
+    const response = await this.post('/api/chat/chats/cleanup_messages');
     return response.json();
   }
 
   async cleanupAllChatData() {
-    const response = await this.post('/api/chats/cleanup_all');
+    const response = await this.post('/api/chat/chats/cleanup_all');
     return response.json();
   }
 
@@ -642,6 +689,14 @@ class ApiClient {
 
   // Update base URL
   setBaseUrl(url) {
+    // CRITICAL: Don't allow baseUrl changes when using Vite proxy
+    const isViteDevMode = window.location.port === '5173';
+    
+    if (isViteDevMode) {
+      console.warn('[ApiClient] Proxy mode: Cannot change baseUrl, ignoring setBaseUrl call');
+      return;
+    }
+
     this.baseUrl = url;
 
     // Also update in settings
@@ -698,7 +753,7 @@ class ApiClient {
   async getApiStatus() {
     const endpoints = [
       '/api/system/health',
-      '/api/chats',
+      '/api/chat/chats',
       '/api/settings/',
       '/api/prompts'
     ];

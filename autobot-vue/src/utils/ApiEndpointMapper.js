@@ -28,11 +28,11 @@ class ApiEndpointMapper {
       ],
       endpoints: [
         '/api/chat',
-        '/api/chats',
-        '/api/chats/new',
-        '/api/chats/{chat_id}',
-        '/api/chats/{chat_id}/save',
-        '/api/chats/{chat_id}/reset',
+        '/api/chat/chats',
+        '/api/chat/chats/new',
+        '/api/chat/chats/{chat_id}',
+        '/api/chat/chats/{chat_id}/save',
+        '/api/chat/chats/{chat_id}/reset',
         '/api/reset'
       ],
       description: 'All chat-related operations'

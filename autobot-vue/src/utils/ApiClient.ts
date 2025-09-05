@@ -40,7 +40,7 @@ export class ApiClient {
   constructor() {
     this.baseUrl = import.meta.env.VITE_API_BASE_URL ||
       `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.3'}:${import.meta.env.VITE_BACKEND_PORT || '8001'}`;
-    this.timeout = 45000; // 45 seconds default timeout (increased for chat/knowledge operations)
+    this.timeout = 30000; // 30 seconds default timeout (balance between functionality and responsiveness)
     this.settings = this.loadSettings();
 
     // Update baseUrl from settings if available
@@ -91,6 +91,8 @@ export class ApiClient {
       requestTimeout = 10000; // 10 seconds for stats (fast with our optimizations)
     } else if (endpoint.includes('chat') || endpoint.includes('message')) {
       requestTimeout = 60000; // 60 seconds for chat operations
+    } else if (endpoint.includes('health')) {
+      requestTimeout = 5000; // 5 seconds for health checks (fail fast)
     }
 
     // Track API call start
@@ -224,27 +226,27 @@ export class ApiClient {
   }
 
   async createNewChat(): Promise<any> {
-    const response = await this.post('/api/chats/new');
+    const response = await this.post('/api/chat/chats/new');
     return response.json();
   }
 
   async getChatList(): Promise<any> {
-    const response = await this.get('/api/chats');
+    const response = await this.get('/api/chat/chats');
     return response.json();
   }
 
   async getChatMessages(chatId: string): Promise<any> {
-    const response = await this.get(`/api/chats/${chatId}`);
+    const response = await this.get(`/api/chat/chats/${chatId}`);
     return response.json();
   }
 
   async saveChatMessages(chatId: string, messages: any[]): Promise<any> {
-    const response = await this.post(`/api/chats/${chatId}/save`, { messages });
+    const response = await this.post(`/api/chat/chats/${chatId}/save`, { messages });
     return response.json();
   }
 
   async deleteChat(chatId: string): Promise<any> {
-    const response = await this.delete(`/api/chats/${chatId}`);
+    const response = await this.delete(`/api/chat/chats/${chatId}`);
     return response.json();
   }
 
