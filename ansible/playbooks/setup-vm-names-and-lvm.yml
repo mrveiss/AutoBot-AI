@@ -1,0 +1,264 @@
+---
+# Setup VM Hostnames and LVM Expansion
+# This playbook configures VM hostnames and expands LVM volumes for AutoBot deployment
+# Run this FIRST after VM creation to prepare the infrastructure
+
+- name: Setup VM Names and Expand LVM Storage
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # LVM configuration
+    volume_group: "ubuntu-vg"      # Default Ubuntu LVM VG name
+    logical_volume: "ubuntu-lv"    # Default Ubuntu LVM LV name
+    filesystem: "ext4"             # Default filesystem type
+    
+  tasks:
+    - name: Display current system information
+      debug:
+        msg: |
+          Configuring system: {{ inventory_hostname }}
+          Target hostname: {{ vm_hostname | default(inventory_hostname) }}
+          Target IP: {{ ansible_host }}
+          Target disk size: {{ vm_resources.disk_gb | default('N/A') }}GB
+          Current disk usage: {{ ansible_mounts | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024) }}GB
+
+    - name: Set hostname
+      hostname:
+        name: "{{ vm_hostname }}"
+      when: vm_hostname is defined
+      notify: restart networking
+
+    - name: Update /etc/hosts with new hostname
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ vm_hostname }}.{{ autobot_domain | default('local') }} {{ vm_hostname }}"
+        backup: yes
+
+    - name: Update /etc/hosts with all AutoBot VMs
+      blockinfile:
+        path: /etc/hosts
+        block: |
+          # AutoBot VM Infrastructure
+          172.16.168.21  autobot-frontend.autobot.internal  autobot-frontend
+          172.16.168.22  autobot-backend.autobot.internal   autobot-backend
+          172.16.168.23  autobot-database.autobot.internal  autobot-database
+          172.16.168.24  autobot-aiml.autobot.internal      autobot-aiml
+          172.16.168.25  autobot-browser.autobot.internal   autobot-browser
+        marker: "# {mark} AUTOBOT VM BLOCK"
+        backup: yes
+
+    - name: Check current LVM setup
+      shell: |
+        echo "=== LVM Physical Volumes ==="
+        pvdisplay
+        echo "=== LVM Volume Groups ==="
+        vgdisplay
+        echo "=== LVM Logical Volumes ==="
+        lvdisplay
+        echo "=== Filesystem Usage ==="
+        df -h /
+      register: lvm_info
+      ignore_errors: yes
+
+    - name: Display current LVM configuration
+      debug:
+        msg: "{{ lvm_info.stdout_lines }}"
+      when: lvm_info is defined
+
+    - name: Get available disk space
+      shell: vgs --noheadings --units g -o vg_free {{ volume_group }}
+      register: vg_free_space
+      ignore_errors: yes
+
+    - name: Check if LVM expansion is needed
+      set_fact:
+        current_disk_size: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024) }}"
+        target_disk_size: "{{ vm_resources.disk_gb | default(50) }}"
+        expansion_needed: "{{ (ansible_mounts | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024)) < (vm_resources.disk_gb | default(50)) }}"
+      when: vm_resources is defined
+
+    - name: Display expansion analysis
+      debug:
+        msg: |
+          Current disk size: {{ current_disk_size | default('N/A') }}GB
+          Target disk size: {{ target_disk_size | default('N/A') }}GB  
+          Expansion needed: {{ expansion_needed | default(false) }}
+          Available free space in VG: {{ vg_free_space.stdout | default('unknown') }}
+      when: vm_resources is defined
+
+    - name: Scan for new disk space (rescan physical volumes)
+      shell: |
+        # Rescan for physical volume changes
+        pvresize /dev/sda3 || pvresize /dev/sda2 || echo "PV resize attempted"
+        # Refresh volume group
+        vgchange -a y {{ volume_group }}
+      when: vm_resources is defined and expansion_needed | default(false) | bool
+      ignore_errors: yes
+
+    - name: Extend logical volume to use available space
+      lvol:
+        vg: "{{ volume_group }}"
+        lv: "{{ logical_volume }}"
+        size: "+100%FREE"
+        resizefs: yes
+        force: yes
+      when: vm_resources is defined and expansion_needed | default(false) | bool
+      register: lv_extend_result
+      ignore_errors: yes
+
+    - name: Alternative LVM extension method (if first method fails)
+      shell: |
+        # Try to extend the logical volume manually
+        lvextend -l +100%FREE /dev/{{ volume_group }}/{{ logical_volume }}
+        # Resize the filesystem
+        resize2fs /dev/{{ volume_group }}/{{ logical_volume }}
+      when: 
+        - expansion_needed | bool
+        - lv_extend_result is failed
+      register: manual_extend
+      ignore_errors: yes
+
+    - name: Verify disk expansion results
+      shell: |
+        echo "=== Final Disk Usage ==="
+        df -h /
+        echo "=== LVM Status After Expansion ==="
+        lvdisplay /dev/{{ volume_group }}/{{ logical_volume }} | grep "LV Size"
+      register: final_disk_status
+
+    - name: Display expansion results
+      debug:
+        msg: "{{ final_disk_status.stdout_lines }}"
+
+    - name: Update system packages (since we're setting up VMs)
+      apt:
+        update_cache: yes
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: package_update
+      retries: 3
+      delay: 10
+
+    - name: Install essential packages for AutoBot deployment
+      apt:
+        name:
+          - htop
+          - iotop
+          - nethogs
+          - curl
+          - wget
+          - git
+          - vim
+          - unzip
+          - software-properties-common
+          - apt-transport-https
+          - ca-certificates
+          - gnupg
+          - lsb-release
+          - python3-pip
+          - python3-venv
+          - build-essential
+          - pkg-config
+          - libssl-dev
+          - libffi-dev
+          - python3-dev
+          - rsync
+          - ntp
+        state: present
+        update_cache: yes
+
+    - name: Configure NTP for time synchronization
+      service:
+        name: systemd-timesyncd
+        state: started
+        enabled: yes
+
+    - name: Create autobot application directory structure
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: autobot
+        group: autobot
+        mode: '0755'
+      loop:
+        - /opt/autobot
+        - /opt/autobot/logs
+        - /opt/autobot/config
+        - /opt/autobot/data
+        - /opt/autobot/backups
+        - /var/log/autobot
+
+    - name: Set up log rotation for AutoBot
+      copy:
+        content: |
+          /var/log/autobot/*.log {
+              daily
+              rotate 30
+              compress
+              delaycompress
+              missingok
+              notifempty
+              create 0644 autobot autobot
+              postrotate
+                  systemctl reload rsyslog > /dev/null 2>&1 || true
+              endscript
+          }
+        dest: /etc/logrotate.d/autobot
+        mode: '0644'
+
+    - name: Configure rsyslog for AutoBot logging
+      copy:
+        content: |
+          # AutoBot application logging
+          $template AutoBotFormat,"%timestamp:::date-rfc3339% [%syslogtag%] %msg%\n"
+          
+          # AutoBot service logs
+          if $programname == 'autobot-backend' then /var/log/autobot/backend.log;AutoBotFormat
+          if $programname == 'autobot-frontend' then /var/log/autobot/frontend.log;AutoBotFormat
+          if $programname == 'autobot-aiml' then /var/log/autobot/aiml.log;AutoBotFormat
+          if $programname == 'autobot-database' then /var/log/autobot/database.log;AutoBotFormat
+          if $programname == 'autobot-browser' then /var/log/autobot/browser.log;AutoBotFormat
+          
+          # Stop processing after AutoBot logs
+          if $programname startswith 'autobot-' then stop
+        dest: /etc/rsyslog.d/50-autobot.conf
+        mode: '0644'
+      notify: restart rsyslog
+
+    - name: Final system status check
+      shell: |
+        echo "=== VM Configuration Complete ==="
+        echo "Hostname: $(hostname)"
+        echo "IP Address: $(ip route get 8.8.8.8 | grep src | cut -d' ' -f7)"
+        echo "Disk Usage: $(df -h / | tail -1)"
+        echo "Memory: $(free -h | grep Mem)"
+        echo "CPU Cores: $(nproc)"
+        echo "System Load: $(uptime)"
+        echo "AutoBot directories created: $(ls -la /opt/autobot/)"
+      register: system_status
+
+    - name: Display final VM status
+      debug:
+        msg: "{{ system_status.stdout_lines }}"
+
+  handlers:
+    - name: restart networking
+      service:
+        name: systemd-networkd
+        state: restarted
+
+    - name: restart rsyslog
+      service:
+        name: rsyslog
+        state: restarted
+
+    - name: reboot system
+      reboot:
+        msg: "Rebooting to apply hostname and LVM changes"
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+        reboot_timeout: 300
