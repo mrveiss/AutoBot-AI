@@ -33,11 +33,11 @@ export const API_CONFIG = {
       return viteApiUrl;
     }
     
-    // FORCE relative URLs when running on port 5173 (Vite dev server)
-    // This is critical to ensure the proxy works correctly
-    if (window.location.port === '5173') {
-      console.log('[AutoBot] FORCE: Using Vite dev proxy for API calls (empty base URL)');
-      console.log('[AutoBot] FORCE: This will make all API calls relative and use proxy');
+    // Check if running in development mode with Vite dev server (has vite process)
+    // Only use proxy mode when actually running with Vite dev server
+    if (window.location.port === '5173' && import.meta.env.DEV) {
+      console.log('[AutoBot] DEV: Using Vite dev proxy for API calls (empty base URL)');
+      console.log('[AutoBot] DEV: This will make all API calls relative and use proxy');
       
       // Check if environment variables would interfere
       if (viteBackendHost || viteBackendPort) {
@@ -88,11 +88,11 @@ export const API_CONFIG = {
       console.warn('[AutoBot] WebSocket environment variable contains localhost address:', envWsUrl, 'falling back to proxy/dynamic URL');
     }
     
-    // In development mode (port 5173), use WebSocket proxy through Vite
-    if (window.location.port === '5173') {
+    // In development mode (port 5173 with Vite dev server), use WebSocket proxy through Vite
+    if (window.location.port === '5173' && import.meta.env.DEV) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
-      console.log('[AutoBot] Using Vite WebSocket proxy:', wsUrl);
+      console.log('[AutoBot] DEV: Using Vite WebSocket proxy:', wsUrl);
       return wsUrl;
     }
     
