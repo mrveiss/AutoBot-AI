@@ -65,6 +65,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { API_CONFIG } from '../config/environment.js'
 
 export default {
   name: 'StartupLoader',
@@ -124,15 +125,8 @@ export default {
     }
 
     const connectWebSocket = () => {
-      // Use proxy in development, direct URL in production
-      let wsUrl
-      if (window.location.port === '5173') {
-        // Development mode - use Vite proxy
-        wsUrl = `ws://${window.location.host}/api/startup/ws`
-      } else {
-        // Production mode - direct to backend
-        wsUrl = `ws://${window.location.hostname}:8001/api/startup/ws`
-      }
+      // Use environment configuration for WebSocket URL (backend has simple /ws endpoint)
+      const wsUrl = API_CONFIG.WS_BASE_URL
       
       console.log('Connecting to startup WebSocket:', wsUrl)
       
