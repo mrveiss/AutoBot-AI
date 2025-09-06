@@ -1002,6 +1002,365 @@
     </div>
     </div>
   </ErrorBoundary>
+
+    <!-- Toast Notification -->
+    <div v-if="showToast" class="toast-notification" :class="`toast-${toastType}`" @click="hideToast">
+      <div class="toast-content">
+        <i class="fas" :class="{
+          'fa-check-circle': toastType === 'success',
+          'fa-exclamation-circle': toastType === 'warning',
+          'fa-times-circle': toastType === 'error',
+          'fa-info-circle': toastType === 'info'
+        }"></i>
+        <span>{{ toastMessage }}</span>
+      </div>
+      <button @click="hideToast" class="toast-close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Result Viewer Modal -->
+    <div v-if="showResultViewer" class="modal-overlay" @click="closeResultViewer">
+      <div class="modal result-viewer-modal" @click.stop>
+        <div class="modal-header">
+          <h3>{{ getResultTitle(selectedResult) }}</h3>
+          <button @click="closeResultViewer" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="result-metadata">
+            <div class="metadata-item">
+              <strong>Source:</strong> {{ selectedResult?.source || selectedResult?.metadata?.source || 'Unknown' }}
+            </div>
+            <div class="metadata-item" v-if="selectedResult?.score">
+              <strong>Relevance Score:</strong> {{ selectedResult.score.toFixed(3) }}
+            </div>
+            <div class="metadata-item" v-if="selectedResult?.type">
+              <strong>Type:</strong> {{ selectedResult.type }}
+            </div>
+            <div class="metadata-item" v-if="selectedResult?.collection">
+              <strong>Collection:</strong> {{ selectedResult.collection }}
+            </div>
+          </div>
+          <div class="result-content">
+            <h4>Content:</h4>
+            <div class="content-text" v-html="highlightText(selectedResult?.content || selectedResult?.text || 'No content available', searchQuery)"></div>
+          </div>
+          <div class="result-actions">
+            <button @click="useResult(selectedResult)" class="btn-primary">
+              <i class="fas fa-comments"></i> Use in Chat
+            </button>
+            <button @click="copyResult(selectedResult)" class="btn-secondary">
+              <i class="fas fa-copy"></i> Copy Content
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category Editor Modal -->
+    <div v-if="showCategoryEditor" class="modal-overlay" @click="closeCategoryEditor">
+      <div class="modal category-editor-modal" @click.stop>
+        <div class="modal-header">
+          <h3>Edit Category</h3>
+          <button @click="closeCategoryEditor" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="saveCategoryChanges">
+            <div class="form-group">
+              <label for="category-name">Name:</label>
+              <input
+                id="category-name"
+                v-model="editingCategory.name"
+                type="text"
+                required
+                class="form-control"
+              />
+            </div>
+            <div class="form-group">
+              <label for="category-description">Description:</label>
+              <textarea
+                id="category-description"
+                v-model="editingCategory.description"
+                class="form-control"
+                rows="3"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="category-path">Path:</label>
+              <input
+                id="category-path"
+                v-model="editingCategory.path"
+                type="text"
+                class="form-control"
+                readonly
+              />
+            </div>
+            <div class="modal-actions">
+              <button type="button" @click="closeCategoryEditor" class="btn-secondary">Cancel</button>
+              <button type="submit" class="btn-primary">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Doc Viewer Modal -->
+    <div v-if="showSystemDocViewer" class="modal-overlay" @click="closeSystemDocViewer">
+      <div class="modal system-doc-viewer-modal" @click.stop>
+        <div class="modal-header">
+          <h3>{{ selectedSystemDoc?.title || selectedSystemDoc?.name }}</h3>
+          <button @click="closeSystemDocViewer" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-metadata">
+            <div class="metadata-item">
+              <strong>Type:</strong> {{ selectedSystemDoc?.type || 'Document' }}
+            </div>
+            <div class="metadata-item" v-if="selectedSystemDoc?.path">
+              <strong>Path:</strong> {{ selectedSystemDoc.path }}
+            </div>
+            <div class="metadata-item" v-if="selectedSystemDoc?.size">
+              <strong>Size:</strong> {{ formatContentSize(selectedSystemDoc.size) }}
+            </div>
+            <div class="metadata-item" v-if="selectedSystemDoc?.last_modified">
+              <strong>Last Modified:</strong> {{ formatDate(selectedSystemDoc.last_modified) }}
+            </div>
+          </div>
+          <div class="doc-content">
+            <h4>Content:</h4>
+            <pre class="content-text">{{ selectedSystemDoc?.content || 'No content available' }}</pre>
+          </div>
+          <div class="doc-actions">
+            <button v-if="!selectedSystemDoc?.immutable" @click="editSystemDoc(selectedSystemDoc)" class="btn-primary">
+              <i class="fas fa-edit"></i> Edit Document
+            </button>
+            <button @click="exportSystemDoc(selectedSystemDoc)" class="btn-secondary">
+              <i class="fas fa-download"></i> Export
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Doc Editor Modal -->
+    <div v-if="showSystemDocEditor" class="modal-overlay" @click="closeSystemDocEditor">
+      <div class="modal system-doc-editor-modal" @click.stop>
+        <div class="modal-header">
+          <h3>Edit Document: {{ selectedSystemDoc?.title || selectedSystemDoc?.name }}</h3>
+          <button @click="closeSystemDocEditor" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="saveSystemDocChanges">
+            <div class="form-group">
+              <label for="doc-title">Title:</label>
+              <input
+                id="doc-title"
+                v-model="selectedSystemDoc.title"
+                type="text"
+                required
+                class="form-control"
+              />
+            </div>
+            <div class="form-group">
+              <label for="doc-content">Content:</label>
+              <textarea
+                id="doc-content"
+                v-model="selectedSystemDoc.content"
+                class="form-control code-editor"
+                rows="20"
+              ></textarea>
+            </div>
+            <div class="modal-actions">
+              <button type="button" @click="closeSystemDocEditor" class="btn-secondary">Cancel</button>
+              <button type="submit" class="btn-primary">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Prompt Viewer Modal -->
+    <div v-if="showSystemPromptViewer" class="modal-overlay" @click="closeSystemPromptViewer">
+      <div class="modal system-prompt-viewer-modal" @click.stop>
+        <div class="modal-header">
+          <h3>{{ selectedSystemPrompt?.name }}</h3>
+          <button @click="closeSystemPromptViewer" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="prompt-metadata">
+            <div class="metadata-item" v-if="selectedSystemPrompt?.description">
+              <strong>Description:</strong> {{ selectedSystemPrompt.description }}
+            </div>
+            <div class="metadata-item" v-if="selectedSystemPrompt?.category">
+              <strong>Category:</strong> {{ selectedSystemPrompt.category }}
+            </div>
+            <div class="metadata-item" v-if="selectedSystemPrompt?.variables?.length">
+              <strong>Variables:</strong> {{ selectedSystemPrompt.variables.map(v => v.name).join(', ') }}
+            </div>
+          </div>
+          <div class="prompt-content">
+            <h4>Template:</h4>
+            <pre class="content-text">{{ selectedSystemPrompt?.content || 'No content available' }}</pre>
+          </div>
+          <div class="prompt-actions">
+            <button @click="useSystemPrompt(selectedSystemPrompt)" class="btn-primary">
+              <i class="fas fa-play"></i> Use Prompt
+            </button>
+            <button v-if="!selectedSystemPrompt?.immutable" @click="editSystemPrompt(selectedSystemPrompt)" class="btn-secondary">
+              <i class="fas fa-edit"></i> Edit
+            </button>
+            <button @click="duplicateSystemPrompt(selectedSystemPrompt)" class="btn-secondary">
+              <i class="fas fa-copy"></i> Duplicate
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Prompt Editor Modal -->
+    <div v-if="showSystemPromptEditor" class="modal-overlay" @click="closeSystemPromptEditor">
+      <div class="modal system-prompt-editor-modal" @click.stop>
+        <div class="modal-header">
+          <h3>Edit Prompt: {{ selectedSystemPrompt?.name }}</h3>
+          <button @click="closeSystemPromptEditor" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="saveSystemPromptChanges">
+            <div class="form-group">
+              <label for="prompt-name">Name:</label>
+              <input
+                id="prompt-name"
+                v-model="selectedSystemPrompt.name"
+                type="text"
+                required
+                class="form-control"
+              />
+            </div>
+            <div class="form-group">
+              <label for="prompt-description">Description:</label>
+              <textarea
+                id="prompt-description"
+                v-model="selectedSystemPrompt.description"
+                class="form-control"
+                rows="2"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="prompt-category">Category:</label>
+              <select id="prompt-category" v-model="selectedSystemPrompt.category" class="form-control">
+                <option value="general">General</option>
+                <option value="system">System</option>
+                <option value="chat">Chat</option>
+                <option value="analysis">Analysis</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="prompt-content">Content:</label>
+              <textarea
+                id="prompt-content"
+                v-model="selectedSystemPrompt.content"
+                class="form-control code-editor"
+                rows="15"
+                required
+              ></textarea>
+            </div>
+            <div class="modal-actions">
+              <button type="button" @click="closeSystemPromptEditor" class="btn-secondary">Cancel</button>
+              <button type="submit" class="btn-primary">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Prompt Creator Modal -->
+    <div v-if="showSystemPromptCreator" class="modal-overlay" @click="closeSystemPromptCreator">
+      <div class="modal system-prompt-creator-modal" @click.stop>
+        <div class="modal-header">
+          <h3>Create New System Prompt</h3>
+          <button @click="closeSystemPromptCreator" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="saveNewSystemPrompt">
+            <div class="form-group">
+              <label for="new-prompt-name">Name:</label>
+              <input
+                id="new-prompt-name"
+                v-model="newSystemPrompt.name"
+                type="text"
+                required
+                class="form-control"
+                placeholder="Enter prompt name..."
+              />
+            </div>
+            <div class="form-group">
+              <label for="new-prompt-description">Description:</label>
+              <textarea
+                id="new-prompt-description"
+                v-model="newSystemPrompt.description"
+                class="form-control"
+                rows="2"
+                placeholder="Describe what this prompt does..."
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="new-prompt-category">Category:</label>
+              <select id="new-prompt-category" v-model="newSystemPrompt.category" class="form-control">
+                <option value="general">General</option>
+                <option value="system">System</option>
+                <option value="chat">Chat</option>
+                <option value="analysis">Analysis</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="new-prompt-content">Content:</label>
+              <textarea
+                id="new-prompt-content"
+                v-model="newSystemPrompt.content"
+                class="form-control code-editor"
+                rows="15"
+                required
+                placeholder="Enter your prompt template here..."
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label>Variables:</label>
+              <div v-for="(variable, index) in newSystemPrompt.variables" :key="index" class="variable-item">
+                <input
+                  v-model="variable.name"
+                  type="text"
+                  placeholder="Variable name"
+                  class="form-control variable-input"
+                />
+                <input
+                  v-model="variable.description"
+                  type="text"
+                  placeholder="Description"
+                  class="form-control variable-input"
+                />
+                <input
+                  v-model="variable.defaultValue"
+                  type="text"
+                  placeholder="Default value"
+                  class="form-control variable-input"
+                />
+                <button type="button" @click="removePromptVariable(index)" class="btn-danger btn-sm">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              <button type="button" @click="addPromptVariable" class="btn-secondary btn-sm">
+                <i class="fas fa-plus"></i> Add Variable
+              </button>
+            </div>
+            <div class="modal-actions">
+              <button type="button" @click="closeSystemPromptCreator" class="btn-secondary">Cancel</button>
+              <button type="submit" class="btn-primary">Create Prompt</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
 </template>
 
 <script>
@@ -1051,6 +1410,38 @@ export default {
       collection: 'default',
       tags: [],
       links: []
+    });
+
+
+    // Toast notification system
+    const showToast = ref(false);
+    const toastMessage = ref('');
+    const toastType = ref('success'); // success, error, info, warning
+    
+    // Result viewer modal
+    const showResultViewer = ref(false);
+    const selectedResult = ref(null);
+    
+    // Category editor modal
+    const showCategoryEditor = ref(false);
+    const editingCategory = ref(null);
+    
+    // System doc viewer and editor modals
+    const showSystemDocViewer = ref(false);
+    const showSystemDocEditor = ref(false);
+    const selectedSystemDoc = ref(null);
+    
+    // System prompt viewer, editor, and creator modals
+    const showSystemPromptViewer = ref(false);
+    const showSystemPromptEditor = ref(false);
+    const showSystemPromptCreator = ref(false);
+    const selectedSystemPrompt = ref(null);
+    const newSystemPrompt = ref({
+      name: '',
+      description: '',
+      content: '',
+      variables: [],
+      category: 'general'
     });
     const tagsInput = ref('');
     const newLink = ref({ url: '', title: '' });
@@ -1336,25 +1727,59 @@ export default {
     };
 
     // Result actions
+
     const viewResult = (result) => {
-      // Open result in modal or new tab
-      // Viewing result
-      // TODO: Implement result viewer
+      selectedResult.value = result;
+      showResultViewer.value = true;
+    };
+    
+    const closeResultViewer = () => {
+      showResultViewer.value = false;
+      selectedResult.value = null;
     };
 
+
     const useResult = (result) => {
-      // Add result to chat context or use in current conversation
-      // Using result in chat
-      // TODO: Implement chat integration
+      try {
+        // Create context data for chat integration
+        const contextData = {
+          type: 'knowledge_result',
+          title: getResultTitle(result),
+          content: result.content || result.text || '',
+          source: result.source || result.metadata?.source || 'Knowledge Base',
+          score: result.score,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Emit event for parent components to handle chat integration
+        if (window.parent && window.parent.postMessage) {
+          window.parent.postMessage({
+            type: 'ADD_CHAT_CONTEXT',
+            data: contextData
+          }, '*');
+        }
+        
+        // Store in sessionStorage as fallback
+        const existingContext = JSON.parse(sessionStorage.getItem('chat_context') || '[]');
+        existingContext.push(contextData);
+        sessionStorage.setItem('chat_context', JSON.stringify(existingContext));
+        
+        showToastNotification(`Added "${getResultTitle(result)}" to chat context`, 'success');
+      } catch (error) {
+        console.error('Failed to add result to chat:', error);
+        showToastNotification('Failed to add result to chat', 'error');
+      }
     };
+
 
     const copyResult = async (result) => {
       try {
-        await navigator.clipboard.writeText(result.content || result.text || '');
-        // TODO: Show toast notification
-        // Content copied to clipboard
+        const textToCopy = result.content || result.text || '';
+        await navigator.clipboard.writeText(textToCopy);
+        showToastNotification('Content copied to clipboard', 'success');
       } catch (error) {
         console.error('Failed to copy content:', error);
+        showToastNotification('Failed to copy content', 'error');
       }
     };
 
@@ -2123,11 +2548,11 @@ export default {
     };
 
     const showSuccess = (message) => {
-      // You can implement a toast notification system here
+      showToastNotification(message, 'success');
     };
 
     const showError = (message) => {
-      // You can implement a toast notification system here
+      showToastNotification(message, 'error');
       console.error('Error:', message);
     };
 
@@ -2256,8 +2681,29 @@ export default {
       filterEntries();
     };
 
+
     const editCategory = (category) => {
-      // TODO: Implement category editing
+      editingCategory.value = { ...category };
+      showCategoryEditor.value = true;
+    };
+    
+    const saveCategoryChanges = async () => {
+      if (!editingCategory.value) return;
+      
+      try {
+        await apiClient.updateKnowledgeCategory(editingCategory.value.id, editingCategory.value);
+        showToastNotification('Category updated successfully', 'success');
+        closeCategoryEditor();
+        await loadCategories();
+      } catch (error) {
+        console.error('Error updating category:', error);
+        showToastNotification('Failed to update category', 'error');
+      }
+    };
+    
+    const closeCategoryEditor = () => {
+      showCategoryEditor.value = false;
+      editingCategory.value = null;
     };
 
     // System Knowledge functionality
@@ -2315,20 +2761,66 @@ export default {
       return iconMap[type] || '📄';
     };
 
+
     const viewSystemDoc = (doc) => {
-      // TODO: Implement system doc viewer
+      selectedSystemDoc.value = doc;
+      showSystemDocViewer.value = true;
     };
+    
+    const closeSystemDocViewer = () => {
+      showSystemDocViewer.value = false;
+      selectedSystemDoc.value = null;
+    };
+
 
     const editSystemDoc = (doc) => {
       if (doc.immutable) {
-        showError('This document is immutable and cannot be edited');
+        showToastNotification('This document is immutable and cannot be edited', 'warning');
         return;
       }
-      // TODO: Implement system doc editor
+      selectedSystemDoc.value = { ...doc };
+      showSystemDocEditor.value = true;
+    };
+    
+    const saveSystemDocChanges = async () => {
+      if (!selectedSystemDoc.value) return;
+      
+      try {
+        await apiClient.updateSystemDocument(selectedSystemDoc.value.id, selectedSystemDoc.value);
+        showToastNotification('Document updated successfully', 'success');
+        closeSystemDocEditor();
+        await loadSystemKnowledge();
+      } catch (error) {
+        console.error('Error updating system document:', error);
+        showToastNotification('Failed to update document', 'error');
+      }
+    };
+    
+    const closeSystemDocEditor = () => {
+      showSystemDocEditor.value = false;
+      selectedSystemDoc.value = null;
     };
 
+
     const exportSystemDoc = (doc) => {
-      // TODO: Implement system doc export
+      try {
+        const dataStr = JSON.stringify(doc, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${doc.title || doc.name || 'system-doc'}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        showToastNotification('Document exported successfully', 'success');
+      } catch (error) {
+        console.error('Error exporting document:', error);
+        showToastNotification('Failed to export document', 'error');
+      }
     };
 
     const getDocPreview = (doc) => {
@@ -2392,28 +2884,142 @@ export default {
       return iconMap[category] || '🎯';
     };
 
+
     const useSystemPrompt = (prompt) => {
-      // TODO: Implement prompt usage
+      try {
+        // Create prompt data for usage
+        const promptData = {
+          type: 'system_prompt',
+          name: prompt.name,
+          content: prompt.content,
+          description: prompt.description,
+          variables: prompt.variables || [],
+          timestamp: new Date().toISOString()
+        };
+        
+        // Emit event for parent components to handle prompt usage
+        if (window.parent && window.parent.postMessage) {
+          window.parent.postMessage({
+            type: 'USE_SYSTEM_PROMPT',
+            data: promptData
+          }, '*');
+        }
+        
+        // Store in sessionStorage as fallback
+        sessionStorage.setItem('active_prompt', JSON.stringify(promptData));
+        
+        showToastNotification(`Activated prompt: "${prompt.name}"`, 'success');
+      } catch (error) {
+        console.error('Failed to use prompt:', error);
+        showToastNotification('Failed to activate prompt', 'error');
+      }
     };
 
+
     const viewSystemPrompt = (prompt) => {
-      // TODO: Implement system prompt viewer
+      selectedSystemPrompt.value = prompt;
+      showSystemPromptViewer.value = true;
     };
+    
+    const closeSystemPromptViewer = () => {
+      showSystemPromptViewer.value = false;
+      selectedSystemPrompt.value = null;
+    };
+
 
     const editSystemPrompt = (prompt) => {
       if (prompt.immutable) {
-        showError('This prompt is immutable and cannot be edited');
+        showToastNotification('This prompt is immutable and cannot be edited', 'warning');
         return;
       }
-      // TODO: Implement system prompt editor
+      selectedSystemPrompt.value = { ...prompt };
+      showSystemPromptEditor.value = true;
+    };
+    
+    const saveSystemPromptChanges = async () => {
+      if (!selectedSystemPrompt.value) return;
+      
+      try {
+        await apiClient.updateSystemPrompt(selectedSystemPrompt.value.id, selectedSystemPrompt.value);
+        showToastNotification('Prompt updated successfully', 'success');
+        closeSystemPromptEditor();
+        await loadSystemPrompts();
+      } catch (error) {
+        console.error('Error updating system prompt:', error);
+        showToastNotification('Failed to update prompt', 'error');
+      }
+    };
+    
+    const closeSystemPromptEditor = () => {
+      showSystemPromptEditor.value = false;
+      selectedSystemPrompt.value = null;
     };
 
-    const duplicateSystemPrompt = (prompt) => {
-      // TODO: Implement system prompt duplication
+
+    const duplicateSystemPrompt = async (prompt) => {
+      try {
+        const duplicatedPrompt = {
+          ...prompt,
+          id: undefined,
+          name: `${prompt.name} (Copy)`,
+          immutable: false
+        };
+        
+        await apiClient.createSystemPrompt(duplicatedPrompt);
+        showToastNotification(`Prompt "${prompt.name}" duplicated successfully`, 'success');
+        await loadSystemPrompts();
+      } catch (error) {
+        console.error('Error duplicating prompt:', error);
+        showToastNotification('Failed to duplicate prompt', 'error');
+      }
     };
+
 
     const createSystemPrompt = () => {
-      // TODO: Implement system prompt creation
+      newSystemPrompt.value = {
+        name: '',
+        description: '',
+        content: '',
+        variables: [],
+        category: 'general'
+      };
+      showSystemPromptCreator.value = true;
+    };
+    
+    const saveNewSystemPrompt = async () => {
+      if (!newSystemPrompt.value.name.trim() || !newSystemPrompt.value.content.trim()) {
+        showToastNotification('Please provide both name and content for the prompt', 'warning');
+        return;
+      }
+      
+      try {
+        await apiClient.createSystemPrompt(newSystemPrompt.value);
+        showToastNotification('New prompt created successfully', 'success');
+        closeSystemPromptCreator();
+        await loadSystemPrompts();
+      } catch (error) {
+        console.error('Error creating prompt:', error);
+        showToastNotification('Failed to create prompt', 'error');
+      }
+    };
+    
+    const closeSystemPromptCreator = () => {
+      showSystemPromptCreator.value = false;
+      newSystemPrompt.value = {
+        name: '',
+        description: '',
+        content: '',
+        variables: [],
+        category: 'general'
+      };
+    };
+    
+    const addPromptVariable = () => {
+      newSystemPrompt.value.variables.push({ name: '', description: '', defaultValue: '' });
+    };
+    
+    const removePromptVariable = (index) => {
+      newSystemPrompt.value.variables.splice(index, 1);
     };
 
     const getPromptPreview = (template) => {
@@ -2657,7 +3263,46 @@ export default {
       editSystemPrompt,
       duplicateSystemPrompt,
       createSystemPrompt,
-      getPromptPreview
+      getPromptPreview,
+      // Toast notification system
+      showToast,
+      toastMessage,
+      toastType,
+      showToastNotification,
+      hideToast,
+      
+      // Result viewer
+      showResultViewer,
+      selectedResult,
+      closeResultViewer,
+      
+      // Category editor
+      showCategoryEditor,
+      editingCategory,
+      saveCategoryChanges,
+      closeCategoryEditor,
+      
+      // System doc viewer and editor
+      showSystemDocViewer,
+      showSystemDocEditor,
+      selectedSystemDoc,
+      closeSystemDocViewer,
+      saveSystemDocChanges,
+      closeSystemDocEditor,
+      
+      // System prompt viewer, editor, and creator
+      showSystemPromptViewer,
+      showSystemPromptEditor,
+      showSystemPromptCreator,
+      selectedSystemPrompt,
+      newSystemPrompt,
+      closeSystemPromptViewer,
+      saveSystemPromptChanges,
+      closeSystemPromptEditor,
+      saveNewSystemPrompt,
+      closeSystemPromptCreator,
+      addPromptVariable,
+      removePromptVariable
     };
   }
 };
@@ -5102,4 +5747,670 @@ export default {
     margin-left: 0;
   }
 }
+/* Toast Notification Styles */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 500px;
+  padding: 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slideInRight 0.3s ease-out, fadeOut 0.3s ease-out 2.7s;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.toast-success {
+  background-color: #d4edda;
+  border-left: 4px solid #28a745;
+  color: #155724;
+}
+
+.toast-error {
+  background-color: #f8d7da;
+  border-left: 4px solid #dc3545;
+  color: #721c24;
+}
+
+.toast-warning {
+  background-color: #fff3cd;
+  border-left: 4px solid #ffc107;
+  color: #856404;
+}
+
+.toast-info {
+  background-color: #d1ecf1;
+  border-left: 4px solid #17a2b8;
+  color: #0c5460;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 8px;
+}
+
+.toast-content i {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.toast-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+}
+
+.toast-close:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Result Viewer Modal Styles */
+.result-viewer-modal {
+  max-width: 800px;
+  max-height: 80vh;
+}
+
+.result-metadata {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.metadata-item {
+  margin-bottom: 8px;
+}
+
+.metadata-item:last-child {
+  margin-bottom: 0;
+}
+
+.result-content {
+  margin-bottom: 20px;
+}
+
+.result-content h4 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.content-text {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.result-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+/* Category Editor Modal Styles */
+.category-editor-modal {
+  max-width: 500px;
+}
+
+/* System Doc Viewer/Editor Modal Styles */
+.system-doc-viewer-modal,
+.system-doc-editor-modal {
+  max-width: 900px;
+  max-height: 90vh;
+}
+
+.doc-metadata {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.doc-content,
+.prompt-content {
+  margin-bottom: 20px;
+}
+
+.doc-content h4,
+.prompt-content h4 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.doc-content pre,
+.prompt-content pre {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.doc-actions,
+.prompt-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+.code-editor {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* System Prompt Modal Styles */
+.system-prompt-viewer-modal,
+.system-prompt-editor-modal,
+.system-prompt-creator-modal {
+  max-width: 800px;
+  max-height: 90vh;
+}
+
+.prompt-metadata {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.variable-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.variable-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+}
+
+/* Form improvements */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-control {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Button improvements */
+.btn-primary {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+  border-color: #004085;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-secondary:hover {
+  background-color: #545b62;
+  border-color: #4e555b;
+}
+
+/* Modal responsiveness */
+@media (max-width: 768px) {
+  .result-viewer-modal,
+  .category-editor-modal,
+  .system-doc-viewer-modal,
+  .system-doc-editor-modal,
+  .system-prompt-viewer-modal,
+  .system-prompt-editor-modal,
+  .system-prompt-creator-modal {
+    width: 95%;
+    margin: 20px;
+    max-height: 90vh;
+  }
+  
+  .variable-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .variable-input {
+    margin-bottom: 5px;
+  }
+  
+  .toast-notification {
+    min-width: 280px;
+    max-width: calc(100vw - 40px);
+    right: 20px;
+  }
+}
+
+/* Toast Notification Styles */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 500px;
+  padding: 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slideInRight 0.3s ease-out, fadeOut 0.3s ease-out 2.7s;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.toast-success {
+  background-color: #d4edda;
+  border-left: 4px solid #28a745;
+  color: #155724;
+}
+
+.toast-error {
+  background-color: #f8d7da;
+  border-left: 4px solid #dc3545;
+  color: #721c24;
+}
+
+.toast-warning {
+  background-color: #fff3cd;
+  border-left: 4px solid #ffc107;
+  color: #856404;
+}
+
+.toast-info {
+  background-color: #d1ecf1;
+  border-left: 4px solid #17a2b8;
+  color: #0c5460;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 8px;
+}
+
+.toast-content i {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.toast-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+}
+
+.toast-close:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Result Viewer Modal Styles */
+.result-viewer-modal {
+  max-width: 800px;
+  max-height: 80vh;
+}
+
+.result-metadata {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.metadata-item {
+  margin-bottom: 8px;
+}
+
+.metadata-item:last-child {
+  margin-bottom: 0;
+}
+
+.result-content {
+  margin-bottom: 20px;
+}
+
+.result-content h4 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.content-text {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.result-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+/* Category Editor Modal Styles */
+.category-editor-modal {
+  max-width: 500px;
+}
+
+/* System Doc Viewer/Editor Modal Styles */
+.system-doc-viewer-modal,
+.system-doc-editor-modal {
+  max-width: 900px;
+  max-height: 90vh;
+}
+
+.doc-metadata {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.doc-content,
+.prompt-content {
+  margin-bottom: 20px;
+}
+
+.doc-content h4,
+.prompt-content h4 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.doc-content pre,
+.prompt-content pre {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.doc-actions,
+.prompt-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+.code-editor {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* System Prompt Modal Styles */
+.system-prompt-viewer-modal,
+.system-prompt-editor-modal,
+.system-prompt-creator-modal {
+  max-width: 800px;
+  max-height: 90vh;
+}
+
+.prompt-metadata {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.variable-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.variable-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+}
+
+/* Form improvements */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-control {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Button improvements */
+.btn-primary {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+  border-color: #004085;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-secondary:hover {
+  background-color: #545b62;
+  border-color: #4e555b;
+}
+
+/* Modal responsiveness */
+@media (max-width: 768px) {
+  .result-viewer-modal,
+  .category-editor-modal,
+  .system-doc-viewer-modal,
+  .system-doc-editor-modal,
+  .system-prompt-viewer-modal,
+  .system-prompt-editor-modal,
+  .system-prompt-creator-modal {
+    width: 95%;
+    margin: 20px;
+    max-height: 90vh;
+  }
+  
+  .variable-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .variable-input {
+    margin-bottom: 5px;
+  }
+  
+  .toast-notification {
+    min-width: 280px;
+    max-width: calc(100vw - 40px);
+    right: 20px;
+  }
+}
+
 </style>

@@ -430,5 +430,12 @@ app = create_app()
 
 # For running directly
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run("backend.fast_app_factory_fix:app", host="0.0.0.0", port=8001)
+    
+    # Use the backend host from environment, fallback to proper host IP
+    backend_host = os.getenv("AUTOBOT_BACKEND_HOST", "172.16.168.20")
+    backend_port = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
+    
+    print(f"Starting backend on {backend_host}:{backend_port}")
+    uvicorn.run("backend.fast_app_factory_fix:app", host=backend_host, port=backend_port)
