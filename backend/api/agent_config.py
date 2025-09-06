@@ -14,6 +14,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from backend.utils.connection_utils import ConnectionTester
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -357,8 +359,31 @@ async def check_agent_health(agent_id: str):
             f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
         )
 
-        # Simple health check - for now just check if enabled and has model
-        is_healthy = enabled and bool(model)
+        # Check provider availability using ConnectionTester
+        provider_available = False
+        start_time = datetime.now()
+        
+        try:
+            provider_config = DEFAULT_AGENT_CONFIGS[agent_id].get("provider", "ollama")
+            
+            # Currently we only support Ollama provider checking
+            # In the future, this can be extended for other providers
+            if provider_config == "ollama":
+                ollama_result = await ConnectionTester.test_ollama_connection()
+                provider_available = ollama_result.get("status") == "connected"
+            else:
+                # For other providers, assume available for now
+                # TODO: Implement provider checks for OpenAI, Anthropic, etc.
+                provider_available = True
+                
+        except Exception as e:
+            logger.warning(f"Provider availability check failed for agent {agent_id}: {str(e)}")
+            provider_available = False
+
+        response_time = (datetime.now() - start_time).total_seconds()
+        
+        # Health check: enabled + model configured + provider available
+        is_healthy = enabled and bool(model) and provider_available
 
         health_status = {
             "agent_id": agent_id,
@@ -369,10 +394,10 @@ async def check_agent_health(agent_id: str):
             "checks": {
                 "enabled": enabled,
                 "model_configured": bool(model),
-                "provider_available": True,  # TODO: Actually check provider availability
+                "provider_available": provider_available,
             },
             "timestamp": datetime.now().isoformat(),
-            "response_time": 0.001,  # Mock response time
+            "response_time": response_time,
         }
 
         return JSONResponse(status_code=200, content=health_status)

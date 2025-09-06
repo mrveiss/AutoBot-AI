@@ -1,8 +1,0 @@
-# ===== VOICE INTERFACE DEPENDENCIES =====
-# These dependencies are optional and only needed for voice functionality
-# Install with: pip install -r requirements-voice.txt
-
-speechrecognition==3.10.0
-pydub==0.25.1
-pyaudio==0.2.11
-gtts==2.3.1

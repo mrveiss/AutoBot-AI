@@ -62,8 +62,14 @@ def add_startup_message(phase: StartupPhase, message: str, progress: int, icon: 
     
     logger.info(f"Startup: [{phase.value}] {message} ({progress}%)")
     
-    # Broadcast to connected WebSocket clients
-    asyncio.create_task(broadcast_startup_message(msg))
+    # Broadcast to connected WebSocket clients (only if event loop is running)
+    try:
+        loop = asyncio.get_running_loop()
+        asyncio.create_task(broadcast_startup_message(msg))
+    except RuntimeError:
+        # No running event loop - this is expected during module import
+        # The message is still stored and will be sent when clients connect
+        pass
 
 async def broadcast_startup_message(message: StartupMessage):
     """Broadcast startup message to all connected WebSocket clients"""
