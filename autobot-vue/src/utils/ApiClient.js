@@ -17,9 +17,9 @@ class ApiClient {
     console.log('[ApiClient] - window.location.port:', window.location.port);
     console.log('[ApiClient] - Settings loaded:', this.settings);
 
-    // CRITICAL: Don't override baseUrl when using Vite proxy (port 5173)
-    // Check if we're running on port 5173 (Vite dev server) 
-    const isViteDevMode = window.location.port === '5173';
+    // CRITICAL: Don't override baseUrl when using Vite proxy (port 5173 in development)
+    // Check if we're running on port 5173 AND in development mode (Vite dev server) 
+    const isViteDevMode = window.location.port === '5173' && API_CONFIG.DEV_MODE;
     
     if (isViteDevMode) {
       console.log('[ApiClient] PROXY MODE: Running on port 5173, forcing proxy usage');
