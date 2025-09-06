@@ -1,0 +1,29 @@
+version: '3.8'
+
+# Minimal Docker Compose for local development without registry access
+services:
+  # Use basic Redis instead of redis-stack to avoid registry pulls
+  redis:
+    image: redis:7-alpine
+    container_name: autobot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      autobot-network:
+        ipv4_address: ${AUTOBOT_REDIS_IP:-192.168.65.10}
+
+networks:
+  autobot-network:
+    external: true
+
+volumes:
+  redis_data:
