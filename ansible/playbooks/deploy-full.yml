@@ -1,0 +1,316 @@
+---
+# AutoBot Full Deployment Playbook
+# Orchestrates complete migration from Docker to Hyper-V VMs
+
+- name: "AutoBot Full Deployment - Docker to Hyper-V Migration"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    deployment_start_time: "{{ ansible_date_time.epoch }}"
+    deployment_id: "autobot-{{ ansible_date_time.date }}-{{ ansible_date_time.time | replace(':', '') }}"
+    
+  tasks:
+    - name: Display deployment information
+      debug:
+        msg:
+          - "🤖 AutoBot Hyper-V Deployment Starting"
+          - "Deployment ID: {{ deployment_id }}"
+          - "Timestamp: {{ ansible_date_time.iso8601 }}"
+          - "Target Infrastructure: 5 Hyper-V VMs"
+          - "Migration: Docker Containers → Virtual Machines"
+
+    - name: Create deployment log directory
+      file:
+        path: "/var/log/autobot/deployment"
+        state: directory
+        mode: '0755'
+      become: true
+
+    - name: Log deployment start
+      copy:
+        content: |
+          Deployment ID: {{ deployment_id }}
+          Start Time: {{ ansible_date_time.iso8601 }}
+          Infrastructure: 5 Hyper-V VMs
+          Migration: Docker → VM
+        dest: "/var/log/autobot/deployment/{{ deployment_id }}.log"
+        mode: '0644'
+      become: true
+
+# Phase 1: Base System Preparation
+- name: "Phase 1: Base System Setup"
+  import_playbook: deploy-base.yml
+  vars:
+    deployment_phase: "base-system"
+    phase_description: "Ubuntu base system, security, users, networking"
+
+# Phase 2: Database Infrastructure  
+- name: "Phase 2: Database Infrastructure"
+  import_playbook: deploy-database.yml
+  vars:
+    deployment_phase: "database"
+    phase_description: "Redis Stack, data persistence, model storage"
+
+# Phase 3: Backend Services
+- name: "Phase 3: Backend Services"
+  import_playbook: deploy-backend.yml
+  vars:
+    deployment_phase: "backend"
+    phase_description: "FastAPI, Python services, log aggregation"
+
+# Phase 4: AI/ML Services  
+- name: "Phase 4: AI/ML Infrastructure"
+  import_playbook: deploy-aiml.yml
+  vars:
+    deployment_phase: "aiml"
+    phase_description: "AI Stack, NPU Worker, Intel OpenVINO"
+
+# Phase 5: Frontend Services
+- name: "Phase 5: Frontend Infrastructure"
+  import_playbook: deploy-frontend.yml
+  vars:
+    deployment_phase: "frontend"
+    phase_description: "Vue.js frontend, nginx, DNS cache"
+
+# Phase 6: Browser Automation
+- name: "Phase 6: Browser Automation"
+  import_playbook: deploy-browser.yml
+  vars:
+    deployment_phase: "browser"
+    phase_description: "Playwright, VNC server, desktop environment"
+
+# Phase 7: Data Migration
+- name: "Phase 7: Data Migration"
+  import_playbook: data-migration.yml
+  vars:
+    deployment_phase: "data-migration"
+    phase_description: "Migrate data from Docker containers"
+
+# Phase 8: Service Integration
+- name: "Phase 8: Service Integration and Startup"
+  hosts: all
+  gather_facts: false
+  serial: 1
+  vars:
+    service_startup_order:
+      1: ["database"]
+      2: ["backend", "aiml"]  
+      3: ["frontend"]
+      4: ["browser"]
+      
+  tasks:
+    - name: Display service startup phase
+      debug:
+        msg: "🚀 Starting AutoBot services in dependency order"
+      run_once: true
+
+    - name: Start database services (Phase 1)
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - "redis-stack-server"
+      when: inventory_hostname in groups['database']
+      become: true
+
+    - name: Wait for database readiness
+      wait_for:
+        host: "{{ redis_host }}"
+        port: "{{ redis_port }}"
+        timeout: 60
+      delegate_to: localhost
+      run_once: true
+
+    - name: Start backend and AI/ML services (Phase 2)
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - "autobot-backend"
+      when: inventory_hostname in groups['backend']
+      become: true
+
+    - name: Start AI/ML services (Phase 2)
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - "autobot-ai-stack"
+        - "autobot-npu-worker"
+      when: inventory_hostname in groups['aiml']
+      become: true
+
+    - name: Wait for backend readiness
+      wait_for:
+        host: "{{ backend_host }}"
+        port: "{{ backend_port }}"
+        timeout: 60
+      delegate_to: localhost
+      run_once: true
+
+    - name: Start frontend services (Phase 3)
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - "nginx"
+        - "autobot-frontend"
+      when: inventory_hostname in groups['frontend']
+      become: true
+
+    - name: Start browser services (Phase 4)
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - "autobot-vnc-server"
+        - "autobot-playwright"
+      when: inventory_hostname in groups['browser']
+      become: true
+
+# Phase 9: Health Validation
+- name: "Phase 9: Health Check and Validation"
+  import_playbook: health-check.yml
+  vars:
+    deployment_phase: "validation"
+    phase_description: "Service health checks and integration testing"
+
+# Phase 10: Deployment Summary
+- name: "Phase 10: Deployment Summary"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    deployment_end_time: "{{ ansible_date_time.epoch }}"
+    
+  tasks:
+    - name: Calculate deployment duration
+      set_fact:
+        deployment_duration: "{{ (deployment_end_time | int) - (deployment_start_time | int) }}"
+
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "🎉 AutoBot Hyper-V Deployment Completed Successfully!"
+          - "======================================================"
+          - ""
+          - "⏱️  Deployment Duration: {{ deployment_duration }} seconds ({{ (deployment_duration | int / 60) | round(1) }} minutes)"
+          - "🆔 Deployment ID: {{ deployment_id }}"
+          - "📅 Completed: {{ ansible_date_time.iso8601 }}"
+          - ""
+          - "🌐 Service Endpoints:"
+          - "   Frontend:     http://192.168.100.10"
+          - "   Backend API:  http://192.168.100.20:8001/api"
+          - "   Redis Stack:  redis://192.168.100.50:6379"
+          - "   RedisInsight:  http://192.168.100.50:8002"
+          - "   AI Stack:     http://192.168.100.30:8080"
+          - "   NPU Worker:   http://192.168.100.40:8081"
+          - "   Browser API:  http://192.168.100.40:3000"
+          - "   VNC Access:   vnc://192.168.100.40:5901"
+          - ""
+          - "🖥️  SSH Access:"
+          - "   Frontend:     ssh autobot@192.168.100.10"
+          - "   Backend:      ssh autobot@192.168.100.20"
+          - "   Database:     ssh autobot@192.168.100.50"
+          - "   AI/ML:        ssh autobot@192.168.100.30"
+          - "   Browser:      ssh autobot@192.168.100.40"
+          - ""
+          - "✅ Migration Status: Docker Containers → Hyper-V VMs Complete"
+          - "📊 Performance: Dedicated resources, native VM performance"
+          - "🔒 Security: Internal network isolation, firewall protection"
+          - "📈 Scalability: Independent VM scaling and resource allocation"
+          - ""
+          - "🔧 Next Steps:"
+          - "   1. Access AutoBot UI at http://192.168.100.10"
+          - "   2. Verify all services: ./deploy.sh --health-check"
+          - "   3. Setup monitoring dashboards"
+          - "   4. Configure automated backups"
+          - "   5. Update DNS entries if needed"
+
+    - name: Log deployment completion
+      copy:
+        content: |
+          Deployment ID: {{ deployment_id }}
+          Start Time: {{ hostvars['localhost']['deployment_start_time'] }}
+          End Time: {{ deployment_end_time }}
+          Duration: {{ deployment_duration }} seconds
+          Status: SUCCESS
+          
+          Service Endpoints:
+          - Frontend: http://192.168.100.10
+          - Backend: http://192.168.100.20:8001
+          - Redis: redis://192.168.100.50:6379
+          - AI Stack: http://192.168.100.30:8080
+          - NPU Worker: http://192.168.100.40:8081
+          - Browser: http://192.168.100.40:3000
+          - VNC: vnc://192.168.100.40:5901
+          
+          Migration: Docker Containers → 5 Hyper-V VMs
+          Infrastructure: Production-ready with monitoring and backups
+        dest: "/var/log/autobot/deployment/{{ deployment_id }}-complete.log"
+        mode: '0644'
+      become: true
+
+    - name: Create deployment success marker
+      file:
+        path: "/etc/autobot/deployment-{{ deployment_id }}.success"
+        state: touch
+        mode: '0644'
+      become: true
+
+# Final Notes Display
+- name: "Final Deployment Notes"
+  hosts: localhost
+  gather_facts: false
+  
+  tasks:
+    - name: Display important post-deployment information
+      debug:
+        msg:
+          - ""
+          - "🔍 IMPORTANT: Post-Deployment Checklist"
+          - "============================================"
+          - ""
+          - "1. 🌐 Web Access:"
+          - "   - Open http://192.168.100.10 in your browser"
+          - "   - Verify frontend loads correctly"
+          - "   - Test API connectivity through UI"
+          - ""
+          - "2. 🏥 Health Monitoring:"
+          - "   - Run: ./deploy.sh --health-check"
+          - "   - Monitor service logs: journalctl -u autobot-*"
+          - "   - Check system resources: htop on each VM"
+          - ""
+          - "3. 💾 Data Verification:"
+          - "   - Verify Redis data: redis-cli -h 192.168.100.50"
+          - "   - Check model files: ls -la /var/lib/autobot/models"
+          - "   - Validate knowledge base: API call to /api/knowledge"
+          - ""
+          - "4. 🔐 Security Review:"
+          - "   - Verify firewall rules: ufw status on each VM"
+          - "   - Check SSH access: ssh-agent and key forwarding"
+          - "   - Review service permissions and file ownership"
+          - ""
+          - "5. 📊 Performance Testing:"
+          - "   - Load test frontend: ab -n 100 -c 10 http://192.168.100.10/"
+          - "   - Test AI inference: curl http://192.168.100.30:8080/health"
+          - "   - Monitor resource usage during load"
+          - ""
+          - "6. 🚨 Backup Configuration:"
+          - "   - Setup automated backups: ./utils/setup-backups.sh"
+          - "   - Test backup/restore procedures"
+          - "   - Configure backup notifications"
+          - ""
+          - "For support and troubleshooting, see:"
+          - "  - ansible/README.md"
+          - "  - /var/log/autobot/deployment/{{ deployment_id }}.log"
+          - "  - Individual service logs in /var/log/autobot/"
