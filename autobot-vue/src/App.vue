@@ -454,7 +454,7 @@ export default {
     
     // Methods
     const setActiveTab = (tab) => {
-      appStore?.setActiveTab(tab);
+      appStore?.updateRoute(tab);
       // Close mobile nav when tab is selected
       showMobileNav.value = false;
     };
