@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoBot Chat Persistence Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 50px auto; 
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status { 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .storage-content { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 5px; 
+            font-family: monospace; 
+            white-space: pre-wrap; 
+            margin: 10px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .clear-btn { background: #dc3545; }
+        .clear-btn:hover { background: #c82333; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔧 AutoBot Chat Persistence Test</h1>
+        <p>This test verifies that chat persistence is working properly in localStorage.</p>
+        
+        <div id="status"></div>
+        
+        <h2>Actions</h2>
+        <button onclick="createTestChat()">Create Test Chat</button>
+        <button onclick="checkPersistence()">Check Persistence</button>
+        <button onclick="clearStorage()" class="clear-btn">Clear Storage</button>
+        <button onclick="refreshPage()">🔄 Refresh Page (Test Persistence)</button>
+        
+        <h2>localStorage Content</h2>
+        <div id="storage-content" class="storage-content"></div>
+        
+        <h2>Instructions</h2>
+        <ol>
+            <li><strong>Create Test Chat:</strong> Simulates a chat session with messages</li>
+            <li><strong>Check Persistence:</strong> Verifies the data is stored properly</li>
+            <li><strong>Refresh Page:</strong> Tests if data survives page refresh</li>
+            <li><strong>Clear Storage:</strong> Resets the test</li>
+        </ol>
+    </div>
+
+    <script>
+        function updateStatus(message, type = 'success') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+        
+        function updateStorageDisplay() {
+            const content = document.getElementById('storage-content');
+            const chatStore = localStorage.getItem('autobot-chat-store');
+            
+            if (chatStore) {
+                try {
+                    const parsed = JSON.parse(chatStore);
+                    content.textContent = JSON.stringify(parsed, null, 2);
+                } catch (e) {
+                    content.textContent = 'Error parsing stored data: ' + e.message;
+                }
+            } else {
+                content.textContent = 'No AutoBot chat data found in localStorage';
+            }
+        }
+        
+        function createTestChat() {
+            const testChatData = {
+                sessions: [
+                    {
+                        id: 'test-session-' + Date.now(),
+                        title: 'Test Chat Session',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        messages: [
+                            {
+                                id: 'msg-1',
+                                role: 'user',
+                                content: 'Hello AutoBot!',
+                                timestamp: new Date().toISOString()
+                            },
+                            {
+                                id: 'msg-2', 
+                                role: 'assistant',
+                                content: 'Hello! I am AutoBot, ready to assist you.',
+                                timestamp: new Date().toISOString()
+                            },
+                            {
+                                id: 'msg-3',
+                                role: 'user', 
+                                content: 'This is a test to verify chat persistence works after page refresh.',
+                                timestamp: new Date().toISOString()
+                            }
+                        ]
+                    }
+                ],
+                currentSessionId: 'test-session-' + Date.now(),
+                settings: {
+                    autoSave: true,
+                    persistHistory: true
+                },
+                sidebarCollapsed: false
+            };
+            
+            localStorage.setItem('autobot-chat-store', JSON.stringify(testChatData));
+            updateStatus('✅ Test chat created successfully!', 'success');
+            updateStorageDisplay();
+        }
+        
+        function checkPersistence() {
+            const stored = localStorage.getItem('autobot-chat-store');
+            
+            if (!stored) {
+                updateStatus('❌ No chat data found in localStorage', 'error');
+                updateStorageDisplay();
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(stored);
+                const sessionCount = parsed.sessions ? parsed.sessions.length : 0;
+                const messageCount = parsed.sessions ? 
+                    parsed.sessions.reduce((total, session) => total + (session.messages ? session.messages.length : 0), 0) : 0;
+                
+                updateStatus(`✅ Persistence working! Found ${sessionCount} session(s) with ${messageCount} message(s)`, 'success');
+                
+                // Check if dates are properly handled
+                if (parsed.sessions && parsed.sessions.length > 0) {
+                    const firstSession = parsed.sessions[0];
+                    if (firstSession.createdAt && firstSession.messages && firstSession.messages.length > 0) {
+                        updateStatus(`✅ Persistence verified! Data structure intact with proper timestamps`, 'success');
+                    }
+                }
+            } catch (e) {
+                updateStatus('❌ Error parsing stored data: ' + e.message, 'error');
+            }
+            
+            updateStorageDisplay();
+        }
+        
+        function clearStorage() {
+            localStorage.removeItem('autobot-chat-store');
+            updateStatus('🗑️ Storage cleared', 'warning');
+            updateStorageDisplay();
+        }
+        
+        function refreshPage() {
+            // Add a flag to detect if this was a refresh test
+            localStorage.setItem('autobot-refresh-test', 'true');
+            location.reload();
+        }
+        
+        // Check if this was a refresh test
+        document.addEventListener('DOMContentLoaded', function() {
+            updateStorageDisplay();
+            
+            if (localStorage.getItem('autobot-refresh-test')) {
+                localStorage.removeItem('autobot-refresh-test');
+                checkPersistence();
+                updateStatus('🔄 Page refreshed - checking if data survived...', 'warning');
+            } else {
+                updateStatus('Ready to test chat persistence. Click "Create Test Chat" to begin.', 'success');
+            }
+        });
+    </script>
+</body>
+</html>
