@@ -28,13 +28,19 @@ async def health_check():
     """Health check endpoint for infrastructure monitoring"""
     try:
         # Check if we can access configuration
-        machines = cfg.get_machines()
+        # Get infrastructure hosts as a proxy for machine count
+        backend_host = cfg.get_host('backend')
+        frontend_host = cfg.get_host('frontend') 
+        redis_host = cfg.get_host('redis')
+        
+        machines = [backend_host, frontend_host, redis_host]
+        unique_machines = len(set(machines))  # Count unique hosts
         
         return {
             "status": "healthy",
             "service": "infrastructure_monitor",
             "timestamp": datetime.now().isoformat(),
-            "machines_configured": len(machines) if machines else 0
+            "machines_configured": unique_machines
         }
     except Exception as e:
         logger.error(f"Infrastructure monitor health check failed: {e}")
