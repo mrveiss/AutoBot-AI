@@ -264,6 +264,21 @@ async def get_browser_info(session_id: str):
     """Get browser information for frontend integration"""
     try:
         session = research_browser_manager.get_session(session_id)
+        
+        # Special handling for chat-browser - create default session if needed
+        if not session and session_id == "chat-browser":
+            logger.info("Creating default chat-browser session for frontend integration")
+            # Create a default research session for chat integration
+            session = research_browser_manager.create_session(
+                conversation_id="default-chat",
+                interaction_settings={
+                    "captcha": False,
+                    "cloudflare": False,
+                    "cookies": False,
+                    "js": False
+                }
+            )
+            
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
