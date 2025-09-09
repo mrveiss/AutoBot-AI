@@ -216,6 +216,14 @@ class APIRegistry:
                 tags=["monitoring", "services"],
                 description="Real-time service monitoring and health checks"
             ),
+            "infrastructure_monitor": RouterConfig(
+                name="infrastructure_monitor",
+                module_path="backend.api.infrastructure_monitor",
+                prefix="/api/infrastructure",
+                tags=["monitoring", "infrastructure", "multi-machine"],
+                status=RouterStatus.ENABLED,
+                description="Multi-machine infrastructure monitoring with service hierarchies"
+            ),
             "monitoring": RouterConfig(
                 name="monitoring",
                 module_path="backend.api.monitoring",
@@ -227,9 +235,9 @@ class APIRegistry:
             "validation_dashboard": RouterConfig(
                 name="validation_dashboard",
                 module_path="backend.api.validation_dashboard",
-                prefix="/api/validation",
+                prefix="/api/validation-dashboard",
                 tags=["validation", "testing"],
-                status=RouterStatus.DISABLED,  # Not in fast backend
+                status=RouterStatus.ENABLED,  # Enable for fast backend
                 description="Validation and testing dashboard"
             ),
             
@@ -253,13 +261,23 @@ class APIRegistry:
                 description="MCP bridge for LLM access to knowledge base via LlamaIndex"
             ),
             
-            # Startup Status and Messages
+            # Research and Browser Automation
+            "research_browser": RouterConfig(
+                name="research_browser",
+                module_path="backend.api.research_browser",
+                prefix="/api/research",
+                tags=["research", "browser", "automation"],
+                status=RouterStatus.ENABLED,
+                description="Browser automation for research tasks with user interaction support"
+            ),
+            
+            # Startup Status and Messages - DISABLED per user request to remove splash screen
             "startup": RouterConfig(
                 name="startup",
                 module_path="backend.api.startup",
                 prefix="/api/startup",
                 tags=["startup", "status", "websockets"],
-                status=RouterStatus.ENABLED,
+                status=RouterStatus.DISABLED,
                 description="Friendly startup messages and status updates for frontend"
             ),
         }

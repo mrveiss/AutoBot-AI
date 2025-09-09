@@ -2,7 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { generateChatId } from '@/utils/ChatIdGenerator.js'
 
-export type TabType = 'dashboard' | 'chat' | 'knowledge' | 'tools' | 'monitoring' | 'settings'
+export type TabType = 'chat' | 'desktop' | 'knowledge' | 'tools' | 'monitoring' | 'secrets' | 'settings'
 
 export interface BackendStatus {
   text: string
@@ -58,7 +58,7 @@ const defaultNotificationSettings: NotificationSettings = {
 
 export const useAppStore = defineStore('app', () => {
   // Navigation and UI State
-  const activeTab = ref<TabType>('dashboard')
+  const activeTab = ref<TabType>('chat')
   const navbarOpen = ref(false)
   const activeChatId = ref(generateChatId())
 

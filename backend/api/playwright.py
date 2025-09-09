@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
+from src.config_helper import cfg
 from backend.services.playwright_service import (
     get_playwright_service,
     playwright_service,
@@ -28,11 +29,11 @@ class SearchRequest(BaseModel):
 
 class TestMessageRequest(BaseModel):
     message: str = "what network scanning tools do we have available?"
-    frontend_url: str = "http://localhost:5173"
+    frontend_url: str = cfg.get_service_url('frontend')
 
 
 class FrontendTestRequest(BaseModel):
-    frontend_url: str = "http://localhost:5173"
+    frontend_url: str = cfg.get_service_url('frontend')
 
 
 class ScreenshotRequest(BaseModel):

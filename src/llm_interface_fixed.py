@@ -8,6 +8,9 @@ import logging
 import time
 from typing import Dict, List, Optional, Any
 
+# Import unified configuration
+from src.config_helper import cfg
+
 logger = logging.getLogger(__name__)
 
 class LLMInterfaceFixed:
@@ -29,19 +32,19 @@ class LLMInterfaceFixed:
     async def _create_session(self) -> aiohttp.ClientSession:
         """Create aiohttp session with proper timeout configuration"""
         
-        # FIXED: Use reasonable timeouts that allow for legitimate streaming responses
+        # FIXED: Use timeouts from config for legitimate streaming responses
         timeout = aiohttp.ClientTimeout(
-            total=300,      # 5 minutes total - enough for complex responses  
-            connect=10,     # 10 seconds to establish connection
-            sock_read=None, # FIXED: Remove sock_read timeout - let streaming complete naturally
-            sock_connect=10 # 10 seconds for socket connection
+            total=cfg.get_timeout('llm', 'total'),
+            connect=cfg.get_timeout('http', 'connect'),
+            sock_read=None,  # FIXED: Remove sock_read timeout - let streaming complete naturally
+            sock_connect=cfg.get_timeout('tcp', 'connect')
         )
         
         connector = aiohttp.TCPConnector(
-            limit=20,           # Increased connection limit
-            limit_per_host=10,  # Increased per-host limit
-            ttl_dns_cache=300,  # DNS cache TTL
-            keepalive_timeout=60,  # Keep connections alive
+            limit=cfg.get('http.connection.limit', 20),
+            limit_per_host=cfg.get('http.connection.limit_per_host', 10),
+            ttl_dns_cache=cfg.get('http.dns_cache_ttl', 300),
+            keepalive_timeout=cfg.get_timeout('http', 'keepalive'),
             enable_cleanup_closed=True
         )
         
@@ -244,7 +247,7 @@ class LLMInterfaceFixed:
             }
         }
         
-        url = "http://127.0.0.1:11434/api/chat"
+        url = cfg.get_service_url('ollama', '/api/chat')
         request_id = f"chat-{int(time.time()*1000)}"
         
         logger.info(f"[{request_id}] Starting chat completion...")

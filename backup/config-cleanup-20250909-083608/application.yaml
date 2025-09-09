@@ -1,0 +1,57 @@
+# Application Configuration  
+# Contains application behavior, UI, and feature settings
+
+chat:
+  auto_scroll: true
+  default_welcome_message: Hello! How can I assist you today?
+  max_messages: 100
+  message_retention_days: 30
+
+ui:
+  animations: true
+  developer_mode: true
+  font_size: medium
+  language: en
+  theme: light
+
+security:
+  enable_encryption: false
+  session_timeout_minutes: 30
+
+voice_interface:
+  enabled: false
+  speech_rate: 1
+  voice: default
+
+web_research:
+  enabled: true
+  fallback_to_file_search: true
+  max_results: 5
+  timeout_seconds: 30
+  
+  security:
+    content_filtering_enabled: true
+    default_risk_threshold: medium
+    domain_validation_enabled: true
+    input_validation_enabled: true
+    require_user_confirmation: true
+
+message_display:
+  show_debug: false
+  show_json: false
+  show_planning: true
+  show_thoughts: true
+  show_utility: false
+
+memory:
+  long_term:
+    enabled: true
+    retention_days: 30
+    
+  short_term:
+    duration_minutes: 30
+    enabled: true
+    
+  vector_storage:
+    enabled: true
+    update_frequency_days: 7

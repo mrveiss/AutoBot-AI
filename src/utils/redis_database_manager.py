@@ -13,6 +13,7 @@ import redis
 import redis.asyncio as aioredis
 import yaml
 
+from src.config_helper import cfg
 from .service_registry import get_service_registry
 
 logger = logging.getLogger(__name__)
@@ -21,17 +22,17 @@ logger = logging.getLogger(__name__)
 class RedisDatabase(Enum):
     """Enumeration of Redis databases for type safety"""
 
-    MAIN = int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0"))
-    KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
-    PROMPTS = int(os.getenv("AUTOBOT_REDIS_DB_PROMPTS", "2"))
-    AGENTS = int(os.getenv("AUTOBOT_REDIS_DB_AGENTS", "3"))
-    METRICS = int(os.getenv("AUTOBOT_REDIS_DB_METRICS", "4"))
-    LOGS = int(os.getenv("AUTOBOT_REDIS_DB_LOGS", "5"))
-    SESSIONS = int(os.getenv("AUTOBOT_REDIS_DB_SESSIONS", "6"))
-    WORKFLOWS = int(os.getenv("AUTOBOT_REDIS_DB_WORKFLOWS", "7"))
-    VECTORS = int(os.getenv("AUTOBOT_REDIS_DB_VECTORS", "8"))
-    MODELS = int(os.getenv("AUTOBOT_REDIS_DB_MODELS", "9"))
-    TESTING = int(os.getenv("AUTOBOT_REDIS_DB_TESTING", "15"))
+    MAIN = cfg.get('redis.databases.main', 0)
+    KNOWLEDGE = cfg.get('redis.databases.knowledge', 1)
+    PROMPTS = cfg.get('redis.databases.prompts', 2)
+    AGENTS = cfg.get('redis.databases.agents', 3)
+    METRICS = cfg.get('redis.databases.metrics', 4)
+    LOGS = cfg.get('redis.databases.logs', 5)
+    SESSIONS = cfg.get('redis.databases.sessions', 6)
+    WORKFLOWS = cfg.get('redis.databases.workflows', 7)
+    VECTORS = cfg.get('redis.databases.vectors', 8)
+    MODELS = cfg.get('redis.databases.models', 9)
+    TESTING = cfg.get('redis.databases.testing', 15)
 
 
 class RedisDatabaseManager:
@@ -51,9 +52,7 @@ class RedisDatabaseManager:
         elif os.path.exists("/home/kali/Desktop/AutoBot/config/redis-databases.yaml"):
             default_config_path = "/home/kali/Desktop/AutoBot/config/redis-databases.yaml"
         
-        self.config_path = config_path or os.getenv(
-            "AUTOBOT_REDIS_CONFIG_PATH", default_config_path
-        )
+        self.config_path = config_path or cfg.get_path('config', 'redis') or default_config_path
         self.config = self._load_config()
         self._connections: Dict[str, redis.Redis] = {}
         self._async_connections: Dict[str, aioredis.Redis] = {}
@@ -65,19 +64,17 @@ class RedisDatabaseManager:
         self.host = (
             redis_config.host
             if redis_config
-            else os.getenv("AUTOBOT_REDIS_HOST", "localhost")
+            else cfg.get_host('redis')
         )
         self.port = (
             redis_config.port
             if redis_config
-            else int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+            else cfg.get_port('redis')
         )
-        self.password = os.getenv("AUTOBOT_REDIS_PASSWORD")
-        self.max_connections = int(os.getenv("AUTOBOT_REDIS_MAX_CONNECTIONS", "20"))
-        self.socket_timeout = int(os.getenv("AUTOBOT_REDIS_SOCKET_TIMEOUT", "30"))
-        self.socket_keepalive = (
-            os.getenv("AUTOBOT_REDIS_SOCKET_KEEPALIVE", "true").lower() == "true"
-        )
+        self.password = cfg.get('redis.password')
+        self.max_connections = cfg.get('redis.connection.max_connections', 20)
+        self.socket_timeout = cfg.get('redis.connection.socket_timeout', 30)
+        self.socket_keepalive = cfg.get('redis.connection.socket_keepalive', True)
 
     def _load_config(self) -> Dict[str, Any]:
         """Load Redis database configuration"""
@@ -97,47 +94,47 @@ class RedisDatabaseManager:
         return {
             "redis_databases": {
                 "main": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0")),
+                    "db": cfg.get('redis.databases.main', 0),
                     "description": "Main application data",
                 },
                 "knowledge": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1")),
+                    "db": cfg.get('redis.databases.knowledge', 1),
                     "description": "Knowledge base documents",
                 },
                 "prompts": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_PROMPTS", "2")),
+                    "db": cfg.get('redis.databases.prompts', 2),
                     "description": "Prompt templates",
                 },
                 "agents": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_AGENTS", "3")),
+                    "db": cfg.get('redis.databases.agents', 3),
                     "description": "Agent communication",
                 },
                 "metrics": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_METRICS", "4")),
+                    "db": cfg.get('redis.databases.metrics', 4),
                     "description": "Performance metrics",
                 },
                 "logs": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_LOGS", "5")),
+                    "db": cfg.get('redis.databases.logs', 5),
                     "description": "Structured logs",
                 },
                 "sessions": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_SESSIONS", "6")),
+                    "db": cfg.get('redis.databases.sessions', 6),
                     "description": "User sessions",
                 },
                 "workflows": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_WORKFLOWS", "7")),
+                    "db": cfg.get('redis.databases.workflows', 7),
                     "description": "Workflow state",
                 },
                 "vectors": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_VECTORS", "8")),
+                    "db": cfg.get('redis.databases.vectors', 8),
                     "description": "Vector embeddings",
                 },
                 "models": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_MODELS", "9")),
+                    "db": cfg.get('redis.databases.models', 9),
                     "description": "Model metadata",
                 },
                 "testing": {
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB_TESTING", "15")),
+                    "db": cfg.get('redis.databases.testing', 15),
                     "description": "Test data",
                 },
             }

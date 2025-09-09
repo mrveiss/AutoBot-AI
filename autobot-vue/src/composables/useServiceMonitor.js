@@ -28,6 +28,10 @@ export function useServiceMonitor() {
   const REFRESH_INTERVAL = 30000 // 30 seconds
   
   // Computed properties
+  const healthyServices = computed(() => {
+    return serviceSummary.value.online || 0
+  })
+  
   const healthPercentage = computed(() => {
     if (serviceSummary.value.total === 0) return 0
     return Math.round((serviceSummary.value.online / serviceSummary.value.total) * 100)
@@ -206,12 +210,20 @@ export function useServiceMonitor() {
   // Format last check time
   const formatLastCheck = () => {
     if (!lastCheck.value) return 'Never'
+    
+    // Ensure lastCheck.value is a valid Date
+    let checkTime = lastCheck.value
+    if (!(checkTime instanceof Date)) {
+      checkTime = new Date(checkTime)
+      if (isNaN(checkTime.getTime())) return 'Never'
+    }
+    
     const now = new Date()
-    const diff = now - lastCheck.value
+    const diff = now - checkTime
     
     if (diff < 60000) return 'Just now'
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-    return lastCheck.value.toLocaleTimeString()
+    return checkTime.toLocaleTimeString()
   }
   
   // Lifecycle
@@ -234,6 +246,7 @@ export function useServiceMonitor() {
     error,
     
     // Computed
+    healthyServices,
     healthPercentage,
     statusColor,
     statusIcon,

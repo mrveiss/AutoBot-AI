@@ -3,15 +3,21 @@ Real-time system monitoring API endpoints for AutoBot.
 Integrates hardware monitoring into the web interface.
 """
 
+import asyncio
 import subprocess
 import time
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import psutil
 import requests
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+# Import advanced metrics system
+from src.utils.system_metrics import get_metrics_collector
+from src.config_helper import cfg
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
@@ -255,9 +261,10 @@ class HardwareMonitor:
 
         # Get Ollama models
         try:
-            from src.config import OLLAMA_URL
+            from src.utils.service_registry import get_service_url
+            ollama_url = get_service_url("ollama")
 
-            response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+            response = requests.get(f"{ollama_url}/api/tags", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 ollama_models = {
@@ -361,3 +368,391 @@ async def test_inference_performance():
         return {"success": False, "error": f"HTTP {response.status_code}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# ADVANCED METRICS SYSTEM - Real-time monitoring with historical data
+# ============================================================================
+
+class MetricsQuery(BaseModel):
+    """Model for advanced metrics query parameters"""
+    categories: Optional[List[str]] = None
+    metrics: Optional[List[str]] = None
+    time_range_minutes: int = 10
+    granularity_seconds: Optional[int] = None
+
+
+@router.get("/metrics/health")
+async def get_metrics_system_health():
+    """Get advanced metrics system health status"""
+    try:
+        collector = get_metrics_collector()
+        
+        # Test basic functionality
+        test_metrics = await collector.collect_system_metrics()
+        
+        health_status = {
+            "status": "healthy" if test_metrics else "degraded",
+            "metrics_collector": "operational" if test_metrics else "error",
+            "collection_interval": collector._collection_interval,
+            "retention_hours": collector._retention_hours,
+            "buffer_size": len(collector._metrics_buffer),
+            "is_collecting": collector._is_collecting
+        }
+        
+        return health_status
+        
+    except Exception as e:
+        return JSONResponse(
+            content={"status": "unhealthy", "error": str(e)},
+            status_code=500
+        )
+
+
+@router.get("/metrics/current")
+async def get_current_advanced_metrics():
+    """Get current system metrics snapshot with advanced data"""
+    try:
+        collector = get_metrics_collector()
+        current_metrics = await collector.collect_all_metrics()
+        
+        # Convert metrics to serializable format
+        metrics_data = {}
+        for name, metric in current_metrics.items():
+            metrics_data[name] = {
+                "timestamp": metric.timestamp,
+                "name": metric.name,
+                "value": metric.value,
+                "unit": metric.unit,
+                "category": metric.category,
+                "metadata": metric.metadata or {}
+            }
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "metrics_count": len(metrics_data),
+            "metrics": metrics_data
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get advanced metrics: {str(e)}")
+
+
+@router.get("/metrics/summary")
+async def get_advanced_metrics_summary():
+    """Get comprehensive system metrics summary"""
+    try:
+        collector = get_metrics_collector()
+        summary = await collector.get_metric_summary()
+        
+        return summary
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get metrics summary: {str(e)}")
+
+
+@router.get("/metrics/recent")
+async def get_recent_advanced_metrics(
+    category: Optional[str] = Query(None, description="Filter by metric category"),
+    minutes: int = Query(10, description="Time range in minutes", ge=1, le=1440)
+):
+    """Get recent metrics within specified time range"""
+    try:
+        collector = get_metrics_collector()
+        recent_metrics = await collector.get_recent_metrics(category=category, minutes=minutes)
+        
+        # Convert to serializable format
+        metrics_data = []
+        for metric in recent_metrics:
+            metrics_data.append({
+                "timestamp": metric.timestamp,
+                "name": metric.name,
+                "value": metric.value,
+                "unit": metric.unit,
+                "category": metric.category,
+                "metadata": metric.metadata or {}
+            })
+        
+        # Sort by timestamp (most recent first)
+        metrics_data.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        return {
+            "time_range_minutes": minutes,
+            "category_filter": category,
+            "metrics_count": len(metrics_data),
+            "metrics": metrics_data
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get recent metrics: {str(e)}")
+
+
+@router.post("/metrics/query")
+async def query_advanced_metrics(query: MetricsQuery):
+    """Advanced metrics querying with filters and time ranges"""
+    try:
+        collector = get_metrics_collector()
+        
+        # Get recent metrics
+        all_recent = await collector.get_recent_metrics(minutes=query.time_range_minutes)
+        
+        # Apply filters
+        filtered_metrics = all_recent
+        
+        if query.categories:
+            filtered_metrics = [
+                m for m in filtered_metrics 
+                if m.category in query.categories
+            ]
+        
+        if query.metrics:
+            filtered_metrics = [
+                m for m in filtered_metrics 
+                if m.name in query.metrics
+            ]
+        
+        # Convert to serializable format
+        metrics_data = []
+        for metric in filtered_metrics:
+            metrics_data.append({
+                "timestamp": metric.timestamp,
+                "name": metric.name,
+                "value": metric.value,
+                "unit": metric.unit,
+                "category": metric.category,
+                "metadata": metric.metadata or {}
+            })
+        
+        # Sort by timestamp
+        metrics_data.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        # Apply granularity (sampling) if requested
+        if query.granularity_seconds and len(metrics_data) > 1:
+            sampled_metrics = []
+            last_timestamp = 0
+            
+            for metric in metrics_data:
+                if metric["timestamp"] >= last_timestamp + query.granularity_seconds:
+                    sampled_metrics.append(metric)
+                    last_timestamp = metric["timestamp"]
+            
+            metrics_data = sampled_metrics
+        
+        return {
+            "query": query.dict(),
+            "metrics_count": len(metrics_data),
+            "metrics": metrics_data
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to query metrics: {str(e)}")
+
+
+@router.get("/dashboard/overview")
+async def get_dashboard_overview():
+    """Get comprehensive dashboard overview combining existing and advanced metrics"""
+    try:
+        # Get existing hardware monitoring data
+        hardware_data = await hardware_monitor.get_comprehensive_status()
+        
+        # Get advanced metrics
+        collector = get_metrics_collector()
+        current_metrics = await collector.collect_all_metrics()
+        summary = await collector.get_metric_summary()
+        
+        # Combine data for comprehensive dashboard
+        dashboard_overview = {
+            "timestamp": datetime.now().isoformat(),
+            
+            # Existing hardware data
+            "system_health": hardware_data.system_health,
+            "gpu_status": hardware_data.gpu_status,
+            "npu_status": hardware_data.npu_status,
+            "frontend_status": hardware_data.frontend_status,
+            "ollama_models": hardware_data.ollama_models,
+            
+            # Enhanced system resources with advanced metrics
+            "system_resources": hardware_data.system_resources,
+            "advanced_metrics": summary,
+            
+            # Service status from advanced metrics
+            "services_status": {},
+            "performance_indicators": {},
+            "knowledge_base_stats": {},
+            
+            # Overall health assessment
+            "overall_health": summary.get('overall_health', {})
+        }
+        
+        # Populate advanced metrics categories
+        for metric_name, metric in current_metrics.items():
+            if metric.category == 'services':
+                dashboard_overview["services_status"][metric.name] = {
+                    "value": metric.value,
+                    "unit": metric.unit,
+                    "status": "online" if metric.value > 0.5 else "offline",
+                    "metadata": metric.metadata
+                }
+            
+            elif metric.category == 'performance':
+                dashboard_overview["performance_indicators"][metric.name] = {
+                    "value": metric.value,
+                    "unit": metric.unit
+                }
+            
+            elif metric.category == 'knowledge_base':
+                dashboard_overview["knowledge_base_stats"][metric.name] = {
+                    "value": metric.value,
+                    "unit": metric.unit
+                }
+        
+        return dashboard_overview
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get dashboard overview: {str(e)}")
+
+
+@router.post("/metrics/collection/start")
+async def start_advanced_metrics_collection():
+    """Start continuous advanced metrics collection"""
+    try:
+        collector = get_metrics_collector()
+        
+        if collector._is_collecting:
+            return {
+                "status": "already_running",
+                "message": "Advanced metrics collection is already active"
+            }
+        
+        # Start collection in background
+        asyncio.create_task(collector.start_collection())
+        
+        # Give it a moment to start
+        await asyncio.sleep(0.5)
+        
+        return {
+            "status": "started",
+            "message": "Advanced metrics collection started successfully",
+            "interval_seconds": collector._collection_interval
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start metrics collection: {str(e)}")
+
+
+@router.post("/metrics/collection/stop")
+async def stop_advanced_metrics_collection():
+    """Stop continuous advanced metrics collection"""
+    try:
+        collector = get_metrics_collector()
+        
+        if not collector._is_collecting:
+            return {
+                "status": "not_running",
+                "message": "Advanced metrics collection is not currently active"
+            }
+        
+        await collector.stop_collection()
+        
+        return {
+            "status": "stopped",
+            "message": "Advanced metrics collection stopped successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to stop metrics collection: {str(e)}")
+
+
+@router.get("/metrics/collection/status")
+async def get_advanced_collection_status():
+    """Get current advanced metrics collection status"""
+    try:
+        collector = get_metrics_collector()
+        
+        status = {
+            "is_collecting": collector._is_collecting,
+            "collection_interval": collector._collection_interval,
+            "retention_hours": collector._retention_hours,
+            "buffer_size": len(collector._metrics_buffer),
+            "buffer_max_size": collector._metrics_buffer.maxlen
+        }
+        
+        # Add recent collection stats
+        recent_metrics = await collector.get_recent_metrics(minutes=5)
+        if recent_metrics:
+            status["recent_collections"] = len(recent_metrics)
+            status["last_collection"] = max(m.timestamp for m in recent_metrics)
+        else:
+            status["recent_collections"] = 0
+            status["last_collection"] = None
+        
+        return status
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get collection status: {str(e)}")
+
+
+@router.get("/alerts/check")
+async def check_advanced_system_alerts():
+    """Check for system alerts based on advanced metrics"""
+    try:
+        collector = get_metrics_collector()
+        current_metrics = await collector.collect_all_metrics()
+        
+        # Define alert rules
+        alert_rules = [
+            {"metric": "cpu_percent", "threshold": 90, "comparison": "gt", "severity": "warning"},
+            {"metric": "memory_percent", "threshold": 90, "comparison": "gt", "severity": "warning"},
+            {"metric": "disk_usage", "threshold": 85, "comparison": "gt", "severity": "warning"},
+            {"metric": "disk_usage", "threshold": 95, "comparison": "gt", "severity": "critical"},
+        ]
+        
+        # Check for service health alerts
+        for metric_name, metric in current_metrics.items():
+            if 'health' in metric_name and metric.category == 'services':
+                if metric.value < 1.0:
+                    alert_rules.append({
+                        "metric": metric_name,
+                        "threshold": 1.0,
+                        "comparison": "lt",
+                        "severity": "critical"
+                    })
+        
+        # Check alerts
+        active_alerts = []
+        for rule in alert_rules:
+            metric_name = rule["metric"]
+            if metric_name in current_metrics:
+                metric = current_metrics[metric_name]
+                threshold = rule["threshold"]
+                comparison = rule["comparison"]
+                
+                alert_triggered = False
+                if comparison == "gt" and metric.value > threshold:
+                    alert_triggered = True
+                elif comparison == "lt" and metric.value < threshold:
+                    alert_triggered = True
+                elif comparison == "eq" and metric.value == threshold:
+                    alert_triggered = True
+                
+                if alert_triggered:
+                    active_alerts.append({
+                        "metric": metric_name,
+                        "current_value": metric.value,
+                        "threshold": threshold,
+                        "comparison": comparison,
+                        "severity": rule["severity"],
+                        "message": f"{metric_name} is {metric.value}{metric.unit} (threshold: {threshold}{metric.unit})",
+                        "timestamp": metric.timestamp
+                    })
+        
+        return {
+            "alerts_count": len(active_alerts),
+            "alerts": active_alerts,
+            "system_status": "critical" if any(a["severity"] == "critical" for a in active_alerts) 
+                           else "warning" if active_alerts 
+                           else "healthy"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check system alerts: {str(e)}")

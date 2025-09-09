@@ -1,0 +1,57 @@
+# AutoBot Main Configuration Orchestrator
+# This is the single entry point for all configuration
+# It references topic-specific configuration files
+
+# Configuration metadata
+config:
+  version: "2.0.0"
+  environment: "${AUTOBOT_ENV:-development}"
+  
+# Import topic-specific configurations
+# These are loaded and merged in order
+imports:
+  - infrastructure.yaml    # Redis, networking, databases
+  - agents.yaml           # AI agents and models
+  - application.yaml      # Application features and UI
+  - logging.yaml          # Logging configuration
+  
+# Environment-specific overrides
+# Loaded based on config.environment value
+environment_overrides:
+  development: "deployment/development.yaml"
+  production: "deployment/production.yaml"
+  testing: "deployment/testing.yaml"
+  
+# Configuration validation rules
+validation:
+  required_sections:
+    - redis
+    - agents
+    - logging
+  
+  required_redis_fields:
+    - host
+    - port
+    - databases
+    
+  required_agent_fields:
+    - llm.default_model
+    - agents.chat.enabled
+    
+# Feature flags for gradual migration
+features:
+  use_unified_config: true
+  validate_on_load: true
+  allow_env_overrides: true
+  
+# Deprecation warnings
+deprecations:
+  - file: "config.yaml"
+    message: "Use main.yaml instead"
+    remove_after: "2025-10-01"
+  - file: "settings.json"
+    message: "Merged into topic-specific YAML files"
+    remove_after: "2025-10-01"
+  - file: "agents_config.yaml"
+    message: "Use agents.yaml instead"
+    remove_after: "2025-10-01"

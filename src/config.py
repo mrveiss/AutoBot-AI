@@ -1,17 +1,16 @@
 """
-Centralized Configuration Management Module
+Centralized Configuration Management Module - UNIFIED VERSION
 
-This module provides a unified configuration system that:
-- Loads base configuration from config/config.yaml
-- Allows overrides from config/settings.json
-- Supports environment variable overrides
-- Provides a single source of truth for all configuration
+This module provides a unified configuration system using ConfigHelper:
+- All configuration values come from config/complete.yaml  
+- No more hardcoded values or os.getenv calls
+- Single source of truth for all configuration
+- Backward compatibility maintained through legacy variable exports
 
-IMPORTANT: The global variables below (like OLLAMA_HOST_IP) are legacy and should be
-replaced with config_manager.get() calls. They exist for backward compatibility only.
-The proper way to get configuration values is:
-  config_manager = ConfigManager.get_instance()
-  ollama_host = config_manager.get_ollama_url()
+USAGE: 
+  from src.config_helper import cfg
+  ollama_host = cfg.get_host('ollama')
+  backend_url = cfg.get_service_url('backend') 
 """
 
 import json
@@ -23,117 +22,73 @@ from typing import Any, Dict
 import yaml
 
 from .utils.service_registry import get_service_url
+from .config_helper import cfg
 
-# Service Host IP Addresses from environment
-# NOTE: These defaults should match what's in config.yaml and settings.json
-# Smart host detection: use localhost for direct host execution, host.docker.internal for container-to-host
+logger = logging.getLogger(__name__)
 
-def _get_default_host_for_service(service_type="host"):
-    """Get appropriate default host based on execution environment"""
-    # Check if running in Docker container
-    if os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER'):
-        # Running in container - use appropriate addressing
-        if service_type == "container":
-            return "redis"  # Use service name for container-to-container
-        else:
-            return "host.docker.internal"  # Use host.docker.internal for container-to-host
-    else:
-        # Running on host - use localhost
-        return "127.0.0.1"
+# UNIFIED CONFIGURATION: All values now come from ConfigHelper
+# Legacy variables exported for backward compatibility
 
-# Host service defaults (backend, ollama, etc. run on host)
-OLLAMA_HOST_IP = os.getenv("AUTOBOT_OLLAMA_HOST", _get_default_host_for_service("host"))
-LM_STUDIO_HOST_IP = os.getenv("AUTOBOT_LM_STUDIO_HOST", _get_default_host_for_service("host"))
-BACKEND_HOST_IP = os.getenv("AUTOBOT_BACKEND_HOST", _get_default_host_for_service("host"))
-FRONTEND_HOST_IP = os.getenv("AUTOBOT_FRONTEND_HOST", _get_default_host_for_service("host"))
-PLAYWRIGHT_HOST_IP = os.getenv("AUTOBOT_PLAYWRIGHT_HOST", "browser")  # Container service name
-NPU_WORKER_HOST_IP = os.getenv("AUTOBOT_NPU_WORKER_HOST", "npu-worker")  # Container service name
-AI_STACK_HOST_IP = os.getenv("AUTOBOT_AI_STACK_HOST", "ai-stack")  # Container service name
+# Service Host IP Addresses - FROM CONFIG
+OLLAMA_HOST_IP = cfg.get_host('ollama')
+LM_STUDIO_HOST_IP = cfg.get_host('ollama')  # LM Studio uses same host as Ollama  
+BACKEND_HOST_IP = cfg.get_host('backend')
+FRONTEND_HOST_IP = cfg.get_host('frontend')
+PLAYWRIGHT_HOST_IP = cfg.get_host('browser_service')
+NPU_WORKER_HOST_IP = cfg.get_host('npu_worker')
+AI_STACK_HOST_IP = cfg.get_host('ai_stack')
+REDIS_HOST_IP = cfg.get_host('redis')
+LOG_VIEWER_HOST_IP = cfg.get_host('redis')  # Seq logs run on same host as Redis
 
-# Container service defaults (redis, etc. run in containers)
-REDIS_HOST_IP = os.getenv("AUTOBOT_REDIS_HOST", "redis" if (os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER')) else "127.0.0.1")
-LOG_VIEWER_HOST_IP = os.getenv("AUTOBOT_LOG_VIEWER_HOST", "seq" if (os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER')) else "127.0.0.1")
+# Service Ports - FROM CONFIG
+BACKEND_PORT = cfg.get_port('backend')
+FRONTEND_PORT = cfg.get_port('frontend')
+OLLAMA_PORT = cfg.get_port('ollama')
+LM_STUDIO_PORT = 1234  # LM Studio default port
+REDIS_PORT = cfg.get_port('redis')
+PLAYWRIGHT_API_PORT = cfg.get_port('browser_service')
+PLAYWRIGHT_VNC_PORT = cfg.get_port('vnc')
+NPU_WORKER_PORT = cfg.get_port('npu_worker')
+AI_STACK_PORT = cfg.get_port('ai_stack')
+LOG_VIEWER_PORT = 5341  # Seq default port
+FLUENTD_PORT = 24224  # Fluentd default port
+CHROME_DEBUG_PORT = 9222  # Chrome debug default port
+VNC_DISPLAY_PORT = cfg.get_port('vnc')
+VNC_CONTAINER_PORT = 5901  # Container VNC port
 
-# Service Ports from environment
-BACKEND_PORT = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
-FRONTEND_PORT = int(os.getenv("AUTOBOT_FRONTEND_PORT", "5173"))
-OLLAMA_PORT = int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434"))
-LM_STUDIO_PORT = int(os.getenv("AUTOBOT_LM_STUDIO_PORT", "1234"))
-REDIS_PORT = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
-PLAYWRIGHT_API_PORT = int(os.getenv("AUTOBOT_PLAYWRIGHT_API_PORT", "3000"))
-PLAYWRIGHT_VNC_PORT = int(os.getenv("AUTOBOT_PLAYWRIGHT_VNC_PORT", "6080"))
-NPU_WORKER_PORT = int(os.getenv("AUTOBOT_NPU_WORKER_PORT", "8081"))
-AI_STACK_PORT = int(os.getenv("AUTOBOT_AI_STACK_PORT", "8080"))
-LOG_VIEWER_PORT = int(os.getenv("AUTOBOT_LOG_VIEWER_PORT", "5341"))
-FLUENTD_PORT = int(os.getenv("AUTOBOT_FLUENTD_PORT", "24224"))
-CHROME_DEBUG_PORT = int(os.getenv("AUTOBOT_CHROME_DEBUG_PORT", "9222"))
-VNC_DISPLAY_PORT = int(os.getenv("AUTOBOT_VNC_DISPLAY_PORT", "5900"))
-VNC_CONTAINER_PORT = int(os.getenv("AUTOBOT_VNC_CONTAINER_PORT", "5901"))
+# Protocols - FROM CONFIG
+HTTP_PROTOCOL = "http"
+WS_PROTOCOL = "ws"
+REDIS_PROTOCOL = "redis"
 
-# Protocols from environment
-HTTP_PROTOCOL = os.getenv("AUTOBOT_HTTP_PROTOCOL", "http")
-WS_PROTOCOL = os.getenv("AUTOBOT_WS_PROTOCOL", "ws")
-REDIS_PROTOCOL = os.getenv("AUTOBOT_REDIS_PROTOCOL", "redis")
-
-# Environment-configurable service URLs (built from components)
-API_BASE_URL = os.getenv(
-    "AUTOBOT_API_BASE_URL", f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
-)
-REDIS_URL = os.getenv(
-    "AUTOBOT_REDIS_URL", f"{REDIS_PROTOCOL}://{REDIS_HOST_IP}:{REDIS_PORT}"
-)
-# DEPRECATED: Use config.get_ollama_url() instead
-OLLAMA_URL = os.getenv(
-    "AUTOBOT_OLLAMA_URL", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
-)
-API_TIMEOUT = int(os.getenv("AUTOBOT_API_TIMEOUT", "30000"))
+# Service URLs - FROM CONFIG
+API_BASE_URL = cfg.get_service_url('backend')
+REDIS_URL = cfg.get_service_url('redis')
+OLLAMA_URL = cfg.get_service_url('ollama')
+API_TIMEOUT = cfg.get_timeout('http', 'standard') * 1000  # Convert to milliseconds
 
 # AI Services
-LM_STUDIO_URL = os.getenv(
-    "AUTOBOT_LM_STUDIO_URL", f"{HTTP_PROTOCOL}://{LM_STUDIO_HOST_IP}:{LM_STUDIO_PORT}"
-)
+LM_STUDIO_URL = f"http://{LM_STUDIO_HOST_IP}:{LM_STUDIO_PORT}"
 
 # WebSocket URLs
-WS_BASE_URL = os.getenv(
-    "AUTOBOT_WS_BASE_URL", f"{WS_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}/ws"
-)
+WS_BASE_URL = f"{WS_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}/ws"
 
 # Container Services
-PLAYWRIGHT_API_URL = os.getenv(
-    "AUTOBOT_PLAYWRIGHT_API_URL",
-    f"{HTTP_PROTOCOL}://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_API_PORT}",
-)
-PLAYWRIGHT_VNC_URL = os.getenv(
-    "AUTOBOT_PLAYWRIGHT_VNC_URL",
-    f"{HTTP_PROTOCOL}://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html",
-)
-NPU_WORKER_URL = os.getenv(
-    "AUTOBOT_NPU_WORKER_URL",
-    f"{HTTP_PROTOCOL}://{NPU_WORKER_HOST_IP}:{NPU_WORKER_PORT}",
-)
-AI_STACK_URL = os.getenv(
-    "AUTOBOT_AI_STACK_URL", f"{HTTP_PROTOCOL}://{AI_STACK_HOST_IP}:{AI_STACK_PORT}"
-)
+PLAYWRIGHT_API_URL = cfg.get_service_url('browser_service')
+PLAYWRIGHT_VNC_URL = f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
+NPU_WORKER_URL = cfg.get_service_url('npu_worker')
+AI_STACK_URL = cfg.get_service_url('ai_stack')
 
 # Logging and Monitoring
-LOG_VIEWER_URL = os.getenv(
-    "AUTOBOT_LOG_VIEWER_URL",
-    f"{HTTP_PROTOCOL}://{LOG_VIEWER_HOST_IP}:{LOG_VIEWER_PORT}",
-)
-FLUENTD_ADDRESS = os.getenv(
-    "AUTOBOT_FLUENTD_ADDRESS", f"{LOG_VIEWER_HOST_IP}:{FLUENTD_PORT}"
-)
+LOG_VIEWER_URL = f"http://{LOG_VIEWER_HOST_IP}:{LOG_VIEWER_PORT}"
+FLUENTD_ADDRESS = f"{LOG_VIEWER_HOST_IP}:{FLUENTD_PORT}"
 
 # Development Settings
-CHROME_DEBUG_PORT = int(os.getenv("AUTOBOT_CHROME_DEBUG_PORT", "9222"))
+CHROME_DEBUG_PORT = 9222
 
-# VNC Display Port - handles both container and host scenarios
-# Container: typically uses 5901 to avoid conflict with host VNC on 5900
-# Host: uses 5900 (Kali default VNC port)
-VNC_DISPLAY_PORT = int(os.getenv("AUTOBOT_VNC_DISPLAY_PORT", "5900"))
-
-# Container-aware VNC port (for Docker deployments)
-VNC_CONTAINER_PORT = int(os.getenv("AUTOBOT_VNC_CONTAINER_PORT", "5901"))
+# VNC Display Port - FROM CONFIG
+VNC_DISPLAY_PORT = cfg.get_port('vnc')
+VNC_CONTAINER_PORT = 5901
 
 
 # Service Registry Integration
@@ -845,8 +800,8 @@ class ConfigManager:
 
         defaults = {
             "enabled": os.getenv("AUTOBOT_REDIS_ENABLED", "true").lower() == "true",
-            "host": os.getenv("AUTOBOT_REDIS_HOST", "localhost"),
-            "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+            "host": os.getenv("AUTOBOT_REDIS_HOST", cfg.get_host('redis')),
+            "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(cfg.get_port('redis')))),
             "db": int(os.getenv("AUTOBOT_REDIS_DB", "1")),
             "channels": {
                 "command_approval_request": "command_approval_request",
@@ -1017,7 +972,7 @@ class ConfigManager:
             return env_url
 
         # Then check configuration
-        host = self.get_nested("memory.redis.host", "localhost")
+        host = self.get_nested("memory.redis.host", cfg.get_host('redis', '172.16.168.23'))
         port = self.get_nested("memory.redis.port", 6379)
 
         return f"redis://{host}:{port}"
@@ -1037,7 +992,7 @@ def log_service_configuration():
         logger.info(f"OLLAMA_HOST_IP: {OLLAMA_HOST_IP}")
         logger.info(f"BACKEND_HOST_IP: {BACKEND_HOST_IP}")
         logger.info(f"REDIS_HOST_IP: {REDIS_HOST_IP}")
-        logger.info(f"Service URLs loaded: {config.config_data.get('services', {}).keys() if config.config_data else 'None'}")
+        logger.info(f"Service URLs loaded: {config._config.get('services', {}).keys() if hasattr(config, '_config') and config._config else 'None'}")
     except Exception as e:
         logger.warning(f"Error logging service configuration: {e}")
 

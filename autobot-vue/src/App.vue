@@ -1,20 +1,12 @@
 <template>
   <ErrorBoundary :on-error="handleGlobalError">
-    <!-- Startup Loader -->
-    <StartupLoader 
-      v-if="showStartupLoader"
-      :auto-hide="true"
-      :min-display-time="2000"
-      @ready="onStartupReady"
-      @skip="onStartupSkip"
-    />
 
     <!-- Skip Navigation Link for Accessibility -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 bg-indigo-600 text-white px-4 py-2 rounded-br-lg z-[100000] focus:outline-none focus:ring-2 focus:ring-white">
       Skip to main content
     </a>
 
-    <div class="min-h-screen bg-blueGray-50" :class="{ 'opacity-50': showStartupLoader }">
+    <div class="min-h-screen bg-blueGray-50">
       <!-- Main content -->
       <div class="relative bg-blueGray-50" :class="appStore?.activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
 
@@ -285,47 +277,8 @@
 
         <!-- Main Content Area with id for skip link -->
         <main id="main-content" :class="appStore?.activeTab === 'chat' ? 'flex-1 overflow-hidden' : 'flex-1'" role="main">
-          <!-- Chat Interface -->
-          <template v-if="appStore?.activeTab === 'chat'">
-            <div class="h-full flex flex-col">
-              <ChatInterface class="flex-1" />
-            </div>
-          </template>
-          
-          <!-- Desktop Interface -->
-          <template v-else-if="appStore?.activeTab === 'desktop'">
-            <DesktopInterface />
-          </template>
-          
-          <!-- Knowledge Base -->
-          <template v-else-if="appStore?.activeTab === 'knowledge'">
-            <KnowledgeInterface />
-          </template>
-          
-          <!-- Secrets Manager -->
-          <template v-else-if="appStore?.activeTab === 'secrets'">
-            <SecretsManager />
-          </template>
-          
-          <!-- Tools Browser -->
-          <template v-else-if="appStore?.activeTab === 'tools'">
-            <ToolsBrowser />
-          </template>
-          
-          <!-- System Monitoring -->
-          <template v-else-if="appStore?.activeTab === 'monitoring'">
-            <SystemMonitor />
-          </template>
-
-          <!-- Settings -->
-          <template v-else-if="appStore?.activeTab === 'settings'">
-            <SettingsInterface />
-          </template>
-          
-          <!-- Default: Dashboard Overview -->
-          <template v-else>
-            <DashboardOverview />
-          </template>
+          <!-- Use router-view for all content to enable proper sub-routing -->
+          <router-view />
         </main>
       </div>
 
@@ -341,8 +294,6 @@
         @cancel="onElevationCancelled"
       />
 
-      <!-- Phase Progression Indicator -->
-      <PhaseProgressionIndicator />
 
       <!-- RUM Dashboard (only if enabled) -->
       <div v-if="appStore?.rumEnabled" class="fixed bottom-4 right-4 z-[60]">
@@ -375,16 +326,14 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/useAppStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
-import { useDashboardStore } from '@/stores/useDashboardStore'
 // Core components loaded immediately (small and always needed)
-import PhaseProgressionIndicator from './components/PhaseProgressionIndicator.vue';
 import ElevationDialog from './components/ElevationDialog.vue';
 import ErrorNotifications from './components/ErrorNotifications.vue';
 import ErrorBoundary from './components/ErrorBoundary.vue';
-import StartupLoader from './components/StartupLoader.vue';
 import SystemStatusNotification from './components/SystemStatusNotification.vue';
 import SystemStatusIndicator from './components/SystemStatusIndicator.vue';
 
@@ -407,11 +356,9 @@ const RumDashboard = defineAsyncComponent({
 export default {
   name: 'App',
   components: {
-    PhaseProgressionIndicator,
     ElevationDialog,
     ErrorNotifications,
     ErrorBoundary,
-    StartupLoader,
     SystemStatusNotification,
     SystemStatusIndicator,
     RumDashboard,
@@ -423,7 +370,6 @@ export default {
     ToolsBrowser: defineAsyncComponent(() => import('./components/ToolsBrowser.vue')),
     SystemMonitor: defineAsyncComponent(() => import('./components/SystemMonitor.vue')),
     SettingsInterface: defineAsyncComponent(() => import('./components/settings/SettingsInterface.vue')),
-    DashboardOverview: defineAsyncComponent(() => import('./components/DashboardOverview.vue')),
   },
   
   setup() {
@@ -431,10 +377,9 @@ export default {
     const appStore = useAppStore();
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
-    const dashboardStore = useDashboardStore();
+    const router = useRouter();
     
     // Reactive data
-    const showStartupLoader = ref(true);
     const showMobileNav = ref(false);
     const showElevationDialog = ref(false);
     const clearingCaches = ref(false);
@@ -454,7 +399,25 @@ export default {
     
     // Methods
     const setActiveTab = (tab) => {
+      // Update app store state
       appStore?.updateRoute(tab);
+      
+      // Navigate using Vue Router for proper sub-routing
+      const routeMap = {
+        'chat': '/chat',
+        'desktop': '/desktop',
+        'knowledge': '/knowledge',
+        'secrets': '/secrets',
+        'tools': '/tools',
+        'monitoring': '/monitoring',
+        'settings': '/settings'
+      };
+      
+      const targetRoute = routeMap[tab];
+      if (targetRoute && router.currentRoute.value.path !== targetRoute) {
+        router.push(targetRoute);
+      }
+      
       // Close mobile nav when tab is selected
       showMobileNav.value = false;
     };
@@ -479,10 +442,10 @@ export default {
       
       try {
         // Show user notification
-        appStore?.addNotification({
-          type: 'info',
-          message: 'Clearing all caches to prevent configuration issues...',
-          duration: 3000
+        appStore?.addSystemNotification({
+          severity: 'info',
+          title: 'Cache Management',
+          message: 'Clearing all caches to prevent configuration issues...'
         });
         
         // Clear API configuration cache
@@ -515,10 +478,10 @@ export default {
         console.log('[AutoBot] Cache clearing completed successfully');
         
         // Show success notification
-        appStore?.addNotification({
-          type: 'success',
-          message: 'All caches cleared successfully! API configurations refreshed.',
-          duration: 5000
+        appStore?.addSystemNotification({
+          severity: 'success',
+          title: 'Cache Cleared',
+          message: 'All caches cleared successfully! API configurations refreshed.'
         });
         
         // Optional: Reload page to ensure clean state
@@ -536,10 +499,10 @@ export default {
       } catch (error) {
         console.error('[AutoBot] Cache clearing failed:', error);
         
-        appStore?.addNotification({
-          type: 'error',
-          message: `Cache clearing failed: ${error.message}. Try refreshing the page manually.`,
-          duration: 8000
+        appStore?.addSystemNotification({
+          severity: 'error',
+          title: 'Cache Clear Failed',
+          message: `Cache clearing failed: ${error.message}. Try refreshing the page manually.`
         });
       } finally {
         clearingCaches.value = false;
@@ -564,27 +527,19 @@ export default {
         
         // Update system health status
         if (healthData.status !== 'healthy') {
-          appStore?.addNotification({
-            type: 'warning',
-            message: `System health check: ${healthData.status}. Some services may be degraded.`,
-            duration: 5000,
-            persistent: false
+          appStore?.addSystemNotification({
+            severity: 'warning',
+            title: 'System Health',
+            message: `System health check: ${healthData.status}. Some services may be degraded.`
           });
         }
       } catch (error) {
         // Only show notification for persistent failures (not single timeouts)
         if (error.message.includes('Failed to fetch') || error.message.includes('Network error')) {
-          appStore?.addNotification({
-            type: 'error',
-            message: 'Backend connection lost. Check if services are running and clear cache if issues persist.',
-            duration: 10000,
-            persistent: false,
-            actions: [
-              {
-                label: 'Clear Cache',
-                action: clearAllCaches
-              }
-            ]
+          appStore?.addSystemNotification({
+            severity: 'error',
+            title: 'Backend Connection Lost',
+            message: 'Backend connection lost. Check if services are running and clear cache if issues persist.'
           });
         }
       }
@@ -608,33 +563,20 @@ export default {
       );
       
       if (isCacheRelated) {
-        appStore?.addNotification({
-          type: 'error',
-          message: `Network/Configuration error detected: ${error.message}. This might be resolved by clearing caches.`,
-          duration: 10000,
-          actions: [
-            {
-              label: 'Clear All Caches',
-              action: clearAllCaches
-            }
-          ]
+        appStore?.addSystemNotification({
+          severity: 'error',
+          title: 'Network/Configuration Error',
+          message: `Network/Configuration error detected: ${error.message}. This might be resolved by clearing caches.`
         });
       } else {
-        appStore?.addNotification({
-          type: 'error',
-          message: `Application error: ${error.message}`,
-          duration: 8000
+        appStore?.addSystemNotification({
+          severity: 'error',
+          title: 'Application Error',
+          message: `Application error: ${error.message}`
         });
       }
     };
 
-    const onStartupReady = () => {
-      showStartupLoader.value = false;
-    };
-
-    const onStartupSkip = () => {
-      showStartupLoader.value = false;
-    };
 
     const onElevationApproved = (password) => {
       console.log('Elevation approved');
@@ -686,7 +628,7 @@ export default {
 
     // Lifecycle hooks
     onMounted(async () => {
-      console.log('App mounted, initializing dashboard metrics...')
+      console.log('App mounted, initializing application...')
       document.addEventListener('click', closeNavbarOnClickOutside)
       
       // Listen for global elevation requests
@@ -723,10 +665,8 @@ export default {
       appStore,
       chatStore,
       knowledgeStore,
-      dashboardStore,
       
       // Reactive data
-      showStartupLoader,
       showMobileNav,
       showElevationDialog,
       clearingCaches,
@@ -741,8 +681,6 @@ export default {
       toggleMobileNav,
       clearAllCaches,
       handleGlobalError,
-      onStartupReady,
-      onStartupSkip,
       onElevationApproved,
       onElevationDenied,
       onElevationCancelled,

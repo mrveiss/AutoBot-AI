@@ -1,0 +1,197 @@
+# AutoBot Agents Configuration
+# This file configures all AI agents used in the AutoBot system
+
+agents:
+  # Knowledge Base Librarian Agent
+  kb_librarian:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 15.0
+    max_results: 5
+    similarity_threshold: 0.3
+    auto_summarize: true
+    priority: 1
+
+  # Research Agent (Web Research)
+  research:
+    enabled: true  # Enable web research capabilities
+    model: "llama3.2:1b-instruct-q4_K_M" 
+    provider: "ollama"
+    timeout_seconds: 30.0
+    max_results: 5
+    priority: 2
+    # Web research specific settings
+    preferred_method: "basic"  # Options: basic, advanced, api_based
+    rate_limit_requests: 5
+    rate_limit_window: 60
+    cache_ttl: 3600  # 1 hour cache
+    circuit_breaker:
+      failure_threshold: 3
+      recovery_timeout: 60
+    # Advanced research settings (requires Playwright)
+    advanced_research:
+      enabled: false  # Set to true to enable advanced Playwright-based research
+      headless: true
+      captcha_solving: false
+      proxy_rotation: false
+      browser_pool: false
+
+  # Classification Agent
+  classification:
+    enabled: true
+    model: "gemma2:2b"
+    provider: "ollama" 
+    timeout_seconds: 10.0
+    priority: 1
+
+  # Chat Agent
+  chat:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 20.0
+    priority: 1
+
+  # System Commands Agent
+  system_commands:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 15.0
+    priority: 3
+
+  # Security Scanner Agent
+  security_scanner:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 30.0
+    priority: 3
+
+  # Code Analysis Agent
+  code_analysis:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 25.0
+    priority: 2
+
+# Global agent settings
+global:
+  # Default fallback settings
+  default_timeout: 20.0
+  default_provider: "ollama"
+  default_model: "llama3.2:1b-instruct-q4_K_M"
+  
+  # Performance settings
+  max_concurrent_agents: 3
+  agent_pool_size: 5
+  
+  # Monitoring and health checks
+  health_check_interval: 300  # 5 minutes
+  performance_monitoring: true
+  
+  # Error handling
+  retry_attempts: 2
+  retry_delay: 1.0
+  
+  # Logging
+  log_agent_performance: true
+  log_level: "INFO"
+
+# Web research configuration (detailed settings)
+web_research:
+  enabled: true  # Master switch for all web research
+  
+  # SECURITY SETTINGS - NEW COMPREHENSIVE SAFETY FEATURES
+  security:
+    domain_validation_enabled: true      # Validate domains before access
+    input_validation_enabled: true       # Validate research queries for threats
+    content_filtering_enabled: true      # Filter malicious content
+    require_user_confirmation: true      # Ask user before risky research
+    
+    # Risk management
+    block_suspicious_queries: true       # Block queries with suspicious keywords
+    url_reputation_checking: true        # Check URL reputation
+    threat_intelligence_enabled: true    # Use threat intelligence feeds
+    
+    # Content safety
+    malware_scanning: true              # Scan content for malware signatures
+    script_injection_prevention: true   # Prevent script injection attacks
+    phishing_detection: true           # Detect phishing content
+    
+    # Network security
+    block_private_networks: true        # Block access to internal networks
+    block_cloud_metadata: true         # Block cloud metadata endpoints
+    allowed_ports: [80, 443, 8080, 8443]  # Allowed ports for research
+    
+    # Risk thresholds
+    low_risk_auto_proceed: true         # Auto-proceed with low risk queries
+    medium_risk_require_confirmation: true  # Require confirmation for medium risk
+    high_risk_block: true              # Block high risk queries
+  
+  # User preferences
+  require_user_confirmation: true  # Ask user before conducting research (overridden by security settings)
+  auto_research_threshold: 0.3     # Auto-research if KB confidence below this
+  
+  # Method preferences (security-ordered: basic is safest)
+  preferred_methods:
+    - "basic"      # Try basic research first (safest method)
+    - "advanced"   # Fallback to advanced if basic fails (requires more security)
+    - "api_based"  # Last resort (external API dependencies)
+  
+  # Rate limiting and quotas (enhanced for security)
+  daily_research_limit: 25    # Reduced from 50 for security
+  hourly_research_limit: 5    # Reduced from 10 for security
+  per_domain_daily_limit: 3   # NEW: Limit requests per domain
+  
+  # Quality control (enhanced)
+  min_result_quality: 0.6        # Increased from 0.5
+  max_results_per_query: 5       # Reduced from 8 for security
+  min_content_length: 100        # NEW: Minimum content length
+  max_content_length: 50000      # NEW: Maximum content length
+  
+  # Content filtering (enhanced)
+  filter_adult_content: true
+  filter_low_quality: true
+  filter_malicious_content: true    # NEW: Enhanced malicious content filtering
+  filter_duplicate_content: true    # NEW: Remove duplicate results
+  
+  # Privacy settings (enhanced)
+  anonymize_requests: true
+  use_tor_proxy: false  # Set to true for enhanced privacy
+  strip_tracking_parameters: true   # NEW: Remove tracking from URLs
+  randomize_user_agent: true       # NEW: Use random user agents
+  
+  # Caching and persistence
+  cache_enabled: true
+  cache_duration: 3600  # 1 hour
+  persistent_cache: false
+  security_cache_duration: 7200  # NEW: Cache security validations for 2 hours
+  
+  # Integration settings
+  store_results_in_kb: true  # Auto-store high-quality results in KB
+  kb_storage_threshold: 0.7   # Minimum quality for KB storage
+  
+  # Fallback behavior
+  fallback_to_kb_only: true   # Fall back to KB search if web research fails
+  show_research_status: true  # Show research progress to user
+
+# MCP (Manual/Context Provider) Integration
+mcp:
+  enabled: true
+  timeout_seconds: 10.0
+  cache_duration: 300  # 5 minutes
+  
+  # Available MCP servers
+  servers:
+    system_manuals:
+      enabled: true
+      priority: 1
+    context7:
+      enabled: true  
+      priority: 2
+    help_documentation:
+      enabled: true
+      priority: 3

@@ -9,12 +9,8 @@ from dotenv import load_dotenv
 
 # Import configuration managers
 from src.circuit_breaker import circuit_breaker_async
-from src.config import (
-    HTTP_PROTOCOL,
-    OLLAMA_HOST_IP,
-    OLLAMA_PORT,
-)
 from src.config import config as global_config_manager
+from src.config_helper import cfg
 from src.prompt_manager import prompt_manager
 from src.retry_mechanism import retry_network_operation
 from src.utils.config_manager import config_manager
@@ -88,10 +84,8 @@ palm = MockPalm()
 
 class LLMInterface:
     def __init__(self):
-        # Use centralized configuration with fallback to environment variables
-        self.ollama_host = config_manager.get(
-            "llm.ollama.base_url", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
-        )
+        # Use unified configuration - NO HARDCODED VALUES
+        self.ollama_host = cfg.get_service_url('ollama')
 
         # Try config first, then environment variable
         self.openai_api_key = config_manager.get(
@@ -104,7 +98,7 @@ class LLMInterface:
         # Use unified configuration for LLM models
         unified_llm_config = global_config_manager.get_llm_config()
         selected_model = unified_llm_config.get("ollama", {}).get(
-            "model", "deepseek-r1:14b"
+            "model", cfg.get('llm.default_model', 'deepseek-r1:14b')
         )
         self.orchestrator_llm_alias = unified_llm_config.get(
             "orchestrator_llm", f"ollama_{selected_model}"
@@ -120,9 +114,9 @@ class LLMInterface:
             "llm_config.task_llm_settings", {}
         )
 
-        self.hardware_priority = global_config_manager.get_nested(
-            "hardware_acceleration.priority",
-            ["openvino_npu", "openvino", "cuda", "cpu"],
+        self.hardware_priority = cfg.get(
+            "hardware.acceleration.priority",
+            ["openvino_npu", "openvino", "cuda", "cpu"]
         )
 
         # Use centralized prompt manager instead of direct file loading
@@ -228,7 +222,8 @@ class LLMInterface:
 
             # Use retry mechanism for network connection - Native async HTTP
             async def make_request():
-                timeout = aiohttp.ClientTimeout(total=5)
+                timeout_val = cfg.get_timeout('http', 'quick')
+                timeout = aiohttp.ClientTimeout(total=timeout_val)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(health_check_url) as response:
                         response.raise_for_status()
@@ -476,7 +471,10 @@ class LLMInterface:
             )
 
     @circuit_breaker_async(
-        "ollama_service", failure_threshold=3, recovery_timeout=30.0, timeout=120.0
+        "ollama_service", 
+        failure_threshold=cfg.get('circuit_breaker.ollama.failure_threshold', 3),
+        recovery_timeout=cfg.get_timeout('circuit_breaker', 'recovery'),
+        timeout=cfg.get_timeout('llm', 'default')
     )
     async def _ollama_chat_completion(
         self,
@@ -608,7 +606,10 @@ class LLMInterface:
             return None
 
     @circuit_breaker_async(
-        "openai_service", failure_threshold=2, recovery_timeout=60.0, timeout=120.0
+        "openai_service",
+        failure_threshold=cfg.get('circuit_breaker.openai.failure_threshold', 2),
+        recovery_timeout=cfg.get_timeout('circuit_breaker', 'openai_recovery'),
+        timeout=cfg.get_timeout('llm', 'default')
     )
     async def _openai_chat_completion(
         self,
@@ -640,7 +641,8 @@ class LLMInterface:
         try:
             # Use retry mechanism for OpenAI API calls - Native async HTTP
             async def make_openai_request():
-                timeout = aiohttp.ClientTimeout(total=600)
+                timeout_val = cfg.get_timeout('llm', 'streaming')
+                timeout = aiohttp.ClientTimeout(total=timeout_val)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.post(
                         url, headers=headers, json=data

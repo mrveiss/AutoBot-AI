@@ -38,6 +38,21 @@ def _generate_templates_cache_key(category, tags, complexity):
     return "list:" + (":".join(key_parts) if key_parts else "all")
 
 
+@router.get("/")
+async def get_templates_root():
+    """Root endpoint for templates API - redirects to /templates"""
+    return {
+        "message": "Templates API",
+        "endpoints": {
+            "list_templates": "/api/templates/templates",
+            "get_template": "/api/templates/templates/{template_id}",
+            "search_templates": "/api/templates/templates/search",
+            "categories": "/api/templates/templates/categories",
+            "stats": "/api/templates/templates/stats"
+        }
+    }
+
+
 @router.get("/templates")
 @smart_cache(
     data_type="templates",

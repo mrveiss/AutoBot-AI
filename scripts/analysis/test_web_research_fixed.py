@@ -183,19 +183,24 @@ async def test_configuration_loading():
     try:
         # Test 1: Load agents config
         print("\n📋 Test 1: Load Agents Configuration")
-        import yaml
         
         try:
-            with open('config/agents_config.yaml', 'r') as f:
-                agents_config = yaml.safe_load(f)
+            # Use ConfigHelper to load from complete.yaml instead of standalone agents_config.yaml
+            import sys
+            import os
+            sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+            from config_helper import cfg
             
-            print(f"✅ Agents config loaded successfully")
-            print(f"   Agents defined: {len(agents_config.get('agents', {}))}")
-            print(f"   Web research enabled: {agents_config.get('agents', {}).get('research', {}).get('enabled', False)}")
-            print(f"   Global settings: {bool(agents_config.get('global', {}))}")
+            agents_config = cfg.get('agents', {})
+            web_research_config = cfg.get('web_research', {})
             
-        except FileNotFoundError:
-            print(f"⚠️  Agents config file not found (expected during testing)")
+            print(f"✅ Agents config loaded successfully from complete.yaml")
+            print(f"   Agents defined: {len(agents_config)}")
+            print(f"   Web research enabled: {agents_config.get('research', {}).get('enabled', False)}")
+            print(f"   Web research config found: {bool(web_research_config)}")
+            
+        except Exception as e:
+            print(f"⚠️  Could not load agents config via ConfigHelper: {e}")
         
         # Test 2: Test config manager integration
         print("\n🔧 Test 2: Config Manager Integration")

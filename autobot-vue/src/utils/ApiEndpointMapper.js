@@ -137,8 +137,7 @@ class ApiEndpointMapper {
         '/api/terminal/execute',
         '/api/terminal/sessions',
         '/api/terminal/sessions/{session_id}',
-        '/api/terminal/consolidated/sessions',
-        '/api/terminal/consolidated/sessions/{session_id}/input'
+        '/api/terminal/sessions/{session_id}/input'
       ],
       description: 'Terminal command execution and session management'
     });

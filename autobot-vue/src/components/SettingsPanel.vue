@@ -1723,18 +1723,18 @@ export default {
 
         if (selectedModel) {
           const endpointInfo = endpoint ? ` @ ${endpoint}` : '';
-          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}${endpointInfo}`;
+          return `${provider ? provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown' : 'Unknown'} - ${selectedModel}${endpointInfo}`;
         } else {
-          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+          return `${provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown'} - Not selected`;
         }
       } else {
         const provider = settings.value.backend.llm.cloud?.provider || 'openai';
         const selectedModel = settings.value.backend.llm.cloud?.providers?.[provider]?.selected_model;
 
         if (selectedModel) {
-          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}`;
+          return `${provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown'} - ${selectedModel}`;
         } else {
-          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+          return `${provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown'} - Not selected`;
         }
       }
     };
@@ -1784,9 +1784,9 @@ export default {
 
       if (selectedModel) {
         const endpointInfo = providerSettings?.endpoint ? ` @ ${providerSettings.endpoint}` : '';
-        return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}${endpointInfo}`;
+        return `${provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown'} - ${selectedModel}${endpointInfo}`;
       } else {
-        return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+        return `${provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown'} - Not selected`;
       }
     };
 

@@ -87,6 +87,46 @@ async def get_log_sources():
         logger.error(f"Error getting log sources: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/recent")
+async def get_recent_logs(limit: int = 100):
+    """Get recent log entries across all log files"""
+    try:
+        log_dir = "/home/kali/Desktop/AutoBot/data/logs"
+        recent_entries = []
+        
+        # Get the most recent log file
+        if os.path.exists(log_dir):
+            log_files = [f for f in os.listdir(log_dir) if f.endswith('.log')]
+            if log_files:
+                # Sort by modification time and get the most recent
+                log_files.sort(key=lambda f: os.path.getmtime(os.path.join(log_dir, f)), reverse=True)
+                most_recent = log_files[0]
+                
+                # Read the last N lines from the most recent log
+                log_path = os.path.join(log_dir, most_recent)
+                try:
+                    with open(log_path, 'r') as f:
+                        lines = f.readlines()
+                        recent_entries = lines[-limit:] if len(lines) > limit else lines
+                except Exception as e:
+                    logger.error(f"Error reading log file {most_recent}: {e}")
+        
+        return {
+            "entries": recent_entries,
+            "count": len(recent_entries),
+            "limit": limit,
+            "source": "file_logs"
+        }
+    except Exception as e:
+        logger.error(f"Error getting recent logs: {e}")
+        return {
+            "entries": [],
+            "count": 0,
+            "limit": limit,
+            "error": str(e)
+        }
+
+
 @router.get("/list")
 async def list_logs() -> List[Dict[str, Any]]:
     """List all available log files (backward compatibility)"""

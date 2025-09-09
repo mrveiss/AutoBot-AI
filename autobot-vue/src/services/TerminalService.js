@@ -35,7 +35,7 @@ class TerminalService {
   getWebSocketUrl() {
     // Use centralized configuration
     const baseWsUrl = API_CONFIG.WS_BASE_URL.replace('/ws', ''); // Remove default /ws suffix
-    return `${baseWsUrl}/api/terminal/consolidated/ws`;
+    return `${baseWsUrl}/api/terminal/ws`;
   }
 
   /**

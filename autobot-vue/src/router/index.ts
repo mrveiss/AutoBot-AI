@@ -2,7 +2,6 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAppStore } from '@/stores/useAppStore'
 
 // Views (Page-level components)
-const DashboardView = () => import('@/views/DashboardView.vue')
 const ChatView = () => import('@/views/ChatView.vue')
 const KnowledgeView = () => import('@/views/KnowledgeView.vue')
 const ToolsView = () => import('@/views/ToolsView.vue')
@@ -10,23 +9,17 @@ const MonitoringView = () => import('@/views/MonitoringView.vue')
 const SecretsView = () => import('@/views/SecretsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
 const NotFoundView = () => import('@/views/NotFoundView.vue')
+const DesktopView = () => import('@/views/DesktopView.vue')
 
 // Route configuration
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/dashboard'
+    redirect: '/chat'
   },
   {
     path: '/dashboard',
-    name: 'dashboard',
-    component: DashboardView,
-    meta: {
-      title: 'Dashboard',
-      icon: 'fas fa-tachometer-alt',
-      description: 'System overview and statistics',
-      requiresAuth: false
-    }
+    redirect: '/monitoring/system'
   },
   {
     path: '/chat',
@@ -55,6 +48,17 @@ const routes: RouteRecordRaw[] = [
         }
       }
     ]
+  },
+  {
+    path: '/desktop',
+    name: 'desktop',
+    component: DesktopView,
+    meta: {
+      title: 'Desktop Interface',
+      icon: 'fas fa-desktop',
+      description: 'Remote desktop and GUI applications',
+      requiresAuth: false
+    }
   },
   {
     path: '/knowledge',
@@ -114,6 +118,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/components/knowledge/KnowledgeStats.vue'),
         meta: {
           title: 'Statistics',
+          parent: 'knowledge'
+        }
+      },
+      {
+        path: 'manpages',
+        name: 'knowledge-manpages',
+        component: () => import('@/components/ManPageManager.vue'),
+        meta: {
+          title: 'Man Pages',
           parent: 'knowledge'
         }
       }
@@ -316,7 +329,7 @@ router.beforeEach((to, from, next) => {
   // Update active tab in store
   if (to.name && typeof to.name === 'string') {
     const tabName = to.name.split('-')[0] // Extract main section (e.g., 'chat' from 'chat-session')
-    if (['dashboard', 'chat', 'knowledge', 'tools', 'monitoring', 'secrets', 'settings'].includes(tabName)) {
+    if (['chat', 'desktop', 'knowledge', 'tools', 'monitoring', 'secrets', 'settings'].includes(tabName)) {
       appStore.updateRoute(tabName as any)
     }
   }

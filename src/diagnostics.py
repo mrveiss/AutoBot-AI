@@ -9,6 +9,7 @@ import psutil
 
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
+from src.config_helper import cfg
 from src.event_manager import event_manager
 from src.llm_interface import LLMInterface
 
@@ -28,7 +29,7 @@ class Diagnostics:
 
         self.reliability_stats_file = self.config_manager.get_nested(
             "data.reliability_stats_file",
-            os.getenv("AUTOBOT_RELIABILITY_STATS_FILE", "data/reliability_stats.json"),
+            cfg.get_path("data", "reliability_stats") or "data/reliability_stats.json",
         )
         self.diagnostics_enabled = self.config_manager.get_nested(
             "diagnostics.enabled", True

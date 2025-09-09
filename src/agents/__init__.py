@@ -1,12 +1,12 @@
 # AutoBot Agents Package
 
-from .kb_librarian_agent import get_kb_librarian
+# Import available agent classes
+from .kb_librarian_agent import KBLibrarianAgent, get_kb_librarian
 
-
-# Create a stub for get_librarian_assistant for backward compatibility
+# Create a stub for get_librarian_assistant for backward compatibility  
 def get_librarian_assistant():
     """Stub function for backward compatibility."""
-    return get_kb_librarian()
+    return None  # Will need knowledge_base parameter
 
 
 __all__ = [

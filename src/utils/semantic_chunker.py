@@ -11,6 +11,12 @@ import os
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
 os.environ['KERAS_BACKEND'] = 'tensorflow'
 
+# Reduce Hugging Face rate limiting and improve caching
+os.environ['HF_HUB_DISABLE_PROGRESS_BARS'] = '1'
+os.environ['TRANSFORMERS_OFFLINE'] = '0'  # Allow downloads but cache aggressively
+os.environ['HF_HUB_CACHE'] = os.path.expanduser('~/.cache/huggingface')
+os.environ['HUGGINGFACE_HUB_CACHE'] = os.path.expanduser('~/.cache/huggingface')
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -88,6 +94,7 @@ class AutoBotSemanticChunker:
                 # Import only when needed to avoid startup delay
                 from sentence_transformers import SentenceTransformer
                 import torch
+                import time
                 
                 # Detect best available device
                 device = "cpu"  # Default fallback
@@ -100,21 +107,76 @@ class AutoBotSemanticChunker:
                 else:
                     logger.info("CUDA not available, using CPU for embeddings")
 
-                # Initialize model with device optimization
-                model = SentenceTransformer(self.embedding_model_name, device=device)
+                # Initialize model with device optimization and retry logic for HuggingFace rate limiting
+                max_retries = 3
+                retry_delay = 2  # seconds
                 
-                # Log device and model info
-                actual_device = next(model.parameters()).device
-                logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
-                
-                # Enable mixed precision for GPU if available
-                if device == "cuda":
+                for attempt in range(max_retries):
                     try:
-                        # Enable automatic mixed precision for better GPU performance
-                        model.half()  # Use FP16 for faster GPU inference
-                        logger.info("Enabled FP16 mixed precision for GPU inference")
-                    except Exception as precision_error:
-                        logger.warning(f"Could not enable FP16: {precision_error}")
+                        if attempt > 0:
+                            logger.info(f"Model loading attempt {attempt + 1}/{max_retries} after {retry_delay}s delay...")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                            
+                        # Try to load model (this may hit HuggingFace rate limits)
+                        model = SentenceTransformer(self.embedding_model_name, device=device)
+                        break  # Success - exit retry loop
+                        
+                    except Exception as load_error:
+                        error_str = str(load_error).lower()
+                        if "429" in error_str or "rate limit" in error_str or "http error" in error_str:
+                            if attempt < max_retries - 1:
+                                logger.warning(f"HuggingFace rate limit hit (attempt {attempt + 1}), retrying in {retry_delay}s...")
+                                continue
+                            else:
+                                logger.error(f"Max retries exceeded for HuggingFace rate limiting: {load_error}")
+                                raise
+                        else:
+                            # Non-rate-limit error, don't retry
+                            raise
+                
+                # After successful model loading, try to optimize for GPU
+                try:
+                    # Log device and model info
+                    actual_device = next(model.parameters()).device
+                    logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
+                    
+                    # Enable mixed precision for GPU if available (with proper error handling)
+                    if device == "cuda":
+                        try:
+                            # Check if model parameters are properly loaded before precision conversion
+                            param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+                            if param_count > 0:
+                                # Use safe tensor conversion for meta tensors
+                                try:
+                                    # First check if any parameters are on meta device
+                                    has_meta_tensors = any(p.device.type == 'meta' for p in model.parameters())
+                                    if has_meta_tensors:
+                                        # Use to_empty() for meta tensors
+                                        model = model.to_empty(device=device, dtype=torch.float16)
+                                        logger.info("Converted meta tensors to FP16 on GPU")
+                                    else:
+                                        # Use regular to() for normal tensors
+                                        model = model.to(device, dtype=torch.float16)
+                                        logger.info("Enabled FP16 mixed precision for GPU inference")
+                                except Exception as tensor_error:
+                                    logger.warning(f"FP16 conversion failed: {tensor_error}, trying FP32")
+                                    model = model.to(device, dtype=torch.float32)
+                            else:
+                                logger.warning("Model parameters not properly loaded, skipping precision conversion")
+                        except Exception as precision_error:
+                            logger.warning(f"Could not enable FP16: {precision_error}, using FP32")
+                            # Ensure model is on correct device even if precision fails
+                            model = model.to(device)
+                            
+                except Exception as model_load_error:
+                    logger.warning(f"Failed to load model '{self.embedding_model_name}' on {device}: {model_load_error}")
+                    # Fallback to CPU with basic loading
+                    if device != "cpu":
+                        logger.info("Attempting fallback to CPU...")
+                        model = SentenceTransformer(self.embedding_model_name, device="cpu")
+                    else:
+                        raise  # Re-raise if CPU also fails
                 
                 return model
             
@@ -129,17 +191,25 @@ class AutoBotSemanticChunker:
             logger.error(
                 f"Failed to load embedding model {self.embedding_model_name}: {e}"
             )
-            # Fallback to a more basic model
+            # Fallback to a more basic model with safer loading
             try:
                 from sentence_transformers import SentenceTransformer
                 import torch
                 
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                self._embedding_model = SentenceTransformer("all-mpnet-base-v2", device=device)
-                logger.warning(f"Fallback to all-mpnet-base-v2 embedding model on {device}")
+                # Use CPU only for fallback to avoid device/tensor issues
+                logger.info("Attempting fallback model loading on CPU to avoid tensor issues...")
+                self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
+                logger.warning("Fallback to all-mpnet-base-v2 embedding model on CPU")
             except Exception as fallback_error:
                 logger.error(f"Failed to load fallback model: {fallback_error}")
-                raise RuntimeError("Could not initialize any embedding model")
+                # Try one more fallback with a very simple model
+                try:
+                    # Use the simplest possible model with CPU only
+                    self._embedding_model = SentenceTransformer("all-MiniLM-L12-v2")
+                    logger.warning("Using basic CPU-only model as final fallback")
+                except Exception as final_error:
+                    logger.error(f"All model loading attempts failed: {final_error}")
+                    raise RuntimeError("Could not initialize any embedding model")
 
     def _sync_initialize_model(self):
         """Synchronous model initialization for fallback cases (blocking)."""
@@ -172,11 +242,20 @@ class AutoBotSemanticChunker:
             # Enable mixed precision for GPU if available
             if device == "cuda":
                 try:
-                    # Enable automatic mixed precision for better GPU performance
-                    self._embedding_model.half()  # Use FP16 for faster GPU inference
-                    logger.info("Enabled FP16 mixed precision for GPU inference")
+                    # Safe tensor conversion for mixed precision
+                    has_meta_tensors = any(p.device.type == 'meta' for p in self._embedding_model.parameters())
+                    if has_meta_tensors:
+                        # Use to_empty() for meta tensors
+                        self._embedding_model = self._embedding_model.to_empty(device=device, dtype=torch.float16)
+                        logger.info("Converted meta tensors to FP16 on GPU")
+                    else:
+                        # Use regular to() for normal tensors
+                        self._embedding_model = self._embedding_model.to(device, dtype=torch.float16)
+                        logger.info("Enabled FP16 mixed precision for GPU inference")
                 except Exception as precision_error:
-                    logger.warning(f"Could not enable FP16: {precision_error}")
+                    logger.warning(f"Could not enable FP16: {precision_error}, using FP32")
+                    # Ensure model is on correct device
+                    self._embedding_model = self._embedding_model.to(device, dtype=torch.float32)
                     
         except Exception as e:
             logger.error(f"Failed to load embedding model {self.embedding_model_name}: {e}")
@@ -186,7 +265,19 @@ class AutoBotSemanticChunker:
                 import torch
                 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
-                self._embedding_model = SentenceTransformer("all-mpnet-base-v2", device=device)
+                # Load model without specifying device to avoid meta tensor issues
+                self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
+                # Then manually move to device with proper handling
+                if device == "cuda":
+                    try:
+                        has_meta_tensors = any(p.device.type == 'meta' for p in self._embedding_model.parameters())
+                        if has_meta_tensors:
+                            self._embedding_model = self._embedding_model.to_empty(device=device)
+                        else:
+                            self._embedding_model = self._embedding_model.to(device)
+                    except Exception as device_error:
+                        logger.warning(f"Failed to move model to GPU: {device_error}, using CPU")
+                        device = "cpu"
                 logger.warning(f"Fallback to all-mpnet-base-v2 embedding model on {device}")
             except Exception as fallback_error:
                 logger.error(f"Failed to load fallback model: {fallback_error}")

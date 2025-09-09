@@ -4,6 +4,7 @@ This agent automatically searches the knowledge base whenever a question is aske
 acting like a helpful librarian that finds relevant information before answering.
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -18,134 +19,123 @@ class KBLibrarianAgent:
     """A librarian agent that searches knowledge base for relevant information."""
 
     def __init__(self):
-        """Initialize the KB Librarian Agent."""
-        self.config = config
         self.knowledge_base = KnowledgeBase()
         self.llm = LLMInterface()
-        self.enabled = self.config.get_nested("kb_librarian.enabled", True)
-        self.similarity_threshold = self.config.get_nested(
-            "kb_librarian.similarity_threshold", 0.7
-        )
-        self.max_results = self.config.get_nested("kb_librarian.max_results", 5)
-        self.auto_summarize = self.config.get_nested(
-            "kb_librarian.auto_summarize", True
+        self.auto_learning_enabled = config.get(
+            "agents.kb_librarian.auto_learning_enabled", True
         )
 
-    def detect_question(self, text: str) -> bool:
-        """Detect if the text contains a question.
+        if self.auto_learning_enabled:
+            logger.info("AUTO-LEARNING: Knowledge Base auto-learning is enabled")
 
-        Args:
-            text: The input text to analyze
-
-        Returns:
-            True if the text appears to be a question
-        """
-        # Simple heuristic for question detection
-        question_indicators = [
-            "?",
-            "what ",
-            "when ",
-            "where ",
-            "who ",
-            "why ",
-            "how ",
-            "which ",
-            "can ",
-            "could ",
-            "would ",
-            "should ",
-            "is ",
-            "are ",
-            "do ",
-            "does ",
-            "did ",
-            "will ",
-            "has ",
-            "have ",
-            "tell me",
-            "explain",
-            "describe",
-            "find ",
-            "search ",
-        ]
-
-        text_lower = text.lower().strip()
-        return any(indicator in text_lower for indicator in question_indicators)
-
-    async def search_knowledge_base(self, query: str) -> List[Dict[str, Any]]:
-        """Search the knowledge base for relevant information.
-
-        Args:
-            query: The search query
-
-        Returns:
-            List of relevant documents from the knowledge base
-        """
+    async def search_knowledge(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search the knowledge base for relevant information."""
         try:
-            # Search for relevant documents
-            results = await self.knowledge_base.search(
-                query, n_results=self.max_results
-            )
+            logger.debug(f"KB-LIBRARIAN: Searching for '{query}'")
+            results = await self.knowledge_base.search(query, limit=limit)
 
-            logger.info(
-                f"KB Librarian found {len(results)} relevant documents "
-                f"for query: {query}"
-            )
-
-            # LEARNING TRIGGER: If no results found, trigger knowledge base population
-            if len(results) == 0:
+            if results:
                 logger.info(
-                    "DEBUG: No documents found in KB - triggering auto-population..."
+                    f"KB-LIBRARIAN: Found {len(results)} results for '{query}'"
                 )
-                await self._trigger_knowledge_base_population()
+                # Return formatted results with sources
+                formatted_results = []
+                for result in results:
+                    formatted_results.append(
+                        {
+                            "content": result.get("content", ""),
+                            "source": result.get("metadata", {}).get("source", "Unknown"),
+                            "score": result.get("score", 0.0),
+                            "metadata": result.get("metadata", {}),
+                        }
+                    )
+                return formatted_results
+            else:
+                logger.info(f"KB-LIBRARIAN: No results found for '{query}'")
+                return []
 
-                # After population, search again
-                results = await self.knowledge_base.search(
-                    query, n_results=self.max_results
-                )
-                logger.info(
-                    f"KB Librarian found {len(results)} documents after auto-population"
-                )
-
-            return results
         except Exception as e:
-            logger.error(f"Error searching knowledge base: {e}")
+            logger.error(f"KB-LIBRARIAN: Search error for '{query}': {e}")
             return []
 
-    async def _trigger_knowledge_base_population(self):
-        """Trigger automatic population of knowledge base with system documentation and prompts."""
+    async def get_context_for_question(self, question: str) -> str:
+        """Get relevant context from knowledge base for a question."""
+        results = await self.search_knowledge(question, limit=3)
+
+        if not results:
+            return "No relevant information found in knowledge base."
+
+        context_parts = []
+        for result in results:
+            context_parts.append(
+                f"Source: {result['source']}\n" f"Content: {result['content']}\n"
+            )
+
+        return "\n---\n".join(context_parts)
+
+    async def answer_question(
+        self, question: str, context_limit: int = 3
+    ) -> Dict[str, Any]:
+        """Answer a question using knowledge base context."""
+        # Search for relevant knowledge
+        kb_results = await self.search_knowledge(question, limit=context_limit)
+
+        # Build context
+        if kb_results:
+            context = "Based on the following information from the knowledge base:\n\n"
+            for result in kb_results:
+                context += f"- {result['content']} (Source: {result['source']})\n"
+
+            prompt = f"{context}\n\nQuestion: {question}\n\nAnswer:"
+        else:
+            # No knowledge base results - trigger auto-learning if enabled
+            if self.auto_learning_enabled:
+                await self._trigger_auto_learning(question)
+
+            prompt = f"Question: {question}\n\nNote: No specific information was found in the knowledge base for this question.\n\nAnswer:"
+
+        # Generate response using LLM
         try:
-            logger.info("AUTO-LEARNING: Starting knowledge base population...")
+            response = await self.llm.generate_response(prompt)
+            return {
+                "answer": response,
+                "knowledge_base_results": kb_results,
+                "sources": [result["source"] for result in kb_results],
+            }
+        except Exception as e:
+            logger.error(f"KB-LIBRARIAN: LLM error: {e}")
+            return {
+                "answer": "I'm sorry, I encountered an error while generating a response.",
+                "knowledge_base_results": kb_results,
+                "sources": [result["source"] for result in kb_results],
+                "error": str(e),
+            }
 
-            # Use the existing knowledge base import endpoints
-            from backend.api.knowledge import router as knowledge_router
+    async def _trigger_auto_learning(self, question: str):
+        """Trigger auto-learning process for missing knowledge."""
+        try:
+            logger.info(f"AUTO-LEARNING: Triggered for question: {question}")
 
-            # Import system documentation
-            logger.info("AUTO-LEARNING: Importing system documentation...")
-            try:
-                # Import documentation files (README, docs/, etc.)
-                import os
+            # Try to find relevant documentation files
+            import os
 
-                docs_to_import = [
-                    "README.md",
-                    "EXECUTIVE_SUMMARY.md",
-                    "CLAUDE.md",
-                    "docs/INDEX.md",
-                ]
+            docs_dirs = [
+                "/home/kali/Desktop/AutoBot/docs",
+                "/home/kali/Desktop/AutoBot",
+                "/home/kali/Desktop/AutoBot/config",
+                "/home/kali/Desktop/AutoBot/scripts",
+            ]
 
-                for doc_path in docs_to_import:
-                    if os.path.exists(doc_path):
-                        logger.info(f"AUTO-LEARNING: Importing {doc_path}")
-                        await self._import_document(doc_path)
+            for docs_dir in docs_dirs:
+                if os.path.exists(docs_dir):
+                    for root, dirs, files in os.walk(docs_dir):
+                        for file in files:
+                            if file.endswith((".md", ".txt", ".py", ".yaml", ".yml")):
+                                file_path = os.path.join(root, file)
+                                await self._import_document(file_path)
 
-                # Import prompts
-                logger.info("AUTO-LEARNING: Importing system prompts...")
-                await self._import_prompts_directory()
-
-                logger.info("AUTO-LEARNING: Knowledge base population completed")
-
-            except Exception as e:
-                logger.error(f"AUTO-LEARNING: Error during population: {e}")
+            # Also try to populate knowledge base if it hasn't been done recently
+            await self.knowledge_base.populate_knowledge_base()
 
         except Exception as e:
             logger.error(f"AUTO-LEARNING: Failed to trigger population: {e}")
@@ -158,8 +148,16 @@ class KBLibrarianAgent:
             if not os.path.exists(file_path):
                 return
 
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            # CRITICAL FIX: Use asyncio.to_thread to prevent blocking the event loop
+            async def _read_file_async(path: str) -> str:
+                """Read file content asynchronously."""
+                def _sync_read():
+                    with open(path, "r", encoding="utf-8") as f:
+                        return f.read()
+                return await asyncio.to_thread(_sync_read)
+
+            # Read file content asynchronously
+            content = await _read_file_async(file_path)
 
             # Add to knowledge base
             await self.knowledge_base.add_text(
@@ -172,173 +170,36 @@ class KBLibrarianAgent:
         except Exception as e:
             logger.error(f"AUTO-LEARNING: Failed to import {file_path}: {e}")
 
-    async def _import_prompts_directory(self):
-        """Import prompts directory into knowledge base."""
+    async def get_knowledge_stats(self) -> Dict[str, Any]:
+        """Get knowledge base statistics."""
         try:
-            import os
-            import glob
-
-            prompts_dir = "prompts"
-            if not os.path.exists(prompts_dir):
-                return
-
-            # Find all text files in prompts directory
-            prompt_files = glob.glob(
-                os.path.join(prompts_dir, "**/*.txt"), recursive=True
-            )
-            prompt_files.extend(
-                glob.glob(os.path.join(prompts_dir, "**/*.md"), recursive=True)
-            )
-
-            for prompt_file in prompt_files[:20]:  # Limit to first 20 to avoid overload
-                await self._import_document(prompt_file)
-
-            logger.info(
-                f"AUTO-LEARNING: Imported {len(prompt_files[:20])} prompt files"
-            )
-
+            stats = await self.knowledge_base.get_stats()
+            return stats
         except Exception as e:
-            logger.error(f"AUTO-LEARNING: Failed to import prompts: {e}")
+            logger.error(f"KB-LIBRARIAN: Failed to get stats: {e}")
+            return {"error": str(e)}
 
-    async def summarize_findings(
-        self, query: str, documents: List[Dict[str, Any]]
-    ) -> str:
-        """Summarize the findings from the knowledge base.
-
-        Args:
-            query: The original query
-            documents: List of found documents
-
-        Returns:
-            A summarized response based on the findings
-        """
-        if not documents:
-            return "No relevant information found in the knowledge base."
-
-        # Prepare context from documents
-        context_parts = []
-        for i, doc in enumerate(documents, 1):
-            content = doc.get("content", "")
-            metadata = doc.get("metadata", {})
-            source = metadata.get("source", "Unknown")
-            context_parts.append(f"Document {i} (Source: {source}):\n{content}\n")
-
-        context = "\n---\n".join(context_parts)
-
-        # Create a prompt for summarization
-        prompt = (
-            "As a helpful librarian, I found the following information in our "
-            f'knowledge base related to the question: "{query}"\n\n'
-            f"{context}\n\n"
-            "Please provide a concise and helpful summary of the relevant "
-            "information found."
-        )
-
+    async def add_new_knowledge(self, content: str, title: str, source: str = None):
+        """Add new knowledge to the base."""
         try:
-            response = await self.llm.chat_completion(
-                messages=[{"role": "system", "content": prompt}], llm_type="task"
-            )
-            return response
+            if not source:
+                source = f"Added by KB Librarian: {title}"
 
+            await self.knowledge_base.add_text(content, title=title, source=source)
+            logger.info(f"KB-LIBRARIAN: Added new knowledge: {title}")
         except Exception as e:
-            logger.error(f"Error summarizing findings: {e}")
-            return "Found relevant documents but couldn't generate summary."
-
-    async def process_query(self, query: str) -> Dict[str, Any]:
-        """Process a query by searching the knowledge base.
-
-        Args:
-            query: The user's query
-
-        Returns:
-            Dictionary containing search results and optional summary
-        """
-        if not self.enabled:
-            return {
-                "enabled": False,
-                "is_question": False,
-                "query": query,
-                "documents_found": 0,
-                "documents": [],
-                "message": "KB Librarian is disabled",
-            }
-
-        # Always search regardless of question detection for better results
-        # if not is_question:
-        #     return {
-        #         "enabled": True,
-        #         "is_question": False,
-        #         "query": query,
-        #         "documents_found": 0,
-        #         "documents": [],
-        #         "message": "Not detected as a question",
-        #     }
-
-        # Search the knowledge base
-        documents = await self.search_knowledge_base(query)
-
-        result = {
-            "enabled": True,
-            "is_question": True,
-            "query": query,
-            "documents_found": len(documents),
-            "documents": documents,
-        }
-
-        # Optionally summarize findings
-        if self.auto_summarize and documents:
-            summary = await self.summarize_findings(query, documents)
-            result["summary"] = summary
-
-        return result
-
-    async def enhance_chat_response(
-        self, user_message: str, chat_response: str
-    ) -> Dict[str, Any]:
-        """Enhance a chat response with knowledge base information.
-
-        Args:
-            user_message: The original user message
-            chat_response: The initial chat response
-
-        Returns:
-            Enhanced response with KB information
-        """
-        # Process the query
-        kb_result = await self.process_query(user_message)
-
-        enhanced_response = {
-            "original_response": chat_response,
-            "kb_search_performed": kb_result.get("is_question", False),
-        }
-
-        if kb_result.get("documents_found", 0) > 0:
-            enhanced_response["kb_documents"] = kb_result["documents"]
-            if "summary" in kb_result:
-                # Prepend KB findings to the response
-                enhanced_response["enhanced_response"] = (
-                    f"📚 **Knowledge Base Findings:**\n{kb_result['summary']}\n\n"
-                    f"**Response:**\n{chat_response}"
-                )
-            else:
-                enhanced_response["enhanced_response"] = chat_response
-        else:
-            enhanced_response["enhanced_response"] = chat_response
-
-        return enhanced_response
+            logger.error(f"KB-LIBRARIAN: Failed to add knowledge '{title}': {e}")
+            raise
 
 
-# Singleton instance
-_kb_librarian = None
+# Global instance for API access
+_kb_librarian_instance = None
 
 
 def get_kb_librarian() -> KBLibrarianAgent:
-    """Get the singleton KB Librarian Agent instance.
-
-    Returns:
-        The KB Librarian Agent instance
-    """
-    global _kb_librarian
-    if _kb_librarian is None:
-        _kb_librarian = KBLibrarianAgent()
-    return _kb_librarian
+    """Get or create the KB Librarian Agent instance."""
+    global _kb_librarian_instance
+    if _kb_librarian_instance is None:
+        _kb_librarian_instance = KBLibrarianAgent()
+        logger.info("KB-LIBRARIAN: Created new instance")
+    return _kb_librarian_instance

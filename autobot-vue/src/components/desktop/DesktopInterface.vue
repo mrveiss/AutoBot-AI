@@ -57,6 +57,8 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { API_CONFIG } from '@/config/environment.js'
+import appConfig from '@/config/AppConfig.js'
 
 const vncFrame = ref(null)
 const loading = ref(true)
@@ -64,8 +66,52 @@ const error = ref(null)
 const isFullscreen = ref(false)
 const connectionStatus = ref('Connecting...')
 
-// VNC connection URL
-const vncUrl = ref('http://localhost:6080/vnc.html?autoconnect=true&resize=scale')
+// VNC connection URL - will be loaded asynchronously
+const vncUrl = ref(API_CONFIG.DESKTOP_VNC_URL) // Fallback until async load
+
+// Load dynamic VNC URL on component mount
+const loadVncUrl = async () => {
+  try {
+    const dynamicVncUrl = await appConfig.getVncUrl('desktop');
+    vncUrl.value = dynamicVncUrl;
+    console.log('[DesktopInterface] Loaded dynamic VNC URL:', dynamicVncUrl);
+    // Clear any previous errors and update status
+    error.value = null;
+    loading.value = false;
+    connectionStatus.value = 'Connected';
+  } catch (err) {
+    console.warn('[DesktopInterface] Failed to load dynamic VNC URL, using fallback:', err);
+    
+    // Handle different error types gracefully
+    if (err.message && err.message.includes('Failed to fetch')) {
+      error.value = 'Backend configuration unavailable. Using default desktop settings. Desktop may still work.';
+      connectionStatus.value = 'Using Defaults';
+    } else if (err.message && err.message.includes('Network Error')) {
+      error.value = 'Network connectivity issues. Desktop service may be temporarily unavailable.';
+      connectionStatus.value = 'Network Error';
+    } else if (err.message && err.message.includes('timeout')) {
+      error.value = 'Configuration service timeout. Using default settings.';
+      connectionStatus.value = 'Timeout';
+    } else {
+      error.value = `Configuration error: ${err.message}. Desktop service may not be available.`;
+      connectionStatus.value = 'Configuration Error';  
+    }
+    
+    // Don't show loading anymore, but allow fallback URL to be used
+    loading.value = false;
+    
+    // Use fallback URL if available
+    if (API_CONFIG.DESKTOP_VNC_URL) {
+      vncUrl.value = API_CONFIG.DESKTOP_VNC_URL;
+      console.log('[DesktopInterface] Using fallback VNC URL:', API_CONFIG.DESKTOP_VNC_URL);
+    } else {
+      // Last resort - construct a default VNC URL
+      const defaultVncUrl = 'http://172.16.168.21:6080/vnc.html?autoconnect=true&password=autobot';
+      vncUrl.value = defaultVncUrl;
+      console.log('[DesktopInterface] Using last resort VNC URL:', defaultVncUrl);
+    }
+  }
+}
 
 const connectionStatusClass = computed(() => {
   switch (connectionStatus.value) {
@@ -75,6 +121,14 @@ const connectionStatusClass = computed(() => {
       return 'text-red-600 dark:text-red-400'
     case 'Connecting...':
       return 'text-yellow-600 dark:text-yellow-400'
+    case 'Using Defaults':
+      return 'text-blue-600 dark:text-blue-400'
+    case 'Configuration Error':
+      return 'text-orange-600 dark:text-orange-400'
+    case 'Network Error':
+      return 'text-red-500 dark:text-red-400'
+    case 'Timeout':
+      return 'text-orange-500 dark:text-orange-400'
     default:
       return 'text-gray-600 dark:text-gray-400'
   }
@@ -103,7 +157,20 @@ const reconnect = () => {
 
 const checkConnection = async () => {
   try {
-    const response = await fetch('http://localhost:6080/vnc.html', { method: 'HEAD' })
+    // Check the actual desktop VNC server health (backend server)
+    const vncBaseUrl = await appConfig.getServiceUrl('vnc_desktop');
+    
+    // Create controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(`${vncBaseUrl}/vnc.html`, { 
+      method: 'HEAD',
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
     if (response.ok) {
       connectionStatus.value = 'Connected'
       loading.value = false
@@ -113,14 +180,38 @@ const checkConnection = async () => {
     }
   } catch (err) {
     connectionStatus.value = 'Disconnected'
-    error.value = `Cannot connect to desktop service: ${err.message}`
+    
+    if (err.name === 'AbortError') {
+      error.value = 'Desktop service connection timeout. Service may be starting up.';
+    } else {
+      const isServiceDisabled = err.message.includes('Connection refused') || 
+                                err.message.includes('Network Error') ||
+                                err.message.includes('Failed to fetch');
+      
+      if (isServiceDisabled) {
+        error.value = 'Desktop service is currently disabled. Start AutoBot with desktop access enabled to use this feature.';
+      } else {
+        error.value = `Cannot connect to desktop service: ${err.message}`;
+      }
+    }
     loading.value = false
   }
 }
 
 let connectionCheckInterval
 
-onMounted(() => {
+onMounted(async () => {
+  // Load dynamic VNC URL first - wrapped in try-catch for safety
+  try {
+    await loadVncUrl()
+  } catch (error) {
+    console.error('[DesktopInterface] Critical error in loadVncUrl:', error)
+    // Fallback to default state
+    loading.value = false
+    connectionStatus.value = 'Configuration Error'
+    error.value = 'Failed to initialize desktop interface. Please refresh the page.'
+  }
+  
   // Initial connection check
   setTimeout(checkConnection, 2000)
   

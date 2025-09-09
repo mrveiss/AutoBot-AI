@@ -6,6 +6,9 @@ from fastapi.responses import JSONResponse
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ConnectionTester, ModelManager
 
+# Import unified configuration system - NO HARDCODED VALUES
+from src.config_helper import cfg
+
 # Import caching utilities (cache_response temporarily disabled)
 # from backend.utils.cache_manager import cache_response
 
@@ -314,7 +317,7 @@ async def get_comprehensive_llm_status():
                         .get("ollama", {})
                         .get(
                             "host",
-                            f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
+                            cfg.get_service_url('ollama'),
                         ),
                     },
                     "lmstudio": {
@@ -331,7 +334,7 @@ async def get_comprehensive_llm_status():
                         .get("lmstudio", {})
                         .get(
                             "endpoint",
-                            f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}/v1",
+                            f"{cfg.get_service_url('ollama')}/v1",
                         ),
                     },
                 },
@@ -424,10 +427,14 @@ async def get_quick_llm_status():
         from src.config import config as global_config_manager
 
         llm_config = global_config_manager.get_llm_config()
-        provider_type = llm_config.get("provider_type", "local")
+        
+        # Get provider type from unified config structure
+        unified_config = llm_config.get("unified", {})
+        provider_type = unified_config.get("provider_type", "local")
 
         if provider_type == "local":
-            local_config = llm_config.get("local", {})
+            # Look in the correct path: unified.local.providers.ollama
+            local_config = unified_config.get("local", {})
             model = (
                 local_config.get("providers", {})
                 .get("ollama", {})
@@ -435,7 +442,8 @@ async def get_quick_llm_status():
             )
             status = "connected" if model else "disconnected"
         else:
-            cloud_config = llm_config.get("cloud", {})
+            # Look in the correct path: unified.cloud.providers.[provider]
+            cloud_config = unified_config.get("cloud", {})
             provider = cloud_config.get("provider", "openai")
             api_key = (
                 cloud_config.get("providers", {}).get(provider, {}).get("api_key", "")

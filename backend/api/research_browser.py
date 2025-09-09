@@ -5,6 +5,7 @@ Handles browser automation for research tasks with user interaction support
 
 import logging
 import os
+from datetime import datetime
 from typing import Optional
 
 import aiofiles
@@ -29,6 +30,29 @@ class SessionAction(BaseModel):
     session_id: str
     action: str  # "wait", "manual_intervention", "save_mhtml", "extract_content"
     timeout_seconds: Optional[int] = 300
+
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for research browser service"""
+    try:
+        # Check if browser manager is initialized
+        status = "healthy" if research_browser_manager else "not_initialized"
+        
+        return {
+            "status": status,
+            "service": "research_browser",
+            "browser_service_url": "http://172.16.168.25:3000",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Research browser health check failed: {e}")
+        return {
+            "status": "error",
+            "service": "research_browser",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 @router.post("/url")

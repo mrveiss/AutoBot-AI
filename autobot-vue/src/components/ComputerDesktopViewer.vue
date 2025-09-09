@@ -23,7 +23,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { API_CONFIG } from '@/config/environment.js';
+import appConfig from '@/config/AppConfig.js';
 
 export default {
   name: 'ComputerDesktopViewer',
@@ -32,12 +32,15 @@ export default {
 
     onMounted(async () => {
       try {
-        // Use environment configuration or fallback to dynamic URL
-        vncUrl.value = API_CONFIG.PLAYWRIGHT_VNC_URL || 
-                      `${window.location.protocol}//${window.location.hostname}:6080/vnc.html`;
+        // Use centralized AppConfig for VNC URL
+        vncUrl.value = await appConfig.getVNCUrl('desktop', {
+          autoconnect: true,
+          resize: 'remote',
+          reconnect: true
+        });
       } catch (error) {
-        console.error('Error loading VNC URL:', error);
-        vncUrl.value = 'Configuration unavailable';
+        console.error('Error loading VNC URL from centralized configuration:', error);
+        vncUrl.value = 'Configuration unavailable - check service discovery';
       }
     });
 

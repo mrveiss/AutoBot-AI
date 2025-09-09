@@ -119,7 +119,7 @@
               </h4>
               <div class="space-y-2">
                 <div 
-                  v-for="notification in activeNotifications.slice(0, 3)" 
+                  v-for="notification in (activeNotifications || []).slice(0, 3)" 
                   :key="notification.id"
                   class="flex items-start p-2 bg-gray-50 dark:bg-gray-700 rounded"
                 >
@@ -228,6 +228,12 @@ const getStatusDescription = (status: string): string => {
 }
 
 const formatTime = (timestamp: Date): string => {
+  if (!timestamp || !(timestamp instanceof Date)) {
+    return new Date().toLocaleTimeString(undefined, { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })
+  }
   return timestamp.toLocaleTimeString(undefined, { 
     hour: '2-digit', 
     minute: '2-digit' 

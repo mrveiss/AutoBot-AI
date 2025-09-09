@@ -39,13 +39,26 @@ class ChatResponse(BaseModel):
 
 # Dependency to ensure services are available
 async def get_service_container(request: Request):
-    """Get service container from app state"""
-    if not hasattr(request.app.state, 'container'):
-        raise HTTPException(
-            status_code=503,
-            detail="Service container not initialized"
+    """Get service container from app state with timeout protection"""
+    try:
+        # Add timeout protection to prevent hanging
+        container_check = asyncio.create_task(
+            _check_container(request)
         )
-    return request.app.state.container
+        return await asyncio.wait_for(container_check, timeout=1.0)
+    except asyncio.TimeoutError:
+        logger.warning("Service container check timed out, proceeding without DI")
+        return None
+    except Exception as e:
+        logger.warning(f"Service container error: {e}, proceeding without DI")
+        return None
+
+async def _check_container(request: Request):
+    """Internal container check function"""
+    if hasattr(request.app.state, 'container') and request.app.state.container:
+        return request.app.state.container
+    else:
+        return None
 
 
 @router.post("/chats/{chat_id}/message", response_model=Dict[str, Any])
@@ -68,11 +81,28 @@ async def send_chat_message(
                 detail="Invalid chat_id format"
             )
         
-        # Process message through async workflow
-        workflow_result = await process_chat_message(
-            user_message=request_data.message,
-            chat_id=chat_id
-        )
+        # Process message through async workflow with timeout protection
+        try:
+            workflow_result = await asyncio.wait_for(
+                process_chat_message(
+                    user_message=request_data.message,
+                    chat_id=chat_id
+                ),
+                timeout=20.0  # 20 second timeout
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Chat workflow timed out after 20s for chat_id: {chat_id}")
+            # Return timeout response with proper structure
+            from src.async_chat_workflow import ChatWorkflowResult, MessageType, KnowledgeStatus
+            workflow_result = ChatWorkflowResult(
+                response=f"I apologize, but processing your message took longer than expected. Your message was: '{request_data.message}' (System is experiencing delays)",
+                message_type=MessageType.GENERAL_QUERY,
+                knowledge_status=KnowledgeStatus.BYPASSED,
+                kb_results=[],
+                librarian_engaged=False,
+                mcp_used=False,
+                processing_time=20.0
+            )
         
         # Convert to API response format
         response_data = workflow_result.to_dict()

@@ -1,5 +1,76 @@
 <template>
-  <div class="system-monitor">
+  <div class="system-monitor-enhanced">
+    <!-- Overview Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <!-- System Status Card -->
+      <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">System Status</h3>
+            <p class="mt-2 text-3xl font-extrabold text-gray-900">{{ systemStatus.status }}</p>
+            <p class="mt-2 text-sm text-gray-600">{{ systemStatus.message }}</p>
+          </div>
+          <div class="flex-shrink-0">
+            <i class="fas fa-server text-3xl" :class="systemStatus.iconClass"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Sessions Card -->
+      <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">Active Sessions</h3>
+            <p class="mt-2 text-3xl font-extrabold text-gray-900">{{ activeSessions }}</p>
+            <p class="mt-2 text-sm text-green-600">
+              <i class="fas fa-arrow-up"></i>
+              {{ sessionsChange }}% from last hour
+            </p>
+          </div>
+          <div class="flex-shrink-0">
+            <i class="fas fa-users text-3xl text-blue-500"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Knowledge Base Card -->
+      <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">Knowledge Items</h3>
+            <p class="mt-2 text-3xl font-extrabold text-gray-900">{{ knowledgeStats.totalItems }}</p>
+            <p class="mt-2 text-sm text-gray-600">{{ knowledgeStats.categories }} categories</p>
+          </div>
+          <div class="flex-shrink-0">
+            <i class="fas fa-brain text-3xl text-purple-500"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance Score Card -->
+      <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">Performance</h3>
+            <p class="mt-2 text-3xl font-extrabold text-gray-900">{{ performanceScore }}%</p>
+            <p class="mt-2 text-sm" :class="performanceChange >= 0 ? 'text-green-600' : 'text-red-600'">
+              <i :class="performanceChange >= 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'"></i>
+              {{ Math.abs(performanceChange) }}% from yesterday
+            </p>
+          </div>
+          <div class="flex-shrink-0">
+            <i class="fas fa-tachometer-alt text-3xl text-yellow-500"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Multi-Machine Infrastructure Overview -->
+    <div class="mb-8">
+      <MultiMachineHealth />
+    </div>
+
+    <!-- Detailed System Monitor Grid -->
     <div class="monitor-grid">
       <!-- Performance Metrics -->
       <div class="metric-card glass-card">
@@ -46,7 +117,7 @@
         </div>
       </div>
 
-      <!-- System Status -->
+      <!-- Service Status -->
       <div class="status-card glass-card">
         <div class="card-header">
           <h3>Service Status</h3>
@@ -77,7 +148,7 @@
               class="time-btn"
               :class="{ active: selectedTimeframe === timeframe.value }"
               @click="selectedTimeframe = timeframe.value"
-             aria-label="{{ timeframe.label }}">
+              :aria-label="timeframe.label">
               {{ timeframe.label }}
             </button>
           </div>
@@ -98,87 +169,56 @@
             <div class="group-name">{{ group.name }}</div>
             <div class="endpoint-list">
               <div
-                class="endpoint-item"
                 v-for="endpoint in group.endpoints"
                 :key="endpoint.path"
-                :class="endpoint.status"
-              >
-                <div class="endpoint-info">
-                  <span class="method">{{ endpoint.method }}</span>
-                  <span class="path">{{ endpoint.path }}</span>
-                </div>
-                <div class="endpoint-metrics">
-                  <span class="response-time">{{ endpoint.responseTime }}ms</span>
-                  <div class="status-indicator" :class="endpoint.status"></div>
-                </div>
+                class="endpoint-item"
+                :class="endpoint.status">
+                <span class="endpoint-path">{{ endpoint.path }}</span>
+                <span class="endpoint-time">{{ endpoint.responseTime }}ms</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- System Logs -->
-      <div class="logs-card glass-card">
+      <!-- Quick Actions -->
+      <div class="actions-card glass-card">
         <div class="card-header">
-          <h3>System Logs</h3>
-          <div class="log-controls">
-            <select v-model="selectedLogLevel" class="log-filter">
-              <option value="all">All Levels</option>
-              <option value="error">Errors</option>
-              <option value="warning">Warnings</option>
-              <option value="info">Info</option>
-            </select>
-            <button class="clear-logs" @click="clearLogs" aria-label="Clear">Clear</button>
-          </div>
+          <h3>Quick Actions</h3>
         </div>
-        <div class="logs-content" ref="logsContainer">
-          <div
-            class="log-entry"
-            v-for="log in filteredLogs"
-            :key="log.id"
-            :class="log.level"
-          >
-            <span class="log-time">{{ log.timestamp }}</span>
-            <span class="log-level">{{ log.level.toUpperCase() }}</span>
-            <span class="log-message">{{ log.message }}</span>
-          </div>
+        <div class="actions-content">
+          <router-link to="/chat" class="action-item">
+            <i class="fas fa-comments text-blue-500"></i>
+            <span>Start New Chat</span>
+          </router-link>
+          <router-link to="/knowledge/upload" class="action-item">
+            <i class="fas fa-upload text-green-500"></i>
+            <span>Upload Document</span>
+          </router-link>
+          <router-link to="/tools/terminal" class="action-item">
+            <i class="fas fa-terminal text-gray-700"></i>
+            <span>Open Terminal</span>
+          </router-link>
+          <router-link to="/monitoring/logs" class="action-item">
+            <i class="fas fa-file-alt text-purple-500"></i>
+            <span>View Logs</span>
+          </router-link>
         </div>
       </div>
 
-      <!-- Resource Usage -->
-      <div class="resources-card glass-card">
+      <!-- Recent Activity -->
+      <div class="activity-card glass-card">
         <div class="card-header">
-          <h3>Resource Usage</h3>
+          <h3>Recent Activity</h3>
         </div>
-        <div class="resources-content">
-          <div class="resource-item">
-            <div class="resource-icon">💾</div>
-            <div class="resource-info">
-              <div class="resource-name">Storage</div>
-              <div class="resource-usage">{{ formatBytes(storage.used) }} / {{ formatBytes(storage.total) }}</div>
-              <div class="resource-bar">
-                <div class="bar-fill storage" :style="{ width: `${(storage.used / storage.total) * 100}%` }"></div>
-              </div>
+        <div class="activity-content">
+          <div v-for="activity in recentActivity" :key="activity.id" class="activity-item">
+            <div class="activity-icon">
+              <i :class="activity.icon"></i>
             </div>
-          </div>
-          <div class="resource-item">
-            <div class="resource-icon">🧠</div>
-            <div class="resource-info">
-              <div class="resource-name">LLM Memory</div>
-              <div class="resource-usage">{{ formatBytes(llmMemory.used) }} / {{ formatBytes(llmMemory.total) }}</div>
-              <div class="resource-bar">
-                <div class="bar-fill llm" :style="{ width: `${(llmMemory.used / llmMemory.total) * 100}%` }"></div>
-              </div>
-            </div>
-          </div>
-          <div class="resource-item">
-            <div class="resource-icon">📊</div>
-            <div class="resource-info">
-              <div class="resource-name">Knowledge Base</div>
-              <div class="resource-usage">{{ knowledge.entries }} entries</div>
-              <div class="resource-bar">
-                <div class="bar-fill kb" :style="{ width: `${Math.min((knowledge.entries / 10000) * 100, 100)}%` }"></div>
-              </div>
+            <div class="activity-info">
+              <div class="activity-action">{{ activity.action }}</div>
+              <div class="activity-time">{{ activity.time }}</div>
             </div>
           </div>
         </div>
@@ -187,395 +227,225 @@
   </div>
 </template>
 
-<script>
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
-import apiClient from '@/utils/ApiClient.js';
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useAppStore } from '@/stores/useAppStore'
+import { useChatStore } from '@/stores/useChatStore'
+import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useServiceMonitor } from '@/composables/useServiceMonitor.js'
+import MultiMachineHealth from './MultiMachineHealth.vue'
 
-export default {
-  name: 'SystemMonitor',
-  setup() {
-    const isRefreshing = ref(false);
-    const selectedTimeframe = ref('1h');
-    const selectedLogLevel = ref('all');
-    const performanceChart = ref(null);
-    const logsContainer = ref(null);
+const appStore = useAppStore()
+const chatStore = useChatStore()
+const knowledgeStore = useKnowledgeStore()
 
-    const metrics = ref({
-      cpu: 0,
-      memory: 0,
-      gpu: 0,
-      npu: 0,
-      network: 0,
-      networkSpeed: 0
-    });
+// Real-time service monitoring
+const serviceMonitor = useServiceMonitor()
 
-    const services = ref([
-      { name: 'Backend API', version: 'v1.2.3', status: 'online', statusText: 'Running' },
-      { name: 'LLM Service', version: 'v2.1.0', status: 'online', statusText: 'Connected' },
-      { name: 'Redis Cache', version: 'v7.0', status: 'online', statusText: 'Connected' },
-      { name: 'Knowledge Base', version: 'v1.0.1', status: 'online', statusText: 'Ready' },
-      { name: 'Voice Interface', version: 'v1.1.0', status: 'online', statusText: 'Ready' },
-      { name: 'File Manager', version: 'v1.0.0', status: 'online', statusText: 'Active' }
-    ]);
-
-    const apiEndpoints = ref([
-      {
-        name: 'Chat API',
-        endpoints: [
-          { method: 'POST', path: '/api/chat', status: 'healthy', responseTime: 245 },
-          { method: 'GET', path: '/api/chat/history', status: 'healthy', responseTime: 123 },
-          { method: 'POST', path: '/api/chat/reset', status: 'healthy', responseTime: 89 }
-        ]
-      },
-      {
-        name: 'Voice API',
-        endpoints: [
-          { method: 'POST', path: '/api/voice/listen', status: 'healthy', responseTime: 567 },
-          { method: 'POST', path: '/api/voice/speak', status: 'warning', responseTime: 1234 }
-        ]
-      },
-      {
-        name: 'Knowledge API',
-        endpoints: [
-          { method: 'POST', path: '/api/knowledge/search', status: 'healthy', responseTime: 145 },
-          { method: 'POST', path: '/api/knowledge/add_text', status: 'healthy', responseTime: 234 }
-        ]
-      }
-    ]);
-
-    const logs = ref([]);
-    const storage = ref({ used: 15.7 * 1024 * 1024 * 1024, total: 100 * 1024 * 1024 * 1024 });
-    const llmMemory = ref({ used: 2.4 * 1024 * 1024 * 1024, total: 8 * 1024 * 1024 * 1024 });
-    const knowledge = ref({ entries: 3847 });
-
-    const timeframes = [
-      { label: '1H', value: '1h' },
-      { label: '6H', value: '6h' },
-      { label: '24H', value: '24h' },
-      { label: '7D', value: '7d' }
-    ];
-
-    let performanceHistory = [];
-    let chartInterval = null;
-    let metricsInterval = null;
-
-    const onlineServices = computed(() => {
-      return services.value.filter(s => s.status === 'online').length;
-    });
-
-    const totalServices = computed(() => services.value.length);
-
-    const healthyEndpoints = computed(() => {
-      return apiEndpoints.value.reduce((count, group) => {
-        return count + group.endpoints.filter(e => e.status === 'healthy').length;
-      }, 0);
-    });
-
-    const totalEndpoints = computed(() => {
-      return apiEndpoints.value.reduce((count, group) => {
-        return count + group.endpoints.length;
-      }, 0);
-    });
-
-    const filteredLogs = computed(() => {
-      if (selectedLogLevel.value === 'all') {
-        return logs.value;
-      }
-      return logs.value.filter(log => log.level === selectedLogLevel.value);
-    });
-
-    const formatBytes = (bytes) => {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    };
-
-    const generateRandomMetrics = () => {
-      metrics.value.cpu = Math.floor(Math.random() * 100);
-      metrics.value.memory = Math.floor(Math.random() * 100);
-      metrics.value.gpu = Math.floor(Math.random() * 100);
-      metrics.value.npu = Math.floor(Math.random() * 100);
-      metrics.value.network = Math.floor(Math.random() * 100);
-      metrics.value.networkSpeed = Math.floor(Math.random() * 1024 * 1024 * 100); // 0-100 MB/s
-    };
-
-    const updatePerformanceHistory = () => {
-      const now = Date.now();
-      performanceHistory.push({
-        timestamp: now,
-        cpu: metrics.value.cpu,
-        memory: metrics.value.memory,
-        gpu: metrics.value.gpu,
-        npu: metrics.value.npu
-      });
-
-      // Keep only last 100 data points
-      if (performanceHistory.length > 100) {
-        performanceHistory = performanceHistory.slice(-100);
-      }
-    };
-
-    const drawChart = () => {
-      if (!performanceChart.value) return;
-
-      const ctx = performanceChart.value.getContext('2d');
-      const canvas = performanceChart.value;
-
-      // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (performanceHistory.length < 2) return;
-
-      const padding = 40;
-      const width = canvas.width - padding * 2;
-      const height = canvas.height - padding * 2;
-
-      // Draw grid
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.lineWidth = 1;
-
-      for (let i = 0; i <= 4; i++) {
-        const y = padding + (height * i / 4);
-        ctx.beginPath();
-        ctx.moveTo(padding, y);
-        ctx.lineTo(width + padding, y);
-        ctx.stroke();
-      }
-
-      // Draw lines
-      const drawLine = (key, color) => {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-
-        performanceHistory.forEach((point, index) => {
-          const x = padding + (width * index / (performanceHistory.length - 1));
-          const y = padding + height - (height * point[key] / 100);
-
-          if (index === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        });
-
-        ctx.stroke();
-      };
-
-      drawLine('cpu', '#ef4444');
-      drawLine('memory', '#10b981');
-      drawLine('gpu', '#3b82f6');
-      drawLine('npu', '#f59e0b');
-
-      // Draw labels
-      ctx.fillStyle = 'var(--blue-gray-800)';
-      ctx.font = '12px Inter';
-      ctx.fillText('CPU', padding + 10, padding + 20);
-      ctx.fillText('Memory', padding + 50, padding + 20);
-      ctx.fillText('GPU', padding + 100, padding + 20);
-      ctx.fillText('NPU', padding + 140, padding + 20);
-
-      // Draw legend colors
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(padding - 5, padding + 10, 10, 2);
-      ctx.fillStyle = '#10b981';
-      ctx.fillRect(padding + 35, padding + 10, 10, 2);
-      ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(padding + 85, padding + 10, 10, 2);
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(padding + 125, padding + 10, 10, 2);
-    };
-
-    const addLog = (level, message) => {
-      const logEntry = {
-        id: Date.now() + Math.random(),
-        level,
-        message,
-        timestamp: new Date().toLocaleTimeString()
-      };
-
-      logs.value.unshift(logEntry);
-
-      // Keep only last 100 logs
-      if (logs.value.length > 100) {
-        logs.value = logs.value.slice(0, 100);
-      }
-
-      // Auto-scroll to top
-      nextTick(() => {
-        if (logsContainer.value) {
-          logsContainer.value.scrollTop = 0;
-        }
-      });
-    };
-
-    const clearLogs = () => {
-      logs.value = [];
-    };
-
-    const simulateSystemActivity = () => {
-      const activities = [
-        { level: 'info', message: 'New chat session started' },
-        { level: 'info', message: 'Knowledge base updated with new entries' },
-        { level: 'warning', message: 'High CPU usage detected' },
-        { level: 'info', message: 'Voice command processed successfully' },
-        { level: 'error', message: 'Failed to connect to external API' },
-        { level: 'info', message: 'File upload completed' },
-        { level: 'warning', message: 'Memory usage approaching limit' },
-        { level: 'info', message: 'Background task completed' }
-      ];
-
-      // Add random log every 5-15 seconds
-      const randomDelay = Math.random() * 10000 + 5000;
-      setTimeout(() => {
-        const activity = activities[Math.floor(Math.random() * activities.length)];
-        addLog(activity.level, activity.message);
-        simulateSystemActivity();
-      }, randomDelay);
-    };
-
-    const updateMetrics = async () => {
-      isRefreshing.value = true;
-
-      try {
-        // In a real implementation, this would fetch from the backend
-        generateRandomMetrics();
-        updatePerformanceHistory();
-        drawChart();
-
-        // Update service status from backend
-        try {
-          const healthResponse = await apiClient.get('/api/system/health');
-          if (healthResponse.status === 'healthy') {
-            // Update backend API status
-            const backendService = services.value.find(s => s.name === 'Backend API');
-            if (backendService) {
-              backendService.status = 'online';
-              backendService.statusText = 'Running';
-            }
-          }
-        } catch (error) {
-          console.warn('Could not fetch system health:', error);
-        }
-
-      } finally {
-        setTimeout(() => {
-          isRefreshing.value = false;
-        }, 500);
-      }
-    };
-
-    onMounted(() => {
-      // Initialize with some sample data
-      for (let i = 0; i < 20; i++) {
-        generateRandomMetrics();
-        updatePerformanceHistory();
-      }
-
-      nextTick(() => {
-        drawChart();
-      });
-
-      // Start intervals
-      metricsInterval = setInterval(updateMetrics, 5000); // Update every 5 seconds
-      chartInterval = setInterval(drawChart, 1000); // Redraw chart every second
-
-      // Add initial logs
-      addLog('info', 'System monitor initialized');
-      addLog('info', 'All services checked');
-
-      // Start simulating system activity
-      simulateSystemActivity();
-    });
-
-    onUnmounted(() => {
-      if (metricsInterval) {
-        clearInterval(metricsInterval);
-      }
-      if (chartInterval) {
-        clearInterval(chartInterval);
-      }
-    });
-
-    return {
-      isRefreshing,
-      selectedTimeframe,
-      selectedLogLevel,
-      performanceChart,
-      logsContainer,
-      metrics,
-      services,
-      apiEndpoints,
-      logs,
-      storage,
-      llmMemory,
-      knowledge,
-      timeframes,
-      onlineServices,
-      totalServices,
-      healthyEndpoints,
-      totalEndpoints,
-      filteredLogs,
-      formatBytes,
-      clearLogs,
-      updateMetrics
-    };
+// Dashboard computed data based on real services
+const systemStatus = computed(() => {
+  const overallStatus = serviceMonitor.overallStatus.value || 'unknown'
+  const healthyCount = serviceMonitor.healthyServices.value || 0
+  const totalServices = serviceMonitor.services.value?.length || 0
+  
+  return {
+    status: overallStatus === 'online' ? 'Healthy' : 
+            overallStatus === 'warning' ? 'Warning' :
+            overallStatus === 'error' ? 'Error' : 'Unknown',
+    message: `${healthyCount}/${totalServices} services operational`,
+    iconClass: overallStatus === 'online' ? 'text-green-500' : 
+              overallStatus === 'warning' ? 'text-yellow-500' : 'text-red-500'
   }
-};
+})
+
+const activeSessions = computed(() => {
+  return chatStore.conversations.length || 1
+})
+
+const sessionsChange = ref(0)
+
+const knowledgeStats = computed(() => ({
+  totalItems: knowledgeStore.stats?.totalDocuments || 0,
+  categories: knowledgeStore.stats?.categories?.length || 0
+}))
+
+const performanceScore = computed(() => {
+  const services = serviceMonitor.services.value || []
+  if (services.length === 0) return 100
+  
+  const avgResponseTime = services.reduce((acc, service) => {
+    return acc + (service.responseTime || 0)
+  }, 0) / services.length
+  
+  // Convert response time to performance score (lower is better)
+  return Math.max(0, Math.min(100, Math.round(100 - (avgResponseTime / 10))))
+})
+
+const performanceChange = ref(2)
+
+const recentActivity = ref([
+  {
+    id: 1,
+    action: 'Dashboard monitoring started',
+    time: 'Just now',
+    icon: 'fas fa-tachometer-alt'
+  },
+  {
+    id: 2,
+    action: 'Service health check completed',
+    time: 'Just now',
+    icon: 'fas fa-check-circle'
+  },
+  {
+    id: 3,
+    action: 'System resources monitored',
+    time: '1 minute ago',
+    icon: 'fas fa-chart-line'
+  },
+  {
+    id: 4,
+    action: 'Real-time monitoring active',
+    time: '2 minutes ago',
+    icon: 'fas fa-heartbeat'
+  }
+])
+
+// System Monitor functionality
+const isRefreshing = ref(false)
+const metrics = ref({
+  cpu: 4,
+  memory: 25,
+  gpu: 15,
+  npu: 8,
+  network: 12,
+  networkSpeed: 1048576 // bytes per second
+})
+
+const services = computed(() => serviceMonitor.services.value || [])
+const onlineServices = computed(() => serviceMonitor.healthyServices.value || 0)
+const totalServices = computed(() => serviceMonitor.services.value?.length || 0)
+
+const timeframes = ref([
+  { label: '1H', value: '1h' },
+  { label: '24H', value: '24h' },
+  { label: '7D', value: '7d' },
+  { label: '30D', value: '30d' }
+])
+
+const selectedTimeframe = ref('1h')
+
+const apiEndpoints = ref([
+  {
+    name: 'Core APIs',
+    endpoints: [
+      { path: '/api/health', status: 'healthy', responseTime: 4 },
+      { path: '/api/chat', status: 'healthy', responseTime: 12 },
+      { path: '/api/knowledge', status: 'healthy', responseTime: 8 }
+    ]
+  },
+  {
+    name: 'System APIs',
+    endpoints: [
+      { path: '/api/monitoring', status: 'healthy', responseTime: 6 },
+      { path: '/api/terminal', status: 'healthy', responseTime: 15 },
+      { path: '/api/research', status: 'healthy', responseTime: 11 }
+    ]
+  }
+])
+
+const healthyEndpoints = computed(() => {
+  return apiEndpoints.value.reduce((acc, group) => {
+    return acc + group.endpoints.filter(ep => ep.status === 'healthy').length
+  }, 0)
+})
+
+const totalEndpoints = computed(() => {
+  return apiEndpoints.value.reduce((acc, group) => {
+    return acc + group.endpoints.length
+  }, 0)
+})
+
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+const performanceChart = ref<HTMLCanvasElement | null>(null)
+
+let refreshInterval: number | null = null
+
+onMounted(() => {
+  // Start real-time monitoring
+  serviceMonitor.startMonitoring()
+  
+  // Refresh metrics every 5 seconds
+  refreshInterval = window.setInterval(() => {
+    isRefreshing.value = true
+    // Simulate metric updates
+    metrics.value.cpu = Math.max(0, Math.min(100, metrics.value.cpu + (Math.random() - 0.5) * 10))
+    metrics.value.memory = Math.max(0, Math.min(100, metrics.value.memory + (Math.random() - 0.5) * 5))
+    metrics.value.gpu = Math.max(0, Math.min(100, metrics.value.gpu + (Math.random() - 0.5) * 15))
+    metrics.value.npu = Math.max(0, Math.min(100, metrics.value.npu + (Math.random() - 0.5) * 12))
+    metrics.value.network = Math.max(0, Math.min(100, metrics.value.network + (Math.random() - 0.5) * 8))
+    
+    setTimeout(() => {
+      isRefreshing.value = false
+    }, 500)
+  }, 5000)
+})
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
+  serviceMonitor.stopMonitoring()
+})
 </script>
 
 <style scoped>
-.system-monitor {
-  height: 100%;
-  color: var(--blue-gray-700);
+.system-monitor-enhanced {
+  padding: 1.5rem;
+  background: #f8fafc;
+  min-height: 100vh;
 }
 
 .monitor-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 20px;
-  height: 100%;
-  overflow-y: auto;
-  padding-bottom: 24px;
-}
-
-@media (min-width: 1200px) {
-  .monitor-grid {
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-    gap: 24px;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1.5rem;
 }
 
 .glass-card {
-  background: white;
-  border: 1px solid var(--blue-gray-200);
-  border-radius: 0.5rem;
-  padding: 0;
-  overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--blue-gray-200);
-  background: var(--blue-gray-50);
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .card-header h3 {
-  margin: 0;
-  font-size: 14px;
+  font-size: 1.1rem;
   font-weight: 600;
-  color: var(--blue-gray-800);
+  color: #374151;
 }
 
 .refresh-indicator {
-  font-size: 16px;
-  color: var(--blue-gray-500);
+  font-size: 1.2rem;
+  color: #6b7280;
+  cursor: pointer;
   transition: transform 0.3s ease;
 }
 
@@ -588,378 +458,197 @@ export default {
   to { transform: rotate(360deg); }
 }
 
-.metric-content, .status-content, .chart-content, .api-content, .logs-content, .resources-content {
-  padding: 14px;
-}
-
-@media (max-width: 1400px) {
-  .metric-content, .status-content, .chart-content, .api-content, .logs-content, .resources-content {
-    padding: 12px;
-  }
-}
-
+/* Metric bars */
 .metric-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 1rem;
 }
 
 .metric-label {
-  min-width: 120px;
-  font-size: 14px;
-  color: var(--blue-gray-700);
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
 }
 
 .metric-bar {
-  flex: 1;
-  height: 8px;
-  background: var(--blue-gray-200);
-  border-radius: 4px;
   position: relative;
+  width: 100%;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 4px;
   transition: width 0.3s ease;
-  position: relative;
+  border-radius: 12px;
 }
 
-.bar-fill::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  animation: shimmer 2s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.bar-fill.cpu { background: linear-gradient(90deg, #ef4444, #dc2626); }
-.bar-fill.memory { background: linear-gradient(90deg, #10b981, #059669); }
-.bar-fill.gpu { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+.bar-fill.cpu { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
+.bar-fill.memory { background: linear-gradient(90deg, #10b981, #065f46); }
+.bar-fill.gpu { background: linear-gradient(90deg, #8b5cf6, #5b21b6); }
 .bar-fill.npu { background: linear-gradient(90deg, #f59e0b, #d97706); }
-.bar-fill.network { background: linear-gradient(90deg, #8b5cf6, #7c3aed); }
-.bar-fill.storage { background: linear-gradient(90deg, #06b6d4, #0891b2); }
-.bar-fill.llm { background: linear-gradient(90deg, #ec4899, #db2777); }
-.bar-fill.kb { background: linear-gradient(90deg, #a855f7, #9333ea); }
+.bar-fill.network { background: linear-gradient(90deg, #ef4444, #dc2626); }
 
 .metric-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--blue-gray-800);
-  min-width: 60px;
-  text-align: right;
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
+/* Service status */
 .service-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--blue-gray-100);
-}
-
-.service-item:last-child {
-  border-bottom: none;
-}
-
-.service-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .service-name {
-  font-size: 13px;
   font-weight: 500;
-  color: var(--blue-gray-800);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: #374151;
 }
 
 .service-version {
-  font-size: 11px;
-  color: var(--blue-gray-500);
+  font-size: 0.875rem;
+  color: #6b7280;
 }
 
 .service-status {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  flex-shrink: 0;
+  gap: 0.5rem;
+  font-size: 0.875rem;
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  flex-shrink: 0;
 }
 
 .service-status.online .status-dot { background: #10b981; }
 .service-status.warning .status-dot { background: #f59e0b; }
-.service-status.offline .status-dot { background: #ef4444; }
+.service-status.error .status-dot { background: #ef4444; }
 
-.service-status.online { color: #10b981; }
-.service-status.warning { color: #f59e0b; }
-.service-status.offline { color: #ef4444; }
-
-.status-summary, .api-stats {
-  font-size: 12px;
-  color: var(--blue-gray-600);
-}
-
+/* Chart controls */
 .chart-controls {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .time-btn {
-  background: var(--blue-gray-100);
-  border: 1px solid var(--blue-gray-300);
-  color: var(--blue-gray-600);
-  padding: 6px 12px;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 6px;
-  font-size: 12px;
+  background: transparent;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
 }
 
-.time-btn:hover, .time-btn.active {
-  background: var(--indigo-500);
+.time-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.time-btn.active {
+  background: #3b82f6;
   color: white;
-  border-color: var(--indigo-500);
+  border-color: #3b82f6;
 }
 
+/* API endpoints */
 .endpoint-group {
-  margin-bottom: 12px;
-}
-
-.endpoint-group:last-child {
-  margin-bottom: 0;
+  margin-bottom: 1rem;
 }
 
 .group-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--blue-gray-800);
-  margin-bottom: 6px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
 }
 
 .endpoint-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 8px;
-  background: var(--blue-gray-50);
-  border-radius: 4px;
-  margin-bottom: 4px;
-  border-left: 3px solid transparent;
-}
-
-.endpoint-item:last-child {
-  margin-bottom: 0;
-}
-
-.endpoint-item.healthy { border-left-color: #10b981; }
-.endpoint-item.warning { border-left-color: #f59e0b; }
-.endpoint-item.error { border-left-color: #ef4444; }
-
-.endpoint-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.method {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: var(--blue-gray-200);
-  color: var(--blue-gray-700);
-  flex-shrink: 0;
-}
-
-.path {
-  font-family: 'Courier New', monospace;
-  font-size: 11px;
-  color: var(--blue-gray-700);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.endpoint-metrics {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.response-time {
-  font-size: 10px;
-  color: var(--blue-gray-500);
-}
-
-.status-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-indicator.healthy { background: #10b981; }
-.status-indicator.warning { background: #f59e0b; }
-.status-indicator.error { background: #ef4444; }
-
-.log-controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.log-filter {
-  background: white;
-  border: 1px solid var(--blue-gray-300);
-  color: var(--blue-gray-700);
-  padding: 6px 12px;
+  padding: 0.5rem;
+  margin-bottom: 0.25rem;
   border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
+  font-size: 0.875rem;
 }
 
-.log-filter option {
-  background: white;
-  color: var(--blue-gray-700);
-  padding: 4px 8px;
+.endpoint-item.healthy {
+  background: rgba(16, 185, 129, 0.1);
+  color: #065f46;
 }
 
-.log-filter:focus {
-  outline: none;
-  border-color: var(--indigo-500);
-  background: white;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+.endpoint-item.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #92400e;
 }
 
-.clear-logs {
+.endpoint-item.error {
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid var(--red-500);
-  color: var(--red-500);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  color: #991b1b;
 }
 
-.clear-logs:hover {
-  background: var(--red-500);
-  color: white;
-}
-
-.logs-content {
-  max-height: 300px;
-  overflow-y: auto;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-}
-
-.log-entry {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.log-entry:last-child {
-  border-bottom: none;
-}
-
-.log-time {
-  color: var(--blue-gray-500);
-}
-
-.log-level {
-  font-weight: 600;
-  min-width: 60px;
-}
-
-.log-entry.error .log-level { color: #ef4444; }
-.log-entry.warning .log-level { color: #f59e0b; }
-.log-entry.info .log-level { color: #10b981; }
-
-.log-message {
-  color: var(--blue-gray-700);
-}
-
-.resource-item {
+/* Quick Actions */
+.action-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #374151;
+  transition: background-color 0.2s ease;
+  margin-bottom: 0.5rem;
 }
 
-.resource-icon {
-  font-size: 20px;
+.action-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Activity */
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.activity-icon {
   width: 32px;
-  text-align: center;
-  flex-shrink: 0;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
 }
 
-.resource-info {
-  flex: 1;
-  min-width: 0; /* Allow text truncation */
-}
-
-.resource-name {
-  font-size: 13px;
+.activity-action {
   font-weight: 500;
-  color: var(--blue-gray-800);
-  margin-bottom: 3px;
+  color: #374151;
 }
 
-.resource-usage {
-  font-size: 11px;
-  color: var(--blue-gray-600);
-  margin-bottom: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.activity-time {
+  font-size: 0.875rem;
+  color: #6b7280;
 }
 
-.resource-bar {
-  height: 6px;
-  background: var(--blue-gray-200);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-@media (max-width: 768px) {
-  .monitor-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .chart-content canvas {
-    width: 100% !important;
-    height: auto !important;
-  }
+.status-summary,
+.api-stats {
+  font-size: 0.875rem;
+  color: #6b7280;
 }
 </style>

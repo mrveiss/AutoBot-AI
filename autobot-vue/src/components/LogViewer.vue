@@ -57,7 +57,7 @@
       <button @click="showSearch = false">Cancel</button>
     </div>
 
-    <div class="log-content" ref="logContent">
+    <div class="log-content" ref="logContentRef">
       <div v-if="loading" class="loading">
         <i class="fas fa-spinner fa-spin"></i> Loading...
       </div>
@@ -211,7 +211,9 @@ export default {
     
     const formatStructuredLogs = (logEntries) => {
       return logEntries.map(entry => {
-        const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : ''
+        const timestamp = entry.timestamp ? 
+          (new Date(entry.timestamp).getTime() ? new Date(entry.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()) : 
+          ''
         const level = entry.level || 'INFO'
         const service = entry.service || 'unknown'
         const sourceType = entry.source_type || 'file'
@@ -222,9 +224,9 @@ export default {
     }
 
     const startWebSocket = () => {
-      if (!selectedFile.value) return
+      if (!selectedSource.value) return
       
-      const wsUrl = `${apiService.getWebSocketUrl()}/api/logs/tail/${selectedFile.value}`
+      const wsUrl = `${apiService.getWebSocketUrl()}/api/logs/tail/${selectedSource.value}`
       websocket = new WebSocket(wsUrl)
       
       websocket.onmessage = (event) => {
@@ -275,7 +277,7 @@ export default {
         loading.value = true
         const response = await apiService.get('/api/logs/search', {
           query: searchQuery.value,
-          filename: selectedFile.value || null
+          source: selectedSource.value || null
         })
         
         if (response.results.length > 0) {
@@ -329,7 +331,7 @@ export default {
       searchQuery,
       lineCount,
       lastUpdated,
-      logContent: logContentRef,
+      logContentRef,
       refreshFiles,
       loadLog,
       toggleAutoScroll,

@@ -253,8 +253,6 @@ def add_fast_middleware(app: FastAPI) -> None:
         allow_origins=[
             f"{HTTP_PROTOCOL}://{FRONTEND_HOST_IP}:{FRONTEND_PORT}",
             f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
-            "http://127.0.0.1:5173",
-            "http://localhost:5173",
         ],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],

@@ -206,18 +206,18 @@ const avgDocSize = computed(() => {
 })
 
 const topCategories = computed(() => {
-  return [...store.categories]
+  return [...(store.categories || [])]
     .sort((a, b) => b.documentCount - a.documentCount)
     .slice(0, 5)
 })
 
 const maxCategoryCount = computed(() => {
-  return Math.max(...store.categories.map(c => c.documentCount), 1)
+  return Math.max(...(store.categories || []).map(c => c.documentCount), 1)
 })
 
 const documentsByType = computed(() => {
   const types: Record<string, number> = {}
-  store.documents.forEach(doc => {
+  (store.documents || []).forEach(doc => {
     types[doc.type] = (types[doc.type] || 0) + 1
   })
   return types
@@ -226,8 +226,8 @@ const documentsByType = computed(() => {
 const popularTags = computed(() => {
   const tagCounts: Record<string, number> = {}
 
-  store.documents.forEach(doc => {
-    doc.tags.forEach(tag => {
+  (store.documents || []).forEach(doc => {
+    (doc.tags || []).forEach(tag => {
       tagCounts[tag] = (tagCounts[tag] || 0) + 1
     })
   })
@@ -349,7 +349,7 @@ ${Object.entries(documentsByType.value).map(([type, count]) => `- ${capitalize(t
 - Average tags per document: ${avgTagsPerDoc.value}
 
 ## Popular Tags
-${popularTags.value.slice(0, 10).map(tag => `- ${tag.name}: ${tag.count} documents`).join('\n')}
+${(popularTags.value || []).slice(0, 10).map(tag => `- ${tag.name}: ${tag.count} documents`).join('\n')}
   `.trim()
 
   const blob = new Blob([report], { type: 'text/markdown' })
@@ -417,7 +417,7 @@ const formatRelativeTime = (date: Date | string): string => {
 }
 
 const capitalize = (str: string): string => {
-  return str.charAt(0).toUpperCase() + str.slice(1)
+  return str && str.length > 0 ? str.charAt(0).toUpperCase() + str.slice(1) : str || ''
 }
 
 // Load stats on mount

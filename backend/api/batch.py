@@ -4,6 +4,7 @@ Reduces multiple round trips by combining requests
 """
 import asyncio
 import logging
+from datetime import datetime
 from typing import Dict, List, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -22,6 +23,22 @@ class BatchResponse(BaseModel):
     responses: Dict[str, Any]  # Map of endpoint to response data
     errors: Dict[str, str]  # Map of endpoint to error message
     timing: Dict[str, float]  # Map of endpoint to response time
+
+
+@router.get("/status")
+async def get_batch_status():
+    """Get batch processing service status"""
+    return {
+        "status": "healthy",
+        "service": "batch_processor",
+        "capabilities": [
+            "batch_load",
+            "chat_init"
+        ],
+        "max_batch_size": 10,
+        "timeout": 30,
+        "timestamp": datetime.now().isoformat()
+    }
 
 
 @router.post("/load")

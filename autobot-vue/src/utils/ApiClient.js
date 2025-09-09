@@ -125,7 +125,31 @@ class ApiClient {
   loadSettings() {
     try {
       const savedSettings = localStorage.getItem('chat_settings');
-      return savedSettings ? JSON.parse(savedSettings) : {};
+      let settings = savedSettings ? JSON.parse(savedSettings) : {};
+      
+      // CRITICAL FIX: Automatically update localStorage if it contains localhost URLs
+      // This prevents old cached settings from overriding correct environment variables
+      const correctBackendUrl = API_CONFIG.BASE_URL;
+      const hasLocalhostUrl = settings.backend?.api_endpoint?.includes('localhost') || 
+                              settings.backend?.api_endpoint?.includes('127.0.0.1');
+      
+      if (correctBackendUrl && hasLocalhostUrl) {
+        console.log('[ApiClient] FIXING LOCALSTORAGE: Detected localhost URL in settings:', settings.backend?.api_endpoint);
+        console.log('[ApiClient] FIXING LOCALHOST: Updating with correct URL:', correctBackendUrl);
+        
+        // Initialize backend settings if not present
+        settings.backend = settings.backend || {};
+        
+        // Update with correct backend URL from environment variables
+        settings.backend.api_endpoint = correctBackendUrl;
+        
+        // Save corrected settings back to localStorage
+        localStorage.setItem('chat_settings', JSON.stringify(settings));
+        
+        console.log('[ApiClient] LOCALHOST FIXED: Settings updated in localStorage');
+      }
+      
+      return settings;
     } catch (error) {
       console.error('Error loading settings:', error);
       return {};
@@ -133,10 +157,17 @@ class ApiClient {
   }
 
 
-  // Generic request method with error handling and timeout
+  // Generic request method with error handling, timeout, and retry logic
   async request(endpoint, options = {}) {
+    return this.requestWithRetry(endpoint, options);
+  }
+
+  // Enhanced request method with retry logic based on MCP error analysis
+  async requestWithRetry(endpoint, options = {}, retryCount = 0) {
     const url = `${this.baseUrl}${endpoint}`;
     const method = options.method || 'GET';
+    const maxRetries = API_CONFIG.RETRY_ATTEMPTS || 3;
+    const retryDelay = API_CONFIG.RETRY_DELAY || 2000;
     const startTime = performance.now();
 
     // Enhanced logging for proxy debugging
@@ -168,14 +199,8 @@ class ApiClient {
       }
     }
 
-    // PERFORMANCE FIX: Dynamic timeout based on endpoint (configurable)
+    // Standard timeout for all requests (background tasks return immediately)
     let requestTimeout = this.timeout;
-    const slowEndpoints = API_CONFIG.SLOW_ENDPOINTS || ['/api/prompts/', '/api/settings/config', '/api/system/health'];
-    const slowEndpointTimeout = API_CONFIG.SLOW_ENDPOINT_TIMEOUT || 45000;
-    
-    if (slowEndpoints.some(slow => endpoint.includes(slow))) {
-      requestTimeout = Math.max(this.timeout, slowEndpointTimeout);
-    }
 
     // Track API call start
     if (window.rum) {
@@ -290,10 +315,29 @@ class ApiClient {
           });
         }
 
+        // Retry logic for timeout errors based on MCP insights
+        if (retryCount < maxRetries && this.shouldRetry(error, method)) {
+          console.warn(`[ApiClient] Timeout on attempt ${retryCount + 1}/${maxRetries + 1}, retrying in ${retryDelay * (retryCount + 1)}ms...`);
+          
+          // Exponential backoff
+          const backoffDelay = retryDelay * Math.pow(2, retryCount);
+          await this.delay(backoffDelay);
+          
+          return this.requestWithRetry(endpoint, options, retryCount + 1);
+        }
+
         throw timeoutError;
       }
 
-      // NETWORK ERROR HANDLING: Better messages for connection issues
+      // NETWORK ERROR HANDLING: Better messages for connection issues with retry logic
+      if (this.shouldRetry(error, method) && retryCount < maxRetries) {
+        console.warn(`[ApiClient] Network error on attempt ${retryCount + 1}/${maxRetries + 1}, retrying...`, error);
+        
+        const backoffDelay = retryDelay * Math.pow(2, retryCount);
+        await this.delay(backoffDelay);
+        
+        return this.requestWithRetry(endpoint, options, retryCount + 1);
+      }
       if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
         const networkError = new Error(
           `Network error: Cannot connect to backend at ${this.baseUrl}. ` +
@@ -687,6 +731,34 @@ class ApiClient {
     return this.timeout;
   }
 
+  // Helper method to determine if request should be retried
+  shouldRetry(error, method) {
+    // Retry logic based on MCP error analysis
+    const retryableErrors = [
+      'timeout',
+      'network',
+      'Failed to fetch',
+      'Connection refused',
+      'ECONNREFUSED'
+    ];
+    
+    // Don't retry write operations (POST, PUT, DELETE) unless specifically safe
+    const safeToRetryMethods = ['GET', 'HEAD', 'OPTIONS'];
+    if (!safeToRetryMethods.includes(method.toUpperCase())) {
+      return false;
+    }
+    
+    // Check if error message indicates a retryable condition
+    return retryableErrors.some(errorType => 
+      error.message && error.message.toLowerCase().includes(errorType.toLowerCase())
+    );
+  }
+
+  // Helper method for delays with exponential backoff
+  async delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   // Update base URL
   setBaseUrl(url) {
     // CRITICAL: Don't allow baseUrl changes when using Vite proxy
@@ -857,11 +929,11 @@ class ApiClient {
 
   // LLM MODEL OPERATIONS  
   async loadLlmModels() {
-    return this.get('/api/llm/models', { cache: 'medium' });
+    return this.get('/api/llm/models', { cache: 'no-cache' });
   }
 
   async loadEmbeddingModels() {
-    return this.get('/api/llm/embedding/models', { cache: 'medium' });
+    return this.get('/api/llm/embedding/models', { cache: 'no-cache' });
   }
 
   // WORKFLOW OPERATIONS
@@ -929,12 +1001,12 @@ class ApiClient {
 
   // CONFIGURATION OPERATIONS
   async loadFrontendConfig() {
-    return this.get('/api/config/frontend', { cache: 'long' });
+    return this.get('/api/config/frontend', { cache: 'default' });
   }
 
   // TERMINAL OPERATIONS
   async createTerminalSession(options = {}) {
-    return this.post('/api/terminal/consolidated/sessions', {
+    return this.post('/api/terminal/sessions', {
       user_id: 'default',
       security_level: 'standard',
       enable_logging: false,
@@ -943,18 +1015,18 @@ class ApiClient {
   }
 
   async deleteTerminalSession(sessionId) {
-    return this.request(`/api/terminal/consolidated/sessions/${sessionId}`, {
+    return this.request(`/api/terminal/sessions/${sessionId}`, {
       method: 'DELETE'
     });
   }
 
   async getTerminalSessions() {
-    return this.get('/api/terminal/consolidated/sessions');
+    return this.get('/api/terminal/sessions');
   }
 
   async executeTerminalCommand(command, options = {}) {
     const terminalTimeout = API_CONFIG.TERMINAL_TIMEOUT || 30000;
-    return this.post('/api/terminal/consolidated/command', {
+    return this.post('/api/terminal/command', {
       command: command,
       timeout: options.timeout || terminalTimeout,
       working_directory: options.cwd,

@@ -20,15 +20,18 @@ class EventManager:
         self._config = self._load_config()  # Load config on init
 
     def _load_config(self):
-        config_path = "config/config.yaml"
-        if not os.path.exists(config_path):
+        # Get absolute path to config file
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent
+        config_path = project_root / "config" / "config.yaml"
+        if not config_path.exists():
             logger.warning(
                 f"Config file not found at {config_path}. "
                 "Using default debug_mode=False."
             )
             return {"agent_behavior": {"debug_mode": False}}
         try:
-            with open(config_path, "r") as f:
+            with open(str(config_path), "r") as f:
                 return yaml.safe_load(f)
         except Exception as e:
             logger.error(

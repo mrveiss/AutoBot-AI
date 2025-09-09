@@ -15,7 +15,6 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 COMPOSE_FILE="$PROJECT_ROOT/docker-compose.hybrid.yml"
-CONFIG_FILE="$PROJECT_ROOT/config/deployment.yaml"
 
 # Functions
 log_info() {
