@@ -161,10 +161,15 @@ class PlaywrightService:
                     raise RuntimeError(f"Frontend test failed: {response.status}")
                     
         except Exception as e:
-            logger.error(f"Frontend test error: {e}")
+            import traceback
+            error_details = f"Exception: {type(e).__name__}: {str(e)}"
+            if hasattr(e, '__cause__') and e.__cause__:
+                error_details += f" | Caused by: {e.__cause__}"
+            error_details += f" | Traceback: {traceback.format_exc()[-500:]}"  # Last 500 chars
+            logger.error(f"Frontend test error: {error_details}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": error_details,
                 "frontend_url": frontend_url,
                 "tests": []
             }
