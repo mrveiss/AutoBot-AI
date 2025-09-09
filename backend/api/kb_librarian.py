@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.agents import get_kb_librarian
+from src.agents.kb_librarian_agent import get_kb_librarian
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

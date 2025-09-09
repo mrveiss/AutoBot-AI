@@ -6,8 +6,18 @@
 
 set -euo pipefail
 
-# Configuration
+# Load unified configuration system
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_SCRIPT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [[ -f "${CONFIG_SCRIPT_DIR}/config/load_config.sh" ]]; then
+    export PATH="$HOME/bin:$PATH"  # Ensure yq is available
+    source "${CONFIG_SCRIPT_DIR}/config/load_config.sh"
+    echo -e "\033[0;32m✓ Loaded unified configuration system\033[0m"
+else
+    echo -e "\033[0;31m✗ Warning: Unified configuration not found, using fallback values\033[0m"
+fi
+
+# Configuration
 INVENTORY_FILE="$SCRIPT_DIR/inventory/production.yml"
 PLAYBOOK_FILE="$SCRIPT_DIR/playbooks/deploy-native-services.yml"
 LOG_DIR="/tmp/autobot-native-deployment"

@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 import aiofiles
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
+from src.config_helper import cfg
 from src.source_attribution import SourceType, track_source
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ class ResearchBrowserSession:
             try:
                 # Try to connect to CDP if available (for future use)
                 self.browser = await self.playwright.chromium.connect_over_cdp(
-                    "http://localhost:9222"
+                    cfg.get_service_url('chrome', '/devtools') or "http://localhost:9222"
                 )
                 logger.info(
                     f"Connected to existing browser via CDP for session "

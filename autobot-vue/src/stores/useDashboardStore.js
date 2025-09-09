@@ -89,7 +89,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   
   // System status computed properties
   const systemHealthStatus = computed(() => {
-    const status = metrics.value.system_health.status
+    const status = metrics.value.system_health.status || 'unknown'
     return {
       text: status.charAt(0).toUpperCase() + status.slice(1),
       class: status === 'healthy' ? 'success' : status === 'degraded' ? 'warning' : 'error',

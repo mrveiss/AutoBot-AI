@@ -429,7 +429,7 @@ secrets_manager = SecretsManager()
 # API Endpoints
 
 
-@router.post("/secrets")
+@router.post("/")
 async def create_secret(request: SecretCreateRequest):
     """Create a new secret"""
     try:
@@ -460,7 +460,7 @@ async def create_secret(request: SecretCreateRequest):
         )
 
 
-@router.get("/secrets")
+@router.get("/")
 async def list_secrets(
     chat_id: Optional[str] = Query(None), scope: Optional[SecretScope] = Query(None)
 ):
@@ -480,142 +480,7 @@ async def list_secrets(
         raise HTTPException(status_code=500, detail=f"Failed to list secrets: {str(e)}")
 
 
-@router.get("/secrets/{secret_id}")
-async def get_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
-    """Get a specific secret with its value"""
-    try:
-        secret = secrets_manager.get_secret(secret_id, chat_id=chat_id)
-        if not secret:
-            raise HTTPException(status_code=404, detail="Secret not found")
-
-        return JSONResponse(status_code=200, content=secret)
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to get secret: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get secret: {str(e)}")
-
-
-@router.put("/secrets/{secret_id}")
-async def update_secret(
-    secret_id: str, request: SecretUpdateRequest, chat_id: Optional[str] = Query(None)
-):
-    """Update a secret's metadata"""
-    try:
-        secret = secrets_manager.update_secret(secret_id, request, chat_id=chat_id)
-        if not secret:
-            raise HTTPException(status_code=404, detail="Secret not found")
-
-        # Convert datetime objects to strings for JSON serialization
-        secret_data = secret.dict()
-        if secret_data.get("created_at"):
-            secret_data["created_at"] = secret_data["created_at"].isoformat()
-        if secret_data.get("updated_at"):
-            secret_data["updated_at"] = secret_data["updated_at"].isoformat()
-        if secret_data.get("expires_at"):
-            secret_data["expires_at"] = secret_data["expires_at"].isoformat()
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": "Secret updated successfully",
-                "secret": secret_data,
-            },
-        )
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to update secret: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update secret: {str(e)}"
-        )
-
-
-@router.delete("/secrets/{secret_id}")
-async def delete_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
-    """Delete a secret"""
-    try:
-        success = secrets_manager.delete_secret(secret_id, chat_id=chat_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Secret not found")
-
-        return JSONResponse(
-            status_code=200,
-            content={"status": "success", "message": "Secret deleted successfully"},
-        )
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to delete secret: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to delete secret: {str(e)}"
-        )
-
-
-@router.post("/secrets/transfer")
-async def transfer_secrets(
-    request: SecretTransferRequest, chat_id: Optional[str] = Query(None)
-):
-    """Transfer secrets between scopes"""
-    try:
-        result = secrets_manager.transfer_secrets(request, chat_id=chat_id)
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": (
-                    f"Transfer completed: {result['total_requested']} requested, "
-                    f"{len(result['transferred'])} transferred"
-                ),
-                "result": result,
-            },
-        )
-    except Exception as e:
-        logger.error(f"Failed to transfer secrets: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to transfer secrets: {str(e)}"
-        )
-
-
-@router.get("/secrets/chat/{chat_id}/cleanup")
-async def get_chat_cleanup_info(chat_id: str):
-    """Get information about secrets that would be affected by chat deletion"""
-    try:
-        info = secrets_manager.cleanup_chat_secrets(chat_id)
-        return JSONResponse(status_code=200, content=info)
-    except Exception as e:
-        logger.error(f"Failed to get chat cleanup info: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get cleanup info: {str(e)}"
-        )
-
-
-@router.delete("/secrets/chat/{chat_id}")
-async def delete_chat_secrets(
-    chat_id: str, secret_ids: Optional[List[str]] = Query(None)
-):
-    """Delete secrets for a specific chat (used during chat cleanup)"""
-    try:
-        result = secrets_manager.delete_chat_secrets(chat_id, secret_ids)
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": (
-                    f"Deleted {result['total_deleted']} secrets for chat {chat_id}"
-                ),
-                "result": result,
-            },
-        )
-    except Exception as e:
-        logger.error(f"Failed to delete chat secrets: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to delete chat secrets: {str(e)}"
-        )
-
-
-@router.get("/secrets/types")
+@router.get("/types")
 async def get_secret_types():
     """Get available secret types"""
     return JSONResponse(
@@ -632,7 +497,31 @@ async def get_secret_types():
     )
 
 
-@router.get("/secrets/stats")
+@router.get("/status")
+async def get_secrets_status():
+    """Get secrets service status"""
+    try:
+        secrets = secrets_manager._load_secrets()
+        
+        return {
+            "status": "healthy",
+            "service": "secrets_manager",
+            "total_secrets": len(secrets),
+            "storage_backend": "file",
+            "encryption_enabled": False,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get secrets status: {e}")
+        return {
+            "status": "error",
+            "service": "secrets_manager",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@router.get("/stats")
 async def get_secrets_stats():
     """Get secrets statistics"""
     try:
@@ -671,3 +560,138 @@ async def get_secrets_stats():
     except Exception as e:
         logger.error(f"Failed to get secrets stats: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+
+@router.get("/{secret_id}")
+async def get_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
+    """Get a specific secret with its value"""
+    try:
+        secret = secrets_manager.get_secret(secret_id, chat_id=chat_id)
+        if not secret:
+            raise HTTPException(status_code=404, detail="Secret not found")
+
+        return JSONResponse(status_code=200, content=secret)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to get secret: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get secret: {str(e)}")
+
+
+@router.put("/{secret_id}")
+async def update_secret(
+    secret_id: str, request: SecretUpdateRequest, chat_id: Optional[str] = Query(None)
+):
+    """Update a secret's metadata"""
+    try:
+        secret = secrets_manager.update_secret(secret_id, request, chat_id=chat_id)
+        if not secret:
+            raise HTTPException(status_code=404, detail="Secret not found")
+
+        # Convert datetime objects to strings for JSON serialization
+        secret_data = secret.dict()
+        if secret_data.get("created_at"):
+            secret_data["created_at"] = secret_data["created_at"].isoformat()
+        if secret_data.get("updated_at"):
+            secret_data["updated_at"] = secret_data["updated_at"].isoformat()
+        if secret_data.get("expires_at"):
+            secret_data["expires_at"] = secret_data["expires_at"].isoformat()
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "Secret updated successfully",
+                "secret": secret_data,
+            },
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to update secret: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update secret: {str(e)}"
+        )
+
+
+@router.delete("/{secret_id}")
+async def delete_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
+    """Delete a secret"""
+    try:
+        success = secrets_manager.delete_secret(secret_id, chat_id=chat_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Secret not found")
+
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "message": "Secret deleted successfully"},
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to delete secret: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete secret: {str(e)}"
+        )
+
+
+@router.post("/transfer")
+async def transfer_secrets(
+    request: SecretTransferRequest, chat_id: Optional[str] = Query(None)
+):
+    """Transfer secrets between scopes"""
+    try:
+        result = secrets_manager.transfer_secrets(request, chat_id=chat_id)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": (
+                    f"Transfer completed: {result['total_requested']} requested, "
+                    f"{len(result['transferred'])} transferred"
+                ),
+                "result": result,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Failed to transfer secrets: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to transfer secrets: {str(e)}"
+        )
+
+
+@router.get("/chat/{chat_id}/cleanup")
+async def get_chat_cleanup_info(chat_id: str):
+    """Get information about secrets that would be affected by chat deletion"""
+    try:
+        info = secrets_manager.cleanup_chat_secrets(chat_id)
+        return JSONResponse(status_code=200, content=info)
+    except Exception as e:
+        logger.error(f"Failed to get chat cleanup info: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get cleanup info: {str(e)}"
+        )
+
+
+@router.delete("/chat/{chat_id}")
+async def delete_chat_secrets(
+    chat_id: str, secret_ids: Optional[List[str]] = Query(None)
+):
+    """Delete secrets for a specific chat (used during chat cleanup)"""
+    try:
+        result = secrets_manager.delete_chat_secrets(chat_id, secret_ids)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": (
+                    f"Deleted {result['total_deleted']} secrets for chat {chat_id}"
+                ),
+                "result": result,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Failed to delete chat secrets: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete chat secrets: {str(e)}"
+        )

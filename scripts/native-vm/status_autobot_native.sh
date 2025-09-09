@@ -4,6 +4,16 @@
 
 set -e
 
+# Load unified configuration system
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
+if [[ -f "${SCRIPT_DIR}/config/load_config.sh" ]]; then
+    export PATH="$HOME/bin:$PATH"  # Ensure yq is available
+    source "${SCRIPT_DIR}/config/load_config.sh"
+    echo -e "\033[0;32m✓ Loaded unified configuration system\033[0m"
+else
+    echo -e "\033[0;31m✗ Warning: Unified configuration not found, using fallback values\033[0m"
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,13 +22,13 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# VM Configuration
+# VM Configuration (from unified config)
 declare -A VMS
-VMS[frontend]="172.16.168.21"
-VMS[npu-worker]="172.16.168.22" 
-VMS[redis]="172.16.168.23"
-VMS[ai-stack]="172.16.168.24"
-VMS[browser]="172.16.168.25"
+VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21")
+VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22")
+VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")
+VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24")
+VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25")
 
 # Service Configuration
 declare -A SERVICES

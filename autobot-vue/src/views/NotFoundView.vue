@@ -16,11 +16,11 @@
         <!-- Navigation Options -->
         <div class="space-x-4">
           <router-link
-            to="/dashboard"
+            to="/chat"
             class="btn btn-primary inline-flex items-center"
           >
             <i class="fas fa-home mr-2"></i>
-            Go to Dashboard
+Go to Chat
           </router-link>
           <button
             @click="$router.go(-1)"

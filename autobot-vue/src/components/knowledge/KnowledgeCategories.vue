@@ -642,7 +642,7 @@ const onCategoriesLoaded = () => {
 const formatCategoryPath = (categoryPath: string) => {
   return categoryPath.split('/').map(part => 
     part.split('-').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
+      word && word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word
     ).join(' ')
   ).join(' > ')
 }
@@ -650,7 +650,7 @@ const formatCategoryPath = (categoryPath: string) => {
 const formatCategoryName = (categoryPath: string) => {
   const parts = categoryPath.split('/')
   return parts[parts.length - 1].split('-').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1)
+    word && word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word
   ).join(' ')
 }
 

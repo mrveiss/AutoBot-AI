@@ -10,7 +10,8 @@ from typing import Dict, Any
 import redis
 from fastapi import APIRouter, HTTPException
 
-from src.config import REDIS_HOST_IP
+from src.config import config as global_config_manager
+from src.config_helper import cfg
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -32,16 +33,20 @@ REDIS_DATABASES = {
 }
 
 def get_redis_connection(db_number: int = 0):
-    """Get Redis connection for specified database"""
+    """Get Redis connection for specified database - NO HARDCODED VALUES"""
     try:
+        # Get all Redis configuration from centralized config
+        redis_config = cfg.get_redis_config()
+        
         return redis.Redis(
-            host=REDIS_HOST_IP,
-            port=6379,
+            host=cfg.get('redis.host'),
+            port=cfg.get('redis.port'),
+            password=cfg.get('redis.password'),
             db=db_number,
             decode_responses=True,
-            socket_timeout=2.0,
-            socket_connect_timeout=2.0,
-            retry_on_timeout=True
+            socket_timeout=cfg.get('redis.connection.socket_timeout'),
+            socket_connect_timeout=cfg.get('redis.connection.socket_connect_timeout'),
+            retry_on_timeout=cfg.get('redis.connection.retry_on_timeout')
         )
     except Exception as e:
         logger.error(f"Failed to connect to Redis database {db_number}: {str(e)}")

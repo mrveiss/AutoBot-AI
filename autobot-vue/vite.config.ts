@@ -4,6 +4,12 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
+// Import centralized defaults to eliminate hardcoded fallbacks
+const DEFAULT_CONFIG = {
+  backend: { host: '172.16.168.20', port: '8001' },
+  browser: { host: '172.16.168.25', port: '6080' }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -53,7 +59,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: `http://${process.env.VITE_BACKEND_HOST || '192.168.168.17'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
+        target: `http://${process.env.VITE_BACKEND_HOST || DEFAULT_CONFIG.backend.host}:${process.env.VITE_BACKEND_PORT || DEFAULT_CONFIG.backend.port}`,
         changeOrigin: true,
         secure: false,
         timeout: 30000,
@@ -80,7 +86,7 @@ export default defineConfig({
         }
       },
       '/ws': {
-        target: `http://${process.env.VITE_BACKEND_HOST || '192.168.168.17'}:${process.env.VITE_BACKEND_PORT || '8001'}`,
+        target: `http://${process.env.VITE_BACKEND_HOST || DEFAULT_CONFIG.backend.host}:${process.env.VITE_BACKEND_PORT || DEFAULT_CONFIG.backend.port}`,
         ws: true,
         changeOrigin: true,
         timeout: 30000,
@@ -97,7 +103,7 @@ export default defineConfig({
         }
       },
       '/vnc-proxy': {
-        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || '192.168.168.17'}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || '6080'}`,
+        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || DEFAULT_CONFIG.browser.host}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || DEFAULT_CONFIG.browser.port}`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/vnc-proxy/, '')
       }

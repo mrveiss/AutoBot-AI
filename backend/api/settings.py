@@ -84,3 +84,28 @@ async def save_full_config(config_data: dict):
         raise HTTPException(
             status_code=500, detail=f"Error saving full config: {str(e)}"
         )
+
+
+@router.post("/clear-cache")
+async def clear_cache():
+    """Clear application cache - includes config cache"""
+    try:
+        logger.info("Settings clear-cache endpoint called - clearing config cache")
+        
+        # Clear the ConfigService cache to force reload of settings
+        ConfigService.clear_cache()
+        
+        return {
+            "status": "success",
+            "message": "Configuration cache cleared. Settings will be reloaded on next request.",
+            "available_endpoints": {
+                "clear_all_redis": "/api/cache/redis/clear/all",
+                "clear_specific_redis": "/api/cache/redis/clear/{database_name}",
+                "clear_cache_type": "/api/cache/clear/{cache_type}"
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error in clear-cache endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error in clear-cache endpoint: {str(e)}"
+        )

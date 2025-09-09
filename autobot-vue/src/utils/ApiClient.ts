@@ -1,5 +1,8 @@
 // ApiClient.ts - Unified API client for all backend operations
 // RumAgent is accessed via window.rum global
+// MIGRATION: Now uses AppConfig.js for centralized configuration
+
+import appConfig from '../config/AppConfig.js';
 
 // Type declarations for window.rum (extending existing interface)
 interface RumApi {
@@ -38,8 +41,8 @@ export class ApiClient {
   settings: any;
 
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL ||
-      `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.3'}:${import.meta.env.VITE_BACKEND_PORT || '8001'}`;
+    // Use synchronous fallback for constructor, but recommend async getBaseUrl() method
+    this.baseUrl = this.getSyncBaseUrl();
     this.timeout = 30000; // 30 seconds default timeout (balance between functionality and responsiveness)
     this.settings = this.loadSettings();
 
@@ -60,6 +63,93 @@ export class ApiClient {
     }
   }
 
+  // Get synchronous base URL for constructor (fallback only)
+  getSyncBaseUrl(): string {
+    const backendHost = import.meta.env.VITE_BACKEND_HOST;
+    const backendPort = import.meta.env.VITE_BACKEND_PORT || '8001';
+    const protocol = import.meta.env.VITE_HTTP_PROTOCOL || 'http';
+    
+    if (backendHost) {
+      return `${protocol}://${backendHost}:${backendPort}`;
+    }
+    
+    // Fallback to localhost for development
+    return `${protocol}://localhost:${backendPort}`;
+  }
+
+  // Get base URL using AppConfig service (recommended)
+  async getBaseUrl(): Promise<string> {
+    try {
+      return await appConfig.getServiceUrl('backend');
+    } catch (error) {
+      console.warn('Failed to get backend URL from AppConfig, using fallback:', error);
+      return this.baseUrl;
+    }
+  }
+
+  // Enhanced request method that uses AppConfig when possible
+  async requestWithConfig(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse> {
+    const baseUrl = await this.getBaseUrl();
+    const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+    
+    return this._makeRequest(url, options);
+  }
+
+  // Private method for making the actual request
+  private async _makeRequest(url: string, options: RequestOptions = {}): Promise<ApiResponse> {
+    const method = options.method || 'GET';
+    
+    // Debug URL construction
+    if (url.includes('http://') && url.lastIndexOf('http://') > 0) {
+      console.error('DUPLICATE URL DETECTED:', url);
+    }
+    
+    const startTime = performance.now();
+    
+    // Set up headers
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
+    
+    // Set up timeout
+    const controller = new AbortController();
+    const timeout = options.timeout || this.timeout;
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const fetchOptions = {
+        method,
+        headers,
+        body: options.body,
+        signal: controller.signal
+      };
+      
+      const response = await fetch(url, fetchOptions);
+      const endTime = performance.now();
+      
+      // Track API call if RUM is available
+      if (window.rum) {
+        window.rum.trackApiCall(method, url, startTime, endTime, response.status);
+      }
+      
+      clearTimeout(timeoutId);
+      return response as ApiResponse;
+      
+    } catch (error) {
+      clearTimeout(timeoutId);
+      const endTime = performance.now();
+      
+      // Track API call failure if RUM is available
+      if (window.rum) {
+        window.rum.trackApiCall(method, url, startTime, endTime, 'error', error as Error);
+      }
+      
+      console.error(`[ApiClient] ${method} ${url} failed:`, error);
+      throw error;
+    }
+  }
+
   // Load settings from localStorage
   loadSettings(): any {
     try {
@@ -71,100 +161,12 @@ export class ApiClient {
     }
   }
 
-  // Generic request method with error handling and timeout
+  // Generic request method with error handling and timeout (legacy - use requestWithConfig for new code)
   async request(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse> {
     // Handle absolute URLs vs relative endpoints
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
-    const method = options.method || 'GET';
     
-    // Debug URL construction
-    if (url.includes('http://') && url.lastIndexOf('http://') > 0) {
-      console.error('DUPLICATE URL DETECTED:', url);
-      console.error('Base URL:', this.baseUrl);
-      console.error('Endpoint:', endpoint);
-    }
-    const startTime = performance.now();
-    
-    // PERFORMANCE FIX: Use endpoint-specific timeouts for known slow operations
-    let requestTimeout = this.timeout;
-    if (endpoint.includes('knowledge_base/stats') || endpoint.includes('/stats')) {
-      requestTimeout = 10000; // 10 seconds for stats (fast with our optimizations)
-    } else if (endpoint.includes('chat') || endpoint.includes('message')) {
-      requestTimeout = 60000; // 60 seconds for chat operations
-    } else if (endpoint.includes('health')) {
-      requestTimeout = 5000; // 5 seconds for health checks (fail fast)
-    }
-
-    // Track API call start
-    if (window.rum) {
-      window.rum.trackUserInteraction('api_call_initiated', null, {
-        method,
-        endpoint,
-        url
-      });
-    }
-
-    const config: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    };
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort(new Error(`Request timeout after ${requestTimeout}ms`));
-      }, requestTimeout);
-
-      const response = await fetch(url, {
-        ...config,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      const endTime = performance.now();
-
-      if (!response.ok) {
-        // Track failed response
-        if (window.rum) {
-          window.rum.trackApiCall(method, endpoint, startTime, endTime, response.status);
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // Track successful response
-      if (window.rum) {
-        window.rum.trackApiCall(method, endpoint, startTime, endTime, response.status);
-      }
-      return response as ApiResponse;
-
-    } catch (error: any) {
-      const endTime = performance.now();
-
-      if (error.name === 'AbortError') {
-        // Use the abort reason if available, otherwise create a generic timeout error
-        const timeoutError = error.cause || error.reason || new Error(`Request timeout after ${requestTimeout}ms`);
-        if (window.rum) {
-          window.rum.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError);
-          window.rum.reportCriticalIssue('api_timeout', {
-            method,
-            endpoint,
-            url,
-            duration: endTime - startTime,
-            timeout: requestTimeout
-          });
-        }
-        throw timeoutError;
-      }
-
-      // Track other errors
-      if (window.rum) {
-        window.rum.trackApiCall(method, endpoint, startTime, endTime, 'error', error);
-      }
-      throw error;
-    }
+    return this._makeRequest(url, options);
   }
 
   // GET request

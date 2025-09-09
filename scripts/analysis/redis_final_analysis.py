@@ -399,7 +399,10 @@ class AutoBotVectorStoreAnalysis:
             'recommendation': recommendation
         }
         
-        with open('/home/kali/Desktop/AutoBot/vector_store_final_analysis.json', 'w') as f:
+        import os
+        output_file = '/home/kali/Desktop/AutoBot/reports/vector_store_final_analysis.json'
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        with open(output_file, 'w') as f:
             json.dump(full_report, f, indent=2)
         
         return recommendation
@@ -600,7 +603,7 @@ async def main():
     analyzer = AutoBotVectorStoreAnalysis()
     recommendation = await analyzer.run_final_analysis()
     
-    logger.info(f"\n💾 Complete analysis saved to: /home/kali/Desktop/AutoBot/vector_store_final_analysis.json")
+    logger.info(f"\n💾 Complete analysis saved to: /home/kali/Desktop/AutoBot/reports/vector_store_final_analysis.json")
 
 if __name__ == "__main__":
     asyncio.run(main())

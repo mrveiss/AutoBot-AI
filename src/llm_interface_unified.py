@@ -36,6 +36,7 @@ import aiohttp
 from dotenv import load_dotenv
 
 from src.utils.config_manager import config_manager
+from src.config_helper import cfg
 from src.utils.logging_manager import get_llm_logger
 from src.utils.service_registry import get_service_url
 
@@ -84,7 +85,7 @@ class LLMRequest:
     stop: Optional[List[str]] = None
     stream: bool = False
     structured_output: bool = False
-    timeout: int = 60
+    timeout: int = None  # Will use config value
     retry_count: int = 3
     fallback_enabled: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -118,7 +119,7 @@ class ProviderConfig:
     default_model: str = ""
     available_models: List[str] = field(default_factory=list)
     max_concurrent_requests: int = 10
-    timeout: int = 60
+    timeout: int = None  # Will use config value
     retry_count: int = 3
     circuit_breaker_enabled: bool = True
     priority: int = 100  # Lower numbers = higher priority
@@ -268,7 +269,8 @@ class OllamaProvider(LLMProvider):
         """Check Ollama availability."""
         try:
             # PERFORMANCE FIX: Convert blocking HTTP to async
-            timeout = aiohttp.ClientTimeout(total=5)
+            timeout_val = cfg.get_timeout('http', 'quick')
+            timeout = aiohttp.ClientTimeout(total=timeout_val)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/api/tags"
                 async with session.get(url) as response:
@@ -280,7 +282,8 @@ class OllamaProvider(LLMProvider):
         """Get available Ollama models."""
         try:
             # PERFORMANCE FIX: Convert blocking HTTP to async
-            timeout = aiohttp.ClientTimeout(total=10)
+            timeout_val = cfg.get_timeout('http', 'standard')
+            timeout = aiohttp.ClientTimeout(total=timeout_val)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/api/tags"
                 async with session.get(url) as response:

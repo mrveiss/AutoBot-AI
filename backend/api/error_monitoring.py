@@ -14,6 +14,8 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
+from src.config_helper import cfg
+
 # Add project root to path for imports
 # Add project root to path for imports
 sys.path.insert(
@@ -220,7 +222,7 @@ async def test_error_system(request: TestErrorRequest):
     """Test the error boundary system (development only)"""
     try:
         # Only allow in development mode
-        if os.getenv("AUTOBOT_ENV", "development") != "development":
+        if cfg.get('environment.mode', 'development') != "development":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Test endpoints only available in development mode",

@@ -2,6 +2,27 @@
 
 This document tracks all fixes and improvements made to the AutoBot system.
 
+## 🚨 STANDARDIZED PROCEDURES (2025-09-09)
+
+**ONLY PERMITTED SETUP AND RUN METHODS:**
+
+### Setup (Required First Time)
+```bash
+bash setup.sh [--full|--minimal|--distributed]
+```
+
+### Startup (Daily Use)  
+```bash
+bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+```
+
+**❌ OBSOLETE METHODS (DO NOT USE):**
+- ~~`run_agent_unified.sh`~~ → Use `run_autobot.sh` 
+- ~~`setup_agent.sh`~~ → Use `setup.sh`
+- ~~Any other run scripts~~ → ALL archived in `scripts/archive/`
+
+---
+
 ## LATEST FIXES (2025-09-01)
 
 ### ✅ Keras Compatibility Issue - RESOLVED
@@ -14,8 +35,8 @@ This document tracks all fixes and improvements made to the AutoBot system.
 
 **Files Updated**:
 - `src/utils/semantic_chunker.py` - Added env vars at module level
-- `scripts/setup/setup_agent.sh` - Added to setup script
-- `run_agent_unified.sh` - Added to startup script
+- `setup.sh` - Added to standardized setup script
+- `run_autobot.sh` - Added to startup script
 - `.env` and `.env.localhost` - Added to environment files
 - `docker/backend/Dockerfile` - Added to Docker image
 - `docker-compose.yml` - Added to AI stack and NPU worker services
@@ -211,7 +232,7 @@ User Response
 - Reduced Redis timeout to 2 seconds
 - Made Redis connection non-blocking (continues without Redis if unavailable)
 - Minimal initialization to start quickly
-- Updated `run_agent_unified.sh` to use fast backend
+- Updated `run_autobot.sh` to use fast backend
 
 ### 2. Frontend API Timeouts (FIXED)
 
@@ -236,96 +257,127 @@ User Response
 - Containers being removed on shutdown (now preserved by default)
 - Browser not launching in dev mode (fixed with proven logic from run_agent.sh)
 
+## Setup and Installation
+
+### Initial Setup (Required)
+
+**IMPORTANT**: Always use the standardized setup script for fresh installations:
+
+```bash
+bash setup.sh
+```
+
+**Setup Options:**
+```bash
+bash setup.sh [OPTIONS]
+
+OPTIONS:
+  --full             Complete setup including all dependencies
+  --minimal          Minimal setup for development
+  --distributed      Setup for distributed VM infrastructure
+  --help             Show setup help and options
+```
+
+**What setup.sh does:**
+- ✅ Installs all required dependencies
+- ✅ Configures distributed VM infrastructure 
+- ✅ Sets up environment variables for all VMs
+- ✅ Initializes Redis databases
+- ✅ Prepares Docker containers
+- ✅ Configures Ollama LLM service
+- ✅ Sets up VNC desktop access
+- ✅ Validates all service connections
+
+**After setup, always use `run_autobot.sh` for starting the system.**
+
 ## How to Run AutoBot
 
-### Development Mode (Recommended)
+### Standard Startup (Recommended)
 
 ```bash
-./run_agent_unified.sh --dev
+bash run_autobot.sh --dev
 ```
 
-This will:
-
-- Start all Docker services (Redis, Frontend, etc.)
-- Start backend on host with fast startup
-- **Start VNC server for desktop access (enabled by default)**
-- Auto-launch browser with DevTools
-- Show live logs from all services
-- **Only build missing Docker images (fast startup)**
-
-### Quick Restart (Fastest)
-
+**Available Options:**
 ```bash
-./run_agent_unified.sh --dev --no-build
+bash run_autobot.sh [OPTIONS]
+
+OPTIONS:
+  --dev              Development mode with auto-reload and debugging
+  --prod             Production mode (default)
+  --no-build         Skip Docker builds (fastest restart)
+  --build            Force build even if images exist
+  --rebuild          Force rebuild everything (clean slate)
+  --no-desktop       Disable VNC desktop access
+  --desktop          Enable VNC desktop access (default)
+  --help             Show this help message
 ```
 
-**Use this for daily development** - skips all Docker builds and uses existing containers.
+### Common Usage Examples
 
-### Build Options
-
+**Development Mode (Daily Use):**
 ```bash
-# Default: Only build missing images (recommended)
-./run_agent_unified.sh --dev
-
-# Never build (fastest restart)
-./run_agent_unified.sh --dev --no-build
-
-# Force build even if images exist
-./run_agent_unified.sh --dev --build
-
-# Force rebuild everything (clean slate)
-./run_agent_unified.sh --dev --rebuild
+bash run_autobot.sh --dev --no-build
 ```
+- Fastest startup for development
+- Uses existing containers
+- Auto-reload and debugging enabled
+
+**Fresh Development Setup:**
+```bash
+bash run_autobot.sh --dev --build
+```
+- Builds/rebuilds all services
+- Development mode with debugging
+- VNC desktop enabled by default
+
+**Production Mode:**
+```bash
+bash run_autobot.sh --prod
+```
+- Production configuration
+- All services optimized
+- Minimal logging
+
+**Clean Rebuild:**
+```bash
+bash run_autobot.sh --dev --rebuild
+```
+- Complete rebuild of all containers
+- Use when major changes are made
 
 ### Desktop Access (VNC)
 
-Desktop access via noVNC is **enabled by default**:
-
-```bash
-# Default: VNC enabled
-./run_agent_unified.sh --dev
-
-# Disable VNC if not needed
-./run_agent_unified.sh --dev --no-desktop
-```
-
-Access at: **http://localhost:6080/vnc.html**
-
-### Production Mode
-
-```bash
-./run_agent_unified.sh
-```
-
-This will:
-- Start all Docker services
-- Start backend on host
-- **Start VNC server for desktop access (enabled by default)**
-- No automatic browser launch
-
-To disable desktop access:
-```bash
-./run_agent_unified.sh --no-desktop
-```
+Desktop access is **enabled by default** on all modes:
+- **Access URL**: `http://127.0.0.1:6080/vnc.html`
+- **Disable**: Add `--no-desktop` flag
+- **Distributed Setup**: VNC runs on main machine (WSL)
 
 ## Architecture Notes
 
-### Service Layout
+### Service Layout - Distributed VM Infrastructure
 
-- **Backend**: Runs on host (port 8001) for system access
-- **Frontend**: Vue.js in Docker container (port 5173)
-- **Redis**: Docker container with Redis Stack (port 6379)
-- **Browser Service**: Playwright in Docker (port 3000)
-- **AI Stack**: Docker container (port 8080)
-- **NPU Worker**: Docker container (port 8081)
-- **VNC Desktop**: Runs on host (port 6080) for desktop access via noVNC
+**Infrastructure Overview:**
+- 📡 **Main Machine (WSL)**: `172.16.168.20` - Backend API (port 8001)
+- 🌐 **Remote VMs:**
+  - **VM1 Frontend**: `172.16.168.21:5173` - Web interface
+  - **VM2 NPU Worker**: `172.16.168.22:8081` - Hardware AI acceleration  
+  - **VM3 Redis**: `172.16.168.23:6379` - Data layer
+  - **VM4 AI Stack**: `172.16.168.24:8080` - AI processing
+  - **VM5 Browser**: `172.16.168.25:3000` - Web automation (Playwright)
+
+**Local Services:**
+- **Ollama LLM**: `127.0.0.1:11434` - Local LLM processing
+- **VNC Desktop**: `127.0.0.1:6080` - Desktop access via noVNC (when enabled)
 
 ### Key Files
 
-- `run_agent_unified.sh`: Main startup script
+- `setup.sh`: Standardized setup and installation script
+- `run_autobot.sh`: Main startup script (replaces all other run methods)
 - `backend/fast_app_factory_fix.py`: Fast backend with Redis timeout fix
-- `docker-compose.yml`: Main Docker configuration
-- `.env.localhost`: Environment configuration
+- `docker-compose.yml`: Distributed VM Docker configuration
+- `.env`: Main environment configuration for distributed infrastructure
+- `config/config.yaml`: Central configuration file
 
 ## Current Status: SUCCESS ✅
 
@@ -517,7 +569,7 @@ All services now start cleanly and maintain stable operations.
 ## Fixes Applied During This Session
 
 ### 1. VNC Desktop Access Enabled by Default
-- Modified `run_agent_unified.sh` to set `DESKTOP_ACCESS=true`
+- Modified `run_autobot.sh` to set `DESKTOP_ACCESS=true`
 - Updated to use `kex` (Kali's Win-KeX) instead of standard vncserver
 - VNC now starts automatically without --desktop flag
 

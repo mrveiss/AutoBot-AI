@@ -19,7 +19,7 @@ services:
       retries: 3
     networks:
       autobot-network:
-        ipv4_address: ${AUTOBOT_REDIS_IP:-192.168.65.10}
+        ipv4_address: ${AUTOBOT_REDIS_HOST:-172.16.168.23}
 
 networks:
   autobot-network:

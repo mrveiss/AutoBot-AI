@@ -116,7 +116,7 @@ class HealthService {
     }
     if (this.healthData.llm.current_model) {
       const provider = this.healthData.llm.provider || 'Unknown';
-      return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${this.healthData.llm.current_model}`;
+      return `${provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown'} - ${this.healthData.llm.current_model}`;
     }
     return 'Connected (No Model)';
   }

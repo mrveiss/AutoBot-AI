@@ -48,9 +48,12 @@ async def get_prompts():
             async with semaphore:  # Limit concurrent reads
                 try:
                     # PERFORMANCE FIX: Add timeout to file operations
-                    async with asyncio.timeout(5.0):  # 5 second timeout per file
+                    # Use wait_for for Python 3.10 compatibility (asyncio.timeout is 3.11+)
+                    async def read_file():
                         async with aiofiles.open(full_path, "r", encoding="utf-8") as f:
-                            content = await f.read()
+                            return await f.read()
+                    
+                    content = await asyncio.wait_for(read_file(), timeout=5.0)
 
                     prompt_id = (
                         rel_path.replace("/", "_").replace("\\", "_").rsplit(".", 1)[0]

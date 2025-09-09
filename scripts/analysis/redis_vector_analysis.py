@@ -569,10 +569,13 @@ async def main():
     recommendation = await analyzer.run_comprehensive_analysis()
     
     # Write recommendation to file
-    with open('/home/kali/Desktop/AutoBot/redis_vector_recommendation.json', 'w') as f:
+    import os
+    output_file = '/home/kali/Desktop/AutoBot/reports/redis_vector_recommendation.json'
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    with open(output_file, 'w') as f:
         json.dump(recommendation, f, indent=2)
     
-    logger.info(f"\n💾 Detailed recommendation saved to: /home/kali/Desktop/AutoBot/redis_vector_recommendation.json")
+    logger.info(f"\n💾 Detailed recommendation saved to: {output_file}")
 
 if __name__ == "__main__":
     asyncio.run(main())

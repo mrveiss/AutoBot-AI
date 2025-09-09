@@ -121,11 +121,11 @@
           <!-- Recommendations -->
           <div class="section recommendations-section">
             <h3>💡 Recommendations</h3>
-            <div v-if="reportData.recommendations.length === 0" class="no-recommendations">
+            <div v-if="(reportData.recommendations || []).length === 0" class="no-recommendations">
               ✅ No recommendations at this time
             </div>
             <div v-else>
-              <div v-for="rec in reportData.recommendations.slice(0, 5)"
+              <div v-for="rec in (reportData.recommendations || []).slice(0, 5)"
                    :key="rec.title" class="recommendation">
                 <div class="rec-header">
                   <div class="rec-title">{{ rec.title }}</div>
@@ -165,6 +165,11 @@
           </div>
         </div>
       </div>
+
+      <!-- Phase Progression Indicator -->
+      <div class="section phase-progression-section">
+        <PhaseProgressionIndicator />
+      </div>
     </div>
 
     <!-- Footer -->
@@ -180,9 +185,13 @@
 <script>
 import apiClient from '../utils/ApiClient.js';
 import errorHandler from '../utils/ErrorHandler.js';
+import PhaseProgressionIndicator from './PhaseProgressionIndicator.vue';
 
 export default {
   name: 'ValidationDashboard',
+  components: {
+    PhaseProgressionIndicator
+  },
   data() {
     return {
       reportData: null,

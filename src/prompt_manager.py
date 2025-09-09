@@ -32,7 +32,13 @@ class PromptManager:
     """
 
     def __init__(self, prompts_dir: str = "prompts"):
-        self.prompts_dir = Path(prompts_dir)
+        # Get absolute path to prompts directory
+        if Path(prompts_dir).is_absolute():
+            self.prompts_dir = Path(prompts_dir)
+        else:
+            # Find project root (parent of src directory)
+            project_root = Path(__file__).parent.parent
+            self.prompts_dir = project_root / prompts_dir
         self.prompts: Dict[str, str] = {}
         self.templates: Dict[str, Template] = {}
         self.jinja_env = Environment(

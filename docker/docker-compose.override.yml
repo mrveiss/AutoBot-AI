@@ -11,7 +11,7 @@ services:
     image: autobot-frontend:dev
     environment:
       - NODE_ENV=development
-      - VITE_BACKEND_HOST=192.168.168.17
+      - VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
       - VITE_BACKEND_PORT=8001
       - DOCKER_CONTAINER=true
       - DEBUG_PROXY=${DEBUG_PROXY:-false}

@@ -336,5 +336,36 @@ workflow_manager = WorkflowManager()
 # Convenience function
 async def process_chat_message(user_message: str, chat_id: str = "default") -> ChatWorkflowResult:
     """Process chat message through async workflow"""
-    workflow = await workflow_manager.get_workflow()
-    return await workflow.process_chat_message(user_message, chat_id)
+    try:
+        # Add timeout protection to prevent hanging - maximum 25 seconds
+        workflow = await workflow_manager.get_workflow()
+        result = await asyncio.wait_for(
+            workflow.process_chat_message(user_message, chat_id),
+            timeout=25.0
+        )
+        return result
+    except asyncio.TimeoutError:
+        logger.error(f"Chat workflow timed out after 25 seconds for message: {user_message[:50]}...")
+        # Return emergency fallback response
+        return ChatWorkflowResult(
+            response=f"I apologize, but I'm experiencing a processing delay. Your message was: '{user_message}' (Emergency mode active)",
+            message_type=MessageType.GENERAL_QUERY,
+            knowledge_status=KnowledgeStatus.BYPASSED,
+            kb_results=[],
+            research_results=None,
+            librarian_engaged=False,
+            mcp_used=False,
+            processing_time=25.0
+        )
+    except Exception as e:
+        logger.error(f"Chat workflow error: {e}")
+        return ChatWorkflowResult(
+            response=f"I encountered an error processing your message. Error: {str(e)}",
+            message_type=MessageType.GENERAL_QUERY,
+            knowledge_status=KnowledgeStatus.BYPASSED,
+            kb_results=[],
+            research_results=None,
+            librarian_engaged=False,
+            mcp_used=False,
+            processing_time=0.1
+        )

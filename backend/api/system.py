@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ModelManager
 from src.config import PLAYWRIGHT_API_URL, PLAYWRIGHT_VNC_URL, config as config_manager
+from src.config_helper import cfg
 
 router = APIRouter()
 
@@ -47,14 +48,14 @@ async def get_frontend_config():
                     "api_url": PLAYWRIGHT_API_URL,
                 },
                 "redis": {
-                    "host": redis_config.get("host", "localhost"),
-                    "port": redis_config.get("port", 6379),
+                    "host": redis_config.get("host", cfg.get_host('redis')),
+                    "port": redis_config.get("port", cfg.get_port('redis')),
                     "enabled": redis_config.get("enabled", True),
                 },
                 "lmstudio": {
                     "url": config_manager.get_nested(
                         "backend.llm.local.providers.lmstudio.endpoint",
-                        "http://localhost:1234/v1",
+                        cfg.get_service_url('lmstudio'),
                     ),
                 },
             },
@@ -110,6 +111,7 @@ async def get_frontend_config():
 
 
 @router.get("/health")
+@router.head("/health")
 async def health_check(detailed: bool = False):
     """PERFORMANCE FIX: Ultra-fast health check endpoint that responds immediately
 
@@ -121,6 +123,51 @@ async def health_check(detailed: bool = False):
                  If False, returns minimal status (default)
     """
     try:
+        # Get LLM status using the same logic as the fixed /api/llm/status endpoint
+        try:
+            from src.config import config as global_config_manager
+            
+            llm_config = global_config_manager.get_llm_config()
+            
+            # Get provider type from unified config structure
+            unified_config = llm_config.get("unified", {})
+            provider_type = unified_config.get("provider_type", "local")
+
+            if provider_type == "local":
+                # Look in the correct path: unified.local.providers.ollama
+                local_config = unified_config.get("local", {})
+                model = (
+                    local_config.get("providers", {})
+                    .get("ollama", {})
+                    .get("selected_model", "")
+                )
+                ollama_status = "connected" if model else "disconnected"
+                ollama_details = {
+                    "ollama": {
+                        "status": ollama_status,
+                        "model": model
+                    }
+                }
+            else:
+                ollama_status = "disconnected"
+                ollama_details = {
+                    "ollama": {
+                        "status": "disconnected", 
+                        "model": ""
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting LLM status for health check: {e}")
+            ollama_status = "disconnected"
+            ollama_details = {
+                "ollama": {
+                    "status": "error",
+                    "model": "",
+                    "error": str(e)
+                }
+            }
+
         # PERFORMANCE FIX: Return immediate response without any blocking operations
         base_status = {
             "status": "healthy",
@@ -128,6 +175,8 @@ async def health_check(detailed: bool = False):
             "timestamp": datetime.now().isoformat(),
             "fast_check": True,
             "response_time_ms": "< 50ms",
+            "ollama": ollama_status,  # Add LLM status for frontend compatibility
+            "details": ollama_details  # Add detailed LLM info
         }
 
         if detailed:
@@ -153,6 +202,8 @@ async def health_check(detailed: bool = False):
                 "timestamp": datetime.now().isoformat(),
                 "fast_check": True,
                 "components": {"system": {"status": "error", "error": str(e)}},
+                "ollama": "disconnected",  # Ensure ollama status is present even in error case
+                "details": {"ollama": {"status": "error", "error": str(e)}}
             },
         )
 
@@ -536,3 +587,57 @@ async def get_resource_cache_status(request: Request):
             "details": str(e),
             "timestamp": datetime.now().isoformat(),
         }
+
+
+@router.get("/info")
+async def get_system_info():
+    """Get basic system information"""
+    try:
+        import platform
+        import sys
+        import os
+        
+        # Get Python version and platform info
+        python_version = sys.version
+        platform_info = platform.platform()
+        architecture = platform.architecture()
+        
+        # Get environment info
+        env_info = {
+            "AUTOBOT_ENV": os.getenv("AUTOBOT_ENV", "development"),
+            "PYTHONPATH": bool(os.getenv("PYTHONPATH")),
+            "working_directory": os.getcwd()
+        }
+        
+        # Basic system stats
+        system_info = {
+            "python_version": python_version.split()[0],  # Just version number
+            "python_full": python_version,
+            "platform": platform_info,
+            "architecture": architecture[0],
+            "processor": platform.processor() or "unknown",
+            "environment": env_info
+        }
+        
+        return {
+            "system_info": system_info,
+            "status": "ok",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get system info: {e}")
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
+
+@router.get("/resources")
+async def get_system_resources():
+    """Get system resource information - redirects to monitoring endpoint"""
+    return {
+        "redirect": "Use /api/monitoring/resources for detailed system resources",
+        "basic_info": "System resources are available via monitoring endpoints",
+        "suggested_endpoint": "/api/monitoring/resources",
+        "status": "redirect"
+    }

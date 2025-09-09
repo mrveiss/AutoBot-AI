@@ -15,6 +15,9 @@ import redis
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+# Import unified configuration system - NO HARDCODED VALUES
+from src.config_helper import cfg
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -46,8 +49,13 @@ class ServiceMonitor:
             logger.warning(f"Could not initialize Docker client: {e}")
         
         try:
-            redis_host = os.getenv('AUTOBOT_REDIS_HOST', 'host.docker.internal')
-            self.redis_client = redis.Redis(host=redis_host, port=6379, decode_responses=True, socket_timeout=2)
+            self.redis_client = redis.Redis(
+                host=cfg.get_host('redis'),
+                port=cfg.get_port('redis'),
+                password=cfg.get('redis.password'),
+                decode_responses=True,
+                socket_timeout=cfg.get('redis.connection.socket_timeout', 2)
+            )
         except Exception as e:
             logger.warning(f"Could not initialize Redis client: {e}")
     
@@ -57,11 +65,13 @@ class ServiceMonitor:
             import aiohttp
             start_time = time.time()
             
-            timeout = aiohttp.ClientTimeout(total=3, connect=1)  # Faster timeouts
+            timeout = aiohttp.ClientTimeout(
+                total=cfg.get_timeout('http', 'standard'), 
+                connect=cfg.get_timeout('tcp', 'connect')
+            )
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                backend_host = os.getenv('AUTOBOT_BACKEND_HOST', 'host.docker.internal')
-                backend_port = os.getenv('AUTOBOT_BACKEND_PORT', '8001')
-                async with session.get(f'http://{backend_host}:{backend_port}/api/health') as response:
+                backend_url = cfg.get_service_url('backend', '/api/health')
+                async with session.get(backend_url) as response:
                     response_time = int((time.time() - start_time) * 1000)
                     
                     if response.status == 200:
@@ -233,11 +243,13 @@ class ServiceMonitor:
             # Check LLM API status
             try:
                 start_time = time.time()
-                timeout = aiohttp.ClientTimeout(total=5, connect=1)  # Faster timeouts
+                timeout = aiohttp.ClientTimeout(
+                    total=cfg.get_timeout('http', 'long'), 
+                    connect=cfg.get_timeout('tcp', 'connect')
+                )
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    backend_host = os.getenv('AUTOBOT_BACKEND_HOST', 'host.docker.internal')
-                    backend_port = os.getenv('AUTOBOT_BACKEND_PORT', '8001')
-                    async with session.get(f'http://{backend_host}:{backend_port}/api/llm/status/comprehensive') as response:
+                    llm_url = cfg.get_service_url('backend', '/api/llm/status/comprehensive')
+                    async with session.get(llm_url) as response:
                         response_time = int((time.time() - start_time) * 1000)
                         
                         if response.status == 200:
@@ -290,26 +302,15 @@ class ServiceMonitor:
             import aiohttp
             start_time = time.time()
             
-            # Try container name first, fallback to localhost
-            kb_urls = [
-                'http://backend.autobot:8001/api/knowledge_base/stats',
-                f'http://{os.getenv("AUTOBOT_BACKEND_HOST", "host.docker.internal")}:{os.getenv("AUTOBOT_BACKEND_PORT", "8001")}/api/knowledge_base/stats'
-            ]
+            # Use configuration system for knowledge base URL
+            kb_url = cfg.get_service_url('backend', '/api/knowledge_base/stats')
             
-            timeout = aiohttp.ClientTimeout(total=5, connect=1)  # Faster timeouts
+            timeout = aiohttp.ClientTimeout(
+                total=cfg.get_timeout('knowledge_base', 'search'), 
+                connect=cfg.get_timeout('tcp', 'connect')
+            )
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                response = None
-                for url in kb_urls:
-                    try:
-                        response = await session.get(url)
-                        break
-                    except:
-                        continue
-                
-                if response is None:
-                    raise Exception("Could not reach knowledge base API")
-                
-                async with response:
+                async with session.get(kb_url) as response:
                     response_time = int((time.time() - start_time) * 1000)
                     
                     if response.status == 200:
@@ -496,6 +497,123 @@ async def get_service_health():
             'total': 1,
             'warnings': 0,
             'errors': 1
+        }
+
+
+@router.get("/resources")
+async def get_system_resources():
+    """Get system resource utilization (CPU, memory, disk)"""
+    try:
+        import psutil
+        
+        # CPU utilization
+        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu_count = psutil.cpu_count()
+        
+        # Memory information
+        memory = psutil.virtual_memory()
+        memory_info = {
+            "total": round(memory.total / (1024**3), 2),  # GB
+            "available": round(memory.available / (1024**3), 2),  # GB
+            "used": round(memory.used / (1024**3), 2),  # GB
+            "percent": memory.percent
+        }
+        
+        # Disk information
+        disk = psutil.disk_usage('/')
+        disk_info = {
+            "total": round(disk.total / (1024**3), 2),  # GB
+            "used": round(disk.used / (1024**3), 2),  # GB
+            "free": round(disk.free / (1024**3), 2),  # GB
+            "percent": round((disk.used / disk.total) * 100, 2)
+        }
+        
+        # Network information (optional)
+        try:
+            net_io = psutil.net_io_counters()
+            network_info = {
+                "bytes_sent": net_io.bytes_sent,
+                "bytes_recv": net_io.bytes_recv,
+                "packets_sent": net_io.packets_sent,
+                "packets_recv": net_io.packets_recv
+            }
+        except Exception:
+            network_info = {"error": "Network info not available"}
+        
+        return {
+            "timestamp": datetime.utcnow().isoformat(),
+            "cpu": {
+                "usage_percent": cpu_percent,
+                "core_count": cpu_count
+            },
+            "memory": memory_info,
+            "disk": disk_info,
+            "network": network_info,
+            "status": "ok"
+        }
+    except ImportError:
+        return {
+            "error": "psutil not available",
+            "message": "System resource monitoring requires psutil package",
+            "status": "unavailable"
+        }
+    except Exception as e:
+        logger.error(f"Failed to get system resources: {e}")
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
+
+@router.get("/services")
+async def get_all_services():
+    """Get status of all AutoBot services"""
+    try:
+        services = {
+            "backend": {"status": "online", "url": "http://localhost:8001", "health": "✅"},
+            "redis": {"status": "checking", "url": "redis://localhost:6379", "health": "⏳"},
+            "ollama": {"status": "checking", "url": "http://localhost:11434", "health": "⏳"},
+            "frontend": {"status": "checking", "url": "http://localhost:5173", "health": "⏳"}
+        }
+        
+        # Quick Redis check
+        try:
+            import redis
+            r = redis.Redis(host='localhost', port=6379, decode_responses=True, socket_timeout=2)
+            r.ping()
+            services["redis"]["status"] = "online"
+            services["redis"]["health"] = "✅"
+        except Exception:
+            services["redis"]["status"] = "offline"
+            services["redis"]["health"] = "❌"
+        
+        # Quick Ollama check
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
+                async with session.get('http://localhost:11434/api/version') as response:
+                    if response.status == 200:
+                        services["ollama"]["status"] = "online"
+                        services["ollama"]["health"] = "✅"
+                    else:
+                        services["ollama"]["status"] = "error"
+                        services["ollama"]["health"] = "⚠️"
+        except Exception:
+            services["ollama"]["status"] = "offline"
+            services["ollama"]["health"] = "❌"
+        
+        return {
+            "timestamp": datetime.utcnow().isoformat(),
+            "services": services,
+            "total_services": len(services),
+            "online_count": sum(1 for s in services.values() if s["status"] == "online"),
+            "status": "ok"
+        }
+    except Exception as e:
+        logger.error(f"Failed to get services status: {e}")
+        return {
+            "error": str(e),
+            "status": "error"
         }
 
 

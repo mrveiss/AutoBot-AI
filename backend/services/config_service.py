@@ -42,6 +42,13 @@ class ConfigService:
         ) > ConfigService.CACHE_DURATION
 
     @staticmethod
+    def clear_cache():
+        """Force clear the configuration cache"""
+        ConfigService._cached_config = None
+        ConfigService._cache_timestamp = None
+        logger.info("Configuration cache cleared")
+
+    @staticmethod  
     def get_full_config() -> Dict[str, Any]:
         """Get complete application configuration"""
         import time

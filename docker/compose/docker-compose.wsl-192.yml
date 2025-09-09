@@ -1,5 +1,5 @@
-# Docker Compose for WSL with 192.168.65.x Static IPs
-# Uses Docker Desktop's internal subnet with static IP assignments
+# Docker Compose for WSL with Standardized Network Configuration
+# Uses complete.yaml network architecture with environment variables
 # Provides the performance benefits of direct IP communication
 
 name: autobot
@@ -9,8 +9,8 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 192.168.65.0/24
-          gateway: 192.168.65.1
+        - subnet: ${DOCKER_SUBNET:-172.16.168.0/24}
+          gateway: ${DOCKER_GATEWAY:-172.16.168.1}
 
 services:
   # Redis Stack with static IP
@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
     networks:
       autobot-192-network:
-        ipv4_address: 192.168.65.10
+        ipv4_address: ${AUTOBOT_REDIS_HOST:-172.16.168.23}
     ports:
       - "127.0.0.1:6379:6379"    # WSL access via localhost
       - "127.0.0.1:8002:8002"    # Redis Insight via localhost
@@ -36,7 +36,7 @@ services:
       retries: 3
     labels:
       - "autobot.service=redis"
-      - "autobot.ip=192.168.65.10"
+      - "autobot.ip=${AUTOBOT_REDIS_HOST:-172.16.168.23}"
 
   # AI Stack with static IP
   autobot-ai-stack:
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
     networks:
       autobot-192-network:
-        ipv4_address: 192.168.65.20
+        ipv4_address: ${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
     ports:
       - "127.0.0.1:8080:8080"    # WSL access via localhost
     depends_on:
@@ -67,9 +67,9 @@ services:
       - AI_SERVER_HOST=0.0.0.0
       - AI_SERVER_PORT=8080
       - AI_SERVER_WORKERS=1
-      - REDIS_HOST=192.168.65.10      # Direct IP connection to Redis
-      - REDIS_PORT=6379
-      - OLLAMA_HOST=192.168.65.30:11434
+      - REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}      # Direct IP connection to Redis
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
+      - OLLAMA_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_OLLAMA_PORT:-11434}
       - CHROMA_DB_PATH=/app/data/chroma_db
       - DISABLE_EXTERNAL_APIS=true
       - PYTHONPATH=/app:/app/src
@@ -81,7 +81,7 @@ services:
       start_period: 60s
     labels:
       - "autobot.service=ai-stack"
-      - "autobot.ip=192.168.65.20"
+      - "autobot.ip=${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
 
   # NPU Worker with static IP
   autobot-npu-worker:
@@ -92,7 +92,7 @@ services:
     restart: unless-stopped
     networks:
       autobot-192-network:
-        ipv4_address: 192.168.65.30
+        ipv4_address: ${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}
     ports:
       - "127.0.0.1:8081:8081"    # WSL access via localhost
     depends_on:
@@ -113,8 +113,8 @@ services:
       - NPU_WORKER_HOST=0.0.0.0
       - NPU_WORKER_PORT=8081
       - NPU_WORKER_WORKERS=1
-      - REDIS_HOST=192.168.65.10      # Direct IP connection to Redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}      # Direct IP connection to Redis
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
       - NPU_LOG_LEVEL=INFO
       - OPENVINO_DEVICE=AUTO
       - OV_LOG_LEVEL=ERROR
@@ -140,7 +140,7 @@ services:
     runtime: nvidia
     labels:
       - "autobot.service=npu-worker"
-      - "autobot.ip=192.168.65.30"
+      - "autobot.ip=${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
 
   # Seq centralized logging with static IP
   autobot-seq:
@@ -149,7 +149,7 @@ services:
     restart: unless-stopped
     networks:
       autobot-192-network:
-        ipv4_address: 192.168.65.40
+        ipv4_address: ${AUTOBOT_SEQ_HOST:-172.16.168.26}
     ports:
       - "127.0.0.1:5341:80"      # WSL access via localhost
     volumes:
@@ -167,7 +167,7 @@ services:
     labels:
       - "autobot.service=seq"
       - "autobot.logging=centralized"
-      - "autobot.ip=192.168.65.40"
+      - "autobot.ip=${AUTOBOT_SEQ_HOST:-172.16.168.26}"
 
   # Ollama (if needed) with static IP
   autobot-ollama:
@@ -176,7 +176,7 @@ services:
     restart: unless-stopped
     networks:
       autobot-192-network:
-        ipv4_address: 192.168.65.50
+        ipv4_address: ${AUTOBOT_OLLAMA_HOST:-172.16.168.20}
     ports:
       - "127.0.0.1:11434:11434"  # WSL access via localhost
     volumes:
@@ -185,7 +185,7 @@ services:
       - OLLAMA_HOST=0.0.0.0
     labels:
       - "autobot.service=ollama"
-      - "autobot.ip=192.168.65.50"
+      - "autobot.ip=${AUTOBOT_OLLAMA_HOST:-172.16.168.20}"
     profiles:
       - ollama  # Only start when ollama profile is specified
 

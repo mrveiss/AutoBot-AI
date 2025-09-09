@@ -290,6 +290,9 @@ const getContentClass = (message: ChatMessage): string => {
 
 const formatTime = (timestamp: Date | string): string => {
   const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 

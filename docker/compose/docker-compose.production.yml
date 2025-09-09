@@ -22,7 +22,7 @@ services:
       retries: 3
     networks:
       autobot-network:
-        ipv4_address: ${AUTOBOT_REDIS_IP:-192.168.65.10}
+        ipv4_address: ${AUTOBOT_REDIS_HOST:-172.16.168.23}
     deploy:
       resources:
         limits:
@@ -39,7 +39,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*,http://192.168.65.0/24
+      - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*,http://${DOCKER_SUBNET:-172.16.168.0/24}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${AUTOBOT_OLLAMA_INTERNAL_PORT:-11434}/api/tags"]
       interval: 30s
@@ -47,7 +47,7 @@ services:
       retries: 3
     networks:
       autobot-network:
-        ipv4_address: ${AUTOBOT_OLLAMA_IP:-192.168.65.20}
+        ipv4_address: ${AUTOBOT_BACKEND_HOST:-172.16.168.20}
     deploy:
       resources:
         limits:
@@ -71,9 +71,9 @@ services:
       - ./config:/app/config
     environment:
       - AUTOBOT_ENVIRONMENT=production
-      - AUTOBOT_REDIS_HOST=${AUTOBOT_REDIS_IP:-192.168.65.10}
+      - AUTOBOT_REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
       - AUTOBOT_REDIS_PORT=${AUTOBOT_REDIS_INTERNAL_PORT:-6379}
-      - AUTOBOT_OLLAMA_HOST=http://${AUTOBOT_OLLAMA_IP:-192.168.65.20}:${AUTOBOT_OLLAMA_INTERNAL_PORT:-11434}
+      - AUTOBOT_OLLAMA_HOST=http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_OLLAMA_PORT:-11434}
       - AUTOBOT_LOG_LEVEL=INFO
       - AUTOBOT_SECURITY_ENABLED=true
       - AUTOBOT_MONITORING_ENABLED=true
@@ -90,7 +90,7 @@ services:
       start_period: 30s
     networks:
       autobot-network:
-        ipv4_address: ${AUTOBOT_BACKEND_IP:-192.168.65.30}
+        ipv4_address: ${AUTOBOT_BACKEND_HOST:-172.16.168.20}
     deploy:
       resources:
         limits:
@@ -118,7 +118,7 @@ services:
       retries: 3
     networks:
       autobot-network:
-        ipv4_address: ${AUTOBOT_FRONTEND_IP:-192.168.65.40}
+        ipv4_address: ${AUTOBOT_FRONTEND_HOST:-172.16.168.21}
     deploy:
       resources:
         limits:
@@ -143,7 +143,7 @@ services:
       - '--web.enable-lifecycle'
     networks:
       autobot-network:
-        ipv4_address: ${AUTOBOT_PROMETHEUS_IP:-192.168.65.50}
+        ipv4_address: ${AUTOBOT_PROMETHEUS_HOST:-172.16.168.27}
     deploy:
       resources:
         limits:
@@ -169,7 +169,7 @@ services:
       - prometheus
     networks:
       autobot-network:
-        ipv4_address: ${AUTOBOT_GRAFANA_IP:-192.168.65.60}
+        ipv4_address: ${AUTOBOT_GRAFANA_HOST:-172.16.168.28}
     deploy:
       resources:
         limits:
@@ -196,5 +196,5 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: ${AUTOBOT_DOCKER_SUBNET:-192.168.65.0/24}
-          gateway: ${AUTOBOT_DOCKER_GATEWAY:-192.168.65.1}
+        - subnet: ${DOCKER_SUBNET:-172.16.168.0/24}
+          gateway: ${DOCKER_GATEWAY:-172.16.168.1}

@@ -75,24 +75,31 @@ class ChatWorkflowManager:
             settings_data = config_manager.get_all()
             self.settings = settings_data
             
-            # Also try to load agents config if available
+            # Load agents config from unified configuration
             try:
-                import yaml
-                with open('config/agents_config.yaml', 'r') as f:
-                    agents_config = yaml.safe_load(f)
-                    # Merge agents config into settings
-                    if 'agents' not in self.settings:
-                        self.settings['agents'] = {}
-                    self.settings['agents'].update(agents_config.get('agents', {}))
-                    
-                    # Merge web_research config
-                    if 'web_research' not in self.settings:
-                        self.settings['web_research'] = {}
-                    self.settings['web_research'].update(agents_config.get('web_research', {}))
-                    
-                    logger.info("Loaded agents configuration from config/agents_config.yaml")
+                from src.config_helper import cfg
+                
+                # Load agents configuration from unified config
+                agents_config = cfg.get('agents', {})
+                web_research_config = cfg.get('web_research', {})
+                mcp_config = cfg.get('mcp', {})
+                
+                # Merge configs into settings
+                if 'agents' not in self.settings:
+                    self.settings['agents'] = {}
+                self.settings['agents'].update(agents_config)
+                
+                if 'web_research' not in self.settings:
+                    self.settings['web_research'] = {}
+                self.settings['web_research'].update(web_research_config)
+                
+                if 'mcp' not in self.settings:
+                    self.settings['mcp'] = {}
+                self.settings['mcp'].update(mcp_config)
+                
+                logger.info("Loaded agents configuration from unified config system")
             except Exception as e:
-                logger.info(f"Could not load agents config (using defaults): {e}")
+                logger.info(f"Could not load agents config from unified system (using defaults): {e}")
                 
         except Exception as e:
             logger.warning(f"Could not load settings: {e}")

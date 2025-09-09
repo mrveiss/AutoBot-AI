@@ -31,7 +31,7 @@ services:
       start_period: 10s
     networks:
       autobot:
-        ipv4_address: 172.18.0.10
+        ipv4_address: ${AUTOBOT_DNS_CACHE_IP:-172.16.168.10}
     ports:
       - "5353:53/udp"  # Alternative DNS port to avoid conflicts
   # Redis Stack - Core data store
@@ -60,6 +60,7 @@ services:
       start_period: 10s
     networks:
       autobot:
+        ipv4_address: ${AUTOBOT_REDIS_HOST:-172.16.168.23}
         aliases:
           - redis.autobot
           - redis
@@ -99,7 +100,8 @@ services:
     ports:
       - "${BROWSER_PORT:-3000}:3000"    # Playwright API
     networks:
-      - autobot
+      autobot:
+        ipv4_address: ${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}
 
   # FIXED: Frontend with proper multi-mode volume strategy
   frontend:
@@ -127,8 +129,8 @@ services:
       - ./logs:/shared/logs  # Share logs with host
     environment:
       - NODE_ENV=${NODE_ENV:-development}
-      - VITE_BACKEND_HOST=192.168.168.17
-      - VITE_BACKEND_PORT=8001
+      - VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+      - VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
       - DOCKER_CONTAINER=true  # Signal that we're running in Docker
       # ARCHITECTURE FIX: Enable comprehensive mode detection
       - AUTOBOT_EXECUTION_MODE=${AUTOBOT_EXECUTION_MODE:-development}
@@ -162,6 +164,7 @@ services:
       start_period: 30s
     networks:
       autobot:
+        ipv4_address: ${AUTOBOT_FRONTEND_HOST:-172.16.168.21}
         aliases:
           - frontend.autobot
           - frontend
@@ -198,9 +201,9 @@ services:
       - AI_SERVER_HOST=0.0.0.0
       - AI_SERVER_PORT=${AI_SERVER_PORT:-8080}
       - AI_SERVER_WORKERS=1
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
-      - OLLAMA_HOST=${OLLAMA_HOST:-host.docker.internal:11434}
+      - REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
+      - OLLAMA_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_OLLAMA_PORT:-11434}
       - CHROMA_DB_PATH=/app/data/chroma_db
       - DISABLE_EXTERNAL_APIS=${DISABLE_EXTERNAL_APIS:-true}
       - TF_USE_LEGACY_KERAS=1
@@ -213,7 +216,8 @@ services:
       retries: 3
       start_period: 60s
     networks:
-      - autobot
+      autobot:
+        ipv4_address: ${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
     ports:
       - "${AI_SERVER_PORT:-8080}:${AI_SERVER_PORT:-8080}"
 
@@ -249,8 +253,8 @@ services:
       - NPU_WORKER_HOST=0.0.0.0
       - NPU_WORKER_PORT=${NPU_WORKER_PORT:-8081}
       - NPU_WORKER_WORKERS=1
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
       - NPU_LOG_LEVEL=${NPU_LOG_LEVEL:-INFO}
       - OPENVINO_DEVICE=${OPENVINO_DEVICE:-AUTO}
       - OV_LOG_LEVEL=${OV_LOG_LEVEL:-ERROR}
@@ -276,7 +280,8 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - autobot
+      autobot:
+        ipv4_address: ${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}
     ports:
       - "${NPU_WORKER_PORT:-8081}:${NPU_WORKER_PORT:-8081}"
 
@@ -303,4 +308,5 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: ${DOCKER_SUBNET:-172.18.0.0/16}
+        - subnet: ${DOCKER_SUBNET:-172.16.168.0/24}
+          gateway: ${DOCKER_GATEWAY:-172.16.168.1}

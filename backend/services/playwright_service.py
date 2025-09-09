@@ -312,7 +312,8 @@ async def get_playwright_service() -> PlaywrightService:
     global _playwright_service
     
     if _playwright_service is None:
-        _playwright_service = PlaywrightService()
+        # Use correct Playwright container IP address
+        _playwright_service = PlaywrightService(container_host="172.16.168.25")
         await _playwright_service.initialize()
         
     return _playwright_service

@@ -254,7 +254,7 @@
             :key="type"
             class="declaration-category"
           >
-            <h4>{{ type.charAt(0).toUpperCase() + type.slice(1) }}</h4>
+            <h4>{{ type && type.length > 0 ? type.charAt(0).toUpperCase() + type.slice(1) : type || '' }}</h4>
             <div class="declaration-list">
               <div
                 v-for="decl in declarations.slice(0, 10)"
@@ -453,6 +453,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue'
 import apiClient from '../utils/ApiClient'
+import appConfig from '../config/AppConfig.js'
 
 export default {
   name: 'CodebaseAnalytics',
@@ -503,6 +504,18 @@ export default {
       rootPath.value = '/home/kali/Desktop/AutoBot'
     }
 
+    // Helper function to get NPU worker URL dynamically
+    const getNpuWorkerUrl = async () => {
+      try {
+        return await appConfig.getServiceUrl('npu_worker');
+      } catch (error) {
+        console.error('Failed to get NPU worker URL from centralized configuration:', error);
+        // AppConfig ServiceDiscovery already handles fallback chains including 172.16.168.22
+        // This should never happen as ServiceDiscovery has comprehensive fallback system
+        throw new Error('NPU worker service discovery failed completely - check network connectivity');
+      }
+    };
+
     const indexCodebase = async () => {
       if (!rootPath.value) return
 
@@ -513,7 +526,8 @@ export default {
       
       try {
         // Call NPU worker indexing endpoint
-        const response = await fetch('http://localhost:8081/code/index', {
+        const npuWorkerUrl = await getNpuWorkerUrl();
+        const response = await fetch(`${npuWorkerUrl}/code/index`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -558,7 +572,8 @@ export default {
     const getIndexStatus = async () => {
       try {
         // Call NPU worker status endpoint
-        const response = await fetch('http://localhost:8081/code/status')
+        const npuWorkerUrl = await getNpuWorkerUrl();
+        const response = await fetch(`${npuWorkerUrl}/code/status`)
         if (response.ok) {
           const data = await response.json()
           indexStatus.value = data
@@ -574,7 +589,8 @@ export default {
       
       try {
         // Call NPU worker analytics endpoint
-        const response = await fetch('http://localhost:8081/code/analytics')
+        const npuWorkerUrl = await getNpuWorkerUrl();
+        const response = await fetch(`${npuWorkerUrl}/code/analytics`)
         if (response.ok) {
           const data = await response.json()
           problemsReport.value = data
@@ -596,7 +612,8 @@ export default {
       
       try {
         console.log('🔍 Starting declarations analysis...')
-        const response = await fetch('http://localhost:8081/code/declarations')
+        const npuWorkerUrl = await getNpuWorkerUrl();
+        const response = await fetch(`${npuWorkerUrl}/code/declarations`)
         console.log('📡 Declarations response status:', response.status)
         
         if (response.ok) {
@@ -672,7 +689,8 @@ export default {
       progressStatus.value = 'Finding duplicate code...'
       
       try {
-        const response = await fetch('http://localhost:8081/code/duplicates')
+        const npuWorkerUrl = await getNpuWorkerUrl();
+        const response = await fetch(`${npuWorkerUrl}/code/duplicates`)
         if (response.ok) {
           const rawData = await response.json()
           
@@ -734,7 +752,8 @@ export default {
       progressStatus.value = 'Detecting hardcoded values...'
       
       try {
-        const response = await fetch('http://localhost:8081/code/hardcodes')
+        const npuWorkerUrl = await getNpuWorkerUrl();
+        const response = await fetch(`${npuWorkerUrl}/code/hardcodes`)
         if (response.ok) {
           const data = await response.json()
           progressStatus.value = 'Analyzing hardcode patterns...'
@@ -778,12 +797,13 @@ export default {
     // Check NPU worker endpoint availability
     const testNpuConnection = async () => {
       console.log('🔍 Testing NPU worker endpoints...')
+      const baseUrl = await getNpuWorkerUrl()
       const endpoints = [
-        'http://localhost:8081/health',
-        'http://localhost:8081/code/status',
-        'http://localhost:8081/code/declarations',
-        'http://localhost:8081/code/duplicates',
-        'http://localhost:8081/code/hardcodes'
+        `${baseUrl}/health`,
+        `${baseUrl}/code/status`,
+        `${baseUrl}/code/declarations`,
+        `${baseUrl}/code/duplicates`,
+        `${baseUrl}/code/hardcodes`
       ]
       
       for (const endpoint of endpoints) {
@@ -888,7 +908,7 @@ export default {
 
     const formatProblemType = (type) => {
       return type.split('_').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1)
+        word && word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word || ''
       ).join(' ')
     }
 

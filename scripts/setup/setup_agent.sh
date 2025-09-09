@@ -101,7 +101,7 @@ if ! command -v pyenv &>/dev/null; then
 # Install pyenv + build tools
 sudo apt update && sudo apt install -y make build-essential libssl-dev zlib1g-dev \\
   libbz2-dev libreadline-dev libsqlite3-dev curl llvm libncursesw5-dev xz-utils tk-dev \\
-  libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev git
+  libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev git yq
 
 # Install pyenv
 curl https://pyenv.run | bash
@@ -124,7 +124,7 @@ if ! pyenv versions | grep -q "$PYTHON_VERSION"; then
     echo "❌ Python $PYTHON_VERSION not installed. Installing build dependencies..."
     sudo apt update && sudo apt install -y make build-essential libssl-dev zlib1g-dev \\
   libbz2-dev libreadline-dev libsqlite3-dev curl llvm libncursesw5-dev xz-utils tk-dev \\
-  libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev git redis-server pciutils || { echo "❌ Failed to install build dependencies and pciutils."; exit 1; }
+  libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev git redis-server pciutils yq || { echo "❌ Failed to install build dependencies and pciutils."; exit 1; }
     echo "Installing Python $PYTHON_VERSION..."
     sudo pyenv install "$PYTHON_VERSION" || { echo "❌ Failed to install Python $PYTHON_VERSION."; exit 1; }
     pyenv global "$PYTHON_VERSION"
@@ -551,13 +551,14 @@ if [[ $voice_choice =~ ^[Yy]$ ]]; then
             espeak espeak-data libespeak1 libespeak-dev \
             flac \
             jq \
+            yq \
             curl \
             netcat-openbsd || {
             echo "⚠️ Failed to install some system audio dependencies"
         }
     elif command -v brew &>/dev/null; then
         # macOS
-        brew install portaudio espeak || {
+        brew install portaudio espeak yq || {
             echo "⚠️ Failed to install some system audio dependencies"
         }
     else
