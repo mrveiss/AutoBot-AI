@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 import re
 
 # Import unified interface for migration
-from src.llm_interface_unified import get_unified_llm_interface, ProviderType
+from src.llm_interface import get_llm_interface, ProviderType
 from src.utils.config_manager import config_manager
 
 
