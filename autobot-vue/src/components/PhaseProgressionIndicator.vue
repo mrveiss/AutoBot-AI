@@ -564,7 +564,7 @@ export default {
         'Phase 6: Monitoring and Alerting': 'fas fa-chart-line',
         'Phase 7: Frontend and UI': 'fas fa-desktop',
         'Phase 8: Agent Orchestration': 'fas fa-sitemap',
-        'Phase 9: Advanced AI Features': 'fas fa-robot',
+        'Advanced AI Features': 'fas fa-robot',
         'Phase 10: Production Readiness': 'fas fa-cloud'
       };
 

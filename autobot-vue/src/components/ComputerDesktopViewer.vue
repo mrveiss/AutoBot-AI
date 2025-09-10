@@ -15,7 +15,7 @@
         </p>
       </div>
       <div class="mt-4 text-xs text-gray-400">
-        Phase 9 Complete - VNC Integration Active
+        VNC Integration Active
       </div>
     </div>
   </div>

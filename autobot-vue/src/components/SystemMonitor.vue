@@ -259,14 +259,15 @@ const systemStatus = computed(() => {
 })
 
 const activeSessions = computed(() => {
-  return chatStore.conversations.length || 1
+  return chatStore.conversations?.length || 1
 })
 
 const sessionsChange = ref(0)
 
+// FIXED: Use actual knowledge store properties instead of non-existent stats
 const knowledgeStats = computed(() => ({
-  totalItems: knowledgeStore.stats?.totalDocuments || 0,
-  categories: knowledgeStore.stats?.categories?.length || 0
+  totalItems: knowledgeStore.documentCount || 0,
+  categories: knowledgeStore.categoryCount || 0
 }))
 
 const performanceScore = computed(() => {

@@ -1,27 +1,64 @@
 <template>
   <div class="file-browser">
-    <h2>File Browser</h2>
-    <div class="file-actions">
-      <button @click="refreshFiles" aria-label="Refresh">Refresh</button>
-      <button @click="uploadFile" aria-label="Upload file">Upload File</button>
-
-      <!-- Alternative: Visible file input for accessibility and testing -->
-      <div class="file-upload-section">
-        <label for="visible-file-input" class="file-input-label">
-          Or drag & drop files here:
-        </label>
-        <input
-          id="visible-file-input"
-          ref="visibleFileInput"
-          type="file"
-          @change="handleFileSelected"
-          class="visible-file-input"
-          data-testid="visible-file-upload-input"
-          aria-label="Visible file upload input"
-        />
+    <div class="file-browser-header">
+      <h2>File Browser</h2>
+      <div class="file-actions">
+        <button @click="refreshFiles" aria-label="Refresh">
+          <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+        <button @click="uploadFile" aria-label="Upload file">
+          <i class="fas fa-upload"></i> Upload File
+        </button>
+        <button @click="toggleView" aria-label="Toggle view">
+          <i :class="viewMode === 'tree' ? 'fas fa-list' : 'fas fa-tree'"></i>
+          {{ viewMode === 'tree' ? 'List View' : 'Tree View' }}
+        </button>
       </div>
+    </div>
 
-      <!-- Hidden file input for programmatic access (legacy) -->
+    <!-- Path Navigation -->
+    <div class="path-navigation">
+      <div class="breadcrumb">
+        <span @click="navigateToPath('/')" class="breadcrumb-item">
+          <i class="fas fa-home"></i> Home
+        </span>
+        <span v-for="(part, index) in pathParts" :key="index" class="breadcrumb-item">
+          <i class="fas fa-chevron-right breadcrumb-separator"></i>
+          <span @click="navigateToPath(getPathUpTo(index))" class="clickable">
+            {{ part }}
+          </span>
+        </span>
+      </div>
+      <div class="path-input">
+        <input
+          v-model="currentPath"
+          @keyup.enter="navigateToPath(currentPath)"
+          placeholder="/path/to/directory"
+          class="path-field"
+        />
+        <button @click="navigateToPath(currentPath)" class="path-go-btn">
+          <i class="fas fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- File Upload Section -->
+    <div class="file-upload-section">
+      <label for="visible-file-input" class="file-input-label">
+        <i class="fas fa-cloud-upload-alt"></i>
+        Drag & drop files here or click to select:
+      </label>
+      <input
+        id="visible-file-input"
+        ref="visibleFileInput"
+        type="file"
+        @change="handleFileSelected"
+        class="visible-file-input"
+        data-testid="visible-file-upload-input"
+        aria-label="Visible file upload input"
+        multiple
+      />
+      <!-- Hidden file input for programmatic access -->
       <input
         ref="fileInput"
         type="file"
@@ -29,6 +66,7 @@
         @change="handleFileSelected"
         data-testid="file-upload-input"
         aria-label="File upload input"
+        multiple
       />
     </div>
 
@@ -81,39 +119,218 @@
         </div>
       </div>
     </div>
-    <div class="file-list-container">
-      <table class="file-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Size</th>
-            <th>Last Modified</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(file, index) in files" :key="file.name || file.id || `file-${index}`">
-            <td>{{ file.name }}</td>
-            <td>{{ file.is_dir ? 'Directory' : 'File' }}</td>
-            <td>{{ file.is_dir ? '-' : formatSize(file.size) }}</td>
-            <td>{{ formatDate(file.last_modified) }}</td>
-            <td>
-              <button @click="viewFile(file)" v-if="!file.is_dir" aria-label="View">View</button>
-              <button @click="deleteFile(file)" aria-label="Delete">Delete</button>
-            </td>
-          </tr>
-          <tr v-if="files.length === 0">
-            <td colspan="5" class="no-files">No files or directories found.</td>
-          </tr>
-        </tbody>
-      </table>
+
+    <!-- Main Content Area -->
+    <div class="file-content-container">
+      <!-- Tree View -->
+      <div v-if="viewMode === 'tree'" class="tree-view">
+        <div class="tree-panel">
+          <div class="tree-header">
+            <h3><i class="fas fa-folder-tree"></i> Directory Structure</h3>
+            <div class="tree-controls">
+              <button @click="expandAll" title="Expand All">
+                <i class="fas fa-expand-alt"></i>
+              </button>
+              <button @click="collapseAll" title="Collapse All">
+                <i class="fas fa-compress-alt"></i>
+              </button>
+            </div>
+          </div>
+          <div class="tree-content">
+            <div 
+              v-for="item in directoryTree" 
+              :key="item.path"
+              class="tree-node"
+              :class="{ expanded: item.expanded, selected: selectedPath === item.path }"
+            >
+              <div 
+                class="tree-node-content"
+                @click="toggleNode(item)"
+                :style="{ paddingLeft: (item.level * 20) + 'px' }"
+              >
+                <i 
+                  v-if="item.is_dir"
+                  :class="item.expanded ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"
+                  class="tree-toggle"
+                ></i>
+                <i 
+                  :class="getFileIcon(item)"
+                  class="tree-icon"
+                ></i>
+                <span class="tree-label">{{ item.name }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- File List Panel -->
+        <div class="files-panel">
+          <div class="files-header">
+            <h3><i class="fas fa-files"></i> {{ selectedPath || '/' }} Contents</h3>
+          </div>
+          <div class="file-list-container">
+            <table class="file-table">
+              <thead>
+                <tr>
+                  <th @click="sortBy('name')" class="sortable">
+                    Name 
+                    <i :class="getSortIcon('name')" class="sort-icon"></i>
+                  </th>
+                  <th @click="sortBy('type')" class="sortable">
+                    Type
+                    <i :class="getSortIcon('type')" class="sort-icon"></i>
+                  </th>
+                  <th @click="sortBy('size')" class="sortable">
+                    Size
+                    <i :class="getSortIcon('size')" class="sort-icon"></i>
+                  </th>
+                  <th @click="sortBy('modified')" class="sortable">
+                    Modified
+                    <i :class="getSortIcon('modified')" class="sort-icon"></i>
+                  </th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(file, index) in sortedFiles" :key="file.name || file.id || `file-${index}`">
+                  <td class="file-name-cell">
+                    <i :class="getFileIcon(file)" class="file-icon"></i>
+                    <span 
+                      @click="file.is_dir ? navigateToPath(file.path) : null"
+                      :class="{ clickable: file.is_dir }"
+                      class="file-name"
+                    >
+                      {{ file.name }}
+                    </span>
+                  </td>
+                  <td>{{ file.is_dir ? 'Directory' : getFileType(file.name) }}</td>
+                  <td>{{ file.is_dir ? '-' : formatSize(file.size) }}</td>
+                  <td>{{ formatDate(file.last_modified) }}</td>
+                  <td>
+                    <div class="action-buttons">
+                      <button 
+                        v-if="!file.is_dir" 
+                        @click="viewFile(file)" 
+                        class="action-btn view-btn"
+                        aria-label="View"
+                        title="View file"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button 
+                        v-if="file.is_dir" 
+                        @click="navigateToPath(file.path)" 
+                        class="action-btn open-btn"
+                        aria-label="Open"
+                        title="Open directory"
+                      >
+                        <i class="fas fa-folder-open"></i>
+                      </button>
+                      <button 
+                        @click="deleteFile(file)" 
+                        class="action-btn delete-btn"
+                        aria-label="Delete"
+                        title="Delete"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="sortedFiles.length === 0">
+                  <td colspan="5" class="no-files">
+                    <i class="fas fa-folder-open"></i>
+                    No files or directories found in {{ currentPath }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- List View (Original) -->
+      <div v-else class="list-view">
+        <table class="file-table">
+          <thead>
+            <tr>
+              <th @click="sortBy('name')" class="sortable">
+                Name 
+                <i :class="getSortIcon('name')" class="sort-icon"></i>
+              </th>
+              <th @click="sortBy('type')" class="sortable">
+                Type
+                <i :class="getSortIcon('type')" class="sort-icon"></i>
+              </th>
+              <th @click="sortBy('size')" class="sortable">
+                Size
+                <i :class="getSortIcon('size')" class="sort-icon"></i>
+              </th>
+              <th @click="sortBy('modified')" class="sortable">
+                Last Modified
+                <i :class="getSortIcon('modified')" class="sort-icon"></i>
+              </th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(file, index) in sortedFiles" :key="file.name || file.id || `file-${index}`">
+              <td class="file-name-cell">
+                <i :class="getFileIcon(file)" class="file-icon"></i>
+                <span 
+                  @click="file.is_dir ? navigateToPath(file.path) : null"
+                  :class="{ clickable: file.is_dir }"
+                  class="file-name"
+                >
+                  {{ file.name }}
+                </span>
+              </td>
+              <td>{{ file.is_dir ? 'Directory' : getFileType(file.name) }}</td>
+              <td>{{ file.is_dir ? '-' : formatSize(file.size) }}</td>
+              <td>{{ formatDate(file.last_modified) }}</td>
+              <td>
+                <div class="action-buttons">
+                  <button 
+                    v-if="!file.is_dir" 
+                    @click="viewFile(file)" 
+                    class="action-btn view-btn"
+                    aria-label="View"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button 
+                    v-if="file.is_dir" 
+                    @click="navigateToPath(file.path)" 
+                    class="action-btn open-btn"
+                    aria-label="Open"
+                  >
+                    <i class="fas fa-folder-open"></i>
+                  </button>
+                  <button 
+                    @click="deleteFile(file)" 
+                    class="action-btn delete-btn"
+                    aria-label="Delete"
+                  >
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="sortedFiles.length === 0">
+              <td colspan="5" class="no-files">
+                <i class="fas fa-folder-open"></i>
+                No files or directories found.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 import { useUserStore } from '../stores/useUserStore.ts';
 
@@ -121,62 +338,230 @@ export default {
   name: 'FileBrowser',
   setup() {
     const files = ref([]);
+    const directoryTree = ref([]);
+    const currentPath = ref('/');
+    const selectedPath = ref('');
+    const viewMode = ref('tree');
+    const sortField = ref('name');
+    const sortOrder = ref('asc');
     const showPreview = ref(false);
     const previewFile = ref(null);
     const fileInput = ref(null);
     const visibleFileInput = ref(null);
 
+    // Computed properties
+    const pathParts = computed(() => {
+      return currentPath.value.split('/').filter(part => part);
+    });
+
+    const sortedFiles = computed(() => {
+      const sorted = [...files.value].sort((a, b) => {
+        let aVal = a[sortField.value];
+        let bVal = b[sortField.value];
+        
+        // Handle different sort fields
+        if (sortField.value === 'size') {
+          aVal = a.size || 0;
+          bVal = b.size || 0;
+        } else if (sortField.value === 'modified') {
+          aVal = new Date(a.last_modified || 0);
+          bVal = new Date(b.last_modified || 0);
+        } else if (sortField.value === 'type') {
+          aVal = a.is_dir ? 'Directory' : getFileType(a.name);
+          bVal = b.is_dir ? 'Directory' : getFileType(b.name);
+        }
+        
+        // Sort directories first
+        if (a.is_dir && !b.is_dir) return -1;
+        if (!a.is_dir && b.is_dir) return 1;
+        
+        // Then sort by field
+        if (aVal < bVal) return sortOrder.value === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortOrder.value === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      return sorted;
+    });
+
+    // Navigation methods
+    const navigateToPath = async (path) => {
+      currentPath.value = path;
+      selectedPath.value = path;
+      await refreshFiles();
+    };
+
+    const getPathUpTo = (index) => {
+      const parts = pathParts.value.slice(0, index + 1);
+      return '/' + parts.join('/');
+    };
+
+    // Tree view methods
+    const toggleView = () => {
+      viewMode.value = viewMode.value === 'tree' ? 'list' : 'tree';
+      if (viewMode.value === 'tree') {
+        buildDirectoryTree();
+      }
+    };
+
+    const toggleNode = async (node) => {
+      if (!node.is_dir) return;
+      
+      node.expanded = !node.expanded;
+      selectedPath.value = node.path;
+      
+      if (node.expanded && !node.loaded) {
+        await loadDirectoryContents(node);
+      }
+      
+      // Update files for the selected directory
+      currentPath.value = node.path;
+      await refreshFiles();
+    };
+
+    const buildDirectoryTree = async () => {
+      try {
+        const data = await apiClient.get('/api/files/tree');
+        directoryTree.value = data.tree || [];
+      } catch (error) {
+        console.warn('Could not load directory tree, using fallback:', error);
+        directoryTree.value = [
+          {
+            name: 'home',
+            path: '/home',
+            is_dir: true,
+            level: 0,
+            expanded: false,
+            loaded: false
+          }
+        ];
+      }
+    };
+
+    const loadDirectoryContents = async (node) => {
+      try {
+        const data = await apiClient.get(`/api/files/list?path=${encodeURIComponent(node.path)}`);
+        node.children = data.files || [];
+        node.loaded = true;
+      } catch (error) {
+        console.warn('Could not load directory contents:', error);
+        node.children = [];
+      }
+    };
+
+    const expandAll = () => {
+      const expandRecursive = (nodes) => {
+        nodes.forEach(node => {
+          if (node.is_dir) {
+            node.expanded = true;
+            if (node.children) {
+              expandRecursive(node.children);
+            }
+          }
+        });
+      };
+      expandRecursive(directoryTree.value);
+    };
+
+    const collapseAll = () => {
+      const collapseRecursive = (nodes) => {
+        nodes.forEach(node => {
+          if (node.is_dir) {
+            node.expanded = false;
+            if (node.children) {
+              collapseRecursive(node.children);
+            }
+          }
+        });
+      };
+      collapseRecursive(directoryTree.value);
+    };
+
+    // Sorting methods
+    const sortBy = (field) => {
+      if (sortField.value === field) {
+        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortField.value = field;
+        sortOrder.value = 'asc';
+      }
+    };
+
+    const getSortIcon = (field) => {
+      if (sortField.value !== field) return 'fas fa-sort';
+      return sortOrder.value === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+    };
+
+    // File operations
     const refreshFiles = async () => {
       try {
-        // Use singleton ApiClient instance
-        const data = await apiClient.get('/api/files/list');
+        const data = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`);
         files.value = data.files || [];
       } catch (error) {
         console.warn('Backend not available - using demo files:', error.message);
-        // Use mock data when there's a network error or JSON parsing fails
         files.value = [
-          { name: 'sample.txt', size: 1024, type: 'file', modified: new Date().toISOString() },
-          { name: 'documents', size: 0, type: 'directory', modified: new Date().toISOString() }
+          { 
+            name: 'sample.txt', 
+            path: '/sample.txt',
+            size: 1024, 
+            is_dir: false, 
+            last_modified: Date.now() / 1000
+          },
+          { 
+            name: 'documents', 
+            path: '/documents',
+            size: 0, 
+            is_dir: true, 
+            last_modified: Date.now() / 1000
+          },
+          { 
+            name: 'images', 
+            path: '/images',
+            size: 0, 
+            is_dir: true, 
+            last_modified: Date.now() / 1000
+          }
         ];
       }
     };
 
     const uploadFile = () => {
-      // Use the ref file input for better testability
       if (fileInput.value) {
         fileInput.value.click();
       } else {
-        // Fallback to programmatic creation for legacy compatibility
         const input = document.createElement('input');
         input.type = 'file';
+        input.multiple = true;
         input.onchange = handleFileSelected;
         input.click();
       }
     };
 
     const handleFileSelected = async (event) => {
-      const file = event.target.files[0];
-      if (file) {
+      const selectedFiles = Array.from(event.target.files);
+      for (const file of selectedFiles) {
         await processFileUpload(file);
-        // Clear the input for next upload
-        if (fileInput.value) {
-          fileInput.value.value = '';
-        }
+      }
+      // Clear the input for next upload
+      if (fileInput.value) {
+        fileInput.value.value = '';
+      }
+      if (visibleFileInput.value) {
+        visibleFileInput.value.value = '';
       }
     };
 
     const processFileUpload = async (file) => {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('path', currentPath.value);
 
       try {
-        // Add user role header for permissions using user store
         const userStore = useUserStore();
         const headers = {
           'X-User-Role': userStore.currentUser?.role || 'user'
         };
 
-        // Use singleton ApiClient instance
         const response = await fetch(`${apiClient.baseUrl}/api/files/upload`, {
           method: 'POST',
           headers: headers,
@@ -184,9 +569,7 @@ export default {
         });
 
         if (response.ok) {
-          const result = await response.json();
           alert(`File ${file.name} uploaded successfully.`);
-          // Upload response logged
           refreshFiles();
         } else {
           const errorText = await response.text();
@@ -209,17 +592,11 @@ export default {
 
     const viewFile = async (file) => {
       try {
-
-        // Determine file type from extension
         const extension = file.name.split('.').pop()?.toLowerCase() || '';
         const fileType = determineFileType(extension);
-
-        // Build file URL for preview
-        // Use singleton ApiClient instance
         const fileUrl = `${apiClient.baseUrl}/api/files/view/${encodeURIComponent(file.path || file.name)}`;
 
         if (fileType === 'html') {
-          // For HTML files, create a blob URL for safe rendering
           const response = await fetch(fileUrl);
           if (response.ok) {
             const htmlContent = await response.text();
@@ -237,7 +614,6 @@ export default {
             throw new Error('Failed to load HTML file');
           }
         } else if (fileType === 'text' || fileType === 'json') {
-          // For text files, fetch content
           const response = await fetch(fileUrl);
           if (response.ok) {
             const textContent = await response.text();
@@ -252,7 +628,6 @@ export default {
             throw new Error('Failed to load text file');
           }
         } else if (fileType === 'image') {
-          // For images, use direct URL
           previewFile.value = {
             name: file.name,
             type: 'image',
@@ -261,7 +636,6 @@ export default {
             fileType: extension.toUpperCase()
           };
         } else if (fileType === 'pdf') {
-          // For PDFs, use direct URL
           previewFile.value = {
             name: file.name,
             type: 'pdf',
@@ -270,7 +644,6 @@ export default {
             fileType: extension.toUpperCase()
           };
         } else {
-          // For other files, show file info
           previewFile.value = {
             name: file.name,
             type: 'other',
@@ -286,6 +659,85 @@ export default {
         console.error('Error viewing file:', error);
         alert(`Error loading ${file.name}: ${error.message}`);
       }
+    };
+
+    const deleteFile = async (file) => {
+      if (!confirm(`Are you sure you want to delete ${file.name}?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${apiClient.baseUrl}/api/files/delete`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ path: file.path })
+        });
+        
+        if (response.ok) {
+          alert(`Deleted ${file.name}.`);
+          refreshFiles();
+        } else {
+          alert(`File ${file.name} would be deleted (API integration pending).`);
+          refreshFiles();
+        }
+      } catch (error) {
+        console.warn('Backend not available - simulating delete:', error.message);
+        alert(`File ${file.name} would be deleted (API integration pending).`);
+        refreshFiles();
+      }
+    };
+
+    // Utility methods
+    const getFileIcon = (file) => {
+      if (file.is_dir) return 'fas fa-folder text-yellow-600';
+      
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      
+      // Image files
+      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'].includes(extension)) {
+        return 'fas fa-image text-green-500';
+      }
+      
+      // Code files
+      if (['js', 'ts', 'jsx', 'tsx', 'vue', 'py', 'java', 'cpp', 'c', 'php', 'rb', 'go', 'rs'].includes(extension)) {
+        return 'fas fa-code text-blue-500';
+      }
+      
+      // Document files
+      if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(extension)) {
+        return 'fas fa-file-alt text-red-500';
+      }
+      
+      // Archive files
+      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
+        return 'fas fa-file-archive text-purple-500';
+      }
+      
+      return 'fas fa-file text-gray-500';
+    };
+
+    const getFileType = (filename) => {
+      const extension = filename.split('.').pop()?.toLowerCase() || '';
+      
+      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'].includes(extension)) {
+        return 'Image';
+      }
+      if (['js', 'ts', 'jsx', 'tsx', 'vue', 'py', 'java', 'cpp', 'c', 'php', 'rb', 'go', 'rs'].includes(extension)) {
+        return 'Code';
+      }
+      if (['pdf', 'doc', 'docx'].includes(extension)) {
+        return 'Document';
+      }
+      if (['txt', 'md'].includes(extension)) {
+        return 'Text';
+      }
+      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
+        return 'Archive';
+      }
+      
+      return extension.toUpperCase() || 'File';
     };
 
     const determineFileType = (extension) => {
@@ -305,7 +757,6 @@ export default {
 
     const closePreview = () => {
       showPreview.value = false;
-      // Clean up blob URLs to prevent memory leaks
       if (previewFile.value?.url && previewFile.value.url.startsWith('blob:')) {
         URL.revokeObjectURL(previewFile.value.url);
       }
@@ -316,7 +767,7 @@ export default {
       try {
         return JSON.stringify(JSON.parse(content), null, 2);
       } catch {
-        return content; // Return as-is if not valid JSON
+        return content;
       }
     };
 
@@ -326,36 +777,6 @@ export default {
         link.href = previewFile.value.url;
         link.download = previewFile.value.name;
         link.click();
-      }
-    };
-
-    const deleteFile = async (file) => {
-      try {
-        // Use singleton ApiClient instance
-        const response = await fetch(`${apiClient.baseUrl}/api/files/delete`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ path: file.path })
-        });
-        if (response.ok) {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            alert(`Deleted ${file.name}.`);
-            refreshFiles();
-          } else {
-            alert(`File ${file.name} would be deleted (API integration pending).`);
-            refreshFiles();
-          }
-        } else {
-          alert(`File ${file.name} would be deleted (API integration pending).`);
-          refreshFiles();
-        }
-      } catch (error) {
-        console.warn('Backend not available - simulating delete:', error.message);
-        alert(`File ${file.name} would be deleted (API integration pending).`);
-        refreshFiles();
       }
     };
 
@@ -370,21 +791,45 @@ export default {
       return date.toLocaleString();
     };
 
-    // Initial load of files
-    refreshFiles();
+    // Initialize
+    onMounted(() => {
+      refreshFiles();
+      if (viewMode.value === 'tree') {
+        buildDirectoryTree();
+      }
+    });
 
     return {
       files,
+      directoryTree,
+      currentPath,
+      selectedPath,
+      viewMode,
+      sortField,
+      sortOrder,
       showPreview,
       previewFile,
       fileInput,
       visibleFileInput,
+      pathParts,
+      sortedFiles,
+      navigateToPath,
+      getPathUpTo,
+      toggleView,
+      toggleNode,
+      buildDirectoryTree,
+      expandAll,
+      collapseAll,
+      sortBy,
+      getSortIcon,
       refreshFiles,
       uploadFile,
       handleFileSelected,
       processFileUpload,
       viewFile,
       deleteFile,
+      getFileIcon,
+      getFileType,
       closePreview,
       formatJson,
       downloadPreviewFile,
@@ -397,68 +842,154 @@ export default {
 
 <style scoped>
 .file-browser {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: 15px;
-  height: 100%;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.file-browser h2 {
-  margin: 0 0 15px 0;
-  font-size: 20px;
-  color: #007bff;
+.file-browser-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: white;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.file-browser-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
 }
 
 .file-actions {
   display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
+  gap: 0.75rem;
 }
 
 .file-actions button {
-  background-color: #007bff;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #3b82f6;
   color: white;
   border: none;
-  padding: 8px 15px;
-  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .file-actions button:hover {
-  background-color: #0056b3;
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.path-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.breadcrumb-item .clickable {
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.breadcrumb-item .clickable:hover {
+  background-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.breadcrumb-separator {
+  margin: 0 0.25rem;
+  color: #9ca3af;
+}
+
+.path-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.path-field {
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  min-width: 200px;
+}
+
+.path-go-btn {
+  padding: 0.5rem;
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.path-go-btn:hover {
+  background-color: #4b5563;
 }
 
 .file-upload-section {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 10px;
-  padding: 10px;
-  border: 2px dashed #dee2e6;
-  border-radius: 4px;
-  background-color: #f8f9fa;
+  margin: 1rem 1.5rem;
+  padding: 1rem;
+  border: 2px dashed #d1d5db;
+  border-radius: 6px;
+  background-color: #f9fafb;
   transition: all 0.3s ease;
 }
 
 .file-upload-section:hover {
-  border-color: #007bff;
-  background-color: #e3f2fd;
+  border-color: #3b82f6;
+  background-color: #eff6ff;
 }
 
 .file-input-label {
-  font-size: 14px;
-  color: #6c757d;
-  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
   text-align: center;
+  width: 100%;
+  justify-content: center;
 }
 
 .visible-file-input {
-  padding: 8px;
-  border: 1px solid #ced4da;
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
   border-radius: 4px;
   background-color: white;
   cursor: pointer;
@@ -466,20 +997,141 @@ export default {
 }
 
 .visible-file-input:hover {
-  border-color: #007bff;
+  border-color: #3b82f6;
 }
 
-.visible-file-input:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+.file-content-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 
+/* Tree View Styles */
+.tree-view {
+  display: flex;
+  flex: 1;
+}
+
+.tree-panel {
+  width: 300px;
+  background-color: white;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.tree-header h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tree-controls {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.tree-controls button {
+  padding: 0.25rem;
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #6b7280;
+}
+
+.tree-controls button:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.tree-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.tree-node {
+  user-select: none;
+}
+
+.tree-node-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.tree-node-content:hover {
+  background-color: #f3f4f6;
+}
+
+.tree-node.selected .tree-node-content {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.tree-toggle {
+  width: 12px;
+  color: #6b7280;
+}
+
+.tree-icon {
+  width: 16px;
+}
+
+.tree-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Files Panel */
+.files-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+}
+
+.files-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.files-header h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Table Styles */
 .file-list-container {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
 }
 
 .file-table {
@@ -488,52 +1140,138 @@ export default {
 }
 
 .file-table th {
-  background-color: #f8f9fa;
-  padding: 10px;
+  background-color: #f9fafb;
+  padding: 0.75rem 1rem;
   text-align: left;
-  border-bottom: 2px solid #dee2e6;
-  color: #495057;
+  border-bottom: 1px solid #e5e7eb;
+  color: #374151;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.file-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.file-table th.sortable:hover {
+  background-color: #f3f4f6;
+}
+
+.sort-icon {
+  margin-left: 0.25rem;
+  color: #6b7280;
 }
 
 .file-table td {
-  padding: 10px;
-  border-bottom: 1px solid #dee2e6;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 0.875rem;
+  color: #374151;
 }
 
 .file-table tr:hover {
-  background-color: #f1f1f1;
+  background-color: #f8fafc;
 }
 
-.file-table button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
+.file-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-icon {
+  width: 16px;
+}
+
+.file-name {
+  font-weight: 500;
+}
+
+.file-name.clickable {
   cursor: pointer;
-  margin-right: 5px;
-  transition: background-color 0.3s;
+  color: #3b82f6;
 }
 
-.file-table button:hover {
-  background-color: #0056b3;
+.file-name.clickable:hover {
+  text-decoration: underline;
 }
 
-.file-table button:last-child {
-  background-color: #dc3545;
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
 }
 
-.file-table button:last-child:hover {
-  background-color: #c82333;
+.action-btn {
+  padding: 0.375rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.75rem;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.view-btn {
+  color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.view-btn:hover {
+  background-color: #eff6ff;
+}
+
+.open-btn {
+  color: #059669;
+  border-color: #059669;
+}
+
+.open-btn:hover {
+  background-color: #ecfdf5;
+}
+
+.delete-btn {
+  color: #dc2626;
+  border-color: #dc2626;
+}
+
+.delete-btn:hover {
+  background-color: #fef2f2;
 }
 
 .no-files {
   text-align: center;
-  color: #6c757d;
+  color: #9ca3af;
   font-style: italic;
+  padding: 2rem;
 }
 
-/* File Preview Modal Styles */
+.no-files i {
+  margin-right: 0.5rem;
+  font-size: 1.25rem;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+/* List View */
+.list-view {
+  flex: 1;
+  background-color: white;
+  margin: 1rem 1.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Modal Styles (keeping original) */
 .file-preview-modal {
   position: fixed;
   top: 0;
@@ -604,19 +1342,20 @@ export default {
   flex-direction: column;
 }
 
-/* HTML Preview */
-.html-preview {
+/* Preview styles (keeping original) */
+.html-preview,
+.pdf-preview {
   flex: 1;
   display: flex;
 }
 
-.html-frame {
+.html-frame,
+.pdf-frame {
   width: 100%;
   height: 100%;
   border: none;
 }
 
-/* Image Preview */
 .image-preview {
   flex: 1;
   display: flex;
@@ -634,14 +1373,15 @@ export default {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Text/Code Preview */
-.text-preview, .json-preview {
+.text-preview,
+.json-preview {
   flex: 1;
   overflow: auto;
   padding: 20px;
 }
 
-.text-preview pre, .json-preview pre {
+.text-preview pre,
+.json-preview pre {
   margin: 0;
   font-family: 'Courier New', Courier, monospace;
   font-size: 14px;
@@ -659,19 +1399,6 @@ export default {
   border-color: #c8e1ff;
 }
 
-/* PDF Preview */
-.pdf-preview {
-  flex: 1;
-  display: flex;
-}
-
-.pdf-frame {
-  width: 100%;
-  height: 100%;
-  border: none;
-}
-
-/* File Info */
 .file-info {
   flex: 1;
   padding: 40px;
@@ -707,30 +1434,5 @@ export default {
 
 .download-btn:hover {
   background-color: #0056b3;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .modal-content {
-    width: 95vw;
-    height: 85vh;
-  }
-
-  .modal-header {
-    padding: 12px 16px;
-  }
-
-  .modal-header h3 {
-    font-size: 16px;
-  }
-
-  .text-preview, .json-preview {
-    padding: 16px;
-  }
-
-  .text-preview pre, .json-preview pre {
-    font-size: 12px;
-    padding: 12px;
-  }
 }
 </style>
