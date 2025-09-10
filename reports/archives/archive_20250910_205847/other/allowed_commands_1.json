@@ -1,0 +1,68 @@
+{
+  "comment": "Safelist of allowed system commands for security - NO LLM extraction",
+  "version": "1.0",
+  "commands": {
+    "system_info": {
+      "commands": ["uname -a", "hostnamectl", "lscpu", "lsb_release -a"],
+      "description": "Get system information",
+      "risk_level": "LOW"
+    },
+    "network_info": {
+      "commands": ["ip addr", "ifconfig", "hostname -I"],
+      "description": "Get network interface information",
+      "risk_level": "LOW"
+    },
+    "disk_usage": {
+      "commands": ["df -h", "lsblk", "du -h --max-depth=1 /"],
+      "description": "Check disk space usage",
+      "risk_level": "LOW"
+    },
+    "memory_usage": {
+      "commands": ["free -h", "cat /proc/meminfo"],
+      "description": "Check memory usage",
+      "risk_level": "LOW"
+    },
+    "process_list": {
+      "commands": ["ps aux", "top -bn1"],
+      "description": "List running processes",
+      "risk_level": "MEDIUM"
+    },
+    "uptime_info": {
+      "commands": ["uptime", "w"],
+      "description": "Check system uptime and load",
+      "risk_level": "LOW"
+    },
+    "date_time": {
+      "commands": ["date", "timedatectl status"],
+      "description": "Get current date and time",
+      "risk_level": "LOW"
+    }
+  },
+  "blocked_patterns": [
+    "rm ",
+    "rmdir ",
+    "del ",
+    "format ",
+    "fdisk ",
+    "mkfs ",
+    "dd ",
+    "chmod +x",
+    "sudo ",
+    "su ",
+    "passwd ",
+    "useradd ",
+    "userdel ",
+    "usermod ",
+    "curl ",
+    "wget ",
+    "nc ",
+    "netcat ",
+    "> ",
+    ">> ",
+    "| ",
+    "; ",
+    "& ",
+    "$(",
+    "`"
+  ]
+}

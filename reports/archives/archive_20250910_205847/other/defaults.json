@@ -1,0 +1,11 @@
+{
+    "host": "localhost",
+    "port": 6080,
+    "encrypt": false,
+    "shared": true,
+    "view_only": false,
+    "path": "websockify",
+    "repeaterID": "",
+    "reconnect": true,
+    "reconnect_delay": 5000
+}

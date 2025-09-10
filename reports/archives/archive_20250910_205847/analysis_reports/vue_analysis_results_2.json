@@ -1,0 +1,518 @@
+{
+  "timestamp": "2025-08-12",
+  "files_analyzed": 28,
+  "total_issues": 40,
+  "issues_by_type": {
+    "vfor_index_keys": 6,
+    "missing_event_cleanup": 0,
+    "performance_issues": 34,
+    "accessibility_issues": 0
+  },
+  "files": [
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 551,
+          "content": "const pageTitle = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/ChatInterface.vue",
+      "vfor_index_keys": [
+        {
+          "line": 125,
+          "content": "<div v-for=\"(message, index) in filteredMessages\" :key=\"index\" class=\"flex\" :class=\"message.sender === 'user' ? 'justify-end' : 'justify-start'\">",
+          "current_key": "index",
+          "item_variable": "message",
+          "suggested_key": "message.id || message.timestamp || `msg-${index}`",
+          "issue_type": "vfor_index_key"
+        },
+        {
+          "line": 137,
+          "content": "<div v-for=\"(file, index) in attachedFiles\" :key=\"index\" class=\"attached-file-chip\">",
+          "current_key": "index",
+          "item_variable": "file",
+          "suggested_key": "file.name || file.id || `file-${index}`",
+          "issue_type": "vfor_index_key"
+        }
+      ],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 286,
+          "content": "const filteredMessages = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/PhaseStatusIndicator.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 136,
+          "content": "const currentPhase = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 141,
+          "content": "const currentPhaseDetails = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 146,
+          "content": "const currentPhaseCapabilities = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 166,
+          "content": "const nextPhase = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/SettingsPanel.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 556,
+          "content": "const corsOriginsString = computed({",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/KnowledgePersistenceDialog.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 255,
+          "content": "const hasSelectedItems = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 259,
+          "content": "const hasDecisions = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 263,
+          "content": "const decisionsCount = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/TerminalSidebar.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 170,
+          "content": "const hasActiveSession = computed(() => sessions.value.length > 0 && activeSessionId.value);",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 171,
+          "content": "const activeSession = computed(() =>",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 174,
+          "content": "const canInput = computed(() =>",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 177,
+          "content": "const connectionStatusText = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowNotifications.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/SystemMonitor.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 262,
+          "content": "const onlineServices = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 266,
+          "content": "const totalServices = computed(() => services.value.length);",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 268,
+          "content": "const healthyEndpoints = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 274,
+          "content": "const totalEndpoints = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 280,
+          "content": "const filteredLogs = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/VoiceInterface.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/ElevationDialog.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowApproval.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/HistoryView.vue",
+      "vfor_index_keys": [
+        {
+          "line": 11,
+          "content": "<div v-for=\"(entry, index) in history\" :key=\"index\" class=\"history-entry\" @click=\"viewHistoryEntry(entry)\" tabindex=\"0\" @keyup.enter=\"$event.target.click()\" @keyup.space=\"$event.target.click()\">",
+          "current_key": "index",
+          "item_variable": "entry",
+          "suggested_key": "entry.id || `history-${entry.date}`",
+          "issue_type": "vfor_index_key"
+        }
+      ],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/AdvancedStepConfirmationModal.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 235,
+          "content": "const totalSteps = computed(() => props.workflowSteps.length);",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 237,
+          "content": "const riskLevel = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 258,
+          "content": "const riskReasons = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 281,
+          "content": "const canExecute = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/TheWelcome.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/KnowledgeManager.vue",
+      "vfor_index_keys": [
+        {
+          "line": 32,
+          "content": "<div v-for=\"(result, index) in searchResults\" :key=\"index\" class=\"search-result\">",
+          "current_key": "index",
+          "item_variable": "result",
+          "suggested_key": "result.id || `result-${index}`",
+          "issue_type": "vfor_index_key"
+        },
+        {
+          "line": 457,
+          "content": "<div v-for=\"(link, index) in currentEntry.links\" :key=\"index\" class=\"link-item\">",
+          "current_key": "index",
+          "item_variable": "link",
+          "suggested_key": "link.url || link.href || `link-${index}`",
+          "issue_type": "vfor_index_key"
+        }
+      ],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowProgressWidget.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 97,
+          "content": "const progressPercentage = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 102,
+          "content": "const currentStep = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 106,
+          "content": "const totalSteps = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 110,
+          "content": "const currentStepInfo = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 115,
+          "content": "const hasApprovalPending = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/FileBrowser.vue",
+      "vfor_index_keys": [
+        {
+          "line": 70,
+          "content": "<tr v-for=\"(file, index) in files\" :key=\"index\">",
+          "current_key": "index",
+          "item_variable": "file",
+          "suggested_key": "file.name || file.id || `file-${index}`",
+          "issue_type": "vfor_index_key"
+        }
+      ],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WelcomeItem.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/TerminalWindow.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 418,
+          "content": "const canInput = computed(() => connectionStatus.value === 'connected');",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 419,
+          "content": "const hasRunningProcesses = computed(() => runningProcesses.value.length > 0);",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 420,
+          "content": "const connectionStatusText = computed(() => {",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/base/BaseButton.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 49,
+          "content": "const buttonClasses = computed(() => [",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/base/BasePanel.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [
+        {
+          "line": 49,
+          "content": "const panelClasses = computed(() => [",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        },
+        {
+          "line": 59,
+          "content": "const contentClasses = computed(() => [",
+          "issue_type": "computed_optimization",
+          "description": "Consider using shallowRef for computed properties with complex objects",
+          "suggestion": "Use shallowRef or shallowReactive for performance"
+        }
+      ],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconSupport.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconEcosystem.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconCommunity.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconDocumentation.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconTooling.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/views/AboutView.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    },
+    {
+      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/views/HomeView.vue",
+      "vfor_index_keys": [],
+      "missing_event_cleanup": [],
+      "performance_issues": [],
+      "accessibility_issues": []
+    }
+  ],
+  "summary": {
+    "total_files": 28,
+    "total_issues": 40,
+    "critical_issues": 6,
+    "performance_issues": 34,
+    "maintenance_issues": 0
+  }
+}

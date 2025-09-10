@@ -1,0 +1,45 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@apply",
+      "description": "Use @apply to inline any existing utility classes into your own custom CSS.",
+      "references": [
+        {
+          "name": "Tailwind CSS @apply directive",
+          "url": "https://tailwindcss.com/docs/functions-and-directives#apply"
+        }
+      ]
+    },
+    {
+      "name": "@layer",
+      "description": "Use @layer to tell Tailwind which 'bucket' a set of custom styles belong to.",
+      "references": [
+        {
+          "name": "Tailwind CSS @layer directive",
+          "url": "https://tailwindcss.com/docs/functions-and-directives#layer"
+        }
+      ]
+    },
+    {
+      "name": "@tailwind",
+      "description": "Use @tailwind to insert Tailwind's base, components, utilities and variants styles into your CSS.",
+      "references": [
+        {
+          "name": "Tailwind CSS @tailwind directive",
+          "url": "https://tailwindcss.com/docs/functions-and-directives#tailwind"
+        }
+      ]
+    },
+    {
+      "name": "@screen",
+      "description": "Use @screen to create media queries that reference your breakpoints by name.",
+      "references": [
+        {
+          "name": "Tailwind CSS @screen directive",
+          "url": "https://tailwindcss.com/docs/functions-and-directives#screen"
+        }
+      ]
+    }
+  ]
+}
