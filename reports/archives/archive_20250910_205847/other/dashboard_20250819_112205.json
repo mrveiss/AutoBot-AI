@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-08-19T11:22:05.669375",
+  "system_overview": {
+    "avg_cpu_percent": 0.6,
+    "avg_memory_percent": 14.4,
+    "avg_disk_percent": 9.03,
+    "max_cpu_percent": 0.6,
+    "max_memory_percent": 14.4,
+    "data_points": 1
+  },
+  "service_status": {
+    "backend": {
+      "avg_response_time_ms": 28.08,
+      "total_errors": 1,
+      "total_successes": 0,
+      "avg_memory_mb": 291.69,
+      "error_rate": 100.0
+    },
+    "frontend": {
+      "avg_response_time_ms": 39.36,
+      "total_errors": 0,
+      "total_successes": 1,
+      "avg_memory_mb": 171.13,
+      "error_rate": 0.0
+    },
+    "redis": {
+      "avg_response_time_ms": 0,
+      "total_errors": 0,
+      "total_successes": 1,
+      "avg_memory_mb": 0,
+      "error_rate": 0.0
+    }
+  },
+  "recent_alerts": [],
+  "performance_trends": {},
+  "health_summary": {}
+}

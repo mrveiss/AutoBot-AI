@@ -1,0 +1,49 @@
+{
+  "chatId": "32ec78bb-1567-404c-95bd-b842937cf757",
+  "name": "",
+  "messages": [
+    {
+      "id": "351fd2c8-3195-4204-bcf3-d9d1640a4f19",
+      "timestamp": "2025-09-02T05:18:17.663Z",
+      "content": "\ud83e\udd14 Processing your message...",
+      "sender": "assistant",
+      "metadata": {}
+    },
+    {
+      "id": "93d95a20-b8d9-4ea6-94af-bf09006ce230",
+      "timestamp": "2025-09-02T05:18:17.663Z",
+      "content": "\ud83d\udd0d Searching knowledge base...",
+      "sender": "assistant",
+      "metadata": {}
+    },
+    {
+      "id": "63839ba6-abbf-44b3-b41c-49178c9a1dbb",
+      "timestamp": "2025-09-02T05:18:17.663Z",
+      "content": "\u26a0\ufe0f Knowledge base temporarily unavailable, using fallback response",
+      "sender": "assistant",
+      "metadata": {}
+    },
+    {
+      "id": "7c1ec287-f5b0-475f-9f53-e63d9cedaa0a",
+      "timestamp": "2025-09-02T05:18:17.663Z",
+      "content": "\u2705 Response generated successfully",
+      "sender": "assistant",
+      "metadata": {}
+    },
+    {
+      "id": "43ef9dfa-23c9-4065-926c-d8041a5e6ad2",
+      "timestamp": "2025-09-02T05:18:17.663Z",
+      "content": "I'm AutoBot, your intelligent Linux automation assistant. I specialize in:\n\n\u2022 **System Administration**: Linux commands, file management, process control\n\u2022 **Automation**: Workflow creation, scheduling, and execution\n\u2022 **Multi-Agent Architecture**: Intelligent task distribution across specialized agents\n\u2022 **Enterprise Features**: Scalable and monitored automation solutions\n\nHow can I help you with your Linux system or automation needs today?",
+      "sender": "assistant",
+      "type": "response",
+      "metadata": {
+        "duration": 5.006678581237793,
+        "message_type": "fallback",
+        "knowledge_status": "working",
+        "sources": []
+      }
+    }
+  ],
+  "last_modified": "2025-09-02 08:22:51",
+  "created_time": "2025-09-02 08:18:21"
+}

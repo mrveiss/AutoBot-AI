@@ -1,0 +1,349 @@
+{
+  "backend": {
+    "api_endpoint": "http://172.16.168.20:8001",
+    "audit_log_file": "logs/audit.log",
+    "chat_data_dir": "data/chats",
+    "chat_history_file": "data/chat_history.json",
+    "cors_origins": [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:3000"
+    ],
+    "knowledge_base_db": "data/knowledge_base.db",
+    "llm": {
+      "cloud": {
+        "provider": "openai",
+        "providers": {
+          "anthropic": {
+            "api_key": "",
+            "endpoint": "https://api.anthropic.com/v1",
+            "models": [],
+            "selected_model": ""
+          },
+          "openai": {
+            "api_key": "",
+            "endpoint": "https://api.openai.com/v1",
+            "models": [],
+            "selected_model": ""
+          }
+        }
+      },
+      "embedding": {
+        "provider": "ollama",
+        "providers": {
+          "ollama": {
+            "endpoint": "http://localhost:11434/api/embeddings",
+            "host": "http://localhost:11434",
+            "models": [
+              {
+                "available": true,
+                "modified_at": "2025-08-12T11:10:47.575501818+03:00",
+                "name": "nomic-embed-text:latest",
+                "size": 274302450,
+                "type": "ollama"
+              }
+            ],
+            "selected_model": "nomic-embed-text:latest"
+          },
+          "openai": {
+            "api_key": "",
+            "endpoint": "https://api.openai.com/v1/embeddings",
+            "models": [
+              "text-embedding-ada-002",
+              "text-embedding-3-small",
+              "text-embedding-3-large"
+            ],
+            "selected_model": "text-embedding-ada-002"
+          }
+        }
+      },
+      "local": {
+        "provider": "ollama",
+        "providers": {
+          "lmstudio": {
+            "endpoint": "http://localhost:1234/v1",
+            "models": [],
+            "selected_model": ""
+          },
+          "ollama": {
+            "classification_model": "gemma2:2b",
+            "endpoint": "http://localhost:11434/api/generate",
+            "host": "http://localhost:11434",
+            "models": [],
+            "selected_model": "llama3.2:1b-instruct-q4_K_M"
+          }
+        }
+      },
+      "provider_type": "local"
+    },
+    "max_retries": 3,
+    "reliability_stats_file": "data/reliability_stats.json",
+    "server_host": "172.16.168.20",
+    "server_port": 8001,
+    "streaming": true,
+    "timeout": 60,
+    "use_phi2": false,
+    "ollama_endpoint": "172.16.168.20"
+  },
+  "chat": {
+    "auto_scroll": true,
+    "max_messages": 100,
+    "message_retention_days": 30,
+    "default_welcome_message": "Hello! How can I assist you today?"
+  },
+  "developer": {
+    "debug_logging": true,
+    "enabled": true,
+    "endpoint_suggestions": true,
+    "enhanced_errors": true,
+    "rum": {
+      "enabled": true,
+      "error_tracking": true,
+      "performance_monitoring": true,
+      "interaction_tracking": true,
+      "session_recording": true,
+      "sample_rate": 100,
+      "max_events_per_session": 1000,
+      "debug_mode": false,
+      "log_to_backend": true,
+      "log_level": "warning"
+    }
+  },
+  "knowledge_base": {
+    "enabled": true,
+    "update_frequency_days": 7,
+    "force_embedding_consistency": true,
+    "semantic_chunking": {
+      "enabled": true,
+      "model": "all-MiniLM-L6-v2",
+      "percentile_threshold": 95.0
+    }
+  },
+  "logging": {
+    "backend_log_file": "logs/backend.log",
+    "backend_log_files": {
+      "critical": "logs/backend.critical.log",
+      "debug": "logs/backend.debug.log",
+      "error": "logs/backend.error.log",
+      "info": "logs/backend.info.log",
+      "warning": "logs/backend.warning.log"
+    },
+    "backup_count": 5,
+    "frontend_log_file": "logs/frontend.log",
+    "frontend_log_files": {
+      "critical": "logs/frontend.critical.log",
+      "debug": "logs/frontend.debug.log",
+      "error": "logs/frontend.error.log",
+      "info": "logs/frontend.info.log",
+      "warning": "logs/frontend.warning.log"
+    },
+    "log_directory": "logs",
+    "log_file_path": "logs/system.log",
+    "log_files": {
+      "critical": "logs/system.critical.log",
+      "debug": "logs/system.debug.log",
+      "error": "logs/system.error.log",
+      "info": "logs/system.info.log",
+      "warning": "logs/system.warning.log"
+    },
+    "log_level": "INFO",
+    "log_levels": [
+      "debug",
+      "info",
+      "warning",
+      "error",
+      "critical"
+    ],
+    "log_rotation": {
+      "compress_backups": true,
+      "delete_old_logs_after_days": 30,
+      "enabled": true,
+      "max_backup_count": 7,
+      "max_file_size": "10MB",
+      "rotation_at_startup": false,
+      "rotation_interval": "daily",
+      "rotation_type": "size"
+    },
+    "log_to_file": true,
+    "max_log_size_mb": 10,
+    "separate_log_files": true,
+    "startup_log_file": "logs/startup.log",
+    "startup_log_files": {
+      "critical": "logs/startup.critical.log",
+      "debug": "logs/startup.debug.log",
+      "error": "logs/startup.error.log",
+      "info": "logs/startup.info.log",
+      "warning": "logs/startup.warning.log"
+    },
+    "startup_log_rotation": {
+      "backup_naming": "timestamp",
+      "compress_backups": true,
+      "delete_old_logs_after_days": 90,
+      "enabled": true,
+      "max_backup_count": 10,
+      "rotate_on_startup": true
+    },
+    "component_log_levels": {
+      "backend_api": "INFO",
+      "cache_operations": "DEBUG",
+      "frontend_proxy": "WARNING",
+      "health_checks": "WARNING",
+      "knowledge_base": "INFO",
+      "llm_interface": "INFO",
+      "seq_ingestion": "ERROR",
+      "system_operations": "INFO",
+      "websocket": "WARNING"
+    }
+  },
+  "memory": {
+    "chromadb": {
+      "collection_name": "autobot_memory",
+      "enabled": true,
+      "path": "data/chromadb"
+    },
+    "long_term": {
+      "enabled": true,
+      "retention_days": 30
+    },
+    "redis": {
+      "enabled": true,
+      "host": "172.16.168.23",
+      "port": 6379,
+      "channels": {
+        "command_approval_request": "command_approval_request",
+        "command_approval_response_prefix": "command_approval_",
+        "worker_capabilities": "worker_capabilities"
+      },
+      "databases": {
+        "main": 0,
+        "knowledge": 1,
+        "prompts": 2,
+        "agents": 3,
+        "metrics": 4,
+        "cache": 5,
+        "sessions": 6,
+        "tasks": 7,
+        "logs": 8,
+        "temp": 9,
+        "backup": 10,
+        "testing": 15
+      },
+      "kb_db": 1,
+      "health_check_interval": 30,
+      "max_connections": 20,
+      "password": null,
+      "retry_attempts": 3,
+      "retry_delay": 1,
+      "timeout": 5
+    },
+    "short_term": {
+      "duration_minutes": 30,
+      "enabled": true
+    },
+    "vector_storage": {
+      "enabled": true,
+      "update_frequency_days": 7
+    }
+  },
+  "message_display": {
+    "show_debug": false,
+    "show_json": false,
+    "show_planning": true,
+    "show_thoughts": true,
+    "show_utility": false
+  },
+  "security": {
+    "enable_encryption": false,
+    "session_timeout_minutes": 30
+  },
+  "ui": {
+    "animations": true,
+    "developer_mode": true,
+    "font_size": "medium",
+    "language": "en",
+    "theme": "light"
+  },
+  "voice_interface": {
+    "enabled": false,
+    "speech_rate": 1,
+    "voice": "default"
+  },
+  "infrastructure": {
+    "hosts": {
+      "backend": "localhost",
+      "frontend": "localhost",
+      "redis": "localhost",
+      "ollama": "localhost",
+      "ai_stack": "localhost",
+      "npu_worker": "localhost",
+      "browser_service": "localhost"
+    }
+  },
+  "agents": {
+    "chat": {
+      "enabled": true,
+      "max_history": 100,
+      "model": "llama3.2:1b-instruct-q4_K_M",
+      "streaming": true
+    },
+    "classification": {
+      "enabled": true,
+      "fallback_enabled": true,
+      "model": "gemma2:2b",
+      "timeout_seconds": 10
+    },
+    "interactive_terminal": {
+      "enabled": true,
+      "model": "llama3.2:1b-instruct-q4_K_M",
+      "session_timeout_minutes": 30
+    },
+    "kb_librarian": {
+      "enabled": true,
+      "max_results": 5,
+      "model": "llama3.2:1b-instruct-q4_K_M",
+      "timeout_seconds": 15
+    },
+    "rag": {
+      "enabled": true,
+      "max_context_length": 4000,
+      "model": "llama3.2:1b-instruct-q4_K_M"
+    },
+    "research": {
+      "browser_enabled": false,
+      "enabled": true,
+      "model": "llama3.2:1b-instruct-q4_K_M",
+      "timeout_seconds": 30
+    },
+    "security_scanner": {
+      "enabled": false,
+      "model": "llama3.2:1b-instruct-q4_K_M",
+      "scan_timeout_seconds": 60
+    },
+    "system_commands": {
+      "approval_required": true,
+      "enabled": true,
+      "model": "llama3.2:1b-instruct-q4_K_M",
+      "safety_enabled": true
+    }
+  },
+  "classification": {
+    "fallback_to_keyword": true,
+    "max_response_time_ms": 5000,
+    "preferred_model": "gemma2:2b",
+    "use_gemma": true
+  },
+  "web_research": {
+    "enabled": true,
+    "fallback_to_file_search": true,
+    "max_results": 5,
+    "security": {
+      "content_filtering_enabled": true,
+      "default_risk_threshold": "medium",
+      "domain_validation_enabled": true,
+      "input_validation_enabled": true,
+      "require_user_confirmation": true
+    },
+    "timeout_seconds": 30
+  }
+}

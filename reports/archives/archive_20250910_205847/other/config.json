@@ -1,0 +1,60 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "mcp-server-filesystem",
+      "args": ["/home/kali/Desktop/AutoBot"],
+      "description": "Enhanced file system operations for AutoBot codebase",
+      "enabled": true
+    },
+    "puppeteer": {
+      "command": "mcp-server-puppeteer", 
+      "args": [],
+      "description": "Browser automation for frontend testing",
+      "enabled": true
+    },
+    "sequential-thinking": {
+      "command": "mcp-server-sequential-thinking",
+      "args": [],
+      "description": "Complex problem-solving workflows",
+      "enabled": true
+    },
+    "autobot-custom": {
+      "command": "node",
+      "args": ["/home/kali/Desktop/AutoBot/.mcp/autobot-mcp-server.js"],
+      "description": "Custom AutoBot-specific MCP server with debugging tools",
+      "enabled": true
+    },
+    "debug-server": {
+      "command": "mcp-debug-server",
+      "args": [],
+      "description": "Debug Adapter Protocol integration for Claude",
+      "enabled": true
+    },
+    "github-mcp": {
+      "command": "/home/kali/Desktop/AutoBot/.mcp/github-mcp-server",
+      "args": ["stdio"],
+      "description": "GitHub MCP server for repository management",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PAT}"
+      },
+      "enabled": false
+    },
+    "sqlite-mcp": {
+      "command": "npx",
+      "args": ["-y", "mcp-sqlite", "data/autobot.db"],
+      "description": "SQLite MCP server for database operations",
+      "enabled": true
+    },
+    "mcp-trace": {
+      "command": "npx",
+      "args": ["mcp-trace"],
+      "description": "Tracing middleware for MCP servers",
+      "enabled": false
+    }
+  },
+  "settings": {
+    "logLevel": "info",
+    "timeout": 30000,
+    "projectRoot": "/home/kali/Desktop/AutoBot"
+  }
+}
