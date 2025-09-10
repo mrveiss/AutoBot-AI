@@ -2076,7 +2076,7 @@ tests/screenshots/      # Visual test artifacts
 **Quality Gates:**
 
 ```bash
-# Comprehensive test execution for Phase 9
+# Comprehensive test execution for AutoBot
 run_full_test_suite() {
     echo "=== AutoBot Test Suite ==="
     
