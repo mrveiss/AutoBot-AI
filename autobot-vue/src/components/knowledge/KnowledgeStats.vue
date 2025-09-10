@@ -162,7 +162,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
-import { useKnowledgeController } from '@/models/controllers'
+import { useKnowledgeController } from '@/models/controllers/index'
 import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
 
 const store = useKnowledgeStore()
