@@ -166,7 +166,21 @@ import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
 
 const store = useKnowledgeStore()
-const controller = useKnowledgeController()
+
+// Defensive controller initialization
+let controller: any = null
+try {
+  controller = useKnowledgeController()
+  console.log('Knowledge controller initialized:', controller)
+} catch (error) {
+  console.error('Failed to initialize knowledge controller:', error)
+  controller = {
+    refreshStats: async () => console.warn('Controller not available'),
+    getDetailedStats: async () => ({}),
+    cleanupKnowledgeBase: async () => console.warn('Controller not available'),
+    reindexKnowledgeBase: async () => console.warn('Controller not available')
+  }
+}
 
 // State
 const isRefreshing = ref(false)
@@ -250,8 +264,19 @@ const refreshStats = async () => {
   isRefreshing.value = true
 
   try {
-    await controller.refreshStats()
-    detailedStats.value = await controller.getDetailedStats()
+    if (controller && typeof controller.refreshStats === 'function') {
+      await controller.refreshStats()
+    } else {
+      console.warn('Controller refreshStats method not available')
+    }
+    
+    if (controller && typeof controller.getDetailedStats === 'function') {
+      detailedStats.value = await controller.getDetailedStats()
+    } else {
+      console.warn('Controller getDetailedStats method not available')
+      detailedStats.value = {}
+    }
+    
     generateRecentActivities()
   } catch (error) {
     console.error('Failed to refresh stats:', error)
@@ -317,8 +342,18 @@ const optimizeKnowledge = async () => {
   }
 
   try {
-    await controller.cleanupKnowledgeBase()
-    await controller.reindexKnowledgeBase()
+    if (controller && typeof controller.cleanupKnowledgeBase === 'function') {
+      await controller.cleanupKnowledgeBase()
+    } else {
+      console.warn('Controller cleanupKnowledgeBase method not available')
+    }
+    
+    if (controller && typeof controller.reindexKnowledgeBase === 'function') {
+      await controller.reindexKnowledgeBase()
+    } else {
+      console.warn('Controller reindexKnowledgeBase method not available')
+    }
+    
     await refreshStats()
   } catch (error) {
     console.error('Failed to optimize knowledge base:', error)

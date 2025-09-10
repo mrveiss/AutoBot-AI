@@ -5,8 +5,21 @@
       <div class="flex items-center gap-2">
         <i class="fas fa-desktop"></i>
         <span>Remote Desktop (noVNC)</span>
+        <div class="connection-status" :class="connectionStatusClass">
+          <div class="status-dot"></div>
+          <span>{{ connectionStatusText }}</span>
+        </div>
       </div>
       <div class="flex items-center gap-2">
+        <button 
+          @click="checkVNCService"
+          class="text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+          title="Check VNC service status"
+          :disabled="isChecking"
+        >
+          <i :class="isChecking ? 'fas fa-spinner fa-spin' : 'fas fa-heartbeat'"></i>
+          Service Check
+        </button>
         <a 
           :href="novncUrl" 
           target="_blank" 
@@ -14,33 +27,80 @@
           title="Open noVNC in new window"
         >
           <i class="fas fa-external-link-alt"></i>
-          Open in New Window
+          New Window
         </a>
         <button 
           @click="refreshViewer"
           class="text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
           title="Refresh connection"
+          :disabled="isRefreshing"
         >
           <i class="fas fa-sync-alt" :class="{ 'animate-spin': isRefreshing }"></i>
+          Refresh
+        </button>
+        <button 
+          @click="toggleFullscreen"
+          class="text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+          title="Toggle fullscreen"
+        >
+          <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand'"></i>
+          Fullscreen
         </button>
       </div>
     </div>
 
-    <!-- Connection Status -->
-    <div v-if="connectionError" class="bg-red-600 text-white px-4 py-2 text-sm flex items-center gap-2">
-      <i class="fas fa-exclamation-triangle"></i>
-      <span>Connection failed. Make sure the noVNC server is running on {{ novncUrl }}</span>
-      <button 
-        @click="retryConnection" 
-        class="ml-auto px-3 py-1 bg-red-700 hover:bg-red-800 rounded text-sm transition-colors"
-      >
-        Retry
+    <!-- Connection Status Banner -->
+    <div v-if="connectionError" class="bg-red-600 text-white px-4 py-3 text-sm flex items-start gap-3">
+      <i class="fas fa-exclamation-triangle flex-shrink-0 mt-0.5"></i>
+      <div class="flex-1">
+        <div class="font-medium">VNC Desktop Service Unavailable</div>
+        <div class="text-xs mt-1 space-y-1">
+          <div>The VNC desktop service is not responding on {{ vncHost }}:{{ vncPort }}.</div>
+          <div v-if="errorDetails" class="text-red-200">{{ errorDetails }}</div>
+          <div class="mt-2">
+            <strong>To start VNC desktop:</strong>
+            <br />1. Run: <code class="bg-red-700 px-1 rounded">bash run_autobot.sh --desktop</code>
+            <br />2. Or manually: <code class="bg-red-700 px-1 rounded">vncserver -geometry 1920x1080 -depth 24</code>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button 
+          @click="retryConnection" 
+          class="px-3 py-1 bg-red-700 hover:bg-red-800 rounded text-sm transition-colors flex items-center gap-1"
+          :disabled="isRetrying"
+        >
+          <i :class="isRetrying ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
+          {{ isRetrying ? 'Retrying...' : 'Retry' }}
+        </button>
+        <button 
+          @click="checkVNCService" 
+          class="px-3 py-1 bg-red-700 hover:bg-red-800 rounded text-sm transition-colors flex items-center gap-1"
+          :disabled="isChecking"
+        >
+          <i :class="isChecking ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+          Check Service
+        </button>
+      </div>
+    </div>
+
+    <!-- Service Status Info -->
+    <div v-if="serviceStatus && !connectionError" class="bg-green-600 text-white px-4 py-2 text-sm flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i class="fas fa-check-circle"></i>
+        <span>VNC service is running</span>
+        <span class="text-green-200">{{ serviceStatus }}</span>
+      </div>
+      <button @click="serviceStatus = null" class="text-green-200 hover:text-white">
+        <i class="fas fa-times"></i>
       </button>
     </div>
 
-    <!-- noVNC Iframe -->
+    <!-- Main VNC Display Area -->
     <div class="flex-1 relative">
+      <!-- noVNC Iframe -->
       <iframe 
+        v-show="!connectionError && !isLoading"
         :key="iframeKey"
         :src="novncUrl"
         class="w-full h-full border-0"
@@ -48,13 +108,79 @@
         allowfullscreen
         @load="onIframeLoad"
         @error="onIframeError"
+        ref="vncIframe"
       ></iframe>
       
       <!-- Loading overlay -->
-      <div v-if="isLoading" class="absolute inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center">
+      <div v-if="isLoading" class="absolute inset-0 bg-gray-900 flex items-center justify-center">
         <div class="text-center text-white">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-          <p>Connecting to remote desktop...</p>
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p class="text-lg">Connecting to remote desktop...</p>
+          <p class="text-sm text-gray-400 mt-2">{{ loadingMessage }}</p>
+        </div>
+      </div>
+
+      <!-- Connection Error Display -->
+      <div v-if="connectionError && !isLoading" class="absolute inset-0 bg-gray-900 flex items-center justify-center">
+        <div class="text-center text-white max-w-md mx-4">
+          <i class="fas fa-desktop text-6xl text-gray-500 mb-4"></i>
+          <h3 class="text-xl font-semibold mb-2">Desktop Not Available</h3>
+          <p class="text-gray-400 mb-4">
+            Unable to connect to the VNC desktop service. The service may not be running or may be temporarily unavailable.
+          </p>
+          <div class="space-y-2">
+            <button 
+              @click="retryConnection" 
+              class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors flex items-center justify-center gap-2"
+              :disabled="isRetrying"
+            >
+              <i :class="isRetrying ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
+              {{ isRetrying ? 'Connecting...' : 'Try Again' }}
+            </button>
+            <button 
+              @click="openInNewWindow" 
+              class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded transition-colors flex items-center justify-center gap-2"
+            >
+              <i class="fas fa-external-link-alt"></i>
+              Open in New Window
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="bg-gray-800 text-white px-4 py-1 text-xs flex justify-between items-center flex-shrink-0">
+      <div class="flex items-center gap-4">
+        <span>{{ vncHost }}:{{ vncPort }}</span>
+        <span v-if="lastConnectionAttempt">
+          Last attempt: {{ formatTime(lastConnectionAttempt) }}
+        </span>
+      </div>
+      <div class="flex items-center gap-4">
+        <span v-if="connectionLatency">Latency: {{ connectionLatency }}ms</span>
+        <span class="cursor-pointer" @click="showDebugInfo = !showDebugInfo" title="Toggle debug info">
+          <i class="fas fa-info-circle"></i>
+        </span>
+      </div>
+    </div>
+
+    <!-- Debug Info Panel -->
+    <div v-if="showDebugInfo" class="bg-gray-800 text-white p-4 text-xs font-mono border-t border-gray-600">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <div><strong>Connection:</strong></div>
+          <div>URL: {{ novncUrl }}</div>
+          <div>Host: {{ vncHost }}</div>
+          <div>Port: {{ vncPort }}</div>
+          <div>Status: {{ connectionStatusText }}</div>
+        </div>
+        <div>
+          <div><strong>Diagnostics:</strong></div>
+          <div>Iframe Key: {{ iframeKey }}</div>
+          <div>Error Count: {{ errorCount }}</div>
+          <div>Last Error: {{ lastError || 'None' }}</div>
+          <div>Service Check: {{ lastServiceCheck || 'Never' }}</div>
         </div>
       </div>
     </div>
@@ -62,56 +188,330 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { API_CONFIG } from '@/config/environment.js'
+import { ref, onMounted, computed, onUnmounted } from 'vue'
+
+// Configuration
+const vncHost = ref('172.16.168.20')  // Main WSL machine
+const vncPort = ref(6080)
+const novncUrl = computed(() => 
+  `http://${vncHost.value}:${vncPort.value}/vnc.html?autoconnect=true&resize=scale&reconnect=true&password=''`
+)
 
 // Component state
-const novncUrl = ref(API_CONFIG.PLAYWRIGHT_VNC_URL)
 const isLoading = ref(true)
 const isRefreshing = ref(false)
+const isRetrying = ref(false)
+const isChecking = ref(false)
 const connectionError = ref(false)
-const iframeKey = ref(0) // For forcing iframe refresh
+const errorDetails = ref('')
+const errorCount = ref(0)
+const lastError = ref('')
+const iframeKey = ref(0)
+const lastConnectionAttempt = ref<Date | null>(null)
+const connectionLatency = ref<number | null>(null)
+const serviceStatus = ref('')
+const loadingMessage = ref('Initializing connection...')
+const showDebugInfo = ref(false)
+const isFullscreen = ref(false)
+const lastServiceCheck = ref('')
+const vncIframe = ref<HTMLIFrameElement | null>(null)
+
+// Connection status
+const connectionStatusClass = computed(() => {
+  if (isLoading.value || isRetrying.value) return 'connecting'
+  if (connectionError.value) return 'disconnected'
+  return 'connected'
+})
+
+const connectionStatusText = computed(() => {
+  if (isLoading.value) return 'Connecting...'
+  if (isRetrying.value) return 'Reconnecting...'
+  if (connectionError.value) return 'Disconnected'
+  return 'Connected'
+})
 
 // Methods
-const onIframeLoad = () => {
-  isLoading.value = false
-  connectionError.value = false
+const onIframeLoad = async () => {
+  console.log('NoVNC iframe loaded successfully')
+  
+  // Small delay to ensure VNC has time to establish connection
+  setTimeout(async () => {
+    isLoading.value = false
+    connectionError.value = false
+    errorDetails.value = ''
+    
+    // Measure connection latency
+    await measureLatency()
+    
+    loadingMessage.value = 'Connected successfully!'
+  }, 2000)
 }
 
-const onIframeError = () => {
+const onIframeError = (event: Event) => {
+  console.error('NoVNC iframe error:', event)
   isLoading.value = false
   connectionError.value = true
+  errorCount.value += 1
+  lastError.value = 'Iframe load error'
+  errorDetails.value = 'Failed to load noVNC interface'
+}
+
+const measureLatency = async () => {
+  try {
+    const start = performance.now()
+    const response = await fetch(`http://${vncHost.value}:${vncPort.value}/`, { 
+      method: 'HEAD',
+      mode: 'no-cors'
+    })
+    const end = performance.now()
+    connectionLatency.value = Math.round(end - start)
+  } catch (error) {
+    connectionLatency.value = null
+  }
+}
+
+const checkVNCService = async () => {
+  isChecking.value = true
+  lastServiceCheck.value = new Date().toLocaleTimeString()
+  
+  try {
+    // Try to reach the VNC service
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    
+    const response = await fetch(`http://${vncHost.value}:${vncPort.value}/`, {
+      method: 'HEAD',
+      signal: controller.signal,
+      mode: 'no-cors'
+    })
+    
+    clearTimeout(timeoutId)
+    serviceStatus.value = `Service responding (${new Date().toLocaleTimeString()})`
+    
+    // If we can reach the service but iframe is broken, try refresh
+    if (connectionError.value) {
+      setTimeout(() => {
+        refreshViewer()
+      }, 1000)
+    }
+    
+  } catch (error: any) {
+    console.warn('VNC service check failed:', error.message)
+    if (error.name === 'AbortError') {
+      errorDetails.value = 'Connection timeout - service may be starting up'
+    } else {
+      errorDetails.value = `Service check failed: ${error.message}`
+    }
+    
+    // Try alternative ports
+    await checkAlternativePorts()
+  }
+  
+  isChecking.value = false
+}
+
+const checkAlternativePorts = async () => {
+  const alternatePorts = [5901, 5902, 6080, 8080]
+  
+  for (const port of alternatePorts) {
+    if (port === vncPort.value) continue
+    
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 2000)
+      
+      await fetch(`http://${vncHost.value}:${port}/`, {
+        method: 'HEAD',
+        signal: controller.signal,
+        mode: 'no-cors'
+      })
+      
+      clearTimeout(timeoutId)
+      
+      // Found service on alternative port
+      serviceStatus.value = `Found VNC service on port ${port}! Switching...`
+      vncPort.value = port
+      
+      setTimeout(() => {
+        refreshViewer()
+      }, 1500)
+      
+      break
+    } catch (error) {
+      // Port not available, continue checking
+    }
+  }
 }
 
 const refreshViewer = () => {
+  console.log('Refreshing NoVNC viewer...')
   isRefreshing.value = true
   isLoading.value = true
   connectionError.value = false
-  iframeKey.value += 1 // Force iframe refresh
+  errorDetails.value = ''
+  lastConnectionAttempt.value = new Date()
+  loadingMessage.value = 'Refreshing connection...'
+  
+  // Force iframe refresh
+  iframeKey.value += 1
   
   setTimeout(() => {
     isRefreshing.value = false
   }, 1000)
-}
-
-const retryConnection = () => {
-  refreshViewer()
-}
-
-// Lifecycle
-onMounted(() => {
+  
   // Set loading timeout
   setTimeout(() => {
     if (isLoading.value) {
       connectionError.value = true
       isLoading.value = false
+      errorDetails.value = 'Connection timeout after refresh'
+      errorCount.value += 1
+      lastError.value = 'Refresh timeout'
     }
-  }, 10000) // 10 second timeout
+  }, 15000)
+}
+
+const retryConnection = () => {
+  console.log('Retrying NoVNC connection...')
+  isRetrying.value = true
+  loadingMessage.value = 'Attempting to reconnect...'
+  
+  setTimeout(() => {
+    refreshViewer()
+    isRetrying.value = false
+  }, 1000)
+}
+
+const openInNewWindow = () => {
+  window.open(novncUrl.value, '_blank', 'width=1200,height=800')
+}
+
+const toggleFullscreen = async () => {
+  if (!document.fullscreenElement) {
+    try {
+      await document.documentElement.requestFullscreen()
+      isFullscreen.value = true
+    } catch (error) {
+      console.error('Failed to enter fullscreen:', error)
+    }
+  } else {
+    try {
+      await document.exitFullscreen()
+      isFullscreen.value = false
+    } catch (error) {
+      console.error('Failed to exit fullscreen:', error)
+    }
+  }
+}
+
+const formatTime = (date: Date) => {
+  return date.toLocaleTimeString()
+}
+
+// Lifecycle
+onMounted(() => {
+  lastConnectionAttempt.value = new Date()
+  
+  // Set initial loading timeout
+  const loadingTimeout = setTimeout(() => {
+    if (isLoading.value) {
+      connectionError.value = true
+      isLoading.value = false
+      errorDetails.value = 'Initial connection timeout - VNC service may not be running'
+      errorCount.value += 1
+      lastError.value = 'Initial load timeout'
+    }
+  }, 12000)
+  
+  // Cleanup timeout if component unmounts
+  onUnmounted(() => {
+    clearTimeout(loadingTimeout)
+  })
+  
+  // Auto-check service status after initial load
+  setTimeout(() => {
+    if (connectionError.value) {
+      checkVNCService()
+    }
+  }, 3000)
+  
+  // Listen for fullscreen changes
+  document.addEventListener('fullscreenchange', () => {
+    isFullscreen.value = !!document.fullscreenElement
+  })
+})
+
+onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', () => {})
 })
 </script>
 
 <style scoped>
 .novnc-viewer {
   height: calc(100vh - 120px);
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  margin-left: 1rem;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.connection-status.connected .status-dot {
+  background: #10b981; /* green */
+}
+
+.connection-status.connecting .status-dot {
+  background: #f59e0b; /* yellow */
+  animation: pulse 1.5s infinite;
+}
+
+.connection-status.disconnected .status-dot {
+  background: #ef4444; /* red */
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 1; 
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.5; 
+    transform: scale(1.1);
+  }
+}
+
+/* Fullscreen styles */
+:fullscreen .novnc-viewer {
+  height: 100vh;
+}
+
+/* Hide scrollbars in fullscreen */
+:fullscreen {
+  overflow: hidden;
+}
+
+/* Smooth transitions */
+.transition-colors {
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+/* Better button hover states */
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:disabled:hover {
+  transform: none;
 }
 </style>

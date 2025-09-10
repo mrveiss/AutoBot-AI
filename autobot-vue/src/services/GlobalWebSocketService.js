@@ -1,13 +1,12 @@
 /**
- * Global WebSocket Service
+ * Global WebSocket Service - Simplified and Reliable
  *
  * Provides system-wide WebSocket connectivity for RUM monitoring,
  * real-time updates, and cross-component communication.
- * Works on any page/tab, not limited to chat interface.
+ * Simplified from 575+ lines to focus on reliability over complexity.
  */
 
 import { ref, reactive } from 'vue'
-import { API_CONFIG } from '@/config/environment.js'
 
 class GlobalWebSocketService {
   constructor() {
@@ -15,211 +14,256 @@ class GlobalWebSocketService {
     this.isConnected = ref(false)
     this.connectionState = ref('disconnected') // disconnected, connecting, connected, error
     this.reconnectAttempts = 0
-    this.maxReconnectAttempts = 10  // Increased from 5
-    this.reconnectDelay = 2000      // Increased from 1000ms
-    this.connectionTimeout = 15000  // Increased from 10s to 15s
-    this.heartbeatInterval = null   // For keepalive pings
-    this.heartbeatTimeout = 30000   // Send ping every 30 seconds
-    this.listeners = new Map() // event -> Set of callback functions
+    this.maxReconnectAttempts = 5 // Reduced from 10 
+    this.baseDelay = 1000 // Base delay for exponential backoff
+    this.maxDelay = 16000 // Cap at 16 seconds
+    this.connectionTimeout = 5000 // Reduced from 10s
+    this.heartbeatInterval = null
+    this.heartbeatTimeout = 30000 // Send ping every 30 seconds
+    this.listeners = new Map()
 
-    // Reactive state for components to monitor
+    // Reactive state for components
     this.state = reactive({
       connected: false,
       lastMessage: null,
       lastError: null,
-      url: API_CONFIG.WS_BASE_URL
+      url: this.getWebSocketUrl(),
+      lastConnectionAttempt: null,
+      reconnectCount: 0
     })
 
-    console.log('🌐 Global WebSocket Service initialized')
+    // Persist connection state across reloads
+    this.restoreConnectionState()
+    
+    console.log('🌐 Global WebSocket Service initialized with URL:', this.state.url)
   }
 
   /**
-   * Connect to WebSocket server
+   * Get WebSocket URL with proper environment detection
    */
-  async connect() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('🔌 WebSocket already connected')
-      return
-    }
-
-    // Quick health check before attempting WebSocket connection
+  getWebSocketUrl() {
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      // Check if we're using Vite proxy in development
+      if (import.meta.env.DEV) {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws`
+        console.log('🔗 Development WebSocket URL (via proxy):', wsUrl)
+        return wsUrl
+      }
+
+      // Production: use environment variables or fallback
+      const backendHost = import.meta.env.VITE_BACKEND_HOST || '172.16.168.20'
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const port = '8001'
       
-      const healthResponse = await fetch('/api/system/health', { 
-        method: 'GET',
-        signal: controller.signal
-      })
-      clearTimeout(timeoutId)
-      if (!healthResponse.ok) {
-        console.warn('🔌 Backend not healthy, skipping WebSocket connection')
-        this.connectionState.value = 'error'
-        return
+      const wsUrl = `${wsProtocol}//${backendHost}:${port}/ws`
+      console.log('🔗 Production WebSocket URL:', wsUrl)
+      return wsUrl
+      
+    } catch (error) {
+      console.error('Failed to construct WebSocket URL:', error)
+      return `ws://localhost:8001/ws`
+    }
+  }
+
+  /**
+   * Restore connection state from localStorage
+   */
+  restoreConnectionState() {
+    try {
+      const saved = localStorage.getItem('autobot-websocket-state')
+      if (saved) {
+        const state = JSON.parse(saved)
+        this.reconnectAttempts = Math.min(state.reconnectCount || 0, 2) // Limit on restore
+        this.state.reconnectCount = this.reconnectAttempts
       }
     } catch (error) {
-      console.warn('🔌 Backend health check failed, skipping WebSocket connection:', error.message)
-      this.connectionState.value = 'error'
+      console.warn('Failed to restore WebSocket state:', error)
+    }
+  }
+
+  /**
+   * Save connection state to localStorage
+   */
+  saveConnectionState() {
+    try {
+      const stateToSave = {
+        reconnectCount: this.reconnectAttempts,
+        lastAttempt: Date.now()
+      }
+      localStorage.setItem('autobot-websocket-state', JSON.stringify(stateToSave))
+    } catch (error) {
+      console.warn('Failed to save WebSocket state:', error)
+    }
+  }
+
+  /**
+   * Connect to WebSocket server with simplified logic
+   */
+  async connect() {
+    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
       return
     }
 
-    const wsUrl = API_CONFIG.WS_BASE_URL
-    console.log('🔌 Connecting to WebSocket:', wsUrl)
-
+    this.state.lastConnectionAttempt = new Date()
     this.connectionState.value = 'connecting'
 
-    // Track connection attempt with RUM
-    if (window.rum) {
-      window.rum.trackWebSocketEvent('global_connection_attempt', { url: wsUrl })
-    }
+    // Clean up existing WebSocket
+    this.cleanup()
 
-    try {
-      this.ws = new WebSocket(wsUrl)
-      this.setupEventHandlers()
+    // Quick health check (optional, don't block on failure)
+    this.quickHealthCheck().catch(() => {
+      // Health check failed but continue with WebSocket attempt
+    })
 
-      // Set connection timeout
-      this.connectionTimeoutId = setTimeout(() => {
-        if (this.connectionState.value === 'connecting') {
-          console.error('❌ WebSocket connection timeout after', this.connectionTimeout + 'ms')
-          this.handleConnectionError(new Error('Connection timeout'))
-          if (this.ws) {
-            this.ws.close()
+    const wsUrl = this.state.url
+    console.log('🔌 Connecting WebSocket (attempt', this.reconnectAttempts + 1, '):', wsUrl)
+
+    // Track with RUM if available
+    this.trackEvent('connection_attempt', { 
+      url: wsUrl,
+      attempt: this.reconnectAttempts + 1
+    })
+
+    return new Promise((resolve, reject) => {
+      try {
+        this.ws = new WebSocket(wsUrl)
+        this.setupEventHandlers(resolve, reject)
+        
+        // Connection timeout
+        const timeoutId = setTimeout(() => {
+          if (this.connectionState.value === 'connecting') {
+            console.error('❌ WebSocket connection timeout')
+            this.handleConnectionError(new Error('Connection timeout'))
+            this.ws?.close()
+            reject(new Error('Connection timeout'))
           }
-        }
-      }, this.connectionTimeout)
+        }, this.connectionTimeout)
 
+        // Clear timeout on connection success/failure
+        this.ws.addEventListener('open', () => clearTimeout(timeoutId), { once: true })
+        this.ws.addEventListener('error', () => clearTimeout(timeoutId), { once: true })
+
+      } catch (error) {
+        console.error('❌ Failed to create WebSocket:', error)
+        this.handleConnectionError(error)
+        reject(error)
+      }
+    })
+  }
+
+  /**
+   * Quick health check (non-blocking)
+   */
+  async quickHealthCheck() {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 2000)
+    
+    try {
+      const response = await fetch('/api/system/health', { 
+        signal: controller.signal,
+        cache: 'no-store'
+      })
+      clearTimeout(timeoutId)
+      return response.ok
     } catch (error) {
-      console.error('❌ Failed to create WebSocket connection:', error)
-      this.handleConnectionError(error)
+      clearTimeout(timeoutId)
+      throw error
     }
   }
 
   /**
    * Setup WebSocket event handlers
    */
-  setupEventHandlers() {
+  setupEventHandlers(resolve, reject) {
     if (!this.ws) return
 
     this.ws.onopen = () => {
-      console.log('✅ Global WebSocket connected successfully')
-
-      // Clear connection timeout
-      if (this.connectionTimeoutId) {
-        clearTimeout(this.connectionTimeoutId)
-        this.connectionTimeoutId = null
-      }
-
+      console.log('✅ WebSocket connected successfully')
+      
       this.connectionState.value = 'connected'
       this.isConnected.value = true
       this.state.connected = true
       this.reconnectAttempts = 0
-
-      // Start heartbeat to keep connection alive
+      this.state.reconnectCount = 0
+      this.state.lastError = null
+      
+      this.saveConnectionState()
       this.startHeartbeat()
-
-      // Track with RUM
-      if (window.rum) {
-        window.rum.trackWebSocketEvent('global_connection_opened', {
-          url: this.state.url
-        })
-      }
-
-      // Notify listeners
+      
+      this.trackEvent('connection_opened', { url: this.state.url })
       this.emit('connected', { url: this.state.url })
+      
+      resolve()
     }
 
     this.ws.onmessage = (event) => {
       try {
-        const eventData = JSON.parse(event.data)
-        console.log('📨 Global WebSocket message:', eventData.type || 'unknown', eventData)
+        const data = JSON.parse(event.data)
+        this.state.lastMessage = data
 
-        this.state.lastMessage = eventData
-
-        // Track with RUM
-        if (window.rum) {
-          window.rum.trackWebSocketEvent('global_message_received', {
-            dataSize: event.data.length,
-            eventType: eventData.type || 'unknown'
-          })
+        // Handle ping/pong
+        if (data.type === 'ping') {
+          this.send({ type: 'pong', timestamp: Date.now() })
+          return
         }
 
-        // Notify listeners
-        this.emit('message', eventData)
-
-        // Emit specific event type if available
-        if (eventData.type) {
-          this.emit(eventData.type, eventData)
+        if (data.type === 'pong') {
+          return // Heartbeat response
         }
+
+        // Emit to listeners
+        this.emit('message', data)
+        if (data.type) {
+          this.emit(data.type, data)
+        }
+
+        this.trackEvent('message_received', {
+          dataSize: event.data.length,
+          eventType: data.type || 'unknown'
+        })
 
       } catch (error) {
         console.error('❌ Failed to parse WebSocket message:', error)
-        if (window.rum) {
-          window.rum.trackWebSocketEvent('global_message_parse_error', {
-            error: error.message
-          })
-        }
+        this.trackEvent('message_parse_error', {
+          error: error.message,
+          rawDataLength: event.data?.length || 0
+        })
       }
     }
 
     this.ws.onerror = (error) => {
-      // Enhanced error logging with detailed information
-      const errorDetails = {
-        message: error.message || 'No error message provided',
-        reason: error.reason || 'No reason provided',
-        code: error.code || 'No error code',
-        url: this.state.url,
-        readyState: this.ws ? this.ws.readyState : 'No WebSocket instance',
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        connectionState: this.connectionState.value,
-        reconnectAttempts: this.reconnectAttempts
-      }
-      
-      console.error('❌ Global WebSocket error - Enhanced Details:', errorDetails)
-      
-      // Also log the raw error event
-      console.error('❌ Raw WebSocket Error Event:', error)
-      
+      console.error('❌ WebSocket error:', error)
       this.handleConnectionError(error)
+      reject(error)
     }
 
     this.ws.onclose = (event) => {
-      console.log('🔌 Global WebSocket closed:', event.code, event.reason)
+      console.log('🔌 WebSocket closed:', {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean
+      })
 
       this.connectionState.value = 'disconnected'
       this.isConnected.value = false
       this.state.connected = false
-
-      // Stop heartbeat
       this.stopHeartbeat()
 
-      // Track with RUM
-      if (window.rum) {
-        window.rum.trackWebSocketEvent('global_connection_closed', {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean
-        })
-      }
+      this.trackEvent('connection_closed', {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean
+      })
 
-      // Notify listeners
       this.emit('disconnected', {
         code: event.code,
         reason: event.reason,
         wasClean: event.wasClean
       })
 
-      // Auto-reconnect if not a clean close and not due to server shutdown
-      if (!event.wasClean && event.code !== 1006 && this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.scheduleReconnect()
-      } else if (event.code === 1006) {
-        // Connection lost unexpectedly - wait longer before reconnecting
-        setTimeout(() => {
-          if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.scheduleReconnect()
-          }
-        }, 5000)
-      }
+      // Auto-reconnect logic
+      this.scheduleReconnect(event)
     }
   }
 
@@ -227,43 +271,51 @@ class GlobalWebSocketService {
    * Handle connection errors
    */
   handleConnectionError(error) {
-    console.error('❌ WebSocket connection error:', error)
-
     this.connectionState.value = 'error'
     this.state.lastError = error.toString()
+    
+    this.trackEvent('connection_error', {
+      error: error.toString(),
+      attempt: this.reconnectAttempts
+    })
 
-    // Track with RUM
-    if (window.rum) {
-      window.rum.trackWebSocketEvent('global_connection_error', {
-        error: error.toString()
-      })
-      window.rum.reportCriticalIssue('global_websocket_error', {
-        url: this.state.url,
-        error: error.toString(),
-        attempts: this.reconnectAttempts
-      })
-    }
-
-    // Notify listeners
     this.emit('error', error)
-
-    // Schedule reconnect
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.scheduleReconnect()
-    }
   }
 
   /**
-   * Schedule reconnection attempt
+   * Schedule reconnection with exponential backoff
    */
-  scheduleReconnect() {
-    this.reconnectAttempts++
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) // Exponential backoff
+  scheduleReconnect(event) {
+    // Don't reconnect on normal closure or manual disconnect
+    if (event.code === 1000 || event.code === 3000) {
+      return
+    }
 
-    console.log(`🔄 Scheduling WebSocket reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('❌ Max reconnection attempts reached')
+      this.state.lastError = `Connection failed after ${this.reconnectAttempts} attempts`
+      return
+    }
+
+    this.reconnectAttempts++
+    this.state.reconnectCount = this.reconnectAttempts
+    
+    // Exponential backoff with jitter
+    const backoffDelay = Math.min(
+      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1),
+      this.maxDelay
+    )
+    const jitter = Math.random() * 1000 // Add up to 1s of jitter
+    const delay = backoffDelay + jitter
+
+    console.log(`🔄 Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
 
     setTimeout(() => {
-      this.connect()
+      if (this.connectionState.value !== 'connected') {
+        this.connect().catch(error => {
+          console.error('Reconnection failed:', error)
+        })
+      }
     }, delay)
   }
 
@@ -272,22 +324,93 @@ class GlobalWebSocketService {
    */
   send(data) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const message = JSON.stringify(data)
-      this.ws.send(message)
-
-      // Track with RUM
-      if (window.rum) {
-        window.rum.trackWebSocketEvent('global_message_sent', {
+      try {
+        const message = JSON.stringify(data)
+        this.ws.send(message)
+        
+        this.trackEvent('message_sent', {
           dataType: typeof data,
-          dataSize: message.length
+          dataSize: message.length,
+          messageType: data.type || 'unknown'
         })
+        
+        return true
+      } catch (error) {
+        console.error('❌ Failed to send WebSocket message:', error)
+        return false
       }
-
-      return true
     } else {
-      console.warn('⚠️ Cannot send WebSocket message - not connected')
+      console.warn('⚠️ Cannot send message - WebSocket not connected')
       return false
     }
+  }
+
+  /**
+   * Start heartbeat to keep connection alive
+   */
+  startHeartbeat() {
+    this.stopHeartbeat()
+    
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.send({ type: 'ping', timestamp: Date.now() })
+      } else {
+        this.stopHeartbeat()
+      }
+    }, this.heartbeatTimeout)
+  }
+
+  /**
+   * Stop heartbeat
+   */
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval)
+      this.heartbeatInterval = null
+    }
+  }
+
+  /**
+   * Clean up WebSocket connection
+   */
+  cleanup() {
+    this.stopHeartbeat()
+    
+    if (this.ws) {
+      // Remove event listeners to prevent memory leaks
+      this.ws.onopen = null
+      this.ws.onmessage = null
+      this.ws.onerror = null
+      this.ws.onclose = null
+      
+      if (this.ws.readyState === WebSocket.OPEN) {
+        this.ws.close(1000, 'cleanup')
+      }
+      this.ws = null
+    }
+  }
+
+  /**
+   * Disconnect cleanly
+   */
+  disconnect() {
+    console.log('🔌 Disconnecting WebSocket')
+    this.reconnectAttempts = this.maxReconnectAttempts // Prevent auto-reconnect
+    this.cleanup()
+    this.connectionState.value = 'disconnected'
+    this.isConnected.value = false
+    this.state.connected = false
+  }
+
+  /**
+   * Force reconnection
+   */
+  forceReconnect() {
+    console.log('🔄 Forcing WebSocket reconnection')
+    this.reconnectAttempts = 0
+    this.state.reconnectCount = 0
+    this.disconnect()
+    setTimeout(() => this.connect(), 1000)
   }
 
   /**
@@ -335,66 +458,12 @@ class GlobalWebSocketService {
   }
 
   /**
-   * Test connection manually
+   * Track events with RUM if available
    */
-  testConnection() {
-    console.log('🧪 Testing WebSocket connection...')
-
+  trackEvent(eventType, data) {
     if (window.rum) {
-      window.rum.trackWebSocketEvent('global_test_initiated', {
-        url: this.state.url
-      })
+      window.rum.trackWebSocketEvent(`global_${eventType}`, data)
     }
-
-    if (this.isConnected.value) {
-      // Send ping if connected
-      this.send({ type: 'ping', timestamp: Date.now() })
-    } else {
-      // Attempt connection if disconnected
-      this.connect()
-    }
-  }
-
-  /**
-   * Start heartbeat to keep connection alive
-   */
-  startHeartbeat() {
-    this.stopHeartbeat() // Clear any existing heartbeat
-
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        console.log('💓 Sending WebSocket heartbeat ping')
-        this.send({
-          type: 'ping',
-          timestamp: Date.now(),
-          source: 'global_websocket_service'
-        })
-      }
-    }, this.heartbeatTimeout)
-  }
-
-  /**
-   * Stop heartbeat
-   */
-  stopHeartbeat() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval)
-      this.heartbeatInterval = null
-    }
-  }
-
-  /**
-   * Disconnect WebSocket
-   */
-  disconnect() {
-    this.stopHeartbeat() // Stop heartbeat first
-
-    if (this.ws) {
-      console.log('🔌 Disconnecting WebSocket')
-      this.ws.close(1000, 'manual disconnect')
-      this.ws = null
-    }
-    this.reconnectAttempts = this.maxReconnectAttempts // Prevent auto-reconnect
   }
 
   /**
@@ -405,7 +474,38 @@ class GlobalWebSocketService {
       connected: this.isConnected.value,
       connectionState: this.connectionState.value,
       reconnectAttempts: this.reconnectAttempts,
+      maxReconnectAttempts: this.maxReconnectAttempts,
+      readyState: this.ws?.readyState,
       ...this.state
+    }
+  }
+
+  /**
+   * Test connection
+   */
+  async testConnection() {
+    console.log('🧪 Testing WebSocket connection...')
+    
+    if (this.isConnected.value) {
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => resolve(false), 5000)
+        
+        const handlePong = () => {
+          clearTimeout(timeout)
+          this.off('pong', handlePong)
+          resolve(true)
+        }
+        
+        this.on('pong', handlePong)
+        this.send({ type: 'ping', timestamp: Date.now(), test: true })
+      })
+    } else {
+      try {
+        await this.connect()
+        return this.isConnected.value
+      } catch (error) {
+        return false
+      }
     }
   }
 }
@@ -413,12 +513,28 @@ class GlobalWebSocketService {
 // Create singleton instance
 const globalWebSocketService = new GlobalWebSocketService()
 
-// Auto-connect when service is created
-globalWebSocketService.connect()
+// Auto-connect with delay to allow app initialization
+setTimeout(() => {
+  globalWebSocketService.connect().catch(error => {
+    console.error('Initial WebSocket connection failed:', error)
+  })
+}, 500) // Reduced delay
 
-// Make available globally for debugging
+// Global debugging interface
 if (typeof window !== 'undefined') {
   window.globalWS = globalWebSocketService
+  
+  window.wsDebug = {
+    connect: () => globalWebSocketService.connect(),
+    disconnect: () => globalWebSocketService.disconnect(),
+    forceReconnect: () => globalWebSocketService.forceReconnect(),
+    test: () => globalWebSocketService.testConnection(),
+    state: () => globalWebSocketService.getState(),
+    clearState: () => {
+      localStorage.removeItem('autobot-websocket-state')
+      console.log('WebSocket state cleared')
+    }
+  }
 }
 
 export default globalWebSocketService
