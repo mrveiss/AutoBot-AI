@@ -132,7 +132,7 @@ services:
     environment:
       - ACCEPT_EULA=Y
       - SEQ_FIRSTRUN_ADMINUSERNAME=admin
-      - SEQ_FIRSTRUN_ADMINPASSWORD=autobot123
+      - SEQ_FIRSTRUN_ADMINPASSWORD=${AUTOBOT_SEQ_ADMIN_PASSWORD}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:5341/"]
       interval: 30s

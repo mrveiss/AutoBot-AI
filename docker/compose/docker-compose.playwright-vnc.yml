@@ -8,7 +8,7 @@ services:
     environment:
       - DISPLAY=:99
       - HEADLESS=false
-      - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-autobot123}
+      - VNC_SERVER_PASSWORD=${VNC_PASSWORD}
       - SCREEN_WIDTH=1200
       - SCREEN_HEIGHT=600
       - SCREEN_DEPTH=24

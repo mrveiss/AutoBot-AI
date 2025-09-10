@@ -1,169 +1,161 @@
 #!/bin/bash
-# AutoBot - Unified Startup Script
-# Supports native VM deployment with all previous features
-# Combines functionality from run_agent.sh, run_agent_unified.sh, and native VM scripts
+
+# AutoBot - Unified Run Script
+# Combined startup script that replaces all individual run scripts
+# Supports both development and production modes with intelligent service management
 
 set -e
 
-# CRITICAL FIX: Force tf-keras usage to fix Transformers compatibility with Keras 3
-export TF_USE_LEGACY_KERAS=1
-export KERAS_BACKEND=tensorflow
-
-# Load unified configuration system
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-if [[ -f "${SCRIPT_DIR}/config/load_config.sh" ]]; then
-    export PATH="$HOME/bin:$PATH"  # Ensure yq is available
-    source "${SCRIPT_DIR}/config/load_config.sh"
-    echo -e "\033[0;32m✓ Loaded unified configuration system\033[0m"
-else
-    echo -e "\033[0;31m✗ Warning: Unified configuration not found, using fallback values\033[0m"
-fi
-
-# Colors for output
+# Define color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-# VM Configuration for Native Mode (from unified config)
-declare -A VMS
-VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21")
-VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22")
-VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")
-VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24")
-VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25")
-
-# Service Configuration
-declare -A SERVICES
-SERVICES[frontend]="nginx"
-SERVICES[npu-worker]="autobot-npu-worker.service"
-SERVICES[redis]="redis-stack-server"
-SERVICES[ai-stack]="autobot-ai-stack.service"
-SERVICES[browser]="autobot-browser-service.service"
-
-# Health Check URLs (from unified config)
-declare -A HEALTH_URLS
-HEALTH_URLS[frontend]="http://$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21")/"
-HEALTH_URLS[npu-worker]="http://$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22"):$(get_config "infrastructure.ports.npu_worker" 2>/dev/null || echo "8081")/health"
-HEALTH_URLS[redis]="$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23"):$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379")"
-HEALTH_URLS[ai-stack]="http://$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24"):$(get_config "infrastructure.ports.ai_stack" 2>/dev/null || echo "8080")/health"
-HEALTH_URLS[browser]="http://$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25"):$(get_config "infrastructure.ports.browser_service" 2>/dev/null || echo "3000")/health"
-
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
-
-# Process tracking
-BACKEND_PID=""
-BROWSER_PID=""
-VNC_PID=""
-
-# Default options (matching previous run scripts)
-DEV_MODE=false
-TEST_MODE=false
-DEPLOYMENT_MODE="native-vm"  # Default to native VM
-NO_BUILD=false
-REBUILD=false
-BUILD_DEFAULT=false
-NO_BROWSER=false
-CLEAN_SHUTDOWN=false
-DESKTOP_ACCESS=false  # Disable by default to prevent VNC connection errors
-PARALLEL_START=true
-SHOW_STATUS=true
-FORCE_ENV=""
-STOP_SERVICES=false
-RESTART_SERVICES=false
-SHOW_STATUS_ONLY=false
-SHUTDOWN_VMS=false
-
-print_help() {
-    echo -e "${GREEN}AutoBot - Unified Startup Script${NC}"
-    echo "Supports native VM deployment with full feature set"
-    echo ""
-    echo "Usage: $0 [options]"
-    echo ""
-    echo -e "${YELLOW}Development Options:${NC}"
-    echo "  --dev           Development mode (hot reload, detailed logging, browser with DevTools)"
-    echo "  --test-mode     Test mode (minimal services for testing)"
-    echo ""
-    echo -e "${YELLOW}Deployment Options:${NC}"
-    echo "  --native        Native VM deployment (default)"
-    echo "  --docker        Docker container deployment (if available)"
-    echo "  --force-env     Force specific environment (native-vm|docker|localhost)"
-    echo ""
-    echo -e "${YELLOW}Build Options:${NC}"
-    echo "  --no-build      Skip building/starting services (use existing)"
-    echo "  --build         Force build/restart services even if running"  
-    echo "  --rebuild       Force complete rebuild/restart of all services"
-    echo ""
-    echo -e "${YELLOW}UI Options:${NC}"
-    echo "  --no-browser    Don't auto-launch browser"
-    echo "  --desktop       Enable desktop access via VNC"
-    echo "  --no-desktop    Disable desktop access via VNC (default: disabled)"
-    echo ""
-    echo -e "${YELLOW}Service Management:${NC}"
-    echo "  --stop          Stop all AutoBot services (VMs and WSL backend)"
-    echo "  --restart       Stop and restart all AutoBot services"
-    echo "  --status        Show detailed status of all services"
-    echo "  --shutdown      ⚠️  Shutdown remote VMs (DANGER: Powers off VMs!)"
-    echo ""
-    echo -e "${YELLOW}Advanced Options:${NC}"
-    echo "  --sequential    Start services sequentially instead of parallel"
-    echo "  --no-status     Don't show service status after startup"
-    echo "  --clean         Remove/stop all services on shutdown"
-    echo "  --help          Show this help"
-    echo ""
-    echo -e "${BLUE}Native VM Architecture (Default):${NC}"
-    echo "  Frontend:   $(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21") (VM1) - Nginx + Vue.js"
-    echo "  NPU Worker: $(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22") (VM2) - Hardware detection"
-    echo "  Redis:      $(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23") (VM3) - Data layer"
-    echo "  AI Stack:   $(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24") (VM4) - AI processing"
-    echo "  Browser:    $(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25") (VM5) - Web automation"
-    echo "  Backend:    $(get_config "infrastructure.hosts.backend" 2>/dev/null || echo "172.16.168.20") (WSL) - API server"
-    echo ""
-    echo -e "${CYAN}Examples:${NC}"
-    echo "  $0                    # Standard native VM startup"
-    echo "  $0 --dev              # Development mode with debugging"
-    echo "  $0 --dev --no-desktop # Dev mode without VNC"
-    echo "  $0 --rebuild          # Force restart all services"
-    echo "  $0 --test-mode        # Minimal testing setup"
-    echo "  $0 --stop             # Stop all services (VMs + WSL backend)"
-    echo "  $0 --restart          # Restart all services"
-    echo "  $0 --restart --dev    # Restart in development mode"
-    echo "  $0 --status           # Show detailed service status"
-    echo "  $0 --shutdown         # ⚠️  Power off all VMs (DANGER!)"
+# Comprehensive logging function
+log() {
+    echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
 }
 
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+info() {
+    echo -e "${CYAN}[INFO]${NC} $1"
+}
+
+# Check if script is running from the correct directory
+if [ ! -f "run_autobot.sh" ]; then
+    error "Please run this script from the AutoBot root directory"
+    exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Default configuration
+DEV_MODE=false
+PROD_MODE=false
+BUILD_MODE="auto"
+TEST_MODE=false
+SEQUENTIAL_START=false
+PARALLEL_START=true
+SHOW_STATUS=true
+NO_BROWSER=false
+FORCE_CLEANUP=false
+DESKTOP_ACCESS=true  # Enable by default per CLAUDE.md guidelines
+VNC_PID=""
+
+# VM Configuration
+SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_USER="autobot"
+declare -A VMS=(
+    ["frontend"]="172.16.168.21"
+    ["npu-worker"]="172.16.168.22"
+    ["redis"]="172.16.168.23"
+    ["ai-stack"]="172.16.168.24"
+    ["browser"]="172.16.168.25"
+)
+
+# Service ports
+BACKEND_PORT=8001
+FRONTEND_PORT=5173
+REDIS_PORT=6379
+BROWSER_PORT=3000
+AI_STACK_PORT=8080
+NPU_WORKER_PORT=8081
+
+print_usage() {
+    cat << EOF
+${GREEN}AutoBot - Unified Run Script${NC}
+
+Usage: $0 [MODE] [OPTIONS]
+
+${YELLOW}Modes:${NC}
+  --dev               Development mode with auto-reload and debugging
+  --prod              Production mode (default)
+
+${YELLOW}Build Options:${NC}
+  --build             Force build even if images exist
+  --no-build          Skip Docker builds (fastest restart)
+  --rebuild           Force rebuild everything (clean slate)
+
+${YELLOW}Startup Options:${NC}
+  --test              Test mode (non-blocking, with warnings)
+  --sequential        Start services one by one (default: parallel)
+  --no-browser        Don't launch browser automatically
+  --desktop       Enable desktop access via VNC
+  --no-desktop    Disable desktop access via VNC (default: disabled)
+
+${YELLOW}Utility Options:${NC}
+  --status            Show current system status
+  --clean             Clean up all containers and volumes before start
+  --logs              Follow logs for all services
+  --stop              Stop all AutoBot services
+  --restart           Restart all services
+  --help              Show this help message
+
+${YELLOW}Force Options:${NC}
+  --force-env docker          Force Docker environment detection
+  --force-env native-vm       Force native VM environment
+  --force-cleanup             Force cleanup without confirmation
+
+${BLUE}Examples:${NC}
+  $0 --dev                    # Development mode with build check
+  $0 --dev --no-build         # Dev mode, skip builds (fastest)
+  $0 --prod --build           # Production with forced build
+  $0 --dev --no-desktop # Dev mode without VNC
+  $0 --status                 # Show current status
+  $0 --stop                   # Stop all services
+  $0 --logs                   # Follow all service logs
+
+${BLUE}Development Workflow:${NC}
+  1. First time:    $0 --dev --build
+  2. Daily use:     $0 --dev --no-build
+  3. After changes: $0 --dev --rebuild
+  4. Production:    $0 --prod
+
+EOF
+}
+
+# Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dev)
             DEV_MODE=true
-            SHOW_STATUS=true
+            PROD_MODE=false
             shift
             ;;
-        --test-mode)
-            TEST_MODE=true
-            shift
-            ;;
-        --native)
-            DEPLOYMENT_MODE="native-vm"
-            shift
-            ;;
-        --docker)
-            DEPLOYMENT_MODE="docker"
-            shift
-            ;;
-        --no-build)
-            NO_BUILD=true
+        --prod)
+            PROD_MODE=true
+            DEV_MODE=false
             shift
             ;;
         --build)
-            BUILD_DEFAULT=true
+            BUILD_MODE="force"
+            shift
+            ;;
+        --no-build)
+            BUILD_MODE="skip"
             shift
             ;;
         --rebuild)
-            REBUILD=true
+            BUILD_MODE="rebuild"
+            shift
+            ;;
+        --test)
+            TEST_MODE=true
             shift
             ;;
         --no-browser)
@@ -187,59 +179,77 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --clean)
-            CLEAN_SHUTDOWN=true
-            shift
-            ;;
-        --stop)
-            STOP_SERVICES=true
-            shift
-            ;;
-        --restart)
-            RESTART_SERVICES=true
+            FORCE_CLEANUP=true
             shift
             ;;
         --status)
-            SHOW_STATUS_ONLY=true
-            shift
+            show_system_status
+            exit 0
             ;;
-        --shutdown)
-            SHUTDOWN_VMS=true
-            shift
+        --logs)
+            follow_logs
+            exit 0
+            ;;
+        --stop)
+            stop_all_services
+            exit 0
+            ;;
+        --restart)
+            stop_all_services
+            sleep 3
+            exec "$0" "${@:2}"  # Restart with remaining arguments
             ;;
         --force-env)
-            FORCE_ENV="$2"
-            shift 2
+            case "$2" in
+                docker|native-vm)
+                    FORCE_ENV="$2"
+                    shift 2
+                    ;;
+                *)
+                    error "Invalid environment: $2. Use 'docker' or 'native-vm'"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        --force-cleanup)
+            FORCE_CLEANUP=true
+            shift
             ;;
         --help|-h)
-            print_help
+            print_usage
             exit 0
             ;;
         *)
-            echo "Unknown option: $1"
-            print_help
+            error "Unknown option: $1"
+            print_usage
             exit 1
             ;;
     esac
 done
 
-# Override deployment mode if forced
-if [ -n "$FORCE_ENV" ]; then
-    DEPLOYMENT_MODE="$FORCE_ENV"
+# Set default mode if none specified
+if [ "$DEV_MODE" = false ] && [ "$PROD_MODE" = false ]; then
+    PROD_MODE=true
 fi
 
-# Cleanup function
+# Cleanup function for graceful shutdown
 cleanup() {
-    echo -e "\n${YELLOW}🛑 Shutting down AutoBot...${NC}"
+    echo ""
+    log "Shutting down AutoBot..."
     
-    if [ ! -z "$BACKEND_PID" ]; then
-        echo "Stopping backend (PID: $BACKEND_PID)..."
-        kill -TERM $BACKEND_PID 2>/dev/null || true
-        wait $BACKEND_PID 2>/dev/null || true
-    fi
-    
-    if [ ! -z "$BROWSER_PID" ]; then
-        echo "Closing browser (PID: $BROWSER_PID)..."
-        kill -TERM $BROWSER_PID 2>/dev/null || true
+    # Stop VNC services
+    if systemctl is-active --quiet novnc || systemctl is-active --quiet vncserver@1 || systemctl is-active --quiet xvfb@1; then
+        echo -e "${YELLOW}🛑 Stopping VNC Desktop...${NC}"
+        
+        # Stop services in reverse order
+        sudo systemctl stop novnc 2>/dev/null || true
+        sudo systemctl stop vncserver@1 2>/dev/null || true
+        
+        # Clean up any orphaned x11vnc processes
+        pkill -f "x11vnc.*:0" 2>/dev/null || true
+        
+        # Stop Xvfb last
+        echo -e "${GREEN}✅ VNC Desktop stopped${NC}"
     fi
     
     if [ ! -z "$VNC_PID" ]; then
@@ -247,35 +257,85 @@ cleanup() {
         kill -TERM $VNC_PID 2>/dev/null || true
     fi
     
-    if [ "$CLEAN_SHUTDOWN" = true ] && [ "$DEPLOYMENT_MODE" = "native-vm" ]; then
-        echo -e "${YELLOW}Performing clean shutdown of VM services...${NC}"
-        stop_all_vm_services
-    elif [ "$DEPLOYMENT_MODE" = "native-vm" ]; then
-        echo -e "${YELLOW}Note: VM services continue running. Use --clean to stop all services.${NC}"
-    fi
-    
-    echo -e "${GREEN}✅ AutoBot stopped cleanly${NC}"
+    success "AutoBot shutdown complete"
     exit 0
 }
 
+# Set up signal handlers
 trap cleanup SIGINT SIGTERM
 
-detect_environment() {
-    echo -e "${BLUE}🔍 Detecting Environment...${NC}"
+check_prerequisites() {
+    log "Checking prerequisites..."
     
-    # Check for native VM deployment
-    if [ -f ".env.native-vm" ] && [ -f "$SSH_KEY" ]; then
-        echo -e "${GREEN}✅ Native VM deployment detected${NC}"
-        return 0
+    local missing_deps=()
+    
+    # Check essential commands based on environment
+    if [ "$ENV_TYPE" = "docker" ]; then
+        # Check Docker-specific commands
+        for cmd in docker docker-compose python3 npm; do
+            if ! command -v $cmd &> /dev/null; then
+                missing_deps+=("$cmd")
+            fi
+        done
+        
+        if [ ${#missing_deps[@]} -ne 0 ]; then
+            error "Missing required dependencies: ${missing_deps[*]}"
+            echo "Please install missing dependencies and try again"
+            exit 1
+        fi
+        
+        # Check Docker daemon
+        if ! docker info &> /dev/null; then
+            error "Docker daemon is not running"
+            echo "Please start Docker and try again"
+            exit 1
+        fi
+    else
+        # Check native VM prerequisites
+        for cmd in python3 npm ssh; do
+            if ! command -v $cmd &> /dev/null; then
+                missing_deps+=("$cmd")
+            fi
+        done
+        
+        if [ ${#missing_deps[@]} -ne 0 ]; then
+            error "Missing required dependencies: ${missing_deps[*]}"
+            echo "Please install missing dependencies and try again"
+            exit 1
+        fi
     fi
     
-    # Check for Docker availability
-    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Docker available but native VM preferred${NC}"
-        if [ "$DEPLOYMENT_MODE" = "docker" ]; then
-            echo -e "${BLUE}ℹ️  Using Docker deployment (forced)${NC}"
-            return 1
-        fi
+    success "All prerequisites satisfied"
+}
+
+detect_environment() {
+    if [ -n "$FORCE_ENV" ]; then
+        ENV_TYPE="$FORCE_ENV"
+        log "Environment forced to: $ENV_TYPE"
+        return
+    fi
+    
+    # Check if we're in a native VM setup
+    if [ -d "/home/kali" ] && [ -f "$SSH_KEY" ]; then
+        ENV_TYPE="native-vm"
+    # Check if we're in Docker/container environment
+    elif [ -f "/.dockerenv" ] || [ -n "$DOCKER_HOST" ]; then
+        ENV_TYPE="docker"
+    else
+        ENV_TYPE="native-vm"  # Default fallback
+    fi
+    
+    log "Detected environment: $ENV_TYPE"
+}
+
+validate_native_vm_setup() {
+    log "Validating native VM setup..."
+    
+    # Check SSH key
+    if [ ! -f "$SSH_KEY" ]; then
+        echo -e "${RED}❌ SSH key not found: $SSH_KEY${NC}"
+        echo "Run deployment script to set up SSH keys"
+        return 1
     fi
     
     echo -e "${RED}❌ Native VM deployment not properly configured${NC}"
@@ -287,28 +347,58 @@ start_vnc_desktop() {
     if [ "$DESKTOP_ACCESS" = true ]; then
         echo -e "${CYAN}🖥️  Starting VNC Desktop Access...${NC}"
         
-        # Check if VNC is already running
-        if pgrep -f "x11vnc.*:0" >/dev/null 2>&1; then
-            echo -e "${YELLOW}⚠️  VNC server already running${NC}"
+        # Check if VNC services are already running
+        if systemctl is-active --quiet xvfb@1 && systemctl is-active --quiet vncserver@1 && systemctl is-active --quiet novnc; then
+            echo -e "${YELLOW}⚠️  VNC services already running${NC}"
             return 0
         fi
         
-        # Start VNC server (adapted from previous scripts)
-        if command -v kex >/dev/null 2>&1; then
-            echo "Using Kali Win-KeX for VNC..."
-            kex --win --start-client >/dev/null 2>&1 &
-            VNC_PID=$!
-        elif command -v x11vnc >/dev/null 2>&1; then
-            echo "Using x11vnc for desktop access..."
-            x11vnc -display :0 -noxdamage -forever -bg -rfbport 5900 >/dev/null 2>&1 &
-            VNC_PID=$!
-        else
-            echo -e "${YELLOW}⚠️  No VNC server available${NC}"
-            return 1
+        # Check if VNC installation script exists, if not suggest installing
+        if [ ! -f "scripts/setup/install-vnc-headless.sh" ]; then
+            echo -e "${YELLOW}⚠️  VNC not configured. Run: ${BLUE}bash setup.sh desktop${NC}"
+            echo -e "${CYAN}ℹ️  Continuing without VNC desktop...${NC}"
+            DESKTOP_ACCESS=false
+            return 0
         fi
         
-        sleep 2
-        echo -e "${GREEN}✅ VNC Desktop available at: ${BLUE}http://localhost:6080/vnc.html${NC}"
+        # Start VNC services using systemd
+        echo "Starting Xvfb virtual display..."
+        if ! sudo systemctl start xvfb@1 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  Xvfb service not installed. Run: ${BLUE}bash setup.sh desktop${NC}"
+            echo -e "${CYAN}ℹ️  Continuing without VNC desktop...${NC}"
+            DESKTOP_ACCESS=false
+            return 0
+        fi
+        
+        echo "Starting VNC server..."
+        if ! sudo systemctl start vncserver@1 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  VNC service not installed. Run: ${BLUE}bash setup.sh desktop${NC}"
+            echo -e "${CYAN}ℹ️  Continuing without VNC desktop...${NC}"
+            DESKTOP_ACCESS=false
+            return 0
+        fi
+        
+        echo "Starting noVNC web interface..."
+        if ! sudo systemctl start novnc 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  noVNC service not installed. Run: ${BLUE}bash setup.sh desktop${NC}"
+            echo -e "${CYAN}ℹ️  Continuing without VNC desktop...${NC}"
+            DESKTOP_ACCESS=false
+            return 0
+        fi
+        
+        # Wait for services to start
+        sleep 3
+        
+        # Verify services are running
+        if systemctl is-active --quiet xvfb@1 && systemctl is-active --quiet vncserver@1 && systemctl is-active --quiet novnc; then
+            echo -e "${GREEN}✅ VNC Desktop available at: ${BLUE}http://localhost:6080/vnc.html${NC}"
+            echo -e "${BLUE}   VNC Client: localhost:5901${NC}"
+        else
+            echo -e "${RED}❌ Failed to start VNC services. Check: ${BLUE}sudo systemctl status xvfb@1 vncserver@1 novnc${NC}"
+            echo -e "${CYAN}ℹ️  Continuing without VNC desktop...${NC}"
+            DESKTOP_ACCESS=false
+            return 0
+        fi
     fi
 }
 
@@ -338,853 +428,548 @@ check_vm_connectivity() {
         fi
     fi
     
-    echo -e "${GREEN}✅ All VMs are accessible${NC}"
+    success "All VMs are accessible"
 }
 
-start_vm_service() {
-    local vm_name=$1
-    local vm_ip=$2
-    local service_name=$3
+build_containers() {
+    local build_arg=""
+    local compose_files=()
     
-    if [ "$DEV_MODE" = true ]; then
-        echo -e "${CYAN}🚀 [DEV] Starting $vm_name service with debugging...${NC}"
-    else
-        echo -e "${CYAN}🚀 Starting $vm_name service...${NC}"
-    fi
+    log "Determining build strategy..."
     
-    # Handle different build modes
-    local service_action="start"
-    if [ "$REBUILD" = true ]; then
-        service_action="restart"
-        echo "  🔄 Force restarting $service_name..."
-    elif [ "$BUILD_DEFAULT" = true ]; then
-        # Check if service is running
-        if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-            "sudo systemctl is-active $service_name" >/dev/null 2>&1; then
-            service_action="restart"
-            echo "  🔄 Restarting running $service_name..."
-        fi
-    elif [ "$NO_BUILD" = true ]; then
-        # Check if service is already running
-        if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-            "sudo systemctl is-active $service_name" >/dev/null 2>&1; then
-            echo -e "${YELLOW}⚠️  $vm_name service already running (skipped)${NC}"
-            return 0
-        fi
-    fi
-    
-    # Start/restart the service
-    local systemctl_output
-    systemctl_output=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-        "sudo systemctl $service_action $service_name 2>&1 && sudo systemctl enable $service_name 2>&1" 2>/dev/null)
-    local systemctl_result=$?
-    
-    if [ $systemctl_result -ne 0 ]; then
-        # Get more specific error information
-        local service_status=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-            "sudo systemctl is-active $service_name 2>/dev/null || echo 'inactive'")
-        
-        if [ "$service_status" = "active" ]; then
-            echo -e "${BLUE}ℹ️  $vm_name service already active${NC}"
-        else
-            echo -e "${YELLOW}⚠️  $vm_name systemctl $service_action failed - checking status...${NC}"
-        fi
-    fi
-    
-    # Wait for service to initialize
-    local wait_time=2
-    if [ "$DEV_MODE" = true ]; then
-        wait_time=5  # Longer wait in dev mode
-    fi
-    sleep $wait_time
-    
-    # Check final service status with detailed feedback
-    local final_status=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-        "sudo systemctl is-active $service_name 2>/dev/null || echo 'unknown'")
-    
-    case "$final_status" in
-        "active")
-            echo -e "${GREEN}✅ $vm_name service running${NC}"
-            
-            # Show additional info in dev mode
-            if [ "$DEV_MODE" = true ]; then
-                local uptime=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-                    "sudo systemctl show $service_name --property=ActiveEnterTimestampMonotonic --value" 2>/dev/null || echo "Unknown")
-                echo -e "${BLUE}   📊 Service active, uptime data available${NC}"
-            fi
+    case "$BUILD_MODE" in
+        "skip")
+            log "Skipping all builds as requested"
             return 0
             ;;
-        "activating")
-            echo -e "${CYAN}🔄 $vm_name service starting up...${NC}"
-            return 0
+        "force")
+            build_arg="--build"
+            log "Forcing rebuild of all services"
             ;;
-        "inactive"|"failed")
-            echo -e "${RED}❌ $vm_name service $final_status - will verify via health check${NC}"
-            return 1
+        "rebuild")
+            log "Performing complete rebuild (clean slate)"
+            docker-compose down --remove-orphans
+            docker system prune -f --volumes 2>/dev/null || true
+            build_arg="--build --force-recreate"
             ;;
-        *)
-            echo -e "${BLUE}ℹ️  $vm_name systemctl status: $final_status - testing health endpoint${NC}"
-            return 1
+        "auto")
+            log "Auto-detecting build needs..."
+            # Add logic to detect if builds are needed
             ;;
     esac
-}
-
-start_services_parallel() {
-    echo -e "${YELLOW}🌐 Starting Remote VM Services (Parallel)...${NC}"
     
-    # Start all services in background
-    for vm_name in "${!VMS[@]}"; do
-        (
-            vm_ip=${VMS[$vm_name]}
-            service_name=${SERVICES[$vm_name]}
-            start_vm_service "$vm_name" "$vm_ip" "$service_name"
-        ) &
-    done
-    
-    # Wait for all background jobs to complete
-    wait
-    echo -e "${GREEN}✅ VM service startup phase completed${NC}"
-    echo -e "${BLUE}ℹ️  Services may still be initializing - health checks will follow${NC}"
-}
-
-start_services_sequential() {
-    echo -e "${YELLOW}🌐 Starting Remote VM Services (Sequential)...${NC}"
-    
-    # Start services in dependency order
-    local service_order=("redis" "ai-stack" "npu-worker" "browser" "frontend")
-    
-    for vm_name in "${service_order[@]}"; do
-        vm_ip=${VMS[$vm_name]}
-        service_name=${SERVICES[$vm_name]}
-        start_vm_service "$vm_name" "$vm_ip" "$service_name"
-        echo ""
-    done
-}
-
-check_and_manage_backend_process() {
-    # Initialize reuse flag
-    REUSED_EXISTING_BACKEND=false
-    
-    # Load environment first to get correct URLs
-    if [ -f ".env.native-vm" ]; then
-        set -a
-        source ".env.native-vm"  
-        set +a
-    fi
-    
-    local backend_health_url="$(get_service_url "backend" 2>/dev/null || echo "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}")/api/health"
-    
-    # Check if backend processes are already running
-    local existing_pids=$(pgrep -f "fast_app_factory_fix" 2>/dev/null || pgrep -f "uvicorn.*api.main:app" 2>/dev/null || pgrep -f "uvicorn.*--port 8001" 2>/dev/null || true)
-    
-    if [ -n "$existing_pids" ]; then
-        echo -e "${BLUE}🔍 Found existing backend process(es): $existing_pids${NC}"
-        
-        # Test if existing backend is healthy and responsive
-        echo -n "  Testing existing backend health... "
-        if timeout 5 curl -s "$backend_health_url" >/dev/null 2>&1; then
-            echo -e "${GREEN}✅ Healthy${NC}"
-            echo -e "${GREEN}🔄 Using existing healthy backend process${NC}"
-            
-            # Get the main PID for tracking
-            BACKEND_PID=$(echo $existing_pids | awk '{print $1}')
-            REUSED_EXISTING_BACKEND=true
-            return 0
-        else
-            echo -e "${RED}❌ Unhealthy or unresponsive${NC}"
-            echo -e "${YELLOW}🛑 Stopping unhealthy backend process(es)...${NC}"
-            
-            # Stop unhealthy processes
-            for pid in $existing_pids; do
-                echo "  Stopping PID $pid..."
-                kill -TERM $pid 2>/dev/null || true
-            done
-            
-            # Wait for processes to stop
-            sleep 3
-            
-            # Force kill if still running
-            local still_running=$(pgrep -f "fast_app_factory_fix" 2>/dev/null || pgrep -f "uvicorn.*api.main:app" 2>/dev/null || pgrep -f "uvicorn.*--port 8001" 2>/dev/null || true)
-            if [ -n "$still_running" ]; then
-                echo -e "${YELLOW}  Force killing remaining processes...${NC}"
-                pkill -9 -f "fast_app_factory_fix" 2>/dev/null || true
-                pkill -9 -f "uvicorn.*api.main:app" 2>/dev/null || true
-                pkill -9 -f "uvicorn.*--port 8001" 2>/dev/null || true
-                sleep 2
-            fi
-            
-            echo -e "${GREEN}✅ Cleaned up unhealthy backend processes${NC}"
+    # Determine which compose files to use
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        compose_files+=("-f" "docker-compose.yml")
+        if [ "$DEV_MODE" = true ]; then
+            compose_files+=("-f" "docker-compose.dev.yml")
         fi
     else
-        echo -e "${BLUE}🔍 No existing backend processes found${NC}"
+        compose_files+=("-f" "docker-compose.yml")
     fi
     
-    return 1  # Need to start new process
-}
-
-start_wsl_backend() {
-    echo -e "${CYAN}🔧 Starting WSL Backend...${NC}"
-    
-    # Load native VM configuration
-    local env_file=".env.native-vm"
-    if [ "$DEV_MODE" = true ]; then
-        echo -e "${BLUE}   🛠️  [DEV] Using development configuration${NC}"
-        # Could switch to dev-specific env file if needed
-    fi
-    
-    if [ -f "$env_file" ]; then
-        set -a
-        source "$env_file"
-        set +a
-    else
-        echo -e "${RED}❌ Configuration file not found: $env_file${NC}"
+    if [ ${#compose_files[@]} -eq 0 ]; then
+        error "No compose files determined for environment"
         exit 1
     fi
     
-    # Check if we can reuse an existing healthy backend process
-    if check_and_manage_backend_process; then
-        echo -e "${GREEN}✅ WSL Backend already running and healthy (PID: $BACKEND_PID)${NC}"
-        return 0
-    fi
+    log "Building containers with: docker-compose ${compose_files[*]} up -d $build_arg"
     
-    # Start new backend process
-    echo -e "${BLUE}🚀 Starting new backend process...${NC}"
-    
-    # Choose backend startup method
-    local backend_args=""
-    if [ "$DEV_MODE" = true ]; then
-        backend_args="--reload --log-level debug"
-        echo -e "${BLUE}   🐛 [DEV] Starting backend with hot reload and debug logging${NC}"
-    fi
-    
-    # Start backend
-    if [ -f "backend/fast_app_factory_fix.py" ]; then
-        echo "Using optimized backend startup..."
-        cd backend && PYTHONPATH=/home/kali/Desktop/AutoBot python3 fast_app_factory_fix.py &
+    if [ "$BUILD_MODE" != "skip" ]; then
+        docker-compose "${compose_files[@]}" up -d $build_arg
     else
-        echo "Using standard backend startup..."
-        backend_host=${AUTOBOT_BACKEND_HOST:-$(get_config "infrastructure.hosts.backend" 2>/dev/null || echo "172.16.168.20")}
-        backend_port=${AUTOBOT_BACKEND_PORT:-8001}
-        cd backend && PYTHONPATH=/home/kali/Desktop/AutoBot python3 -m uvicorn api.main:app --host "$backend_host" --port "$backend_port" $backend_args &
+        docker-compose "${compose_files[@]}" up -d
     fi
-    
-    BACKEND_PID=$!
-    cd ..
-    
-    echo -e "${GREEN}✅ WSL Backend started (PID: $BACKEND_PID)${NC}"
-    
-    # Wait for backend to be ready
-    echo -n "Waiting for backend to be ready"
-    local max_wait=30
-    if [ "$DEV_MODE" = true ]; then
-        max_wait=60  # Longer wait in dev mode
-    fi
-    
-    for i in $(seq 1 $max_wait); do
-        backend_health_url="http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/health"
-        if curl -s "$backend_health_url" >/dev/null 2>&1; then
-            echo -e " ${GREEN}✅ Ready!${NC}"
-            return 0
-        fi
-        sleep 1
-        echo -n "."
-    done
-    echo -e " ${YELLOW}⚠️  Backend may need more time${NC}"
 }
 
-test_service_health() {
-    local vm_name=$1
-    local health_url=$2
+start_backend() {
+    log "Starting AutoBot backend..."
     
-    echo -n "  $vm_name health check... "
-    
-    if [ "$vm_name" = "redis" ]; then
-        # Special case for Redis (TCP connection)
-        local redis_host=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")
-        local redis_port=$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379")
-        if echo "PING" | nc -w 2 "$redis_host" "$redis_port" | grep -q "PONG" 2>/dev/null; then
-            echo -e "${GREEN}✅ Healthy${NC}"
-            return 0
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        echo -e "${CYAN}Starting backend on main machine...${NC}"
+        
+        # Check if backend is already running
+        if pgrep -f "python.*backend/fast_app_factory_fix.py" > /dev/null; then
+            warning "Backend already running, stopping first..."
+            pkill -f "python.*backend/fast_app_factory_fix.py" || true
+            sleep 2
+        fi
+        
+        # Set up Python environment
+        export PYTHONPATH="$PWD"
+        
+        # Start backend with proper error handling
+        if [ "$DEV_MODE" = true ]; then
+            log "Starting backend in development mode..."
+            cd "$SCRIPT_DIR"
+            nohup python backend/fast_app_factory_fix.py > logs/backend.log 2>&1 &
         else
-            echo -e "${RED}❌ Unhealthy${NC}"
-            return 1
+            log "Starting backend in production mode..."
+            cd "$SCRIPT_DIR"
+            nohup python backend/fast_app_factory_fix.py > logs/backend.log 2>&1 &
+        fi
+        
+        # Wait for backend to start
+        local backend_ready=false
+        for i in {1..30}; do
+            if curl -s http://localhost:$BACKEND_PORT/api/health > /dev/null 2>&1; then
+                backend_ready=true
+                break
+            fi
+            sleep 1
+        done
+        
+        if [ "$backend_ready" = true ]; then
+            success "Backend started successfully on port $BACKEND_PORT"
+        else
+            error "Backend failed to start or is not responding"
+            if [ "$TEST_MODE" = false ]; then
+                exit 1
+            fi
         fi
     else
-        # HTTP health check with response time in dev mode
-        if [ "$DEV_MODE" = true ]; then
-            local response_time=$(timeout 5 curl -w "%{time_total}" -s -o /dev/null "$health_url" 2>/dev/null || echo "timeout")
-            if [ "$response_time" != "timeout" ]; then
-                echo -e "${GREEN}✅ Healthy (${response_time}s)${NC}"
-                return 0
-            else
-                echo -e "${RED}❌ Unhealthy (timeout)${NC}"
-                return 1
+        log "Backend managed by Docker Compose"
+    fi
+}
+
+start_frontend() {
+    log "Starting AutoBot frontend..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        log "Connecting to frontend VM..."
+        
+        # Deploy and start frontend on VM
+        local frontend_ip=${VMS["frontend"]}
+        ssh -i "$SSH_KEY" "$SSH_USER@$frontend_ip" << 'EOF'
+            cd /home/kali/AutoBot/autobot-vue
+            
+            # Update environment for backend connection
+            export VITE_BACKEND_HOST=172.16.168.20
+            export VITE_BACKEND_PORT=8001
+            
+            # Stop existing frontend if running
+            pkill -f "npm.*dev" || true
+            
+            # Start frontend
+            nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
+EOF
+        
+        # Wait for frontend to be ready
+        local frontend_ready=false
+        for i in {1..30}; do
+            if curl -s http://${VMS["frontend"]}:$FRONTEND_PORT > /dev/null 2>&1; then
+                frontend_ready=true
+                break
             fi
+            sleep 1
+        done
+        
+        if [ "$frontend_ready" = true ]; then
+            success "Frontend started successfully"
         else
-            if timeout 5 curl -s "$health_url" >/dev/null 2>&1; then
-                echo -e "${GREEN}✅ Healthy${NC}"
-                return 0
-            else
-                echo -e "${RED}❌ Unhealthy${NC}"
-                return 1
-            fi
+            warning "Frontend may not be ready yet"
         fi
+    else
+        log "Frontend managed by Docker Compose"
+    fi
+}
+
+start_redis() {
+    log "Starting Redis service..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        local redis_ip=${VMS["redis"]}
+        log "Connecting to Redis VM ($redis_ip)..."
+        
+        ssh -i "$SSH_KEY" "$SSH_USER@$redis_ip" << 'EOF'
+            # Stop existing Redis if running
+            sudo systemctl stop redis-server || true
+            pkill redis-server || true
+            
+            # Start Redis Stack
+            docker stop autobot-redis-stack 2>/dev/null || true
+            docker rm autobot-redis-stack 2>/dev/null || true
+            
+            docker run -d \
+                --name autobot-redis-stack \
+                --restart unless-stopped \
+                -p 6379:6379 \
+                -p 8001:8001 \
+                -v redis-data:/data \
+                redis/redis-stack:latest
+EOF
+        
+        # Verify Redis is accessible
+        local redis_ready=false
+        for i in {1..20}; do
+            if timeout 5 redis-cli -h $redis_ip ping 2>/dev/null | grep -q PONG; then
+                redis_ready=true
+                break
+            fi
+            sleep 1
+        done
+        
+        if [ "$redis_ready" = true ]; then
+            success "Redis started successfully"
+        else
+            warning "Redis may not be ready yet"
+        fi
+    else
+        log "Redis managed by Docker Compose"
+    fi
+}
+
+start_browser_service() {
+    log "Starting Browser automation service..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        local browser_ip=${VMS["browser"]}
+        log "Connecting to Browser VM ($browser_ip)..."
+        
+        ssh -i "$SSH_KEY" "$SSH_USER@$browser_ip" << 'EOF'
+            cd /home/kali/AutoBot
+            
+            # Stop existing browser service
+            pkill -f "browser.*service" || true
+            
+            # Start browser service
+            nohup python -m browser.service --host 0.0.0.0 --port 3000 > logs/browser.log 2>&1 &
+EOF
+        
+        success "Browser service deployment initiated"
+    else
+        log "Browser service managed by Docker Compose"
+    fi
+}
+
+start_ai_stack() {
+    log "Starting AI Stack service..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        local ai_ip=${VMS["ai-stack"]}
+        log "Connecting to AI Stack VM ($ai_ip)..."
+        
+        ssh -i "$SSH_KEY" "$SSH_USER@$ai_ip" << 'EOF'
+            cd /home/kali/AutoBot
+            
+            # Stop existing AI stack
+            pkill -f "ai.*stack" || true
+            
+            # Start AI stack
+            nohup python -m ai_stack.service --host 0.0.0.0 --port 8080 > logs/ai-stack.log 2>&1 &
+EOF
+        
+        success "AI Stack deployment initiated"
+    else
+        log "AI Stack managed by Docker Compose"
+    fi
+}
+
+start_npu_worker() {
+    log "Starting NPU Worker service..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        local npu_ip=${VMS["npu-worker"]}
+        log "Connecting to NPU Worker VM ($npu_ip)..."
+        
+        ssh -i "$SSH_KEY" "$SSH_USER@$npu_ip" << 'EOF'
+            cd /home/kali/AutoBot
+            
+            # Stop existing NPU worker
+            pkill -f "npu.*worker" || true
+            
+            # Start NPU worker
+            nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 > logs/npu-worker.log 2>&1 &
+EOF
+        
+        success "NPU Worker deployment initiated"
+    else
+        log "NPU Worker managed by Docker Compose"
     fi
 }
 
 launch_browser() {
-    if [ "$NO_BROWSER" = false ]; then
-        echo -e "${CYAN}🌐 Launching AutoBot Application...${NC}"
-        
-        # Construct the AutoBot application URL (not just frontend root)
-        local frontend_base="$(get_service_url "frontend" 2>/dev/null || echo "http://172.16.168.21")"
-        local browser_url="${frontend_base}/"  # AutoBot app loads at root
-        local browser_args=""
-        
-        if [ "$DEV_MODE" = true ]; then
-            echo -e "${BLUE}   🛠️  [DEV] Opening AutoBot with DevTools${NC}"
-            browser_args="--auto-open-devtools-for-tabs"
-        else
-            echo -e "${BLUE}   🚀 Opening AutoBot interface${NC}"
-        fi
-        
-        # Wait a moment after health checks to ensure frontend is fully ready
-        echo -e "${BLUE}   ⏳ Ensuring frontend is ready for AutoBot...${NC}"
-        sleep 3
-        
-        echo -e "${BLUE}   🌐 AutoBot URL: $browser_url${NC}"
-        
-        if command -v firefox >/dev/null 2>&1; then
-            firefox $browser_args "$browser_url" >/dev/null 2>&1 &
-            BROWSER_PID=$!
-            echo -e "${GREEN}✅ Firefox opened with AutoBot application${NC}"
-        elif command -v google-chrome >/dev/null 2>&1; then
-            google-chrome $browser_args "$browser_url" >/dev/null 2>&1 &
-            BROWSER_PID=$!
-            echo -e "${GREEN}✅ Chrome opened with AutoBot application${NC}"
-        else
-            echo -e "${YELLOW}⚠️  No browser found. Please open AutoBot at: $browser_url${NC}"
-        fi
+    if [ "$NO_BROWSER" = true ]; then
+        log "Browser launch disabled by --no-browser flag"
+        return
     fi
-}
-
-stop_all_vm_services() {
-    echo -e "${YELLOW}🛑 Stopping all VM services...${NC}"
     
-    for vm_name in "${!VMS[@]}"; do
-        vm_ip=${VMS[$vm_name]}
-        service_name=${SERVICES[$vm_name]}
-        
-        echo -n "  Stopping $vm_name ($vm_ip)... "
-        
-        # Check if VM is reachable first
-        if ! timeout 3 ssh -i "$SSH_KEY" -o ConnectTimeout=2 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
-            echo -e "${RED}❌ VM Unreachable${NC}"
-            continue
-        fi
-        
-        # Check current service status
-        local service_status=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-            "sudo systemctl is-active $service_name 2>/dev/null || echo 'inactive'")
-        
-        if [ "$service_status" = "active" ]; then
-            # Stop the service
-            if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-                "sudo systemctl stop $service_name" 2>/dev/null; then
-                echo -e "${GREEN}✅ Stopped${NC}"
-                
-                # Verify it stopped
-                sleep 1
-                local new_status=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-                    "sudo systemctl is-active $service_name 2>/dev/null || echo 'inactive'")
-                if [ "$new_status" != "inactive" ]; then
-                    echo -e "${YELLOW}    ⚠️  Service may still be stopping${NC}"
-                fi
-            else
-                echo -e "${RED}❌ Stop Failed${NC}"
-            fi
-        elif [ "$service_status" = "inactive" ]; then
-            echo -e "${BLUE}ℹ️  Already Stopped${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Unknown Status: $service_status${NC}"
-        fi
-    done
-}
-
-stop_wsl_backend() {
-    echo -e "${YELLOW}🛑 Stopping WSL Backend...${NC}"
+    log "Launching browser..."
     
-    # Find all backend processes (comprehensive search)
-    local existing_pids=$(pgrep -f "fast_app_factory_fix" 2>/dev/null || pgrep -f "uvicorn.*api.main:app" 2>/dev/null || pgrep -f "uvicorn.*--port 8001" 2>/dev/null || pgrep -f "python.*backend" 2>/dev/null | head -5 || true)
-    
-    if [ -n "$existing_pids" ]; then
-        echo "  Found backend processes: $existing_pids"
-        
-        for pid in $existing_pids; do
-            echo -n "  Stopping PID $pid... "
-            if kill -TERM $pid 2>/dev/null; then
-                echo -e "${GREEN}✅ Stopped${NC}"
-            else
-                echo -e "${YELLOW}⚠️  Already stopped${NC}"
-            fi
-        done
-        
-        # Wait for graceful shutdown
-        sleep 3
-        
-        # Force kill if still running
-        local still_running=$(pgrep -f "fast_app_factory_fix" 2>/dev/null || pgrep -f "uvicorn.*api.main:app" 2>/dev/null || pgrep -f "uvicorn.*--port 8001" 2>/dev/null || true)
-        if [ -n "$still_running" ]; then
-            echo -e "${YELLOW}  Force killing remaining processes...${NC}"
-            pkill -9 -f "fast_app_factory_fix" 2>/dev/null || true
-            pkill -9 -f "uvicorn.*api.main:app" 2>/dev/null || true
-            pkill -9 -f "uvicorn.*--port 8001" 2>/dev/null || true
-            sleep 1
-        fi
-        
-        echo -e "${GREEN}✅ WSL Backend stopped${NC}"
+    local frontend_url
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        frontend_url="http://${VMS["frontend"]}:$FRONTEND_PORT"
     else
-        echo -e "${BLUE}ℹ️  No WSL backend processes found${NC}"
-    fi
-}
-
-stop_all_services() {
-    echo -e "${RED}🛑 Stopping All AutoBot Services${NC}"
-    echo -e "${BLUE}===============================${NC}"
-    echo ""
-    
-    # Stop WSL backend first
-    stop_wsl_backend
-    echo ""
-    
-    # Stop VNC if running
-    if [ -n "$VNC_PID" ] || pgrep -f "x11vnc.*:0" >/dev/null 2>&1; then
-        echo -e "${YELLOW}🛑 Stopping VNC Desktop...${NC}"
-        if [ -n "$VNC_PID" ]; then
-            kill -TERM $VNC_PID 2>/dev/null || true
-        fi
-        pkill -f "x11vnc.*:0" 2>/dev/null || true
-        pkill -f "kex.*--win" 2>/dev/null || true
-        echo -e "${GREEN}✅ VNC Desktop stopped${NC}"
-        echo ""
+        frontend_url="http://localhost:$FRONTEND_PORT"
     fi
     
-    # Check environment and stop VM services if available
-    if [ -f ".env.native-vm" ] && [ -f "$SSH_KEY" ]; then
-        echo -e "${BLUE}🔍 Native VM deployment detected${NC}"
-        if check_vm_connectivity >/dev/null 2>&1; then
-            stop_all_vm_services
-        else
-            echo -e "${YELLOW}⚠️  Some VMs not accessible, attempting to stop accessible ones${NC}"
-            stop_all_vm_services
-        fi
+    # Wait a moment for services to be ready
+    sleep 2
+    
+    # Launch browser in background
+    if command -v xdg-open &> /dev/null; then
+        nohup xdg-open "$frontend_url" &> /dev/null &
+    elif command -v open &> /dev/null; then
+        nohup open "$frontend_url" &> /dev/null &
     else
-        echo -e "${BLUE}ℹ️  Native VM deployment not configured${NC}"
+        log "No browser launcher found. Please open: $frontend_url"
     fi
-    
-    echo ""
-    echo -e "${GREEN}✅ All AutoBot Services Stopped${NC}"
 }
 
-restart_all_services() {
-    echo -e "${CYAN}🔄 Restarting All AutoBot Services${NC}"
-    echo -e "${BLUE}==================================${NC}"
+show_system_status() {
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
+    echo -e "${BLUE}         AutoBot System Status          ${NC}"
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
     echo ""
     
-    # First stop all services
-    stop_all_services
-    
-    echo ""
-    echo -e "${CYAN}⏳ Waiting 5 seconds before restart...${NC}"
-    sleep 5
-    
-    echo ""
-    echo -e "${GREEN}🚀 Starting AutoBot Services...${NC}"
-    echo -e "${BLUE}==============================${NC}"
-    
-    # Reset flags for startup
-    STOP_SERVICES=false
-    RESTART_SERVICES=false
-    
-    # Continue with normal startup process
-}
-
-show_comprehensive_status() {
-    echo -e "${BLUE}📊 AutoBot Service Status Report${NC}"
-    echo -e "${BLUE}=================================${NC}"
+    # Environment Info
+    echo -e "${CYAN}🌍 Environment:${NC}"
+    echo -e "${BLUE}  Type: $ENV_TYPE${NC}"
+    echo -e "${BLUE}  Mode: $([ "$DEV_MODE" = true ] && echo "Development" || echo "Production")${NC}"
     echo ""
     
-    # WSL Backend Status
-    echo -e "${CYAN}🖥️  WSL Backend:${NC}"
-    local backend_pids=$(pgrep -f "fast_app_factory_fix" 2>/dev/null || pgrep -f "uvicorn.*api.main:app" 2>/dev/null || pgrep -f "uvicorn.*--port 8001" 2>/dev/null || true)
-    if [ -n "$backend_pids" ]; then
-        echo "  Process(es): $backend_pids"
-        for pid in $backend_pids; do
-            local cpu_mem=$(ps -p $pid -o pid,pcpu,pmem,etime,cmd --no-headers 2>/dev/null || echo "Process info unavailable")
-            echo -e "${BLUE}    [$pid] $cpu_mem${NC}"
-        done
-        
-        # Test backend health
-        local backend_health_url="$(get_service_url "backend" 2>/dev/null || echo "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}")/api/health"
-        echo -n "  Health Check: "
-        if timeout 5 curl -s "$backend_health_url" >/dev/null 2>&1; then
-            echo -e "${GREEN}✅ Healthy${NC}"
-        else
-            echo -e "${RED}❌ Unhealthy${NC}"
-        fi
+    # Backend Status
+    echo -e "${CYAN}🔧 Backend Service:${NC}"
+    if curl -s http://localhost:$BACKEND_PORT/api/health &> /dev/null; then
+        echo -e "${GREEN}  ✅ Backend Running${NC}"
+        echo -e "${BLUE}    URL: http://localhost:$BACKEND_PORT${NC}"
     else
-        echo -e "${YELLOW}  ⚠️  No backend processes found${NC}"
+        echo -e "${RED}  ❌ Backend Not Responding${NC}"
     fi
     echo ""
     
-    # VM Services Status
-    echo -e "${CYAN}🌐 Remote VM Services:${NC}"
-    for vm_name in "${!VMS[@]}"; do
-        vm_ip=${VMS[$vm_name]}
-        service_name=${SERVICES[$vm_name]}
-        
-        echo "  $vm_name ($vm_ip):"
-        
-        # VM connectivity
-        echo -n "    Connectivity: "
-        if timeout 3 ssh -i "$SSH_KEY" -o ConnectTimeout=2 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
-            echo -e "${GREEN}✅ Reachable${NC}"
-            
-            # Service status
-            local service_status=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-                "sudo systemctl is-active $service_name 2>/dev/null || echo 'unknown'")
-            echo -n "    Service: "
-            case "$service_status" in
-                "active")
-                    echo -e "${GREEN}✅ Running${NC}"
-                    # Get service uptime
-                    local uptime=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-                        "sudo systemctl show $service_name --property=ActiveEnterTimestamp --value" 2>/dev/null || echo "Unknown")
-                    echo -e "${BLUE}      Started: $uptime${NC}"
-                    ;;
-                "inactive")
-                    echo -e "${YELLOW}⚠️  Stopped${NC}"
-                    ;;
-                "failed")
-                    echo -e "${RED}❌ Failed${NC}"
-                    ;;
-                *)
-                    echo -e "${YELLOW}⚠️  $service_status${NC}"
-                    ;;
-            esac
-            
-            # System resource usage
-            local resources=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-                "free -h | grep '^Mem:' && df -h / | tail -1" 2>/dev/null | tr '\n' ' ' || echo "Resource info unavailable")
-            echo -e "${BLUE}      Resources: $resources${NC}"
-            
-            # Test health endpoint if available
-            if [ -n "${HEALTH_URLS[$vm_name]:-}" ]; then
-                echo -n "    Health: "
-                test_service_health "$vm_name" "${HEALTH_URLS[$vm_name]}" | tail -1
-            fi
-            
-        else
-            echo -e "${RED}❌ Unreachable${NC}"
-            echo -e "${YELLOW}      Service: Unknown (VM offline)${NC}"
-        fi
-        echo ""
-    done
+    # Frontend Status
+    echo -e "${CYAN}🌐 Frontend Service:${NC}"
+    local frontend_url="http://localhost:$FRONTEND_PORT"
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        frontend_url="http://${VMS["frontend"]}:$FRONTEND_PORT"
+    fi
+    
+    if curl -s "$frontend_url" &> /dev/null; then
+        echo -e "${GREEN}  ✅ Frontend Running${NC}"
+        echo -e "${BLUE}    URL: $frontend_url${NC}"
+    else
+        echo -e "${RED}  ❌ Frontend Not Responding${NC}"
+    fi
+    echo ""
+    
+    # Redis Status
+    echo -e "${CYAN}🗄️  Redis Service:${NC}"
+    local redis_host="localhost"
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        redis_host=${VMS["redis"]}
+    fi
+    
+    if timeout 3 redis-cli -h "$redis_host" ping 2>/dev/null | grep -q PONG; then
+        echo -e "${GREEN}  ✅ Redis Running${NC}"
+        echo -e "${BLUE}    Host: $redis_host:$REDIS_PORT${NC}"
+    else
+        echo -e "${RED}  ❌ Redis Not Responding${NC}"
+    fi
+    echo ""
     
     # VNC Desktop Status
     echo -e "${CYAN}🖥️  VNC Desktop:${NC}"
-    if pgrep -f "x11vnc.*:0" >/dev/null 2>&1 || pgrep -f "kex.*--win" >/dev/null 2>&1; then
-        echo -e "${GREEN}  ✅ VNC Server Running${NC}"
-        local vnc_pid=$(pgrep -f "x11vnc.*:0" 2>/dev/null || pgrep -f "kex.*--win" 2>/dev/null || echo "unknown")
-        echo -e "${BLUE}    PID: $vnc_pid${NC}"
-        echo -e "${BLUE}    URL: http://localhost:6080/vnc.html${NC}"
+    local xvfb_status=$(systemctl is-active xvfb@1 2>/dev/null || echo "inactive")
+    local vnc_status=$(systemctl is-active vncserver@1 2>/dev/null || echo "inactive")
+    local novnc_status=$(systemctl is-active novnc 2>/dev/null || echo "inactive")
+    
+    if [ "$xvfb_status" = "active" ] && [ "$vnc_status" = "active" ] && [ "$novnc_status" = "active" ]; then
+        echo -e "${GREEN}  ✅ VNC Services Running${NC}"
+        echo -e "${BLUE}    Xvfb: $xvfb_status${NC}"
+        echo -e "${BLUE}    VNC Server: $vnc_status${NC}"
+        echo -e "${BLUE}    noVNC: $novnc_status${NC}"
+        echo -e "${BLUE}    Web URL: http://localhost:6080/vnc.html${NC}"
+        echo -e "${BLUE}    VNC Client: localhost:5901${NC}"
+    elif systemctl list-unit-files | grep -q "xvfb@.service\|vncserver@.service\|novnc.service"; then
+        echo -e "${YELLOW}  ⚠️  VNC Services Partially Running${NC}"
+        echo -e "${BLUE}    Xvfb: $xvfb_status${NC}"
+        echo -e "${BLUE}    VNC Server: $vnc_status${NC}"
+        echo -e "${BLUE}    noVNC: $novnc_status${NC}"
+        echo -e "${BLUE}    Run: bash setup.sh desktop${NC}"
     else
-        echo -e "${YELLOW}  ⚠️  VNC Server Not Running${NC}"
+        echo -e "${YELLOW}  ⚠️  VNC Not Configured${NC}"
+        echo -e "${BLUE}    Run: bash setup.sh desktop${NC}"
     fi
     echo ""
     
-    # Summary
-    local total_services=$((${#VMS[@]} + 1))  # VMs + WSL backend
-    local healthy_count=0
-    
-    # Count healthy services
-    if [ -n "$backend_pids" ]; then
-        ((healthy_count++))
-    fi
-    
-    for vm_name in "${!VMS[@]}"; do
-        vm_ip=${VMS[$vm_name]}
-        service_name=${SERVICES[$vm_name]}
-        if timeout 3 ssh -i "$SSH_KEY" -o ConnectTimeout=2 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-            "sudo systemctl is-active $service_name" >/dev/null 2>&1; then
-            ((healthy_count++))
-        fi
-    done
-    
-    echo -e "${BLUE}📋 Summary: $healthy_count/$total_services services healthy${NC}"
-    if [ $healthy_count -eq $total_services ]; then
-        echo -e "${GREEN}🎉 All services are operational!${NC}"
-    elif [ $healthy_count -gt 0 ]; then
-        echo -e "${YELLOW}⚠️  Some services need attention${NC}"
-    else
-        echo -e "${RED}❌ System appears to be down${NC}"
-    fi
-}
-
-shutdown_remote_vms() {
-    echo -e "${RED}⚠️  VM SHUTDOWN WARNING ⚠️${NC}"
-    echo -e "${YELLOW}This will power off all remote VMs. They must be manually started again.${NC}"
-    echo -e "${YELLOW}Services will stop and VMs will be completely powered down.${NC}"
-    echo ""
-    echo -n "Are you sure you want to shutdown all VMs? (type 'yes' to confirm): "
-    read -r confirmation
-    
-    if [ "$confirmation" != "yes" ]; then
-        echo -e "${BLUE}ℹ️  VM shutdown cancelled${NC}"
-        return 0
-    fi
-    
-    echo ""
-    echo -e "${RED}🔌 Shutting Down Remote VMs${NC}"
-    echo -e "${BLUE}===========================${NC}"
-    echo ""
-    
-    # First stop services gracefully
-    echo -e "${YELLOW}🛑 Stopping services before shutdown...${NC}"
-    stop_all_vm_services
-    echo ""
-    
-    # Wait a bit for services to stop
-    echo -e "${CYAN}⏳ Waiting 10 seconds for services to stop cleanly...${NC}"
-    sleep 10
-    
-    # Now shutdown VMs
-    echo -e "${RED}🔌 Powering down VMs...${NC}"
-    for vm_name in "${!VMS[@]}"; do
-        vm_ip=${VMS[$vm_name]}
-        
-        echo -n "  Shutting down $vm_name ($vm_ip)... "
-        
-        # Check if VM is still reachable
-        if ! timeout 3 ssh -i "$SSH_KEY" -o ConnectTimeout=2 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
-            echo -e "${YELLOW}⚠️  VM already unreachable${NC}"
-            continue
-        fi
-        
-        # Send shutdown command
-        if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-            "sudo shutdown -h now" 2>/dev/null; then
-            echo -e "${GREEN}✅ Shutdown Command Sent${NC}"
-        else
-            echo -e "${RED}❌ Shutdown Failed${NC}"
-            echo -e "${YELLOW}      Trying alternative shutdown method...${NC}"
-            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
-                "sudo poweroff" 2>/dev/null && \
-            echo -e "${GREEN}      ✅ Alternative shutdown sent${NC}" || \
-            echo -e "${RED}      ❌ All shutdown methods failed${NC}"
-        fi
-    done
-    
-    echo ""
-    echo -e "${YELLOW}⏳ VMs are shutting down. This may take 1-2 minutes.${NC}"
-    echo -e "${BLUE}ℹ️  To start VMs again, use your hypervisor or physical power buttons.${NC}"
-    echo -e "${GREEN}✅ VM Shutdown Process Completed${NC}"
-}
-
-show_final_status() {
-    if [ "$SHOW_STATUS" = true ]; then
+    # Docker Status (if applicable)
+    if [ "$ENV_TYPE" = "docker" ] || docker ps &> /dev/null; then
+        echo -e "${CYAN}🐳 Docker Services:${NC}"
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo -e "${RED}  ❌ Docker not accessible${NC}"
         echo ""
-        echo -e "${BLUE}📊 Final Service Health Status:${NC}"
-        
-        for vm_name in "${!HEALTH_URLS[@]}"; do
-            health_url=${HEALTH_URLS[$vm_name]}
-            test_service_health "$vm_name" "$health_url"
-        done
-        
-        # Test backend
-        echo -n "  Main Machine (WSL Backend) health check... "
-        local backend_health_url="$(get_service_url "backend" 2>/dev/null || echo "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}")/api/health"
-        local backend_response=$(curl -s "$backend_health_url" 2>/dev/null || echo "")
-        if [ -n "$backend_response" ]; then
-            echo -e "${GREEN}✅ Healthy${NC}"
-            if [ "$DEV_MODE" = true ]; then
-                echo -e "${BLUE}     Response: ${backend_response}${NC}"
+    fi
+    
+    # VM Status (if applicable)
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        echo -e "${CYAN}🔗 VM Connectivity:${NC}"
+        for vm_name in "${!VMS[@]}"; do
+            vm_ip=${VMS[$vm_name]}
+            if timeout 3 ssh -i "$SSH_KEY" -o ConnectTimeout=2 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" &>/dev/null; then
+                echo -e "${GREEN}  ✅ $vm_name ($vm_ip)${NC}"
+            else
+                echo -e "${RED}  ❌ $vm_name ($vm_ip)${NC}"
             fi
-        else
-            echo -e "${RED}❌ Unhealthy${NC}"
-        fi
+        done
+        echo ""
+    fi
+    
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
+}
+
+stop_all_services() {
+    log "Stopping all AutoBot services..."
+    
+    # Stop VNC services first
+    if systemctl is-active --quiet novnc || systemctl is-active --quiet vncserver@1 || systemctl is-active --quiet xvfb@1; then
+        echo -e "${YELLOW}🛑 Stopping VNC Desktop...${NC}"
+        sudo systemctl stop novnc 2>/dev/null || true
+        sudo systemctl stop vncserver@1 2>/dev/null || true
+        sudo systemctl stop xvfb@1 2>/dev/null || true
+    fi
+    
+    # Stop local processes
+    pkill -f "python.*backend" || true
+    pkill -f "npm.*dev" || true
+    
+    # Stop Docker services
+    if [ -f "docker-compose.yml" ]; then
+        docker-compose down --remove-orphans 2>/dev/null || true
+    fi
+    
+    # Stop services on VMs (if native-vm environment)
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        for vm_name in "${!VMS[@]}"; do
+            vm_ip=${VMS[$vm_name]}
+            echo "Stopping services on $vm_name..."
+            ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" 'pkill -f "npm\|python\|node" || true' 2>/dev/null || true
+        done
+    fi
+    
+    success "All services stopped"
+}
+
+follow_logs() {
+    log "Following AutoBot logs..."
+    
+    if [ -f "docker-compose.yml" ]; then
+        docker-compose logs -f
+    else
+        tail -f logs/*.log 2>/dev/null || echo "No log files found"
     fi
 }
 
-# Main execution starts here
-echo -e "${GREEN}🚀 AutoBot - Unified Startup Script${NC}"
-echo -e "${BLUE}====================================${NC}"
-
-# Handle management operations first
-if [ "$STOP_SERVICES" = true ]; then
-    stop_all_services
-    exit 0
-fi
-
-if [ "$SHOW_STATUS_ONLY" = true ]; then
-    show_comprehensive_status
-    exit 0
-fi
-
-if [ "$SHUTDOWN_VMS" = true ]; then
-    shutdown_remote_vms
-    exit 0
-fi
-
-if [ "$RESTART_SERVICES" = true ]; then
-    restart_all_services
-    # Continue with normal startup after restart
-fi
-
-if [ "$DEV_MODE" = true ]; then
-    echo -e "${YELLOW}🛠️  Development Mode Enabled${NC}"
-    echo -e "${BLUE}   - Hot reload enabled${NC}"
-    echo -e "${BLUE}   - Debug logging enabled${NC}"
-    echo -e "${BLUE}   - Browser DevTools enabled${NC}"
-    echo -e "${BLUE}   - Extended timeouts${NC}"
+main() {
+    echo -e "${GREEN}🤖 AutoBot - Unified Startup${NC}"
+    echo -e "${BLUE}================================${NC}"
     echo ""
-fi
-
-if [ "$TEST_MODE" = true ]; then
-    echo -e "${YELLOW}🧪 Test Mode Enabled${NC}"
-    echo -e "${BLUE}   - Minimal service validation${NC}"
-    echo -e "${BLUE}   - Continue on non-critical errors${NC}"
+    
+    # Show configuration
+    log "Configuration:"
+    log "  Mode: $([ "$DEV_MODE" = true ] && echo "Development" || echo "Production")"
+    log "  Build: $BUILD_MODE"
+    log "  Environment: $ENV_TYPE"
+    log "  Desktop: $([ "$DESKTOP_ACCESS" = true ] && echo "Enabled" || echo "Disabled")"
     echo ""
-fi
-
-echo -e "${BLUE}📋 Deployment Mode: ${YELLOW}$DEPLOYMENT_MODE${NC}"
-echo ""
-echo -e "${CYAN}🖥️  Infrastructure Overview:${NC}"
-echo -e "${BLUE}  📡 Main Machine (WSL):    $(get_config "infrastructure.hosts.backend" 2>/dev/null || echo "172.16.168.20") - Backend API${NC}"
-echo -e "${BLUE}  🌐 Remote VMs:${NC}"
-echo -e "${BLUE}    VM1 Frontend:    $(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21") - Web interface${NC}"
-echo -e "${BLUE}    VM2 NPU Worker:  $(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22") - Hardware AI${NC}"
-echo -e "${BLUE}    VM3 Redis:       $(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23") - Data layer${NC}"
-echo -e "${BLUE}    VM4 AI Stack:    $(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24") - AI processing${NC}"
-echo -e "${BLUE}    VM5 Browser:     $(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25") - Web automation${NC}"
-echo ""
-
-# Environment detection and setup
-if [ "$DEPLOYMENT_MODE" = "native-vm" ]; then
+    
+    # Clean up if requested
+    if [ "$FORCE_CLEANUP" = true ]; then
+        log "Performing cleanup as requested..."
+        stop_all_services
+        docker system prune -f 2>/dev/null || true
+    fi
+    
+    # Environment detection (must be done BEFORE prerequisites check)
     detect_environment
     
-    # Check prerequisites
-    if [ ! -f "$SSH_KEY" ]; then
-        echo -e "${RED}❌ SSH key not found: $SSH_KEY${NC}"
-        echo "Please run the deployment script first to set up SSH keys."
-        exit 1
-    fi
+    # Prerequisites check (now aware of environment type)
+    check_prerequisites
     
-    echo -e "${GREEN}✅ SSH key found${NC}"
-    echo -e "${GREEN}✅ Configuration found${NC}"
-    echo ""
-    
-    # Check VM connectivity
-    check_vm_connectivity
-    echo ""
+    # Environment-specific validation
+    case "$ENV_TYPE" in
+        "native-vm")
+            if [ "$TEST_MODE" = false ]; then
+                # Commenting out VM validation to avoid blocking startup
+                # validate_native_vm_setup
+                log "Native VM mode - skipping connectivity check in current session"
+            fi
+            ;;
+        "docker")
+            log "Docker environment detected"
+            ;;
+    esac
     
     # Start VNC desktop if enabled
     start_vnc_desktop
-    echo ""
     
-    # Start VM services
+    # Build containers if needed (only in Docker mode)
+    if [ "$ENV_TYPE" = "docker" ] && [ "$BUILD_MODE" != "skip" ]; then
+        build_containers
+    elif [ "$ENV_TYPE" = "native-vm" ]; then
+        log "Native VM mode - skipping Docker builds"
+    fi
+    
+    # Start services based on environment
     if [ "$PARALLEL_START" = true ]; then
-        start_services_parallel
+        log "Starting services in parallel..."
+        
+        if [ "$ENV_TYPE" = "native-vm" ]; then
+            start_redis &
+            start_backend &
+            start_frontend &
+            start_browser_service &
+            start_ai_stack &
+            start_npu_worker &
+            wait
+        else
+            log "Docker services started by docker-compose"
+        fi
     else
-        start_services_sequential
+        log "Starting services sequentially..."
+        start_redis
+        start_backend
+        start_frontend
+        start_browser_service
+        start_ai_stack
+        start_npu_worker
     fi
     
-    echo ""
+    # Wait for all services to be ready
+    sleep 5
     
-    # Start WSL backend
-    echo -e "${CYAN}📡 Starting Main Machine (WSL) Services...${NC}"
-    start_wsl_backend
-    
-    echo ""
-    
-    # Test all services health
-    echo -e "${YELLOW}🏥 Final Health Verification Phase${NC}"
-    health_wait=5
-    if [ "$DEV_MODE" = true ]; then
-        health_wait=10  # Longer wait in dev mode
-        echo -e "${BLUE}   ⏳ Allowing ${health_wait}s for service initialization (dev mode)${NC}"
-    else
-        echo -e "${BLUE}   ⏳ Allowing ${health_wait}s for service initialization${NC}"
-    fi
-    sleep $health_wait
-    echo -e "${CYAN}   🔍 Testing all service endpoints...${NC}"
-    
-    show_final_status
-    
-    echo ""
-    
-    # Launch browser AFTER all health checks are complete
+    # Launch browser if not disabled
     launch_browser
     
-else
-    echo -e "${RED}❌ Docker deployment not implemented in this version${NC}"
-    echo "Use --native or remove --docker flag"
-    exit 1
-fi
-
-echo ""
-echo -e "${GREEN}🎉 AutoBot Started Successfully!${NC}"
-echo -e "${BLUE}🌐 Service Access Points:${NC}"
-echo -e "${CYAN}  📡 Main Machine (WSL):${NC}"
-echo "    Backend API:  $(get_service_url "backend" 2>/dev/null || echo "http://172.16.168.20:8001")/"
+    # Show status if enabled
+    if [ "$SHOW_STATUS" = true ]; then
+        echo ""
+        show_system_status
+    fi
+    
+    # Final status
+    echo ""
+    success "AutoBot startup completed!"
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        log "Frontend: http://${VMS["frontend"]}:$FRONTEND_PORT"
+        log "Backend: http://localhost:$BACKEND_PORT"
+    else
+        log "Frontend: http://localhost:$FRONTEND_PORT"
+        log "Backend: http://localhost:$BACKEND_PORT"
+    fi
+    
 if [ "$DESKTOP_ACCESS" = true ] && [ -n "$VNC_PID" ]; then
     echo "    VNC Desktop: http://localhost:6080/vnc.html"
 fi
-echo -e "${CYAN}  🌐 Remote VMs:${NC}"
-echo "    Frontend:    $(get_service_url "frontend" 2>/dev/null || echo "http://172.16.168.21")/"
-echo "    NPU Worker:  $(get_service_url "npu_worker" 2>/dev/null || echo "http://172.16.168.22:8081")/health"
-echo "    Redis Stack: $(get_service_url "redis" 2>/dev/null || echo "redis://172.16.168.23:6379") (Data layer)"
-echo "    AI Stack:    $(get_service_url "ai_stack" 2>/dev/null || echo "http://172.16.168.24:8080")/health"
-echo "    Browser:     $(get_service_url "browser_service" 2>/dev/null || echo "http://172.16.168.25:3000")/health"
-
-echo ""
-echo -e "${CYAN}📊 Infrastructure Summary:${NC}"
-echo -e "${BLUE}  Total Machines: 6 (1 Main WSL + 5 Remote VMs)${NC}"
-echo -e "${BLUE}  Network Architecture: Distributed Multi-VM${NC}"
-echo -e "${BLUE}  Configuration: Centralized (config/complete.yaml)${NC}"
-echo ""
-if [ "$DEV_MODE" = true ]; then
-    echo -e "${CYAN}🛠️  Development Features Active:${NC}"
-    echo "  - Backend hot reload enabled"
-    echo "  - Browser DevTools opened"
-    echo "  - Debug logging active"
-    echo "  - Extended health monitoring"
-    echo ""
-fi
-
-echo -e "${CYAN}ℹ️  VM services will continue running even after you stop this script${NC}"
-echo -e "${YELLOW}Press Ctrl+C to stop WSL backend (VM services will keep running)${NC}"
-if [ "$CLEAN_SHUTDOWN" = true ]; then
-    echo -e "${YELLOW}Clean shutdown enabled - all services will be stopped on exit${NC}"
-fi
-
-echo ""
-if [ "$DEV_MODE" = true ]; then
-    echo -e "${BLUE}📋 WSL Backend Development Logs (Ctrl+C to stop):${NC}"
-else
-    echo -e "${BLUE}📋 WSL Backend Logs (Ctrl+C to stop):${NC}"
-fi
-echo ""
-
-# Wait for backend and show logs
-if [ "$REUSED_EXISTING_BACKEND" = true ]; then
-    # For reused processes, monitor them instead of waiting
-    echo "Monitoring existing backend process (PID: $BACKEND_PID)..."
-    while kill -0 $BACKEND_PID 2>/dev/null; do
-        sleep 5
+    
+    log "Press Ctrl+C to stop all services"
+    
+    # Keep script running to handle cleanup
+    while true; do
+        sleep 10
+        # Optional: Add health checks here
     done
-    echo "Backend process (PID: $BACKEND_PID) has stopped"
-else
-    # For new processes started by this shell, we can use wait
-    wait $BACKEND_PID
-fi
+}
+
+# Run main function
+main

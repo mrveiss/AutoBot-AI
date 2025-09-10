@@ -238,8 +238,9 @@ services:
       - models:/app/models
       - npu_logs:/app/logs
       - ./logs:/shared/logs  # Share logs with host
-      # Hardware access for NPU
-      - /dev:/dev:ro
+      # SECURITY FIX: Targeted hardware access instead of full /dev mount
+      # - /dev:/dev:ro  # REMOVED - too permissive
+      - /dev/dri:/dev/dri:rw  # GPU access only
       - /lib/firmware:/lib/firmware:ro
       - /usr/local/lib:/usr/local/lib:ro
     logging:
@@ -263,7 +264,15 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - TF_USE_LEGACY_KERAS=1
       - KERAS_BACKEND=tensorflow
-    privileged: true
+    # SECURITY FIX: Remove privileged access and add specific security controls
+    privileged: false
+    user: "1001:1001"  # Non-root user
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL  # Drop all capabilities
+    cap_add:
+      - DAC_OVERRIDE  # Only add necessary capabilities for file access
     # GPU support (if available)
     deploy:
       resources:

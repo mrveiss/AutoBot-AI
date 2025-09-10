@@ -33,7 +33,7 @@ services:
     environment:
       - ACCEPT_EULA=Y
       - SEQ_FIRSTRUN_ADMINUSERNAME=admin
-      - SEQ_FIRSTRUN_ADMINPASSWORD=autobot123
+      - SEQ_FIRSTRUN_ADMINPASSWORD=${AUTOBOT_SEQ_ADMIN_PASSWORD}
     volumes:
       - autobot_seq_data:/data
     networks:
