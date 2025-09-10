@@ -1,5 +1,5 @@
 """
-Multi-Modal Input Processor for AutoBot Phase 9 - Compatibility Layer
+Multi-Modal Input Processor for AutoBot - Compatibility Layer
 This module provides backward compatibility while redirecting to the unified processor
 """
 

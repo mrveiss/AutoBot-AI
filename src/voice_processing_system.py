@@ -1,5 +1,5 @@
 """
-Voice Processing System for AutoBot Phase 9
+Voice Processing System for AutoBot
 Advanced voice command recognition, natural language processing, and speech synthesis
 """
 

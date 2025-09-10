@@ -1,5 +1,5 @@
 """
-Context-Aware Decision Making System for AutoBot Phase 9
+Context-Aware Decision Making System for AutoBot
 Intelligent decision making that considers multi-modal context, history, and environmental factors
 """
 

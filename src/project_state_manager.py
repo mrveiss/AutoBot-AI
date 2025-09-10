@@ -34,7 +34,7 @@ class DevelopmentPhase(Enum):
     PHASE_6_SELF_AWARENESS = "phase_6_self_awareness"
     PHASE_7_MEMORY_ENHANCEMENT = "phase_7_memory_enhancement"
     PHASE_8_ENHANCED_INTERFACE = "phase_8_enhanced_interface"
-    PHASE_9_LOCAL_MODELS = "phase_9_local_models"
+    PHASE_9_LOCAL_MODELS = "local_models_support"
     PHASE_10_OPENVINO = "phase_10_openvino"
 
 

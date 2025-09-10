@@ -281,14 +281,14 @@ class PhaseProgressionManager:
                 ],
                 "auto_progression": False,
                 "promotion_triggers": [ProgressionTrigger.USER_REQUEST],
-                "next_phases": ["Phase 9: Local Intelligence Model Support"],
+                "next_phases": ["Phase 11: Local Intelligence Model Support"],
                 "capabilities_unlocked": [
                     "desktop_streaming",
                     "takeover_control",
                     "advanced_ui",
                 ],
             },
-            "Phase 9: Local Intelligence Model Support": {
+            "Phase 11: Local Intelligence Model Support": {
                 "prerequisites": [
                     "Phase 3: LLM Integration",
                     "Phase 8: Enhanced Interface and Web Control Panel",
@@ -305,8 +305,8 @@ class PhaseProgressionManager:
                     "model_optimization",
                 ],
             },
-            "Phase 10: OpenVINO Acceleration (CPU/iGPU)": {
-                "prerequisites": ["Phase 9: Local Intelligence Model Support"],
+            "Phase 12: OpenVINO Acceleration (CPU/iGPU)": {
+                "prerequisites": ["Phase 11: Local Intelligence Model Support"],
                 "auto_progression": False,
                 "promotion_triggers": [
                     ProgressionTrigger.USER_REQUEST,

@@ -11,7 +11,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, Field
 
-from src.async_chat_workflow import process_chat_message
+from src.chat_workflow_consolidated import process_chat_message_unified as process_chat_message
 from src.dependency_container import get_llm, get_config
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ async def send_chat_message(
         except asyncio.TimeoutError:
             logger.warning(f"Chat workflow timed out after 20s for chat_id: {chat_id}")
             # Return timeout response with proper structure
-            from src.async_chat_workflow import ChatWorkflowResult, MessageType, KnowledgeStatus
+            from src.chat_workflow_consolidated import ConsolidatedWorkflowResult as ChatWorkflowResult, MessageType, KnowledgeStatus
             workflow_result = ChatWorkflowResult(
                 response=f"I apologize, but processing your message took longer than expected. Your message was: '{request_data.message}' (System is experiencing delays)",
                 message_type=MessageType.GENERAL_QUERY,
