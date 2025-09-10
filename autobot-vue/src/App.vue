@@ -39,19 +39,6 @@
                   💬 Chat
                 </button>
                 
-                <button 
-                  @click="setActiveTab('desktop')"
-                  :class="{
-                    'bg-white text-indigo-700': appStore?.activeTab === 'desktop',
-                    'text-white hover:bg-indigo-500': appStore?.activeTab !== 'desktop'
-                  }"
-                  class="px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center"
-                  title="Desktop Interface"
-                  role="tab"
-                  :aria-selected="appStore?.activeTab === 'desktop'"
-                >
-                  🖥️ Desktop
-                </button>
                 
                 <button 
                   @click="setActiveTab('knowledge')"
@@ -189,17 +176,6 @@
               💬 Chat Interface
             </button>
             
-            <button 
-              @click="setActiveTab('desktop')"
-              :class="{
-                'bg-white text-indigo-700': appStore?.activeTab === 'desktop',
-                'text-white hover:bg-indigo-600': appStore?.activeTab !== 'desktop'
-              }"
-              class="w-full text-left px-4 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center"
-              role="menuitem"
-            >
-              🖥️ Desktop Interface
-            </button>
             
             <button 
               @click="setActiveTab('knowledge')"
@@ -364,7 +340,6 @@ export default {
     RumDashboard,
     // Async components loaded on-demand
     ChatInterface: defineAsyncComponent(() => import('./components/chat/ChatInterface.vue')),
-    DesktopInterface: defineAsyncComponent(() => import('./components/desktop/DesktopInterface.vue')),
     KnowledgeInterface: defineAsyncComponent(() => import('./components/knowledge/KnowledgeInterface.vue')),
     SecretsManager: defineAsyncComponent(() => import('./components/SecretsManager.vue')),
     ToolsBrowser: defineAsyncComponent(() => import('./components/ToolsBrowser.vue')),

@@ -9,7 +9,6 @@ const MonitoringView = () => import('@/views/MonitoringView.vue')
 const SecretsView = () => import('@/views/SecretsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
 const NotFoundView = () => import('@/views/NotFoundView.vue')
-const DesktopView = () => import('@/views/DesktopView.vue')
 
 // Route configuration
 const routes: RouteRecordRaw[] = [
@@ -48,17 +47,6 @@ const routes: RouteRecordRaw[] = [
         }
       }
     ]
-  },
-  {
-    path: '/desktop',
-    name: 'desktop',
-    component: DesktopView,
-    meta: {
-      title: 'Desktop Interface',
-      icon: 'fas fa-desktop',
-      description: 'Remote desktop and GUI applications',
-      requiresAuth: false
-    }
   },
   {
     path: '/knowledge',

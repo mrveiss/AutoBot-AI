@@ -135,7 +135,10 @@
           <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
             <div class="flex-1 flex flex-col bg-black">
               <div class="flex justify-between items-center bg-gray-800 text-white px-4 py-2 text-sm">
-                <span><i class="fas fa-desktop mr-2"></i>Remote Desktop (noVNC)</span>
+                <span>
+                  <i class="fas fa-desktop mr-2"></i>
+                  Remote Desktop (Chat Session: {{ store.currentSessionId?.slice(-8) || 'N/A' }})
+                </span>
                 <a 
                   :href="novncUrl" 
                   target="_blank" 
@@ -147,6 +150,7 @@
                 </a>
               </div>
               <iframe 
+                :key="`desktop-${store.currentSessionId}`"
                 :src="novncUrl"
                 class="flex-1 w-full border-0"
                 title="noVNC Remote Desktop"
@@ -260,8 +264,13 @@ const connectionStatus = ref('Connected')
 const isConnected = ref(true)
 const lastHeartbeat = ref(Date.now())
 
-// Tool URLs
-const novncUrl = ref(API_CONFIG.PLAYWRIGHT_VNC_URL)
+// Tool URLs - Dynamic per-chat desktop URLs
+const novncUrl = computed(() => {
+  if (!store.currentSessionId) {
+    return API_CONFIG.PLAYWRIGHT_VNC_URL // Fallback for no session
+  }
+  return store.getDesktopUrl(store.currentSessionId)
+})
 
 // Computed
 const currentSessionTitle = computed(() => {

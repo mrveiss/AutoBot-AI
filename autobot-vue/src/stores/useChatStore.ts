@@ -31,6 +31,13 @@ export interface ChatSession {
   createdAt: Date
   updatedAt: Date
   isActive: boolean
+  // Desktop automation context
+  desktopSession?: {
+    vncUrl?: string
+    sessionId?: string
+    lastActivity?: Date
+    automationContext?: Record<string, any>
+  }
 }
 
 export interface ChatSettings {
@@ -197,6 +204,80 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value.push(session)
   }
 
+  // Desktop session management
+  function createDesktopSession(sessionId: string): string {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return ''
+
+    // Generate unique desktop session ID
+    const desktopSessionId = `desktop-${sessionId}-${Date.now()}`
+    
+    // Initialize desktop session if not exists
+    if (!session.desktopSession) {
+      session.desktopSession = {
+        sessionId: desktopSessionId,
+        lastActivity: new Date(),
+        automationContext: {}
+      }
+    }
+
+    return desktopSessionId
+  }
+
+  function getDesktopUrl(sessionId: string): string {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.desktopSession) {
+      // Create desktop session if it doesn't exist
+      createDesktopSession(sessionId)
+    }
+
+    // Generate per-chat desktop URL with session context
+    const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || 'http://172.16.168.20:6080/vnc.html'
+    const params = new URLSearchParams({
+      autoconnect: 'true',
+      password: 'autobot',
+      resize: 'remote',
+      reconnect: 'true',
+      quality: '9',
+      compression: '9',
+      // Add chat session context for future automation
+      chatSession: sessionId,
+      desktopSession: session.desktopSession?.sessionId || '',
+      // Enable automation tracking
+      automationMode: 'true'
+    })
+
+    const desktopUrl = `${baseUrl}?${params.toString()}`
+    
+    // Cache the URL in session
+    if (session.desktopSession) {
+      session.desktopSession.vncUrl = desktopUrl
+      session.desktopSession.lastActivity = new Date()
+    }
+
+    return desktopUrl
+  }
+
+  function updateDesktopContext(sessionId: string, context: Record<string, any>) {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.desktopSession) {
+      createDesktopSession(sessionId)
+    }
+
+    if (session.desktopSession) {
+      session.desktopSession.automationContext = {
+        ...session.desktopSession.automationContext,
+        ...context
+      }
+      session.desktopSession.lastActivity = new Date()
+    }
+  }
+
+  function getDesktopContext(sessionId: string): Record<string, any> {
+    const session = sessions.value.find(s => s.id === sessionId)
+    return session?.desktopSession?.automationContext || {}
+  }
+
   return {
     // State
     sessions,
@@ -224,7 +305,12 @@ export const useChatStore = defineStore('chat', () => {
     toggleSidebar,
     setTyping,
     exportSession,
-    importSession
+    importSession,
+    // Desktop session management
+    createDesktopSession,
+    getDesktopUrl,
+    updateDesktopContext,
+    getDesktopContext
   }
 }, {
   persist: {
@@ -246,7 +332,12 @@ export const useChatStore = defineStore('chat', () => {
               messages: session.messages.map((msg: any) => ({
                 ...msg,
                 timestamp: new Date(msg.timestamp)
-              }))
+              })),
+              // Handle desktop session dates
+              desktopSession: session.desktopSession ? {
+                ...session.desktopSession,
+                lastActivity: session.desktopSession.lastActivity ? new Date(session.desktopSession.lastActivity) : undefined
+              } : undefined
             }))
           }
           return parsed
