@@ -1,0 +1,247 @@
+{
+  "summary": {
+    "test_summary": {
+      "total_tests": 14,
+      "passed": 8,
+      "failed": 1,
+      "warnings": 5,
+      "skipped": 0,
+      "success_rate": "57.1%"
+    },
+    "agent_analysis": {
+      "agents_tested": [
+        "API Gateway",
+        "Chat Agent",
+        "Error Handler",
+        "Research Agent",
+        "Backend Router",
+        "Knowledge Agent",
+        "Vector Database",
+        "LLM Agent",
+        "Intelligent Agent"
+      ],
+      "agent_count": 9,
+      "coordination_capable": true
+    },
+    "performance_metrics": {
+      "average_response_time": "0.007s",
+      "fastest_response": "0.007s",
+      "slowest_response": "0.008s"
+    },
+    "production_readiness": {
+      "multi_agent_coordination": true,
+      "performance_acceptable": true,
+      "resilience_verified": true
+    }
+  },
+  "detailed_results": [
+    {
+      "test_name": "Backend Availability",
+      "status": "pass",
+      "message": "Backend is accessible and responding",
+      "duration": 1757530727.8217914,
+      "agents_involved": [],
+      "performance_metrics": {
+        "response_time": "0.008s"
+      },
+      "details": {}
+    },
+    {
+      "test_name": "Agent Availability - Intelligent Agent",
+      "status": "warning",
+      "message": "Intelligent Agent returned HTTP 404",
+      "duration": 1757530727.8326952,
+      "agents_involved": [
+        "Intelligent Agent"
+      ],
+      "performance_metrics": {},
+      "details": {
+        "status_code": 404
+      }
+    },
+    {
+      "test_name": "Agent Availability - Research Agent",
+      "status": "warning",
+      "message": "Research Agent returned HTTP 404",
+      "duration": 1757530727.8436546,
+      "agents_involved": [
+        "Research Agent"
+      ],
+      "performance_metrics": {},
+      "details": {
+        "status_code": 404
+      }
+    },
+    {
+      "test_name": "Agent Availability - Knowledge Agent",
+      "status": "fail",
+      "message": "Knowledge Agent returned HTTP 405",
+      "duration": 1757530727.8538885,
+      "agents_involved": [
+        "Knowledge Agent"
+      ],
+      "performance_metrics": {},
+      "details": {
+        "status_code": 405
+      }
+    },
+    {
+      "test_name": "Agent Availability - LLM Agent",
+      "status": "pass",
+      "message": "LLM Agent is accessible",
+      "duration": 1757530727.8619351,
+      "agents_involved": [
+        "LLM Agent"
+      ],
+      "performance_metrics": {
+        "response_time": "0.007s"
+      },
+      "details": {}
+    },
+    {
+      "test_name": "Agent Coordination Status",
+      "status": "warning",
+      "message": "Only 1 agents available - limited coordination",
+      "duration": 1757530727.8619628,
+      "agents_involved": [
+        "LLM Agent"
+      ],
+      "performance_metrics": {
+        "available_agents": 1
+      },
+      "details": {}
+    },
+    {
+      "test_name": "Backend Availability",
+      "status": "pass",
+      "message": "Backend is accessible and responding",
+      "duration": 1757530727.8701756,
+      "agents_involved": [],
+      "performance_metrics": {
+        "response_time": "0.007s"
+      },
+      "details": {}
+    },
+    {
+      "test_name": "Parallel Task Execution",
+      "status": "pass",
+      "message": "4/4 parallel requests successful",
+      "duration": 1757530727.9060757,
+      "agents_involved": [
+        "Backend Router",
+        "API Gateway"
+      ],
+      "performance_metrics": {
+        "total_time": "0.036s",
+        "successful_requests": 4,
+        "success_rate": "100.0%"
+      },
+      "details": {
+        "results": [
+          {
+            "endpoint": "/api/health",
+            "status_code": 200,
+            "response_time": 0.021253,
+            "success": true
+          },
+          {
+            "endpoint": "/api/system/status",
+            "status_code": 200,
+            "response_time": 0.01468,
+            "success": true
+          },
+          {
+            "endpoint": "/api/endpoints",
+            "status_code": 200,
+            "response_time": 0.02054,
+            "success": true
+          },
+          {
+            "endpoint": "/ws/health",
+            "status_code": 200,
+            "response_time": 0.013078,
+            "success": true
+          }
+        ]
+      }
+    },
+    {
+      "test_name": "Backend Availability",
+      "status": "pass",
+      "message": "Backend is accessible and responding",
+      "duration": 1757530727.915492,
+      "agents_involved": [],
+      "performance_metrics": {
+        "response_time": "0.008s"
+      },
+      "details": {}
+    },
+    {
+      "test_name": "Knowledge Base Task Completion",
+      "status": "warning",
+      "message": "Knowledge search completed in 0.636s",
+      "duration": 1757530728.551849,
+      "agents_involved": [
+        "Knowledge Agent",
+        "Vector Database"
+      ],
+      "performance_metrics": {
+        "completion_time": "0.636s",
+        "results_count": 0,
+        "throughput": "0.0 results/sec"
+      },
+      "details": {}
+    },
+    {
+      "test_name": "Backend Availability",
+      "status": "pass",
+      "message": "Backend is accessible and responding",
+      "duration": 1757530728.5622354,
+      "agents_involved": [],
+      "performance_metrics": {
+        "response_time": "0.008s"
+      },
+      "details": {}
+    },
+    {
+      "test_name": "Inter-Agent Communication Workflow",
+      "status": "warning",
+      "message": "Chat workflow returned HTTP 400",
+      "duration": 1757530728.5691864,
+      "agents_involved": [
+        "Chat Agent"
+      ],
+      "performance_metrics": {},
+      "details": {
+        "status_code": 400
+      }
+    },
+    {
+      "test_name": "Backend Availability",
+      "status": "pass",
+      "message": "Backend is accessible and responding",
+      "duration": 1757530728.5777814,
+      "agents_involved": [],
+      "performance_metrics": {
+        "response_time": "0.007s"
+      },
+      "details": {}
+    },
+    {
+      "test_name": "System Resilience",
+      "status": "pass",
+      "message": "System handles errors gracefully (100% resilience)",
+      "duration": 1757530728.6098359,
+      "agents_involved": [
+        "Error Handler",
+        "API Gateway"
+      ],
+      "performance_metrics": {
+        "resilience_score": "100%"
+      },
+      "details": {}
+    }
+  ],
+  "timestamp": "2025-09-10T21:58:48.610263",
+  "validation_type": "multi_agent_workflow"
+}
