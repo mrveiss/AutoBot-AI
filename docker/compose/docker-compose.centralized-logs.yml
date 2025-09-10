@@ -234,7 +234,7 @@ services:
       - "${AUTOBOT_SEQ_EXTERNAL_PORT:-5341}:${AUTOBOT_SEQ_INTERNAL_PORT:-80}"  # Web interface for viewing ALL logs
     environment:
       - ACCEPT_EULA=Y
-      - SEQ_FIRSTRUN_ADMINPASSWORD=${AUTOBOT_SEQ_ADMIN_PASSWORD:-Autobot123!}  # pragma: allowlist secret
+      - SEQ_FIRSTRUN_ADMINPASSWORD=${AUTOBOT_SEQ_ADMIN_PASSWORD}
     volumes:
       - autobot_all_logs:/var/log/autobot:ro  # Read from central log location
       - autobot_log_data:/data

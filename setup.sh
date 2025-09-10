@@ -28,6 +28,7 @@ print_usage() {
     echo "  analytics       Seq analytics and authentication setup"
     echo "  network         DNS and network optimization setup"
     echo "  openvino        OpenVINO and NPU setup"
+    echo "  desktop         VNC desktop environment setup for headless servers"
     echo "  repair          Repair existing installation"
     echo ""
     echo -e "${YELLOW}Environment Options:${NC}"
@@ -56,7 +57,7 @@ SKIP_DEPS=false
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        initial|agent|system|knowledge|docker|models|analytics|network|openvino|repair)
+        initial|agent|system|knowledge|docker|models|analytics|network|openvino|desktop|repair)
             SETUP_TYPE="$1"
             shift
             ;;
@@ -179,6 +180,9 @@ case "$SETUP_TYPE" in
     "openvino")
         run_setup_script "scripts/setup/setup_openvino.sh" "Setting up OpenVINO"
         run_setup_script "scripts/utilities/verify_npu_setup.py" "Verifying NPU setup"
+        ;;
+    "desktop")
+        run_setup_script "scripts/setup/install-vnc-headless.sh" "Setting up VNC desktop environment"
         ;;
     "repair")
         run_setup_script "scripts/setup/setup_repair.sh" "Running setup repair"

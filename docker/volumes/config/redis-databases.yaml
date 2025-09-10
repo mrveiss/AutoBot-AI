@@ -40,7 +40,7 @@ databases:
 connection_settings:
   host: localhost
   port: 6379
-  password: Autobot123!      # Updated to match Seq password standard  # pragma: allowlist secret
+  password: ${AUTOBOT_REDIS_PASSWORD}      # Secure generated password
   timeout: 30
   retry_on_timeout: true
   max_retries: 3
@@ -124,7 +124,7 @@ monitoring:
 
   # Seq logging integration
   seq_endpoint: "http://localhost:5341"
-  seq_api_key: "Autobot123!"  # Match Seq authentication  # pragma: allowlist secret
+  seq_api_key: "${AUTOBOT_SEQ_ADMIN_PASSWORD}"  # Secure generated password
   enable_seq_forwarding: true
 
 # Backup settings
