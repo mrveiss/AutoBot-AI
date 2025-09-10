@@ -1,5 +1,5 @@
 """
-Unified Multi-Modal AI Processor for AutoBot Phase 9
+Unified Multi-Modal AI Processor for AutoBot
 Consolidates vision, voice, and context processing with consistent interfaces
 """
 

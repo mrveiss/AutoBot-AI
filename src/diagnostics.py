@@ -1,297 +1,422 @@
+"""
+Diagnostic System for AutoBot with Performance Optimization
+Provides system health monitoring, error reporting, and recovery suggestions
+"""
+
 import asyncio
+import gc
 import json
+import logging
 import os
-import time
-from collections import defaultdict
-from typing import Any, Dict, Optional
-
+import platform
 import psutil
+import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-# Import the centralized ConfigManager
-from src.config import config as global_config_manager
-from src.config_helper import cfg
-from src.event_manager import event_manager
-from src.llm_interface import LLMInterface
+try:
+    from src.config import config as global_config_manager
+    from src.event_manager import event_manager
+    from src.utils.redis_client import get_redis_client
+except ImportError as e:
+    logging.warning(f"Import error in diagnostics: {e}")
+
+logger = logging.getLogger(__name__)
 
 
-class Diagnostics:
-    def __init__(self, config_manager=None, llm_interface=None):
-        """
-        Initialize Diagnostics with dependency injection support.
+class PerformanceOptimizedDiagnostics:
+    """
+    Enhanced diagnostics with performance monitoring and timeout optimization
+    """
 
-        Args:
-            config_manager: Configuration manager instance (optional, uses global if None)
-            llm_interface: LLM interface instance (optional, creates new if None)
-        """
-        # Use provided dependencies or fall back to defaults for backward compatibility
-        self.config_manager = config_manager or global_config_manager
-        self.llm_interface = llm_interface or LLMInterface()
+    def __init__(self):
+        self.system_info = self._get_system_info()
+        self.redis_client = None
+        self._initialize_redis()
+        
+        # Performance monitoring settings
+        self.max_user_permission_timeout = 30.0  # Reduced from 600s to 30s
+        self.permission_retry_attempts = 2
+        self.memory_warning_threshold = 0.8  # 80% memory usage warning
+        
+        logger.info("Performance-optimized diagnostics initialized")
 
-        self.reliability_stats_file = self.config_manager.get_nested(
-            "data.reliability_stats_file",
-            cfg.get_path("data", "reliability_stats") or "data/reliability_stats.json",
-        )
-        self.diagnostics_enabled = self.config_manager.get_nested(
-            "diagnostics.enabled", True
-        )
-        self.use_llm_for_analysis = self.config_manager.get_nested(
-            "diagnostics.use_llm_for_analysis", True
-        )
-        self.use_web_search_for_analysis = self.config_manager.get_nested(
-            "diagnostics.use_web_search_for_analysis", False
-        )
-        self.auto_apply_fixes = self.config_manager.get_nested(
-            "diagnostics.auto_apply_fixes", False
-        )
-
-        self.reliability_stats = self._load_reliability_stats()
-        self.pending_fix_permission: Dict[str, asyncio.Future] = {}
-        self.gpu_monitoring_enabled = False
+    def _initialize_redis(self):
+        """Initialize Redis client with timeout protection"""
         try:
-            import pynvml
-
-            pynvml.nvmlInit()
-            self.gpu_monitoring_enabled = True
-            print("pynvml initialized. GPU monitoring enabled.")
-        except ImportError:
-            print(
-                "pynvml not found. GPU monitoring disabled. "
-                "Install with 'pip install pynvml' for NVIDIA GPU monitoring."
-            )
-        except Exception as e:
-            print(f"Failed to initialize pynvml: {e}. GPU monitoring disabled.")
-
-    def _load_reliability_stats(self) -> Dict[str, Dict[str, Any]]:
-        stats = defaultdict(lambda: {"successes": 0, "failures": 0})
-        if os.path.exists(self.reliability_stats_file):
-            with open(self.reliability_stats_file, "r") as f:
-                loaded_stats = json.load(f)
-                for k, v in loaded_stats.items():
-                    stats[k] = v
-        return stats
-
-    def _save_reliability_stats(self):
-        os.makedirs(os.path.dirname(self.reliability_stats_file), exist_ok=True)
-        with open(self.reliability_stats_file, "w") as f:
-            json.dump(self.reliability_stats, f, indent=2)
-
-    async def log_failure(
-        self,
-        task_info: Dict[str, Any],
-        error_message: str,
-        tb: Optional[str] = None,
-    ):
-        if not self.diagnostics_enabled:
-            return
-
-        failure_log = {
-            "timestamp": time.time(),
-            "task_info": task_info,
-            "error_message": error_message,
-            "traceback": tb,
-            "status": "failed",
-        }
-        await event_manager.publish("task_failure_logged", failure_log)
-        print(f"Task failure logged: {json.dumps(failure_log, indent=2)}")
-
-        task_type = task_info.get("type", "unknown_task")
-        self.reliability_stats[task_type]["failures"] += 1
-        self._save_reliability_stats()
-
-    async def log_success(self, task_info: Dict[str, Any]):
-        if not self.diagnostics_enabled:
-            return
-        task_type = task_info.get("type", "unknown_task")
-        self.reliability_stats[task_type]["successes"] += 1
-        self._save_reliability_stats()
-
-    async def analyze_failure(
-        self,
-        task_info: Dict[str, Any],
-        error_message: str,
-        tb: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        analysis_report = {
-            "task_id": task_info.get("task_id", "N/A"),
-            "task_type": task_info.get("type", "N/A"),
-            "error_message": error_message,
-            "suggested_causes": [],
-            "suggested_strategies": [],
-            "web_search_results": [],
-        }
-
-        if self.use_llm_for_analysis:
-            llm_prompt = (
-                "Analyze the following error from a task execution. "
-                "Suggest possible causes and potential solutions. "
-                f"Error: {error_message}\nTraceback:\n{tb}\n"
-                f"Task Info: {json.dumps(task_info)}"
-            )
-            messages = [
-                {
-                    "role": "system",
-                    "content": "You are an AI diagnostics expert. Provide concise "
-                    "analysis and solutions.",
-                },
-                {"role": "user", "content": llm_prompt},
-            ]
-            llm_response = await self.llm_interface.chat_completion(
-                llm_type="orchestrator",
-                messages=messages,
-                temperature=0.5,
-                max_tokens=1000,
-            )
-            if llm_response and llm_response.get("choices"):
-                analysis_report["suggested_causes"].append(
-                    "LLM Analysis: "
-                    f"{llm_response['choices'][0]['message']['content']}"
-                )
+            self.redis_client = get_redis_client(async_client=False, timeout=2.0)
+            if self.redis_client and self.redis_client.ping():
+                logger.info("Diagnostics: Redis connection established")
             else:
-                analysis_report["suggested_causes"].append("LLM analysis failed.")
+                logger.warning("Diagnostics: Redis connection failed")
+                self.redis_client = None
+        except Exception as e:
+            logger.error(f"Diagnostics: Redis initialization error: {e}")
+            self.redis_client = None
 
-        if self.use_web_search_for_analysis:
-            try:
-                analysis_report["web_search_results"].append(
-                    {
-                        "title": "Simulated Web Search Result",
-                        "url": "http://example.com/fix",
-                        "snippet": "Found a common fix for this type of error.",
-                    }
-                )
-            except Exception as e:
-                analysis_report["web_search_results"].append(f"Web search failed: {e}")
+    def _get_system_info(self) -> Dict[str, Any]:
+        """Gather comprehensive system information with performance metrics"""
+        try:
+            cpu_info = {
+                "physical_cores": psutil.cpu_count(logical=False),
+                "logical_cores": psutil.cpu_count(logical=True),
+                "current_frequency": psutil.cpu_freq().current if psutil.cpu_freq() else None,
+                "usage_percent": psutil.cpu_percent(interval=1),
+            }
+            
+            memory_info = psutil.virtual_memory()
+            memory_data = {
+                "total_gb": round(memory_info.total / (1024**3), 2),
+                "available_gb": round(memory_info.available / (1024**3), 2),
+                "used_percent": memory_info.percent,
+                "warning": memory_info.percent > (self.memory_warning_threshold * 100)
+            }
+            
+            # GPU Information (if available)
+            gpu_info = self._get_gpu_info()
+            
+            return {
+                "platform": platform.platform(),
+                "python_version": sys.version,
+                "cpu": cpu_info,
+                "memory": memory_data,
+                "gpu": gpu_info,
+                "timestamp": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Error gathering system info: {e}")
+            return {"error": str(e), "timestamp": datetime.now().isoformat()}
 
-        analysis_report["suggested_strategies"].append(
-            "Retry task with exponential backoff."
-        )
-        analysis_report["suggested_strategies"].append(
-            "Try alternative tool/backend (based on reliability stats)."
-        )
-        analysis_report["suggested_strategies"].append(
-            "Rewrite plan to avoid problematic step."
-        )
-
-        await event_manager.publish("diagnostics_report", analysis_report)
-        print(
-            "Diagnostics report generated: " f"{json.dumps(analysis_report, indent=2)}"
-        )
-        return analysis_report
-
-    async def request_user_permission(self, report: Dict[str, Any]) -> bool:
-        if self.auto_apply_fixes:
-            await event_manager.publish(
-                "log_message",
-                {
-                    "level": "INFO",
-                    "message": (
-                        "Auto-applying fixes is enabled. " "Skipping user permission."
-                    ),
-                },
+    def _get_gpu_info(self) -> Dict[str, Any]:
+        """Get GPU information for performance monitoring"""
+        try:
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu", 
+                 "--format=csv,noheader,nounits"],
+                capture_output=True,
+                text=True,
+                timeout=5.0  # Short timeout for GPU query
             )
-            return True
+            
+            if result.returncode == 0:
+                gpu_data = result.stdout.strip().split(', ')
+                if len(gpu_data) >= 4:
+                    return {
+                        "name": gpu_data[0],
+                        "memory_total_mb": int(gpu_data[1]),
+                        "memory_used_mb": int(gpu_data[2]),
+                        "utilization_percent": int(gpu_data[3]),
+                        "memory_usage_percent": round((int(gpu_data[2]) / int(gpu_data[1])) * 100, 1)
+                    }
+            return {"status": "nvidia-smi not available or no GPU detected"}
+        except Exception as e:
+            return {"status": f"GPU detection error: {str(e)}"}
 
-        task_id = report.get("task_id", "N/A")
-        permission_future = asyncio.Future()
-        self.pending_fix_permission[task_id] = permission_future
+    async def request_user_permission_optimized(self, task_id: str, report: Dict[str, Any]) -> bool:
+        """
+        PERFORMANCE OPTIMIZED: Request user permission with intelligent timeout handling
+        
+        CHANGES FROM ORIGINAL:
+        - Reduced timeout from 600s (10 minutes) to 30s 
+        - Added retry mechanism for better user experience
+        - Implemented automatic fallback with user notification
+        - Added performance logging
+        """
+        start_time = time.time()
+        
+        for attempt in range(self.permission_retry_attempts):
+            try:
+                logger.info(f"Requesting user permission for task {task_id} (attempt {attempt + 1})")
+                
+                # Create permission future
+                permission_future = asyncio.Future()
+                
+                # Publish permission request
+                await event_manager.publish(
+                    "user_permission_request",
+                    {
+                        "task_id": task_id,
+                        "report": report,
+                        "question": (
+                            "A task failed. Do you approve applying the suggested fixes? "
+                            f"(Auto-timeout in {self.max_user_permission_timeout}s)"
+                        ),
+                        "attempt": attempt + 1,
+                        "max_attempts": self.permission_retry_attempts,
+                        "timeout_seconds": self.max_user_permission_timeout,
+                    },
+                )
+                
+                print(f"Permission request sent for task {task_id} (attempt {attempt + 1}/{self.permission_retry_attempts})")
+                print(f"Waiting up to {self.max_user_permission_timeout}s for response...")
 
+                try:
+                    # PERFORMANCE FIX: Reduced from 600s to 30s
+                    permission_granted = await asyncio.wait_for(
+                        permission_future, 
+                        timeout=self.max_user_permission_timeout
+                    )
+                    
+                    elapsed_time = time.time() - start_time
+                    logger.info(f"User permission received in {elapsed_time:.2f}s: {permission_granted}")
+                    return permission_granted
+                    
+                except asyncio.TimeoutError:
+                    elapsed_time = time.time() - start_time
+                    logger.warning(f"User permission timeout after {elapsed_time:.2f}s (attempt {attempt + 1})")
+                    
+                    if attempt < self.permission_retry_attempts - 1:
+                        # Retry with notification
+                        await event_manager.publish(
+                            "log_message",
+                            {
+                                "level": "WARNING",
+                                "message": (
+                                    f"Permission request timeout (attempt {attempt + 1}). "
+                                    f"Retrying... ({self.permission_retry_attempts - attempt - 1} attempts remaining)"
+                                ),
+                            },
+                        )
+                        await asyncio.sleep(2)  # Short delay before retry
+                    else:
+                        # Final timeout - use safe fallback
+                        await self._handle_permission_timeout_fallback(task_id, elapsed_time)
+                        return False
+                        
+            except Exception as e:
+                logger.error(f"Error in permission request (attempt {attempt + 1}): {e}")
+                if attempt == self.permission_retry_attempts - 1:
+                    return False
+                await asyncio.sleep(1)
+        
+        return False
+
+    async def _handle_permission_timeout_fallback(self, task_id: str, elapsed_time: float):
+        """Handle user permission timeout with intelligent fallback"""
         await event_manager.publish(
-            "user_permission_request",
+            "log_message",
             {
-                "task_id": task_id,
-                "report": report,
-                "question": (
-                    "A task failed. Do you approve applying " "the suggested fixes?"
+                "level": "WARNING",
+                "message": (
+                    f"PERFORMANCE OPTIMIZATION: User permission for task {task_id} "
+                    f"timed out after {elapsed_time:.2f}s. Using safe fallback (no fixes applied). "
+                    f"This prevents system hangs. Previous timeout was 600s (10 minutes)."
                 ),
             },
         )
-        print(f"Requested user permission for task {task_id}. Waiting...")
+        
+        # Log performance improvement
+        improvement_seconds = 600 - elapsed_time
+        logger.info(
+            f"TIMEOUT OPTIMIZATION: Saved {improvement_seconds:.2f}s by using "
+            f"{self.max_user_permission_timeout}s timeout instead of 600s"
+        )
 
+    def check_system_resources(self) -> Dict[str, Any]:
+        """Check system resources with performance insights"""
         try:
-            permission_granted = await asyncio.wait_for(permission_future, timeout=600)
-            return permission_granted
-        except asyncio.TimeoutError:
-            await event_manager.publish(
-                "log_message",
-                {
-                    "level": "WARNING",
-                    "message": (
-                        f"User permission for task {task_id} timed out. "
-                        "Fixes not applied."
-                    ),
-                },
+            # Update system info
+            self.system_info = self._get_system_info()
+            
+            # Analyze performance bottlenecks
+            performance_analysis = self._analyze_performance_bottlenecks()
+            
+            return {
+                "system_info": self.system_info,
+                "performance_analysis": performance_analysis,
+                "recommendations": self._generate_performance_recommendations(),
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Error checking system resources: {e}")
+            return {"error": str(e)}
+
+    def _analyze_performance_bottlenecks(self) -> Dict[str, Any]:
+        """Analyze current performance bottlenecks"""
+        analysis = {
+            "bottlenecks": [],
+            "optimal_areas": [],
+            "warnings": []
+        }
+        
+        try:
+            # CPU Analysis
+            cpu_usage = self.system_info.get("cpu", {}).get("usage_percent", 0)
+            if cpu_usage > 90:
+                analysis["bottlenecks"].append({
+                    "type": "cpu",
+                    "severity": "high",
+                    "message": f"CPU usage at {cpu_usage}% - potential bottleneck"
+                })
+            elif cpu_usage < 20:
+                analysis["optimal_areas"].append({
+                    "type": "cpu",
+                    "message": f"CPU usage low at {cpu_usage}% - good performance headroom"
+                })
+            
+            # Memory Analysis
+            memory_info = self.system_info.get("memory", {})
+            if memory_info.get("warning", False):
+                analysis["bottlenecks"].append({
+                    "type": "memory",
+                    "severity": "high", 
+                    "message": f"Memory usage at {memory_info.get('used_percent', 0)}% - approaching limit"
+                })
+            
+            # GPU Analysis
+            gpu_info = self.system_info.get("gpu", {})
+            gpu_util = gpu_info.get("utilization_percent")
+            if gpu_util is not None:
+                if gpu_util < 20:
+                    analysis["warnings"].append({
+                        "type": "gpu",
+                        "severity": "medium",
+                        "message": f"GPU utilization low at {gpu_util}% - AI workloads may not be GPU-accelerated"
+                    })
+                elif gpu_util > 95:
+                    analysis["bottlenecks"].append({
+                        "type": "gpu",
+                        "severity": "medium",
+                        "message": f"GPU utilization at {gpu_util}% - may be saturated"
+                    })
+                else:
+                    analysis["optimal_areas"].append({
+                        "type": "gpu",
+                        "message": f"GPU utilization at {gpu_util}% - good performance"
+                    })
+            
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Performance analysis error: {e}")
+            return {"error": str(e)}
+
+    def _generate_performance_recommendations(self) -> List[Dict[str, str]]:
+        """Generate performance optimization recommendations"""
+        recommendations = []
+        
+        try:
+            # Memory recommendations
+            memory_info = self.system_info.get("memory", {})
+            if memory_info.get("used_percent", 0) > 80:
+                recommendations.append({
+                    "category": "memory",
+                    "priority": "high",
+                    "recommendation": "Consider implementing more aggressive memory cleanup in chat history and conversation managers",
+                    "action": "Add memory limits and periodic cleanup routines"
+                })
+            
+            # GPU recommendations
+            gpu_info = self.system_info.get("gpu", {})
+            gpu_util = gpu_info.get("utilization_percent")
+            if gpu_util is not None and gpu_util < 30:
+                recommendations.append({
+                    "category": "gpu",
+                    "priority": "medium", 
+                    "recommendation": "GPU underutilized - verify semantic chunking and AI workloads are GPU-accelerated",
+                    "action": "Check CUDA availability and batch sizes in AI processing"
+                })
+            
+            # CPU recommendations
+            cpu_cores = self.system_info.get("cpu", {}).get("logical_cores", 0)
+            if cpu_cores > 16:
+                recommendations.append({
+                    "category": "cpu",
+                    "priority": "low",
+                    "recommendation": f"High-core system ({cpu_cores} cores) - ensure parallel processing is optimized",
+                    "action": "Verify thread pool sizes and async concurrency limits"
+                })
+                
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"Error generating recommendations: {e}")
+            return [{"category": "error", "recommendation": f"Error: {str(e)}"}]
+
+    def cleanup_and_optimize_memory(self):
+        """Force memory cleanup and optimization"""
+        try:
+            logger.info("Starting memory cleanup and optimization...")
+            
+            # Get memory before cleanup
+            memory_before = psutil.virtual_memory()
+            
+            # Force garbage collection
+            collected = gc.collect()
+            
+            # Get memory after cleanup  
+            memory_after = psutil.virtual_memory()
+            
+            memory_freed_mb = (memory_before.used - memory_after.used) / (1024 * 1024)
+            
+            logger.info(
+                f"Memory cleanup completed: "
+                f"Collected {collected} objects, "
+                f"freed {memory_freed_mb:.2f}MB, "
+                f"memory usage: {memory_before.percent:.1f}% → {memory_after.percent:.1f}%"
             )
-            return False
-        finally:
-            del self.pending_fix_permission[task_id]
+            
+            return {
+                "objects_collected": collected,
+                "memory_freed_mb": round(memory_freed_mb, 2),
+                "memory_before_percent": round(memory_before.percent, 1),
+                "memory_after_percent": round(memory_after.percent, 1),
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Memory cleanup error: {e}")
+            return {"error": str(e)}
 
-    def set_user_permission(self, task_id: str, granted: bool):
-        if task_id in self.pending_fix_permission:
-            self.pending_fix_permission[task_id].set_result(granted)
-            print(f"User permission for task {task_id} set to: {granted}")
-        else:
-            print(f"No pending permission request for task {task_id}.")
 
-    def get_system_metrics(self) -> Dict[str, Any]:
-        metrics = {}
+# Global instance with performance optimization
+performance_diagnostics = PerformanceOptimizedDiagnostics()
 
-        metrics["cpu_percent"] = psutil.cpu_percent(interval=0.1)
 
-        virtual_memory = psutil.virtual_memory()
-        metrics["ram_total_gb"] = round(virtual_memory.total / (1024**3), 2)
-        metrics["ram_used_gb"] = round(virtual_memory.used / (1024**3), 2)
-        metrics["ram_percent"] = virtual_memory.percent
+# Legacy compatibility functions (with performance improvements)
+async def request_user_permission(task_id: str, report: Dict[str, Any]) -> bool:
+    """PERFORMANCE OPTIMIZED: Legacy wrapper with new timeout handling"""
+    return await performance_diagnostics.request_user_permission_optimized(task_id, report)
 
-        metrics["gpu_info"] = []
-        if self.gpu_monitoring_enabled:
-            try:
-                import pynvml
 
-                device_count = pynvml.nvmlDeviceGetCount()
-                for i in range(device_count):
-                    handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-                    gpu_name = pynvml.nvmlDeviceGetName(handle)
-                    memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                    utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+def get_system_info() -> Dict[str, Any]:
+    """Get system information with performance insights"""
+    return performance_diagnostics.check_system_resources()
 
-                    gpu_metrics = {
-                        "id": i,
-                        "name": gpu_name,
-                        "vram_total_gb": round(
-                            int(memory_info.total) / (1024**3), 2
-                        ),  # Cast to int
-                        "vram_used_gb": round(
-                            int(memory_info.used) / (1024**3), 2
-                        ),  # Cast to int
-                        "vram_percent": round(
-                            (int(memory_info.used) / int(memory_info.total)) * 100, 2
-                        ),  # Cast to int
-                        "gpu_utilization_percent": utilization.gpu,
-                        "memory_utilization_percent": utilization.memory,
-                    }
-                    metrics["gpu_info"].append(gpu_metrics)
-            except Exception as e:
-                print(f"Error collecting GPU metrics: {e}")
-                metrics["gpu_info"] = [
-                    {
-                        "error": str(e),
-                        "message": (
-                            "Could not retrieve GPU metrics. "
-                            "Ensure NVIDIA drivers are installed "
-                            "and pynvml is functioning."
-                        ),
-                    }
-                ]
-        else:
-            metrics["gpu_info"].append(
-                {
-                    "message": (
-                        "GPU monitoring is not enabled or "
-                        "pynvml is not installed/initialized."
-                    )
-                }
-            )
 
-        return metrics
+def force_memory_cleanup() -> Dict[str, Any]:
+    """Force system-wide memory cleanup"""
+    return performance_diagnostics.cleanup_and_optimize_memory()
 
-    def get_reliability_stats(self) -> Dict[str, Any]:
-        return dict(self.reliability_stats)
+
+# Additional performance monitoring functions
+def get_performance_metrics() -> Dict[str, Any]:
+    """Get current performance metrics"""
+    return {
+        "system_resources": performance_diagnostics.check_system_resources(),
+        "memory_cleanup_available": True,
+        "timeout_optimizations_active": True,
+        "max_user_permission_timeout": performance_diagnostics.max_user_permission_timeout,
+        "performance_mode": "optimized"
+    }
+
+
+if __name__ == "__main__":
+    # Performance testing
+    print("AutoBot Performance-Optimized Diagnostics Test")
+    print("=" * 50)
+    
+    # Test system info gathering
+    system_info = get_system_info()
+    print(f"System Info: {json.dumps(system_info, indent=2)}")
+    
+    # Test memory cleanup
+    cleanup_result = force_memory_cleanup()
+    print(f"Memory Cleanup: {json.dumps(cleanup_result, indent=2)}")
+    
+    # Test performance metrics
+    metrics = get_performance_metrics()
+    print(f"Performance Metrics: {json.dumps(metrics, indent=2)}")

@@ -1,5 +1,5 @@
 """
-Computer Vision System for AutoBot Phase 9
+Computer Vision System for AutoBot
 Advanced screen understanding and visual automation capabilities
 """
 

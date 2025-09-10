@@ -48,7 +48,7 @@ class APIRegistry:
             "async_chat": RouterConfig(
                 name="async_chat",
                 module_path="backend.api.async_chat",
-                prefix="/api/chat",
+                prefix="/api/async_chat",
                 tags=["chat", "async"],
                 description="Async chat interface with dependency injection",
                 version="v2"
@@ -224,6 +224,14 @@ class APIRegistry:
                 status=RouterStatus.ENABLED,
                 description="Multi-machine infrastructure monitoring with service hierarchies"
             ),
+            "monitoring_alerts": RouterConfig(
+                name="monitoring_alerts",
+                module_path="backend.api.monitoring_alerts",
+                prefix="/api/alerts",
+                tags=["alerts", "notifications", "monitoring"],
+                status=RouterStatus.ENABLED,
+                description="Advanced monitoring alerts and notifications system"
+            ),
             "monitoring": RouterConfig(
                 name="monitoring",
                 module_path="backend.api.monitoring",
@@ -231,6 +239,21 @@ class APIRegistry:
                 tags=["monitoring", "metrics"],
                 status=RouterStatus.DISABLED,  # Not in fast backend
                 description="Advanced system monitoring and analytics"
+            ),
+            "phase9_monitoring": RouterConfig(
+                name="phase9_monitoring",
+                module_path="backend.api.phase9_monitoring",
+                prefix="/api/monitoring/phase9",
+                tags=["monitoring", "phase9", "gpu", "npu", "performance"],
+                status=RouterStatus.ENABLED,
+                description="Phase 9 comprehensive performance monitoring for GPU/NPU utilization and multi-modal AI"
+            ),
+            "system_validation": RouterConfig(
+                name="system_validation",
+                module_path="backend.api.system_validation",
+                prefix="/api/system_validation",
+                tags=["validation", "system", "testing"],
+                description="Comprehensive system validation and integration testing"
             ),
             "validation_dashboard": RouterConfig(
                 name="validation_dashboard",
@@ -279,6 +302,16 @@ class APIRegistry:
                 tags=["startup", "status", "websockets"],
                 status=RouterStatus.DISABLED,
                 description="Friendly startup messages and status updates for frontend"
+            ),
+            
+            # Hot Reload for Development
+            "hot_reload": RouterConfig(
+                name="hot_reload",
+                module_path="backend.api.hot_reload",
+                prefix="/api/hot-reload",
+                tags=["development", "hot-reload"],
+                status=RouterStatus.ENABLED,
+                description="Hot reload functionality for chat workflow modules during development"
             ),
         }
     

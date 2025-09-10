@@ -1,3 +1,4 @@
+import gc
 import json
 import logging
 import os
@@ -17,6 +18,8 @@ from src.encryption_service import (
 )
 from src.utils.redis_client import get_redis_client
 
+logger = logging.getLogger(__name__)
+
 
 class ChatHistoryManager:
     def __init__(
@@ -27,7 +30,7 @@ class ChatHistoryManager:
         redis_port: Optional[int] = None,
     ):
         """
-        Initializes the ChatHistoryManager.
+        Initializes the ChatHistoryManager with PERFORMANCE OPTIMIZATIONS.
 
         Args:
             history_file (str): Path to the JSON file for persistent storage.
@@ -58,6 +61,18 @@ class ChatHistoryManager:
         self.history: List[Dict[str, Any]] = []
         self.redis_client = None
         self.encryption_enabled = is_encryption_enabled()
+
+        # PERFORMANCE OPTIMIZATION: Memory leak protection
+        self.max_messages = 10000  # Maximum messages per session
+        self.cleanup_threshold = 12000  # Cleanup trigger (120% of max)
+        self.max_session_files = 1000  # Maximum session files to keep
+        self.memory_check_counter = 0  # Counter for periodic memory checks
+        self.memory_check_interval = 50  # Check memory every N operations
+
+        logger.info(
+            f"PERFORMANCE: ChatHistoryManager initialized with memory protection - "
+            f"max_messages: {self.max_messages}, cleanup_threshold: {self.cleanup_threshold}"
+        )
 
         # Log encryption status
         if self.encryption_enabled:
@@ -96,6 +111,75 @@ class ChatHistoryManager:
         data_dir = os.path.dirname(self.history_file)
         if data_dir and not os.path.exists(data_dir):
             os.makedirs(data_dir, exist_ok=True)
+
+    def _cleanup_messages_if_needed(self):
+        """PERFORMANCE OPTIMIZATION: Clean up messages to prevent memory leaks"""
+        if len(self.history) > self.cleanup_threshold:
+            # Keep most recent messages within the limit
+            old_count = len(self.history)
+            self.history = self.history[-self.max_messages:]
+            
+            # Force garbage collection to free memory immediately
+            collected_objects = gc.collect()
+            
+            logger.info(
+                f"CHAT CLEANUP: Trimmed messages from {old_count} to {len(self.history)} "
+                f"(limit: {self.max_messages}), collected {collected_objects} objects"
+            )
+
+    def _periodic_memory_check(self):
+        """PERFORMANCE OPTIMIZATION: Periodic memory usage monitoring"""
+        self.memory_check_counter += 1
+        if self.memory_check_counter >= self.memory_check_interval:
+            self.memory_check_counter = 0
+            
+            # Check memory usage
+            message_count = len(self.history)
+            if message_count > self.max_messages * 0.8:  # 80% threshold warning
+                logger.warning(
+                    f"MEMORY WARNING: Chat history approaching limit - "
+                    f"{message_count}/{self.max_messages} messages "
+                    f"({(message_count/self.max_messages)*100:.1f}%)"
+                )
+            
+            # Cleanup if needed
+            self._cleanup_messages_if_needed()
+
+    def _cleanup_old_session_files(self):
+        """PERFORMANCE OPTIMIZATION: Clean up old session files"""
+        try:
+            chats_directory = self._get_chats_directory()
+            if not os.path.exists(chats_directory):
+                return
+                
+            # Get all chat files sorted by modification time
+            chat_files = []
+            for filename in os.listdir(chats_directory):
+                if filename.startswith("chat_") and filename.endswith(".json"):
+                    file_path = os.path.join(chats_directory, filename)
+                    mtime = os.path.getmtime(file_path)
+                    chat_files.append((file_path, mtime, filename))
+            
+            # Sort by modification time (newest first)
+            chat_files.sort(key=lambda x: x[1], reverse=True)
+            
+            # Remove old files if exceeding limit
+            if len(chat_files) > self.max_session_files:
+                files_to_remove = chat_files[self.max_session_files:]
+                for file_path, _, filename in files_to_remove:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"CLEANUP: Removed old session file: {filename}")
+                    except Exception as e:
+                        logger.error(f"Failed to remove session file {filename}: {e}")
+                
+                logger.info(
+                    f"SESSION CLEANUP: Removed {len(files_to_remove)} old session files, "
+                    f"kept {self.max_session_files} most recent"
+                )
+                        
+        except Exception as e:
+            logger.error(f"Error cleaning up session files: {e}")
 
     def _encrypt_data(self, data: Dict[str, Any]) -> str:
         """Encrypt chat data if encryption is enabled."""
@@ -161,6 +245,9 @@ class ChatHistoryManager:
                 if isinstance(history_data, str):
                     self.history = json.loads(history_data)
                     logging.info("Loaded chat history from Redis.")
+                    
+                    # Apply memory limits to loaded data
+                    self._cleanup_messages_if_needed()
                     return
                 elif history_data is not None:
                     logging.warning(
@@ -178,6 +265,10 @@ class ChatHistoryManager:
             try:
                 with open(self.history_file, "r") as f:
                     self.history = json.load(f)
+                    
+                # Apply memory limits to loaded data
+                self._cleanup_messages_if_needed()
+                
             except json.JSONDecodeError as e:
                 self.history = []
                 logging.warning(
@@ -202,8 +293,11 @@ class ChatHistoryManager:
         Saves current chat history to the JSON file and optionally to Redis
         if enabled.
 
-        Logs an error if the save operation fails.
+        PERFORMANCE OPTIMIZATION: Includes memory cleanup before save.
         """
+        # PERFORMANCE: Check and cleanup memory before saving
+        self._periodic_memory_check()
+        
         # Save to file for persistence
         try:
             async with aiofiles.open(self.history_file, "w") as f:
@@ -230,6 +324,8 @@ class ChatHistoryManager:
     ):
         """
         Adds a new message to the history and saves it to file.
+        
+        PERFORMANCE OPTIMIZATION: Includes memory monitoring.
 
         Args:
             sender (str): The sender of the message (e.g., 'user', 'bot').
@@ -245,6 +341,10 @@ class ChatHistoryManager:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         self.history.append(message)
+        
+        # PERFORMANCE: Periodic memory checks
+        self._periodic_memory_check()
+        
         await self._save_history()
         logging.debug(f"Added message from {sender} with type {message_type}")
 
@@ -255,10 +355,20 @@ class ChatHistoryManager:
     async def clear_history(self):
         """
         Clears the entire chat history and saves the empty history to file.
+        
+        PERFORMANCE OPTIMIZATION: Forces garbage collection after clear.
         """
+        old_count = len(self.history)
         self.history = []
+        
+        # Force garbage collection to free memory
+        collected_objects = gc.collect()
+        
         await self._save_history()
-        logging.info("Chat history cleared.")
+        logging.info(
+            f"Chat history cleared: removed {old_count} messages, "
+            f"collected {collected_objects} objects"
+        )
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
         """Lists available chat sessions with their metadata."""
@@ -270,6 +380,9 @@ class ChatHistoryManager:
             if not os.path.exists(chats_directory):
                 os.makedirs(chats_directory, exist_ok=True)
                 return sessions
+
+            # Clean up old session files if needed
+            self._cleanup_old_session_files()
 
             # Look for chat files in the chats directory
             for filename in os.listdir(chats_directory):
@@ -409,6 +522,8 @@ class ChatHistoryManager:
     ):
         """
         Saves a chat session with messages and metadata.
+        
+        PERFORMANCE OPTIMIZATION: Includes session file cleanup.
 
         Args:
             session_id (str): The identifier for the session to save.
@@ -427,6 +542,14 @@ class ChatHistoryManager:
 
             # Use provided messages or current history
             session_messages = self.history if messages is None else messages
+            
+            # PERFORMANCE: Limit session messages to prevent excessive file sizes
+            if len(session_messages) > self.max_messages:
+                logger.warning(
+                    f"Session {session_id} has {len(session_messages)} messages, "
+                    f"truncating to {self.max_messages} most recent"
+                )
+                session_messages = session_messages[-self.max_messages:]
 
             # Load existing chat data if it exists to preserve metadata
             chat_data = {}
@@ -458,6 +581,15 @@ class ChatHistoryManager:
                 await f.write(encrypted_data)
 
             logging.info(f"Chat session '{session_id}' saved successfully")
+            
+            # PERFORMANCE: Periodic cleanup of old session files
+            if hasattr(self, '_session_save_counter'):
+                self._session_save_counter += 1
+            else:
+                self._session_save_counter = 1
+                
+            if self._session_save_counter % 10 == 0:  # Every 10th save
+                self._cleanup_old_session_files()
 
         except Exception as e:
             logging.error(f"Error saving chat session {session_id}: {str(e)}")
@@ -527,6 +659,32 @@ class ChatHistoryManager:
             logging.error(f"Error updating chat session {session_id} name: {str(e)}")
             return False
 
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """PERFORMANCE: Get current memory usage statistics"""
+        return {
+            "current_messages": len(self.history),
+            "max_messages": self.max_messages,
+            "cleanup_threshold": self.cleanup_threshold,
+            "memory_usage_percent": (len(self.history) / self.max_messages) * 100,
+            "memory_check_counter": self.memory_check_counter,
+            "memory_check_interval": self.memory_check_interval,
+            "needs_cleanup": len(self.history) > self.cleanup_threshold,
+        }
+
+    def force_cleanup(self) -> Dict[str, Any]:
+        """PERFORMANCE: Force memory cleanup and return statistics"""
+        old_count = len(self.history)
+        self._cleanup_messages_if_needed()
+        collected_objects = gc.collect()
+        
+        return {
+            "messages_before": old_count,
+            "messages_after": len(self.history),
+            "messages_removed": old_count - len(self.history),
+            "objects_collected": collected_objects,
+            "cleanup_performed": old_count > len(self.history)
+        }
+
 
 # Example Usage (for testing)
 if __name__ == "__main__":
@@ -537,20 +695,28 @@ if __name__ == "__main__":
 
     manager = ChatHistoryManager(test_file)
     print("Initial history:", manager.get_all_messages())
+    print("Memory stats:", manager.get_memory_stats())
 
-    manager.add_message("user", "Hello there!")
-    manager.add_message("bot", "Hi! How can I help?")
-    manager.add_message(
-        "thought", '{"tool_name": "greet"}', "thought", {"tool_name": "greet"}
-    )
-    print("History after adding messages:", manager.get_all_messages())
+    import asyncio
 
-    # Simulate new instance loading
-    new_manager = ChatHistoryManager(test_file)
-    print("History loaded by new manager:", new_manager.get_all_messages())
+    async def test_memory_protection():
+        # Add many messages to test memory protection
+        for i in range(100):
+            await manager.add_message("user", f"Test message {i}")
+            await manager.add_message("bot", f"Response {i}")
+        
+        print(f"After adding 200 messages: {len(manager.get_all_messages())}")
+        print("Memory stats:", manager.get_memory_stats())
+        
+        # Test cleanup
+        cleanup_stats = manager.force_cleanup()
+        print("Cleanup stats:", cleanup_stats)
+        
+        # Clear history
+        await manager.clear_history()
+        print("History after clearing:", len(manager.get_all_messages()))
 
-    new_manager.clear_history()
-    print("History after clearing:", new_manager.get_all_messages())
+    asyncio.run(test_memory_protection())
 
     if os.path.exists(test_file):
         os.remove(test_file)

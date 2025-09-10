@@ -14,7 +14,7 @@ from typing import List, Dict, Any, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.dependency_container import get_llm, get_config, inject_services
-from src.async_llm_interface import ChatMessage, LLMResponse
+from src.llm_interface import ChatMessage, LLMResponse
 
 logger = logging.getLogger(__name__)
 

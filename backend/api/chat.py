@@ -37,24 +37,15 @@ def get_conversation_manager_lazy():
     return get_conversation_manager
 
 def get_simple_workflow_lazy():
-    from src.simple_chat_workflow import process_chat_message_simple, SimpleWorkflowResult
-    return process_chat_message_simple, SimpleWorkflowResult
-# PERFORMANCE FIX: Make these imports lazy too
-# from src.error_handler import log_error, safe_api_error
-# from src.exceptions import (
-#     AutoBotError,
-#     InternalError,
-#     ResourceNotFoundError,
-#     ValidationError,
-#     get_error_code,
-# )
-# from src.source_attribution import (
-#     SourceReliability,
-#     SourceType,
-#     clear_sources,
-#     source_manager,
-#     track_source,
-# )
+    # UPDATED: Use consolidated chat workflow with all features
+    from src.chat_workflow_consolidated import process_chat_message_unified, ConsolidatedWorkflowResult
+    return process_chat_message_unified, ConsolidatedWorkflowResult
+
+def get_consolidated_workflow_lazy():
+    from src.chat_workflow_consolidated import process_chat_message_unified, ConsolidatedWorkflowResult
+    return process_chat_message_unified, ConsolidatedWorkflowResult
+# PERFORMANCE FIX: Critical imports re-enabled with lazy loading
+# These were disabled but are essential for proper error handling and source attribution
 
 def get_error_handler_lazy():
     from src.error_handler import log_error, safe_api_error
@@ -68,9 +59,11 @@ def get_source_attribution_lazy():
     from src.source_attribution import SourceReliability, SourceType, clear_sources, source_manager, track_source
     return SourceReliability, SourceType, clear_sources, source_manager, track_source
 
-# PERFORMANCE FIX: Make workflow automation import lazy too
-# try:
-#     from backend.api.workflow_automation import workflow_manager
+# PERFORMANCE FIX: Workflow automation re-enabled with lazy loading
+
+def get_workflow_automation_lazy():
+    from backend.api.workflow_automation import workflow_manager
+    return workflow_manager
 #     WORKFLOW_AUTOMATION_AVAILABLE = True
 # except ImportError:
 #     workflow_manager = None
@@ -86,7 +79,17 @@ def get_workflow_automation_lazy():
 router = APIRouter()
 
 
-@router.get("/chat/llm-status")
+@router.get("/health")
+async def get_chat_health():
+    """Health check endpoint for chat service"""
+    return {
+        "status": "healthy",
+        "service": "chat",
+        "timestamp": time.time()
+    }
+
+
+@router.get("/llm-status")
 async def get_llm_status():
     """Get the current status of all LLM tiers"""
     try:
@@ -610,7 +613,7 @@ class ChatSave(BaseModel):
     messages: list
 
 
-@router.post("/chats/new")
+@router.post("/chats/new") 
 async def create_new_chat(request: Request):
     """Create a new chat session ID (POST method)."""
     try:
@@ -784,7 +787,7 @@ async def delete_chat(chat_id: str, request: Request):
 
         # Attempt deletion
         try:
-            success = await chat_history_manager.delete_session(chat_id)
+            success = chat_history_manager.delete_session(chat_id)
             
             if success:
                 return JSONResponse(
@@ -861,7 +864,7 @@ async def reset_chat(chat_id: str, request: Request):
         )
 
 
-@router.post("/chat/conversation")
+@router.post("/conversation")
 async def conversation_chat_message(chat_message: dict, request: Request):
     """Enhanced chat endpoint using the new Conversation class with KB integration."""
     try:
@@ -884,8 +887,8 @@ async def conversation_chat_message(chat_message: dict, request: Request):
         # Process the message through the proper chat workflow
         logger.info(f"Processing chat message through workflow manager for chat_id: {chat_id}")
         # CRITICAL FIX: Use simple chat workflow to avoid blocking imports
-        process_chat_message_simple, SimpleWorkflowResult = get_simple_workflow_lazy()
-        workflow_result = await process_chat_message_simple(
+        process_chat_message_unified, ConsolidatedWorkflowResult = get_consolidated_workflow_lazy()
+        workflow_result = await process_chat_message_unified(
             user_message=message,
             chat_id=chat_id,
             conversation=conversation
@@ -1027,7 +1030,7 @@ async def conversation_chat_message(chat_message: dict, request: Request):
         )
 
 
-@router.post("/chat/direct")
+@router.post("/direct")
 async def send_direct_chat_message(chat_message: dict, request: Request):
     """Direct chat endpoint that bypasses orchestration for simple responses."""
     try:
@@ -1624,37 +1627,10 @@ async def send_chat_message_legacy(chat_message: dict, request: Request):
 
 @router.post("/chats/{chat_id}/message")
 async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Request):
-    """Send a message to a specific chat and get a response."""
-    logging.info(f"DEBUG: send_chat_message called for chat_id: {chat_id}")
+    """Send a message to a specific chat and get a response with full source attribution."""
+    logging.info(f"Processing chat message for chat_id: {chat_id}")
     
-    # EMERGENCY FIX: Return immediate response to test if endpoint works without any processing
-    try:
-        message = chat_message.message
-        simple_response = f"Echo: {message} (processed by emergency fallback)"
-        
-        return JSONResponse(
-            content={
-                "response": simple_response,
-                "message_type": "emergency",
-                "knowledge_status": "bypassed",
-                "sources": [],
-                "kb_results_count": 0,
-                "processing_time": 0.1,
-                "librarian_engaged": False,
-                "mcp_used": False,
-                "conversation_id": chat_id,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "emergency_mode": True
-            }
-        )
-    except Exception as e:
-        logger.error(f"Even emergency fallback failed: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Emergency fallback failed: {str(e)}"}
-        )
-
-    # ORIGINAL CODE BELOW - KEEP FOR REFERENCE BUT COMMENTED OUT
+    # RESTORED: Full chat workflow with source attribution and knowledge base integration
     # Add timeout protection to prevent the entire endpoint from hanging
     async def _process_message():
         # Clear previous sources for new request
@@ -1726,9 +1702,9 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         logger.info("DEBUG: Processing message through SimpleChatWorkflow...")
         try:
             # Process the message through the working chat workflow (lazy import)
-            process_chat_message_simple, SimpleWorkflowResult = get_simple_workflow_lazy()
+            process_chat_message_unified, ConsolidatedWorkflowResult = get_consolidated_workflow_lazy()
             workflow_task = asyncio.create_task(
-                process_chat_message_simple(
+                process_chat_message_unified(
                     user_message=message,
                     chat_id=chat_id,
                     conversation=None
@@ -2430,7 +2406,7 @@ async def _execute_single_chat_operation(
             if not chat_id:
                 raise ValueError("chat_id is required for delete_chat operation")
 
-            success = await chat_history_manager.delete_session(chat_id)
+            success = chat_history_manager.delete_session(chat_id)
             return {
                 "operation": operation,
                 "success": success,

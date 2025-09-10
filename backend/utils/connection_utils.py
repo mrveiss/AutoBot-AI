@@ -412,6 +412,10 @@ class ConnectionTester:
 
 class ModelManager:
     """Centralized model management for LLM services"""
+    
+    # Rate limiting for warnings to prevent log spam
+    _last_ollama_warning = 0
+    _warning_interval = 60  # Only warn once per minute
 
     @staticmethod
     async def get_available_models() -> Dict[str, Any]:
@@ -470,5 +474,10 @@ class ModelManager:
                 return models
             return []
         except Exception as e:
-            logger.warning(f"Failed to get Ollama models: {str(e)}")
+            # Implement rate limiting to prevent log spam
+            import time
+            current_time = time.time()
+            if current_time - ModelManager._last_ollama_warning >= ModelManager._warning_interval:
+                logger.warning(f"Failed to get Ollama models: {str(e)}")
+                ModelManager._last_ollama_warning = current_time
             return []

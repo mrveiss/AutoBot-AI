@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 
 from src.utils.async_redis_manager import AsyncRedisManager, async_redis_manager, initialize_default_redis
-from src.async_llm_interface import AsyncLLMInterface, LLMManager, llm_manager
+from src.llm_interface import LLMInterface, LLMSettings, get_llm_interface
 from src.async_config_manager import AsyncConfigManager, ConfigManagerContainer, config_container
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class AsyncServiceContainer:
         
         # LLM Interface
         self._services["llm"] = ServiceDescriptor(
-            service_type=AsyncLLMInterface,
+            service_type=LLMInterface,
             factory=self._create_llm_interface,
             singleton=True,
             dependencies=["config"]
@@ -81,9 +81,9 @@ class AsyncServiceContainer:
         """Factory for config manager"""
         return await config_container.get_manager()
     
-    async def _create_llm_interface(self) -> AsyncLLMInterface:
+    async def _create_llm_interface(self) -> LLMInterface:
         """Factory for LLM interface"""
-        return await llm_manager.get_instance()
+        return get_llm_interface()
     
     def register_service(
         self,
@@ -353,7 +353,7 @@ async def get_config() -> AsyncConfigManager:
     return await container.get_service("config")
 
 
-async def get_llm() -> AsyncLLMInterface:
+async def get_llm() -> LLMInterface:
     """Get LLM interface"""
     return await container.get_service("llm")
 

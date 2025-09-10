@@ -10,28 +10,57 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from src.intelligence.intelligent_agent import IntelligentAgent
-from src.knowledge_base import KnowledgeBase
-from src.llm_interface import LLMInterface
-from src.utils.command_validator import CommandValidator
-from src.worker_node import WorkerNode
-
+# CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)
 
 # Global agent instance
 _agent_instance = None
+_agent_initialization_lock = None
 
+def get_lazy_dependencies():
+    """Lazy import of heavy dependencies to prevent startup blocking"""
+    try:
+        from src.intelligence.intelligent_agent import IntelligentAgent
+        from src.knowledge_base import KnowledgeBase
+        from src.llm_interface import LLMInterface
+        from src.utils.command_validator import CommandValidator
+        from src.worker_node import WorkerNode
+        return IntelligentAgent, KnowledgeBase, LLMInterface, CommandValidator, WorkerNode
+    except ImportError as e:
+        logger.error(f"Failed to import intelligent agent dependencies: {e}")
+        raise HTTPException(status_code=503, detail="Intelligent agent dependencies not available")
 
 async def get_agent() -> IntelligentAgent:
-    """Get or create the global intelligent agent instance."""
-    global _agent_instance
-    if _agent_instance is None:
-        _agent_instance = IntelligentAgent(
-            LLMInterface(), KnowledgeBase(), WorkerNode(), CommandValidator()
-        )
-        await _agent_instance.initialize()
-        logger.info("Intelligent agent initialized")
-    return _agent_instance
+    """Get or create the global intelligent agent instance with lazy loading."""
+    global _agent_instance, _agent_initialization_lock
+    
+    if _agent_instance is not None:
+        return _agent_instance
+    
+    # Prevent concurrent initialization
+    import asyncio
+    if _agent_initialization_lock is None:
+        _agent_initialization_lock = asyncio.Lock()
+    
+    async with _agent_initialization_lock:
+        if _agent_instance is not None:
+            return _agent_instance
+        
+        try:
+            logger.info("Lazy loading intelligent agent dependencies...")
+            IntelligentAgent, KnowledgeBase, LLMInterface, CommandValidator, WorkerNode = get_lazy_dependencies()
+            
+            logger.info("Initializing intelligent agent with lazy-loaded dependencies...")
+            _agent_instance = IntelligentAgent(
+                LLMInterface(), KnowledgeBase(), WorkerNode(), CommandValidator()
+            )
+            await _agent_instance.initialize()
+            logger.info("✅ Intelligent agent initialized successfully with lazy loading")
+            return _agent_instance
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize intelligent agent: {e}")
+            raise HTTPException(status_code=503, detail=f"Intelligent agent initialization failed: {str(e)}")
 
 
 # Pydantic models for API

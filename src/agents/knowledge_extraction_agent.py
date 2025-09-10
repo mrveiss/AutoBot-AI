@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.llm_interface_unified import LLMType, get_unified_llm_interface
+from src.llm_interface import LLMType, get_llm_interface
 from src.models.atomic_fact import (
     AtomicFact,
     FactExtractionResult,
