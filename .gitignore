@@ -266,3 +266,36 @@ reports/**/security_audit_*.json
 # External projects/submodules that are independent repositories
 code-index-mcp/
 mcp-github-project-manager/
+
+# Large log and analysis files
+*.log.bak
+reports/archives/**/duplicate_analysis_results*.json
+reports/archives/**/*.log.bak
+
+# Files over 50MB
+reports/archives/archive_*/other/*.log.bak
+reports/archives/archive_*/analysis_reports/duplicate_analysis_results*.json
+
+# Logs and backups - should never be in repo
+*.log
+*.log.*
+*.bak
+*.backup
+*.old
+*.tmp
+*.temp
+
+# Archive directories with logs/backups
+reports/archives/
+logs/
+backups/
+temp/
+tmp/
+
+# Large files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
