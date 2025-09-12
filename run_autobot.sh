@@ -49,6 +49,9 @@ DEV_MODE=false
 PROD_MODE=false
 NO_BROWSER=false
 DESKTOP_ACCESS=true  # Enable by default per CLAUDE.md guidelines
+BUILD=false
+NO_BUILD=false
+REBUILD=false
 VNC_PID=""
 
 # VM Configuration (Distributed Architecture)
