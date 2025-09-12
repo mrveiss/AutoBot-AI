@@ -73,7 +73,7 @@ class ThresholdUpdate(BaseModel):
     category: str
     metric: str
     threshold: float
-    comparison: str = Field(..., regex="^(gt|lt|eq)$")
+    comparison: str = Field(..., pattern="^(gt|lt|eq)$")
 
 
 # WebSocket connection manager for real-time updates
@@ -559,7 +559,7 @@ async def get_services_health():
 
 @router.get("/export/metrics")
 async def export_metrics(
-    format: str = Query("json", regex="^(json|csv)$"),
+    format: str = Query("json", pattern="^(json|csv)$"),
     time_range_hours: int = Query(1, ge=1, le=168)  # Max 1 week
 ):
     """Export performance metrics in JSON or CSV format"""

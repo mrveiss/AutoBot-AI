@@ -30,7 +30,7 @@ def get_lazy_dependencies():
         logger.error(f"Failed to import intelligent agent dependencies: {e}")
         raise HTTPException(status_code=503, detail="Intelligent agent dependencies not available")
 
-async def get_agent() -> IntelligentAgent:
+async def get_agent() -> "IntelligentAgent":
     """Get or create the global intelligent agent instance with lazy loading."""
     global _agent_instance, _agent_initialization_lock
     

@@ -39,15 +39,16 @@ class ChatResponse(BaseModel):
 
 # Dependency to ensure services are available
 async def get_service_container(request: Request):
-    """Get service container from app state with timeout protection"""
+    """Get service container from app state with immediate check"""
     try:
-        # Add timeout protection to prevent hanging
+        # Use immediate container check without timeout
         container_check = asyncio.create_task(
             _check_container(request)
         )
-        return await asyncio.wait_for(container_check, timeout=1.0)
-    except asyncio.TimeoutError:
-        logger.warning("Service container check timed out, proceeding without DI")
+        # Let the task complete naturally or fail quickly
+        return await container_check
+    except Exception as e:
+        logger.warning(f"Service container check failed: {e}, proceeding without DI")
         return None
     except Exception as e:
         logger.warning(f"Service container error: {e}, proceeding without DI")
@@ -83,25 +84,24 @@ async def send_chat_message(
         
         # Process message through async workflow with timeout protection
         try:
-            workflow_result = await asyncio.wait_for(
-                process_chat_message(
-                    user_message=request_data.message,
-                    chat_id=chat_id
-                ),
-                timeout=20.0  # 20 second timeout
+            # ROOT CAUSE FIX: Remove timeout and fix underlying blocking operations
+            # All blocking operations have been converted to async in the workflow
+            workflow_result = await process_chat_message(
+                user_message=request_data.message,
+                chat_id=chat_id
             )
-        except asyncio.TimeoutError:
-            logger.warning(f"Chat workflow timed out after 20s for chat_id: {chat_id}")
-            # Return timeout response with proper structure
+        except Exception as e:
+            # ROOT CAUSE FIX: Handle actual errors instead of timeout symptoms
+            logger.error(f"Chat workflow error for chat_id: {chat_id}: {e}")
             from src.chat_workflow_consolidated import ConsolidatedWorkflowResult as ChatWorkflowResult, MessageType, KnowledgeStatus
             workflow_result = ChatWorkflowResult(
-                response=f"I apologize, but processing your message took longer than expected. Your message was: '{request_data.message}' (System is experiencing delays)",
+                response=f"I apologize, but I encountered an error processing your message: '{request_data.message}'. Please try again.",
                 message_type=MessageType.GENERAL_QUERY,
                 knowledge_status=KnowledgeStatus.BYPASSED,
                 kb_results=[],
                 librarian_engaged=False,
                 mcp_used=False,
-                processing_time=20.0
+                processing_time=0.0
             )
         
         # Convert to API response format

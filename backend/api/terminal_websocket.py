@@ -93,15 +93,23 @@ class TerminalWebSocketHandler:
             await self.connect(websocket, chat_id)
 
             while websocket.client_state == WebSocketState.CONNECTED:
-                # Receive message from client with timeout
+                # Receive message from client with proper handling
                 try:
-                    message = await asyncio.wait_for(
-                        websocket.receive_text(), timeout=30.0
-                    )
-                except asyncio.TimeoutError:
-                    # Send ping to keep connection alive
-                    await websocket.send_text(json.dumps({"type": "ping"}))
-                    continue
+                    # Use asyncio.create_task for non-blocking message receive
+                    message_task = asyncio.create_task(websocket.receive_text())
+                    
+                    # Poll for message or connection state change
+                    while not message_task.done() and websocket.client_state == WebSocketState.CONNECTED:
+                        await asyncio.sleep(0.1)
+                    
+                    if message_task.done():
+                        message = await message_task
+                    else:
+                        message_task.cancel()
+                        break
+                        
+                except asyncio.CancelledError:
+                    break
                 except Exception:
                     break
 

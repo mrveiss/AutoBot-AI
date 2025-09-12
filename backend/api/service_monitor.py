@@ -569,9 +569,14 @@ async def get_system_resources():
 async def get_all_services():
     """Get status of all AutoBot services"""
     try:
+        # Get distributed service URLs from environment
+        import os
+        redis_host = os.environ.get('REDIS_HOST', '172.16.168.23')
+        redis_port = os.environ.get('REDIS_PORT', '6379')
+        
         services = {
             "backend": {"status": "online", "url": "http://localhost:8001", "health": "✅"},
-            "redis": {"status": "checking", "url": "redis://localhost:6379", "health": "⏳"},
+            "redis": {"status": "checking", "url": f"redis://{redis_host}:{redis_port}", "health": "⏳"},
             "ollama": {"status": "checking", "url": "http://localhost:11434", "health": "⏳"},
             "frontend": {"status": "checking", "url": "http://localhost:5173", "health": "⏳"}
         }
@@ -579,7 +584,7 @@ async def get_all_services():
         # Quick Redis check
         try:
             import redis
-            r = redis.Redis(host='localhost', port=6379, decode_responses=True, socket_timeout=2)
+            r = redis.Redis(host=redis_host, port=int(redis_port), decode_responses=True, socket_timeout=2)
             r.ping()
             services["redis"]["status"] = "online"
             services["redis"]["health"] = "✅"

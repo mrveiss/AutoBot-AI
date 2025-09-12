@@ -59,11 +59,14 @@ def setup_rum_logger():
     rum_logger = logging.getLogger('rum')
     rum_logger.setLevel(getattr(logging, rum_config['log_level'].upper(), logging.INFO))
     
-    # Create logs directory if it doesn't exist
-    os.makedirs('logs', exist_ok=True)
+    # Create logs directory in proper location
+    from pathlib import Path
+    project_root = Path(__file__).parent.parent.parent
+    logs_dir = project_root / 'logs' / 'backend'
+    logs_dir.mkdir(parents=True, exist_ok=True)
     
     # Create file handler for RUM logs
-    handler = logging.FileHandler('logs/rum.log')
+    handler = logging.FileHandler(logs_dir / 'rum.log')
     formatter = logging.Formatter(
         '%(asctime)s - RUM - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'

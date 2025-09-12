@@ -47,13 +47,9 @@ async def get_prompts():
             """Read a single prompt file with timeout protection"""
             async with semaphore:  # Limit concurrent reads
                 try:
-                    # PERFORMANCE FIX: Add timeout to file operations
-                    # Use wait_for for Python 3.10 compatibility (asyncio.timeout is 3.11+)
-                    async def read_file():
-                        async with aiofiles.open(full_path, "r", encoding="utf-8") as f:
-                            return await f.read()
-                    
-                    content = await asyncio.wait_for(read_file(), timeout=5.0)
+                    # Use async file operations without timeout
+                    from src.utils.async_file_operations import read_file_async
+                    content = await read_file_async(full_path)
 
                     prompt_id = (
                         rel_path.replace("/", "_").replace("\\", "_").rsplit(".", 1)[0]
@@ -111,11 +107,10 @@ async def get_prompts():
                 logger.error(f"Error collecting files from {directory}: {e}")
                 return []
 
-        # Read prompts from the prompts directory with timeout protection
+        # Read prompts from the prompts directory with cancellation protection
         if os.path.exists(prompts_dir):
             try:
-                # PERFORMANCE FIX: Add overall timeout for the entire operation
-                # Use asyncio.wait_for for Python < 3.11 compatibility
+                # PERFORMANCE FIX: Use smart cancellation for the entire operation
                 async def load_all_prompts():
                     # Collect all file read tasks
                     file_tasks = await collect_prompt_files(prompts_dir)
@@ -136,11 +131,12 @@ async def get_prompts():
                         if default_info:
                             defaults[default_info[0]] = default_info[1]
 
-                # 25 second overall timeout using wait_for
-                await asyncio.wait_for(load_all_prompts(), timeout=25.0)
+                # Load prompts with smart cancellation instead of timeout
+                from src.utils.async_cancellation import execute_with_cancellation
+                await execute_with_cancellation(load_all_prompts(), "prompts_loading")
 
-            except asyncio.TimeoutError:
-                logger.error("Prompts loading timed out after 25 seconds")
+            except Exception as e:
+                logger.error(f"Prompts loading failed: {str(e)}")
                 # Return partial results
                 if not prompts:
                     raise HTTPException(

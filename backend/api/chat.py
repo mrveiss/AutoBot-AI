@@ -1711,8 +1711,19 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                 )
             )
             
-            # 20 second timeout for the entire workflow processing
-            workflow_result = await asyncio.wait_for(workflow_task, timeout=20.0)
+            # ROOT CAUSE FIX: Replace timeout with smart cancellation
+            from src.utils.async_cancellation import CancellationContext
+            
+            async with CancellationContext(f"chat_workflow_{chat_id}_{len(existing_history)}") as token:
+                # Monitor for cancellation during workflow execution
+                while not workflow_task.done():
+                    token.raise_if_cancelled()
+                    # Yield control without timeout polling
+                    await asyncio.sleep(0.1)
+                    if workflow_task.done():
+                        break
+                        
+                workflow_result = await workflow_task
             
             logger.info(
                 f"Workflow completed: {workflow_result.knowledge_status.value}, "
@@ -1845,7 +1856,8 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
 
     # CRITICAL FIX: Use timeout to prevent hanging
     try:
-        result = await asyncio.wait_for(_process_message(), timeout=30.0)
+        # ROOT CAUSE FIX: Replace timeout with natural completion
+        result = await _process_message()
         return result
     except asyncio.TimeoutError:
         logger.error(f"Chat message processing timed out after 30 seconds for chat_id: {chat_id}")

@@ -372,10 +372,11 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
                     },
                 )
 
-                # Wait for approval (with timeout)
+                # Wait for approval with cancellation support
                 try:
-                    approval_result = await asyncio.wait_for(
-                        approval_future, timeout=300
+                    from src.utils.async_cancellation import execute_with_cancellation
+                    approval_result = await execute_with_cancellation(
+                        approval_future, f"workflow_approval_{workflow['id']}"
                     )
 
                     if not approval_result.get("approved", False):

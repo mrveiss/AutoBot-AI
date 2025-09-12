@@ -261,8 +261,8 @@ async def test_web_research(query: str = "test query"):
         # Conduct test research
         result = await conduct_web_research(
             query=query,
-            max_results=3,
-            timeout=10  # Short timeout for testing
+            max_results=3
+            # Remove timeout - let research complete naturally
         )
         
         return JSONResponse(
