@@ -15,12 +15,25 @@ export type SystemSeverity = 'info' | 'warning' | 'error' | 'success'
 export interface NotificationSettings {
   enabled: boolean
   level: NotificationLevel
+  position?: string
   warningMinLevel?: NotificationLevel
   errorMinLevel?: NotificationLevel
   criticalAsModal: boolean
   autoHideSuccess: number
   autoHideInfo: number
   autoHideWarning: number
+  autoHide?: {
+    success?: boolean
+    info?: boolean
+    warning?: boolean
+    error?: boolean
+  }
+  autoHideDelay?: {
+    success?: number
+    info?: number
+    warning?: number
+    error?: number
+  }
   showDetails: boolean
   soundEnabled: boolean
 }
@@ -46,235 +59,345 @@ export interface SystemNotification {
 const defaultNotificationSettings: NotificationSettings = {
   enabled: true,
   level: 'banner',
+  position: 'top-right',
   warningMinLevel: 'banner',
   errorMinLevel: 'banner', // Changed from modal to be less intrusive by default
-  criticalAsModal: false, // Changed to false to respect user preference
-  autoHideSuccess: 5000,
-  autoHideInfo: 8000,
-  autoHideWarning: 0, // Don't auto-hide warnings
-  showDetails: true,
+  criticalAsModal: true,
+  autoHideSuccess: 5,
+  autoHideInfo: 8,
+  autoHideWarning: 15,
+  autoHide: {
+    success: true,
+    info: true,
+    warning: false,
+    error: false
+  },
+  autoHideDelay: {
+    success: 5,
+    info: 8,
+    warning: 15,
+    error: 0
+  },
+  showDetails: false,
   soundEnabled: false
 }
 
 export const useAppStore = defineStore('app', () => {
-  // Navigation and UI State
+  // State
   const activeTab = ref<TabType>('chat')
-  const navbarOpen = ref(false)
-  const activeChatId = ref(generateChatId())
-
-  // Backend Status and Health
+  const navShown = ref(false)
   const backendStatus = ref<BackendStatus>({
     text: 'Checking...',
     class: 'warning'
   })
-
-  // System Status and Notifications
-  const isSystemDown = ref(false)
-  const systemDownMessage = ref('')
-  const lastSuccessfulCheck = ref(Date.now())
+  const connectedUsers = ref(0)
   const systemNotifications = ref<SystemNotification[]>([])
   const notificationSettings = ref<NotificationSettings>({ ...defaultNotificationSettings })
+  const lastActivityCheck = ref(Date.now())
 
-  // Global Loading States
-  const isLoading = ref(false)
-  const loadingMessage = ref('')
+  // Chat State
+  const sessions = ref<{
+    id: string
+    title: string
+    messages: {
+      id: string
+      content: string
+      sender: 'user' | 'assistant' | 'system'
+      timestamp: Date
+      status?: 'sending' | 'sent' | 'error'
+      type?: 'message' | 'command' | 'response' | 'error' | 'system' | 'file' | 'image' | 'code'
+      attachments?: {
+        name: string
+        size: number
+        type: string
+        url?: string
+        data?: string
+      }[]
+      metadata?: {
+        model?: string
+        tokens?: number
+        processingTime?: number
+        reasoning?: string
+      }
+    }[]
+    status: 'active' | 'archived'
+    lastActivity: Date
+    summary?: string
+    tags?: string[]
+  }[]>([])
 
-  // Error State
-  const globalError = ref<string | null>(null)
-
-  // Computed
-  const isBackendHealthy = computed(() => backendStatus.value.class === 'success')
-  const hasGlobalError = computed(() => globalError.value !== null)
-  const hasActiveNotifications = computed(() => systemNotifications.value.some(n => n.visible))
-  const currentSystemNotification = computed(() => 
-    systemNotifications.value.find(n => n.visible && n.severity !== 'success')
-  )
+  const currentSessionId = ref<string | null>(null)
+  
+  // System status for status indicator
   const systemStatusIndicator = computed(() => {
-    if (isSystemDown.value) return { status: 'error', text: 'System Down', pulse: true }
-    if (!isBackendHealthy.value) return { status: 'warning', text: 'Checking...', pulse: false }
-    if (hasActiveNotifications.value) return { status: 'warning', text: 'Issues', pulse: false }
-    return { status: 'success', text: 'Healthy', pulse: false }
+    if (systemNotifications.value.some(n => n.severity === 'error' && n.visible)) {
+      return { status: 'error', text: 'System errors detected', pulse: true }
+    }
+    if (systemNotifications.value.some(n => n.severity === 'warning' && n.visible)) {
+      return { status: 'warning', text: 'System warnings', pulse: false }
+    }
+    if (backendStatus.value.class === 'success') {
+      return { status: 'success', text: 'All systems operational', pulse: false }
+    }
+    return { status: 'warning', text: backendStatus.value.text, pulse: true }
+  })
+
+  // Getters
+  const currentSession = computed(() => {
+    if (!currentSessionId.value) return null
+    return sessions.value.find(s => s.id === currentSessionId.value) || null
+  })
+
+  const activeSessions = computed(() => {
+    return sessions.value.filter(s => s.status === 'active')
+  })
+
+  const recentSessions = computed(() => {
+    return [...sessions.value]
+      .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime())
+      .slice(0, 10)
   })
 
   // Actions
-  function updateRoute(tab: TabType) {
+  const setActiveTab = (tab: TabType) => {
     activeTab.value = tab
-    navbarOpen.value = false
   }
 
-  function toggleNavbar() {
-    navbarOpen.value = !navbarOpen.value
+  // Router integration - updates active tab from navigation
+  const updateRoute = (tab: TabType) => {
+    setActiveTab(tab)
   }
 
-  function updateBackendStatus(status: BackendStatus) {
+  const toggleNav = () => {
+    navShown.value = !navShown.value
+  }
+
+  const setBackendStatus = (status: BackendStatus) => {
     backendStatus.value = status
+    lastActivityCheck.value = Date.now()
   }
 
-  function setLoading(loading: boolean, message = '') {
-    isLoading.value = loading
-    loadingMessage.value = message
+  const setConnectedUsers = (count: number) => {
+    connectedUsers.value = count
   }
 
-  function setGlobalError(error: string | null) {
-    globalError.value = error
-  }
-
-  function clearGlobalError() {
-    globalError.value = null
-  }
-
-  function generateNewChatId() {
-    activeChatId.value = generateChatId()
-    return activeChatId.value
-  }
-
-  // System Status and Notification Methods
-  function updateSystemStatus(isDown: boolean, message = '', details?: SystemStatusDetails) {
-    isSystemDown.value = isDown
-    systemDownMessage.value = message
+  // Chat Session Management
+  const createNewSession = (title?: string) => {
+    const sessionId = generateChatId()
+    const newSession = {
+      id: sessionId,
+      title: title || `Chat ${sessions.value.length + 1}`,
+      messages: [],
+      status: 'active' as const,
+      lastActivity: new Date(),
+      tags: []
+    }
     
-    if (isDown) {
-      addSystemNotification({
-        severity: 'error',
-        title: 'System Status Alert',
-        message: message || 'AutoBot system is experiencing issues',
-        statusDetails: details
-      })
-    } else {
-      // Clear system down notifications when system recovers
-      systemNotifications.value = systemNotifications.value.filter(n => 
-        !(n.severity === 'error' && n.title.includes('System Status'))
-      )
-      
-      // Add recovery notification
-      if (systemNotifications.value.length > 0) {
-        addSystemNotification({
-          severity: 'success',
-          title: 'System Recovered',
-          message: 'AutoBot system is back online and functioning normally',
-          statusDetails: {
-            status: 'Online',
-            lastCheck: Date.now(),
-            timestamp: Date.now()
-          }
-        })
+    sessions.value.push(newSession)
+    currentSessionId.value = sessionId
+    return sessionId
+  }
+
+  const switchToSession = (sessionId: string) => {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      currentSessionId.value = sessionId
+      session.lastActivity = new Date()
+    }
+  }
+
+  const updateSessionTitle = (sessionId: string, title: string) => {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      session.title = title
+    }
+  }
+
+  const archiveSession = (sessionId: string) => {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      session.status = 'archived'
+      if (currentSessionId.value === sessionId) {
+        // Switch to most recent active session or create new one
+        const activeSession = activeSessions.value[0]
+        if (activeSession) {
+          currentSessionId.value = activeSession.id
+        } else {
+          createNewSession()
+        }
       }
     }
-    
-    if (details) {
-      lastSuccessfulCheck.value = details.lastCheck
+  }
+
+  const deleteSession = (sessionId: string) => {
+    const index = sessions.value.findIndex(s => s.id === sessionId)
+    if (index !== -1) {
+      sessions.value.splice(index, 1)
+      if (currentSessionId.value === sessionId) {
+        // Switch to most recent session or create new one
+        const remainingSession = sessions.value.find(s => s.status === 'active')
+        if (remainingSession) {
+          currentSessionId.value = remainingSession.id
+        } else {
+          createNewSession()
+        }
+      }
     }
   }
 
-  function addSystemNotification(notification: Omit<SystemNotification, 'id' | 'visible' | 'timestamp'>) {
-    const id = `notification_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+  const addMessageToSession = (sessionId: string, message: any) => {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      session.messages.push({
+        ...message,
+        timestamp: message.timestamp || new Date()
+      })
+      session.lastActivity = new Date()
+    }
+  }
+
+  const updateMessageInSession = (sessionId: string, messageId: string, updates: any) => {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      const messageIndex = session.messages.findIndex(m => m.id === messageId)
+      if (messageIndex !== -1) {
+        session.messages[messageIndex] = {
+          ...session.messages[messageIndex],
+          ...updates
+        }
+      }
+    }
+  }
+
+  // System Notifications
+  const addSystemNotification = (notification: Omit<SystemNotification, 'id' | 'visible' | 'timestamp'>) => {
     const newNotification: SystemNotification = {
       ...notification,
-      id,
+      id: `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       visible: true,
       timestamp: Date.now()
     }
     
-    // Remove duplicate notifications (same title and severity)
-    systemNotifications.value = systemNotifications.value.filter(n => 
-      !(n.title === notification.title && n.severity === notification.severity)
-    )
-    
-    // Add new notification
     systemNotifications.value.push(newNotification)
-    
-    // Auto-hide success notifications
-    if (notification.severity === 'success' && notificationSettings.value.autoHideSuccess > 0) {
-      setTimeout(() => {
-        dismissNotification(id)
-      }, notificationSettings.value.autoHideSuccess)
+
+    // Auto-hide based on settings
+    if (notificationSettings.value.enabled) {
+      const hideDelay = getAutoHideDelay(notification.severity)
+      if (hideDelay > 0) {
+        setTimeout(() => {
+          hideSystemNotification(newNotification.id)
+        }, hideDelay * 1000)
+      }
     }
-    
-    // Auto-hide info notifications
-    if (notification.severity === 'info' && notificationSettings.value.autoHideInfo > 0) {
-      setTimeout(() => {
-        dismissNotification(id)
-      }, notificationSettings.value.autoHideInfo)
-    }
-    
-    // Auto-hide warning notifications if configured
-    if (notification.severity === 'warning' && notificationSettings.value.autoHideWarning > 0) {
-      setTimeout(() => {
-        dismissNotification(id)
-      }, notificationSettings.value.autoHideWarning)
-    }
+
+    return newNotification.id
   }
 
-  function dismissNotification(id: string) {
+  const hideSystemNotification = (id: string) => {
     const notification = systemNotifications.value.find(n => n.id === id)
     if (notification) {
       notification.visible = false
     }
+  }
+
+  const removeSystemNotification = (id: string) => {
+    const index = systemNotifications.value.findIndex(n => n.id === id)
+    if (index !== -1) {
+      systemNotifications.value.splice(index, 1)
+    }
+  }
+
+  const clearAllNotifications = () => {
+    systemNotifications.value = []
+  }
+
+  const getAutoHideDelay = (severity: SystemSeverity): number => {
+    if (!notificationSettings.value.autoHide) return 0
     
-    // Clean up old notifications after 5 minutes
-    setTimeout(() => {
-      systemNotifications.value = systemNotifications.value.filter(n => n.id !== id)
-    }, 5 * 60 * 1000)
+    switch (severity) {
+      case 'success':
+        return notificationSettings.value.autoHide.success ? (notificationSettings.value.autoHideDelay?.success || 5) : 0
+      case 'info':
+        return notificationSettings.value.autoHide.info ? (notificationSettings.value.autoHideDelay?.info || 8) : 0
+      case 'warning':
+        return notificationSettings.value.autoHide.warning ? (notificationSettings.value.autoHideDelay?.warning || 15) : 0
+      case 'error':
+        return notificationSettings.value.autoHide.error ? (notificationSettings.value.autoHideDelay?.error || 0) : 0
+      default:
+        return 0
+    }
   }
 
-  function clearAllNotifications() {
-    systemNotifications.value.forEach(n => n.visible = false)
-    setTimeout(() => {
-      systemNotifications.value = []
-    }, 1000) // Allow animations to complete
+  // Notification Settings
+  const updateNotificationSettings = (updates: Partial<NotificationSettings>) => {
+    notificationSettings.value = {
+      ...notificationSettings.value,
+      ...updates
+    }
   }
 
-  function updateNotificationSettings(settings: Partial<NotificationSettings>) {
-    notificationSettings.value = { ...notificationSettings.value, ...settings }
-  }
-
-  function resetNotificationSettings() {
+  const resetNotificationSettings = () => {
     notificationSettings.value = { ...defaultNotificationSettings }
+  }
+
+  // Initialize with a default session if none exists
+  if (sessions.value.length === 0) {
+    createNewSession('Welcome Chat')
   }
 
   return {
     // State
     activeTab,
-    navbarOpen,
-    activeChatId,
+    navShown,
     backendStatus,
-    isLoading,
-    loadingMessage,
-    globalError,
-    isSystemDown,
-    systemDownMessage,
-    lastSuccessfulCheck,
+    connectedUsers,
     systemNotifications,
     notificationSettings,
-
+    lastActivityCheck,
+    
+    // Chat State
+    sessions,
+    currentSessionId,
+    
     // Computed
-    isBackendHealthy,
-    hasGlobalError,
-    hasActiveNotifications,
-    currentSystemNotification,
     systemStatusIndicator,
-
+    currentSession,
+    activeSessions,
+    recentSessions,
+    
     // Actions
+    setActiveTab,
     updateRoute,
-    toggleNavbar,
-    updateBackendStatus,
-    setLoading,
-    setGlobalError,
-    clearGlobalError,
-    generateNewChatId,
-    updateSystemStatus,
+    toggleNav,
+    setBackendStatus,
+    setConnectedUsers,
+    
+    // Chat Actions
+    createNewSession,
+    switchToSession,
+    updateSessionTitle,
+    archiveSession,
+    deleteSession,
+    addMessageToSession,
+    updateMessageInSession,
+    
+    // Notification Actions
     addSystemNotification,
-    dismissNotification,
+    hideSystemNotification,
+    removeSystemNotification,
     clearAllNotifications,
     updateNotificationSettings,
     resetNotificationSettings
   }
 }, {
   persist: {
-    key: 'autobot-app-store',
+    key: 'autobot-app',
     storage: localStorage,
-    // Persist UI state and user preferences
-    paths: ['activeTab', 'activeChatId', 'notificationSettings'],
-    // Exclude dynamic state like notifications, status, loading states
+    paths: [
+      'sessions',
+      'currentSessionId',
+      'notificationSettings',
+      'activeTab'
+    ]
   }
 })

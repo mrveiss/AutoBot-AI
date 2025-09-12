@@ -3,12 +3,26 @@
 
 import { API_CONFIG, ENDPOINTS, getApiUrl } from '@/config/environment.js';
 import errorHandler from '@/utils/ErrorHandler.js';
+import { EnhancedFetch } from '@/utils/ApiCircuitBreaker.js';
 
 class ApiClient {
   constructor() {
     this.baseUrl = API_CONFIG.BASE_URL;
-    this.timeout = API_CONFIG.TIMEOUT;
+    this.timeout = API_CONFIG.TIMEOUT;  // Kept for compatibility but not used for timeouts
     this.settings = this.loadSettings();
+    
+    // Initialize circuit breaker-based HTTP client
+    this.enhancedFetch = new EnhancedFetch({
+      baseUrl: this.baseUrl,
+      circuitBreaker: {
+        failureThreshold: 3,
+        recoveryTime: 30000,  // 30 seconds before retry
+        monitoringWindow: 60000  // 1 minute monitoring window
+      },
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
 
     // Extensive logging for debugging proxy issues
     console.log('[ApiClient] Constructor initialization:');
@@ -220,24 +234,14 @@ class ApiClient {
       ...options
     };
 
-    // ABORT FIX: Better abort signal handling
-    const controller = new AbortController();
-    let timeoutId;
-    let isTimedOut = false;
-
+    // ROOT CAUSE FIX: Replace timeout-based fetch with circuit breaker pattern
     try {
-      // Set up timeout with clear reason
-      timeoutId = setTimeout(() => {
-        isTimedOut = true;
-        controller.abort(new Error(`Request timeout after ${requestTimeout}ms`));
-      }, requestTimeout);
-
-      const response = await fetch(url, {
-        ...config,
-        signal: controller.signal
+      // Use circuit breaker instead of arbitrary timeouts
+      const response = await this.enhancedFetch.request(endpoint, {
+        method,
+        headers: config.headers,
+        body: config.body
       });
-
-      clearTimeout(timeoutId);
       const endTime = performance.now();
 
       if (!response.ok) {
@@ -283,12 +287,27 @@ class ApiClient {
     } catch (error) {
       const endTime = performance.now();
 
-      // Clear timeout if still active
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+      // Handle circuit breaker errors
+      if (error.name === 'CircuitBreakerError') {
+        console.log('[ApiClient] Circuit breaker triggered:', {
+          state: error.circuitState,
+          endpoint,
+          method
+        });
+        
+        // Track circuit breaker activation
+        if (window.rum) {
+          window.rum.trackApiCall(method, endpoint, startTime, endTime, 503); // Service Unavailable
+        }
+        
+        const cbError = new Error(`Service temporarily unavailable: Circuit breaker is ${error.circuitState}`);
+        cbError.name = 'CircuitBreakerError';
+        cbError.circuitState = error.circuitState;
+        cbError.status = error.status;
+        throw cbError;
       }
 
-      // BETTER ABORT ERROR HANDLING: More descriptive error messages
+      // Legacy timeout error handling (should not occur with circuit breaker)
       if (error.name === 'AbortError') {
         let timeoutError;
         if (isTimedOut) {
@@ -721,9 +740,21 @@ class ApiClient {
     return results;
   }
 
-  // Set custom timeout
+  // Set custom timeout (kept for compatibility but circuit breaker replaces timeouts)
   setTimeout(timeout) {
     this.timeout = timeout;
+    console.warn('[ApiClient] setTimeout called but circuit breaker is now handling request failures');
+  }
+  
+  // Get circuit breaker status
+  getCircuitStatus() {
+    return this.enhancedFetch.getCircuitStatus();
+  }
+  
+  // Reset circuit breaker
+  resetCircuit() {
+    this.enhancedFetch.resetCircuit();
+    console.log('[ApiClient] Circuit breaker manually reset');
   }
 
   // Get current timeout
