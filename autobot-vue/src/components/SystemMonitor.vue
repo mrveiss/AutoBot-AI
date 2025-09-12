@@ -229,6 +229,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import type { ServiceStatus, KnowledgeBaseStats } from '@/types/api'
 import { useAppStore } from '@/stores/useAppStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
@@ -258,23 +259,27 @@ const systemStatus = computed(() => {
   }
 })
 
+// FIXED: Use sessionCount property instead of non-existent conversations
 const activeSessions = computed(() => {
-  return chatStore.conversations?.length || 1
+  return chatStore.sessionCount || 1
 })
 
 const sessionsChange = ref(0)
 
 // FIXED: Use actual knowledge store properties instead of non-existent stats
-const knowledgeStats = computed(() => ({
+const knowledgeStats = computed((): KnowledgeBaseStats => ({
   totalItems: knowledgeStore.documentCount || 0,
-  categories: knowledgeStore.categoryCount || 0
+  categories: knowledgeStore.categoryCount || 0,
+  documentCount: knowledgeStore.documentCount || 0,
+  categoryCount: knowledgeStore.categoryCount || 0
 }))
 
 const performanceScore = computed(() => {
   const services = serviceMonitor.services.value || []
   if (services.length === 0) return 100
   
-  const avgResponseTime = services.reduce((acc, service) => {
+  // FIXED: Use proper type casting for service compatibility
+  const avgResponseTime = services.reduce((acc: number, service: any) => {
     return acc + (service.responseTime || 0)
   }, 0) / services.length
   
@@ -284,7 +289,14 @@ const performanceScore = computed(() => {
 
 const performanceChange = ref(2)
 
-const recentActivity = ref([
+interface ActivityItem {
+  id: number;
+  action: string;
+  time: string;
+  icon: string;
+}
+
+const recentActivity = ref<ActivityItem[]>([
   {
     id: 1,
     action: 'Dashboard monitoring started',
@@ -313,7 +325,17 @@ const recentActivity = ref([
 
 // System Monitor functionality
 const isRefreshing = ref(false)
-const metrics = ref({
+
+interface SystemMetrics {
+  cpu: number;
+  memory: number;
+  gpu: number;
+  npu: number;
+  network: number;
+  networkSpeed: number;
+}
+
+const metrics = ref<SystemMetrics>({
   cpu: 4,
   memory: 25,
   gpu: 15,
@@ -326,7 +348,12 @@ const services = computed(() => serviceMonitor.services.value || [])
 const onlineServices = computed(() => serviceMonitor.healthyServices.value || 0)
 const totalServices = computed(() => serviceMonitor.services.value?.length || 0)
 
-const timeframes = ref([
+interface Timeframe {
+  label: string;
+  value: string;
+}
+
+const timeframes = ref<Timeframe[]>([
   { label: '1H', value: '1h' },
   { label: '24H', value: '24h' },
   { label: '7D', value: '7d' },
@@ -335,7 +362,18 @@ const timeframes = ref([
 
 const selectedTimeframe = ref('1h')
 
-const apiEndpoints = ref([
+interface ApiEndpoint {
+  path: string;
+  status: 'healthy' | 'warning' | 'error';
+  responseTime: number;
+}
+
+interface ApiGroup {
+  name: string;
+  endpoints: ApiEndpoint[];
+}
+
+const apiEndpoints = ref<ApiGroup[]>([
   {
     name: 'Core APIs',
     endpoints: [

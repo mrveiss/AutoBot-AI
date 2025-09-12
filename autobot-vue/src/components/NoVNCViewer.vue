@@ -91,7 +91,7 @@
         <span>VNC service is running</span>
         <span class="text-green-200">{{ serviceStatus }}</span>
       </div>
-      <button @click="serviceStatus = null" class="text-green-200 hover:text-white">
+      <button @click="clearServiceStatus" class="text-green-200 hover:text-white">
         <i class="fas fa-times"></i>
       </button>
     </div>
@@ -209,7 +209,7 @@ const lastError = ref('')
 const iframeKey = ref(0)
 const lastConnectionAttempt = ref<Date | null>(null)
 const connectionLatency = ref<number | null>(null)
-const serviceStatus = ref('')
+const serviceStatus = ref<string | null>(null)  // Allow null values
 const loadingMessage = ref('Initializing connection...')
 const showDebugInfo = ref(false)
 const isFullscreen = ref(false)
@@ -341,6 +341,10 @@ const checkAlternativePorts = async () => {
       // Port not available, continue checking
     }
   }
+}
+
+const clearServiceStatus = () => {
+  serviceStatus.value = null
 }
 
 const refreshViewer = () => {
