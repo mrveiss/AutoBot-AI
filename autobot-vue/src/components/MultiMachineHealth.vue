@@ -318,7 +318,7 @@ const getDefaultServicesForMachine = (role: string) => {
     case 'frontend':
       return {
         core: [
-          { name: 'Nginx Web Server', status: 'online', responseTime: '8ms' },
+          { name: 'Vite Dev Server', status: 'online', responseTime: '8ms' },
           { name: 'Vue Application', status: 'warning', responseTime: '250ms', error: 'Old bundle with cache errors' }
         ],
         application: [

@@ -509,7 +509,7 @@ describe('TerminalWindow', () => {
       webSocketTestUtil.simulateMessage(WebSocketMessageType.WORKFLOW_UPDATE, {
         workflowId: 'test-workflow',
         status: 'terminal_command_executing',
-        details: { command: 'apt-get install -y nginx' }
+        details: { command: 'npm install -g vite' }
       })
 
       // Terminal should show relevant information

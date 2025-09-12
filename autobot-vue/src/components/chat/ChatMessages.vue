@@ -53,18 +53,15 @@
           </div>
         </div>
 
-        <!-- Message Status -->
-        <div v-if="message.status && message.status !== 'sent'" class="message-status">
-          <i
-            class="fas"
-            :class="{
-              'fa-clock text-yellow-500': message.status === 'sending',
-              'fa-exclamation-triangle text-red-500': message.status === 'error'
-            }"
-          ></i>
-          <span class="text-sm">
-            {{ getStatusText(message.status) }}
-          </span>
+        <!-- Enhanced Message Status -->
+        <div v-if="message.sender === 'user'" class="message-status-container">
+          <MessageStatus
+            :status="message.status || 'sent'"
+            :show-text="true"
+            :timestamp="message.timestamp"
+            :error="message.error"
+            @retry="retryMessage(message.id)"
+          />
         </div>
 
         <!-- Message Content -->
@@ -129,29 +126,43 @@
         </div>
       </div>
 
-      <!-- Loading indicator for AI response -->
-      <div v-if="store.isTyping" class="message-wrapper assistant-message">
+      <!-- Enhanced AI typing indicator -->
+      <div v-if="store.isTyping" class="message-wrapper assistant-message typing-message">
         <div class="message-header">
           <div class="flex items-center gap-2">
             <div class="message-avatar assistant">
-              <i class="fas fa-robot"></i>
+              <LoadingSpinner variant="pulse" size="sm" color="#3b82f6" />
             </div>
             <div class="message-info">
               <span class="sender-name">AI Assistant</span>
-              <span class="message-time">Thinking...</span>
+              <span class="message-time">{{ typingStatusText }}</span>
             </div>
           </div>
         </div>
         <div class="message-content">
-          <div class="typing-indicator large">
-            <div class="typing-dots">
-              <span></span>
-              <span></span>
-              <span></span>
+          <div class="enhanced-typing-indicator">
+            <div class="typing-animation">
+              <div class="typing-dots-enhanced">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="typing-wave"></div>
             </div>
-            <span class="typing-text">AI is thinking...</span>
+            <div class="typing-status">
+              <span class="typing-text">{{ typingDetailText }}</span>
+              <span v-if="estimatedResponseTime" class="typing-eta">
+                ~{{ estimatedResponseTime }}s
+              </span>
+            </div>
           </div>
         </div>
+      </div>
+
+      <!-- Loading skeleton for initial response -->
+      <div v-if="store.isTyping && !store.currentMessages.length" class="message-skeleton">
+        <SkeletonLoader variant="chat-message" :animated="true" />
       </div>
     </div>
 
@@ -198,6 +209,9 @@ import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import type { ChatMessage } from '@/stores/useChatStore'
+import MessageStatus from '@/components/ui/MessageStatus.vue'
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
+import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 
 const store = useChatStore()
 const controller = useChatController()
@@ -223,6 +237,10 @@ const displaySettings = ref({
   showMetadata: true
 })
 
+// Enhanced typing indicator state
+const typingStartTime = ref<number | null>(null)
+const estimatedResponseTime = ref<number | null>(null)
+
 // Computed
 const filteredMessages = computed(() => {
   return store.currentMessages.filter(message => {
@@ -234,6 +252,27 @@ const filteredMessages = computed(() => {
 
     return true
   })
+})
+
+const typingStatusText = computed(() => {
+  const elapsed = typingStartTime.value ? Date.now() - typingStartTime.value : 0
+  if (elapsed < 2000) return 'Thinking...'
+  if (elapsed < 5000) return 'Processing...'
+  if (elapsed < 10000) return 'Analyzing...'
+  return 'Working on it...'
+})
+
+const typingDetailText = computed(() => {
+  const elapsed = typingStartTime.value ? Date.now() - typingStartTime.value : 0
+  const details = [
+    'Understanding your request...',
+    'Searching knowledge base...',
+    'Formulating response...',
+    'Crafting detailed answer...',
+    'Reviewing response quality...'
+  ]
+  const index = Math.min(Math.floor(elapsed / 2000), details.length - 1)
+  return details[index]
 })
 
 // Methods
@@ -413,6 +452,14 @@ const viewAttachment = (attachment: any) => {
   }
 }
 
+const retryMessage = async (messageId: string) => {
+  try {
+    await controller.retryMessage(messageId)
+  } catch (error) {
+    console.error('Failed to retry message:', error)
+  }
+}
+
 const scrollToBottom = () => {
   if (store.settings.autoSave && scrollAnchor.value) { // Using autoSave as proxy for auto-scroll
     scrollAnchor.value.scrollIntoView({ behavior: 'smooth' })
@@ -422,6 +469,24 @@ const scrollToBottom = () => {
 // Auto-scroll when new messages arrive
 watch(() => store.currentMessages.length, () => {
   nextTick(scrollToBottom)
+})
+
+// Watch typing status to manage timing
+watch(() => store.isTyping, (isTyping) => {
+  if (isTyping) {
+    typingStartTime.value = Date.now()
+    // Estimate response time based on message complexity
+    const lastMessage = store.currentMessages[store.currentMessages.length - 1]
+    if (lastMessage) {
+      const complexity = Math.min(lastMessage.content.length / 100, 10)
+      estimatedResponseTime.value = Math.ceil(2 + complexity)
+    } else {
+      estimatedResponseTime.value = 5
+    }
+  } else {
+    typingStartTime.value = null
+    estimatedResponseTime.value = null
+  }
 })
 
 // Scroll to bottom on mount
@@ -597,6 +662,72 @@ onMounted(() => {
 
 .streaming-content {
   @apply space-y-2;
+}
+
+/* Enhanced Typing Indicator */
+.typing-message {
+  @apply animate-pulse;
+}
+
+.enhanced-typing-indicator {
+  @apply flex flex-col gap-3 p-4;
+}
+
+.typing-animation {
+  @apply relative;
+}
+
+.typing-dots-enhanced {
+  @apply flex gap-2;
+}
+
+.typing-dots-enhanced span {
+  @apply w-3 h-3 bg-blue-500 rounded-full;
+  animation: typingBounce 1.4s ease-in-out infinite both;
+}
+
+.typing-dots-enhanced span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots-enhanced span:nth-child(2) { animation-delay: -0.16s; }
+.typing-dots-enhanced span:nth-child(3) { animation-delay: 0s; }
+.typing-dots-enhanced span:nth-child(4) { animation-delay: 0.16s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% { 
+    transform: scale(0.8);
+    opacity: 0.5;
+  } 
+  40% { 
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.typing-wave {
+  @apply absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-blue-400 to-transparent rounded-full;
+  animation: typingWave 2s ease-in-out infinite;
+}
+
+@keyframes typingWave {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.typing-status {
+  @apply flex justify-between items-center text-sm;
+}
+
+.typing-eta {
+  @apply text-blue-600 font-medium;
+}
+
+/* Message Status Container */
+.message-status-container {
+  @apply mt-2 flex justify-end;
+}
+
+/* Message Skeleton */
+.message-skeleton {
+  @apply mt-4;
 }
 
 /* Scrollbar styling */

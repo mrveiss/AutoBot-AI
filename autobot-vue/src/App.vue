@@ -253,8 +253,40 @@
 
         <!-- Main Content Area with id for skip link -->
         <main id="main-content" :class="appStore?.activeTab === 'chat' ? 'flex-1 overflow-hidden' : 'flex-1'" role="main">
+          
+          <!-- DEBUG: Router and Store Status -->
+          <div v-if="debugMode" class="p-4 bg-red-100 border border-red-400 text-red-800 text-sm relative z-50">
+            <h3 class="font-bold mb-2">🐛 DEBUG: App.vue Router Status</h3>
+            <p><strong>Current Route:</strong> {{ $route?.path || 'NONE' }}</p>
+            <p><strong>Route Name:</strong> {{ $route?.name || 'NONE' }}</p>
+            <p><strong>App Store Active Tab:</strong> {{ appStore?.activeTab || 'NONE' }}</p>
+            <p><strong>App Store Initialized:</strong> {{ !!appStore ? 'YES' : 'NO' }}</p>
+            <p><strong>Router Ready:</strong> {{ $router?.isReady ? 'YES' : 'NO' }}</p>
+            <p><strong>Route Matched:</strong> {{ $route?.matched?.length || 0 }} components</p>
+            <div v-if="$route?.matched?.length">
+              <strong>Matched Components:</strong>
+              <ul class="ml-4">
+                <li v-for="(match, index) in $route.matched" :key="index">
+                  {{ match.name }} ({{ match.path }})
+                </li>
+              </ul>
+            </div>
+          </div>
+          
           <!-- Use router-view for all content to enable proper sub-routing -->
           <router-view />
+          
+          <!-- FALLBACK: Show if router-view is empty -->
+          <div v-if="debugMode && !$route.matched.length" class="p-8 bg-yellow-50 border border-yellow-200">
+            <div class="text-center">
+              <h2 class="text-xl font-bold text-yellow-800 mb-4">⚠️ No Route Matched</h2>
+              <p class="text-yellow-700 mb-4">The router couldn't find a matching component for path: <code class="bg-yellow-200 px-2 py-1 rounded">{{ $route.path }}</code></p>
+              <button @click="debugRouter" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+                Debug Router
+              </button>
+            </div>
+          </div>
+          
         </main>
       </div>
 
@@ -358,6 +390,7 @@ export default {
     const showMobileNav = ref(false);
     const showElevationDialog = ref(false);
     const clearingCaches = ref(false);
+    const debugMode = ref(true); // Enable debug mode to diagnose router issues
     
     const elevationRequest = ref({
       service: '',
@@ -408,7 +441,23 @@ export default {
       }
     };
 
-    // Cache management methods
+    // Cache management methods and debug router function (consolidated)
+    const debugRouter = () => {
+      console.log('🐛 Router Debug Information:');
+      console.log('Current Route:', router.currentRoute.value);
+      console.log('All Routes:', router.getRoutes());
+      console.log('App Store:', appStore);
+      console.log('Router Ready:', router.isReady());
+      
+      // Try to manually navigate to /chat
+      console.log('Attempting manual navigation to /chat...');
+      router.push('/chat').then(() => {
+        console.log('Navigation successful');
+      }).catch(error => {
+        console.error('Navigation failed:', error);
+      });
+    };
+    
     const clearAllCaches = async () => {
       if (clearingCaches.value) return;
       
@@ -604,6 +653,12 @@ export default {
     // Lifecycle hooks
     onMounted(async () => {
       console.log('App mounted, initializing application...')
+      console.log('[DEBUG] Current route:', router.currentRoute.value)
+      console.log('[DEBUG] Route path:', router.currentRoute.value.path)
+      console.log('[DEBUG] Route matched:', router.currentRoute.value.matched)
+      console.log('[DEBUG] Debug mode:', debugMode.value)
+      console.log('[DEBUG] App store exists:', !!appStore)
+      console.log('[DEBUG] App store has updateRoute:', typeof appStore?.updateRoute)
       document.addEventListener('click', closeNavbarOnClickOutside)
       
       // Listen for global elevation requests
@@ -646,6 +701,8 @@ export default {
       showElevationDialog,
       clearingCaches,
       elevationRequest,
+      debugMode,
+      debugRouter,
       
       // Computed
       isLoading,

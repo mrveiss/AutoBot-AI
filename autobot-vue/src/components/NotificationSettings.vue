@@ -14,7 +14,7 @@
       <input 
         type="checkbox" 
         :checked="settings.enabled"
-        @change="updateSetting('enabled', $event.target.checked)" 
+        @change="handleCheckboxChange('enabled', $event)" 
       />
     </div>
 
@@ -26,7 +26,7 @@
       </label>
       <select 
         :value="settings.level"
-        @change="updateSetting('level', $event.target.value)"
+        @change="handleSelectChange('level', $event)"
       >
         <option value="toast">Toast (Top-right corner)</option>
         <option value="banner">Banner (Top of page)</option>
@@ -42,7 +42,7 @@
       </label>
       <select 
         :value="settings.warningMinLevel || 'banner'"
-        @change="updateSetting('warningMinLevel', $event.target.value)"
+        @change="handleSelectChange('warningMinLevel', $event)"
       >
         <option value="toast">Toast</option>
         <option value="banner">Banner</option>
@@ -57,8 +57,8 @@
         <span class="description">Minimum display level for error messages</span>
       </label>
       <select 
-        :value="settings.errorMinLevel || 'banner'"
-        @change="updateSetting('errorMinLevel', $event.target.value)"
+        :value="settings.errorMinLevel || 'modal'"
+        @change="handleSelectChange('errorMinLevel', $event)"
       >
         <option value="toast">Toast</option>
         <option value="banner">Banner</option>
@@ -66,124 +66,148 @@
       </select>
     </div>
 
-    <!-- Critical as Modal -->
+    <!-- Position -->
     <div class="setting-item" v-if="settings.enabled">
       <label class="with-description">
-        Force Critical Errors as Modals
-        <span class="description">Always show critical system errors as blocking modals</span>
+        Toast Position
+        <span class="description">Where toast notifications should appear</span>
       </label>
-      <input 
-        type="checkbox" 
-        :checked="settings.criticalAsModal"
-        @change="updateSetting('criticalAsModal', $event.target.checked)" 
-      />
+      <select 
+        :value="settings.position || 'top-right'"
+        @change="handleSelectChange('position', $event)"
+      >
+        <option value="top-right">Top Right</option>
+        <option value="top-left">Top Left</option>
+        <option value="bottom-right">Bottom Right</option>
+        <option value="bottom-left">Bottom Left</option>
+        <option value="top-center">Top Center</option>
+        <option value="bottom-center">Bottom Center</option>
+      </select>
     </div>
 
-    <!-- Auto-hide Settings -->
-    <div class="notification-auto-hide" v-if="settings.enabled">
-      <h4>Auto-Hide Timers</h4>
-      <p class="text-xs text-gray-500 mb-3">
-        Set to 0 to prevent auto-hiding. Times are in milliseconds (1000 = 1 second).
-      </p>
+    <!-- Auto-hide Options -->
+    <div class="notification-auto-hide mt-6 pt-4 border-t border-gray-200" v-if="settings.enabled">
+      <h4>Auto-hide Settings</h4>
       
       <div class="setting-item">
-        <label>Success Messages (Auto-hide after)</label>
+        <label class="with-description">
+          Auto-hide Success Messages
+          <span class="description">Automatically close success notifications after a delay</span>
+        </label>
         <input 
-          type="number" 
-          :value="settings.autoHideSuccess"
-          @input="updateSetting('autoHideSuccess', parseInt($event.target.value) || 0)"
-          min="0" 
-          max="30000" 
-          step="1000"
-          class="w-24"
+          type="checkbox" 
+          :checked="settings.autoHide?.success || true"
+          @change="handleAutoHideChange('success', $event)" 
         />
-        <span class="text-xs text-gray-500 ml-2">ms</span>
       </div>
-
+      
       <div class="setting-item">
-        <label>Info Messages (Auto-hide after)</label>
+        <label class="with-description">
+          Success Auto-hide Duration (seconds)
+          <span class="description">How long to show success messages before auto-closing</span>
+        </label>
         <input 
           type="number" 
-          :value="settings.autoHideInfo"
-          @input="updateSetting('autoHideInfo', parseInt($event.target.value) || 0)"
-          min="0" 
-          max="30000" 
-          step="1000"
-          class="w-24"
+          :value="settings.autoHideDelay?.success || 5"
+          min="1" 
+          max="60" 
+          @input="handleNumberChange('autoHideDelay.success', $event)"
         />
-        <span class="text-xs text-gray-500 ml-2">ms</span>
       </div>
-
+      
       <div class="setting-item">
-        <label>Warning Messages (Auto-hide after)</label>
+        <label class="with-description">
+          Auto-hide Info Messages
+          <span class="description">Automatically close info notifications after a delay</span>
+        </label>
+        <input 
+          type="checkbox" 
+          :checked="settings.autoHide?.info || true"
+          @change="handleAutoHideChange('info', $event)" 
+        />
+      </div>
+      
+      <div class="setting-item">
+        <label class="with-description">
+          Info Auto-hide Duration (seconds)
+          <span class="description">How long to show info messages before auto-closing</span>
+        </label>
         <input 
           type="number" 
-          :value="settings.autoHideWarning"
-          @input="updateSetting('autoHideWarning', parseInt($event.target.value) || 0)"
-          min="0" 
-          max="30000" 
-          step="1000"
-          class="w-24"
+          :value="settings.autoHideDelay?.info || 8"
+          min="1" 
+          max="60" 
+          @input="handleNumberChange('autoHideDelay.info', $event)"
         />
-        <span class="text-xs text-gray-500 ml-2">ms (0 = never)</span>
+      </div>
+      
+      <div class="setting-item">
+        <label class="with-description">
+          Auto-hide Warnings
+          <span class="description">Automatically close warning notifications (not recommended)</span>
+        </label>
+        <input 
+          type="checkbox" 
+          :checked="settings.autoHide?.warning || false"
+          @change="handleAutoHideChange('warning', $event)" 
+        />
+      </div>
+      
+      <div class="setting-item" v-if="settings.autoHide?.warning">
+        <label class="with-description">
+          Warning Auto-hide Duration (seconds)
+          <span class="description">How long to show warning messages before auto-closing</span>
+        </label>
+        <input 
+          type="number" 
+          :value="settings.autoHideDelay?.warning || 15"
+          min="5" 
+          max="120" 
+          @input="handleNumberChange('autoHideDelay.warning', $event)"
+        />
+      </div>
+      
+      <div class="setting-item">
+        <label class="with-description">
+          Keep Errors Visible
+          <span class="description">Never auto-hide error notifications (recommended)</span>
+        </label>
+        <input 
+          type="checkbox" 
+          :checked="!(settings.autoHide?.error || false)"
+          @change="handleErrorAutoHideToggle($event)" 
+        />
       </div>
     </div>
 
-    <!-- Additional Options -->
-    <div class="setting-item" v-if="settings.enabled">
-      <label class="with-description">
-        Show Details Button
-        <span class="description">Allow expanding notifications to show detailed information</span>
-      </label>
-      <input 
-        type="checkbox" 
-        :checked="settings.showDetails"
-        @change="updateSetting('showDetails', $event.target.checked)" 
-      />
-    </div>
-
-    <div class="setting-item" v-if="settings.enabled">
-      <label class="with-description">
-        Sound Notifications
-        <span class="description">Play sound alerts for notifications (not implemented yet)</span>
-      </label>
-      <input 
-        type="checkbox" 
-        :checked="settings.soundEnabled"
-        @change="updateSetting('soundEnabled', $event.target.checked)"
-        disabled
-      />
-      <span class="text-xs text-gray-400 ml-2">(Coming soon)</span>
-    </div>
-
-    <!-- Test Notification -->
+    <!-- Test Notifications -->
     <div class="notification-test mt-6 pt-4 border-t border-gray-200" v-if="settings.enabled">
       <h4>Test Notifications</h4>
       <p class="text-xs text-gray-500 mb-3">
-        Test different notification types to see how they appear with your current settings.
+        Preview how different notification types will appear with your current settings.
       </p>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex gap-2 flex-wrap">
         <button 
-          @click="testNotification('info')"
-          class="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition-colors"
+          @click="testNotification('info')" 
+          class="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
         >
           Test Info
         </button>
         <button 
-          @click="testNotification('success')"
-          class="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors"
+          @click="testNotification('success')" 
+          class="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
         >
           Test Success
         </button>
         <button 
-          @click="testNotification('warning')"
-          class="px-3 py-1 bg-yellow-500 text-white rounded text-xs hover:bg-yellow-600 transition-colors"
+          @click="testNotification('warning')" 
+          class="px-3 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
         >
           Test Warning
         </button>
         <button 
-          @click="testNotification('error')"
-          class="px-3 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors"
+          @click="testNotification('error')" 
+          class="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
         >
           Test Error
         </button>
@@ -191,10 +215,10 @@
     </div>
 
     <!-- Reset to Defaults -->
-    <div class="notification-reset mt-6 pt-4 border-t border-gray-200">
+    <div class="mt-6 pt-4 border-t border-gray-200">
       <button 
         @click="resetToDefaults"
-        class="px-4 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors"
+        class="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
       >
         Reset to Defaults
       </button>
@@ -241,8 +265,53 @@ const appStore = useAppStore()
 const settings = computed(() => appStore.notificationSettings)
 const systemStatus = computed(() => appStore.systemStatusIndicator)
 const activeNotificationCount = computed(() => 
-  appStore.systemNotifications.filter(n => n.visible).length
+  appStore.systemNotifications.filter((n: any) => n.visible).length
 )
+
+// Event handlers with proper typing
+const handleCheckboxChange = (key: keyof NotificationSettings, event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target) {
+    updateSetting(key, target.checked)
+  }
+}
+
+const handleSelectChange = (key: keyof NotificationSettings, event: Event) => {
+  const target = event.target as HTMLSelectElement
+  if (target) {
+    updateSetting(key, target.value)
+  }
+}
+
+const handleNumberChange = (key: string, event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target) {
+    const value = parseInt(target.value, 10)
+    if (key.includes('.')) {
+      const [parentKey, childKey] = key.split('.')
+      const currentValue = (settings.value as any)[parentKey] || {}
+      updateSetting(parentKey as keyof NotificationSettings, { ...currentValue, [childKey]: value })
+    } else {
+      updateSetting(key as keyof NotificationSettings, value)
+    }
+  }
+}
+
+const handleAutoHideChange = (type: string, event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target) {
+    const currentAutoHide = settings.value.autoHide || {}
+    updateSetting('autoHide', { ...currentAutoHide, [type]: target.checked })
+  }
+}
+
+const handleErrorAutoHideToggle = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target) {
+    const currentAutoHide = settings.value.autoHide || {}
+    updateSetting('autoHide', { ...currentAutoHide, error: !target.checked })
+  }
+}
 
 // Methods
 const updateSetting = (key: keyof NotificationSettings, value: any) => {

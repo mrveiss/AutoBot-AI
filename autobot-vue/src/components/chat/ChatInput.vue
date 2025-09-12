@@ -1,5 +1,35 @@
 <template>
   <div class="chat-input-container bg-white border-t border-gray-200 p-4">
+    <!-- File Upload Progress -->
+    <div v-if="uploadProgress.length > 0" class="upload-progress mb-4">
+      <div
+        v-for="upload in uploadProgress"
+        :key="upload.id"
+        class="upload-item"
+      >
+        <div class="upload-info">
+          <div class="upload-filename">{{ upload.filename }}</div>
+          <div class="upload-status">{{ upload.status }}</div>
+        </div>
+        <ProgressBar
+          :progress="upload.progress"
+          :variant="upload.error ? 'error' : 'info'"
+          :current="upload.current"
+          :total="upload.total"
+          :eta="upload.eta"
+          size="sm"
+          :show-details="true"
+        />
+        <button
+          v-if="upload.error"
+          @click="retryUpload(upload.id)"
+          class="retry-upload-btn"
+        >
+          <i class="fas fa-redo"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- Attached Files Display -->
     <div v-if="attachedFiles.length > 0" class="attached-files mb-4">
       <div class="attached-files-header">
@@ -107,10 +137,19 @@
           @click="sendMessage"
           class="send-button"
           :disabled="!canSend"
-          :class="{ 'sending': isSending }"
-          title="Send message (Enter)"
+          :class="{ 'sending': isSending, 'pulse': messageQueueLength > 0 }"
+          :title="isSending ? 'Sending...' : canSend ? 'Send message (Enter)' : 'Enter a message to send'"
         >
-          <i v-if="isSending" class="fas fa-spinner fa-spin"></i>
+          <LoadingSpinner
+            v-if="isSending"
+            variant="dots"
+            size="xs"
+            color="white"
+          />
+          <div v-else-if="messageQueueLength > 0" class="queue-indicator">
+            <i class="fas fa-paper-plane"></i>
+            <span class="queue-count">{{ messageQueueLength }}</span>
+          </div>
           <i v-else class="fas fa-paper-plane"></i>
         </button>
       </div>
@@ -179,6 +218,8 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import globalWebSocketService from '@/services/GlobalWebSocketService'
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
+import ProgressBar from '@/components/ui/ProgressBar.vue'
 
 const store = useChatStore()
 const controller = useChatController()
@@ -196,6 +237,19 @@ const isVoiceRecording = ref(false)
 const isSending = ref(false)
 const showEmojiPicker = ref(false)
 const showQuickActions = ref(true)
+const uploadProgress = ref<Array<{
+  id: string
+  filename: string
+  progress: number
+  status: string
+  current: number
+  total: number
+  eta?: number
+  error?: string
+}>>([])  
+const messageQueueLength = ref(0)
+const isTypingStartTime = ref<number | null>(null)
+const typingDebounceTimer = ref<number | null>(null)
 
 // Constants
 const maxCharacters = 4000
@@ -278,6 +332,9 @@ const handleInput = (event: Event) => {
   // Auto-resize
   target.style.height = 'auto'
   target.style.height = Math.min(target.scrollHeight, 150) + 'px'
+  
+  // Update typing indicator
+  updateTypingIndicator()
 }
 
 const sendMessage = async () => {
@@ -319,7 +376,7 @@ const attachFile = () => {
   fileInput.value?.click()
 }
 
-const handleFileSelect = (event: Event) => {
+const handleFileSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const files = Array.from(target.files || [])
 
@@ -332,7 +389,29 @@ const handleFileSelect = (event: Event) => {
     return true
   })
 
-  attachedFiles.value.push(...validFiles)
+  // Process files with upload progress
+  for (const file of validFiles) {
+    const uploadId = generateId()
+    const upload = {
+      id: uploadId,
+      filename: file.name,
+      progress: 0,
+      status: 'Preparing...',
+      current: 0,
+      total: file.size
+    }
+    
+    uploadProgress.value.push(upload)
+    
+    try {
+      // Simulate upload progress (replace with actual upload logic)
+      await simulateUpload(upload, file)
+      attachedFiles.value.push(file)
+    } catch (error) {
+      upload.error = error instanceof Error ? error.message : 'Upload failed'
+      upload.status = 'Failed'
+    }
+  }
 
   // Clear input
   target.value = ''
@@ -444,6 +523,77 @@ const generateId = (): string => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2)
 }
 
+// Enhanced UX methods
+const simulateUpload = async (upload: any, file: File): Promise<void> => {
+  const chunkSize = Math.max(file.size / 10, 1024) // 10 chunks minimum
+  let uploaded = 0
+  const startTime = Date.now()
+  
+  upload.status = 'Uploading...'
+  
+  while (uploaded < file.size) {
+    await new Promise(resolve => setTimeout(resolve, 100)) // Simulate network delay
+    
+    uploaded = Math.min(uploaded + chunkSize, file.size)
+    upload.current = uploaded
+    upload.progress = (uploaded / file.size) * 100
+    
+    // Calculate ETA
+    const elapsed = Date.now() - startTime
+    const rate = uploaded / elapsed
+    const remaining = (file.size - uploaded) / rate / 1000
+    upload.eta = remaining > 1 ? remaining : undefined
+    
+    // Update status
+    if (upload.progress >= 100) {
+      upload.status = 'Processing...'
+      await new Promise(resolve => setTimeout(resolve, 500))
+      upload.status = 'Complete'
+      
+      // Remove from progress after delay
+      setTimeout(() => {
+        const index = uploadProgress.value.findIndex(u => u.id === upload.id)
+        if (index !== -1) uploadProgress.value.splice(index, 1)
+      }, 2000)
+    }
+  }
+}
+
+const retryUpload = async (uploadId: string) => {
+  const upload = uploadProgress.value.find(u => u.id === uploadId)
+  if (!upload) return
+  
+  upload.error = undefined
+  upload.progress = 0
+  upload.current = 0
+  upload.status = 'Retrying...'
+  
+  // Find corresponding file and retry upload
+  // This is a simplified retry - in production, you'd need to track the original file
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  upload.status = 'Complete'
+  upload.progress = 100
+  
+  setTimeout(() => {
+    const index = uploadProgress.value.findIndex(u => u.id === uploadId)
+    if (index !== -1) uploadProgress.value.splice(index, 1)
+  }, 2000)
+}
+
+const updateTypingIndicator = () => {
+  if (typingDebounceTimer.value) {
+    clearTimeout(typingDebounceTimer.value)
+  }
+  
+  if (!isTypingStartTime.value && messageText.value.length > 0) {
+    isTypingStartTime.value = Date.now()
+  }
+  
+  typingDebounceTimer.value = setTimeout(() => {
+    isTypingStartTime.value = null
+  }, 1000) as unknown as number
+}
+
 // Event listeners
 const handleClickOutside = (event: Event) => {
   if (showEmojiPicker.value && emojiPicker.value && !emojiPicker.value.contains(event.target as Node)) {
@@ -468,6 +618,31 @@ onUnmounted(() => {
 <style scoped>
 .chat-input-container {
   @apply relative;
+}
+
+/* Upload Progress */
+.upload-progress {
+  @apply space-y-3;
+}
+
+.upload-item {
+  @apply flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg;
+}
+
+.upload-info {
+  @apply flex-1 min-w-0;
+}
+
+.upload-filename {
+  @apply font-medium text-blue-900 truncate;
+}
+
+.upload-status {
+  @apply text-sm text-blue-600;
+}
+
+.retry-upload-btn {
+  @apply w-8 h-8 flex items-center justify-center text-red-600 hover:text-red-800 hover:bg-red-100 rounded transition-colors;
 }
 
 /* Attached Files */
@@ -555,6 +730,23 @@ onUnmounted(() => {
 
 .send-button.sending {
   @apply bg-indigo-500;
+}
+
+.send-button.pulse {
+  animation: buttonPulse 2s infinite;
+}
+
+@keyframes buttonPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.queue-indicator {
+  @apply relative;
+}
+
+.queue-count {
+  @apply absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center text-xs font-bold;
 }
 
 /* Status Bar */
