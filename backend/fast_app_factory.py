@@ -59,7 +59,7 @@ async def initialize_components_background(app: FastAPI):
                 ["python", "scripts/verify_knowledge_consistency.py"],
                 capture_output=True,
                 text=True,
-                timeout=30,
+                # Remove timeout - let process complete naturally
             )
             if result.returncode == 0:
                 logger.info(
