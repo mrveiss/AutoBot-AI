@@ -1,172 +1,76 @@
+#!/usr/bin/env python3
 """
-Fast App Factory with Redis Connection Fix
-Temporary fix for Redis connection timeout issues
-UPDATED: Now uses unified configuration via ConfigHelper
+FastAPI Backend with Optimizations
+Created for AutoBot - Fast startup with minimal dependencies
 """
 
 import asyncio
-import sys
 import logging
-import os
-import time
 from contextlib import asynccontextmanager
-from typing import List, Union
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
-import redis
-from fastapi import APIRouter, FastAPI, Request
+import uvicorn
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
-# Import unified configuration
-from src.config_helper import cfg
-
-# Import centralized router registry
-from backend.api.registry import get_router_configs, RouterStatus
-
-# Configure logging first
-logging.basicConfig(level=logging.INFO)
+# Configure logging immediately
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s:%(name)s:%(message)s',
+    handlers=[logging.StreamHandler()]
+)
 logger = logging.getLogger(__name__)
 
-# Import startup tracking
-try:
-    from backend.api.startup import add_startup_message, StartupPhase
-    startup_available = True
-except ImportError:
-    startup_available = False
-    logger.warning("Startup tracking not available")
+# Quick startup progress tracker
+def report_startup_progress(phase: str, message: str, progress: int, emoji: str = "⏳"):
+    """Report startup progress"""
+    logger.info(f"Startup: [{phase}] {emoji} {message} ({progress}%)")
 
-def report_startup_progress(phase: str, message: str, progress: int, icon: str = "🚀"):
-    """Report startup progress if startup API is available"""
-    if startup_available:
-        try:
-            phase_enum = StartupPhase(phase)
-            add_startup_message(phase_enum, message, progress, icon)
-        except Exception as e:
-            logger.debug(f"Failed to report startup progress: {e}")
-    else:
-        logger.info(f"[{progress}%] {message}")
+# Health check model
+class HealthResponse(BaseModel):
+    status: str
+    mode: str
+    timestamp: datetime
+    redis: bool
+    ollama: str
+    chat_manager: bool
 
-# PERFORMANCE FIX: Set environment variable to prevent immediate knowledge base initialization
-os.environ["AUTOBOT_LAZY_INIT"] = "true"  # Signal to delay heavy initialization
-
-class GlobalConfigManager:
-    """Singleton config manager for backend"""
-    _instance = None
-    _config = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-    
-    def __init__(self):
-        if self._config is None:
-            # Initialize with minimal configuration
-            self._config = {
-                'backend': {
-                    'llm': {
-                        'local': {
-                            'providers': {
-                                'ollama': {
-                                    'models': []
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-    
-    def set_nested(self, key_path: str, value):
-        """Set nested configuration value using dot notation"""
-        keys = key_path.split('.')
-        config = self._config
-        
-        # Navigate to parent
-        for key in keys[:-1]:
-            if key not in config:
-                config[key] = {}
-            config = config[key]
-        
-        # Set final value
-        config[keys[-1]] = value
-    
-    def get_nested(self, key_path: str, default=None):
-        """Get nested configuration value using dot notation"""
-        keys = key_path.split('.')
-        config = self._config
-        
-        try:
-            for key in keys:
-                config = config[key]
-            return config
-        except (KeyError, TypeError):
-            return default
-    
-    def get_llm_config(self):
-        """Get LLM configuration"""
-        return self._config.get('backend', {}).get('llm', {})
-
-# Global configuration manager instance
-global_config_manager = GlobalConfigManager()
-
-# Minimal app state
-class AppState:
-    def __init__(self):
-        self.main_redis_client = None
-        self.chat_history_manager = None
-        self.background_tasks = set()
-
-    def add_task(self, task):
-        """Add a background task"""
-        self.background_tasks.add(task)
-        task.add_done_callback(self.background_tasks.discard)
-
-# Lifecycle management
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifecycle"""
+    """Application lifespan with fast startup and graceful shutdown"""
     
-    # Startup
     logger.info("🚀 Starting AutoBot Fast Backend...")
-    report_startup_progress("initialization", "Starting fast backend mode", 0, "🚀")
     
-    # Initialize minimal app state
-    app.state = AppState()
+    # Phase 1: Minimal Redis setup (with timeout)
+    report_startup_progress("connecting_backend", "Connecting to Redis (with timeout)", 10, "📡")
     
-    # Initialize Redis with timeout (don't block startup)
     try:
-        report_startup_progress("connecting_backend", "Connecting to Redis (with timeout)", 10, "🔗")
-        # Try to connect to Redis with short timeout
-        # Import Redis immediate test utility
         from src.utils.redis_immediate_test import test_redis_connection_immediate
-        
-        # Use immediate connection test instead of timeout-based approach
-        redis_client = await test_redis_connection_immediate(
-            host=cfg.REDIS_HOST_IP,
-            port=cfg.REDIS_PORT,
-            db=0
-        )
-        app.state.main_redis_client = redis_client
-        logger.info("✅ Connected to Redis")
-        report_startup_progress("connecting_backend", "Redis connection established", 25, "✅")
+        redis_available = await asyncio.wait_for(test_redis_connection_immediate(), timeout=2.0)
+        app.state.redis_available = redis_available
+        if redis_available:
+            report_startup_progress("connecting_backend", "Redis connected", 25, "✅")
+        else:
+            report_startup_progress("connecting_backend", "Redis unavailable - continuing", 25, "⚠️")
     except Exception as e:
         logger.warning(f"⚠️  Redis connection failed (continuing without Redis): {e}")
-        app.state.main_redis_client = None
+        app.state.redis_available = False
         report_startup_progress("connecting_backend", "Redis unavailable - continuing", 25, "⚠️")
     
-    # Initialize minimal ChatHistoryManager
+    # Phase 2: Minimal Chat History Manager
     try:
         from src.chat_history_manager import ChatHistoryManager
-        chat_manager = ChatHistoryManager()
-        app.state.chat_history_manager = chat_manager
+        app.state.chat_history_manager = ChatHistoryManager(mode='fast')
         logger.info("✅ Initialized Chat History Manager")
         report_startup_progress("connecting_backend", "Chat manager initialized", 40, "💬")
     except Exception as e:
         logger.error(f"❌ Failed to initialize Chat History Manager: {e}")
-        # Create minimal fallback
-        app.state.chat_history_manager = type('MockChatManager', (), {
-            'save_session': lambda *args, **kwargs: {"status": "error", "message": "Chat manager unavailable"},
-            'load_session': lambda *args, **kwargs: None,
+        # Create fallback chat manager
+        app.state.chat_history_manager = type('FallbackChatManager', (), {
+            'save_session': lambda *args, **kwargs: True,
+            'get_session_history': lambda *args, **kwargs: [],
             'create_new_session': lambda *args, **kwargs: {"chat_id": "fallback", "status": "created"}
         })()
         report_startup_progress("connecting_backend", "Using fallback chat manager", 40, "⚠️")
@@ -175,7 +79,7 @@ async def lifespan(app: FastAPI):
     def background_llm_sync():
         """Background task to sync LLM configuration"""
         try:
-            from backend.utils.llm_config_sync import LLMConfigurationSynchronizer
+            from src.utils.llm_config_sync import LLMConfigurationSynchronizer
             logger.info("🔄 Starting background LLM config synchronization...")
             asyncio.create_task(LLMConfigurationSynchronizer.full_synchronization())
             logger.info("✅ LLM config sync started in background")
@@ -184,164 +88,152 @@ async def lifespan(app: FastAPI):
     
     # Start background sync task
     task = asyncio.create_task(asyncio.to_thread(background_llm_sync))
-    app.state.add_task(task)
     
     report_startup_progress("ready", "Fast backend ready", 100, "✅")
     logger.info("✅ AutoBot Fast Backend startup completed")
     
-    yield  # Server is running
+    yield  # Application runs
     
-    # Shutdown
+    # Cleanup on shutdown
     logger.info("🛑 Shutting down AutoBot Fast Backend...")
-    if app.state.main_redis_client:
-        try:
-            app.state.main_redis_client.close()
-            logger.info("✅ Redis connection closed")
-        except Exception as e:
-            logger.warning(f"⚠️  Error closing Redis: {e}")
     
-    # Cancel any remaining background tasks
-    for task in list(app.state.background_tasks):
-        if not task.done():
-            task.cancel()
+    # Cancel background task if still running
+    if not task.done():
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     
     logger.info("✅ AutoBot Fast Backend shutdown completed")
 
-def setup_cors_middleware(app: FastAPI):
-    """Setup CORS middleware with proper configuration"""
-    allowed_origins = [
-        "http://localhost:5173",
-        "http://localhost:3000", 
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        "http://172.16.168.21:5173",
-        "http://172.16.168.20:8001"
-    ]
-    
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allowed_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["*"]
-    )
-    logger.info(f"✅ CORS configured for origins: {allowed_origins}")
+# Create the FastAPI app with lifespan
+app = FastAPI(
+    title="AutoBot Fast Backend",
+    description="High-performance backend for AutoBot with optimized startup",
+    version="2.0.0",
+    lifespan=lifespan
+)
 
-def create_fast_app() -> FastAPI:
-    """Create FastAPI application with fast startup configuration"""
+# Configure CORS
+CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000", 
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+    "http://172.16.168.21:5173",
+    "http://172.16.168.20:8001"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+logger.info(f"✅ CORS configured for origins: {CORS_ORIGINS}")
+
+# Load routers with LAZY_LOAD pattern
+logger.info("Loading router configurations...")
+
+# Import routers that need to be loaded
+routers_to_load = [
+    # Core system APIs - always needed
+    "backend.api.system",
+    "backend.api.health", 
+    "backend.api.config",
     
-    # Create the application with lifespan management
-    app = FastAPI(
-        title="AutoBot Fast Backend API",
-        description="Fast startup backend for AutoBot with Redis timeout fixes",
-        version="1.0.0",
-        docs_url="/api/docs",
-        redoc_url="/api/redoc",
-        lifespan=lifespan
-    )
+    # Settings and configuration APIs
+    "backend.api.settings",
     
-    # Add request logging middleware
-    @app.middleware("http")
-    async def log_requests(request: Request, call_next):
-        start_time = time.time()
-        response = await call_next(request)
-        process_time = time.time() - start_time
-        
-        # Only log non-health check requests
-        if not request.url.path.endswith('/health'):
-            logger.debug(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
-        
-        return response
+    # LLM APIs - critical for settings page
+    "backend.api.llm",
     
-    # Setup CORS
-    setup_cors_middleware(app)
+    # Chat APIs
+    "backend.api.chat",
+    "backend.api.async_chat",
     
-    # Load and register router configurations
-    logger.info("Loading router configurations...")
-    router_configs = get_router_configs()
+    # Knowledge APIs
+    "backend.api.knowledge",
     
-    registered_count = 0
-    for router_name, config in router_configs.items():
-        try:
-            # Check if router is enabled - FIXED: Include LAZY_LOAD routers
-            if config.status not in [RouterStatus.ENABLED, RouterStatus.LAZY_LOAD]:
-                logger.debug(f"Skipping disabled router: {config.name}")
-                continue
-            
-            # Import and register router - the router variable is called 'router'
-            module = __import__(config.module_path, fromlist=['router'])
-            router = getattr(module, 'router')
-            
-            # Apply prefix if specified
-            if config.prefix and not config.prefix.startswith('/'):
-                config.prefix = f'/{config.prefix}'
-            
-            app.include_router(
-                router,
-                prefix=config.prefix,
-                tags=config.tags or [config.name]
-            )
-            
-            registered_count += 1
-            logger.debug(f"✅ Registered router: {config.name} ({config.module_path})")
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to register router {config.name}: {e}")
-            import traceback
-            traceback.print_exc()
-            # Continue with other routers
+    # Other core APIs
+    "backend.api.rum",
+    "backend.api.monitoring",
+    "backend.api.batch",
+    "backend.api.service_monitor",
+    "backend.api.phase9_monitoring",
+    "backend.api.intelligent_agent",
     
-    logger.info(f"✅ Registered {registered_count} API routers successfully")
-    report_startup_progress("connecting_backend", f"Registered {registered_count} routers", 65, "🔗")
-    
-    # Add a simple health check endpoint
-    @app.get("/api/health")
-    async def health_check():
-        """Health check endpoint"""
-        return {
-            "status": "ok",
-            "mode": "fast",
-            "redis": app.state.main_redis_client is not None,
-            "ollama": "connected",
-            "chat_manager": app.state.chat_history_manager is not None,
-        }
-    
-    # Add WebSocket support for frontend communication
+    # WebSocket
+    "backend.api.websockets"
+]
+
+# Load routers
+router_count = 0
+for router_module in routers_to_load:
     try:
-        from backend.api import websockets
-        # WebSocket routes don't need prefix
-        app.include_router(websockets.router)
-        logger.info("✅ WebSocket router registered successfully")
-        report_startup_progress("connecting_backend", "WebSocket support enabled", 80, "🔗")
+        module = __import__(router_module, fromlist=[''])
+        if hasattr(module, 'router'):
+            app.include_router(module.router)
+            router_count += 1
+        elif hasattr(module, 'app') and hasattr(module.app, 'router'):
+            app.include_router(module.app.router)
+            router_count += 1
     except Exception as e:
-        logger.error(f"❌ Failed to register WebSocket router: {e}")
-        report_startup_progress("connecting_backend", "WebSocket support failed", 80, "❌")
-    
-    logger.info("🎯 Fast backend application created successfully")
-    
-    return app
+        logger.warning(f"⚠️  Could not load router {router_module}: {e}")
 
-# Create the application instance
-app = create_fast_app()
+logger.info(f"✅ Registered {router_count} API routers successfully")
+report_startup_progress("connecting_backend", f"Registered {router_count} routers", 65, "🔌")
 
-# Start the server if running as main module
+# Register WebSocket router explicitly
+try:
+    from backend.api.websockets import router as websocket_router
+    app.include_router(websocket_router)
+    logger.info("✅ WebSocket router registered successfully")
+    report_startup_progress("connecting_backend", "WebSocket support enabled", 80, "🌐")
+except Exception as e:
+    logger.warning(f"⚠️  WebSocket router failed to load: {e}")
+
+# Health check endpoint
+@app.get("/api/health", response_model=HealthResponse)
+async def health_check():
+    """Fast health check endpoint"""
+    
+    # Quick Ollama check
+    ollama_status = "unknown"
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1.0)) as session:
+            async with session.get("http://localhost:11434/api/tags") as response:
+                if response.status == 200:
+                    ollama_status = "connected"
+                else:
+                    ollama_status = "disconnected"
+    except:
+        ollama_status = "disconnected"
+    
+    return HealthResponse(
+        status="ok",
+        mode="fast", 
+        timestamp=datetime.now(timezone.utc),
+        redis=getattr(app.state, 'redis_available', False),
+        ollama=ollama_status,
+        chat_manager=hasattr(app.state, 'chat_history_manager')
+    )
+
+logger.info("🎯 Fast backend application created successfully")
+
+# Main execution
 if __name__ == "__main__":
-    import uvicorn
-    import os
+    print("🚀 Starting AutoBot Backend Server on 0.0.0.0:8001")
     
-    # Get port from environment or default to 8001
-    port = int(os.getenv('BACKEND_PORT', 8001))
-    host = os.getenv('BACKEND_HOST', '0.0.0.0')
-    
-    print(f"🚀 Starting AutoBot Backend Server on {host}:{port}")
-    
-    # Start the uvicorn server
     uvicorn.run(
-        app,
-        host=host,
-        port=port,
+        "backend.fast_app_factory_fix:app",
+        host="0.0.0.0",
+        port=8001,
+        reload=False,  # Disable reload for faster startup
         log_level="info",
-        access_log=True,
-        reload=False  # Disable reload for stability
+        access_log=False  # Disable access logs for performance
     )
