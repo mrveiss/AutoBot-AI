@@ -74,11 +74,22 @@ stop_redis_vm() {
         # Stop Redis Stack service
         if systemctl is-active redis-stack-server >/dev/null 2>&1; then
             echo "Stopping Redis Stack service..."
-            sudo systemctl stop redis-stack-server
+            # Try passwordless sudo first
+            if sudo -n systemctl stop redis-stack-server 2>/dev/null; then
+                echo "Redis Stack stopped via systemctl"
+            else
+                echo "Warning: Could not stop Redis Stack (passwordless sudo not configured)"
+                # Try to stop with regular process kill
+                pkill redis-stack-server 2>/dev/null || true
+            fi
         fi
         
-        # Stop any standalone Redis processes
-        sudo pkill redis-server 2>/dev/null || true
+        # Stop any standalone Redis processes (try both ways)
+        if sudo -n pkill redis-server 2>/dev/null; then
+            echo "Redis processes stopped via sudo"
+        else
+            pkill redis-server 2>/dev/null || echo "Note: Some Redis processes may still be running"
+        fi
         
         echo "Redis service stopped"
 EOF
