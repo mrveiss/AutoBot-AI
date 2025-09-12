@@ -175,10 +175,10 @@ async def lifespan(app: FastAPI):
     def background_llm_sync():
         """Background task to sync LLM configuration"""
         try:
-            from src.utils.llm_config_sync import sync_llm_config_to_unified
+            from backend.utils.llm_config_sync import LLMConfigurationSynchronizer
             logger.info("🔄 Starting background LLM config synchronization...")
-            sync_llm_config_to_unified()
-            logger.info("✅ LLM config sync completed in background")
+            asyncio.create_task(LLMConfigurationSynchronizer.full_synchronization())
+            logger.info("✅ LLM config sync started in background")
         except Exception as e:
             logger.error(f"❌ Background LLM config sync failed: {e}")
     
