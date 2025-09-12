@@ -95,6 +95,9 @@ ${YELLOW}Options:${NC}
   --no-browser        Don't launch browser automatically
   --desktop           Enable desktop access via VNC
   --no-desktop        Disable desktop access via VNC
+  --build             Force build even if images exist
+  --no-build          Skip Docker builds (fastest restart)
+  --rebuild           Force rebuild everything (clean slate)
   --status            Show current system status
   --stop              Stop all AutoBot services (backend + VMs)
   --restart           Restart all services (backend + all VMs)
@@ -353,6 +356,22 @@ while [[ $# -gt 0 ]]; do
         --restart)
             restart_all_services
             exit 0
+            ;;
+        --build)
+            BUILD=true
+            NO_BUILD=false
+            shift
+            ;;
+        --no-build)
+            NO_BUILD=true
+            BUILD=false
+            shift
+            ;;
+        --rebuild)
+            REBUILD=true
+            BUILD=true
+            NO_BUILD=false
+            shift
             ;;
         --help|-h)
             print_usage
