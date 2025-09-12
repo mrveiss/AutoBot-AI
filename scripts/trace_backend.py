@@ -14,8 +14,16 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class FunctionTracer:
-    def __init__(self, output_file="/tmp/backend_trace.log"):
-        self.output_file = output_file
+    def __init__(self, output_file=None):
+        # Use proper output directory
+        if output_file is None:
+            project_root = Path(__file__).parent.parent
+            logs_dir = project_root / "logs" / "performance"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            self.output_file = logs_dir / "backend_trace.log"
+        else:
+            self.output_file = output_file
+            
         self.call_stack = []
         self.start_times = {}
         self.call_count = 0
@@ -82,7 +90,7 @@ def trace_backend_startup():
     tracer = FunctionTracer()
     
     print("🕵️ Starting function call tracing...")
-    print("📝 Trace log: /tmp/backend_trace.log")
+    print(f"📝 Trace log: {tracer.output_file}")
     
     # Set up tracing
     sys.settrace(tracer.trace_calls)
