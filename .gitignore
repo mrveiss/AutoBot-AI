@@ -67,6 +67,50 @@ data/reports/
 # Backend data
 backend/data/chats/*
 
+# === SECURITY & AUTHENTICATION ===
+# SSH keys and certificates
+*.pem
+*.key
+*.pub
+*.ppk
+*.p12
+*.pfx
+*.crt
+*.cer
+*.ca
+*.ca-bundle
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+authorized_keys
+known_hosts
+autobot_key*
+ssh_host_*
+
+# Password files
+*.pass
+*.password
+*.passwd
+credentials*
+# Note: secrets.py and secrets_service.py are legitimate code files for secrets management
+# Only exclude actual secret/password data files:
+*.secrets
+.secrets
+secrets.txt
+secrets.json
+secrets.yaml
+secrets.conf
+secrets.key
+**/secrets.key
+
+# Authentication tokens
+*.token
+*token.txt
+*token.json
+*.auth
+*auth.json
+
 # === CONFIGURATION FILES ===
 # Configuration files with sensitive data
 config/*.yaml
@@ -107,6 +151,27 @@ data/logs/
 *.temp
 .tmp/
 .temp/
+
+# === ROOT DIRECTORY PROTECTION ===
+# Prevent files that should be in organized directories from polluting root
+/test*.py            # Test files belong in tests/
+/TEST*.py           # Test files belong in tests/  
+/*REPORT*.md        # Reports belong in reports/
+/*SUMMARY*.md       # Summaries belong in reports/
+/*GUIDE*.md         # Guides belong in docs/ or reports/
+/*ANALYSIS*.md      # Analysis belong in analysis/ or reports/
+/*.log              # Log files belong in logs/
+/*.log.*            # Rotated log files belong in logs/
+/*.bak              # Backup files belong in backups/
+/*.backup           # Backup files belong in backups/
+/*_backup.*         # Backup files belong in backups/
+/*.old              # Old files belong in backups/
+/*_old.*            # Old files belong in backups/
+/analysis_*.json    # Analysis outputs belong in analysis/
+/test_results_*.json # Test results belong in tests/results/
+/profile_*.txt      # Profiles belong in reports/performance/
+/trace_*.log        # Traces belong in logs/performance/
+/benchmark_*.json   # Benchmarks belong in tests/benchmarks/
 
 # === OS GENERATED FILES ===
 *:Zone.Identifier

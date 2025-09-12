@@ -312,6 +312,9 @@ stop_backend() {
     fi
     
     success "All AutoBot services stopped (backend + VMs)"
+    echo ""
+    echo -e "${YELLOW}💡 Tip: For smoother service management, configure passwordless sudo:${NC}"
+    echo -e "${CYAN}  bash scripts/utilities/batch-configure-vms.sh sudo${NC}"
 }
 
 # Parse command line arguments

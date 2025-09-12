@@ -95,6 +95,57 @@ docs/
 
 ---
 
+## 🧹 REPOSITORY CLEANLINESS STANDARDS (2025-09-11)
+
+**MANDATORY: Keep root directory clean and organized**
+
+### **File Placement Rules:**
+- **❌ NEVER place in root directory:**
+  - Test files (`test_*.py`, `*_test.py`)
+  - Report files (`*REPORT*.md`, `*_report.*`)
+  - Log files (`*.log`, `*.log.*`, `*.bak`)
+  - Analysis outputs (`analysis_*.json`, `*_analysis.*`)
+  - Temporary files (`*.tmp`, `*.temp`)
+  - Backup files (`*.backup`, `*.old`)
+
+### **Proper Directory Structure:**
+```
+/
+├── tests/           # All test files go here
+│   ├── results/     # Test results and validation reports
+│   └── temp/        # Temporary test files
+├── logs/            # Application logs (gitignored)
+├── reports/         # Generated reports (gitignored)
+├── temp/            # Temporary files (gitignored)
+├── analysis/        # Analysis outputs (gitignored)
+└── backups/         # Backup files (gitignored)
+```
+
+### **Agent and Script Guidelines:**
+- **All agents MUST**: Use proper output directories for their files
+- **All scripts MUST**: Create organized output in designated folders
+- **Test systems MUST**: Place results in `tests/results/` directory
+- **Report generators MUST**: Output to `reports/` directory (gitignored)
+- **Monitoring systems MUST**: Log to `logs/` directory (gitignored)
+
+### **Enforcement:**
+- **STRICT .gitignore patterns** prevent root directory pollution (`/test*.py`, `/*.log`, `/*REPORT*.md`, etc.)
+- **All 18 agent configurations** include cleanliness mandates to prevent violations
+- **Scripts updated** to use proper output directories instead of root or `/tmp/`
+- **Automated cleanup performed** (2025-09-11): Moved 18+ misplaced files to proper locations
+- **Enforcement script**: `scripts/utilities/enforce-repository-cleanliness.sh` automatically detects and fixes violations
+
+### **ZERO TOLERANCE POLICY:**
+⚠️ **Files found in root directory violating these standards WILL BE IMMEDIATELY RELOCATED:**
+- `test*.py` → `tests/`
+- `*REPORT*.md`, `*SUMMARY*.md`, `*GUIDE*.md` → `reports/`
+- `*.log` → `logs/`
+- `*.bak`, `*.backup` → `backups/`
+- Analysis files → `analysis/`
+- Profile files → `reports/performance/`
+
+---
+
 ## 🚨 STANDARDIZED PROCEDURES (2025-09-09)
 
 **ONLY PERMITTED SETUP AND RUN METHODS:**
@@ -669,6 +720,82 @@ All services now start cleanly and maintain stable operations.
 - When you receive error or warning, you fix it properly untill it is gone forever. investigate all logs, not only the one error appeared, but related also components until you track down the line where it happened and all related functions that could have caused it.
 - Allways trace  all errors full way, if its a frontend error, trace it all the way to backend, if backend all the way to frontend, allways look in to logs.
 - when installing dependency allways update the install scripts for the fresh deployments.
+
+## Remote Host Development Rules
+
+**MANDATORY - NEVER EDIT CODE DIRECTLY ON REMOTE HOSTS**:
+
+- **ALL code edits MUST be made locally** and then synced to remote hosts
+- **NEVER use SSH to edit files directly** on remote VMs (172.16.168.21-25)
+- **NEVER use remote text editors** (vim, nano, etc.) on remote hosts
+- **Configuration changes MUST be made locally** and deployed via sync scripts
+
+### 🔐 CERTIFICATE-BASED SSH AUTHENTICATION (2025-09-12)
+
+**MANDATORY: Use SSH keys instead of passwords for all operations**
+
+#### SSH Key Configuration:
+- **SSH Private Key**: `~/.ssh/autobot_key` (4096-bit RSA)
+- **SSH Public Key**: `~/.ssh/autobot_key.pub`
+- **All 5 VMs configured**: frontend(21), npu-worker(22), redis(23), ai-stack(24), browser(25)
+
+#### Setup SSH Keys (One-time):
+```bash
+# Deploy SSH keys to all VMs
+./scripts/utilities/setup-ssh-keys.sh
+
+# Verify key deployment
+ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
+```
+
+#### Sync Files to Remote VMs:
+```bash
+# Sync specific file to specific VM
+./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/App.vue /home/autobot/autobot-vue/src/components/
+
+# Sync directory to specific VM  
+./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
+
+# Sync to ALL VMs
+./scripts/utilities/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
+
+# Test connections to all VMs
+./scripts/utilities/sync-to-vm.sh all /tmp/test /tmp/test --test-connection
+```
+
+#### Legacy Frontend Sync (Certificate-based):
+```bash
+# Sync specific component
+./scripts/utilities/sync-frontend.sh components/SystemStatusIndicator.vue
+
+# Sync all components
+./scripts/utilities/sync-frontend.sh components
+
+# Sync entire src directory
+./scripts/utilities/sync-frontend.sh all
+```
+
+**❌ DEPRECATED: Never use password-based authentication:**
+- ~~`sshpass -p "autobot" ssh`~~ → Use `ssh -i ~/.ssh/autobot_key`
+- ~~`sshpass -p "autobot" scp`~~ → Use `scp -i ~/.ssh/autobot_key`
+
+**Proper Workflow for Remote Changes**:
+1. **Edit locally** - Make all changes in `/home/kali/Desktop/AutoBot/`
+2. **Test locally** - Verify changes work on local development environment
+3. **Sync to remote** - Use `./sync-frontend.sh` or tar/scp method
+4. **Verify on remote** - Check that changes are applied correctly
+
+**Sync Methods**:
+- **Frontend production build**: `./sync-frontend.sh` (builds and deploys to /var/www/html/)
+- **Frontend source code**: `tar czf /tmp/frontend-src.tar.gz --exclude=node_modules --exclude=dist --exclude=.git -C autobot-vue . && sshpass -p "autobot" scp -o StrictHostKeyChecking=no /tmp/frontend-src.tar.gz autobot@172.16.168.21:/tmp/ && sshpass -p "autobot" ssh -o StrictHostKeyChecking=no autobot@172.16.168.21 "cd /home/autobot/autobot-vue && tar xzf /tmp/frontend-src.tar.gz"`
+- **Backend/other services**: Use ansible playbooks or custom sync scripts
+
+**Why This Rule Exists**:
+- Maintains single source of truth (local development)
+- Prevents configuration drift between environments
+- Ensures reproducible deployments
+- Allows proper version control tracking
+- Prevents accidental production changes
 
 ## Fixes Applied During This Session
 
