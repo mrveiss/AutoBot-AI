@@ -27,14 +27,14 @@ export const API_CONFIG = {
   get WS_BASE_URL() {
     // Synchronous fallback - components should use appConfig.getWebSocketUrl() instead
     const backendHost = import.meta.env.VITE_BACKEND_HOST;
+    const backendPort = import.meta.env.VITE_BACKEND_PORT || '8001';
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const port = '8001';
     
     if (backendHost) {
-      return `${wsProtocol}//${backendHost}:${port}/ws`;
+      return `${wsProtocol}//${backendHost}:${backendPort}/ws`;
     }
     
-    return `${wsProtocol}//localhost:${port}/ws`;
+    return `${wsProtocol}//localhost:${backendPort}/ws`;
   },
 
   get DESKTOP_VNC_URL() {

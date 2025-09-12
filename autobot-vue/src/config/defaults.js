@@ -13,7 +13,7 @@ export const DEFAULT_CONFIG = {
     // Backend VM - Main API server
     backend: {
       host: '172.16.168.20',
-      port: '8001',
+      port: '8002',
       protocol: 'http'
     },
     

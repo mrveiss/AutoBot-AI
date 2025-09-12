@@ -312,6 +312,10 @@ const router = createRouter({
 // Global navigation guards
 router.beforeEach((to, from, next) => {
   const appStore = useAppStore()
+  
+  console.log('[Router DEBUG] Navigating to:', to.path)
+  console.log('[Router DEBUG] Route matched:', to.matched.length > 0)
+  console.log('[Router DEBUG] AppStore.updateRoute type:', typeof appStore?.updateRoute)
 
   // Update document title
   if (to.meta.title) {

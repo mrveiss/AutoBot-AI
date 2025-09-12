@@ -4,10 +4,10 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
-// Import centralized defaults to eliminate hardcoded fallbacks
+// Import centralized defaults - use localhost for WSL development
 const DEFAULT_CONFIG = {
-  backend: { host: '172.16.168.20', port: '8001' },
-  browser: { host: '172.16.168.25', port: '6080' }
+  backend: { host: 'localhost', port: '8001' },
+  browser: { host: 'localhost', port: '6080' }
 }
 
 // https://vite.dev/config/
