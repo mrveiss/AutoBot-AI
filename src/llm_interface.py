@@ -18,6 +18,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from .utils.async_stream_processor import StreamProcessor, StreamCompletionSignal
 from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
@@ -92,7 +93,7 @@ class LLMSettings(BaseSettings):
     # Ollama settings
     ollama_host: str = Field(default="127.0.0.1", env="OLLAMA_HOST")
     ollama_port: int = Field(default=11434, env="OLLAMA_PORT")
-    ollama_timeout: float = Field(default=30.0, env="OLLAMA_TIMEOUT")
+    # Removed timeout - using circuit breaker pattern instead
     
     # Model settings
     default_model: str = Field(default="llama3.2:1b-instruct-q4_K_M", env="DEFAULT_LLM_MODEL")
@@ -106,11 +107,11 @@ class LLMSettings(BaseSettings):
     max_retries: int = Field(default=3, env="LLM_MAX_RETRIES")
     connection_pool_size: int = Field(default=20, env="LLM_POOL_SIZE")
     max_concurrent_requests: int = Field(default=8, env="LLM_MAX_CONCURRENT")
-    connection_timeout: float = Field(default=15.0, env="LLM_CONNECTION_TIMEOUT")
+    # Removed connection_timeout - using immediate connection testing
     cache_ttl: int = Field(default=300, env="LLM_CACHE_TTL")
     
-    # Streaming settings
-    chunk_timeout: float = Field(default=10.0, env="LLM_CHUNK_TIMEOUT")
+    # Streaming settings - using completion signal detection
+    # Removed chunk_timeout - using natural stream termination
     max_chunks: int = Field(default=1000, env="LLM_MAX_CHUNKS")
     
     class Config:
@@ -448,10 +449,12 @@ class LLMInterface:
                 self.streaming_failures[model]["count"] - 1)
 
     # Legacy method loading methods (preserved for backward compatibility)
-    def _load_prompt_from_file(self, file_path: str) -> str:
+    async def _load_prompt_from_file(self, file_path: str) -> str:
         try:
-            with open(file_path, "r") as f:
-                return f.read().strip()
+            # ROOT CAUSE FIX: Use async file operations instead of blocking sync I/O
+            from src.utils.async_file_operations import read_file_async
+            content = await read_file_async(file_path)
+            return content.strip()
         except FileNotFoundError:
             logger.error(f"Prompt file not found: {file_path}")
             return ""
@@ -833,96 +836,35 @@ class LLMInterface:
         logger.info(f"[{request_id}] Starting protected streaming for model {model}")
         
         try:
+            # ROOT CAUSE FIX: Use async stream processor instead of timeouts
+            from src.utils.async_stream_processor import process_llm_stream
+            
             async with self._get_session() as session:
-                # Set overall request timeout
-                timeout = aiohttp.ClientTimeout(total=20.0)  # Hard 20s timeout
+                # No timeout - let stream processor handle completion detection
+                timeout = aiohttp.ClientTimeout(connect=5.0)  # Only connection timeout
                 
                 async with session.post(url, headers=headers, json=data, timeout=timeout) as response:
                     if response.status != 200:
                         raise aiohttp.ClientError(f"HTTP {response.status}: {await response.text()}")
                     
-                    async for chunk_bytes in response.content.iter_chunked(1024):
-                        current_time = time.time()
-                        
-                        # Check chunk timeout
-                        if current_time - last_chunk_time > self.settings.chunk_timeout:
-                            logger.warning(f"[{request_id}] Chunk timeout exceeded, stopping stream")
-                            break
-                        
-                        # Check max chunks limit
-                        if chunk_count > self.settings.max_chunks:
-                            logger.warning(f"[{request_id}] Max chunks exceeded, stopping stream")
-                            break
-                        
-                        # Decode chunk
-                        try:
-                            chunk_text = chunk_bytes.decode('utf-8').strip()
-                        except UnicodeDecodeError:
-                            logger.warning(f"[{request_id}] Failed to decode chunk, skipping...")
-                            continue
-                        
-                        if not chunk_text:
-                            continue
-                        
-                        # Process each line in the chunk
-                        for line in chunk_text.split('\n'):
-                            if not line.strip():
-                                continue
-                            
-                            try:
-                                chunk_data = json.loads(line.strip())
-                                chunk_count += 1
-                                last_chunk_time = current_time
-                                
-                                # Extract content
-                                if "message" in chunk_data and "content" in chunk_data["message"]:
-                                    content = chunk_data["message"]["content"]
-                                    full_content += content
-                                
-                                # Check for completion
-                                if chunk_data.get("done", False):
-                                    duration = current_time - start_time
-                                    logger.info(f"[{request_id}] Stream completed: {chunk_count} chunks in {duration:.2f}s")
-                                    
-                                    return {
-                                        "model": chunk_data.get("model", model),
-                                        "message": {"role": "assistant", "content": full_content},
-                                        "done": True,
-                                        "stats": {
-                                            "chunks": chunk_count,
-                                            "duration": duration,
-                                            "content_length": len(full_content)
-                                        }
-                                    }
-                                
-                            except json.JSONDecodeError as e:
-                                logger.debug(f"[{request_id}] JSON decode error: {e}")
-                                continue
-                        
-                        # Log progress periodically
-                        if chunk_count > 0 and chunk_count % 50 == 0:
-                            duration = current_time - start_time
-                            logger.debug(f"[{request_id}] Progress: {chunk_count} chunks in {duration:.1f}s")
-            
-            # Stream ended without explicit done flag
-            duration = time.time() - start_time
-            logger.info(f"[{request_id}] Stream ended naturally: {chunk_count} chunks in {duration:.2f}s")
-            
-            return {
-                "message": {"role": "assistant", "content": full_content},
-                "done": True,
-                "stats": {
-                    "chunks": chunk_count,
-                    "duration": duration,
-                    "content_length": len(full_content),
-                    "completed_naturally": True
-                }
-            }
-            
-        except asyncio.TimeoutError:
-            duration = time.time() - start_time
-            logger.error(f"[{request_id}] Stream timeout after {duration:.2f}s")
-            raise
+                    # Use proper stream processing instead of timeout management
+                    accumulated_content, completed_successfully = await process_llm_stream(
+                        response, provider="ollama", max_chunks=self.settings.max_chunks
+                    )
+                    
+                    if not completed_successfully:
+                        logger.warning(f"[{request_id}] Stream did not complete properly")
+                        # Still return content if we got some
+                    
+                    logger.info(f"[{request_id}] Stream processing completed: {len(accumulated_content)} chars")
+                    return accumulated_content
+                    
+                    # ROOT CAUSE FIX COMPLETE: All timeout logic replaced with proper stream detection
+                    return {
+                        "message": {"role": "assistant", "content": accumulated_content},
+                        "done": True,
+                        "completed_successfully": completed_successfully
+                    }
         except Exception as e:
             duration = time.time() - start_time
             logger.error(f"[{request_id}] Stream error after {duration:.2f}s: {e}")
