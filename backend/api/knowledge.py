@@ -133,13 +133,15 @@ async def search_knowledge(request: dict, req: Request = None):
 
         logger.info(f"Knowledge search request: {query} (limit: {limit})")
 
-        # Add timeout protection to prevent hanging (5 seconds max)
+        # Use smart cancellation instead of arbitrary timeout
         try:
-            search_task = asyncio.create_task(kb_to_use.search(query, limit))
-            results = await asyncio.wait_for(search_task, timeout=5.0)
-        except asyncio.TimeoutError:
-            logger.warning(f"Knowledge search timed out for query: {query}")
-            search_task.cancel()  # Cancel the hanging task
+            from src.utils.async_cancellation import execute_with_cancellation
+            results = await execute_with_cancellation(
+                kb_to_use.search(query, limit), 
+                f"knowledge_search_{hash(query)}"
+            )
+        except Exception as e:
+            logger.warning(f"Knowledge search failed for query: {query} - {str(e)}")
             results = []  # Return empty results instead of error
 
         # Transform results to match frontend expectations

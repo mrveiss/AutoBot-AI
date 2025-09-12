@@ -26,12 +26,15 @@ async def websocket_test_endpoint(websocket: WebSocket):
             {"type": "connected", "message": "Test connection successful"}
         )
 
+        # ROOT CAUSE FIX: Replace timeout-based handling with event-driven pattern
         while websocket.client_state == WebSocketState.CONNECTED:
             try:
-                message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                # No timeout - WebSocketDisconnect will be raised on disconnect
+                message = await websocket.receive_text()
                 await websocket.send_json({"type": "echo", "message": message})
-            except asyncio.TimeoutError:
-                await websocket.send_json({"type": "ping"})
+            except WebSocketDisconnect:
+                logger.info("Test WebSocket client disconnected")
+                break
             except Exception as e:
                 logger.error(f"Error in test WebSocket: {e}")
                 break
@@ -232,20 +235,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 break
                 
             try:
-                message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-            except asyncio.TimeoutError:
-                # Send ping to keep connection alive
-                try:
-                    if websocket.client_state == WebSocketState.CONNECTED:
-                        await websocket.send_text(json.dumps({"type": "ping"}))
-                        logger.debug("Sent keepalive ping")
-                    else:
-                        logger.info("Connection lost during ping attempt")
-                        break
-                except Exception as e:
-                    logger.warning(f"Failed to send ping, connection likely closed: {e}")
-                    break
-                continue
+                # ROOT CAUSE FIX: Replace timeout with natural message receive
+                message = await websocket.receive_text()
+                # No timeout needed - WebSocketDisconnect will be raised on disconnect
             except WebSocketDisconnect as e:
                 logger.info(f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'")
                 break

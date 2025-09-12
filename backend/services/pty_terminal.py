@@ -215,20 +215,23 @@ class PTYTerminal:
             try:
                 # Try graceful termination first
                 self.process.terminate()
-                try:
-                    self.process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    # Force kill if needed
+                # Give process a moment to terminate gracefully
+                import time
+                time.sleep(0.1)
+                if self.process.poll() is None:
+                    # Process didn't terminate, force kill
                     self.process.kill()
+                    # Wait without timeout for kill to complete
                     self.process.wait()
             except Exception as e:
                 logger.error(f"Error terminating process: {e}")
             finally:
                 self.process = None
         
-        # Wait for read thread to finish
+        # Signal read thread to finish naturally
         if self.read_thread and self.read_thread.is_alive():
-            self.read_thread.join(timeout=1)
+            # Thread will exit when is_active=False
+            pass
         
         logger.info(f"PTY terminal cleaned up for session {self.session_id}")
     

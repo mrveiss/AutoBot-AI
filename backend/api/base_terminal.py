@@ -151,13 +151,12 @@ class BaseTerminalWebSocket(ABC):
         try:
             while self.active:
                 try:
-                    # Wait for message with timeout
-                    message = await asyncio.wait_for(
-                        asyncio.get_event_loop().run_in_executor(
-                            None, self.output_queue.get, True, 0.1
-                        ),
-                        timeout=0.2,
-                    )
+                    # Non-blocking queue check - immediate success/failure
+                    try:
+                        message = self.output_queue.get_nowait()
+                    except queue.Empty:
+                        await asyncio.sleep(0.01)  # Yield control briefly
+                        continue
 
                     if message.get("type") == "stop":
                         break
@@ -202,13 +201,11 @@ class BaseTerminalWebSocket(ABC):
         if hasattr(self, "_output_sender_task") and self._output_sender_task:
             try:
                 self._output_sender_task.cancel()
-                # Wait for task to complete cancellation
+                # Let task cancel naturally without timeout
                 try:
-                    await asyncio.wait_for(
-                        asyncio.wrap_future(self._output_sender_task), timeout=1.0
-                    )
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    pass
+                    await self._output_sender_task
+                except asyncio.CancelledError:
+                    pass  # Expected when cancelling
             except Exception as e:
                 logger.warning(f"Error cancelling output sender task: {e}")
 

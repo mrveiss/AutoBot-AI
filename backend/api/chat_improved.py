@@ -229,16 +229,17 @@ async def process_chat(request: ChatRequest, http_request: Request):
         if orchestrator is None:
             raise InternalError("Chat orchestrator not initialized")
 
-        # Process message with timeout and specific error handling
+        # Process message with cancellation-based handling
         try:
             import asyncio
+            from src.utils.async_cancellation import execute_with_cancellation
 
-            # Add timeout to prevent hanging
-            response = await asyncio.wait_for(
+            # Use smart cancellation instead of timeout
+            response = await execute_with_cancellation(
                 orchestrator.process_message(
                     message=request.message, chat_id=request.chat_id
                 ),
-                timeout=30.0,  # 30 second timeout
+                f"chat_improved_{request.chat_id}"
             )
 
             return JSONResponse(status_code=200, content=response)

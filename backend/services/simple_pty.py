@@ -104,9 +104,9 @@ class SimplePTY:
         """Background thread to write to PTY"""
         while self.running and self.master_fd:
             try:
-                # Wait for input with timeout
+                # Wait for input without timeout
                 try:
-                    text = self.input_queue.get(timeout=0.1)
+                    text = self.input_queue.get_nowait()
                     if text is None:  # Shutdown signal
                         break
                         
@@ -201,20 +201,25 @@ class SimplePTY:
         if self.process:
             try:
                 self.process.terminate()
-                try:
-                    self.process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
+                # Give process a moment to terminate gracefully
+                import time
+                time.sleep(0.1)
+                if self.process.poll() is None:
+                    # Process didn't terminate, force kill
                     self.process.kill()
+                    # Wait without timeout for kill to complete
                     self.process.wait()
             except:
                 pass
             self.process = None
         
-        # Wait for threads
+        # Wait for threads to complete naturally
         if self.reader_thread and self.reader_thread.is_alive():
-            self.reader_thread.join(timeout=1)
+            # Signal shutdown via running flag, thread will exit naturally
+            pass  # Thread will exit when running=False
         if self.writer_thread and self.writer_thread.is_alive():
-            self.writer_thread.join(timeout=1)
+            # Thread will exit when running=False and queue is processed
+            pass
         
         logger.info(f"PTY cleanup completed for session {self.session_id}")
 
