@@ -186,3 +186,38 @@ async def get_redis_with_immediate_test(config: Dict[str, Any]) -> Tuple[Optiona
     ]
     
     return await create_redis_with_fallback(config, fallback_configs)
+
+async def test_redis_connection_immediate(redis_host: str, redis_port: int, redis_db: int = 0) -> Optional[redis.Redis]:
+    """
+    Test Redis connection immediately and return client if successful.
+    Used by backend startup to quickly test Redis availability.
+    
+    Args:
+        redis_host: Redis host address
+        redis_port: Redis port number  
+        redis_db: Redis database number
+        
+    Returns:
+        Redis client if connection successful, None if failed
+    """
+    try:
+        async with immediate_redis_test(redis_host, redis_port, redis_db) as state:
+            if state.is_connected:
+                logger.info(f"✅ Redis connection test successful: {redis_host}:{redis_port}")
+                # Return a new client for the caller to use
+                return redis.Redis(
+                    host=redis_host,
+                    port=redis_port,
+                    db=redis_db,
+                    decode_responses=True,
+                    socket_keepalive=True,
+                    socket_keepalive_options={},
+                    retry_on_timeout=False,
+                    health_check_interval=0
+                )
+            else:
+                logger.warning(f"⚠️ Redis connection test failed: {redis_host}:{redis_port}")
+                return None
+    except Exception as e:
+        logger.error(f"❌ Redis connection test error: {redis_host}:{redis_port} - {str(e)}")
+        return None
