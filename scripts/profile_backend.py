@@ -58,7 +58,11 @@ def profile_backend_startup():
     stats.print_stats(0.1)
     
     # Save detailed profile for snakeviz
-    profile_file = "/tmp/backend_profile.prof"
+    from pathlib import Path
+    reports_dir = Path(__file__).parent.parent / "reports" / "performance"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    
+    profile_file = reports_dir / "backend_profile.prof"
     profiler.dump_stats(profile_file)
     print(f"\n📁 Detailed profile saved to: {profile_file}")
     print(f"🐍 View with: pip install snakeviz && snakeviz {profile_file}")
@@ -66,10 +70,15 @@ def profile_backend_startup():
     # Print stats to string for analysis
     stats_output = stats_stream.getvalue()
     
-    # Save stats to file
-    with open("/tmp/backend_profile.txt", "w") as f:
+    # Save stats to proper directory
+    from pathlib import Path
+    reports_dir = Path(__file__).parent.parent / "reports" / "performance"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    
+    profile_file = reports_dir / "backend_profile.txt"
+    with open(profile_file, "w") as f:
         f.write(stats_output)
-    print("📄 Text stats saved to: /tmp/backend_profile.txt")
+    print(f"📄 Text stats saved to: {profile_file}")
     
     return stats_output
 

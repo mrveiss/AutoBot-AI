@@ -46,11 +46,16 @@ def profile_startup():
     print("\n🔝 Top 10 slowest functions:")
     stats.print_stats(10)
     
-    # Save detailed report
-    with open('startup_profile.txt', 'w') as f:
+    # Save detailed report to proper directory
+    from pathlib import Path
+    reports_dir = Path(__file__).parent.parent / "reports" / "performance"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    
+    profile_file = reports_dir / "startup_profile.txt"
+    with open(profile_file, 'w') as f:
         stats.print_stats(file=f)
     
-    print("\nDetailed profile saved to startup_profile.txt")
+    print(f"\nDetailed profile saved to {profile_file}")
 
 if __name__ == "__main__":
     profile_startup()

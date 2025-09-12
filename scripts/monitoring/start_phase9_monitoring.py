@@ -35,13 +35,16 @@ from src.utils.gpu_acceleration_optimizer import (
     get_gpu_capabilities
 )
 
-# Configure logging
+# Configure logging to proper directory
+logs_dir = project_root / "logs" / "monitoring"
+logs_dir.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('/tmp/phase9_monitoring.log')
+        logging.FileHandler(logs_dir / 'phase9_monitoring.log')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -328,8 +331,11 @@ class Phase9MonitoringManager:
                 logger.info("Testing GPU optimization...")
                 results["optimization_results"] = await optimize_gpu_for_multimodal()
             
-            # Save results
-            benchmark_file = f"/tmp/phase9_benchmark_{int(time.time())}.json"
+            # Save results to proper directory
+            reports_dir = project_root / "reports" / "performance"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            
+            benchmark_file = reports_dir / f"phase9_benchmark_{int(time.time())}.json"
             with open(benchmark_file, 'w') as f:
                 json.dump(results, f, indent=2, default=str)
             

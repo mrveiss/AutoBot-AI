@@ -21,9 +21,14 @@ class OutputCapture:
     """Capture terminal output from subprocess with real-time display."""
 
     def __init__(self, log_file=None):
-        self.log_file = (
-            log_file or f"autobot_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        )
+        if log_file is None:
+            # Use proper logs directory
+            from pathlib import Path
+            logs_dir = Path(__file__).parent.parent / "logs" / "debug"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            self.log_file = str(logs_dir / f"autobot_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+        else:
+            self.log_file = log_file
         self.output_queue = queue.Queue()
 
     def capture_line(self, pipe, prefix=""):

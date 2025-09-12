@@ -152,8 +152,9 @@ fi
 echo -e "\n${BLUE}⏱️  Step 8: Startup Timing Test${NC}"
 echo "  Testing backend startup performance..."
 
-# Create a test script for timing
-cat > /tmp/startup_test.py << 'EOF'
+# Create a test script for timing in proper directory
+mkdir -p tests/temp
+cat > tests/temp/startup_test.py << 'EOF'
 #!/usr/bin/env python3
 import time
 import sys
@@ -204,8 +205,8 @@ for imp in heavy_imports:
 print(f"Import test completed in {time.time() - start_time:.3f}s")
 EOF
 
-python3 /tmp/startup_test.py
-rm /tmp/startup_test.py
+python3 tests/temp/startup_test.py
+rm tests/temp/startup_test.py
 
 # Step 9: Recommendations
 echo -e "\n${YELLOW}💡 Performance Recommendations:${NC}"
@@ -288,11 +289,16 @@ def profile_startup():
     print("\n🔝 Top 10 slowest functions:")
     stats.print_stats(10)
     
-    # Save detailed report
-    with open('startup_profile.txt', 'w') as f:
+    # Save detailed report to proper directory
+    from pathlib import Path
+    reports_dir = Path(__file__).parent.parent / "reports" / "performance"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    
+    profile_file = reports_dir / "startup_profile.txt"
+    with open(profile_file, 'w') as f:
         stats.print_stats(file=f)
     
-    print("\nDetailed profile saved to startup_profile.txt")
+    print(f"\nDetailed profile saved to {profile_file}")
 
 if __name__ == "__main__":
     profile_startup()
