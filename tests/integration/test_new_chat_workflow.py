@@ -18,10 +18,11 @@ import time
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.chat_workflow_manager import (
-    ChatWorkflowManager, 
+# Updated imports to use current chat workflow system
+from src.async_chat_workflow import (
+    AsyncChatWorkflow, 
     MessageType, 
     KnowledgeStatus,
     process_chat_message
@@ -70,7 +71,8 @@ async def test_chat_workflow():
         }
     ]
     
-    workflow_manager = ChatWorkflowManager()
+    # Use AsyncChatWorkflow directly instead of ChatWorkflowManager
+    workflow = AsyncChatWorkflow()
     results = []
     
     for i, test_case in enumerate(test_cases, 1):
@@ -92,13 +94,13 @@ async def test_chat_workflow():
             # Display results
             print(f"✅ Status: {result.knowledge_status.value.upper()}")
             print(f"🏷️  Type: {result.message_type.value}")
-            print(f"📚 KB Results: {len(result.kb_results)}")
-            print(f"🔍 Librarian: {'Yes' if result.librarian_engaged else 'No'}")
-            print(f"📖 MCP Used: {'Yes' if result.mcp_used else 'No'}")
+            print(f"📚 KB Results: {len(result.kb_results) if result.kb_results else 0}")
+            print(f"🔍 Research: {'Yes' if hasattr(result, 'research_engaged') and result.research_engaged else 'No'}")
+            print(f"📖 MCP Used: {'Yes' if hasattr(result, 'mcp_used') and result.mcp_used else 'No'}")
             print(f"⏱️  Time: {processing_time:.2f}s")
             print(f"💬 Response Preview: {result.response[:100]}{'...' if len(result.response) > 100 else ''}")
             
-            if result.error:
+            if hasattr(result, 'error') and result.error:
                 print(f"❌ Error: {result.error}")
             
             # Verify classification accuracy
@@ -109,7 +111,7 @@ async def test_chat_workflow():
             
             results.append({
                 'test_case': test_case['name'],
-                'success': not bool(result.error),
+                'success': not bool(hasattr(result, 'error') and result.error),
                 'classification_correct': result.message_type == test_case['expected_type'],
                 'processing_time': processing_time,
                 'knowledge_status': result.knowledge_status,
@@ -209,7 +211,7 @@ async def test_knowledge_scenarios():
             has_knowledge = result.knowledge_status in [KnowledgeStatus.FOUND, KnowledgeStatus.PARTIAL]
             
             print(f"📚 Knowledge Status: {result.knowledge_status.value}")
-            print(f"🔍 Research Engaged: {'Yes' if result.librarian_engaged else 'No'}")
+            print(f"🔍 Research Engaged: {'Yes' if hasattr(result, 'research_engaged') and result.research_engaged else 'No'}")
             
             # Check if behavior matches expectation
             if test['expect_kb'] and has_knowledge:
