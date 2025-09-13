@@ -138,49 +138,48 @@ logger.info(f"✅ CORS configured for origins: {CORS_ORIGINS}")
 # Load routers with LAZY_LOAD pattern
 logger.info("Loading router configurations...")
 
-# Import routers that need to be loaded
-routers_to_load = [
+# Router configurations with prefixes
+routers_config = [
     # Core system APIs - always needed
-    "backend.api.system",
-    "backend.api.health", 
-    "backend.api.config",
+    ("backend.api.system", "/api"),
+    ("backend.api.health", "/api"), 
+    ("backend.api.config", "/api"),
     
-    # Settings and configuration APIs
-    "backend.api.settings",
+    # Settings and configuration APIs - CRITICAL FIX
+    ("backend.api.settings", "/api/settings"),
     
     # LLM APIs - critical for settings page
-    "backend.api.llm",
+    ("backend.api.llm", "/api/llm"),
     
     # Chat APIs
-    "backend.api.chat",
-    "backend.api.async_chat",
+    ("backend.api.chat", "/api"),
+    ("backend.api.async_chat", "/api"),
     
     # Knowledge APIs
-    "backend.api.knowledge",
+    ("backend.api.knowledge", "/api"),
     
     # Other core APIs
-    "backend.api.rum",
-    "backend.api.monitoring",
-    "backend.api.batch",
-    "backend.api.service_monitor",
-    "backend.api.phase9_monitoring",
-    "backend.api.intelligent_agent",
-    
-    # WebSocket
-    "backend.api.websockets"
+    ("backend.api.rum", "/api"),
+    ("backend.api.monitoring", "/api"),
+    ("backend.api.batch", "/api"),
+    ("backend.api.service_monitor", "/api"),
+    ("backend.api.phase9_monitoring", "/api"),
+    ("backend.api.intelligent_agent", "/api"),
 ]
 
-# Load routers
+# Load routers with proper prefixes
 router_count = 0
-for router_module in routers_to_load:
+for router_module, prefix in routers_config:
     try:
         module = __import__(router_module, fromlist=[''])
         if hasattr(module, 'router'):
-            app.include_router(module.router)
+            app.include_router(module.router, prefix=prefix)
             router_count += 1
+            logger.info(f"✅ Loaded {router_module} with prefix {prefix}")
         elif hasattr(module, 'app') and hasattr(module.app, 'router'):
-            app.include_router(module.app.router)
+            app.include_router(module.app.router, prefix=prefix)
             router_count += 1
+            logger.info(f"✅ Loaded {router_module}.app.router with prefix {prefix}")
     except Exception as e:
         logger.warning(f"⚠️  Could not load router {router_module}: {e}")
 
