@@ -1,0 +1,48 @@
+{
+  "chatId": "eade5248-9719-4fb7-b375-429bf5d92f23",
+  "name": "",
+  "messages": [
+    {
+      "id": "8aecef99-2a1a-47ef-8638-1b2d8b1fa919",
+      "timestamp": "2025-09-08T10:35:28.726Z",
+      "content": "hello",
+      "sender": "user",
+      "status": "sent"
+    },
+    {
+      "id": "fab40b6a-5de5-47c4-a205-c14b12b0f9c4",
+      "timestamp": "2025-09-08T10:35:48.736Z",
+      "content": "I apologize, but processing your message took longer than expected. Your message was: 'hello' (System is experiencing delays)",
+      "sender": "assistant",
+      "type": "response",
+      "metadata": {
+        "duration": 20,
+        "message_type": "general_query",
+        "knowledge_status": "bypassed",
+        "sources": []
+      }
+    },
+    {
+      "id": "9f474884-c4fc-45b5-9d25-c629dae89784",
+      "timestamp": "2025-09-08T13:20:58.772Z",
+      "content": "test",
+      "sender": "user",
+      "status": "sent"
+    },
+    {
+      "id": "f3cfc8f4-898d-4de8-b733-3bb360fb2c7b",
+      "timestamp": "2025-09-08T13:21:18.785Z",
+      "content": "I apologize, but processing your message took longer than expected. Your message was: 'test' (System is experiencing delays)",
+      "sender": "assistant",
+      "type": "response",
+      "metadata": {
+        "duration": 20,
+        "message_type": "general_query",
+        "knowledge_status": "bypassed",
+        "sources": []
+      }
+    }
+  ],
+  "last_modified": "2025-09-08 17:34:51",
+  "created_time": "2025-09-08 17:34:51"
+}
