@@ -9,6 +9,8 @@ The router-view implementation issue where the main content shows `<!---->` indi
 
 **CRITICAL DISCOVERY**: The frontend-engineer agent's "fix" was **completely ineffective** due to a fundamental deployment architecture mismatch. The fix was applied to `/home/autobot/autobot-vue/` but the actual running Vite server serves from `/opt/autobot/src/autobot-vue/` with different file ownership (`autobot-service` user). Even after correcting the file location, **the router-view is still not being served**, indicating a deeper architectural failure.
 
+**UPDATE (2025-09-13)**: This analysis remains relevant for understanding Vue.js deployment issues in distributed environments. The deployment architecture patterns identified here have been standardized in the AutoBot infrastructure per CLAUDE.md guidelines.
+
 ## Critical Issues (Will Definitely Cause Failures)
 
 ### 1. **DEPLOYMENT ARCHITECTURE FAILURE** ⚠️ **PRIMARY ROOT CAUSE**
@@ -20,6 +22,11 @@ The router-view implementation issue where the main content shows `<!---->` indi
   - Production runtime: `/opt/autobot/src/autobot-vue/src/App.vue`
   - File ownership: `autobot-service:autobot-service` vs `autobot:autobot`
 - **Impact**: **100% of frontend development changes are ineffective** until proper deployment
+
+**Current Status**: Per CLAUDE.md, standardized deployment scripts have been implemented:
+- Use `./scripts/utilities/sync-frontend.sh` for proper deployment
+- SSH key-based authentication implemented (see CLAUDE.md)
+- Certificate-based sync replaces password authentication
 
 ### 2. **VUE ROUTER ARCHITECTURAL BREAKDOWN** ⚠️ **SECONDARY ROOT CAUSE**
 **Failure Scenario**: Even after correcting file deployment, router-view still renders as `<!---->`.
@@ -108,6 +115,14 @@ router.beforeEach((to, from, next) => {
 ```
 - **Failure Mode**: Import promise rejects or times out
 - **Evidence**: Would show in browser console as "ChunkLoadError"
+- **Debug Commands**:
+  ```bash
+  # Check if component files exist and are accessible
+  ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "ls -la /opt/autobot/src/autobot-vue/src/views/SettingsView.vue"
+  
+  # Test HTTP access to component chunks
+  curl -I "http://172.16.168.21:5173/src/views/SettingsView.vue"
+  ```
 
 ## Hidden Assumptions (Will Break When Assumptions Are Violated)
 
@@ -174,24 +189,136 @@ const hasErrors = computed(() => appStore?.errors?.length > 0 || false);
 ### Immediate Tests Required:
 1. **Hard Refresh Test**: Ctrl+Shift+R to bypass all caches
 2. **Direct File Verification**: SSH to VM and verify App.vue contains router-view
+   ```bash
+   # Using standardized SSH keys (per CLAUDE.md)
+   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "cat /opt/autobot/src/autobot-vue/src/App.vue | grep router-view"
+   ```
 3. **Console Error Check**: Browser devtools for component import failures
 4. **Store State Inspection**: Vue devtools to verify store initialization
 5. **Network Tab**: Check if SettingsView.vue chunk loads correctly
 
 ### Root Cause Verification:
 1. **Container Status**: Verify frontend container running expected image
+   ```bash
+   docker ps --filter name=autobot-frontend --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+   ```
 2. **File Timestamp**: Check if remote App.vue modification time matches sync
+   ```bash
+   # Compare local and remote timestamps
+   stat /home/kali/Desktop/AutoBot/autobot-vue/src/App.vue
+   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "stat /opt/autobot/src/autobot-vue/src/App.vue"
+   ```
 3. **Route Resolution**: Add debug logging to router beforeEach guard
 4. **Component Loading**: Add error boundaries around lazy imports
 5. **Service Dependencies**: Verify all imported services (apiClient, settingsService, etc.) load
 
+### Automated Diagnosis Script:
+```bash
+#!/bin/bash
+# diagnose-router-view.sh - Comprehensive router-view failure diagnosis
+
+echo "=== Router-View Failure Diagnosis ==="
+
+# 1. Check local vs remote file sync
+echo "1. Checking file synchronization..."
+LOCAL_HASH=$(md5sum /home/kali/Desktop/AutoBot/autobot-vue/src/App.vue | cut -d' ' -f1)
+REMOTE_HASH=$(ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "md5sum /opt/autobot/src/autobot-vue/src/App.vue 2>/dev/null" | cut -d' ' -f1)
+
+if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
+    echo "✅ Files synchronized"
+else
+    echo "❌ Files NOT synchronized - deployment issue"
+    echo "Local hash: $LOCAL_HASH"
+    echo "Remote hash: $REMOTE_HASH"
+fi
+
+# 2. Check for router-view in served content
+echo "\n2. Checking router-view in served HTML..."
+ROUTER_VIEW_COUNT=$(curl -s http://172.16.168.21:5173 | grep -c "router-view")
+if [ "$ROUTER_VIEW_COUNT" -gt 0 ]; then
+    echo "✅ Router-view found in HTML ($ROUTER_VIEW_COUNT instances)"
+else
+    echo "❌ Router-view NOT found in served HTML"
+fi
+
+# 3. Check container health
+echo "\n3. Checking container status..."
+ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "docker ps --filter name=autobot-frontend --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+
+# 4. Check Vue application errors
+echo "\n4. Checking application logs..."
+ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "docker logs autobot-frontend --tail 20 2>&1 | grep -i error"
+
+echo "\n=== Diagnosis Complete ==="
+```
+
 ## Recommended Failure Investigation Priority:
 
-1. **CRITICAL**: Verify sync actually applied to remote VM
+1. **CRITICAL**: Verify sync actually applied to remote VM using standardized scripts
+   ```bash
+   # Use proper sync method (per CLAUDE.md)
+   ./scripts/utilities/sync-frontend.sh components/App.vue
+   ```
 2. **HIGH**: Check browser console for import/component errors
 3. **HIGH**: Inspect Vue devtools for store state and component tree
 4. **MEDIUM**: Test with browser cache disabled
 5. **MEDIUM**: Verify container and build integrity
 6. **LOW**: Check for race conditions in router guards
 
-The most likely root cause is **synchronization failure** - the fix exists locally but was never deployed to the running remote environment, making this appear as a router-view implementation problem when it's actually a deployment issue.
+## Resolution Workflow
+
+### Step 1: Proper Deployment
+```bash
+# 1. Edit locally first (MANDATORY per CLAUDE.md)
+vim /home/kali/Desktop/AutoBot/autobot-vue/src/App.vue
+
+# 2. Sync using standardized method
+./scripts/utilities/sync-frontend.sh src/App.vue
+
+# 3. Verify deployment
+ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "grep router-view /opt/autobot/src/autobot-vue/src/App.vue"
+```
+
+### Step 2: Verification Testing
+```bash
+# Run the diagnosis script
+./diagnose-router-view.sh
+
+# Check Vite HMR response
+curl -s "http://172.16.168.21:5173" | grep -c "router-view"
+
+# Monitor container logs during testing
+ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "docker logs -f autobot-frontend"
+```
+
+### Step 3: Component-Specific Debugging
+```javascript
+// Add to App.vue for debugging
+mounted() {
+  console.log('🔍 App.vue mounted, router available:', !!this.$router);
+  console.log('🔍 Current route:', this.$route);
+  console.log('🔍 Store state:', {
+    isLoading: this.isLoading,
+    hasErrors: this.hasErrors
+  });
+}
+```
+
+### Step 4: Preventive Measures
+1. **Always use standardized sync scripts** (per CLAUDE.md local editing policy)
+2. **Verify file hashes** before and after deployment
+3. **Test in isolated environment** before production sync
+4. **Monitor container logs** during deployment
+5. **Use Vue devtools** for runtime state inspection
+
+The most likely root cause is **synchronization failure** - the fix exists locally but was never properly deployed to the running remote environment using the correct deployment architecture, making this appear as a router-view implementation problem when it's actually a deployment workflow issue.
+
+## Key Lessons Learned
+
+1. **Deployment Architecture Matters**: Always verify the actual runtime directory structure
+2. **File Ownership is Critical**: Container services may run under different users
+3. **Sync Methods Must Match Architecture**: Use proper deployment scripts, not ad-hoc file copying
+4. **Testing Must Verify Actual Deployment**: Check served content, not just file presence
+5. **Vue.js Debugging Requires Multiple Layers**: Template compilation, component loading, router state, store initialization
+
+This analysis demonstrates the importance of understanding the complete deployment pipeline rather than focusing solely on application code when diagnosing frontend issues.
