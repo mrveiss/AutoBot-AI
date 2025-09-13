@@ -134,11 +134,11 @@
                     :is="getNotificationIcon(notification.severity)"
                     :class="[
                       'w-4 h-4 mr-2 mt-0.5 flex-shrink-0',
-                      notification.severity === 'low' ? 'text-green-500' :
-                      notification.severity === 'medium' ? 'text-yellow-500' :
-                      notification.severity === 'high' ? 'text-orange-500' :
-                      notification.severity === 'critical' ? 'text-red-500' :
-                      'text-blue-500'
+                      notification.severity === 'success' ? 'text-green-500' :
+                      notification.severity === 'warning' ? 'text-yellow-500' :
+                      notification.severity === 'error' ? 'text-red-500' :
+                      notification.severity === 'info' ? 'text-blue-500' :
+                      'text-gray-500'
                     ]"
                   />
                   <div class="flex-1 min-w-0">
@@ -172,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import type { SystemSeverity } from '@/types/system'
 import { useAppStore } from '@/stores/useAppStore'
 import XMarkIcon from '@heroicons/vue/24/outline/XMarkIcon'
@@ -225,10 +225,10 @@ const getStatusIcon = (status: string) => {
 
 const getNotificationIcon = (severity: SystemSeverity) => {
   switch (severity) {
-    case 'low': return CheckCircleIcon
-    case 'medium': return ExclamationTriangleIcon
-    case 'high': return ExclamationTriangleIcon
-    case 'critical': return XCircleIcon
+    case 'success': return CheckCircleIcon
+    case 'warning': return ExclamationTriangleIcon
+    case 'error': return XCircleIcon
+    case 'info': return InformationCircleIcon
     default: return InformationCircleIcon
   }
 }
@@ -291,6 +291,11 @@ const clearAllNotifications = () => {
 const hideNotification = (id: string) => {
   appStore.hideSystemNotification(id)
 }
+
+// Cleanup on unmount to prevent teleport accumulation
+onUnmounted(() => {
+  showDetails.value = false
+})
 </script>
 
 <style scoped>

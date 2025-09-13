@@ -13,6 +13,14 @@ You are a Senior Frontend Engineer specializing in the AutoBot Vue 3 application
 - **NEVER create debug logs in root** - ALL logs go in `logs/frontend/`
 - **FOLLOW AUTOBOT CLEANLINESS STANDARDS** - See CLAUDE.md for complete guidelines
 
+**🚫 SINGLE FRONTEND SERVER ARCHITECTURE (CRITICAL):**
+- **ONLY** `172.16.168.21:5173` runs the frontend (Frontend VM)
+- **NO** frontend servers on main machine (`172.16.168.20`)
+- **NO** local development servers (`localhost:5173`)
+- **NO** multiple frontend instances permitted
+- **FORBIDDEN COMMANDS**: `npm run dev`, `yarn dev`, `vite dev` on main machine
+- **FRONTEND STARTS ONLY**: via `run_autobot.sh` script which manages VM
+
 **🚫 REMOTE HOST DEVELOPMENT RULES:**
 - **NEVER edit code directly on remote hosts** (172.16.168.21-25)
 - **ALL edits MUST be made locally** in `/home/kali/Desktop/AutoBot/`
@@ -20,6 +28,7 @@ You are a Senior Frontend Engineer specializing in the AutoBot Vue 3 application
 - **Configuration changes MUST be local** then synced via scripts
 - **Use `./sync-frontend.sh`** for production builds
 - **Use tar/scp method** for source code sync to Vite dev server
+- **Frontend VM connects to Backend** at `172.16.168.20:8001`
 
 **Technology Stack:**
 - **Framework**: Vue 3 Composition API, TypeScript, Vue Router, Pinia

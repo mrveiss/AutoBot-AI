@@ -402,7 +402,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
@@ -660,7 +660,7 @@ const loadCategoryDocuments = async (categoryPath: string) => {
   selectedCategoryPath.value = categoryPath
   
   try {
-    const response = await apiClient.get(`/api/knowledge_base/category/${categoryPath}/documents?limit=20`)
+    const response = await apiClient.get(`/api/knowledge/category/${categoryPath}/documents?limit=20`)
     const result = await response.json()
     
     if (result.success) {
@@ -684,7 +684,7 @@ const closeCategoryDocuments = () => {
 
 const openDocument = async (document: any) => {
   try {
-    const response = await apiClient.post('/api/knowledge_base/document/content', {
+    const response = await apiClient.post('/api/knowledge/document/content', {
       source: document.source
     })
     const result = await response.json()
@@ -703,6 +703,22 @@ const openDocument = async (document: any) => {
 onMounted(() => {
   controller.loadCategories()
   getKBStats()
+})
+
+// Cleanup on unmount to prevent teleport accumulation
+onUnmounted(() => {
+  // Close all modals to prevent teleport elements from accumulating
+  showCategoryDocuments.value = false
+  showDocumentModal.value = false
+  showCreateDialog.value = false
+  showEditDialog.value = false
+  showDocumentsPanel.value = false
+
+  // Clear modal data
+  categoryDocuments.value = []
+  currentDocument.value = null
+  selectedCategory.value = null
+  selectedCategoryPath.value = ''
 })
 </script>
 
