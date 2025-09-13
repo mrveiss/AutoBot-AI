@@ -1,5 +1,5 @@
 // System Status Types
-export type SystemSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type SystemSeverity = 'info' | 'warning' | 'error' | 'success';
 
 export interface SystemStatusDetails {
   status: string;

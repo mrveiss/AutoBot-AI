@@ -266,13 +266,20 @@
       ></div>
     </header>
 
-    <!-- System Status Notifications -->
-    <SystemStatusNotification 
-      v-for="notification in appStore?.systemNotifications || []"
+    <!-- System Status Notifications (limit to last 5 to prevent teleport accumulation) -->
+    <SystemStatusNotification
+      v-for="notification in (appStore?.systemNotifications || []).filter(n => n.visible).slice(-5)"
       :key="notification.id"
-      :notification="notification"
-      @hide="appStore?.hideSystemNotification"
-      @remove="appStore?.removeSystemNotification"
+      :visible="notification.visible || true"
+      :severity="notification.severity || 'info'"
+      :title="notification.title || 'Notification'"
+      :message="notification.message || ''"
+      :status-details="notification.statusDetails"
+      :allow-dismiss="notification.allowDismiss !== false"
+      :show-details="notification.showDetails || false"
+      :auto-hide="notification.autoHide || 0"
+      @dismiss="() => appStore?.hideSystemNotification(notification.id)"
+      @expired="() => appStore?.removeSystemNotification(notification.id)"
     />
 
     <!-- Main Content Area with Router -->
@@ -343,6 +350,7 @@ export default {
     const showMobileNav = ref(false);
 
     let systemHealthCheck = null;
+    let notificationCleanup = null;
 
     // Computed properties
     const isLoading = computed(() => appStore?.isLoading || false);
@@ -429,6 +437,29 @@ export default {
       if (systemHealthCheck) {
         clearInterval(systemHealthCheck);
         systemHealthCheck = null;
+      }
+    };
+
+    // Start notification cleanup to prevent accumulation
+    const startNotificationCleanup = () => {
+      if (notificationCleanup) {
+        clearInterval(notificationCleanup);
+      }
+
+      notificationCleanup = setInterval(() => {
+        if (appStore && appStore.systemNotifications && appStore.systemNotifications.length > 10) {
+          console.log('[App] Cleaning up excessive notifications:', appStore.systemNotifications.length);
+          // Keep only the last 5 notifications
+          const recentNotifications = appStore.systemNotifications.slice(-5);
+          appStore.systemNotifications.splice(0, appStore.systemNotifications.length, ...recentNotifications);
+        }
+      }, 10000); // Check every 10 seconds
+    };
+
+    const stopNotificationCleanup = () => {
+      if (notificationCleanup) {
+        clearInterval(notificationCleanup);
+        notificationCleanup = null;
       }
     };
 
@@ -522,6 +553,9 @@ export default {
       // Start health monitoring
       startSystemHealthCheck();
 
+      // Start notification cleanup to prevent teleport accumulation
+      startNotificationCleanup();
+
       // Initial health check
       setTimeout(() => {
         startSystemHealthCheck();
@@ -532,6 +566,7 @@ export default {
       // Clean up listeners
       document.removeEventListener('click', closeNavbarOnClickOutside);
       stopSystemHealthCheck();
+      stopNotificationCleanup();
     });
 
     return {

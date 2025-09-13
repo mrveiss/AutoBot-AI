@@ -502,17 +502,59 @@ Desktop access is **enabled by default** on all modes:
 ### Service Layout - Distributed VM Infrastructure
 
 **Infrastructure Overview:**
-- 📡 **Main Machine (WSL)**: `172.16.168.20` - Backend API (port 8001)
+- 📡 **Main Machine (WSL)**: `172.16.168.20` - Backend API (port 8001) + Desktop/Terminal VNC (port 6080)
 - 🌐 **Remote VMs:**
-  - **VM1 Frontend**: `172.16.168.21:5173` - Web interface
-  - **VM2 NPU Worker**: `172.16.168.22:8081` - Hardware AI acceleration  
+  - **VM1 Frontend**: `172.16.168.21:5173` - Web interface (SINGLE FRONTEND SERVER)
+  - **VM2 NPU Worker**: `172.16.168.22:8081` - Hardware AI acceleration
   - **VM3 Redis**: `172.16.168.23:6379` - Data layer
   - **VM4 AI Stack**: `172.16.168.24:8080` - AI processing
   - **VM5 Browser**: `172.16.168.25:3000` - Web automation (Playwright)
 
-**Local Services:**
+**Service Distribution:**
+- **Backend API**: `172.16.168.20:8001` - Main machine
+- **Desktop VNC**: `172.16.168.20:6080` - Main machine
+- **Terminal VNC**: `172.16.168.20:6080` - Main machine
+- **Browser Automation**: `172.16.168.25:3000` - Browser VM
 - **Ollama LLM**: `127.0.0.1:11434` - Local LLM processing
-- **VNC Desktop**: `127.0.0.1:6080` - Desktop access via noVNC (when enabled)
+
+## ⚠️ **CRITICAL: Single Frontend Server Architecture**
+
+**MANDATORY FRONTEND SERVER RULES:**
+
+### **✅ CORRECT: Single Frontend Server**
+- **ONLY** `172.16.168.21:5173` runs the frontend (Frontend VM)
+- **NO** frontend servers on main machine (`172.16.168.20`)
+- **NO** local development servers (`localhost:5173`)
+- **NO** multiple frontend instances permitted
+
+### **Development Workflow:**
+1. **Edit Code Locally**: Make all changes in `/home/kali/Desktop/AutoBot/autobot-vue/`
+2. **Sync to Frontend VM**: Use `./sync-frontend.sh` or `./scripts/utilities/sync-to-vm.sh frontend`
+3. **Frontend VM Runs**: Either dev or production mode via `run_autobot.sh`
+
+### **Sync Scripts:**
+- `./sync-frontend.sh` - Frontend-specific sync to VM
+- `./scripts/utilities/sync-to-vm.sh frontend <file> <target>` - General VM sync
+- **SSH Key Authentication**: Uses `~/.ssh/autobot_key` (no passwords)
+
+### **❌ STRICTLY FORBIDDEN (CAUSES SYSTEM CONFLICTS):**
+- Starting frontend servers on main machine (`172.16.168.20`)
+- Running `npm run dev` locally
+- Running `yarn dev` locally
+- Running `vite dev` locally
+- Running any Vite development server on main machine
+- Multiple frontend instances (causes port conflicts and confusion)
+- Direct editing on remote VMs
+- **ANY command that starts a server on port 5173 on main machine**
+
+### **⚠️ CRITICAL WARNING:**
+**Running local frontend servers breaks the distributed architecture and causes:**
+- Port conflicts between local and VM servers
+- Configuration confusion (local vs VM environment variables)
+- API proxy routing failures
+- WebSocket connection issues
+- Lost development work due to sync conflicts
+- **System architecture violations that require manual cleanup**
 
 ### Key Files
 
@@ -543,8 +585,8 @@ All major issues have been resolved:
 
 The application is now fully functional with:
 
-- Backend responding on port 8001
-- Frontend running on port 5173 with proxy to backend
+- Backend responding on port 8001 (main machine)
+- **Single Frontend VM** running on 172.16.168.21:5173 with proxy to backend
 - **VNC desktop access on port 6080 (enabled by default)**
 - All Docker services healthy
 - Chat save operations working

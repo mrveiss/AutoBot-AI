@@ -10,7 +10,7 @@
       leave-to-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
     >
       <div
-        v-if="showNotification && notificationLevel === 'toast'"
+        v-show="showNotification && notificationLevel === 'toast'"
         class="fixed top-4 right-4 max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden z-[9999]"
       >
         <div class="p-4">
@@ -28,8 +28,8 @@
               />
             </div>
             <div class="ml-3 w-0 flex-1 pt-0.5">
-              <p class="text-sm font-medium text-gray-900">{{ title }}</p>
-              <p class="mt-1 text-sm text-gray-500">{{ message }}</p>
+              <p class="text-sm font-medium text-gray-900">{{ notificationData.title }}</p>
+              <p class="mt-1 text-sm text-gray-500">{{ notificationData.message }}</p>
             </div>
             <div class="ml-4 flex-shrink-0 flex">
               <button
@@ -55,16 +55,16 @@
       leave-to-class="opacity-0"
     >
       <div
-        v-if="showNotification && notificationLevel === 'overlay'"
+        v-show="showNotification && notificationLevel === 'overlay'"
         class="fixed inset-0 z-[9999] bg-black bg-opacity-25 backdrop-blur-sm flex items-center justify-center p-4"
       >
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto border border-gray-200 dark:border-gray-600 overflow-hidden">
           <!-- Header -->
           <div :class="[
             'px-4 py-3 border-b border-gray-200 dark:border-gray-600',
-            severity === 'error' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' :
-            severity === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' :
-            severity === 'info' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' :
+            notificationData.severity === 'error' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' :
+            notificationData.severity === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' :
+            notificationData.severity === 'info' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' :
             'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
           ]">
             <div class="flex items-center justify-between">
@@ -73,30 +73,30 @@
                   :is="statusIcon"
                   :class="[
                     'h-6 w-6 mr-2',
-                    severity === 'error' ? 'text-red-600 dark:text-red-400' :
-                    severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-                    severity === 'info' ? 'text-blue-600 dark:text-blue-400' :
+                    notificationData.severity === 'error' ? 'text-red-600 dark:text-red-400' :
+                    notificationData.severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                    notificationData.severity === 'info' ? 'text-blue-600 dark:text-blue-400' :
                     'text-green-600 dark:text-green-400'
                   ]"
                 />
                 <h3 :class="[
                   'text-lg font-semibold',
-                  severity === 'error' ? 'text-red-900 dark:text-red-100' :
-                  severity === 'warning' ? 'text-yellow-900 dark:text-yellow-100' :
-                  severity === 'info' ? 'text-blue-900 dark:text-blue-100' :
+                  notificationData.severity === 'error' ? 'text-red-900 dark:text-red-100' :
+                  notificationData.severity === 'warning' ? 'text-yellow-900 dark:text-yellow-100' :
+                  notificationData.severity === 'info' ? 'text-blue-900 dark:text-blue-100' :
                   'text-green-900 dark:text-green-100'
                 ]">
-                  {{ title }}
+                  {{ notificationData.title }}
                 </h3>
               </div>
               <button
-                v-if="allowDismiss"
+                v-if="notificationData.allowDismiss"
                 @click="dismissNotification"
                 :class="[
                   'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors',
-                  severity === 'error' ? 'hover:text-red-700 dark:hover:text-red-300' :
-                  severity === 'warning' ? 'hover:text-yellow-700 dark:hover:text-yellow-300' :
-                  severity === 'info' ? 'hover:text-blue-700 dark:hover:text-blue-300' :
+                  notificationData.severity === 'error' ? 'hover:text-red-700 dark:hover:text-red-300' :
+                  notificationData.severity === 'warning' ? 'hover:text-yellow-700 dark:hover:text-yellow-300' :
+                  notificationData.severity === 'info' ? 'hover:text-blue-700 dark:hover:text-blue-300' :
                   'hover:text-green-700 dark:hover:text-green-300'
                 ]"
                 aria-label="Close notification"
@@ -109,11 +109,11 @@
           <!-- Content -->
           <div class="p-4">
             <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
-              {{ message }}
+              {{ notificationData.message }}
             </p>
 
             <!-- Status Details -->
-            <div v-if="statusDetails && showDetails" class="space-y-3">
+            <div v-if="notificationData.statusDetails && notificationData.showDetails" class="space-y-3">
               <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
                   System Details
@@ -123,29 +123,29 @@
                     <dt class="text-gray-600 dark:text-gray-400">Status:</dt>
                     <dd :class="[
                       'font-medium',
-                      statusDetails.status === 'online' ? 'text-green-600 dark:text-green-400' :
-                      statusDetails.status === 'degraded' ? 'text-yellow-600 dark:text-yellow-400' :
+                      notificationData.statusDetails.status === 'online' ? 'text-green-600 dark:text-green-400' :
+                      notificationData.statusDetails.status === 'degraded' ? 'text-yellow-600 dark:text-yellow-400' :
                       'text-red-600 dark:text-red-400'
                     ]">
-                      {{ statusDetails.status }}
+                      {{ notificationData.statusDetails.status }}
                     </dd>
                   </div>
                   <div class="flex justify-between text-sm">
                     <dt class="text-gray-600 dark:text-gray-400">Last Check:</dt>
                     <dd class="text-gray-900 dark:text-white font-medium">
-                      {{ formatTimestamp(statusDetails.lastCheck) }}
+                      {{ formatTimestamp(notificationData.statusDetails.lastCheck) }}
                     </dd>
                   </div>
-                  <div v-if="statusDetails.consecutiveFailures" class="flex justify-between text-sm">
+                  <div v-if="notificationData.statusDetails.consecutiveFailures" class="flex justify-between text-sm">
                     <dt class="text-gray-600 dark:text-gray-400">Consecutive Failures:</dt>
                     <dd class="text-red-600 dark:text-red-400 font-medium">
-                      {{ statusDetails.consecutiveFailures }}
+                      {{ notificationData.statusDetails.consecutiveFailures }}
                     </dd>
                   </div>
-                  <div v-if="statusDetails.error" class="mt-2">
+                  <div v-if="notificationData.statusDetails.error" class="mt-2">
                     <dt class="text-sm text-gray-600 dark:text-gray-400 mb-1">Error Details:</dt>
                     <dd class="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded font-mono">
-                      {{ statusDetails.error }}
+                      {{ notificationData.statusDetails.error }}
                     </dd>
                   </div>
                 </dl>
@@ -154,14 +154,14 @@
           </div>
 
           <!-- Actions -->
-          <div v-if="allowDismiss" class="px-4 py-3 bg-gray-50 dark:bg-gray-700 flex justify-end">
+          <div v-if="notificationData.allowDismiss" class="px-4 py-3 bg-gray-50 dark:bg-gray-700 flex justify-end">
             <button
               @click="dismissNotification"
               :class="[
                 'px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-                severity === 'error' ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500' :
-                severity === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-yellow-500' :
-                severity === 'info' ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500' :
+                notificationData.severity === 'error' ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500' :
+                notificationData.severity === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-yellow-500' :
+                notificationData.severity === 'info' ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500' :
                 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500'
               ]"
             >
@@ -191,14 +191,24 @@ export interface SystemStatusDetails {
 }
 
 export interface SystemStatusNotificationProps {
-  visible: boolean
-  severity: 'info' | 'warning' | 'error' | 'success'
-  title: string
-  message: string
+  visible?: boolean
+  severity?: 'info' | 'warning' | 'error' | 'success'
+  title?: string
+  message?: string
   statusDetails?: SystemStatusDetails
   allowDismiss?: boolean
   showDetails?: boolean
   autoHide?: number // Auto hide after X milliseconds
+  notification?: {
+    visible: boolean
+    severity: 'info' | 'warning' | 'error' | 'success'
+    title: string
+    message: string
+    statusDetails?: SystemStatusDetails
+    allowDismiss?: boolean
+    showDetails?: boolean
+    autoHide?: number
+  }
 }
 
 const props = withDefaults(defineProps<SystemStatusNotificationProps>(), {
@@ -210,17 +220,36 @@ const props = withDefaults(defineProps<SystemStatusNotificationProps>(), {
 const emit = defineEmits<{
   dismiss: []
   expired: []
+  hide: []
+  remove: []
 }>()
 
 const appStore = useAppStore()
 
+// Computed properties for handling both prop formats
+const notificationData = computed(() => {
+  if (props.notification) {
+    return props.notification
+  }
+  return {
+    visible: props.visible ?? true,
+    severity: props.severity ?? 'info',
+    title: props.title ?? '',
+    message: props.message ?? '',
+    statusDetails: props.statusDetails,
+    allowDismiss: props.allowDismiss ?? true,
+    showDetails: props.showDetails ?? false,
+    autoHide: props.autoHide ?? 0
+  }
+})
+
 // Local state
-const showNotification = ref(props.visible)
+const showNotification = ref(notificationData.value.visible)
 const autoHideTimer = ref<NodeJS.Timeout | null>(null)
 
 // Computed properties
 const statusIcon = computed(() => {
-  switch (props.severity) {
+  switch (notificationData.value.severity) {
     case 'error':
       return XCircleIcon
     case 'warning':
@@ -234,7 +263,7 @@ const statusIcon = computed(() => {
 
 const notificationLevel = computed(() => {
   // Critical errors show as overlay, others as toast
-  if (props.severity === 'error' && props.statusDetails?.consecutiveFailures && props.statusDetails.consecutiveFailures > 3) {
+  if (notificationData.value.severity === 'error' && notificationData.value.statusDetails?.consecutiveFailures && notificationData.value.statusDetails.consecutiveFailures > 3) {
     return 'overlay'
   }
   return 'toast'
@@ -249,12 +278,12 @@ const clearAutoHide = () => {
 }
 
 const setupAutoHide = () => {
-  if (props.autoHide > 0) {
+  if (notificationData.value.autoHide > 0) {
     clearAutoHide()
     autoHideTimer.value = setTimeout(() => {
       showNotification.value = false
       emit('expired')
-    }, props.autoHide)
+    }, notificationData.value.autoHide)
   }
 }
 
@@ -262,12 +291,14 @@ const dismissNotification = () => {
   showNotification.value = false
   clearAutoHide()
   emit('dismiss')
+  emit('hide')
+  emit('remove')
 }
 
 // Watchers
-watch(() => props.visible, (newValue) => {
+watch(() => notificationData.value.visible, (newValue) => {
   showNotification.value = newValue
-  
+
   if (newValue) {
     setupAutoHide()
   } else {

@@ -10,10 +10,12 @@
 
 export class BackendFallbackService {
   constructor() {
+    // SINGLE FRONTEND SERVER ARCHITECTURE:
+    // Frontend VM (172.16.168.21) connects to Backend VM (172.16.168.20:8001)
     this.backendHosts = [
-      'localhost:8001',
-      '172.16.168.20:8001',
-      '127.0.0.1:8001'
+      '172.16.168.20:8001',  // Primary: Backend VM
+      'localhost:8001',       // Fallback: Local development
+      '127.0.0.1:8001'       // Final fallback
     ];
     
     this.currentBackend = null;

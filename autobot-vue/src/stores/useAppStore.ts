@@ -368,6 +368,15 @@ export const useAppStore = defineStore('app', () => {
     notificationSettings.value = { ...defaultNotificationSettings }
   }
 
+  // Error handling method for legacy compatibility
+  const setGlobalError = (message: string) => {
+    addSystemNotification({
+      title: 'Error',
+      message,
+      severity: 'error'
+    })
+  }
+
   // Initialize with a default session if none exists
   if (sessions.value.length === 0) {
     createNewSession('Welcome Chat')
@@ -404,6 +413,7 @@ export const useAppStore = defineStore('app', () => {
     setBackendStatus,
     setConnectedUsers,
     setLoading,
+    setGlobalError,
 
     // Chat Actions
     createNewSession,
