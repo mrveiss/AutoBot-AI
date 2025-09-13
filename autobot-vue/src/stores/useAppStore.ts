@@ -95,6 +95,10 @@ export const useAppStore = defineStore('app', () => {
   const notificationSettings = ref<NotificationSettings>({ ...defaultNotificationSettings })
   const lastActivityCheck = ref(Date.now())
 
+  // Loading State
+  const isLoading = ref(false)
+  const loadingMessage = ref('')
+
   // Chat State
   const sessions = ref<{
     id: string
@@ -198,6 +202,11 @@ export const useAppStore = defineStore('app', () => {
 
   const setConnectedUsers = (count: number) => {
     connectedUsers.value = count
+  }
+
+  const setLoading = (loading: boolean, message: string = '') => {
+    isLoading.value = loading
+    loadingMessage.value = message
   }
 
   // Chat Session Management
@@ -373,7 +382,11 @@ export const useAppStore = defineStore('app', () => {
     systemNotifications,
     notificationSettings,
     lastActivityCheck,
-    
+
+    // Loading State
+    isLoading,
+    loadingMessage,
+
     // Chat State
     sessions,
     currentSessionId,
@@ -390,7 +403,8 @@ export const useAppStore = defineStore('app', () => {
     toggleNav,
     setBackendStatus,
     setConnectedUsers,
-    
+    setLoading,
+
     // Chat Actions
     createNewSession,
     switchToSession,
