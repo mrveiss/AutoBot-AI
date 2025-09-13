@@ -812,6 +812,19 @@ async def get_detailed_knowledge_stats(request: Request):
         )
 
 
+# Add alias route for frontend compatibility
+@router.get("/knowledge_base/stats")
+async def get_knowledge_base_stats_alias(request: Request):
+    """Alias for /stats endpoint for frontend compatibility"""
+    return await get_knowledge_stats(request)
+
+
+@router.get("/knowledge_base/stats/basic")
+async def get_knowledge_base_stats_basic_alias(request: Request):
+    """Alias for /stats/basic endpoint for frontend compatibility"""
+    return await get_basic_knowledge_stats(request)
+
+
 @router.get("/ingestion/status")
 async def get_ingestion_status(request: Request):
     """Get knowledge base ingestion status and progress"""
