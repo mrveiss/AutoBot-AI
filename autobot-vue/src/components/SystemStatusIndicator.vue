@@ -1,10 +1,10 @@
 <template>
-  <div class="fixed top-4 right-4 z-40">
+  <div class="fixed top-4 right-4 z-30">
     <!-- Main status indicator -->
     <button
       @click="toggleDetails"
       :class="statusClasses"
-      class="relative px-3 py-2 rounded-lg shadow-lg flex items-center space-x-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      class="relative px-3 py-2 rounded-lg shadow-lg flex items-center space-x-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
       :title="getStatusDescription(indicator.status)"
     >
       <!-- Status icon -->
@@ -45,7 +45,7 @@
             <h3 class="font-medium text-gray-900 dark:text-white">System Status</h3>
             <button
               @click="showDetails = false"
-              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-1 transition-colors duration-200"
             >
               <XMarkIcon class="h-5 w-5" />
             </button>
@@ -57,14 +57,14 @@
               <component 
                 :is="getStatusIcon(indicator.status)" 
                 :class="[
-                  'h-6 w-6',
+                  'h-6 w-6 flex-shrink-0',
                   indicator.status === 'success' ? 'text-green-500' :
                   indicator.status === 'warning' ? 'text-yellow-500' :
                   indicator.status === 'error' ? 'text-red-500' :
                   'text-gray-500'
                 ]" 
               />
-              <div class="flex-1">
+              <div class="flex-1 min-w-0">
                 <p class="font-medium text-gray-900 dark:text-white">
                   {{ indicator.text }}
                 </p>
@@ -94,10 +94,27 @@
               </div>
               <div 
                 v-if="indicator.statusDetails.error"
-                class="mt-2 text-xs text-red-600 dark:text-red-400"
+                class="mt-2 text-xs text-red-600 dark:text-red-400 break-words"
               >
                 {{ indicator.statusDetails.error }}
               </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="flex items-center justify-between border-t dark:border-gray-700 pt-4 mt-4">
+              <button
+                @click="refreshStatus"
+                class="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 rounded-md transition-colors duration-200"
+              >
+                Refresh
+              </button>
+              <button
+                v-if="activeNotificationCount > 0"
+                @click="clearAllNotifications"
+                class="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900 rounded-md transition-colors duration-200"
+              >
+                Clear All
+              </button>
             </div>
           </div>
           
@@ -107,11 +124,11 @@
               <h4 class="font-medium text-gray-900 dark:text-white mb-3">
                 Active Notifications ({{ activeNotificationCount }})
               </h4>
-              <div class="space-y-2">
+              <div class="space-y-2 max-h-40 overflow-y-auto">
                 <div 
-                  v-for="notification in (activeNotifications || []).slice(0, 3)" 
+                  v-for="notification in (activeNotifications || []).slice(0, 5)" 
                   :key="notification.id"
-                  class="flex items-start p-2 bg-gray-50 dark:bg-gray-700 rounded"
+                  class="flex items-start p-2 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200"
                 >
                   <component
                     :is="getNotificationIcon(notification.severity)"
@@ -128,13 +145,22 @@
                     <p class="text-sm text-gray-900 dark:text-white truncate">
                       {{ notification.title }}
                     </p>
-                    <p class="text-xs text-gray-600 dark:text-gray-400">
+                    <p class="text-xs text-gray-600 dark:text-gray-400 truncate">
+                      {{ notification.message }}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-500">
                       {{ formatTime(new Date(notification.timestamp)) }}
                     </p>
                   </div>
+                  <button
+                    @click="hideNotification(notification.id)"
+                    class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+                  >
+                    <XMarkIcon class="h-3 w-3" />
+                  </button>
                 </div>
-                <div v-if="activeNotificationCount > 3" class="text-xs text-gray-500 dark:text-gray-400 text-center">
-                  ... and {{ activeNotificationCount - 3 }} more
+                <div v-if="activeNotificationCount > 5" class="text-xs text-gray-500 dark:text-gray-400 text-center pt-2">
+                  ... and {{ activeNotificationCount - 5 }} more
                 </div>
               </div>
             </div>
@@ -164,21 +190,21 @@ const showDetails = ref(false)
 const indicator = computed(() => appStore.systemStatusIndicator)
 
 const statusClasses = computed(() => {
-  const baseClasses = 'transition-colors duration-200'
+  const baseClasses = 'transition-all duration-200 hover:shadow-xl'
   switch (indicator.value.status) {
     case 'success':
       return `${baseClasses} bg-green-600 hover:bg-green-700 text-white`
     case 'warning':
       return `${baseClasses} bg-yellow-600 hover:bg-yellow-700 text-white`
     case 'error':
-      return `${baseClasses} bg-red-600 hover:bg-red-700 text-white`
+      return `${baseClasses} bg-red-600 hover:bg-red-700 text-white animate-pulse`
     default:
       return `${baseClasses} bg-gray-600 hover:bg-gray-700 text-white`
   }
 })
 
 const activeNotifications = computed(() => 
-  appStore.systemNotifications.filter(n => !n.dismissed)
+  appStore.systemNotifications.filter(n => n.visible)
 )
 
 const activeNotificationCount = computed(() => activeNotifications.value.length)
@@ -214,7 +240,7 @@ const getStatusDescription = (status: string): string => {
     case 'warning':
       return 'Some systems experiencing issues'
     case 'error':
-      return 'System errors detected'
+      return 'System errors detected - click for details'
     default:
       return 'System status unknown'
   }
@@ -236,6 +262,35 @@ const formatTime = (timestamp: Date | number): string => {
     minute: '2-digit' 
   })
 }
+
+const refreshStatus = async () => {
+  try {
+    // Trigger a manual health check
+    const response = await fetch('/api/health')
+    if (response.ok) {
+      appStore.setBackendStatus({
+        text: 'Connected',
+        class: 'success'
+      })
+    } else {
+      throw new Error(`Health check failed: ${response.status}`)
+    }
+  } catch (error) {
+    console.error('Manual health check failed:', error)
+    appStore.setBackendStatus({
+      text: 'Connection Error',
+      class: 'error'
+    })
+  }
+}
+
+const clearAllNotifications = () => {
+  appStore.clearAllNotifications()
+}
+
+const hideNotification = (id: string) => {
+  appStore.hideSystemNotification(id)
+}
 </script>
 
 <style scoped>
@@ -252,5 +307,28 @@ const formatTime = (timestamp: Date | number): string => {
 
 .animate-ping {
   animation: pulse 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Custom scrollbar for notification area */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 2px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.8);
+}
+
+/* Ensure error state is highly visible */
+.bg-red-600.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 </style>

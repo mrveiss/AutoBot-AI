@@ -302,7 +302,7 @@ export class AppConfigService {
    */
   async loadRemoteConfig() {
     try {
-      const response = await this.fetchApi('/api/system/frontend-config', {
+      const response = await this.fetchApi('/api/frontend-config', {
         timeout: 5000, // Short timeout for config loading
         cacheBust: false // Don't cache bust config requests
       });

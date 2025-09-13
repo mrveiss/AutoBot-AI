@@ -160,7 +160,7 @@ class GlobalWebSocketService {
     const timeoutId = setTimeout(() => controller.abort(), 2000)
     
     try {
-      const response = await fetch('/api/system/health', { 
+      const response = await fetch(`${this.apiEndpoint}/api/health`, { 
         signal: controller.signal,
         cache: 'no-store'
       })

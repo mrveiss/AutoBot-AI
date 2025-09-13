@@ -1,335 +1,313 @@
 <template>
-  <ErrorBoundary :on-error="handleGlobalError">
-
-    <!-- Skip Navigation Link for Accessibility -->
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 bg-indigo-600 text-white px-4 py-2 rounded-br-lg z-[100000] focus:outline-none focus:ring-2 focus:ring-white">
-      Skip to main content
-    </a>
-
-    <div class="min-h-screen bg-blueGray-50">
-      <!-- Main content -->
-      <div class="relative bg-blueGray-50" :class="appStore?.activeTab === 'chat' ? 'h-screen flex flex-col' : 'min-h-screen'">
-
-      <!-- Header gradient with navigation - Always visible sticky header -->
-      <div class="sticky top-0 bg-gradient-to-br from-indigo-600 to-indigo-800 z-50 shadow-lg">
-        <div class="px-4 md:px-6 mx-auto w-full">
-          <div class="flex flex-row items-center justify-between py-3">
-            <!-- Brand (Left side) -->
-            <div class="flex items-center flex-shrink-0 ml-2">
-              <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
-                <span class="text-indigo-700 text-lg font-bold">A</span>
-              </div>
-              <span class="ml-3 text-lg font-semibold text-white">AutoBot Pro</span>
-            </div>
-
-            <!-- Navigation (Center) -->
-            <div class="hidden lg:flex items-center space-x-8">
-              <div class="flex items-center space-x-4">
-                <button 
-                  @click="setActiveTab('chat')"
-                  :class="{ 
-                    'bg-white text-indigo-700': appStore?.activeTab === 'chat',
-                    'text-white hover:bg-indigo-500': appStore?.activeTab !== 'chat'
-                  }"
-                  class="px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center"
-                  title="Chat Interface"
-                  role="tab"
-                  :aria-selected="appStore?.activeTab === 'chat'"
-                >
-                  💬 Chat
-                </button>
-                
-                
-                <button 
-                  @click="setActiveTab('knowledge')"
-                  :class="{
-                    'bg-white text-indigo-700': appStore?.activeTab === 'knowledge',
-                    'text-white hover:bg-indigo-500': appStore?.activeTab !== 'knowledge'
-                  }"
-                  class="px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center"
-                  title="Knowledge Base"
-                  role="tab"
-                  :aria-selected="appStore?.activeTab === 'knowledge'"
-                >
-                  📚 Knowledge
-                </button>
-                
-                <button 
-                  @click="setActiveTab('secrets')"
-                  :class="{
-                    'bg-white text-indigo-700': appStore?.activeTab === 'secrets',
-                    'text-white hover:bg-indigo-500': appStore?.activeTab !== 'secrets'
-                  }"
-                  class="px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center"
-                  title="Secrets Manager"
-                  role="tab"
-                  :aria-selected="appStore?.activeTab === 'secrets'"
-                >
-                  🔐 Secrets
-                </button>
-                
-                <button 
-                  @click="setActiveTab('tools')"
-                  :class="{
-                    'bg-white text-indigo-700': appStore?.activeTab === 'tools',
-                    'text-white hover:bg-indigo-500': appStore?.activeTab !== 'tools'
-                  }"
-                  class="px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center"
-                  title="Tools Browser"
-                  role="tab"
-                  :aria-selected="appStore?.activeTab === 'tools'"
-                >
-                  🛠️ Tools
-                </button>
-                
-                <button 
-                  @click="setActiveTab('monitoring')"
-                  :class="{
-                    'bg-white text-indigo-700': appStore?.activeTab === 'monitoring',
-                    'text-white hover:bg-indigo-500': appStore?.activeTab !== 'monitoring'
-                  }"
-                  class="px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center"
-                  title="System Monitoring"
-                  role="tab"
-                  :aria-selected="appStore?.activeTab === 'monitoring'"
-                >
-                  📊 Monitoring
-                </button>
-
-                <button 
-                  @click="setActiveTab('settings')"
-                  :class="{
-                    'bg-white text-indigo-700': appStore?.activeTab === 'settings',
-                    'text-white hover:bg-indigo-500': appStore?.activeTab !== 'settings'
-                  }"
-                  class="px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center"
-                  title="Settings & Configuration"
-                  role="tab"
-                  :aria-selected="appStore?.activeTab === 'settings'"
-                >
-                  ⚙️ Settings
-                </button>
-              </div>
-            </div>
-
-            <!-- System Status and Mobile Menu (Right side) -->
+  <div id="app" class="min-h-screen bg-gray-100 flex flex-col">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-sm relative z-30">
+      <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <!-- Logo/Brand -->
+          <div class="flex-shrink-0 flex items-center">
             <div class="flex items-center space-x-3">
-              <!-- System Status Indicator -->
-              <SystemStatusIndicator />
-              
-              <!-- Cache Clear Button -->
-              <button 
-                @click="clearAllCaches"
-                :disabled="clearingCaches"
-                class="hidden md:flex items-center px-3 py-1 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm transition-colors duration-200 disabled:opacity-50"
-                title="Clear all caches to prevent configuration issues"
-              >
-                <span v-if="clearingCaches" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
-                🧹 Clear Cache
-              </button>
-
-              <!-- Mobile Menu Toggle -->
-              <button 
-                @click="toggleMobileNav"
-                class="lg:hidden relative z-[70] flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 transition-colors duration-200"
-                :aria-expanded="showMobileNav"
-                aria-controls="mobile-nav"
-                aria-label="Toggle mobile navigation"
-              >
-                <!-- Hamburger Icon with Animation -->
-                <div class="relative w-6 h-6 flex flex-col justify-center">
-                  <div 
-                    class="absolute h-0.5 w-6 bg-white transform transition-all duration-200"
-                    :class="showMobileNav ? 'rotate-45' : '-translate-y-1'"
-                  ></div>
-                  <div 
-                    class="absolute h-0.5 w-6 bg-white transform transition-all duration-200"
-                    :class="showMobileNav ? 'opacity-0' : ''"
-                  ></div>
-                  <div 
-                    class="absolute h-0.5 w-6 bg-white transform transition-all duration-200"
-                    :class="showMobileNav ? '-rotate-45' : 'translate-y-1'"
-                  ></div>
-                </div>
-              </button>
+              <div class="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+                <span class="text-indigo-600 font-bold text-sm">AB</span>
+              </div>
+              <span class="text-white font-bold text-lg hidden sm:block">AutoBot</span>
             </div>
           </div>
-        </div>
 
-        <!-- Mobile Navigation Menu -->
+          <!-- Desktop Navigation -->
+          <nav class="hidden lg:block">
+            <div class="hidden lg:flex items-center space-x-8">
+              <div class="flex items-center space-x-4">
+                <router-link
+                  to="/chat"
+                  :class="{ 
+                    'bg-white text-indigo-700': $route.path.startsWith('/chat'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/chat')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>Chat</span>
+                  </div>
+                </router-link>
+                
+                <router-link
+                  to="/knowledge"
+                  :class="{
+                    'bg-white text-indigo-700': $route.path.startsWith('/knowledge'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/knowledge')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>Knowledge</span>
+                  </div>
+                </router-link>
+                
+                <router-link
+                  to="/secrets"
+                  :class="{
+                    'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/secrets')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>Secrets</span>
+                  </div>
+                </router-link>
+                
+                <router-link
+                  to="/tools"
+                  :class="{
+                    'bg-white text-indigo-700': $route.path.startsWith('/tools'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/tools')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>Tools</span>
+                  </div>
+                </router-link>
+                
+                <router-link
+                  to="/monitoring"
+                  :class="{
+                    'bg-white text-indigo-700': $route.path.startsWith('/monitoring'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/monitoring')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>Monitor</span>
+                  </div>
+                </router-link>
+
+                <router-link
+                  to="/settings"
+                  :class="{
+                    'bg-white text-indigo-700': $route.path.startsWith('/settings'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/settings')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>Settings</span>
+                  </div>
+                </router-link>
+              </div>
+            </div>
+          </nav>
+
+          <!-- Right side - Status and controls -->
+          <div class="flex items-center space-x-4">
+            <SystemStatusIndicator />
+            <RumDashboard />
+            
+            <!-- Mobile menu button -->
+            <button 
+              @click="toggleMobileNav"
+              class="lg:hidden inline-flex items-center justify-center p-2 rounded-md text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-600 focus:ring-white"
+              aria-controls="mobile-nav"
+              aria-expanded="false"
+            >
+              <span class="sr-only">Open main menu</span>
+              <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Navigation Panel -->
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="transform -translate-y-full opacity-0"
+        enter-to-class="transform translate-y-0 opacity-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="transform translate-y-0 opacity-100"
+        leave-to-class="transform -translate-y-full opacity-0"
+      >
         <div 
           v-show="showMobileNav"
           id="mobile-nav"
-          class="lg:hidden relative z-[60] bg-indigo-700"
-          role="menu"
+          class="lg:hidden absolute top-full left-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg z-20"
         >
           <div class="px-4 py-3 space-y-2">
-            <button 
-              @click="setActiveTab('chat')"
+            <router-link
+              to="/chat"
+              @click="closeMobileNav"
               :class="{ 
-                'bg-white text-indigo-700': appStore?.activeTab === 'chat',
-                'text-white hover:bg-indigo-600': appStore?.activeTab !== 'chat'
+                'bg-white text-indigo-700': $route.path.startsWith('/chat'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/chat')
               }"
-              class="w-full text-left px-4 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center"
-              role="menuitem"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
-              💬 Chat Interface
-            </button>
-            
-            
-            <button 
-              @click="setActiveTab('knowledge')"
-              :class="{
-                'bg-white text-indigo-700': appStore?.activeTab === 'knowledge',
-                'text-white hover:bg-indigo-600': appStore?.activeTab !== 'knowledge'
-              }"
-              class="w-full text-left px-4 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center"
-              role="menuitem"
-            >
-              📚 Knowledge Base
-            </button>
-            
-            <button 
-              @click="setActiveTab('secrets')"
-              :class="{
-                'bg-white text-indigo-700': appStore?.activeTab === 'secrets',
-                'text-white hover:bg-indigo-600': appStore?.activeTab !== 'secrets'
-              }"
-              class="w-full text-left px-4 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center"
-              role="menuitem"
-            >
-              🔐 Secrets Manager
-            </button>
-            
-            <button 
-              @click="setActiveTab('tools')"
-              :class="{
-                'bg-white text-indigo-700': appStore?.activeTab === 'tools',
-                'text-white hover:bg-indigo-600': appStore?.activeTab !== 'tools'
-              }"
-              class="w-full text-left px-4 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center"
-              role="menuitem"
-            >
-              🛠️ Tools Browser
-            </button>
-            
-            <button 
-              @click="setActiveTab('monitoring')"
-              :class="{
-                'bg-white text-indigo-700': appStore?.activeTab === 'monitoring',
-                'text-white hover:bg-indigo-600': appStore?.activeTab !== 'monitoring'
-              }"
-              class="w-full text-left px-4 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center"
-              role="menuitem"
-            >
-              📊 System Monitoring
-            </button>
-
-            <button 
-              @click="setActiveTab('settings')"
-              :class="{
-                'bg-white text-indigo-700': appStore?.activeTab === 'settings',
-                'text-white hover:bg-indigo-600': appStore?.activeTab !== 'settings'
-              }"
-              class="w-full text-left px-4 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center"
-              role="menuitem"
-            >
-              ⚙️ Settings & Configuration
-            </button>
-            
-            <!-- Mobile Cache Clear Button -->
-            <button 
-              @click="clearAllCaches"
-              :disabled="clearingCaches"
-              class="w-full text-left px-4 py-3 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white transition-colors duration-200 flex items-center disabled:opacity-50"
-              role="menuitem"
-            >
-              <span v-if="clearingCaches" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
-              🧹 Clear All Caches
-            </button>
-          </div>
-        </div>
-      </div>
-
-        <!-- Main Content Area with id for skip link -->
-        <main id="main-content" :class="appStore?.activeTab === 'chat' ? 'flex-1 overflow-hidden' : 'flex-1'" role="main">
-          
-          <!-- DEBUG: Router and Store Status -->
-          <div v-if="debugMode" class="p-4 bg-red-100 border border-red-400 text-red-800 text-sm relative z-50">
-            <h3 class="font-bold mb-2">🐛 DEBUG: App.vue Router Status</h3>
-            <p><strong>Current Route:</strong> {{ $route?.path || 'NONE' }}</p>
-            <p><strong>Route Name:</strong> {{ $route?.name || 'NONE' }}</p>
-            <p><strong>App Store Active Tab:</strong> {{ appStore?.activeTab || 'NONE' }}</p>
-            <p><strong>App Store Initialized:</strong> {{ !!appStore ? 'YES' : 'NO' }}</p>
-            <p><strong>Router Ready:</strong> {{ $router?.isReady ? 'YES' : 'NO' }}</p>
-            <p><strong>Route Matched:</strong> {{ $route?.matched?.length || 0 }} components</p>
-            <div v-if="$route?.matched?.length">
-              <strong>Matched Components:</strong>
-              <ul class="ml-4">
-                <li v-for="(match, index) in $route.matched" :key="index">
-                  {{ match.name }} ({{ match.path }})
-                </li>
-              </ul>
-            </div>
-          </div>
-          
-          <!-- Use router-view for all content to enable proper sub-routing -->
-          <router-view />
-          
-          <!-- FALLBACK: Show if router-view is empty -->
-          <div v-if="debugMode && !$route.matched.length" class="p-8 bg-yellow-50 border border-yellow-200">
-            <div class="text-center">
-              <h2 class="text-xl font-bold text-yellow-800 mb-4">⚠️ No Route Matched</h2>
-              <p class="text-yellow-700 mb-4">The router couldn't find a matching component for path: <code class="bg-yellow-200 px-2 py-1 rounded">{{ $route.path }}</code></p>
-              <button @click="debugRouter" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
-                Debug Router
-              </button>
-            </div>
-          </div>
-          
-        </main>
-      </div>
-
-      <!-- Elevation Dialog -->
-      <ElevationDialog 
-        :show="showElevationDialog"
-        :service="elevationRequest.service"
-        :reason="elevationRequest.reason"
-        :request-id="elevationRequest.requestId || 'default-request-id'"
-        :details="elevationRequest.details"
-        @approved="onElevationApproved"
-        @denied="onElevationDenied"
-        @cancel="onElevationCancelled"
-      />
-
-
-      <!-- RUM Dashboard (only if enabled) -->
-      <div v-if="appStore?.rumEnabled" class="fixed bottom-4 right-4 z-[60]">
-        <div class="bg-white rounded-lg shadow-lg p-4 max-w-sm">
-          <Suspense>
-            <template #default>
-              <RumDashboard />
-            </template>
-            <template #fallback>
-              <div class="flex items-center justify-center p-4">
-                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-                <span class="ml-2 text-sm">Loading RUM...</span>
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"></path>
+                </svg>
+                <span>Chat</span>
               </div>
-            </template>
-          </Suspense>
+            </router-link>
+            
+            <router-link
+              to="/knowledge"
+              @click="closeMobileNav"
+              :class="{
+                'bg-white text-indigo-700': $route.path.startsWith('/knowledge'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/knowledge')
+              }"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>Knowledge</span>
+              </div>
+            </router-link>
+            
+            <router-link
+              to="/secrets"
+              @click="closeMobileNav"
+              :class="{
+                'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/secrets')
+              }"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path>
+                </svg>
+                <span>Secrets</span>
+              </div>
+            </router-link>
+            
+            <router-link
+              to="/tools"
+              @click="closeMobileNav"
+              :class="{
+                'bg-white text-indigo-700': $route.path.startsWith('/tools'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/tools')
+              }"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                </svg>
+                <span>Tools</span>
+              </div>
+            </router-link>
+            
+            <router-link
+              to="/monitoring"
+              @click="closeMobileNav"
+              :class="{
+                'bg-white text-indigo-700': $route.path.startsWith('/monitoring'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/monitoring')
+              }"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>Monitor</span>
+              </div>
+            </router-link>
+
+            <router-link
+              to="/settings"
+              @click="closeMobileNav"
+              :class="{
+                'bg-white text-indigo-700': $route.path.startsWith('/settings'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/settings')
+              }"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                </svg>
+                <span>Settings</span>
+              </div>
+            </router-link>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Click overlay to close mobile nav -->
+      <div 
+        v-if="showMobileNav"
+        @click="showMobileNav = false"
+        class="lg:hidden fixed inset-0 bg-black bg-opacity-25 z-10"
+      ></div>
+    </header>
+
+    <!-- System Status Notifications -->
+    <SystemStatusNotification 
+      v-for="notification in appStore?.systemNotifications || []"
+      :key="notification.id"
+      :notification="notification"
+      @hide="appStore?.hideSystemNotification"
+      @remove="appStore?.removeSystemNotification"
+    />
+
+    <!-- Main Content Area with Router -->
+    <main id="main-content" class="flex-1 overflow-hidden" role="main">
+      <!-- Loading Screen -->
+      <div v-if="isLoading" class="flex items-center justify-center h-full">
+        <div class="text-center">
+          <div class="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p class="text-gray-600">Loading AutoBot...</p>
         </div>
       </div>
-    </div>
 
-    <!-- Global notifications -->
-    <SystemStatusNotification 
-      :visible="false"
-      severity="info"
-      title=""
-      message=""
-    />
-    <ErrorNotifications />
-  </ErrorBoundary>
+      <!-- Error Screen -->
+      <div v-else-if="hasErrors" class="flex items-center justify-center h-full">
+        <div class="text-center">
+          <div class="text-red-500 mb-4">
+            <svg class="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+            </svg>
+          </div>
+          <h2 class="text-xl font-semibold text-gray-900 mb-2">System Error</h2>
+          <p class="text-gray-600 mb-4">An error occurred while loading AutoBot.</p>
+          <button 
+            @click="clearAllCaches"
+            class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200"
+          >
+            Refresh System
+          </button>
+        </div>
+      </div>
+
+      <!-- Use router-view for all content to enable proper sub-routing -->
+      <router-view v-else class="h-full" />
+    </main>
+  </div>
 </template>
 
 <script>
@@ -338,45 +316,20 @@ import { useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/useAppStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
-// Core components loaded immediately (small and always needed)
-import ElevationDialog from './components/ElevationDialog.vue';
-import ErrorNotifications from './components/ErrorNotifications.vue';
-import ErrorBoundary from './components/ErrorBoundary.vue';
-import SystemStatusNotification from './components/SystemStatusNotification.vue';
-import SystemStatusIndicator from './components/SystemStatusIndicator.vue';
-
-// Import cache manager
-import { cacheManager } from '@/utils/CacheManager.ts';
-import { invalidateApiCache } from '@/config/environment.js';
-
-// Import async RUM Dashboard component
-import { defineAsyncComponent } from 'vue';
-
-const RumDashboard = defineAsyncComponent({
-  loader: () => import('./components/RumDashboard.vue'),
-  loadingComponent: { template: '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3">Loading RUM Dashboard...</span></div>' },
-  errorComponent: { template: '<div class="text-red-600 p-4">Failed to load RUM Dashboard component</div>' },
-  delay: 100,
-  timeout: 10000
-});
-
+import SystemStatusNotification from '@/components/SystemStatusNotification.vue';
+import SystemStatusIndicator from '@/components/SystemStatusIndicator.vue';
+import RumDashboard from '@/components/RumDashboard.vue';
+import { cacheBuster } from '@/utils/CacheBuster.js';
+import { routerHealthMonitor } from '@/utils/RouterHealthMonitor.js';
+import { frontendHealthMonitor } from '@/utils/FrontendHealthMonitor.js';
 
 export default {
   name: 'App',
+  
   components: {
-    ElevationDialog,
-    ErrorNotifications,
-    ErrorBoundary,
     SystemStatusNotification,
     SystemStatusIndicator,
     RumDashboard,
-    // Async components loaded on-demand
-    ChatInterface: defineAsyncComponent(() => import('./components/chat/ChatInterface.vue')),
-    KnowledgeInterface: defineAsyncComponent(() => import('./components/knowledge/KnowledgeInterface.vue')),
-    SecretsManager: defineAsyncComponent(() => import('./components/SecretsManager.vue')),
-    ToolsBrowser: defineAsyncComponent(() => import('./components/ToolsBrowser.vue')),
-    SystemMonitor: defineAsyncComponent(() => import('./components/SystemMonitor.vue')),
-    SettingsInterface: defineAsyncComponent(() => import('./components/settings/SettingsInterface.vue')),
   },
   
   setup() {
@@ -388,16 +341,6 @@ export default {
     
     // Reactive data
     const showMobileNav = ref(false);
-    const showElevationDialog = ref(false);
-    const clearingCaches = ref(false);
-    const debugMode = ref(true); // Enable debug mode to diagnose router issues
-    
-    const elevationRequest = ref({
-      service: '',
-      reason: '',
-      requestId: '',
-      details: ''
-    });
 
     let systemHealthCheck = null;
 
@@ -406,32 +349,12 @@ export default {
     const hasErrors = computed(() => appStore?.errors?.length > 0 || false);
     
     // Methods
-    const setActiveTab = (tab) => {
-      // Update app store state
-      appStore?.updateRoute(tab);
-      
-      // Navigate using Vue Router for proper sub-routing
-      const routeMap = {
-        'chat': '/chat',
-        'desktop': '/desktop',
-        'knowledge': '/knowledge',
-        'secrets': '/secrets',
-        'tools': '/tools',
-        'monitoring': '/monitoring',
-        'settings': '/settings'
-      };
-      
-      const targetRoute = routeMap[tab];
-      if (targetRoute && router.currentRoute.value.path !== targetRoute) {
-        router.push(targetRoute);
-      }
-      
-      // Close mobile nav when tab is selected
-      showMobileNav.value = false;
-    };
-
     const toggleMobileNav = () => {
       showMobileNav.value = !showMobileNav.value;
+    };
+
+    const closeMobileNav = () => {
+      showMobileNav.value = false;
     };
 
     const closeNavbarOnClickOutside = (event) => {
@@ -441,315 +364,217 @@ export default {
       }
     };
 
-    // Cache management methods and debug router function (consolidated)
-    const debugRouter = () => {
-      console.log('🐛 Router Debug Information:');
-      console.log('Current Route:', router.currentRoute.value);
-      console.log('All Routes:', router.getRoutes());
-      console.log('App Store:', appStore);
-      console.log('Router Ready:', router.isReady());
-      
-      // Try to manually navigate to /chat
-      console.log('Attempting manual navigation to /chat...');
-      router.push('/chat').then(() => {
-        console.log('Navigation successful');
-      }).catch(error => {
-        console.error('Navigation failed:', error);
-      });
-    };
-    
     const clearAllCaches = async () => {
-      if (clearingCaches.value) return;
-      
-      clearingCaches.value = true;
-      console.log('[AutoBot] Starting comprehensive cache clearing...');
-      
       try {
-        // Show user notification
-        appStore?.addSystemNotification({
-          severity: 'info',
-          title: 'Cache Management',
-          message: 'Clearing all caches to prevent configuration issues...'
-        });
-        
-        // Clear API configuration cache
-        invalidateApiCache();
-        
-        // Clear browser caches via cache manager
-        await cacheManager.clearAllCaches();
-        
-        // Clear service worker cache
-        if ('serviceWorker' in navigator) {
-          const registration = await navigator.serviceWorker.ready;
-          if (registration.active) {
-            const messageChannel = new MessageChannel();
-            const clearPromise = new Promise((resolve) => {
-              messageChannel.port1.onmessage = () => resolve();
-            });
-            
-            registration.active.postMessage(
-              { type: 'CLEAR_CACHE' },
-              [messageChannel.port2]
-            );
-            
-            await clearPromise;
-          }
+        // Clear all stores
+        if (appStore && typeof appStore.clearAllNotifications === 'function') {
+          appStore.clearAllNotifications();
+        }
+        if (chatStore && typeof chatStore.clearAllSessions === 'function') {
+          chatStore.clearAllSessions();
+        }
+        if (knowledgeStore && typeof knowledgeStore.clearCache === 'function') {
+          knowledgeStore.clearCache();
         }
         
-        // Update build version to prevent future cache issues
-        cacheManager.updateBuildVersion();
-        
-        console.log('[AutoBot] Cache clearing completed successfully');
-        
-        // Show success notification
-        appStore?.addSystemNotification({
-          severity: 'success',
-          title: 'Cache Cleared',
-          message: 'All caches cleared successfully! API configurations refreshed.'
-        });
-        
-        // Optional: Reload page to ensure clean state
-        const shouldReload = await new Promise((resolve) => {
-          const confirmed = window.confirm(
-            'Caches have been cleared successfully.\n\nWould you like to reload the page to ensure a completely clean state?\n\n(This is recommended for full cache invalidation)'
-          );
-          resolve(confirmed);
-        });
-        
-        if (shouldReload) {
-          window.location.reload();
-        }
-        
+        // Reload the page
+        window.location.reload();
       } catch (error) {
-        console.error('[AutoBot] Cache clearing failed:', error);
-        
-        appStore?.addSystemNotification({
-          severity: 'error',
-          title: 'Cache Clear Failed',
-          message: `Cache clearing failed: ${error.message}. Try refreshing the page manually.`
-        });
-      } finally {
-        clearingCaches.value = false;
+        console.error('Error clearing caches:', error);
       }
     };
 
-    const checkSystemHealth = async () => {
-      try {
-        // Use the new notification system for health status
-        const response = await fetch('/api/system/health', {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'X-Cache-Bust': Date.now().toString()
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Health check failed: ${response.status}`);
-        }
-        
-        const healthData = await response.json();
-        
-        // Update system health status
-        if (healthData.status !== 'healthy') {
-          appStore?.addSystemNotification({
-            severity: 'warning',
-            title: 'System Health',
-            message: `System health check: ${healthData.status}. Some services may be degraded.`
-          });
-        }
-      } catch (error) {
-        // Only show notification for persistent failures (not single timeouts)
-        if (error.message.includes('Failed to fetch') || error.message.includes('Network error')) {
-          appStore?.addSystemNotification({
-            severity: 'error',
-            title: 'Backend Connection Lost',
-            message: 'Backend connection lost. Check if services are running and clear cache if issues persist.'
-          });
-        }
-      }
-    };
-
-    const handleGlobalError = (error, instance, info) => {
-      console.error('Global error caught:', error, info);
-      
-      // Check if error is related to cache or configuration
-      const cacheRelatedErrors = [
-        'Failed to fetch',
-        'NetworkError',
-        'ERR_INTERNET_DISCONNECTED',
-        'ERR_NETWORK_CHANGED',
-        'Configuration error',
-        'API endpoint not found'
-      ];
-      
-      const isCacheRelated = cacheRelatedErrors.some(errorType => 
-        error.message?.includes(errorType) || error.toString().includes(errorType)
-      );
-      
-      if (isCacheRelated) {
-        appStore?.addSystemNotification({
-          severity: 'error',
-          title: 'Network/Configuration Error',
-          message: `Network/Configuration error detected: ${error.message}. This might be resolved by clearing caches.`
-        });
-      } else {
-        appStore?.addSystemNotification({
+    const handleGlobalError = (error) => {
+      console.error('Global error:', error);
+      if (appStore && typeof appStore.addSystemNotification === 'function') {
+        appStore.addSystemNotification({
           severity: 'error',
           title: 'Application Error',
-          message: `Application error: ${error.message}`
+          message: error.message || 'An unexpected error occurred'
         });
       }
     };
 
-
-    const onElevationApproved = (password) => {
-      console.log('Elevation approved');
-      
-      // Send approval event with the password
-      window.dispatchEvent(new CustomEvent('elevation-approved', {
-        detail: {
-          service: elevationRequest.value.service,
-          password: password
-        }
-      }));
-      
-      showElevationDialog.value = false;
-      elevationRequest.value = { service: '', reason: '', requestId: '', details: '' };
-    };
-
-    const onElevationDenied = () => {
-      console.log('Elevation denied');
-      
-      // Send denial event
-      window.dispatchEvent(new CustomEvent('elevation-denied', {
-        detail: {
-          service: elevationRequest.value.service,
-        }
-      }));
-      
-      showElevationDialog.value = false;
-      elevationRequest.value = { service: '', reason: '', requestId: '', details: '' };
-    };
-
-    const onElevationCancelled = () => {
-      console.log('Elevation cancelled');
-      showElevationDialog.value = false;
-      elevationRequest.value = { service: '', reason: '', requestId: '', details: '' };
-    };
-
-    const handleElevationRequest = (event) => {
-      const { service, reason, details } = event.detail;
-      
-      elevationRequest.value = {
-        service: service || 'Unknown Service',
-        reason: reason || 'No reason provided',
-        requestId: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9),
-        details: details || ''
-      };
-      
-      showElevationDialog.value = true;
-    };
-
-    // Lifecycle hooks
-    onMounted(async () => {
-      console.log('App mounted, initializing application...')
-      console.log('[DEBUG] Current route:', router.currentRoute.value)
-      console.log('[DEBUG] Route path:', router.currentRoute.value.path)
-      console.log('[DEBUG] Route matched:', router.currentRoute.value.matched)
-      console.log('[DEBUG] Debug mode:', debugMode.value)
-      console.log('[DEBUG] App store exists:', !!appStore)
-      console.log('[DEBUG] App store has updateRoute:', typeof appStore?.updateRoute)
-      document.addEventListener('click', closeNavbarOnClickOutside)
-      
-      // Listen for global elevation requests
-      window.addEventListener('elevation-request', handleElevationRequest);
-      
-      // Initialize cache manager
-      try {
-        await cacheManager.initialize();
-        console.log('[AutoBot] Cache manager initialized successfully');
-      } catch (error) {
-        console.error('[AutoBot] Cache manager initialization failed:', error);
-      }
-      
-      // Start system health monitoring using new notification system
-      systemHealthCheck = setInterval(checkSystemHealth, 10000) // Check every 10 seconds
-      
-      // Initial health check
-      setTimeout(checkSystemHealth, 1000);
-      
-      console.log('App initialization completed');
-    });
-
-    onUnmounted(() => {
-      document.removeEventListener('click', closeNavbarOnClickOutside)
-      window.removeEventListener('elevation-request', handleElevationRequest);
-      
+    // System health monitoring
+    const startSystemHealthCheck = () => {
       if (systemHealthCheck) {
         clearInterval(systemHealthCheck);
       }
+      
+      systemHealthCheck = setInterval(async () => {
+        try {
+          const response = await fetch('/api/health');
+          if (response.ok) {
+            if (appStore && typeof appStore.setBackendStatus === 'function') {
+              appStore.setBackendStatus({
+                text: 'Connected',
+                class: 'success'
+              });
+            }
+          } else {
+            throw new Error(`Health check failed: ${response.status}`);
+          }
+        } catch (error) {
+          if (appStore && typeof appStore.setBackendStatus === 'function') {
+            appStore.setBackendStatus({
+              text: 'Disconnected',
+              class: 'error'
+            });
+          }
+        }
+      }, 30000); // Check every 30 seconds
+    };
+
+    const stopSystemHealthCheck = () => {
+      if (systemHealthCheck) {
+        clearInterval(systemHealthCheck);
+        systemHealthCheck = null;
+      }
+    };
+
+    // Lifecycle hooks
+    onMounted(() => {
+      // Add global click listener for mobile nav
+      document.addEventListener('click', closeNavbarOnClickOutside);
+
+      // Set up global error handler
+      window.addEventListener('error', (event) => {
+        handleGlobalError(event.error || event);
+      });
+
+      window.addEventListener('unhandledrejection', (event) => {
+        handleGlobalError(event.reason);
+      });
+
+      // Initialize bulletproof systems
+      try {
+        // Initialize cache buster
+        if (cacheBuster && typeof cacheBuster.initialize === 'function') {
+          cacheBuster.initialize();
+        }
+
+        // Initialize router health monitor
+        if (routerHealthMonitor && typeof routerHealthMonitor.initialize === 'function') {
+          routerHealthMonitor.initialize(router);
+
+          // Set up router health listeners
+          routerHealthMonitor.on('failure', (data) => {
+            console.error('[App] Router failure detected:', data);
+            if (appStore && typeof appStore.addSystemNotification === 'function') {
+              appStore.addSystemNotification({
+                severity: 'warning',
+                title: 'Navigation Issue',
+                message: `Router failure detected. Attempting recovery... (${data.failureCount})`
+              });
+            }
+          });
+
+          routerHealthMonitor.on('recovery', (data) => {
+            console.log('[App] Router recovery successful:', data);
+            if (appStore && typeof appStore.addSystemNotification === 'function') {
+              appStore.addSystemNotification({
+                severity: 'success',
+                title: 'Recovery Complete',
+                message: 'Router has been successfully recovered.'
+              });
+            }
+          });
+        }
+
+        // Initialize frontend health monitor
+        if (frontendHealthMonitor && typeof frontendHealthMonitor.initialize === 'function') {
+          frontendHealthMonitor.initialize();
+
+          // Set up health status listeners
+          frontendHealthMonitor.onHealthChange((healthData) => {
+            if (healthData.status.overall !== 'healthy') {
+              console.warn('[App] Frontend health degraded:', healthData);
+
+              if (appStore && typeof appStore.addSystemNotification === 'function') {
+                let severity = 'info';
+                let title = 'System Status';
+                let message = '';
+
+                switch (healthData.status.overall) {
+                  case 'degraded':
+                    severity = 'warning';
+                    title = 'Performance Degraded';
+                    message = 'System performance is degraded. Monitoring for recovery...';
+                    break;
+                  case 'unhealthy':
+                    severity = 'error';
+                    title = 'System Issues Detected';
+                    message = 'System health issues detected. Auto-recovery in progress...';
+                    break;
+                }
+
+                if (message) {
+                  appStore.addSystemNotification({ severity, title, message });
+                }
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error('[App] Error initializing bulletproof systems:', error);
+      }
+
+      // Start health monitoring
+      startSystemHealthCheck();
+
+      // Initial health check
+      setTimeout(() => {
+        startSystemHealthCheck();
+      }, 1000);
+    });
+
+    onUnmounted(() => {
+      // Clean up listeners
+      document.removeEventListener('click', closeNavbarOnClickOutside);
+      stopSystemHealthCheck();
     });
 
     return {
-      // Stores
+      // Store references
       appStore,
       chatStore,
       knowledgeStore,
       
       // Reactive data
       showMobileNav,
-      showElevationDialog,
-      clearingCaches,
-      elevationRequest,
-      debugMode,
-      debugRouter,
       
       // Computed
       isLoading,
       hasErrors,
       
       // Methods
-      setActiveTab,
       toggleMobileNav,
+      closeMobileNav,
       clearAllCaches,
       handleGlobalError,
-      onElevationApproved,
-      onElevationDenied,
-      onElevationCancelled,
-    }
-  },
-}
+    };
+  }
+};
 </script>
 
 <style scoped>
 /* Add any component-specific styles here */
-.router-link-active {
-  @apply bg-white text-indigo-700;
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.5s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 
-/* Animation for mobile menu */
+/* Ensure proper z-index for mobile navigation */
 #mobile-nav {
-  animation: slideDown 0.2s ease-out;
+  z-index: 50;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Focus styles for accessibility */
-button:focus-visible {
-  @apply ring-2 ring-white ring-offset-2 ring-offset-indigo-600;
-}
-
-/* Mobile navigation z-index fix */
-.lg\:hidden {
-  position: relative;
+/* Smooth transitions for navigation state changes */
+.transition-transform {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
 }
 </style>

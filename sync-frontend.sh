@@ -14,6 +14,31 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}🔧 AutoBot Frontend Sync${NC}"
 echo "=================================="
 
+# Parse command line arguments
+DEV_MODE=false
+if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+    echo -e "${BLUE}AutoBot Frontend Sync Script${NC}"
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --dev         Development mode: Sync source files (fast, hot reload)"
+    echo "  --restart     Production mode + restart frontend server"
+    echo "  (no flags)    Production mode: Build and deploy"
+    echo "  --help, -h    Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0                # Production build and deploy"
+    echo "  $0 --dev         # Development source sync (recommended for development)"
+    echo "  $0 --restart     # Production build + server restart"
+    exit 0
+elif [[ "$1" == "--dev" ]]; then
+    DEV_MODE=true
+    echo -e "${YELLOW}🧪 Development mode: Syncing source files${NC}"
+else
+    echo -e "${BLUE}🏭 Production mode: Building and deploying${NC}"
+fi
+
 # Check if we're in the right directory
 if [[ ! -f "autobot-vue/package.json" ]]; then
     echo -e "${RED}❌ Error: Must run from AutoBot root directory${NC}"
@@ -29,10 +54,6 @@ if [[ ! -f "ansible/inventory/production.yml" ]]; then
     exit 1
 fi
 
-# Step 1: Build frontend
-echo -e "${YELLOW}📦 Building frontend...${NC}"
-cd autobot-vue
-
 # Show current git status for context
 if git status &>/dev/null; then
     echo -e "${BLUE}Git status:${NC}"
@@ -40,25 +61,58 @@ if git status &>/dev/null; then
     echo ""
 fi
 
-# Build with timing
-start_time=$(date +%s)
-if npm run build; then
-    end_time=$(date +%s)
-    build_time=$((end_time - start_time))
-    echo -e "${GREEN}✅ Build completed in ${build_time}s${NC}"
+if [[ "$DEV_MODE" == "true" ]]; then
+    # Development mode: Sync source files
+    echo -e "${YELLOW}📁 Syncing source files to frontend VM...${NC}"
+    start_time=$(date +%s)
+    
+    if ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/; then
+        end_time=$(date +%s)
+        sync_time=$((end_time - start_time))
+        echo -e "${GREEN}✅ Source sync completed in ${sync_time}s${NC}"
+    else
+        echo -e "${RED}❌ Source sync failed${NC}"
+        exit 1
+    fi
+    
+    # Skip production deployment in dev mode
+    echo -e "${GREEN}🎉 Development sync completed!${NC}"
+    echo "=================================="
+    echo -e "${BLUE}Summary:${NC}"
+    echo "  • Mode: 🧪 Development source sync"
+    echo "  • Target: Frontend VM (172.16.168.21)"
+    echo "  • Status: ✅ Source files synced"
+    echo ""
+    echo -e "${BLUE}Next steps:${NC}"
+    echo "  • Frontend dev server will auto-reload changes"
+    echo "  • Open browser: http://172.16.168.21:5173"
+    echo "  • Check console for any errors"
+    exit 0
 else
-    echo -e "${RED}❌ Build failed${NC}"
-    exit 1
+    # Production mode: Build and deploy
+    echo -e "${YELLOW}📦 Building frontend...${NC}"
+    cd autobot-vue
+
+    # Build with timing
+    start_time=$(date +%s)
+    if npm run build; then
+        end_time=$(date +%s)
+        build_time=$((end_time - start_time))
+        echo -e "${GREEN}✅ Build completed in ${build_time}s${NC}"
+    else
+        echo -e "${RED}❌ Build failed${NC}"
+        exit 1
+    fi
+
+    # Extract new bundle name
+    cd dist
+    bundle_name=$(ls js/index-*.js 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "unknown")
+    css_name=$(ls assets/index-*.css 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "unknown")
+    echo -e "${BLUE}📄 New bundle: ${bundle_name}${NC}"
+
+    # Go back to AutoBot root
+    cd ../..
 fi
-
-# Extract new bundle name
-cd dist
-bundle_name=$(ls js/index-*.js 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "unknown")
-css_name=$(ls assets/index-*.css 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "unknown")
-echo -e "${BLUE}📄 New bundle: ${bundle_name}${NC}"
-
-# Go back to AutoBot root
-cd ../..
 
 # Step 2: Test backend connectivity
 echo -e "${YELLOW}🔍 Testing backend connectivity...${NC}"
