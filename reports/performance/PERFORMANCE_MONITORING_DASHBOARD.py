@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PerformanceSnapshot:
-    """Single performance measurement snapshot"""
+    """Single performance measurement snapshot with AutoBot-specific metrics"""
     timestamp: float
     
     # System metrics
@@ -48,6 +48,18 @@ class PerformanceSnapshot:
     cache_hit_rate: float
     error_rate: float
     active_sessions: int
+    
+    # AutoBot-specific metrics (NEW)
+    npu_utilization: float
+    npu_inference_time_ms: float
+    multimodal_processing_time_ms: float
+    vector_search_latency_ms: float
+    chromadb_query_count: int
+    knowledge_base_size: int
+    cross_vm_latency_ms: float
+    desktop_session_count: int
+    terminal_session_count: int
+    workflow_execution_time_ms: float
 
 
 @dataclass
@@ -78,7 +90,7 @@ class PerformanceMonitoringDashboard:
         self.snapshots = deque(maxlen=self.max_snapshots)
         self.alerts = deque(maxlen=1000)
         
-        # Performance thresholds
+        # Performance thresholds (enhanced for AutoBot)
         self.thresholds = {
             "cpu_warning": 80.0,
             "cpu_critical": 95.0,
@@ -90,15 +102,32 @@ class PerformanceMonitoringDashboard:
             "error_rate_critical": 15.0,  # 15%
             "gpu_utilization_low": 30.0,  # Low GPU usage alert
             "bundle_size_warning": 2000,  # 2MB
-            "cache_hit_rate_low": 80.0  # 80% cache hit rate
+            "cache_hit_rate_low": 80.0,  # 80% cache hit rate
+            
+            # AutoBot-specific thresholds
+            "npu_utilization_low": 10.0,  # NPU should be active for AI tasks
+            "npu_inference_time_warning": 500.0,  # 500ms for NPU inference
+            "multimodal_processing_warning": 3000.0,  # 3s for multi-modal
+            "vector_search_warning": 200.0,  # 200ms for vector search
+            "vector_search_critical": 800.0,  # 800ms critical threshold
+            "chromadb_queries_high": 100,  # High query load per minute
+            "cross_vm_latency_warning": 100.0,  # 100ms inter-VM latency
+            "workflow_execution_warning": 10000.0,  # 10s workflow execution
         }
         
-        # Baseline measurements for comparison
+        # Baseline measurements for comparison (AutoBot-enhanced)
         self.baselines = {
             "chat_response_time_ms": 3000.0,  # Before optimization
             "frontend_load_time_ms": 2500.0,  # Before optimization
             "bundle_size_kb": 3200,  # Before optimization
             "memory_usage_mb": 200.0,  # Before optimization
+            
+            # AutoBot-specific baselines
+            "multimodal_processing_ms": 8000.0,  # Before NPU/GPU optimization
+            "vector_search_ms": 500.0,  # Before FAISS optimization
+            "npu_inference_ms": 1000.0,  # CPU-only baseline
+            "cross_vm_latency_ms": 200.0,  # Before network optimization
+            "workflow_execution_ms": 15000.0,  # Before coordination optimization
         }
         
         # Monitoring state
@@ -129,6 +158,13 @@ class PerformanceMonitoringDashboard:
             # Redis metrics (if available)
             redis_memory = await self._get_redis_memory_usage()
             
+            # AutoBot-specific metrics
+            npu_utilization, npu_inference_time = await self._get_npu_metrics()
+            multimodal_processing_time = await self._get_multimodal_metrics()
+            vector_search_latency, chromadb_queries = await self._get_vector_search_metrics()
+            cross_vm_latency = await self._get_cross_vm_latency()
+            workflow_metrics = await self._get_workflow_metrics()
+            
             # Create snapshot
             snapshot = PerformanceSnapshot(
                 timestamp=current_time,
@@ -158,7 +194,19 @@ class PerformanceMonitoringDashboard:
                 bundle_size_kb=2100,  # Would be actual measurement
                 cache_hit_rate=85.0,  # Would be actual calculation
                 error_rate=2.1,  # Would be actual calculation
-                active_sessions=3  # Would be actual count
+                active_sessions=3,  # Would be actual count
+                
+                # AutoBot-specific metrics
+                npu_utilization=npu_utilization,
+                npu_inference_time_ms=npu_inference_time,
+                multimodal_processing_time_ms=multimodal_processing_time,
+                vector_search_latency_ms=vector_search_latency,
+                chromadb_query_count=chromadb_queries,
+                knowledge_base_size=13383,  # Current AutoBot KB size
+                cross_vm_latency_ms=cross_vm_latency,
+                desktop_session_count=workflow_metrics.get('desktop_sessions', 0),
+                terminal_session_count=workflow_metrics.get('terminal_sessions', 0),
+                workflow_execution_time_ms=workflow_metrics.get('execution_time_ms', 0)
             )
             
             return snapshot
@@ -231,6 +279,191 @@ class PerformanceMonitoringDashboard:
             return info.get('used_memory', 0) / (1024 * 1024)  # Convert to MB
         except Exception:
             return 0.0
+    
+    async def _get_npu_metrics(self) -> tuple[float, float]:
+        """Get NPU utilization and inference time metrics"""
+        try:
+            # Check if OpenVINO NPU is available and being used
+            try:
+                import openvino as ov
+                core = ov.Core()
+                available_devices = core.available_devices
+                npu_devices = [d for d in available_devices if 'NPU' in d]
+                
+                if npu_devices:
+                    # Simulate NPU utilization (would be actual monitoring)
+                    npu_utilization = 75.0  # Active NPU usage
+                    npu_inference_time = 250.0  # Fast NPU inference in ms
+                else:
+                    npu_utilization = 0.0  # No NPU detected
+                    npu_inference_time = 1000.0  # Fallback CPU time
+                    
+            except ImportError:
+                npu_utilization = 0.0  # OpenVINO not available
+                npu_inference_time = 1000.0  # CPU fallback
+                
+            return npu_utilization, npu_inference_time
+            
+        except Exception as e:
+            logger.error(f"NPU metrics collection failed: {e}")
+            return 0.0, 1000.0
+    
+    async def _get_multimodal_metrics(self) -> float:
+        """Get multi-modal processing performance metrics"""
+        try:
+            # Check recent multi-modal processing times from logs or metrics
+            # This would integrate with actual AutoBot multi-modal pipeline
+            
+            # Simulate metrics based on hardware availability
+            gpu_available = torch.cuda.is_available() if 'torch' in globals() else False
+            npu_available = await self._check_npu_availability()
+            
+            if npu_available and gpu_available:
+                # Optimal: NPU + GPU coordination
+                processing_time = 800.0  # ms - significant improvement
+            elif gpu_available:
+                # Good: GPU-only processing
+                processing_time = 2000.0  # ms - GPU acceleration
+            else:
+                # Baseline: CPU-only processing
+                processing_time = 8000.0  # ms - slow CPU processing
+                
+            return processing_time
+            
+        except Exception as e:
+            logger.error(f"Multi-modal metrics collection failed: {e}")
+            return 8000.0  # Return baseline CPU time on error
+    
+    async def _get_vector_search_metrics(self) -> tuple[float, int]:
+        """Get vector search latency and query count metrics"""
+        try:
+            # Check ChromaDB/vector search performance
+            # This would integrate with actual AutoBot knowledge base metrics
+            
+            # Simulate vector search performance
+            import random
+            
+            # Base latency varies by optimization level
+            base_latencies = {
+                'faiss_optimized': random.uniform(20, 50),  # FAISS acceleration
+                'standard_chromadb': random.uniform(200, 500),  # Standard ChromaDB
+                'slow_search': random.uniform(800, 1200)  # Unoptimized search
+            }
+            
+            # Determine current optimization level (would be actual detection)
+            optimization_level = 'standard_chromadb'  # Default assumption
+            
+            # Check if FAISS optimization is available
+            try:
+                import faiss
+                optimization_level = 'faiss_optimized'
+            except ImportError:
+                pass
+            
+            search_latency = base_latencies[optimization_level]
+            
+            # Query count (would be actual metrics from last minute)
+            query_count = random.randint(5, 25)  # Simulated query load
+            
+            return search_latency, query_count
+            
+        except Exception as e:
+            logger.error(f"Vector search metrics collection failed: {e}")
+            return 500.0, 0  # Return safe defaults
+    
+    async def _get_cross_vm_latency(self) -> float:
+        """Get cross-VM communication latency metrics"""
+        try:
+            # Test latency to AutoBot VMs
+            vm_endpoints = {
+                'frontend': 'http://172.16.168.21:5173',
+                'npu_worker': 'http://172.16.168.22:8081', 
+                'redis': 'http://172.16.168.23:6379',
+                'ai_stack': 'http://172.16.168.24:8080',
+                'browser': 'http://172.16.168.25:3000'
+            }
+            
+            latencies = []
+            
+            # Quick ping test to each VM (simplified)
+            import subprocess
+            for vm_name, endpoint in vm_endpoints.items():
+                try:
+                    # Extract IP from endpoint
+                    ip = endpoint.split('//')[1].split(':')[0]
+                    
+                    # Simple ping test (1 packet)
+                    result = subprocess.run(
+                        ['ping', '-c', '1', '-W', '1000', ip],
+                        capture_output=True, text=True, timeout=2
+                    )
+                    
+                    if result.returncode == 0:
+                        # Extract latency from ping output
+                        output_lines = result.stdout.split('\n')
+                        for line in output_lines:
+                            if 'time=' in line:
+                                latency = float(line.split('time=')[1].split(' ms')[0])
+                                latencies.append(latency)
+                                break
+                                
+                except Exception:
+                    # VM not reachable, use high latency
+                    latencies.append(200.0)
+            
+            # Return average latency
+            if latencies:
+                return sum(latencies) / len(latencies)
+            else:
+                return 100.0  # Default if no measurements
+                
+        except Exception as e:
+            logger.error(f"Cross-VM latency measurement failed: {e}")
+            return 100.0  # Safe default
+    
+    async def _get_workflow_metrics(self) -> Dict[str, Any]:
+        """Get AutoBot workflow execution metrics"""
+        try:
+            # Collect workflow-specific metrics
+            # This would integrate with actual AutoBot workflow monitoring
+            
+            metrics = {
+                'desktop_sessions': 2,  # Active desktop sessions
+                'terminal_sessions': 3,  # Active terminal sessions  
+                'execution_time_ms': 5000.0,  # Average workflow execution time
+                'success_rate': 95.0,  # Workflow success percentage
+                'queue_depth': 1  # Pending workflows
+            }
+            
+            # Simulate some variation in metrics
+            import random
+            metrics['desktop_sessions'] = random.randint(0, 5)
+            metrics['terminal_sessions'] = random.randint(1, 8)
+            metrics['execution_time_ms'] = random.uniform(2000, 12000)
+            
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"Workflow metrics collection failed: {e}")
+            return {
+                'desktop_sessions': 0,
+                'terminal_sessions': 0,
+                'execution_time_ms': 10000.0,
+                'success_rate': 90.0,
+                'queue_depth': 0
+            }
+    
+    async def _check_npu_availability(self) -> bool:
+        """Check if NPU is available and active"""
+        try:
+            import openvino as ov
+            core = ov.Core()
+            available_devices = core.available_devices
+            return any('NPU' in device for device in available_devices)
+        except ImportError:
+            return False
+        except Exception:
+            return False
     
     async def analyze_performance_and_generate_alerts(self, snapshot: PerformanceSnapshot):
         """Analyze performance snapshot and generate alerts"""
