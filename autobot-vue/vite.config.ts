@@ -4,10 +4,16 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
-// Import centralized defaults - use localhost for WSL development
+// Import centralized defaults - SINGLE FRONTEND SERVER ARCHITECTURE
+// Frontend runs on 172.16.168.21:5173 and connects to backend on 172.16.168.20:8001
+// Service Distribution:
+// - Browser (Playwright): 172.16.168.25:3000
+// - Terminal VNC: 172.16.168.20:6080
+// - Desktop VNC: 172.16.168.20:6080
 const DEFAULT_CONFIG = {
-  backend: { host: 'localhost', port: '8001' },
-  browser: { host: 'localhost', port: '6080' }
+  backend: { host: '172.16.168.20', port: '8001' },
+  browser: { host: '172.16.168.25', port: '3000' },  // Browser automation service
+  vnc: { host: '172.16.168.20', port: '6080' }       // Desktop/Terminal VNC
 }
 
 // https://vite.dev/config/
