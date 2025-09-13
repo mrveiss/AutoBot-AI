@@ -163,9 +163,28 @@ export const useAppStore = defineStore('app', () => {
     activeTab.value = tab
   }
 
-  // Router integration - updates active tab from navigation
-  const updateRoute = (tab: TabType) => {
+  // Router integration - updates active tab from navigation and handles route changes
+  const updateRoute = (tab: TabType, router?: any) => {
+    // Update the active tab state
     setActiveTab(tab)
+    
+    // Handle router navigation if router is provided
+    if (router) {
+      const routeMap = {
+        'chat': '/chat',
+        'desktop': '/desktop', 
+        'knowledge': '/knowledge',
+        'secrets': '/secrets',
+        'tools': '/tools',
+        'monitoring': '/monitoring',
+        'settings': '/settings'
+      };
+      
+      const targetRoute = routeMap[tab];
+      if (targetRoute && router.currentRoute.value.path !== targetRoute) {
+        router.push(targetRoute);
+      }
+    }
   }
 
   const toggleNav = () => {

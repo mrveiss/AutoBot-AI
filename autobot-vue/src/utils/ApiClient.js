@@ -499,7 +499,7 @@ class ApiClient {
   async loadFrontendConfig() {
     // Load dynamic configuration from backend
     // This eliminates the need for hardcoded ports and URLs
-    const response = await this.get('/api/system/frontend-config');
+    const response = await this.get('/api/frontend-config');
     return response.json();
   }
 
