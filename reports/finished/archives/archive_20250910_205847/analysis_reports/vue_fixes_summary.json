@@ -1,0 +1,15 @@
+{
+  "total_fixes": 6,
+  "successful_fixes": 6,
+  "failed_fixes": 0,
+  "files_modified": [
+    "/home/kali/Desktop/AutoBot/autobot-vue/src/components/HistoryView.vue",
+    "/home/kali/Desktop/AutoBot/autobot-vue/src/components/FileBrowser.vue",
+    "/home/kali/Desktop/AutoBot/autobot-vue/src/components/KnowledgeManager.vue",
+    "/home/kali/Desktop/AutoBot/autobot-vue/src/components/ChatInterface.vue"
+  ],
+  "fixes_by_type": {
+    "vfor_key_fix": 6,
+    "event_cleanup_fix": 0
+  }
+}

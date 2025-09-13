@@ -1,0 +1,17 @@
+{
+  "name": "autobot-browser-service",
+  "version": "1.0.0",
+  "description": "AutoBot browser automation service using Playwright",
+  "main": "playwright-server.js",
+  "scripts": {
+    "start": "node playwright-server.js"
+  },
+  "dependencies": {
+    "playwright": "^1.54.2",
+    "express": "^4.21.2",
+    "winston": "^3.17.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "mission_info": {
+    "timestamp": "2025-09-10T20:58:47.590568",
+    "duration_seconds": 0.0,
+    "coordinator_id": "AUTOBOT_REPORT_PROCESSOR"
+  },
+  "discovery_summary": {
+    "test_results": {
+      "file_count": 134,
+      "total_size_mb": 4.040844917297363,
+      "file_types": [
+        "json",
+        "html",
+        "md",
+        "png",
+        "ts",
+        "py"
+      ]
+    },
+    "security_reports": {
+      "file_count": 37,
+      "total_size_mb": 0.6947422027587891,
+      "file_types": [
+        "json",
+        "py",
+        "js",
+        "md"
+      ]
+    },
+    "analysis_reports": {
+      "file_count": 125,
+      "total_size_mb": 260.1843433380127,
+      "file_types": [
+        "json",
+        "log",
+        "js",
+        "md",
+        "yaml",
+        "identifier",
+        "py"
+      ]
+    },
+    "documentation": {
+      "file_count": 381,
+      "total_size_mb": 3.19156551361084,
+      "file_types": [
+        "html",
+        "md"
+      ]
+    },
+    "logs": {
+      "file_count": 90,
+      "total_size_mb": 7.459277153015137,
+      "file_types": [
+        "log",
+        "txt"
+      ]
+    },
+    "other": {
+      "file_count": 665,
+      "total_size_mb": 122.17627048492432,
+      "file_types": [
+        "json",
+        "meta",
+        "backup",
+        "sh",
+        "db",
+        "bak",
+        "new",
+        "vue",
+        "gz",
+        "css",
+        "fixed",
+        "csv",
+        "ts",
+        "identifier",
+        "test",
+        "ini",
+        "html",
+        "yml",
+        "svg",
+        "png",
+        "yaml",
+        "unknown",
+        "js",
+        "md",
+        "py"
+      ]
+    }
+  },
+  "analysis_summary": {
+    "critical_files": 506,
+    "warning_files": 26,
+    "clean_files": 900,
+    "top_error_patterns": [
+      "failed",
+      "FAILED",
+      "error",
+      "ERROR",
+      "abort"
+    ]
+  },
+  "archive_summary": {
+    "archive_location": "/home/kali/Desktop/AutoBot/reports/archives/archive_20250910_205847",
+    "categories_created": [
+      "test_results",
+      "security_reports",
+      "analysis_reports",
+      "documentation",
+      "logs",
+      "other",
+      "summary"
+    ],
+    "successful_archives": 1432,
+    "failed_archives": 0
+  },
+  "statistics": {
+    "total_files": 1432,
+    "processed_files": 1432,
+    "archived_files": 1432,
+    "errors_found": 506,
+    "warnings_found": 26,
+    "processing_time": 0.0
+  },
+  "recommendations": [
+    "\ud83d\udd34 CRITICAL: 506 files contain errors requiring immediate attention",
+    "\ud83d\udfe1 WARNING: 26 files have warnings that should be reviewed",
+    "\ud83d\udfe2 POSITIVE: 900 files are clean and ready for production",
+    "\ud83d\udccb Review archived files in categorized directories",
+    "\ud83d\udd0d Investigate critical error patterns identified",
+    "\ud83d\udcca Use processing summary for future improvements",
+    "\ud83d\uddc2\ufe0f Consider automated monitoring for new reports"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "chatId": "test-123",
+  "name": "",
+  "messages": [
+    {
+      "id": "5b0edd3c-d6e3-452e-a057-55017d2487c7",
+      "timestamp": "2025-09-02T05:18:12.638Z",
+      "content": "123?",
+      "sender": "user",
+      "status": "sending"
+    }
+  ],
+  "last_modified": "2025-09-02 08:21:21",
+  "created_time": "2025-09-02 08:20:51"
+}
