@@ -14,6 +14,18 @@ import redis
 import torch
 from sentence_transformers import SentenceTransformer
 import psutil
+import numpy as np
+from collections import defaultdict, LRUCache
+from dataclasses import dataclass
+from typing import Union
+try:
+    import faiss
+except ImportError:
+    faiss = None
+try:
+    import openvino as ov
+except ImportError:
+    ov = None
 
 logger = logging.getLogger(__name__)
 
@@ -424,7 +436,531 @@ class OptimizedMemoryManager:
 
 
 # =====================================================
-# 5. Implementation Helper Functions
+# 5. AutoBot-Specific Performance Optimizations (NEW)
+# =====================================================
+
+class AutoBotNPUAccelerationManager:
+    """
+    Intel NPU acceleration manager specifically for AutoBot's multi-modal AI workloads
+    """
+    
+    def __init__(self):
+        self.openvino_core = None
+        self.npu_models = {}
+        self.npu_available = self._detect_npu_hardware()
+        self.performance_metrics = defaultdict(list)
+        
+        if ov is not None and self.npu_available:
+            self.openvino_core = ov.Core()
+            logger.info("OpenVINO NPU acceleration initialized")
+        else:
+            logger.warning("NPU acceleration not available - falling back to GPU/CPU")
+    
+    def _detect_npu_hardware(self) -> bool:
+        """Detect Intel NPU hardware availability"""
+        if ov is None:
+            return False
+            
+        try:
+            core = ov.Core()
+            available_devices = core.available_devices
+            npu_devices = [device for device in available_devices if 'NPU' in device]
+            return len(npu_devices) > 0
+        except Exception as e:
+            logger.warning(f"NPU detection failed: {e}")
+            return False
+    
+    async def initialize_npu_models(self):
+        """Initialize NPU models for AutoBot workloads"""
+        if not self.npu_available or self.openvino_core is None:
+            return
+            
+        try:
+            # Load text embedding model for AutoBot's knowledge base operations
+            self.npu_models["text_embedder"] = await self._load_onnx_model_on_npu(
+                "all-MiniLM-L6-v2", "text_embedding"
+            )
+            
+            # Load message classification model for AutoBot's chat workflow
+            self.npu_models["message_classifier"] = await self._load_onnx_model_on_npu(
+                "autobot_message_classifier", "classification"
+            )
+            
+            logger.info(f"Loaded {len(self.npu_models)} models on NPU")
+            
+        except Exception as e:
+            logger.error(f"NPU model initialization failed: {e}")
+    
+    async def _load_onnx_model_on_npu(self, model_name: str, model_type: str):
+        """Load ONNX model on NPU device"""
+        # In production, these would be actual ONNX model paths
+        model_path = f"/models/{model_name}.onnx"
+        
+        try:
+            # Compile model for NPU
+            compiled_model = self.openvino_core.compile_model(
+                model_path, device_name="NPU"
+            )
+            
+            return {
+                "compiled_model": compiled_model,
+                "model_type": model_type,
+                "batch_size": 64,  # NPU optimized batch size
+                "input_shape": (1, 384) if model_type == "text_embedding" else (1, 512)
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to load {model_name} on NPU: {e}")
+            return None
+    
+    async def process_text_embeddings_npu(self, texts: List[str]) -> np.ndarray:
+        """Process text embeddings using NPU acceleration"""
+        if "text_embedder" not in self.npu_models:
+            raise RuntimeError("NPU text embedder not loaded")
+            
+        start_time = time.time()
+        model_info = self.npu_models["text_embedder"]
+        batch_size = model_info["batch_size"]
+        
+        embeddings = []
+        
+        # Process in NPU-optimized batches
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
+            
+            # Tokenize and preprocess (would use actual tokenizer)
+            input_tokens = self._tokenize_texts(batch_texts)
+            
+            # NPU inference
+            batch_embeddings = await self._npu_inference(
+                model_info["compiled_model"], input_tokens
+            )
+            
+            embeddings.extend(batch_embeddings)
+        
+        processing_time = time.time() - start_time
+        self.performance_metrics['npu_embedding_time'].append(processing_time)
+        
+        logger.info(f"NPU processed {len(texts)} embeddings in {processing_time:.3f}s")
+        return np.array(embeddings)
+    
+    async def classify_messages_npu(self, messages: List[str]) -> List[Dict[str, Any]]:
+        """Classify messages using NPU acceleration for AutoBot chat workflow"""
+        if "message_classifier" not in self.npu_models:
+            raise RuntimeError("NPU message classifier not loaded")
+            
+        start_time = time.time()
+        model_info = self.npu_models["message_classifier"]
+        
+        # Batch classification on NPU
+        input_features = self._extract_message_features(messages)
+        
+        classifications = await self._npu_inference(
+            model_info["compiled_model"], input_features
+        )
+        
+        # Post-process NPU output for AutoBot message types
+        results = []
+        for i, message in enumerate(messages):
+            classification = classifications[i]
+            results.append({
+                "message": message,
+                "type": self._decode_classification(classification),
+                "confidence": float(np.max(classification)),
+                "processing_time_ms": (time.time() - start_time) * 1000 / len(messages)
+            })
+        
+        processing_time = time.time() - start_time
+        self.performance_metrics['npu_classification_time'].append(processing_time)
+        
+        return results
+    
+    def _tokenize_texts(self, texts: List[str]) -> np.ndarray:
+        """Tokenize texts for NPU processing"""
+        # Simplified tokenization - in production would use proper tokenizer
+        max_length = 512
+        tokenized = []
+        
+        for text in texts:
+            tokens = [ord(c) % 1000 for c in text[:max_length]]  # Simplified
+            tokens = tokens + [0] * (max_length - len(tokens))  # Padding
+            tokenized.append(tokens)
+        
+        return np.array(tokenized, dtype=np.float32)
+    
+    def _extract_message_features(self, messages: List[str]) -> np.ndarray:
+        """Extract features from messages for classification"""
+        # Simplified feature extraction
+        features = []
+        for message in messages:
+            # Basic features: length, word count, etc.
+            feature_vector = [
+                len(message),
+                len(message.split()),
+                message.count('?'),
+                message.count('!'),
+                1 if 'terminal' in message.lower() else 0,
+                1 if 'desktop' in message.lower() else 0
+            ]
+            # Pad to 512 features
+            feature_vector.extend([0] * (512 - len(feature_vector)))
+            features.append(feature_vector)
+        
+        return np.array(features, dtype=np.float32)
+    
+    async def _npu_inference(self, compiled_model, input_data: np.ndarray) -> np.ndarray:
+        """Perform inference on NPU"""
+        try:
+            # Create inference request
+            infer_request = compiled_model.create_infer_request()
+            
+            # Set input tensor
+            input_tensor = ov.Tensor(input_data)
+            infer_request.set_tensor(compiled_model.inputs[0], input_tensor)
+            
+            # Run inference
+            infer_request.infer()
+            
+            # Get output
+            output_tensor = infer_request.get_tensor(compiled_model.outputs[0])
+            return output_tensor.data
+            
+        except Exception as e:
+            logger.error(f"NPU inference failed: {e}")
+            raise
+    
+    def _decode_classification(self, classification: np.ndarray) -> str:
+        """Decode NPU classification output to AutoBot message types"""
+        class_names = [
+            "general_query", "terminal_task", "desktop_task", 
+            "system_task", "research_needed"
+        ]
+        
+        predicted_class = np.argmax(classification)
+        return class_names[predicted_class] if predicted_class < len(class_names) else "unknown"
+
+
+class AutoBotChromaDBOptimizer:
+    """
+    Optimized ChromaDB performance manager for AutoBot's 13K+ vector knowledge base
+    """
+    
+    def __init__(self):
+        self.faiss_index = None
+        self.vector_cache = {}
+        self.query_stats = defaultdict(list)
+        self.autobot_document_types = {
+            "api_documentation", "system_manual", "troubleshooting", 
+            "configuration", "performance_data", "security_guide"
+        }
+    
+    async def initialize_faiss_optimization(self, vectors: np.ndarray, 
+                                          metadata: List[Dict]):
+        """Initialize FAISS index for fast approximate similarity search"""
+        if faiss is None:
+            logger.warning("FAISS not available, using fallback search")
+            return
+            
+        try:
+            dimension = vectors.shape[1]
+            
+            # Use HNSW for high-dimensional vectors (384d embeddings)
+            if dimension > 256:
+                # Hierarchical Navigable Small World graphs - excellent for high recall
+                self.faiss_index = faiss.IndexHNSWFlat(dimension, 32)
+                self.faiss_index.hnsw.efConstruction = 200
+                self.faiss_index.hnsw.efSearch = 100
+            else:
+                # IVF for smaller dimensions
+                nlist = min(100, vectors.shape[0] // 10)  # Adaptive number of clusters
+                quantizer = faiss.IndexFlatL2(dimension)
+                self.faiss_index = faiss.IndexIVFFlat(quantizer, dimension, nlist)
+                
+                # Train the index
+                self.faiss_index.train(vectors)
+            
+            # Add vectors to index
+            self.faiss_index.add(vectors.astype('float32'))
+            
+            # Cache metadata for quick lookup
+            self.vector_metadata = {i: meta for i, meta in enumerate(metadata)}
+            
+            logger.info(f"FAISS index initialized with {vectors.shape[0]} vectors, dimension {dimension}")
+            
+        except Exception as e:
+            logger.error(f"FAISS initialization failed: {e}")
+            self.faiss_index = None
+    
+    async def optimized_similarity_search(self, query_embedding: np.ndarray, 
+                                         k: int = 5, 
+                                         filters: Optional[Dict] = None) -> List[Dict]:
+        """Optimized vector similarity search for AutoBot knowledge base"""
+        start_time = time.time()
+        
+        try:
+            if self.faiss_index is not None:
+                # Use FAISS for fast approximate search
+                results = await self._faiss_search(query_embedding, k * 2, filters)
+            else:
+                # Fallback to brute force search
+                results = await self._brute_force_search(query_embedding, k * 2, filters)
+            
+            # Apply AutoBot-specific ranking
+            ranked_results = self._autobot_relevance_ranking(results, filters)
+            
+            search_time = time.time() - start_time
+            self.query_stats['search_time'].append(search_time)
+            
+            logger.debug(f"Vector search completed in {search_time:.3f}s, returned {len(ranked_results)} results")
+            
+            return ranked_results[:k]
+            
+        except Exception as e:
+            logger.error(f"Vector search failed: {e}")
+            return []
+    
+    async def _faiss_search(self, query_embedding: np.ndarray, k: int, 
+                           filters: Optional[Dict]) -> List[Dict]:
+        """FAISS-accelerated similarity search"""
+        query = query_embedding.reshape(1, -1).astype('float32')
+        
+        # Search with FAISS
+        distances, indices = self.faiss_index.search(query, k)
+        
+        results = []
+        for i, (distance, idx) in enumerate(zip(distances[0], indices[0])):
+            if idx == -1:  # FAISS returns -1 for insufficient results
+                continue
+                
+            metadata = self.vector_metadata.get(idx, {})
+            
+            # Apply filters
+            if self._passes_autobot_filters(metadata, filters):
+                results.append({
+                    "id": idx,
+                    "distance": float(distance),
+                    "similarity": 1.0 / (1.0 + float(distance)),
+                    "metadata": metadata,
+                    "rank": i
+                })
+        
+        return results
+    
+    def _passes_autobot_filters(self, metadata: Dict, filters: Optional[Dict]) -> bool:
+        """Apply AutoBot-specific filters to search results"""
+        if not filters:
+            return True
+            
+        # Document type filtering
+        if 'document_type' in filters:
+            doc_type = metadata.get('document_type', 'unknown')
+            if doc_type not in filters['document_type']:
+                return False
+        
+        # Recency filtering for AutoBot's evolving documentation
+        if 'max_age_days' in filters:
+            created_date = metadata.get('created_date')
+            if created_date:
+                age_days = (datetime.now() - created_date).days
+                if age_days > filters['max_age_days']:
+                    return False
+        
+        # Relevance threshold for AutoBot queries
+        if 'min_relevance' in filters:
+            relevance_score = metadata.get('relevance_score', 0.0)
+            if relevance_score < filters['min_relevance']:
+                return False
+        
+        return True
+    
+    def _autobot_relevance_ranking(self, results: List[Dict], 
+                                  filters: Optional[Dict]) -> List[Dict]:
+        """Apply AutoBot-specific relevance ranking"""
+        for result in results:
+            metadata = result['metadata']
+            base_score = result['similarity']
+            
+            # Boost scores for AutoBot-specific document types
+            doc_type = metadata.get('document_type', 'unknown')
+            if doc_type in self.autobot_document_types:
+                base_score *= 1.2
+            
+            # Boost recent documentation
+            created_date = metadata.get('created_date')
+            if created_date:
+                age_days = (datetime.now() - created_date).days
+                if age_days < 30:  # Recent docs get boost
+                    base_score *= 1.1
+            
+            # Boost frequently accessed documents
+            access_count = metadata.get('access_count', 0)
+            if access_count > 10:
+                base_score *= 1.05
+            
+            result['autobot_relevance_score'] = base_score
+        
+        # Sort by AutoBot relevance score
+        return sorted(results, key=lambda x: x['autobot_relevance_score'], reverse=True)
+
+
+class AutoBotMultiModalCoordinator:
+    """
+    Coordinates multi-modal AI processing across NPU, GPU, and CPU for optimal performance
+    """
+    
+    def __init__(self):
+        self.npu_manager = AutoBotNPUAccelerationManager()
+        self.gpu_processor = GPUAcceleratedMultiModalProcessor()
+        self.pipeline_cache = {}  # Simple dict for now, would use LRU in production
+        self.performance_metrics = defaultdict(list)
+    
+    async def initialize_multimodal_pipeline(self):
+        """Initialize all components of the multi-modal pipeline"""
+        await self.npu_manager.initialize_npu_models()
+        await self.gpu_processor.initialize_models()
+        logger.info("AutoBot multi-modal pipeline initialized")
+    
+    async def process_multimodal_request(self, text: Optional[str] = None,
+                                       image: Optional[bytes] = None,
+                                       audio: Optional[bytes] = None) -> Dict[str, Any]:
+        """Process multi-modal request with optimal hardware utilization"""
+        start_time = time.time()
+        request_id = f"multimodal_{int(start_time)}_{hash(str([text, image is not None, audio is not None]))}"
+        
+        # Check cache first
+        cache_key = self._generate_cache_key(text, image, audio)
+        if cache_key in self.pipeline_cache:
+            logger.debug(f"Cache hit for multimodal request {request_id}")
+            return self.pipeline_cache[cache_key]
+        
+        tasks = []
+        hardware_usage = {'npu': False, 'gpu': False, 'cpu': False}
+        
+        # Text processing on NPU (fastest for embeddings)
+        if text and self.npu_manager.npu_available:
+            tasks.append(('text_npu', self.npu_manager.process_text_embeddings_npu([text])))
+            hardware_usage['npu'] = True
+        elif text:
+            # Fallback to GPU for text processing
+            tasks.append(('text_gpu', self.gpu_processor.process_text_batch([text])))
+            hardware_usage['gpu'] = True
+        
+        # Image processing on GPU (RTX 4070 optimal)
+        if image:
+            tasks.append(('image_gpu', self._process_image_gpu(image)))
+            hardware_usage['gpu'] = True
+        
+        # Audio processing on CPU (specialized libraries)
+        if audio:
+            tasks.append(('audio_cpu', self._process_audio_cpu(audio)))
+            hardware_usage['cpu'] = True
+        
+        # Execute tasks in parallel across hardware
+        results = {}
+        if tasks:
+            task_results = await asyncio.gather(
+                *[task[1] for task in tasks], 
+                return_exceptions=True
+            )
+            
+            for i, (task_name, _) in enumerate(tasks):
+                result = task_results[i]
+                if not isinstance(result, Exception):
+                    results[task_name] = result
+                else:
+                    logger.error(f"Task {task_name} failed: {result}")
+        
+        # Cross-modal fusion if multiple modalities
+        fused_result = None
+        if len(results) > 1:
+            # Perform fusion on GPU for tensor operations
+            fused_result = await self._fuse_modalities_gpu(results)
+            hardware_usage['gpu'] = True
+        
+        processing_time = time.time() - start_time
+        
+        final_result = {
+            'request_id': request_id,
+            'individual_results': results,
+            'fused_result': fused_result,
+            'processing_time_ms': processing_time * 1000,
+            'hardware_utilization': hardware_usage,
+            'cache_hit': False
+        }
+        
+        # Cache the result
+        self.pipeline_cache[cache_key] = final_result
+        
+        # Record performance metrics
+        self.performance_metrics['multimodal_processing_time'].append(processing_time)
+        
+        logger.info(f"Multimodal request {request_id} completed in {processing_time:.3f}s")
+        return final_result
+    
+    def _generate_cache_key(self, text: Optional[str], image: Optional[bytes], 
+                          audio: Optional[bytes]) -> str:
+        """Generate cache key for multimodal request"""
+        key_parts = []
+        if text:
+            key_parts.append(f"text_{hash(text)}")
+        if image:
+            key_parts.append(f"image_{hash(image)}")
+        if audio:
+            key_parts.append(f"audio_{hash(audio)}")
+        return "_".join(key_parts)
+    
+    async def _process_image_gpu(self, image_bytes: bytes) -> Dict[str, Any]:
+        """Process image using GPU acceleration"""
+        # Placeholder for GPU image processing
+        # In production, would use actual image processing models
+        processing_time = 0.05  # Simulated fast GPU processing
+        await asyncio.sleep(processing_time)
+        
+        return {
+            'type': 'image',
+            'embedding': [0.1] * 512,  # Placeholder embedding
+            'features': {'width': 1920, 'height': 1080, 'format': 'JPEG'},
+            'processing_time_ms': processing_time * 1000
+        }
+    
+    async def _process_audio_cpu(self, audio_bytes: bytes) -> Dict[str, Any]:
+        """Process audio using CPU-based libraries"""
+        # Placeholder for audio processing
+        processing_time = 0.1  # Simulated audio processing
+        await asyncio.sleep(processing_time)
+        
+        return {
+            'type': 'audio',
+            'embedding': [0.2] * 512,  # Placeholder embedding
+            'features': {'duration': 5.0, 'sample_rate': 44100, 'channels': 2},
+            'processing_time_ms': processing_time * 1000
+        }
+    
+    async def _fuse_modalities_gpu(self, modality_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Fuse multiple modalities using GPU tensor operations"""
+        # Placeholder for cross-modal fusion
+        fusion_time = 0.02  # Fast GPU tensor operations
+        await asyncio.sleep(fusion_time)
+        
+        # Combine embeddings from different modalities
+        fused_embedding = []
+        modalities_used = []
+        
+        for modality, result in modality_results.items():
+            if 'embedding' in result:
+                fused_embedding.extend(result['embedding'][:256])  # Truncate for fusion
+                modalities_used.append(modality)
+        
+        return {
+            'type': 'fused_multimodal',
+            'embedding': fused_embedding,
+            'modalities_used': modalities_used,
+            'fusion_time_ms': fusion_time * 1000
+        }
+
+
+# =====================================================
+# 6. Implementation Helper Functions (Updated)
 # =====================================================
 
 async def apply_critical_performance_fixes():
