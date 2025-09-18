@@ -141,7 +141,7 @@ export const useAppStore = defineStore('app', () => {
       return { status: 'warning', text: 'System warnings', pulse: false }
     }
     if (backendStatus.value.class === 'success') {
-      return { status: 'success', text: 'All systems operational', pulse: false }
+      return { status: 'success', text: backendStatus.value.text, pulse: false }  // Use actual backend status text instead of generic message
     }
     return { status: 'warning', text: backendStatus.value.text, pulse: true }
   })

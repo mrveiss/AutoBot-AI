@@ -589,10 +589,35 @@ class SecureSandboxExecutor:
             return {}
 
 
-# Global instance for easy access
-# Disable Docker initialization during startup to prevent blocking
-# secure_sandbox = SecureSandboxExecutor()
-secure_sandbox = None
+# Global instance for easy access with lazy initialization
+# Lazy loading prevents startup blocking while ensuring security is available
+
+import threading
+_sandbox_lock = threading.Lock()
+_sandbox_instance = None
+
+def get_secure_sandbox() -> Optional[SecureSandboxExecutor]:
+    """Get or create the global secure sandbox instance with thread-safe lazy initialization"""
+    global _sandbox_instance
+    
+    if _sandbox_instance is not None:
+        return _sandbox_instance
+        
+    with _sandbox_lock:
+        if _sandbox_instance is None:
+            try:
+                logger.info("Initializing secure sandbox for command execution security")
+                _sandbox_instance = SecureSandboxExecutor()
+                logger.info("Secure sandbox initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize secure sandbox: {e}")
+                logger.warning("Command execution will proceed without sandboxing - SECURITY RISK")
+                _sandbox_instance = None
+                
+        return _sandbox_instance
+
+# Maintain backward compatibility
+secure_sandbox = None  # Will be initialized on first access via get_secure_sandbox()
 
 
 async def execute_in_sandbox(
@@ -613,8 +638,28 @@ async def execute_in_sandbox(
     Returns:
         SandboxResult with execution details
     """
+    sandbox = get_secure_sandbox()
+    if sandbox is None:
+        # Fallback error result when sandbox unavailable
+        return SandboxResult(
+            success=False,
+            exit_code=-1,
+            stdout="",
+            stderr="Secure sandbox unavailable - command execution blocked for security",
+            execution_time=0,
+            container_id="unavailable",
+            security_events=[{
+                "type": "sandbox_unavailable",
+                "command": str(command),
+                "reason": "Failed to initialize secure sandbox",
+                "timestamp": time.time()
+            }],
+            resource_usage={},
+            metadata={"error": "sandbox_unavailable"}
+        )
+    
     config = SandboxConfig(
         security_level=SandboxSecurityLevel(security_level), timeout=timeout, **kwargs
     )
 
-    return await secure_sandbox.execute_command(command, config)
+    return await sandbox.execute_command(command, config)

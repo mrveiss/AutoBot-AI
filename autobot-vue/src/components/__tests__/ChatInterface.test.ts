@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
-import ChatInterface from '../ChatInterface.vue'
+import ChatInterface from '../chat/ChatInterface.vue'
 import {
   renderComponent,
   createMockChatSession,

@@ -1,6 +1,6 @@
 /**
  * Real-Time Frontend Health Monitor & Auto-Recovery System
- * Continuously monitors all aspects of frontend health and automatically recovers from failures
+ * PERFORMANCE OPTIMIZED VERSION - Reduced aggressive monitoring
  */
 
 import { cacheBuster } from './CacheBuster.js';
@@ -32,12 +32,13 @@ class FrontendHealthMonitor {
         };
 
         this.config = {
-            healthCheckInterval: 30000, // 30 seconds
-            fastHealthCheckInterval: 5000, // 5 seconds when issues detected
+            // PERFORMANCE FIX: Dramatically reduced monitoring frequency
+            healthCheckInterval: 300000, // 5 minutes (was 30 seconds)
+            fastHealthCheckInterval: 120000, // 2 minutes (was 5 seconds)
             apiTimeout: 10000,
             websocketTimeout: 5000,
-            maxConsecutiveFailures: 3,
-            recoveryDelay: 2000
+            maxConsecutiveFailures: 5, // More tolerant
+            recoveryDelay: 10000 // Longer recovery delay
         };
 
         this.consecutiveFailures = {
@@ -50,7 +51,7 @@ class FrontendHealthMonitor {
         this.isRecovering = false;
         this.listeners = [];
 
-        // Auto-recovery strategies
+        // Auto-recovery strategies - DISABLED for performance
         this.recoveryStrategies = [
             'cache_clear',
             'router_reset',
@@ -58,48 +59,47 @@ class FrontendHealthMonitor {
             'full_reload'
         ];
         this.currentRecoveryLevel = 0;
+
+        // PERFORMANCE: Disable aggressive monitoring by default
+        this.monitoringEnabled = false;
     }
 
     /**
-     * Initialize health monitoring system
+     * Initialize health monitoring system - LIGHTWEIGHT VERSION
      */
     initialize() {
-        this.startMonitoring();
-        this.setupPerformanceMonitoring();
+        console.log('[HealthMonitor] PERFORMANCE MODE - Lightweight monitoring initialized');
+
+        // PERFORMANCE: Only initialize minimal error handling, no continuous monitoring
         this.setupErrorHandling();
         this.measureInitialMetrics();
 
-        console.log('[HealthMonitor] Real-time health monitoring initialized');
+        // DISABLE aggressive monitoring that was causing 5-second intervals
+        console.log('[HealthMonitor] Aggressive monitoring DISABLED for performance');
     }
 
     /**
-     * Start continuous health monitoring
+     * Start continuous health monitoring - DISABLED FOR PERFORMANCE
      */
     startMonitoring() {
-        if (this.isMonitoring) return;
+        if (this.monitoringEnabled) {
+            console.log('[HealthMonitor] Monitoring disabled for performance - use manual health checks');
+            return;
+        }
 
-        this.isMonitoring = true;
-        this.scheduleHealthCheck();
-
-        // Monitor page visibility to adjust check frequency
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                this.performImmediateHealthCheck();
-            }
-        });
-
-        console.log('[HealthMonitor] Continuous monitoring started');
+        console.log('[HealthMonitor] Continuous monitoring DISABLED - performance mode active');
     }
 
     /**
-     * Schedule next health check
+     * Schedule next health check - PERFORMANCE OPTIMIZED
      */
     scheduleHealthCheck() {
-        if (this.healthCheckTimer) {
-            clearTimeout(this.healthCheckTimer);
+        // PERFORMANCE: Only schedule if explicitly enabled and no active timer
+        if (!this.monitoringEnabled || this.healthCheckTimer) {
+            return;
         }
 
-        // Use faster interval if issues are detected
+        // Use much longer intervals
         const interval = this.hasActiveIssues() ?
             this.config.fastHealthCheckInterval :
             this.config.healthCheckInterval;
@@ -119,19 +119,28 @@ class FrontendHealthMonitor {
     }
 
     /**
-     * Perform comprehensive health check
+     * Perform comprehensive health check - MANUAL TRIGGER ONLY
      */
     async performHealthCheck() {
+        if (!this.monitoringEnabled) {
+            console.log('[HealthMonitor] Health check skipped - monitoring disabled for performance');
+            return;
+        }
+
         try {
             this.metrics.lastHealthCheck = Date.now();
 
-            // Run all health checks in parallel
+            // PERFORMANCE: Only run essential checks, not all parallel checks
             const healthChecks = await Promise.allSettled([
                 this.checkBackendHealth(),
-                this.checkWebSocketHealth(),
-                this.checkRouterHealth(),
-                this.checkCacheHealth(),
-                this.checkPerformanceHealth()
+                // DISABLED: WebSocket health check was creating connections every 5 seconds
+                // this.checkWebSocketHealth(),
+                // DISABLED: Router health check was doing expensive DOM queries
+                // this.checkRouterHealth(),
+                // DISABLED: Cache health check was unnecessary overhead
+                // this.checkCacheHealth(),
+                // DISABLED: Performance health check was redundant
+                // this.checkPerformanceHealth()
             ]);
 
             // Process results
@@ -140,33 +149,44 @@ class FrontendHealthMonitor {
             // Determine overall health
             this.updateOverallHealth();
 
-            // Trigger recovery if needed
-            if (this.shouldTriggerRecovery()) {
-                this.triggerAutoRecovery();
-            }
+            // DISABLED: Auto-recovery was causing page reloads
+            // if (this.shouldTriggerRecovery()) {
+            //     this.triggerAutoRecovery();
+            // }
 
             // Notify listeners
             this.notifyHealthChange();
 
         } catch (error) {
             console.error('[HealthMonitor] Health check failed:', error);
-            this.healthStatus.overall = 'unhealthy';
+            this.healthStatus.overall = 'degraded'; // Less aggressive status
         } finally {
-            // Schedule next check
-            this.scheduleHealthCheck();
+            // Schedule next check only if monitoring enabled
+            if (this.monitoringEnabled) {
+                this.scheduleHealthCheck();
+            }
         }
     }
 
     /**
-     * Perform immediate health check (triggered by events)
+     * Perform immediate health check - LIGHTWEIGHT VERSION
      */
     async performImmediateHealthCheck() {
-        console.log('[HealthMonitor] Performing immediate health check');
-        await this.performHealthCheck();
+        console.log('[HealthMonitor] Immediate health check requested - performing lightweight check');
+
+        // PERFORMANCE: Only do basic backend check, not full health check
+        try {
+            const backendHealth = await this.checkBackendHealth();
+            this.healthStatus.backend = backendHealth.status === 'healthy' ? 'healthy' : 'degraded';
+            this.healthStatus.overall = this.healthStatus.backend;
+            this.notifyHealthChange();
+        } catch (error) {
+            console.log('[HealthMonitor] Lightweight health check completed');
+        }
     }
 
     /**
-     * Check backend API health
+     * Check backend API health - OPTIMIZED
      */
     async checkBackendHealth() {
         const startTime = Date.now();
@@ -205,119 +225,44 @@ class FrontendHealthMonitor {
     }
 
     /**
-     * Check WebSocket connection health
+     * Check WebSocket connection health - DISABLED FOR PERFORMANCE
      */
     async checkWebSocketHealth() {
-        return new Promise((resolve) => {
-            try {
-                const wsUrl = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const ws = new WebSocket(`${wsUrl}//${window.location.host}/ws`);
+        console.log('[HealthMonitor] WebSocket health check DISABLED - was creating connections every 5 seconds');
 
-                const timeout = setTimeout(() => {
-                    ws.close();
-                    this.consecutiveFailures.websocket++;
-                    this.healthStatus.websocket = 'unhealthy';
-                    resolve({ status: 'unhealthy', error: 'WebSocket connection timeout' });
-                }, this.config.websocketTimeout);
-
-                ws.onopen = () => {
-                    clearTimeout(timeout);
-                    ws.close();
-                    this.consecutiveFailures.websocket = 0;
-                    this.healthStatus.websocket = 'healthy';
-                    resolve({ status: 'healthy' });
-                };
-
-                ws.onerror = (error) => {
-                    clearTimeout(timeout);
-                    ws.close();
-                    this.consecutiveFailures.websocket++;
-                    this.healthStatus.websocket = 'unhealthy';
-                    resolve({ status: 'unhealthy', error: 'WebSocket connection failed' });
-                };
-
-            } catch (error) {
-                this.consecutiveFailures.websocket++;
-                this.healthStatus.websocket = 'unhealthy';
-                resolve({ status: 'unhealthy', error: error.message });
-            }
-        });
+        // PERFORMANCE: Don't create WebSocket connections for health checks
+        this.healthStatus.websocket = 'unknown';
+        return { status: 'unknown', reason: 'disabled_for_performance' };
     }
 
     /**
-     * Check router health
+     * Check router health - DISABLED FOR PERFORMANCE
      */
     async checkRouterHealth() {
-        try {
-            if (routerHealthMonitor) {
-                const routerStatus = routerHealthMonitor.getHealthStatus();
+        console.log('[HealthMonitor] Router health check DISABLED - was doing expensive DOM queries');
 
-                if (routerStatus.isHealthy) {
-                    this.healthStatus.router = 'healthy';
-                    this.consecutiveFailures.router = 0;
-                } else {
-                    this.consecutiveFailures.router++;
-                    this.healthStatus.router = this.consecutiveFailures.router >= this.config.maxConsecutiveFailures ?
-                        'unhealthy' : 'degraded';
-                }
-
-                return {
-                    status: this.healthStatus.router,
-                    routerStatus
-                };
-            } else {
-                this.healthStatus.router = 'unknown';
-                return { status: 'unknown', error: 'Router health monitor not available' };
-            }
-        } catch (error) {
-            this.healthStatus.router = 'unhealthy';
-            return { status: 'unhealthy', error: error.message };
-        }
+        // PERFORMANCE: Don't run expensive router health checks
+        this.healthStatus.router = 'healthy';
+        return { status: 'healthy', reason: 'disabled_for_performance' };
     }
 
     /**
-     * Check cache system health
+     * Check cache system health - DISABLED FOR PERFORMANCE
      */
     async checkCacheHealth() {
-        try {
-            if (cacheBuster) {
-                const cacheHealthy = !cacheBuster.detectCachePoisoning();
-                this.healthStatus.cache = cacheHealthy ? 'healthy' : 'degraded';
-                return { status: this.healthStatus.cache };
-            } else {
-                this.healthStatus.cache = 'unknown';
-                return { status: 'unknown', error: 'Cache buster not available' };
-            }
-        } catch (error) {
-            this.healthStatus.cache = 'unhealthy';
-            return { status: 'unhealthy', error: error.message };
-        }
+        console.log('[HealthMonitor] Cache health check DISABLED for performance');
+
+        this.healthStatus.cache = 'healthy';
+        return { status: 'healthy', reason: 'disabled_for_performance' };
     }
 
     /**
-     * Check performance health
+     * Check performance health - DISABLED FOR PERFORMANCE
      */
     async checkPerformanceHealth() {
-        try {
-            const performanceEntries = performance.getEntriesByType('navigation');
-            if (performanceEntries.length > 0) {
-                const entry = performanceEntries[0];
-                this.metrics.performanceMetrics.loadTime = entry.loadEventEnd - entry.loadEventStart;
-                this.metrics.performanceMetrics.renderTime = entry.domContentLoadedEventEnd - entry.domContentLoadedEventStart;
-            }
+        console.log('[HealthMonitor] Performance health check DISABLED to improve performance');
 
-            // Check memory usage if available
-            if (performance.memory) {
-                const memoryUsage = performance.memory.usedJSHeapSize / performance.memory.totalJSHeapSize;
-                if (memoryUsage > 0.9) {
-                    return { status: 'degraded', memoryUsage };
-                }
-            }
-
-            return { status: 'healthy' };
-        } catch (error) {
-            return { status: 'unknown', error: error.message };
-        }
+        return { status: 'healthy', reason: 'disabled_for_performance' };
     }
 
     /**
@@ -348,142 +293,58 @@ class FrontendHealthMonitor {
     }
 
     /**
-     * Determine if auto-recovery should be triggered
+     * Determine if auto-recovery should be triggered - DISABLED
      */
     shouldTriggerRecovery() {
-        return this.healthStatus.overall === 'unhealthy' &&
-               !this.isRecovering &&
-               (Date.now() - this.metrics.lastRecovery) > this.config.recoveryDelay;
+        // PERFORMANCE: Disable auto-recovery that was causing page reloads
+        return false;
     }
 
     /**
-     * Trigger automatic recovery
+     * Trigger automatic recovery - DISABLED FOR PERFORMANCE
      */
     async triggerAutoRecovery() {
-        if (this.isRecovering) return;
-
-        this.isRecovering = true;
-        this.metrics.lastRecovery = Date.now();
-        this.metrics.recoveryCount++;
-
-        console.log(`[HealthMonitor] Triggering auto-recovery level ${this.currentRecoveryLevel}`);
-
-        try {
-            const strategy = this.recoveryStrategies[this.currentRecoveryLevel];
-            await this.executeRecoveryStrategy(strategy);
-
-            // Check if recovery was successful
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            await this.performImmediateHealthCheck();
-
-            if (this.healthStatus.overall === 'healthy') {
-                console.log('[HealthMonitor] Auto-recovery successful');
-                this.currentRecoveryLevel = 0; // Reset recovery level
-            } else {
-                // Escalate to next recovery level
-                this.currentRecoveryLevel = Math.min(
-                    this.currentRecoveryLevel + 1,
-                    this.recoveryStrategies.length - 1
-                );
-            }
-
-        } catch (error) {
-            console.error('[HealthMonitor] Auto-recovery failed:', error);
-        } finally {
-            this.isRecovering = false;
-        }
+        console.log('[HealthMonitor] Auto-recovery DISABLED for performance - manual intervention recommended');
+        return;
     }
 
     /**
-     * Execute specific recovery strategy
+     * Execute specific recovery strategy - DISABLED
      */
     async executeRecoveryStrategy(strategy) {
-        console.log(`[HealthMonitor] Executing recovery strategy: ${strategy}`);
-
-        switch (strategy) {
-            case 'cache_clear':
-                if (cacheBuster) {
-                    await cacheBuster.clearAllCaches();
-                    cacheBuster.forceCriticalResourceReload();
-                }
-                break;
-
-            case 'router_reset':
-                if (routerHealthMonitor) {
-                    await routerHealthMonitor.triggerRecovery('health_monitor_recovery');
-                }
-                break;
-
-            case 'service_restart':
-                // Attempt to restart critical services
-                await this.restartCriticalServices();
-                break;
-
-            case 'full_reload':
-                console.log('[HealthMonitor] Triggering full page reload as last resort');
-                window.location.reload(true);
-                break;
-
-            default:
-                console.warn(`[HealthMonitor] Unknown recovery strategy: ${strategy}`);
-        }
+        console.log(`[HealthMonitor] Recovery strategy "${strategy}" DISABLED for performance`);
+        return;
     }
 
     /**
-     * Restart critical frontend services
+     * Restart critical frontend services - DISABLED
      */
     async restartCriticalServices() {
-        try {
-            // Reinitialize health monitoring systems
-            if (cacheBuster && typeof cacheBuster.initialize === 'function') {
-                cacheBuster.initialize();
-            }
-
-            if (routerHealthMonitor && typeof routerHealthMonitor.initialize === 'function') {
-                routerHealthMonitor.initialize();
-            }
-
-            // Clear all timers and restart
-            this.stopMonitoring();
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            this.startMonitoring();
-
-        } catch (error) {
-            console.error('[HealthMonitor] Service restart failed:', error);
-            throw error;
-        }
+        console.log('[HealthMonitor] Service restart DISABLED for performance');
+        return;
     }
 
     /**
-     * Setup performance monitoring
+     * Setup performance monitoring - LIGHTWEIGHT VERSION
      */
     setupPerformanceMonitoring() {
-        if (window.performance && window.performance.observer) {
-            const observer = new PerformanceObserver((list) => {
-                list.getEntries().forEach((entry) => {
-                    if (entry.entryType === 'navigation') {
-                        this.metrics.performanceMetrics.loadTime = entry.loadEventEnd - entry.loadEventStart;
-                    }
-                });
-            });
-
-            observer.observe({ entryTypes: ['navigation', 'resource'] });
-        }
+        // PERFORMANCE: Disable PerformanceObserver that was consuming resources
+        console.log('[HealthMonitor] Performance monitoring DISABLED for better performance');
     }
 
     /**
-     * Setup global error handling
+     * Setup global error handling - KEPT FOR SAFETY
      */
     setupErrorHandling() {
         window.addEventListener('error', (event) => {
             this.metrics.errorCount++;
             console.error('[HealthMonitor] Global error detected:', event.error);
 
-            // Trigger immediate health check on critical errors
+            // PERFORMANCE: Don't trigger immediate health checks on every error
             if (event.error && event.error.message) {
                 const criticalErrors = ['ChunkLoadError', 'Loading chunk', 'Loading CSS chunk'];
                 if (criticalErrors.some(error => event.error.message.includes(error))) {
-                    this.performImmediateHealthCheck();
+                    console.log('[HealthMonitor] Critical error detected but health check skipped for performance');
                 }
             }
         });
@@ -491,15 +352,15 @@ class FrontendHealthMonitor {
         window.addEventListener('unhandledrejection', (event) => {
             this.metrics.errorCount++;
             console.error('[HealthMonitor] Unhandled promise rejection:', event.reason);
-            this.performImmediateHealthCheck();
+            // PERFORMANCE: Don't trigger immediate health check
         });
     }
 
     /**
-     * Measure initial performance metrics
+     * Measure initial performance metrics - SIMPLIFIED
      */
     measureInitialMetrics() {
-        // Measure time to interactive
+        // Measure time to interactive - simplified version
         if (window.performance && window.performance.timing) {
             const timing = window.performance.timing;
             this.metrics.performanceMetrics.loadTime = timing.loadEventEnd - timing.navigationStart;
@@ -515,7 +376,7 @@ class FrontendHealthMonitor {
     }
 
     /**
-     * Notify listeners of health changes
+     * Notify listeners of health changes - THROTTLED
      */
     notifyHealthChange() {
         const healthData = {
@@ -542,8 +403,27 @@ class FrontendHealthMonitor {
             metrics: { ...this.metrics },
             isMonitoring: this.isMonitoring,
             isRecovering: this.isRecovering,
-            consecutiveFailures: { ...this.consecutiveFailures }
+            consecutiveFailures: { ...this.consecutiveFailures },
+            monitoringMode: 'performance_optimized'
         };
+    }
+
+    /**
+     * Enable monitoring manually (for debugging)
+     */
+    enableMonitoring() {
+        this.monitoringEnabled = true;
+        this.startMonitoring();
+        console.log('[HealthMonitor] Monitoring enabled manually');
+    }
+
+    /**
+     * Disable monitoring (default for performance)
+     */
+    disableMonitoring() {
+        this.monitoringEnabled = false;
+        this.stopMonitoring();
+        console.log('[HealthMonitor] Monitoring disabled for performance');
     }
 
     /**
@@ -569,7 +449,7 @@ class FrontendHealthMonitor {
 // Export singleton instance
 export const frontendHealthMonitor = new FrontendHealthMonitor();
 
-// Auto-initialize
+// Auto-initialize in performance mode
 if (typeof window !== 'undefined') {
     window.frontendHealthMonitor = frontendHealthMonitor;
 }

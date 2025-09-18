@@ -32,16 +32,24 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-# Import configuration managers
+# Import unified configuration and dependencies
 from src.circuit_breaker import circuit_breaker_async
-from src.config import config as global_config_manager
-from src.config_helper import cfg
-from src.prompt_manager import prompt_manager
+from src.unified_config import config
+from src.redis_pool_manager import get_redis_async
 from src.retry_mechanism import retry_network_operation
-from src.utils.async_redis_manager import async_redis_manager, redis_get, redis_set
-from src.utils.config_manager import config_manager
-from src.utils.logging_manager import get_llm_logger
-from src.utils.service_registry import get_service_url
+
+# Optional imports with proper error handling
+try:
+    from src.prompt_manager import prompt_manager
+except ImportError:
+    prompt_manager = None
+
+try:
+    from src.utils.logging_manager import get_llm_logger
+    logger = get_llm_logger()
+except ImportError:
+    import logging
+    logger = logging.getLogger(__name__)
 
 # Conditional imports for optional dependencies
 try:
@@ -231,42 +239,22 @@ class LLMInterface:
         self.settings = settings or LLMSettings()
         
         # Use unified configuration - NO HARDCODED VALUES
-        self.ollama_host = cfg.get_service_url('ollama')
-        
-        # CRITICAL FIX: Override incorrect distributed IP with localhost for Ollama
-        if self.ollama_host and "172.16.168.20" in self.ollama_host:
-            self.ollama_host = "http://localhost:11434"
-            logger.info(f"LLMInterface: Overriding Ollama URL to localhost: {self.ollama_host}")
+        self.ollama_host = config.get_service_url('ollama')
 
-        # Configuration setup
-        self.openai_api_key = config_manager.get(
-            "llm.openai.api_key", ""
-        ) or config_manager.get("openai.api_key", "")
+        # Configuration setup using unified config
+        self.openai_api_key = config.get("openai.api_key", os.getenv("OPENAI_API_KEY", ""))
 
-        self.ollama_models = global_config_manager.get_nested(
-            "llm_config.ollama.models", {}
-        )
-        
+        self.ollama_models = config.get("llm.fallback_models", ["llama3.2:3b"])
+
         # Use unified configuration for LLM models
-        unified_llm_config = global_config_manager.get_llm_config()
-        selected_model = unified_llm_config.get("ollama", {}).get(
-            "model", cfg.get('llm.default_model', 'deepseek-r1:14b')
-        )
-        self.orchestrator_llm_alias = unified_llm_config.get(
-            "orchestrator_llm", f"ollama_{selected_model}"
-        )
-        self.task_llm_alias = unified_llm_config.get(
-            "task_llm", f"ollama_{selected_model}"
-        )
+        selected_model = config.get('llm.fallback_models.0', 'llama3.2:3b')
+        self.orchestrator_llm_alias = f"ollama_{selected_model}"
+        self.task_llm_alias = f"ollama_{selected_model}"
 
-        self.orchestrator_llm_settings = global_config_manager.get_nested(
-            "llm_config.orchestrator_llm_settings", {}
-        )
-        self.task_llm_settings = global_config_manager.get_nested(
-            "llm_config.task_llm_settings", {}
-        )
+        self.orchestrator_llm_settings = config.get("llm.orchestrator_settings", {})
+        self.task_llm_settings = config.get("llm.task_settings", {})
 
-        self.hardware_priority = cfg.get(
+        self.hardware_priority = config.get(
             "hardware.acceleration.priority",
             ["openvino_npu", "openvino", "cuda", "cpu"]
         )
@@ -335,60 +323,50 @@ class LLMInterface:
         logger.info("Consolidated LLM Interface initialized with all provider support")
 
     def reload_ollama_configuration(self):
-        """Runtime reload of Ollama configuration to fix distributed IP issues"""
+        """Runtime reload of Ollama configuration"""
         old_host = self.ollama_host
-        self.ollama_host = cfg.get_service_url('ollama')
-        
-        # Apply localhost override fix
-        if self.ollama_host and "172.16.168.20" in self.ollama_host:
-            self.ollama_host = "http://localhost:11434"
-            logger.info(f"LLMInterface: Runtime config reload - Fixed Ollama URL from {old_host} to {self.ollama_host}")
-        else:
-            logger.info(f"LLMInterface: Runtime config reload - Ollama URL: {self.ollama_host}")
-            
+        self.ollama_host = config.get_service_url('ollama')
+
+        logger.info(f"LLMInterface: Runtime config reload - Ollama URL: {self.ollama_host}")
         return self.ollama_host
 
     def _initialize_prompts(self):
         """Initialize system prompts using centralized prompt manager"""
         try:
-            orchestrator_prompt_key = global_config_manager.get_nested(
+            orchestrator_prompt_key = config.get(
                 "prompts.orchestrator_key", "default.agent.system.main"
             )
-            self.orchestrator_system_prompt = prompt_manager.get(orchestrator_prompt_key)
-        except KeyError:
-            logger.warning("Orchestrator prompt not found in prompt manager, using legacy file loading")
-            self.orchestrator_system_prompt = self._load_composite_prompt(
-                global_config_manager.get_nested(
-                    "prompts.orchestrator", "prompts/default/agent.system.main.md"
-                )
-            )
+            if prompt_manager:
+                self.orchestrator_system_prompt = prompt_manager.get(orchestrator_prompt_key)
+            else:
+                self.orchestrator_system_prompt = "You are AutoBot, an autonomous Linux administration assistant."
+        except (KeyError, AttributeError):
+            logger.warning("Orchestrator prompt not found, using default")
+            self.orchestrator_system_prompt = "You are AutoBot, an autonomous Linux administration assistant."
 
         try:
-            task_prompt_key = global_config_manager.get_nested(
+            task_prompt_key = config.get(
                 "prompts.task_key", "reflection.agent.system.main.role"
             )
-            self.task_system_prompt = prompt_manager.get(task_prompt_key)
-        except KeyError:
-            logger.warning("Task prompt not found in prompt manager, using legacy file loading")
-            self.task_system_prompt = self._load_composite_prompt(
-                global_config_manager.get_nested(
-                    "prompts.task", "prompts/reflection/agent.system.main.role.md"
-                )
-            )
+            if prompt_manager:
+                self.task_system_prompt = prompt_manager.get(task_prompt_key)
+            else:
+                self.task_system_prompt = "You are AutoBot, completing specific tasks efficiently."
+        except (KeyError, AttributeError):
+            logger.warning("Task prompt not found, using default")
+            self.task_system_prompt = "You are AutoBot, completing specific tasks efficiently."
 
         try:
-            tool_interpreter_prompt_key = global_config_manager.get_nested(
+            tool_interpreter_prompt_key = config.get(
                 "prompts.tool_interpreter_key", "tool_interpreter_system_prompt"
             )
-            self.tool_interpreter_system_prompt = prompt_manager.get(tool_interpreter_prompt_key)
-        except KeyError:
-            logger.warning("Tool interpreter prompt not found in prompt manager, using legacy file loading")
-            self.tool_interpreter_system_prompt = self._load_prompt_from_file(
-                global_config_manager.get_nested(
-                    "prompts.tool_interpreter",
-                    "prompts/tool_interpreter_system_prompt.txt",
-                )
-            )
+            if prompt_manager:
+                self.tool_interpreter_system_prompt = prompt_manager.get(tool_interpreter_prompt_key)
+            else:
+                self.tool_interpreter_system_prompt = "You are AutoBot's tool interpreter."
+        except (KeyError, AttributeError):
+            logger.warning("Tool interpreter prompt not found, using default")
+            self.tool_interpreter_system_prompt = "You are AutoBot's tool interpreter."
 
     @property
     def base_url(self) -> str:
@@ -734,9 +712,9 @@ class LLMInterface:
 
     @circuit_breaker_async(
         "ollama_service", 
-        failure_threshold=cfg.get('circuit_breaker.ollama.failure_threshold', 3),
-        recovery_timeout=cfg.get_timeout('circuit_breaker', 'recovery'),
-        timeout=cfg.get_timeout('llm', 'default')
+        failure_threshold=config.get('circuit_breaker.ollama.failure_threshold', 3),
+        recovery_timeout=config.get_timeout('circuit_breaker', 'recovery'),
+        timeout=config.get_timeout('llm', 'default')
     )
     async def _ollama_chat_completion(self, request: LLMRequest) -> LLMResponse:
         """

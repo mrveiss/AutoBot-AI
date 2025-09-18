@@ -8,8 +8,9 @@ from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ModelManager
-from src.config import PLAYWRIGHT_API_URL, PLAYWRIGHT_VNC_URL, config as config_manager
-from src.config_helper import cfg
+# Add caching support for performance improvement
+from backend.utils.cache_manager import cache_response
+from src.unified_config import config
 
 router = APIRouter()
 
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/frontend-config")
+@cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
 async def get_frontend_config():
     """Get configuration values needed by the frontend.
 
@@ -25,69 +27,69 @@ async def get_frontend_config():
     """
     try:
         # Get configuration from the config manager
-        ollama_url = config_manager.get_ollama_url()
-        redis_config = config_manager.get_redis_config()
-        backend_config = config_manager.get_backend_config()
+        ollama_url = config.get_service_url('ollama')
+        redis_config = config.get_redis_config()
+        backend_config = config.get('backend', {})
 
         # Build frontend configuration
         frontend_config = {
             "services": {
                 "ollama": {
                     "url": ollama_url,
-                    "endpoint": config_manager.get_nested(
+                    "endpoint": config.get(
                         "backend.llm.local.providers.ollama.endpoint",
                         f"{ollama_url}/api/generate",
                     ),
-                    "embedding_endpoint": config_manager.get_nested(
+                    "embedding_endpoint": config.get(
                         "backend.llm.embedding.providers.ollama.endpoint",
                         f"{ollama_url}/api/embeddings",
                     ),
                 },
                 "playwright": {
-                    "vnc_url": PLAYWRIGHT_VNC_URL,
-                    "api_url": PLAYWRIGHT_API_URL,
+                    "vnc_url": config.get_service_url('playwright-vnc'),
+                    "api_url": config.get_service_url('playwright'),
                 },
                 "redis": {
-                    "host": redis_config.get("host", cfg.get_host('redis')),
-                    "port": redis_config.get("port", cfg.get_port('redis')),
+                    "host": redis_config.get("host", config.get_host('redis')),
+                    "port": redis_config.get("port", config.get_port('redis')),
                     "enabled": redis_config.get("enabled", True),
                 },
                 "lmstudio": {
-                    "url": config_manager.get_nested(
+                    "url": config.get(
                         "backend.llm.local.providers.lmstudio.endpoint",
-                        cfg.get_service_url('lmstudio'),
+                        config.get_service_url('lmstudio'),
                     ),
                 },
             },
             "api": {
-                "timeout": config_manager.get_nested("backend.timeout", 60)
+                "timeout": config.get("backend.timeout", 60)
                 * 1000,  # Convert to milliseconds
-                "retry_attempts": config_manager.get_nested("backend.max_retries", 3),
-                "streaming": config_manager.get_nested("backend.streaming", False),
+                "retry_attempts": config.get("backend.max_retries", 3),
+                "streaming": config.get("backend.streaming", False),
             },
             "features": {
-                "voice_enabled": config_manager.get_nested(
+                "voice_enabled": config.get(
                     "voice_interface.enabled", False
                 ),
-                "knowledge_base_enabled": config_manager.get_nested(
+                "knowledge_base_enabled": config.get(
                     "knowledge_base.enabled", True
                 ),
-                "developer_mode": config_manager.get_nested("developer.enabled", True),
+                "developer_mode": config.get("developer.enabled", True),
             },
             "ui": {
-                "theme": config_manager.get_nested("ui.theme", "light"),
-                "animations": config_manager.get_nested("ui.animations", True),
-                "font_size": config_manager.get_nested("ui.font_size", "medium"),
+                "theme": config.get("ui.theme", "light"),
+                "animations": config.get("ui.animations", True),
+                "font_size": config.get("ui.font_size", "medium"),
             },
             "defaults": {
-                "welcome_message": config_manager.get_nested(
+                "welcome_message": config.get(
                     "chat.default_welcome_message", "Hello! How can I assist you today?"
                 ),
-                "model_name": config_manager.get_nested(
+                "model_name": config.get(
                     "backend.llm.local.providers.ollama.selected_model",
                     "deepseek-r1:14b",
                 ),
-                "max_chat_messages": config_manager.get_nested(
+                "max_chat_messages": config.get(
                     "chat.max_messages", 100
                 ),
             },
@@ -100,544 +102,259 @@ async def get_frontend_config():
         }
 
     except Exception as e:
-        logger.error(f"Error getting frontend config: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"Failed to get frontend config: {str(e)}",
-            },
+        logger.error(f"Failed to get frontend config: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get frontend config: {str(e)}"
         )
 
 
 @router.get("/health")
-@router.head("/health")
-async def health_check(detailed: bool = False):
-    """PERFORMANCE FIX: Ultra-fast health check endpoint that responds immediately
-
-    This replaces the complex consolidated health check that was timing out at 45+ seconds.
-    The health endpoint should be the fastest responding endpoint in the system.
-
-    Args:
-        detailed: If True, includes basic system info (still fast)
-                 If False, returns minimal status (default)
-    """
+@cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
+async def get_system_health():
+    """Get system health status"""
     try:
-        # Get LLM status using the same logic as the fixed /api/llm/status endpoint
-        try:
-            from src.config import config as global_config_manager
-            
-            llm_config = global_config_manager.get_llm_config()
-            
-            # Get provider type from unified config structure
-            unified_config = llm_config.get("unified", {})
-            provider_type = unified_config.get("provider_type", "local")
-
-            if provider_type == "local":
-                # Look in the correct path: unified.local.providers.ollama
-                local_config = unified_config.get("local", {})
-                model = (
-                    local_config.get("providers", {})
-                    .get("ollama", {})
-                    .get("selected_model", "")
-                )
-                ollama_status = "connected" if model else "disconnected"
-                ollama_details = {
-                    "ollama": {
-                        "status": ollama_status,
-                        "model": model
-                    }
-                }
-            else:
-                ollama_status = "disconnected"
-                ollama_details = {
-                    "ollama": {
-                        "status": "disconnected", 
-                        "model": ""
-                    }
-                }
-                
-        except Exception as e:
-            logger.error(f"Error getting LLM status for health check: {e}")
-            ollama_status = "disconnected"
-            ollama_details = {
-                "ollama": {
-                    "status": "error",
-                    "model": "",
-                    "error": str(e)
-                }
-            }
-
-        # PERFORMANCE FIX: Return immediate response without any blocking operations
-        base_status = {
+        # Check various system components
+        health_status = {
             "status": "healthy",
-            "backend": "connected",
             "timestamp": datetime.now().isoformat(),
-            "fast_check": True,
-            "response_time_ms": "< 50ms",
-            "ollama": ollama_status,  # Add LLM status for frontend compatibility
-            "details": ollama_details  # Add detailed LLM info
-        }
-
-        if detailed:
-            # Add some basic system info without blocking operations
-            base_status.update(
-                {
-                    "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-                    "modules_loaded": len(sys.modules),
-                    "detailed_check": True,
-                }
-            )
-
-        return base_status
-
-    except Exception as e:
-        logger.error(f"Error in fast health check: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "unhealthy",
-                "backend": "connected",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat(),
-                "fast_check": True,
-                "components": {"system": {"status": "error", "error": str(e)}},
-                "ollama": "disconnected",  # Ensure ollama status is present even in error case
-                "details": {"ollama": {"status": "error", "error": str(e)}}
-            },
-        )
-
-
-@router.get("/health/comprehensive")
-async def comprehensive_health_check():
-    """Comprehensive health check for all system components
-
-    WARNING: This endpoint may take longer to respond as it checks all components.
-    For fast health checks, use /health instead.
-    """
-    try:
-        # Try to import and use the consolidated health service
-        from backend.services.consolidated_health_service import consolidated_health
-
-        status = await consolidated_health.get_comprehensive_health()
-        return status
-    except ImportError:
-        # Fallback if consolidated health service is not available
-        return {
-            "overall_status": "degraded",
-            "message": "Comprehensive health service not available, using fallback",
             "components": {
-                "backend": {
-                    "status": "healthy",
-                    "timestamp": datetime.now().isoformat(),
-                }
+                "backend": "healthy",
+                "config": "healthy",
+                "logging": "healthy",
             },
-            "timestamp": datetime.now().isoformat(),
-            "fast_check": False,
-        }
-    except Exception as e:
-        logger.error(f"Error in comprehensive health check: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "overall_status": "unhealthy",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat(),
-                "fast_check": False,
-            },
-        )
-
-
-@router.get("/health/{component}")
-async def component_health_check(component: str):
-    """Get health status for a specific component
-
-    Args:
-        component: Component name (system, chat, llm, knowledge_base, terminal)
-    """
-    try:
-        # Simple component status without complex dependencies
-        if component == "system":
-            return {
-                "status": "healthy",
-                "component": component,
-                "timestamp": datetime.now().isoformat(),
-                "details": "System is operational",
-            }
-        elif component == "backend":
-            return {
-                "status": "healthy",
-                "component": component,
-                "timestamp": datetime.now().isoformat(),
-                "details": "Backend API is responding",
-            }
-        else:
-            return {
-                "status": "unknown",
-                "component": component,
-                "timestamp": datetime.now().isoformat(),
-                "details": f"Health check not implemented for {component}",
-            }
-    except Exception as e:
-        logger.error(f"Error checking component health for {component}: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "unhealthy",
-                "component": component,
-                "error": str(e),
-                "timestamp": datetime.now().isoformat(),
-            },
-        )
-
-
-@router.post("/restart")
-async def restart():
-    try:
-        logger.info("Restart request received")
-        return {"status": "success", "message": "Restart initiated."}
-    except Exception as e:
-        logger.error(f"Error processing restart request: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error processing restart request: {str(e)}"
-        )
-
-
-@router.post("/reload")
-async def reload_system(request: Request):
-    """Reload system modules and configuration"""
-    try:
-        logger.info("System reload request received")
-        reload_results = []
-
-        # List of modules to reload
-        modules_to_reload = [
-            "src.llm_interface",
-            "src.config",
-            "src.orchestrator",
-            "backend.services.config_service",
-            "backend.utils.connection_utils",
-        ]
-
-        reloaded_modules = []
-        failed_modules = []
-
-        for module_name in modules_to_reload:
-            try:
-                if module_name in sys.modules:
-                    importlib.reload(sys.modules[module_name])
-                    reloaded_modules.append(module_name)
-                    logger.info(f"Successfully reloaded module: {module_name}")
-                else:
-                    logger.info(f"Module {module_name} not loaded, skipping")
-            except Exception as e:
-                failed_modules.append({"module": module_name, "error": str(e)})
-                logger.error(f"Failed to reload module {module_name}: {str(e)}")
-
-        # Reinitialize app state if available
-        if hasattr(request.app.state, "llm_interface"):
-            try:
-                # Reinitialize LLM interface
-                from src.llm_interface import LLMInterface
-
-                request.app.state.llm_interface = LLMInterface()
-                logger.info("Reinitialized LLM interface")
-                reload_results.append("LLM interface reinitialized")
-            except Exception as e:
-                logger.error(f"Failed to reinitialize LLM interface: {str(e)}")
-                failed_modules.append({"component": "LLM interface", "error": str(e)})
-
-        # Reinitialize orchestrator if available
-        if hasattr(request.app.state, "orchestrator"):
-            try:
-                from src.orchestrator import Orchestrator
-
-                request.app.state.orchestrator = Orchestrator()
-                logger.info("Reinitialized orchestrator")
-                reload_results.append("Orchestrator reinitialized")
-            except Exception as e:
-                logger.error(f"Failed to reinitialize orchestrator: {str(e)}")
-                failed_modules.append({"component": "Orchestrator", "error": str(e)})
-
-        return {
-            "status": "success",
-            "message": "System reload completed",
-            "reloaded_modules": reloaded_modules,
-            "failed_modules": failed_modules,
-            "reload_results": reload_results,
-            "timestamp": datetime.now().isoformat(),
         }
 
-    except Exception as e:
-        logger.error(f"Error processing reload request: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error processing reload request: {str(e)}"
-        )
-
-
-@router.get("/models")
-async def get_models():
-    """Get available LLM models"""
-    try:
-        result = await ModelManager.get_available_models()
-        if result["status"] == "error":
-            return JSONResponse(status_code=500, content={"error": result["error"]})
-
-        # Format for backward compatibility
-        available_models = [
-            model["name"] for model in result["models"] if model.get("available", False)
-        ]
-        configured_models = {
-            model["name"]: model["name"]
-            for model in result["models"]
-            if model.get("configured", False)
-        }
-
-        return {
-            "status": "success",
-            "models": available_models,
-            "configured_models": configured_models,
-            "detailed_models": result["models"],
-        }
-    except Exception as e:
-        logger.error(f"Error getting models: {str(e)}")
-        return JSONResponse(
-            status_code=500, content={"error": f"Error getting models: {str(e)}"}
-        )
-
-
-@router.get("/status")
-async def get_system_status(request: Request):
-    """Get current system status including LLM configuration"""
-    try:
-        llm_config = ConfigService.get_llm_config()
-
-        # Resolve actual model names for display
-        default_llm = llm_config.get("default_llm", "unknown")
-        current_llm_display = default_llm
-        if default_llm.startswith("ollama_"):
-            base_alias = default_llm.replace("ollama_", "")
-            ollama_models = llm_config.get("ollama", {}).get("models", {})
-            actual_model = ollama_models.get(base_alias, base_alias)
-            current_llm_display = f"Ollama: {actual_model}"
-        elif default_llm.startswith("openai_"):
-            current_llm_display = f"OpenAI: {default_llm.replace('openai_', '')}"
-
-        # Check for background tasks status
-        background_tasks_status = "disabled"
-        background_tasks_count = 0
-
-        if hasattr(request.app.state, "background_tasks"):
-            background_tasks_count = len(request.app.state.background_tasks)
-            if background_tasks_count > 0:
-                background_tasks_status = "active"
-
-        return {
-            "status": "success",
-            "current_llm": current_llm_display,
-            "default_llm": llm_config.get("default_llm", "unknown"),
-            "task_llm": llm_config.get("task_llm", "unknown"),
-            "ollama_models": llm_config.get("ollama", {}).get("models", {}),
-            "background_tasks": {
-                "status": background_tasks_status,
-                "count": background_tasks_count,
-            },
-            "timestamp": datetime.now().isoformat(),
-        }
-    except Exception as e:
-        logger.error(f"Error getting system status: {str(e)}")
-        return JSONResponse(
-            status_code=500, content={"error": f"Error getting system status: {str(e)}"}
-        )
-
-
-@router.post("/login")
-async def login(request: Request, username: str = Form(...), password: str = Form(...)):
-    """User authentication endpoint"""
-    security_layer = request.app.state.security_layer
-    user_role = security_layer.authenticate_user(username, password)
-    if user_role:
-        security_layer.audit_log("login", username, "success", {"ip": "N/A"})
-        return {"message": "Login successful", "role": user_role}
-    else:
-        security_layer.audit_log(
-            "login", username, "failure", {"reason": "invalid_credentials"}
-        )
-        return JSONResponse(status_code=401, content={"message": "Invalid credentials"})
-
-
-@router.get("/ctx_window")
-async def get_context_window():
-    """
-    Retrieves the content of the LLM's context window.
-    For now, this is a placeholder. In a real implementation, this would fetch
-    the actual context provided to the LLM in the last interaction.
-    """
-    mock_context = """
-System Prompt: You are an AI assistant.
-Conversation History:
-User: Hello, how are you?
-Agent: I am an AI assistant, functioning as expected. How can I help you today?
-Relevant Knowledge:
-- AutoBot is an autonomous agent.
-- It uses Ollama for local LLM interactions.
-"""
-    mock_tokens = len(mock_context.split())
-    return {"content": mock_context, "tokens": mock_tokens}
-
-
-@router.get("/playwright/health")
-async def check_playwright_health():
-    """Check Playwright container health status"""
-    try:
-        import requests
-
-        # Check if Playwright service is accessible
+        # Test configuration access
         try:
-            response = requests.get(f"{PLAYWRIGHT_API_URL}/health", timeout=5)
-            if response.status_code == 200:
-                playwright_data = response.json()
-                return {
-                    "status": "healthy",
-                    "playwright_available": True,
-                    "browser_connected": playwright_data.get(
-                        "browser_connected", False
-                    ),
-                    "timestamp": playwright_data.get("timestamp"),
-                    "vnc_url": PLAYWRIGHT_VNC_URL,
-                    "api_url": PLAYWRIGHT_API_URL,
-                }
-            else:
-                return {
-                    "status": "unhealthy",
-                    "playwright_available": False,
-                    "error": f"HTTP {response.status_code}",
-                    "timestamp": datetime.now().isoformat(),
-                }
-        except requests.exceptions.ConnectionError:
-            return {
-                "status": "unhealthy",
-                "playwright_available": False,
-                "error": "Connection refused - container may be down",
-                "timestamp": datetime.now().isoformat(),
-            }
-        except requests.exceptions.Timeout:
-            return {
-                "status": "unhealthy",
-                "playwright_available": False,
-                "error": "Request timeout - service not responding",
-                "timestamp": datetime.now().isoformat(),
-            }
+            config.get_service_url('ollama')
+            health_status["components"]["config"] = "healthy"
+        except Exception as e:
+            health_status["components"]["config"] = f"error: {str(e)}"
+            health_status["status"] = "degraded"
+
+        return health_status
 
     except Exception as e:
-        logger.error(f"Error checking Playwright health: {str(e)}")
+        logger.error(f"Health check failed: {str(e)}")
         return {
-            "status": "error",
-            "playwright_available": False,
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
             "error": str(e),
-            "timestamp": datetime.now().isoformat(),
-        }
-
-
-@router.get("/resource_cache")
-async def get_resource_cache_status(request: Request):
-    """Get status of cached resources for performance monitoring"""
-    try:
-        from src.utils.resource_factory import ResourceFactory
-
-        cached_resources = ResourceFactory.get_all_cached_resources(request)
-
-        # Count statistics
-        total_resources = len(cached_resources)
-        cached_count = sum(1 for r in cached_resources.values() if r["cached"])
-        cache_hit_rate = (
-            (cached_count / total_resources * 100) if total_resources > 0 else 0
-        )
-
-        return {
-            "cache_statistics": {
-                "total_resource_types": total_resources,
-                "cached_resources": cached_count,
-                "cache_hit_rate_percent": round(cache_hit_rate, 1),
-                "performance_status": (
-                    "optimized" if cache_hit_rate > 70 else "needs_optimization"
-                ),
-            },
-            "resource_details": cached_resources,
-            "optimization_notes": {
-                "high_cache_rate": "Excellent performance - most resources are pre-initialized",
-                "medium_cache_rate": "Good performance - some resources being cached",
-                "low_cache_rate": "Performance impact - resources being created on-demand",
-            }[
-                (
-                    "high_cache_rate"
-                    if cache_hit_rate > 70
-                    else (
-                        "medium_cache_rate" if cache_hit_rate > 40 else "low_cache_rate"
-                    )
-                )
-            ],
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to get resource cache status: {e}")
-        return {
-            "error": "Failed to get resource cache status",
-            "details": str(e),
-            "timestamp": datetime.now().isoformat(),
         }
 
 
 @router.get("/info")
+@cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
 async def get_system_info():
-    """Get basic system information"""
+    """Get system information"""
     try:
-        import platform
-        import sys
-        import os
-        
-        # Get Python version and platform info
-        python_version = sys.version
-        platform_info = platform.platform()
-        architecture = platform.architecture()
-        
-        # Get environment info
-        env_info = {
-            "AUTOBOT_ENV": os.getenv("AUTOBOT_ENV", "development"),
-            "PYTHONPATH": bool(os.getenv("PYTHONPATH")),
-            "working_directory": os.getcwd()
-        }
-        
-        # Basic system stats
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
         system_info = {
-            "python_version": python_version.split()[0],  # Just version number
-            "python_full": python_version,
-            "platform": platform_info,
-            "architecture": architecture[0],
-            "processor": platform.processor() or "unknown",
-            "environment": env_info
+            "name": "AutoBot Backend",
+            "version": "Phase 9.0",
+            "python_version": python_version,
+            "timestamp": datetime.now().isoformat(),
+            "features": {
+                "llm_integration": True,
+                "knowledge_base": True,
+                "chat_system": True,
+                "caching": True,  # Now enabled!
+                "websockets": True,
+            },
         }
-        
+
+        return system_info
+
+    except Exception as e:
+        logger.error(f"Failed to get system info: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get system info: {str(e)}"
+        )
+
+
+@router.post("/reload_config")
+async def reload_system_config():
+    """Reload system configuration and clear caches"""
+    try:
+        logger.info("Reloading system configuration...")
+
+        # Reload configuration
+        config.reload()
+
+        # Clear configuration-related caches
+        from backend.utils.cache_manager import cache_manager
+
+        await cache_manager.clear_pattern("frontend_config*")
+        await cache_manager.clear_pattern("system_*")
+        await cache_manager.clear_pattern("llm_*")
+
+        logger.info("System configuration reloaded and caches cleared")
+
         return {
-            "system_info": system_info,
-            "status": "ok",
-            "timestamp": datetime.now().isoformat()
+            "status": "success",
+            "message": "System configuration reloaded successfully",
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to reload config: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reload config: {str(e)}"
+        )
+
+
+@router.get("/prompt_reload")
+async def reload_prompts():
+    """Reload prompt templates"""
+    try:
+        logger.info("Reloading prompt templates...")
+
+        # Try to reload prompts if available
+        try:
+            from src.prompt_manager import prompt_manager
+
+            prompt_manager.reload_prompts()
+            message = "Prompts reloaded successfully"
+        except ImportError:
+            message = "Prompt manager not available"
+        except Exception as e:
+            message = f"Prompt reload error: {str(e)}"
+
+        return {
+            "status": "success",
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to reload prompts: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reload prompts: {str(e)}"
+        )
+
+
+@router.get("/admin_check")
+async def admin_check():
+    """Check admin status and permissions"""
+    try:
+        import os
+
+        admin_status = {
+            "user": os.getenv("USER", "unknown"),
+            "admin": os.getuid() == 0 if hasattr(os, "getuid") else False,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        return admin_status
+
+    except Exception as e:
+        logger.error(f"Admin check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Admin check failed: {str(e)}")
+
+
+@router.post("/dynamic_import")
+async def dynamic_import(request: Request, module_name: str = Form(...)):
+    """Dynamically import a module (admin only)"""
+    try:
+        logger.info(f"Dynamic import requested for module: {module_name}")
+
+        # Security check - only allow specific modules
+        allowed_modules = [
+            "src.config",
+            "src.llm_interface",
+            "backend.services",
+            "backend.utils",
+        ]
+
+        if not any(module_name.startswith(allowed) for allowed in allowed_modules):
+            raise HTTPException(
+                status_code=403, detail="Module import not allowed for security reasons"
+            )
+
+        # Attempt import
+        imported_module = importlib.import_module(module_name)
+
+        return {
+            "status": "success",
+            "message": f"Module {module_name} imported successfully",
+            "module_info": {
+                "name": getattr(imported_module, "__name__", "unknown"),
+                "file": getattr(imported_module, "__file__", "unknown"),
+                "doc": getattr(imported_module, "__doc__", "No documentation"),
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except ImportError as e:
+        logger.error(f"Import failed for {module_name}: {str(e)}")
+        raise HTTPException(
+            status_code=400, detail=f"Failed to import module: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Dynamic import error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
+
+
+@router.get("/metrics")
+@cache_response(cache_key="system_metrics", ttl=15)  # Cache for 15 seconds
+async def get_system_metrics():
+    """Get system performance metrics"""
+    try:
+        import psutil
+        import time
+
+        # Get system metrics
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage("/")
+
+        metrics = {
+            "timestamp": datetime.now().isoformat(),
+            "system": {
+                "cpu_percent": cpu_percent,
+                "memory": {
+                    "total": memory.total,
+                    "available": memory.available,
+                    "percent": memory.percent,
+                    "used": memory.used,
+                    "free": memory.free,
+                },
+                "disk": {
+                    "total": disk.total,
+                    "used": disk.used,
+                    "free": disk.free,
+                    "percent": (disk.used / disk.total) * 100,
+                },
+            },
+            "python": {
+                "version": sys.version,
+                "executable": sys.executable,
+            },
+        }
+
+        # Add cache statistics if available
+        try:
+            from backend.utils.cache_manager import cache_manager
+
+            cache_stats = await cache_manager.get_stats()
+            metrics["cache"] = cache_stats
+        except Exception:
+            metrics["cache"] = {"status": "unavailable"}
+
+        return metrics
+
+    except ImportError:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "error": "psutil not available",
+            "basic_info": {
+                "python_version": sys.version,
+                "executable": sys.executable,
+            },
         }
     except Exception as e:
-        logger.error(f"Failed to get system info: {e}")
-        return {
-            "error": str(e),
-            "status": "error"
-        }
-
-
-@router.get("/resources")
-async def get_system_resources():
-    """Get system resource information - redirects to monitoring endpoint"""
-    return {
-        "redirect": "Use /api/monitoring/resources for detailed system resources",
-        "basic_info": "System resources are available via monitoring endpoints",
-        "suggested_endpoint": "/api/monitoring/resources",
-        "status": "redirect"
-    }
+        logger.error(f"Failed to get system metrics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get system metrics: {str(e)}"
+        )

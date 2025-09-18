@@ -41,29 +41,38 @@ warning() {
 
 stop_frontend_vm() {
     log "Stopping Frontend service on VM (172.16.168.21)..."
-    
+
     ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF' || true
-        # Stop frontend processes
-        pkill -f "npm.*dev" || true
-        pkill -f "node.*vite" || true
-        
+        # Stop frontend processes - only kill processes owned by current user
+        pkill -u "$(whoami)" -f "npm.*dev" 2>/dev/null || echo "No npm dev processes to stop"
+        pkill -u "$(whoami)" -f "node.*vite" 2>/dev/null || echo "No Vite processes to stop"
+
         echo "Frontend service stopped"
 EOF
-    
+
     success "Frontend VM service stopped"
 }
 
 stop_npu_worker_vm() {
     log "Stopping NPU Worker service on VM (172.16.168.22)..."
-    
+
     ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.22" << 'EOF' || true
-        # Stop NPU worker processes
-        pkill -f "npu.*worker" || true
-        pkill -f "python.*8081" || true
-        
-        echo "NPU Worker service stopped"
+        # Stop NPU worker processes - only kill processes owned by current user
+        pkill -u "$(whoami)" -f "npu.*worker" 2>/dev/null || echo "No NPU worker processes to stop"
+        pkill -u "$(whoami)" -f "python.*8081" 2>/dev/null || echo "No Python processes on port 8081 to stop"
+
+        # Try to stop any systemd services if running
+        if systemctl is-active --quiet npu-worker 2>/dev/null; then
+            if sudo -n systemctl stop npu-worker 2>/dev/null; then
+                echo "NPU Worker systemd service stopped"
+            else
+                echo "Note: NPU Worker systemd service requires manual stop"
+            fi
+        fi
+
+        echo "NPU Worker service stop attempted"
 EOF
-    
+
     success "NPU Worker VM service stopped"
 }
 
@@ -99,37 +108,38 @@ EOF
 
 stop_ai_stack_vm() {
     log "Stopping AI Stack service on VM (172.16.168.24)..."
-    
+
     ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.24" << 'EOF' || true
-        # Stop AI stack processes
-        pkill -f "ai.*stack" || true
-        pkill -f "python.*8080" || true
-        
+        # Stop AI stack processes - only kill processes owned by current user
+        pkill -u "$(whoami)" -f "ai.*stack" 2>/dev/null || echo "No AI stack processes to stop"
+        pkill -u "$(whoami)" -f "python.*8080" 2>/dev/null || echo "No Python processes on port 8080 to stop"
+        pkill -u "$(whoami)" -f "ollama" 2>/dev/null || echo "No Ollama processes to stop"
+
         echo "AI Stack service stopped"
 EOF
-    
+
     success "AI Stack VM service stopped"
 }
 
 stop_browser_vm() {
     log "Stopping Browser service on VM (172.16.168.25)..."
-    
+
     ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.25" << 'EOF' || true
-        # Stop browser service processes
-        pkill -f "browser.*service" || true
-        pkill -f "python.*3000" || true
-        
+        # Stop browser service processes - only kill processes owned by current user
+        pkill -u "$(whoami)" -f "browser.*service" 2>/dev/null || echo "No browser service processes to stop"
+        pkill -u "$(whoami)" -f "python.*3000" 2>/dev/null || echo "No Python processes on port 3000 to stop"
+
         # Stop Xvfb processes
-        pkill -f "Xvfb.*:99" || true
-        
-        # Kill any remaining browser processes
-        pkill chromium || true
-        pkill firefox || true
-        pkill playwright || true
-        
+        pkill -u "$(whoami)" -f "Xvfb.*:99" 2>/dev/null || echo "No Xvfb processes to stop"
+
+        # Kill any remaining browser processes (only owned by current user)
+        pkill -u "$(whoami)" chromium 2>/dev/null || echo "No Chromium processes to stop"
+        pkill -u "$(whoami)" firefox 2>/dev/null || echo "No Firefox processes to stop"
+        pkill -u "$(whoami)" playwright 2>/dev/null || echo "No Playwright processes to stop"
+
         echo "Browser service stopped"
 EOF
-    
+
     success "Browser VM service stopped"
 }
 

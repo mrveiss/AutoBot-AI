@@ -20,6 +20,9 @@ tiktoken>=0.5.0                  # Token counting for different models
 transformers>=4.55.2             # HuggingFace transformers for model utils - SECURITY UPDATE
 sentence-transformers>=2.2.0     # Embedding models support
 torch>=2.0.0,<2.5.0              # PyTorch for model operations - compatible version
+torchvision>=0.15.0              # PyTorch vision models for CLIP and image processing
+torchaudio>=2.0.0                # PyTorch audio models for Whisper and audio processing
+accelerate>=0.25.0               # HuggingFace model optimization and GPU acceleration
 
 # Agent Communication & Coordination
 asyncio-mqtt>=0.16.0             # MQTT for agent communication (future)
@@ -59,6 +62,11 @@ nltk>=3.8.0                      # Natural language processing
 spacy>=3.7.0                     # Advanced NLP (optional)
 textstat>=0.7.3                  # Text complexity analysis
 
+# ===== GPU-ACCELERATED MULTI-MODAL AI DEPENDENCIES =====
+# Audio Processing & Speech Recognition
+librosa>=0.10.0                  # Audio preprocessing and feature extraction
+scipy>=1.11.0                    # Scientific computing for audio processing
+
 # ===== GUI & AUTOMATION =====
 pyautogui==0.9.54
 mouseinfo==0.1.3
@@ -88,6 +96,8 @@ pre-commit>=3.6.0
 detect-secrets>=1.4.0
 pycryptodome>=3.19.0              # Encryption for secure agent communication
 cryptography>=45.0.6             # Additional crypto support - SECURITY UPDATE
+pyjwt>=2.8.0                     # JWT token authentication
+bcrypt>=4.0.0                    # Password hashing
 
 # ===== MONITORING & OBSERVABILITY =====
 prometheus-client>=0.19.0         # Metrics collection

@@ -16,6 +16,16 @@ import errorHandlerPlugin from './plugins/errorHandler'
 // Import global services
 import './services/GlobalWebSocketService.js'
 
+// Clean up any recovery parameters from URL on app start
+if (typeof window !== 'undefined') {
+  const url = new URL(window.location.href)
+  if (url.searchParams.has('_recovery') || url.searchParams.has('_router_recovery')) {
+    url.searchParams.delete('_recovery')
+    url.searchParams.delete('_router_recovery')
+    window.history.replaceState({}, document.title, url.toString())
+  }
+}
+
 // Import development and diagnostic tools
 if (import.meta.env.DEV) {
   import('./utils/RumConsoleHelper')

@@ -1,269 +1,80 @@
 <template>
   <div class="terminal-window-standalone" data-testid="terminal-window">
-    <div class="window-header">
-      <div class="window-title">
-        <span class="terminal-icon">⬛</span>
-        <span data-testid="terminal-title">Terminal - {{ sessionTitle }}</span>
-      </div>
-      <div class="window-controls">
-        <!-- Emergency Kill Button -->
-        <button
-          class="control-button emergency-kill"
-          data-testid="emergency-kill-button"
-          @click="emergencyKillAll"
-          :disabled="!hasRunningProcesses"
-          title="EMERGENCY KILL - Stop all running processes immediately"
-        >
-          🛑 KILL
-        </button>
+    <!-- Terminal Header -->
+    <TerminalHeader
+      :session-title="sessionTitle"
+      :has-running-processes="hasRunningProcesses"
+      :automation-paused="automationPaused"
+      :has-automated-workflow="hasAutomatedWorkflow"
+      :has-active-process="hasActiveProcess"
+      :connecting="connecting"
+      @emergency-kill="emergencyKillAll"
+      @toggle-automation="workflowAutomation.toggleAutomationPause"
+      @interrupt-process="interruptProcess"
+      @reconnect="reconnect"
+      @clear-terminal="clearTerminal"
+      @close-window="closeWindow"
+    />
 
-        <!-- Session Takeover / Pause Automation -->
-        <button
-          class="control-button takeover"
-          @click="toggleAutomationPause"
-          :class="{ 'active': automationPaused }"
-          :disabled="!hasAutomatedWorkflow"
-          :title="automationPaused ? 'Resume automated workflow' : 'Pause automation and take manual control'"
-        >
-          {{ automationPaused ? '▶️ RESUME' : '⏸️ PAUSE' }}
-        </button>
+    <!-- Terminal Status Bar -->
+    <TerminalStatusBar
+      :connection-status="connectionStatus"
+      :connecting="connecting"
+      :can-input="canInput"
+      :session-id="sessionId"
+      :output-lines-count="outputLines.length"
+    />
 
-        <!-- Interrupt Current Process -->
-        <button
-          class="control-button interrupt"
-          data-testid="interrupt-button"
-          @click="interruptProcess"
-          :disabled="!hasActiveProcess"
-          title="Send Ctrl+C to interrupt current process"
-        >
-          ⚡ INT
-        </button>
-
-        <button
-          class="control-button"
-          data-testid="reconnect-button"
-          @click="reconnect"
-          :disabled="connecting"
-          title="Reconnect"
-        >
-          {{ connecting ? '⟳' : '🔄' }}
-        </button>
-        <button
-          class="control-button"
-          data-testid="clear-button"
-          @click="clearTerminal"
-          title="Clear"
-        >
-          🗑️
-        </button>
-        <button
-          class="control-button danger"
-          @click="closeWindow"
-          title="Close Window"
-        >
-          ✕
-        </button>
-      </div>
-    </div>
-
-    <div class="terminal-status-bar">
-      <div class="status-left">
-        <div class="connection-status" :class="connectionStatus">
-          <div class="status-dot"></div>
-          <span>{{ connectionStatusText }}</span>
-        </div>
-        <div class="session-info">
-          <span>Session: {{ sessionId ? sessionId.slice(0, 8) + '...' : 'unknown' }}</span>
-        </div>
-        <div class="debug-info" v-if="!canInput">
-          <span style="color: orange; font-size: 12px;">
-            Debug: Status={{ connectionStatus }}, Connecting={{ connecting }}, CanInput={{ canInput }}
-          </span>
-        </div>
-      </div>
-      <div class="status-right">
-        <div class="terminal-stats">
-          Lines: {{ outputLines.length }}
-        </div>
-      </div>
-    </div>
-
+    <!-- Terminal Main Area -->
     <div class="terminal-main" ref="terminalMain">
-      <div
-        class="terminal-output"
-        data-testid="terminal-output"
-        ref="terminalOutput"
-        @click="focusInput"
-       tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <div
-          v-for="(line, index) in outputLines"
-          :key="index"
-          class="terminal-line"
-          :class="getLineClass(line)"
-          v-html="formatTerminalLine(line)"
-        ></div>
+      <!-- Terminal Output -->
+      <TerminalOutput
+        :output-lines="outputLines"
+        @focus-input="focusInput"
+        ref="terminalOutputComponent"
+      />
 
-        <div class="terminal-input-line">
-          <span class="prompt" v-html="currentPrompt"></span>
-          <input
-            ref="terminalInput"
-            v-model="currentInput"
-            @keydown="handleKeydown"
-            @keyup.enter="sendCommand"
-            class="terminal-input"
-            data-testid="terminal-input"
-            :disabled="!canInput"
-            autocomplete="off"
-            spellcheck="false"
-            autofocus
-          />
-          <button
-            class="send-button"
-            data-testid="terminal-send"
-            @click="sendCommand"
-            :disabled="!canInput"
-            title="Send Command"
-          >
-            ⏎
-          </button>
-          <span class="cursor" :class="{ 'blink': showCursor }">█</span>
-        </div>
-      </div>
+      <!-- Terminal Input -->
+      <TerminalInput
+        v-model:current-input="currentInput"
+        :current-prompt="currentPrompt"
+        :can-input="canInput"
+        :show-cursor="showCursor"
+        :has-automated-workflow="hasAutomatedWorkflow"
+        :command-history="commandHistory"
+        @send-command="sendCommand"
+        @history-navigation="handleHistoryNavigation"
+        @interrupt-signal="interruptProcess"
+        @exit-signal="sendExitSignal"
+        @clear-terminal="clearTerminal"
+        @start-example-workflow="workflowAutomation.startExampleWorkflow"
+        @download-log="downloadLog"
+        @share-session="shareSession"
+        ref="terminalInputComponent"
+      />
     </div>
 
-    <div class="terminal-footer">
-      <div class="footer-info">
-        <span>Press Ctrl+C to interrupt, Ctrl+D to exit, Tab for completion</span>
-      </div>
-      <div class="footer-actions">
-        <button
-          class="footer-button workflow-test"
-          @click="startExampleWorkflow"
-          title="Start Example Automated Workflow (for testing)"
-          v-if="!hasAutomatedWorkflow"
-        >
-          🤖 Test Workflow
-        </button>
-        <button
-          class="footer-button"
-          @click="downloadLog"
-          title="Download Session Log"
-        >
-          💾 Save Log
-        </button>
-        <button
-          class="footer-button"
-          @click="shareSession"
-          title="Share Session"
-        >
-          🔗 Share
-        </button>
-      </div>
-    </div>
-
-    <!-- Connection Lost Modal -->
-    <div v-if="showReconnectModal" class="modal-overlay" @click="hideReconnectModal" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="modal-content" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <h3>Connection Lost</h3>
-        <p>The terminal connection was lost. Would you like to reconnect?</p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="hideReconnectModal" aria-label="Cancel">
-            Cancel
-          </button>
-          <button class="btn btn-primary" @click="reconnect" aria-label="Reconnect">
-            Reconnect
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Command Confirmation Modal -->
-    <div v-if="showCommandConfirmation" class="confirmation-modal-overlay" @click="cancelCommand" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="confirmation-modal" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <div class="modal-header">
-          <h3 class="modal-title">⚠️ Potentially Destructive Command</h3>
-        </div>
-        <div class="modal-content">
-          <div class="command-preview">
-            <div class="command-label">Command to execute:</div>
-            <div class="command-text">{{ pendingCommand }}</div>
-          </div>
-
-          <div class="risk-assessment">
-            <div class="risk-level" :class="pendingCommandRisk">
-              Risk Level: <strong>{{ pendingCommandRisk.toUpperCase() }}</strong>
-            </div>
-            <div class="risk-reasons">
-              <div v-for="reason in pendingCommandReasons" :key="reason" class="risk-reason">
-                • {{ reason }}
-              </div>
-            </div>
-          </div>
-
-          <div class="confirmation-message">
-            <p><strong>This command may:</strong></p>
-            <ul>
-              <li>Delete files or directories permanently</li>
-              <li>Modify system configurations</li>
-              <li>Change file permissions or ownership</li>
-              <li>Install or remove software packages</li>
-            </ul>
-            <p><strong>Are you sure you want to proceed?</strong></p>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button
-            class="btn btn-danger"
-            @click="executeConfirmedCommand"
-           aria-label="⚡ execute command">
-            ⚡ Execute Command
-          </button>
-          <button
-            class="btn btn-secondary"
-            @click="cancelCommand"
-           aria-label="❌ cancel">
-            ❌ Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Emergency Kill Confirmation Modal -->
-    <div v-if="showKillConfirmation" class="confirmation-modal-overlay" @click="showKillConfirmation = false" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="confirmation-modal emergency" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <div class="modal-header">
-          <h3 class="modal-title">🛑 Emergency Kill All Processes</h3>
-        </div>
-        <div class="modal-content">
-          <div class="emergency-warning">
-            <p><strong>⚠️ WARNING: This will immediately terminate ALL running processes in this terminal session!</strong></p>
-            <p>Running processes:</p>
-            <ul>
-              <li v-for="process in runningProcesses" :key="process.pid" class="process-item">
-                PID {{ process.pid }}: {{ process.command }}
-              </li>
-            </ul>
-            <p><strong>This action cannot be undone. Continue?</strong></p>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button
-            class="btn btn-danger"
-            @click="confirmEmergencyKill"
-           aria-label="🛑 kill all processes">
-            🛑 KILL ALL PROCESSES
-          </button>
-          <button
-            class="btn btn-secondary"
-            @click="showKillConfirmation = false"
-           aria-label="❌ cancel">
-            ❌ Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Terminal Modals -->
+    <TerminalModals
+      :show-reconnect-modal="showReconnectModal"
+      :show-command-confirmation="showCommandConfirmation"
+      :show-kill-confirmation="showKillConfirmation"
+      :show-legacy-modal="showLegacyModal"
+      :pending-command="pendingCommand"
+      :pending-command-risk="pendingCommandRisk"
+      :pending-command-reasons="pendingCommandReasons"
+      :running-processes="runningProcesses"
+      :pending-workflow-step="pendingWorkflowStep"
+      @hide-reconnect-modal="hideReconnectModal"
+      @reconnect="reconnect"
+      @cancel-command="cancelCommand"
+      @execute-confirmed-command="executeConfirmedCommand"
+      @cancel-kill="showKillConfirmation = false"
+      @confirm-emergency-kill="confirmEmergencyKill"
+      @confirm-workflow-step="workflowAutomation.confirmWorkflowStep"
+      @skip-workflow-step="workflowAutomation.skipWorkflowStep"
+      @take-manual-control="workflowAutomation.takeManualControl"
+    />
 
     <!-- Advanced Step Confirmation Modal -->
     <AdvancedStepConfirmationModal
@@ -272,84 +83,57 @@
       :current-step-index="currentWorkflowStep"
       :workflow-steps="workflowSteps"
       :session-id="sessionId"
-      @execute-step="executeConfirmedStep"
-      @skip-step="skipCurrentStep"
-      @take-manual-control="takeManualControl"
-      @execute-all="executeAllRemainingSteps"
-      @save-workflow="saveCustomWorkflow"
-      @update-workflow="updateWorkflowSteps"
-      @close="closeAdvancedModal"
+      @execute-step="workflowAutomation.executeConfirmedStep"
+      @skip-step="workflowAutomation.skipCurrentStep"
+      @take-manual-control="workflowAutomation.takeManualControl"
+      @execute-all="workflowAutomation.executeAllRemainingSteps"
+      @save-workflow="workflowAutomation.saveCustomWorkflow"
+      @update-workflow="workflowAutomation.updateWorkflowSteps"
+      @close="workflowAutomation.closeAdvancedModal"
     />
 
-    <!-- Legacy Manual Step Confirmation Modal (fallback) -->
-    <div v-if="showLegacyModal" class="confirmation-modal-overlay" @click="takeManualControl" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="confirmation-modal workflow-step" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <div class="modal-header">
-          <h3 class="modal-title">🤖 AI Workflow Step Confirmation</h3>
-        </div>
-        <div class="modal-content">
-          <div class="workflow-step-info" v-if="pendingWorkflowStep">
-            <div class="step-counter">
-              Step {{ pendingWorkflowStep.stepNumber }} of {{ pendingWorkflowStep.totalSteps }}
-            </div>
-
-            <div class="step-description">
-              <h4>{{ pendingWorkflowStep.description }}</h4>
-              <p>{{ pendingWorkflowStep.explanation || 'The AI wants to execute the following command:' }}</p>
-            </div>
-
-            <div class="command-preview">
-              <div class="command-label">Command to Execute:</div>
-              <div class="command-text">{{ pendingWorkflowStep.command }}</div>
-            </div>
-
-            <div class="workflow-options">
-              <div class="option-info">
-                <p><strong>Choose your action:</strong></p>
-                <ul>
-                  <li><strong>Execute:</strong> Run this command and continue to next step</li>
-                  <li><strong>Skip:</strong> Skip this command and continue to next step</li>
-                  <li><strong>Take Control:</strong> Pause automation and perform manual steps</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-actions workflow-actions">
-          <button
-            class="btn btn-success"
-            @click="confirmWorkflowStep"
-           aria-label="✅ execute & continue">
-            ✅ Execute & Continue
-          </button>
-          <button
-            class="btn btn-warning"
-            @click="skipWorkflowStep"
-           aria-label="⏭️ skip this step">
-            ⏭️ Skip This Step
-          </button>
-          <button
-            class="btn btn-primary"
-            @click="takeManualControl"
-           aria-label="👤 take manual control">
-            👤 Take Manual Control
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Workflow Automation Logic Component -->
+    <WorkflowAutomation
+      ref="workflowAutomation"
+      v-model:automation-paused="automationPaused"
+      v-model:has-automated-workflow="hasAutomatedWorkflow"
+      v-model:current-workflow-step="currentWorkflowStep"
+      v-model:workflow-steps="workflowSteps"
+      v-model:pending-workflow-step="pendingWorkflowStep"
+      v-model:automation-queue="automationQueue"
+      v-model:waiting-for-user-confirmation="waitingForUserConfirmation"
+      @send-automation-control="sendAutomationControl"
+      @execute-automated-command="executeAutomatedCommand"
+      @add-output-line="addOutputLine"
+      @add-running-process="addRunningProcess"
+      @request-manual-step-confirmation="handleManualStepConfirmation"
+    />
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
-import { useTerminalService } from '@/services/TerminalService.js';
-import { useRoute, useRouter } from 'vue-router';
-import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useTerminalService } from '@/services/TerminalService.js'
+import { useRoute, useRouter } from 'vue-router'
+
+// Import sub-components
+import TerminalHeader from './terminal/TerminalHeader.vue'
+import TerminalStatusBar from './terminal/TerminalStatusBar.vue'
+import TerminalOutput from './terminal/TerminalOutput.vue'
+import TerminalInput from './terminal/TerminalInput.vue'
+import TerminalModals from './terminal/TerminalModals.vue'
+import WorkflowAutomation from './terminal/WorkflowAutomation.vue'
+import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue'
 
 export default {
   name: 'TerminalWindow',
   components: {
+    TerminalHeader,
+    TerminalStatusBar,
+    TerminalOutput,
+    TerminalInput,
+    TerminalModals,
+    WorkflowAutomation,
     AdvancedStepConfirmationModal
   },
   props: {
@@ -363,8 +147,8 @@ export default {
     }
   },
   setup(props) {
-    const route = useRoute();
-    const router = useRouter();
+    const route = useRoute()
+    const router = useRouter()
 
     // Get the terminal service with all its methods
     const {
@@ -376,121 +160,123 @@ export default {
       disconnect,
       createSession,
       closeSession
-    } = useTerminalService();
+    } = useTerminalService()
 
     // Terminal session management
-    const sessionId = ref(props.sessionId || null);
-    
+    const sessionId = ref(props.sessionId || null)
+
     // Initialize proper terminal session
     const initializeTerminalSession = async () => {
       try {
         // If in chat context and session ID provided via props, use it
         if (props.chatContext && props.sessionId) {
-          sessionId.value = props.sessionId;
-          return props.sessionId;
+          sessionId.value = props.sessionId
+          return props.sessionId
         }
-        
+
         // Check if there's an existing terminal session ID in route params (standalone mode)
         if (route?.params?.sessionId || route?.query?.sessionId) {
-          const existingSessionId = route.params.sessionId || route.query.sessionId;
-          sessionId.value = existingSessionId;
-          return existingSessionId;
+          const existingSessionId = route.params.sessionId || route.query.sessionId
+          sessionId.value = existingSessionId
+          return existingSessionId
         }
 
         // Create a new terminal session using the API (standalone mode)
-        const newSessionId = await createSession();
-        sessionId.value = newSessionId;
-        return newSessionId;
+        const newSessionId = await createSession()
+        sessionId.value = newSessionId
+        return newSessionId
       } catch (error) {
-        console.error('Failed to initialize terminal session:', error);
+        console.error('Failed to initialize terminal session:', error)
         // Fallback to a generated session ID if API fails
-        const fallbackId = `terminal_${Date.now()}`;
-        sessionId.value = fallbackId;
-        return fallbackId;
+        const fallbackId = `terminal_${Date.now()}`
+        sessionId.value = fallbackId
+        return fallbackId
       }
-    };
+    }
+
     const sessionTitle = ref(
-      props.chatContext ? 'Chat Terminal' : 
+      props.chatContext ? 'Chat Terminal' :
       route?.query?.title || 'Terminal'
-    );
-    const outputLines = ref([]);
-    const currentInput = ref('');
-    const currentPrompt = ref('$ ');
-    const connectionStatus = ref('disconnected');
-    const connecting = ref(false);
-    const showCursor = ref(true);
-    const showReconnectModal = ref(false);
-    const commandHistory = ref([]);
-    const historyIndex = ref(-1);
+    )
+    const outputLines = ref([])
+    const currentInput = ref('')
+    const currentPrompt = ref('$ ')
+    const connectionStatus = ref('disconnected')
+    const connecting = ref(false)
+    const showCursor = ref(true)
+    const showReconnectModal = ref(false)
+    const commandHistory = ref([])
+    const historyIndex = ref(-1)
 
     // Safety and control state
-    const showCommandConfirmation = ref(false);
-    const showKillConfirmation = ref(false);
-    const pendingCommand = ref('');
-    const pendingCommandRisk = ref('low');
-    const pendingCommandReasons = ref([]);
-    const runningProcesses = ref([]);
-    const hasActiveProcess = ref(false);
+    const showCommandConfirmation = ref(false)
+    const showKillConfirmation = ref(false)
+    const pendingCommand = ref('')
+    const pendingCommandRisk = ref('low')
+    const pendingCommandReasons = ref([])
+    const runningProcesses = ref([])
+    const hasActiveProcess = ref(false)
 
     // Automation control state
-    const automationPaused = ref(false);
-    const hasAutomatedWorkflow = ref(false);
-    const currentWorkflowStep = ref(0);
-    const workflowSteps = ref([]);
-    const showManualStepModal = ref(false);
-    const showLegacyModal = ref(false);
-    const pendingWorkflowStep = ref(null);
-    const automationQueue = ref([]);
-    const waitingForUserConfirmation = ref(false);
+    const automationPaused = ref(false)
+    const hasAutomatedWorkflow = ref(false)
+    const currentWorkflowStep = ref(0)
+    const workflowSteps = ref([])
+    const showManualStepModal = ref(false)
+    const showLegacyModal = ref(false)
+    const pendingWorkflowStep = ref(null)
+    const automationQueue = ref([])
+    const waitingForUserConfirmation = ref(false)
 
     // Advanced workflow management state
-    const isAdvancedMode = ref(true); // Use advanced modal by default
-    const workflowTemplates = ref([]);
-    const passwordPromptActive = ref(false);
-    const currentPasswordPrompt = ref(null);
+    const isAdvancedMode = ref(true)
+    const workflowTemplates = ref([])
+    const passwordPromptActive = ref(false)
+    const currentPasswordPrompt = ref(null)
 
     // Refs
-    const terminalMain = ref(null);
-    const terminalOutput = ref(null);
-    const terminalInput = ref(null);
+    const terminalMain = ref(null)
+    const terminalOutputComponent = ref(null)
+    const terminalInputComponent = ref(null)
+    const workflowAutomation = ref(null)
 
     // Computed properties
     const canInput = computed(() => {
-      // Only allow input when connected AND terminal is ready AND not waiting for user input
       return connectionStatus.value === 'connected' &&
              !connecting.value &&
-             !waitingForUserConfirmation.value;
-    });
-    const hasRunningProcesses = computed(() => runningProcesses.value.length > 0);
+             !waitingForUserConfirmation.value
+    })
+
+    const hasRunningProcesses = computed(() => runningProcesses.value.length > 0)
+
     const connectionStatusText = computed(() => {
       switch (connectionStatus.value) {
-        case 'connected': return 'Connected';
-        case 'connecting': return 'Connecting...';
-        case 'disconnected': return 'Disconnected';
-        case 'error': return 'Error';
-        default: return 'Unknown';
+        case 'connected': return 'Connected'
+        case 'connecting': return 'Connecting...'
+        case 'disconnected': return 'Disconnected'
+        case 'error': return 'Error'
+        default: return 'Unknown'
       }
-    });
+    })
 
     // Methods
     const connect = async () => {
-      // Initialize terminal session first if not already set
       if (!sessionId.value) {
         try {
-          await initializeTerminalSession();
+          await initializeTerminalSession()
         } catch (error) {
-          console.error('Failed to initialize terminal session:', error);
-          return;
+          console.error('Failed to initialize terminal session:', error)
+          return
         }
       }
 
       if (!sessionId.value) {
-        console.error('No session ID available after initialization');
-        return;
+        console.error('No session ID available after initialization')
+        return
       }
 
-      connecting.value = true;
-      connectionStatus.value = 'connecting';
+      connecting.value = true
+      connectionStatus.value = 'connecting'
 
       try {
         await connectToService(sessionId.value, {
@@ -498,75 +284,67 @@ export default {
           onPromptChange: handlePromptChange,
           onStatusChange: handleStatusChange,
           onError: handleError
-        });
+        })
       } catch (error) {
-        console.error('Failed to connect:', error);
-        handleError(error.message);
+        console.error('Failed to connect:', error)
+        handleError(error.message)
       } finally {
-        connecting.value = false;
+        connecting.value = false
       }
-    };
+    }
 
     const reconnect = async () => {
-      hideReconnectModal();
+      hideReconnectModal()
 
-      // Disconnect first if connected
       if (isConnected(sessionId.value)) {
-        disconnect(sessionId.value);
+        disconnect(sessionId.value)
       }
 
-      // Clear output and reset state
-      outputLines.value = [];
-      currentPrompt.value = '$ ';
-
-      // Attempt to reconnect
-      await connect();
-    };
+      outputLines.value = []
+      currentPrompt.value = '$ '
+      await connect()
+    }
 
     // Enhanced sendCommand with safety checks
     const sendCommand = () => {
-      if (!currentInput.value.trim() || !canInput.value) return;
+      if (!currentInput.value.trim() || !canInput.value) return
 
-      const command = currentInput.value.trim();
-
-      // Check if command is potentially destructive
-      const riskAssessment = assessCommandRisk(command);
+      const command = currentInput.value.trim()
+      const riskAssessment = assessCommandRisk(command)
 
       if (riskAssessment.risk === 'high' || riskAssessment.risk === 'critical') {
-        // Show confirmation modal for dangerous commands
-        pendingCommand.value = command;
-        pendingCommandRisk.value = riskAssessment.risk;
-        pendingCommandReasons.value = riskAssessment.reasons;
-        showCommandConfirmation.value = true;
-        return;
+        pendingCommand.value = command
+        pendingCommandRisk.value = riskAssessment.risk
+        pendingCommandReasons.value = riskAssessment.reasons
+        showCommandConfirmation.value = true
+        return
       }
 
-      // Execute safe commands immediately
-      executeCommand(command);
-    };
+      executeCommand(command)
+    }
 
     // Execute command after safety checks
     const executeCommand = (command) => {
       // Add to command history
       if (command && (!commandHistory.value.length || commandHistory.value[commandHistory.value.length - 1] !== command)) {
-        commandHistory.value.push(command);
+        commandHistory.value.push(command)
         if (commandHistory.value.length > 100) {
-          commandHistory.value = commandHistory.value.slice(-100);
+          commandHistory.value = commandHistory.value.slice(-100)
         }
       }
-      historyIndex.value = commandHistory.value.length;
+      historyIndex.value = commandHistory.value.length
 
       // Track process start
       if (isProcessStartCommand(command)) {
-        hasActiveProcess.value = true;
-        addRunningProcess(command);
+        hasActiveProcess.value = true
+        addRunningProcess(command)
       }
 
       // Send to terminal
-      sendInput(sessionId.value, command);
+      sendInput(sessionId.value, command)
 
       // Clear input
-      currentInput.value = '';
+      currentInput.value = ''
 
       // Add command to output for immediate feedback
       addOutputLine({
@@ -574,56 +352,56 @@ export default {
         type: 'command',
         timestamp: new Date(),
         risk: pendingCommandRisk.value || 'low'
-      });
-    };
+      })
+    }
 
     // Command risk assessment
     const assessCommandRisk = (command) => {
-      const lowerCmd = command.toLowerCase().trim();
+      const lowerCmd = command.toLowerCase().trim()
 
       // Critical risk patterns (system destruction)
       const criticalPatterns = [
-        /rm\s+-rf\s+\/($|\s)/,  // rm -rf /
-        /dd\s+if=.*of=\/dev\/[sh]d/,  // dd to disk
-        /mkfs\./,  // format filesystem
-        /fdisk.*\/dev\/[sh]d/,  // disk partitioning
-        />(\/etc\/passwd|\/etc\/shadow)/,  // overwrite critical files
-      ];
+        /rm\s+-rf\s+\/($|\s)/,
+        /dd\s+if=.*of=\/dev\/[sh]d/,
+        /mkfs\./,
+        /fdisk.*\/dev\/[sh]d/,
+        />(\/etc\/passwd|\/etc\/shadow)/,
+      ]
 
       // High risk patterns (data loss, system changes)
       const highRiskPatterns = [
-        /rm\s+-rf/,  // recursive force delete
-        /chmod\s+777.*\/$/,  // chmod 777 on root
-        /chown.*\/$/,  // chown on root
-        /rm\s+.*\/etc\//,  // delete config files
-        /sudo\s+rm/,  // sudo rm
-        />\s*\/dev\/null.*&&.*rm/,  // redirect and delete
-        /killall\s+-9/,  // kill all processes
-        /reboot|shutdown\s+-h/,  // system restart/shutdown
-        /iptables\s+-F/,  // flush firewall rules
-        /userdel|groupdel/,  // delete users/groups
-      ];
+        /rm\s+-rf/,
+        /chmod\s+777.*\/$/,
+        /chown.*\/$/,
+        /rm\s+.*\/etc\//,
+        /sudo\s+rm/,
+        />\s*\/dev\/null.*&&.*rm/,
+        /killall\s+-9/,
+        /reboot|shutdown\s+-h/,
+        /iptables\s+-F/,
+        /userdel|groupdel/,
+      ]
 
       // Moderate risk patterns (installations, configuration)
       const moderateRiskPatterns = [
-        /sudo\s+(apt|yum|dnf|pacman).*install/,  // package installation
-        /sudo\s+(apt|yum|dnf|pacman).*remove/,   // package removal
-        /sudo\s+systemctl/,  // system service control
-        /sudo\s+(service|systemd)/,  // service management
-        /sudo\s+mount/,  // mount filesystems
-        /chmod.*[4-7][0-7][0-7]/,  // permission changes with setuid
-        /sudo.*>/,  // sudo with redirection
-      ];
+        /sudo\s+(apt|yum|dnf|pacman).*install/,
+        /sudo\s+(apt|yum|dnf|pacman).*remove/,
+        /sudo\s+systemctl/,
+        /sudo\s+(service|systemd)/,
+        /sudo\s+mount/,
+        /chmod.*[4-7][0-7][0-7]/,
+        /sudo.*>/,
+      ]
 
-      let risk = 'low';
-      const reasons = [];
+      let risk = 'low'
+      const reasons = []
 
       // Check for critical patterns
       for (const pattern of criticalPatterns) {
         if (pattern.test(lowerCmd)) {
-          risk = 'critical';
-          reasons.push('Command could cause irreversible system damage');
-          break;
+          risk = 'critical'
+          reasons.push('Command could cause irreversible system damage')
+          break
         }
       }
 
@@ -631,9 +409,9 @@ export default {
       if (risk === 'low') {
         for (const pattern of highRiskPatterns) {
           if (pattern.test(lowerCmd)) {
-            risk = 'high';
-            reasons.push('Command could delete data or modify system configuration');
-            break;
+            risk = 'high'
+            reasons.push('Command could delete data or modify system configuration')
+            break
           }
         }
       }
@@ -642,519 +420,221 @@ export default {
       if (risk === 'low') {
         for (const pattern of moderateRiskPatterns) {
           if (pattern.test(lowerCmd)) {
-            risk = 'moderate';
-            reasons.push('Command requires elevated privileges or modifies system');
-            break;
+            risk = 'moderate'
+            reasons.push('Command requires elevated privileges or modifies system')
+            break
           }
         }
       }
 
       // Additional risk factors
       if (lowerCmd.includes('sudo')) {
-        reasons.push('Command uses sudo (elevated privileges)');
+        reasons.push('Command uses sudo (elevated privileges)')
       }
 
       if (lowerCmd.includes('>>') || lowerCmd.includes('>')) {
-        reasons.push('Command redirects output (potential file modification)');
+        reasons.push('Command redirects output (potential file modification)')
       }
 
-      return { risk, reasons };
-    };
+      return { risk, reasons }
+    }
 
     // Safety control methods
     const executeConfirmedCommand = () => {
-      executeCommand(pendingCommand.value);
-      showCommandConfirmation.value = false;
-      pendingCommand.value = '';
-      pendingCommandRisk.value = 'low';
-      pendingCommandReasons.value = [];
-    };
+      executeCommand(pendingCommand.value)
+      showCommandConfirmation.value = false
+      pendingCommand.value = ''
+      pendingCommandRisk.value = 'low'
+      pendingCommandReasons.value = []
+    }
 
     const cancelCommand = () => {
-      showCommandConfirmation.value = false;
-      pendingCommand.value = '';
-      pendingCommandRisk.value = 'low';
-      pendingCommandReasons.value = [];
-      currentInput.value = ''; // Clear the input
-    };
+      showCommandConfirmation.value = false
+      pendingCommand.value = ''
+      pendingCommandRisk.value = 'low'
+      pendingCommandReasons.value = []
+      currentInput.value = ''
+    }
 
     const emergencyKillAll = () => {
       if (runningProcesses.value.length === 0) {
-        return; // No processes to kill
+        return
       }
-      showKillConfirmation.value = true;
-    };
+      showKillConfirmation.value = true
+    }
 
     const confirmEmergencyKill = async () => {
       try {
-        // Send SIGKILL to all processes in the terminal session
-        await sendInput(sessionId.value, '\u0003\u0003\u0003'); // Multiple Ctrl+C
+        await sendInput(sessionId.value, '\u0003\u0003\u0003')
 
-        // Force kill all tracked processes
         for (const process of runningProcesses.value) {
           try {
-            await sendSignal(sessionId.value, 'SIGKILL', process.pid);
+            await sendSignal(sessionId.value, 'SIGKILL', process.pid)
           } catch (error) {
-            console.warn(`Failed to kill process ${process.pid}:`, error);
+            console.warn(`Failed to kill process ${process.pid}:`, error)
           }
         }
 
-        // Clear all process tracking
-        runningProcesses.value = [];
-        hasActiveProcess.value = false;
+        runningProcesses.value = []
+        hasActiveProcess.value = false
 
-        // Add emergency kill message to terminal
         addOutputLine({
           content: '🛑 EMERGENCY KILL: All processes terminated by user',
           type: 'system_message',
           timestamp: new Date()
-        });
+        })
 
-        showKillConfirmation.value = false;
+        showKillConfirmation.value = false
 
       } catch (error) {
-        console.error('Emergency kill failed:', error);
+        console.error('Emergency kill failed:', error)
         addOutputLine({
           content: '❌ Emergency kill failed: ' + error.message,
           type: 'error',
           timestamp: new Date()
-        });
+        })
       }
-    };
+    }
 
     const interruptProcess = () => {
-      if (!hasActiveProcess.value) return;
+      if (!hasActiveProcess.value) return
 
-      // Send Ctrl+C (SIGINT) to interrupt current process
-      sendInput(sessionId.value, '\u0003');
+      sendInput(sessionId.value, '\u0003')
 
       addOutputLine({
         content: '^C (Process interrupted by user)',
         type: 'system_message',
         timestamp: new Date()
-      });
-    };
+      })
+    }
 
     // Process tracking helpers
     const isProcessStartCommand = (command) => {
       const processStartPatterns = [
-        /^(vim|nano|emacs|less|more|top|htop|tail\s+-f)/,  // interactive programs
-        /&\s*$/,  // background processes
-        /^(python|node|java|go)/,  // program execution
-        /^(ssh|scp|rsync)/,  // network operations
-        /^(find|grep|sort).*\|/,  // long-running pipes
-      ];
+        /^(vim|nano|emacs|less|more|top|htop|tail\s+-f)/,
+        /&\s*$/,
+        /^(python|node|java|go)/,
+        /^(ssh|scp|rsync)/,
+        /^(find|grep|sort).*\|/,
+      ]
 
-      return processStartPatterns.some(pattern => pattern.test(command.toLowerCase()));
-    };
+      return processStartPatterns.some(pattern => pattern.test(command.toLowerCase()))
+    }
 
     const addRunningProcess = (command) => {
       const process = {
-        pid: Date.now(), // Simplified PID (in real implementation, get actual PID)
+        pid: Date.now(),
         command: command,
         startTime: new Date()
-      };
-
-      runningProcesses.value.push(process);
-    };
-
-    // Automation Control Methods
-    const toggleAutomationPause = () => {
-      automationPaused.value = !automationPaused.value;
-
-      if (automationPaused.value) {
-        // Pause automation - user takes control
-        addOutputLine({
-          content: '⏸️ AUTOMATION PAUSED - Manual control activated. Type commands freely.',
-          type: 'system_message',
-          timestamp: new Date()
-        });
-
-        // Notify backend about pause
-        sendAutomationControl('pause');
-
-      } else {
-        // Resume automation
-        addOutputLine({
-          content: '▶️ AUTOMATION RESUMED - Continuing workflow execution.',
-          type: 'system_message',
-          timestamp: new Date()
-        });
-
-        // Resume any pending automation steps
-        sendAutomationControl('resume');
-
-        // Continue with next step if available
-        if (automationQueue.value.length > 0) {
-          processNextAutomationStep();
-        }
-      }
-    };
-
-    const sendAutomationControl = async (action) => {
-      try {
-        // Send automation control signal to backend
-        const controlMessage = {
-          type: 'automation_control',
-          action: action,
-          sessionId: sessionId.value,
-          timestamp: new Date().toISOString()
-        };
-
-        await sendInput(sessionId.value, JSON.stringify(controlMessage));
-
-      } catch (error) {
-        console.error('Failed to send automation control:', error);
-      }
-    };
-
-    const requestManualStepConfirmation = (stepInfo) => {
-      pendingWorkflowStep.value = stepInfo;
-      showManualStepModal.value = true;
-      waitingForUserConfirmation.value = true;
-
-      addOutputLine({
-        content: `🤖 AI WORKFLOW: About to execute "${stepInfo.command}"`,
-        type: 'system_message',
-        timestamp: new Date()
-      });
-
-      addOutputLine({
-        content: `📋 Step ${stepInfo.stepNumber}/${stepInfo.totalSteps}: ${stepInfo.description}`,
-        type: 'workflow_info',
-        timestamp: new Date()
-      });
-    };
-
-    const confirmWorkflowStep = () => {
-      if (pendingWorkflowStep.value) {
-        // Execute the pending step
-        executeAutomatedCommand(pendingWorkflowStep.value.command);
-
-        // Close modal and continue
-        showManualStepModal.value = false;
-        waitingForUserConfirmation.value = false;
-        pendingWorkflowStep.value = null;
-
-        // Schedule next step
-        scheduleNextAutomationStep();
-      }
-    };
-
-    const skipWorkflowStep = () => {
-      if (pendingWorkflowStep.value) {
-        addOutputLine({
-          content: `⏭️ SKIPPED: ${pendingWorkflowStep.value.command}`,
-          type: 'system_message',
-          timestamp: new Date()
-        });
-
-        // Close modal
-        showManualStepModal.value = false;
-        waitingForUserConfirmation.value = false;
-        pendingWorkflowStep.value = null;
-
-        // Continue with next step
-        scheduleNextAutomationStep();
-      }
-    };
-
-    const takeManualControl = () => {
-      // User wants to do manual steps before continuing
-      automationPaused.value = true;
-      showManualStepModal.value = false;
-      waitingForUserConfirmation.value = false;
-
-      addOutputLine({
-        content: '👤 MANUAL CONTROL TAKEN - Complete your manual steps, then click RESUME to continue workflow.',
-        type: 'system_message',
-        timestamp: new Date()
-      });
-
-      // Keep the pending step for later
-      if (pendingWorkflowStep.value) {
-        automationQueue.value.unshift(pendingWorkflowStep.value);
-        pendingWorkflowStep.value = null;
-      }
-    };
-
-    const executeAutomatedCommand = (command) => {
-      // Mark as automated execution
-      addOutputLine({
-        content: `🤖 AUTOMATED: ${command}`,
-        type: 'automated_command',
-        timestamp: new Date()
-      });
-
-      // Execute the command
-      sendInput(sessionId.value, command);
-
-      // Track the automated process
-      hasActiveProcess.value = true;
-      addRunningProcess(`[AUTO] ${command}`);
-    };
-
-    const processNextAutomationStep = () => {
-      if (automationQueue.value.length > 0 && !automationPaused.value) {
-        const nextStep = automationQueue.value.shift();
-
-        // Small delay between steps for readability
-        setTimeout(() => {
-          requestManualStepConfirmation(nextStep);
-        }, 1000);
-      }
-    };
-
-    const scheduleNextAutomationStep = () => {
-      currentWorkflowStep.value++;
-
-      // Small delay before next step
-      setTimeout(() => {
-        processNextAutomationStep();
-      }, 2000);
-    };
-
-    // Enhanced command execution with automation awareness
-    const executeCommandWithAutomation = (command) => {
-      if (automationPaused.value || waitingForUserConfirmation.value) {
-        // Manual command during paused automation
-        addOutputLine({
-          content: `👤 MANUAL: ${command}`,
-          type: 'manual_command',
-          timestamp: new Date()
-        });
       }
 
-      // Execute normally
-      executeCommand(command);
-    };
+      runningProcesses.value.push(process)
+    }
 
-    // API Integration for Workflow Automation
-    const startAutomatedWorkflow = (workflowData) => {
-      hasAutomatedWorkflow.value = true;
-      automationPaused.value = false;
-      currentWorkflowStep.value = 0;
-      workflowSteps.value = workflowData.steps || [];
-
-      // Clear any previous automation queue
-      automationQueue.value = [];
-
-      // Add all steps to automation queue
-      workflowData.steps.forEach((step, index) => {
-        automationQueue.value.push({
-          stepNumber: index + 1,
-          totalSteps: workflowData.steps.length,
-          command: step.command,
-          description: step.description || `Execute: ${step.command}`,
-          explanation: step.explanation || null,
-          requiresConfirmation: step.requiresConfirmation !== false // Default to true
-        });
-      });
-
-      addOutputLine({
-        content: `🚀 AUTOMATED WORKFLOW STARTED: ${workflowData.name || 'Unnamed Workflow'}`,
-        type: 'system_message',
-        timestamp: new Date()
-      });
-
-      addOutputLine({
-        content: `📋 ${workflowSteps.value.length} steps planned. Use PAUSE button to take manual control at any time.`,
-        type: 'workflow_info',
-        timestamp: new Date()
-      });
-
-      // Start the first step
-      setTimeout(() => {
-        processNextAutomationStep();
-      }, 1500);
-    };
-
-    // Example workflow for testing
-    const startExampleWorkflow = () => {
-      const exampleWorkflow = {
-        name: "System Update and Package Installation",
-        steps: [
-          {
-            command: "sudo apt update",
-            description: "Update package repositories",
-            explanation: "This updates the list of available packages from configured repositories.",
-            requiresConfirmation: true
-          },
-          {
-            command: "sudo apt upgrade -y",
-            description: "Upgrade installed packages",
-            explanation: "This upgrades all installed packages to their latest versions.",
-            requiresConfirmation: true
-          },
-          {
-            command: "sudo apt install -y git curl wget",
-            description: "Install essential tools",
-            explanation: "Install commonly needed development tools.",
-            requiresConfirmation: true
-          },
-          {
-            command: "git --version && curl --version",
-            description: "Verify installations",
-            explanation: "Check that the tools were installed correctly.",
-            requiresConfirmation: false
-          }
-        ]
-      };
-
-      startAutomatedWorkflow(exampleWorkflow);
-    };
-
-    // Listen for workflow events from backend
-    const handleWorkflowMessage = (message) => {
-      try {
-        const data = JSON.parse(message);
-
-        if (data.type === 'start_workflow') {
-          startAutomatedWorkflow(data.workflow);
-        } else if (data.type === 'pause_workflow') {
-          automationPaused.value = true;
-          addOutputLine({
-            content: '⏸️ WORKFLOW PAUSED BY SYSTEM',
-            type: 'system_message',
-            timestamp: new Date()
-          });
-        } else if (data.type === 'resume_workflow') {
-          automationPaused.value = false;
-          addOutputLine({
-            content: '▶️ WORKFLOW RESUMED BY SYSTEM',
-            type: 'system_message',
-            timestamp: new Date()
-          });
-          processNextAutomationStep();
-        }
-      } catch (error) {
-        console.warn('Failed to parse workflow message:', error);
+    // History navigation
+    const handleHistoryNavigation = (direction, index) => {
+      if (direction === 'up' && index >= 0 && index < commandHistory.value.length) {
+        currentInput.value = commandHistory.value[index]
+        historyIndex.value = index
+      } else if (direction === 'down' && index >= 0 && index < commandHistory.value.length) {
+        currentInput.value = commandHistory.value[index]
+        historyIndex.value = index
       }
-    };
+    }
 
-    const handleKeydown = (event) => {
-      switch (event.key) {
-        case 'ArrowUp':
-          event.preventDefault();
-          if (historyIndex.value > 0) {
-            historyIndex.value--;
-            currentInput.value = commandHistory.value[historyIndex.value];
-          }
-          break;
-
-        case 'ArrowDown':
-          event.preventDefault();
-          if (historyIndex.value < commandHistory.value.length - 1) {
-            historyIndex.value++;
-            currentInput.value = commandHistory.value[historyIndex.value];
-          } else if (historyIndex.value === commandHistory.value.length - 1) {
-            historyIndex.value = commandHistory.value.length;
-            currentInput.value = '';
-          }
-          break;
-
-        case 'Tab':
-          event.preventDefault();
-          // TODO: Implement tab completion
-          break;
-
-        case 'c':
-          if (event.ctrlKey) {
-            event.preventDefault();
-            sendSignal(sessionId.value, 'SIGINT');
-          }
-          break;
-
-        case 'd':
-          if (event.ctrlKey && !currentInput.value) {
-            event.preventDefault();
-            sendInput(sessionId.value, 'exit');
-          }
-          break;
-
-        case 'l':
-          if (event.ctrlKey) {
-            event.preventDefault();
-            clearTerminal();
-          }
-          break;
-      }
-    };
+    const sendExitSignal = () => {
+      sendInput(sessionId.value, 'exit')
+    }
 
     const clearTerminal = () => {
-      outputLines.value = [];
-    };
+      outputLines.value = []
+    }
 
     const focusInput = () => {
-      if (terminalInput.value && canInput.value) {
-        terminalInput.value.focus();
-        // Ensure input is properly focused for automated testing
-        nextTick(() => {
-          if (terminalInput.value && document.activeElement !== terminalInput.value) {
-            terminalInput.value.focus();
-          }
-        });
-      }
-    };
+      terminalInputComponent.value?.focusInput()
+    }
 
     const closeWindow = () => {
       if (confirm('Are you sure you want to close this terminal window?')) {
         if (isConnected(sessionId.value)) {
-          disconnect(sessionId.value);
+          disconnect(sessionId.value)
         }
-        window.close();
+        window.close()
       }
-    };
+    }
 
     const downloadLog = () => {
       const logContent = outputLines.value
         .map(line => {
-          const timestamp = line.timestamp ? `[${line.timestamp.toLocaleString()}] ` : '';
-          return `${timestamp}${line.content || line}`;
+          const timestamp = line.timestamp ? `[${line.timestamp.toLocaleString()}] ` : ''
+          return `${timestamp}${line.content || line}`
         })
-        .join('\n');
+        .join('\n')
 
-      const blob = new Blob([logContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `terminal-${sessionId.value}-${new Date().toISOString().split('T')[0]}.log`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    };
+      const blob = new Blob([logContent], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `terminal-${sessionId.value}-${new Date().toISOString().split('T')[0]}.log`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }
 
     const shareSession = async () => {
-      const url = `${window.location.origin}/terminal/${sessionId.value}?title=${encodeURIComponent(sessionTitle.value)}`;
+      const url = `${window.location.origin}/terminal/${sessionId.value}?title=${encodeURIComponent(sessionTitle.value)}`
 
       if (navigator.share) {
         try {
           await navigator.share({
             title: `Terminal Session - ${sessionTitle.value}`,
             url: url
-          });
+          })
         } catch (error) {
-          // User cancelled the share or sharing failed
-          // This is not necessarily an error condition, just log for debugging
           if (error.name !== 'AbortError') {
-            console.warn('Share operation failed:', error);
+            console.warn('Share operation failed:', error)
           }
         }
       } else {
-        // Fallback: copy to clipboard
         try {
-          await navigator.clipboard.writeText(url);
-          alert('Terminal URL copied to clipboard!');
+          await navigator.clipboard.writeText(url)
+          alert('Terminal URL copied to clipboard!')
         } catch (error) {
-          prompt('Copy this URL:', url);
+          prompt('Copy this URL:', url)
         }
       }
-    };
+    }
 
     const hideReconnectModal = () => {
-      showReconnectModal.value = false;
-    };
+      showReconnectModal.value = false
+    }
+
+    // Automation control methods
+    const sendAutomationControl = async (action) => {
+      try {
+        const controlMessage = {
+          type: 'automation_control',
+          action: action,
+          sessionId: sessionId.value,
+          timestamp: new Date().toISOString()
+        }
+
+        await sendInput(sessionId.value, JSON.stringify(controlMessage))
+      } catch (error) {
+        console.error('Failed to send automation control:', error)
+      }
+    }
+
+    const executeAutomatedCommand = (command) => {
+      sendInput(sessionId.value, command)
+      hasActiveProcess.value = true
+      addRunningProcess(`[AUTO] ${command}`)
+    }
+
+    const handleManualStepConfirmation = (stepInfo) => {
+      showManualStepModal.value = true
+    }
 
     // Terminal event handlers
     const handleOutput = (data) => {
@@ -1162,216 +642,108 @@ export default {
         content: data.content,
         type: data.stream || 'output',
         timestamp: new Date()
-      });
-    };
+      })
+    }
 
     const handlePromptChange = (prompt) => {
-      currentPrompt.value = prompt;
-    };
+      currentPrompt.value = prompt
+    }
 
     const handleStatusChange = (status) => {
-      const oldStatus = connectionStatus.value;
-      connectionStatus.value = status;
-
-      // Terminal status change
+      connectionStatus.value = status
 
       if (status === 'connected') {
-        // Mark as not connecting anymore
-        connecting.value = false;
-
-        // Ensure input is focused and interactive when connection is established
+        connecting.value = false
         nextTick(() => {
-          // Wait for canInput computed to update
           setTimeout(() => {
             if (canInput.value) {
-              focusInput();
-              // Additional focus attempt for automated testing reliability
-              setTimeout(() => {
-                if (canInput.value && terminalInput.value && document.activeElement !== terminalInput.value) {
-                  focusInput();
-                }
-              }, 200);
+              focusInput()
             }
-          }, 50);
-        });
+          }, 50)
+        })
       } else if (status === 'disconnected' && !connecting.value) {
-        showReconnectModal.value = true;
+        showReconnectModal.value = true
       } else if (status === 'connecting') {
-        connecting.value = true;
+        connecting.value = true
       }
-    };
+    }
 
     const handleError = (error) => {
       addOutputLine({
         content: `Error: ${error}`,
         type: 'error',
         timestamp: new Date()
-      });
-      connectionStatus.value = 'error';
-    };
+      })
+      connectionStatus.value = 'error'
+    }
 
     const addOutputLine = (line) => {
-      outputLines.value.push(line);
+      outputLines.value.push(line)
 
-      // Limit output lines to prevent memory issues
       if (outputLines.value.length > 10000) {
-        outputLines.value = outputLines.value.slice(-8000);
+        outputLines.value = outputLines.value.slice(-8000)
       }
-
-      nextTick(() => {
-        if (terminalOutput.value) {
-          terminalOutput.value.scrollTop = terminalOutput.value.scrollHeight;
-        }
-      });
-    };
-
-    const formatTerminalLine = (line) => {
-      let content = line.content || line;
-
-      // Comprehensive ANSI escape sequence handling
-      content = content
-        // Remove cursor positioning sequences
-        .replace(/\x1b\[([0-9]+;[0-9]+)?[Hf]/g, '')
-        // Remove cursor movement sequences  
-        .replace(/\x1b\[([0-9]+)?[ABCD]/g, '')
-        // Remove cursor save/restore
-        .replace(/\x1b\[(s|u)/g, '')
-        // Remove erase sequences
-        .replace(/\x1b\[([0-9]+)?[JK]/g, '')
-        // Remove color/formatting sequences (SGR)
-        .replace(/\x1b\[([0-9]{1,3}(;[0-9]{1,3})*)?m/g, '')
-        // Remove private mode sequences (like bracketed paste)
-        .replace(/\x1b\[\?[0-9]+[hl]/g, '')
-        // Remove title/window sequences
-        .replace(/\x1b\][0-9]+;.*?\x07/g, '')
-        // Remove other CSI sequences
-        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
-        // Clean up carriage returns and newlines
-        .replace(/\r\n/g, '\n')
-        .replace(/\r/g, '')
-        // HTML escape for safety
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        // Clean up extra whitespace but preserve intentional spacing
-        .replace(/\n+$/, ''); // Remove trailing newlines
-
-      return content;
-    };
-
-    const getLineClass = (line) => {
-      const classes = ['terminal-line'];
-
-      if (line.type) {
-        classes.push(`line-${line.type}`);
-      }
-
-      return classes;
-    };
+    }
 
     // Cursor blinking effect
     const startCursorBlink = () => {
       setInterval(() => {
-        showCursor.value = !showCursor.value;
-      }, 500);
-    };
+        showCursor.value = !showCursor.value
+      }, 500)
+    }
 
     // Handle window resize
     const handleResize = () => {
       if (terminalMain.value && isConnected(sessionId.value)) {
-        const rect = terminalMain.value.getBoundingClientRect();
-        const charWidth = 8; // Approximate character width
-        const charHeight = 16; // Approximate character height
-
-        const cols = Math.floor((rect.width - 20) / charWidth);
-        const rows = Math.floor((rect.height - 100) / charHeight);
-
-        resize(sessionId.value, rows, cols);
+        const rect = terminalMain.value.getBoundingClientRect()
+        const charWidth = 8
+        const charHeight = 16
+        const cols = Math.floor((rect.width - 20) / charWidth)
+        const rows = Math.floor((rect.height - 100) / charHeight)
+        resize(sessionId.value, rows, cols)
       }
-    };
+    }
 
     // Handle window beforeunload
     const handleBeforeUnload = (event) => {
       if (isConnected(sessionId.value)) {
-        event.preventDefault();
-        event.returnValue = 'You have an active terminal session. Are you sure you want to close?';
-        return event.returnValue;
+        event.preventDefault()
+        event.returnValue = 'You have an active terminal session. Are you sure you want to close?'
+        return event.returnValue
       }
-    };
+    }
 
     // Lifecycle
     onMounted(async () => {
-      startCursorBlink();
-
-      // Set window title
-      document.title = `Terminal - ${sessionTitle.value}`;
-
-      // Connect to session
-      await connect();
-
-      // Add event listeners
-      window.addEventListener('resize', handleResize);
-      window.addEventListener('beforeunload', handleBeforeUnload);
-
-      // Enhanced focus handling for automated testing
+      startCursorBlink()
+      document.title = `Terminal - ${sessionTitle.value}`
+      await connect()
+      window.addEventListener('resize', handleResize)
+      window.addEventListener('beforeunload', handleBeforeUnload)
       nextTick(() => {
-        focusInput();
-
-        // Add additional focus recovery mechanisms for automated testing
-        document.addEventListener('click', (event) => {
-          // If click is inside terminal area but not on input, restore focus
-          const terminalArea = document.querySelector('.terminal-window-standalone');
-          if (terminalArea && terminalArea.contains(event.target) &&
-              event.target !== terminalInput.value && canInput.value) {
-            nextTick(() => focusInput());
-          }
-        });
-
-        // Periodic focus check for automation scenarios (clean up on unmount)
-        const focusInterval = setInterval(() => {
-          if (canInput.value && terminalInput.value &&
-              document.activeElement !== terminalInput.value &&
-              document.querySelector('.terminal-window-standalone')) {
-            focusInput();
-          }
-        }, 1000);
-
-        // Store interval for cleanup
-        window.terminalFocusInterval = focusInterval;
-      });
-    });
+        focusInput()
+      })
+    })
 
     onUnmounted(() => {
-      // Clean up
       if (isConnected && typeof isConnected === 'function' && isConnected(sessionId.value)) {
-        disconnect(sessionId.value);
+        disconnect(sessionId.value)
       }
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    })
 
-      // Remove event listeners
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-
-      // Clean up focus interval for automated testing
-      if (window.terminalFocusInterval) {
-        clearInterval(window.terminalFocusInterval);
-        window.terminalFocusInterval = null;
-      }
-    });
-
-    // Watch for route changes (if session ID changes)
+    // Watch for route changes
     watch(() => route.params.sessionId, (newSessionId) => {
       if (newSessionId && newSessionId !== sessionId.value) {
-        // Disconnect from old session
         if (sessionId.value && isConnected(sessionId.value)) {
-          disconnect(sessionId.value);
+          disconnect(sessionId.value)
         }
-
-        // Connect to new session
-        sessionId.value = newSessionId;
-        outputLines.value = [];
-        connect();
+        sessionId.value = newSessionId
+        outputLines.value = []
+        connect()
       }
-    });
+    })
 
     return {
       // Data
@@ -1391,6 +763,7 @@ export default {
       pendingCommandReasons,
       runningProcesses,
       hasActiveProcess,
+      commandHistory,
 
       // Automation Control Data
       automationPaused,
@@ -1403,16 +776,11 @@ export default {
       automationQueue,
       waitingForUserConfirmation,
 
-      // Advanced workflow state
-      isAdvancedMode,
-      workflowTemplates,
-      passwordPromptActive,
-      currentPasswordPrompt,
-
       // Refs
       terminalMain,
-      terminalOutput,
-      terminalInput,
+      terminalOutputComponent,
+      terminalInputComponent,
+      workflowAutomation,
 
       // Computed
       canInput,
@@ -1429,108 +797,22 @@ export default {
       emergencyKillAll,
       confirmEmergencyKill,
       interruptProcess,
-
-      // Automation Control Methods
-      toggleAutomationPause,
-      requestManualStepConfirmation,
-      confirmWorkflowStep,
-      skipWorkflowStep,
-      takeManualControl,
-      executeCommandWithAutomation,
-      startAutomatedWorkflow,
-      startExampleWorkflow,
-      handleWorkflowMessage,
-
-      // Advanced Modal Methods
-      executeConfirmedStep: (stepData) => {
-        addOutputLine({
-          content: `🤖 EXECUTING: ${stepData.command}`,
-          type: 'system_message',
-          timestamp: new Date()
-        });
-        executeAutomatedCommand(stepData.command);
-        scheduleNextAutomationStep();
-      },
-      skipCurrentStep: (stepIndex) => {
-        addOutputLine({
-          content: `⏭️ STEP ${stepIndex + 1} SKIPPED BY USER`,
-          type: 'system_message',
-          timestamp: new Date()
-        });
-        scheduleNextAutomationStep();
-      },
-      executeAllRemainingSteps: () => {
-        automationPaused.value = false;
-        waitingForUserConfirmation.value = false;
-        processNextAutomationStep();
-      },
-      saveCustomWorkflow: (workflowData) => {
-        addOutputLine({
-          content: `💾 WORKFLOW SAVED: ${workflowData.name}`,
-          type: 'system_message',
-          timestamp: new Date()
-        });
-      },
-      updateWorkflowSteps: (newSteps) => {
-        workflowSteps.value = newSteps;
-        addOutputLine({
-          content: `📋 WORKFLOW UPDATED: ${newSteps.length} steps configured`,
-          type: 'system_message',
-          timestamp: new Date()
-        });
-      },
-      closeAdvancedModal: () => {
-        showManualStepModal.value = false;
-        waitingForUserConfirmation.value = false;
-      },
-      handlePasswordPrompt: (promptData) => {
-        passwordPromptActive.value = true;
-        currentPasswordPrompt.value = promptData;
-      },
-
-      // Other Methods
-      handleKeydown,
+      handleHistoryNavigation,
+      sendExitSignal,
       clearTerminal,
       focusInput,
       closeWindow,
       downloadLog,
       shareSession,
       hideReconnectModal,
-      formatTerminalLine,
-      getLineClass,
-      // Testing utilities for automated tests
-      isTerminalReady: () => {
-        const ready = canInput.value && terminalInput.value && !terminalInput.value.disabled;
-        // Terminal ready check
-        return ready;
-      },
-      ensureInputFocus: () => {
-        if (canInput.value && terminalInput.value) {
-          // Ensuring terminal input focus
-          terminalInput.value.focus();
-          const focused = document.activeElement === terminalInput.value;
-          // Focus result
-          return focused;
-        }
-        // Cannot ensure focus
-        return false;
-      },
-      // Additional debug utility for automated testing
-      getDebugInfo: () => {
-        return {
-          canInput: canInput.value,
-          connectionStatus: connectionStatus.value,
-          connecting: connecting.value,
-          waitingForUserConfirmation: waitingForUserConfirmation.value,
-          hasTerminalInput: !!terminalInput.value,
-          inputDisabled: terminalInput.value ? terminalInput.value.disabled : null,
-          activeElement: document.activeElement?.className || 'none',
-          isInputFocused: document.activeElement === terminalInput.value
-        };
-      }
-    };
+      sendAutomationControl,
+      executeAutomatedCommand,
+      handleManualStepConfirmation,
+      addOutputLine,
+      addRunningProcess
+    }
   }
-};
+}
 </script>
 
 <style scoped>
@@ -1544,102 +826,6 @@ export default {
   overflow: hidden;
 }
 
-.window-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: #2d2d2d;
-  padding: 8px 16px;
-  border-bottom: 1px solid #333;
-  user-select: none;
-}
-
-.window-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.terminal-icon {
-  font-size: 16px;
-}
-
-.window-controls {
-  display: flex;
-  gap: 8px;
-}
-
-.control-button {
-  background-color: #444;
-  border: 1px solid #666;
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s;
-}
-
-.control-button:hover:not(:disabled) {
-  background-color: #555;
-  transform: translateY(-1px);
-}
-
-.control-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.control-button.danger:hover:not(:disabled) {
-  background-color: #dc3545;
-}
-
-.terminal-status-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: #1e1e1e;
-  padding: 4px 16px;
-  border-bottom: 1px solid #333;
-  font-size: 11px;
-  color: #888;
-}
-
-.status-left, .status-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.connection-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #dc3545;
-}
-
-.connection-status.connected .status-dot {
-  background-color: #28a745;
-}
-
-.connection-status.connecting .status-dot {
-  background-color: #ffc107;
-  animation: pulse 1s infinite;
-}
-
-.connection-status.error .status-dot {
-  background-color: #dc3545;
-  animation: flash 0.5s infinite;
-}
-
 .terminal-main {
   flex: 1;
   display: flex;
@@ -1647,655 +833,10 @@ export default {
   overflow: hidden;
 }
 
-.terminal-output {
-  flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-  font-size: 13px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.terminal-line {
-  margin: 0;
-  padding: 0;
-  min-height: 1.4em;
-}
-
-.line-error {
-  color: #ff6b6b;
-}
-
-.line-warning {
-  color: #ffc107;
-}
-
-.line-success {
-  color: #28a745;
-}
-
-.line-command {
-  color: #87ceeb;
-}
-
-.line-system {
-  color: #9370db;
-}
-
-.terminal-input-line {
-  display: flex;
-  align-items: center;
-  padding: 0 16px 16px 16px;
-  background-color: #000;
-}
-
-.prompt {
-  color: #00ff00;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
-.terminal-input {
-  background: none;
-  border: none;
-  color: #fff;
-  font-family: inherit;
-  font-size: inherit;
-  outline: none;
-  flex: 1;
-  min-width: 0;
-}
-
-.send-button {
-  background: rgba(0, 255, 0, 0.1);
-  border: 1px solid rgba(0, 255, 0, 0.3);
-  color: #00ff00;
-  padding: 4px 8px;
-  margin-left: 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.send-button:hover:not(:disabled) {
-  background: rgba(0, 255, 0, 0.2);
-  border-color: rgba(0, 255, 0, 0.5);
-}
-
-.send-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.cursor {
-  color: #00ff00;
-  font-weight: bold;
-  margin-left: 2px;
-}
-
-.cursor.blink {
-  animation: blink 1s infinite;
-}
-
-.terminal-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: #2d2d2d;
-  padding: 6px 16px;
-  border-top: 1px solid #333;
-  font-size: 11px;
-}
-
-.footer-info {
-  color: #888;
-}
-
-.footer-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.footer-button {
-  background-color: #444;
-  border: 1px solid #666;
-  color: #ccc;
-  padding: 3px 8px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 10px;
-  transition: background-color 0.2s;
-}
-
-.footer-button:hover {
-  background-color: #555;
-}
-
-.footer-button.workflow-test {
-  background-color: #17a2b8;
-  border-color: #138496;
-  color: white;
-  font-weight: 600;
-}
-
-.footer-button.workflow-test:hover {
-  background-color: #138496;
-}
-
-/* Modal styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: #2d2d2d;
-  color: #fff;
-  padding: 24px;
-  border-radius: 8px;
-  max-width: 400px;
-  width: 90%;
-  text-align: center;
-}
-
-.modal-content h3 {
-  margin-top: 0;
-  color: #ffc107;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 20px;
-}
-
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
-}
-
-.btn-primary {
-  background-color: #007acc;
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: #005999;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background-color: #5a6268;
-}
-
-.btn-danger {
-  background-color: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover {
-  background-color: #c82333;
-}
-
-/* Emergency control button styles */
-.control-button.emergency-kill {
-  background-color: #dc3545;
-  color: white;
-  font-weight: bold;
-  border-color: #c82333;
-}
-
-.control-button.emergency-kill:hover:not(:disabled) {
-  background-color: #c82333;
-  border-color: #bd2130;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
-}
-
-.control-button.interrupt {
-  background-color: #ffc107;
-  color: #212529;
-  border-color: #e0a800;
-}
-
-.control-button.interrupt:hover:not(:disabled) {
-  background-color: #e0a800;
-  border-color: #d39e00;
-}
-
-.control-button.takeover {
-  background-color: #17a2b8;
-  color: white;
-  border-color: #138496;
-  font-weight: 600;
-}
-
-.control-button.takeover:hover:not(:disabled) {
-  background-color: #138496;
-  border-color: #0c7084;
-}
-
-.control-button.takeover.active {
-  background-color: #28a745;
-  border-color: #1e7e34;
-  animation: pulse-success 2s infinite;
-}
-
-.control-button.takeover.active:hover {
-  background-color: #218838;
-}
-
-/* Command confirmation modal styles */
-.confirmation-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  backdrop-filter: blur(2px);
-}
-
-.confirmation-modal {
-  background-color: #2d2d2d;
-  color: #fff;
-  padding: 0;
-  border-radius: 12px;
-  max-width: 600px;
-  width: 90%;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  border: 1px solid #444;
-}
-
-.confirmation-modal.emergency {
-  border-color: #dc3545;
-  box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
-}
-
-.modal-header {
-  padding: 20px 24px 16px 24px;
-  border-bottom: 1px solid #444;
-  background: linear-gradient(135deg, #333 0%, #2d2d2d 100%);
-  border-radius: 12px 12px 0 0;
-}
-
-.modal-title {
-  margin: 0;
-  color: #ffc107;
-  font-size: 18px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.confirmation-modal.emergency .modal-title {
-  color: #ff6b6b;
-}
-
-.modal-content {
-  padding: 24px;
-}
-
-.command-preview {
-  background-color: #1e1e1e;
-  border: 1px solid #444;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
-}
-
-.command-label {
-  font-size: 12px;
-  color: #888;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.command-text {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  color: #87ceeb;
-  background-color: #000;
-  padding: 12px;
-  border-radius: 6px;
-  border-left: 4px solid #ffc107;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.risk-assessment {
-  margin-bottom: 20px;
-}
-
-.risk-level {
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
-}
-
-.risk-level.low {
-  background-color: rgba(40, 167, 69, 0.2);
-  color: #28a745;
-  border: 1px solid #28a745;
-}
-
-.risk-level.moderate {
-  background-color: rgba(255, 193, 7, 0.2);
-  color: #ffc107;
-  border: 1px solid #ffc107;
-}
-
-.risk-level.high {
-  background-color: rgba(255, 107, 107, 0.2);
-  color: #ff6b6b;
-  border: 1px solid #ff6b6b;
-}
-
-.risk-level.critical {
-  background-color: rgba(220, 53, 69, 0.3);
-  color: #ff4757;
-  border: 1px solid #dc3545;
-  animation: pulse-danger 2s infinite;
-}
-
-.risk-reasons {
-  color: #ccc;
-}
-
-.risk-reason {
-  margin-bottom: 4px;
-  font-size: 13px;
-}
-
-.confirmation-message {
-  color: #ddd;
-}
-
-.confirmation-message p {
-  margin-bottom: 12px;
-}
-
-.confirmation-message ul {
-  margin: 12px 0;
-  padding-left: 20px;
-}
-
-.confirmation-message li {
-  margin-bottom: 6px;
-  color: #ccc;
-}
-
-.emergency-warning {
-  color: #ff6b6b;
-}
-
-.emergency-warning p {
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-
-.process-item {
-  background-color: #1e1e1e;
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 4px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
-  color: #87ceeb;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  padding: 20px 24px;
-  border-top: 1px solid #444;
-  background-color: #252525;
-  border-radius: 0 0 12px 12px;
-}
-
-/* Enhanced animations */
-@keyframes pulse-danger {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
-  }
-}
-
-/* Process status indicators */
-.line-system_message {
-  color: #9370db;
-  font-weight: 500;
-}
-
-.line-error {
-  color: #ff6b6b;
-}
-
-.line-command.high {
-  border-left: 3px solid #ffc107;
-  background-color: rgba(255, 193, 7, 0.1);
-}
-
-.line-command.critical {
-  border-left: 3px solid #dc3545;
-  background-color: rgba(220, 53, 69, 0.1);
-}
-
-/* Workflow Step Modal Styles */
-.confirmation-modal.workflow-step {
-  max-width: 700px;
-  border-color: #17a2b8;
-  box-shadow: 0 10px 30px rgba(23, 162, 184, 0.3);
-}
-
-.workflow-step-info {
-  text-align: left;
-}
-
-.step-counter {
-  background-color: #17a2b8;
-  color: white;
-  padding: 8px 16px;
-  border-radius: 20px;
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.step-description h4 {
-  margin: 0 0 8px 0;
-  color: #17a2b8;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.step-description p {
-  margin: 0 0 16px 0;
-  color: #ccc;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.workflow-options {
-  background-color: #1e1e1e;
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 20px;
-  border-left: 4px solid #17a2b8;
-}
-
-.option-info p {
-  margin: 0 0 12px 0;
-  color: #17a2b8;
-  font-weight: 600;
-}
-
-.option-info ul {
-  margin: 0;
-  padding-left: 20px;
-  color: #ccc;
-}
-
-.option-info li {
-  margin-bottom: 8px;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.option-info li strong {
-  color: #fff;
-}
-
-.workflow-actions {
-  justify-content: space-between;
-  padding: 20px 24px;
-}
-
-.btn-success {
-  background-color: #28a745;
-  color: white;
-  border: 1px solid #1e7e34;
-}
-
-.btn-success:hover {
-  background-color: #218838;
-  border-color: #1c7430;
-}
-
-.btn-warning {
-  background-color: #ffc107;
-  color: #212529;
-  border: 1px solid #e0a800;
-}
-
-.btn-warning:hover {
-  background-color: #e0a800;
-  border-color: #d39e00;
-}
-
-/* Animation for active automation state */
-@keyframes pulse-success {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(40, 167, 69, 0);
-  }
-}
-
-/* Terminal line styles for automation */
-.line-automated_command {
-  color: #17a2b8;
-  font-weight: 500;
-  background-color: rgba(23, 162, 184, 0.1);
-  border-left: 3px solid #17a2b8;
-  padding-left: 8px;
-}
-
-.line-manual_command {
-  color: #28a745;
-  font-weight: 500;
-  background-color: rgba(40, 167, 69, 0.1);
-  border-left: 3px solid #28a745;
-  padding-left: 8px;
-}
-
-.line-workflow_info {
-  color: #6f42c1;
-  background-color: rgba(111, 66, 193, 0.1);
-  border-left: 3px solid #6f42c1;
-  padding-left: 8px;
-  font-style: italic;
-}
-
-/* Animations */
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes flash {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-/* Scrollbar styling */
-.terminal-output::-webkit-scrollbar {
-  width: 8px;
-}
-
-.terminal-output::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.terminal-output::-webkit-scrollbar-thumb {
-  background: #555;
-  border-radius: 4px;
-}
-
-.terminal-output::-webkit-scrollbar-thumb:hover {
-  background: #777;
-}
-
 /* Responsive */
 @media (max-width: 768px) {
-  .window-header {
-    padding: 6px 12px;
-  }
-
-  .terminal-status-bar {
-    padding: 3px 12px;
-  }
-
-  .terminal-output {
-    padding: 12px;
+  .terminal-window-standalone {
     font-size: 12px;
-  }
-
-  .terminal-input-line {
-    padding: 0 12px 12px 12px;
-  }
-
-  .footer-info {
-    display: none; /* Hide on mobile */
   }
 }
 </style>

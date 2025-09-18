@@ -115,7 +115,7 @@ export class ConfigTester {
     console.log('[ConfigTester] Testing API URL generation...');
     
     const endpoints = [
-      '/api/system/health',
+      '/api/health',
       '/api/chat/chats',
       '/api/knowledge_base/stats',
       '/api/settings'

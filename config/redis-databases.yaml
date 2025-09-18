@@ -6,8 +6,8 @@ redis_databases:
     db: 0
     description: "Main application data (switched to match kb_db configuration)"
   knowledge:
-    db: 0
-    description: "Knowledge base and documents (CRITICAL: 13,383 vectors stored in DB 0)"
+    db: 1
+    description: "Knowledge base and documents (CRITICAL: 13,383 vectors - moving from DB 0 to DB 1)"
   prompts:
     db: 2
     description: "Prompt templates and management"

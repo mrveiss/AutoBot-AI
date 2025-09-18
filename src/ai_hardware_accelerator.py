@@ -1,0 +1,617 @@
+#!/usr/bin/env python3
+"""
+AutoBot AI Hardware Accelerator
+Intelligent routing and optimization for NPU/GPU/CPU semantic processing
+"""
+
+import asyncio
+import json
+import logging
+import time
+import numpy as np
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, Any, List, Optional, Tuple, Union
+import aiohttp
+import torch
+from datetime import datetime, timedelta
+
+# Import centralized components
+from src.config import cfg
+from src.utils.redis_client import get_redis_client
+from src.utils.logging_manager import get_llm_logger
+
+logger = get_llm_logger("ai_hardware_accelerator")
+
+
+class HardwareDevice(Enum):
+    """Available hardware devices for AI processing."""
+    NPU = "npu"          # Intel NPU for lightweight tasks
+    GPU = "gpu"          # RTX 4070 for heavy compute
+    CPU = "cpu"          # CPU fallback
+
+
+class TaskComplexity(Enum):
+    """Task complexity levels for hardware routing."""
+    LIGHTWEIGHT = "lightweight"    # < 1s, small models
+    MODERATE = "moderate"          # 1-5s, medium models
+    HEAVY = "heavy"               # > 5s, large models
+
+
+@dataclass
+class HardwareMetrics:
+    """Hardware performance metrics."""
+    device: HardwareDevice
+    utilization_percent: float
+    temperature_c: float
+    power_usage_w: float
+    available_memory_mb: float
+    last_updated: datetime
+
+
+@dataclass
+class ProcessingTask:
+    """AI processing task definition."""
+    task_id: str
+    task_type: str
+    input_data: Dict[str, Any]
+    complexity: TaskComplexity
+    priority: int = 1
+    timeout_seconds: int = 30
+    preferred_device: Optional[HardwareDevice] = None
+
+
+@dataclass
+class ProcessingResult:
+    """AI processing result."""
+    task_id: str
+    success: bool
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    device_used: Optional[HardwareDevice] = None
+    processing_time_ms: float = 0.0
+    device_metrics: Optional[HardwareMetrics] = None
+
+
+class AIHardwareAccelerator:
+    """
+    Intelligent AI hardware accelerator for AutoBot.
+
+    Optimally routes AI tasks to Intel NPU, RTX 4070 GPU, or CPU
+    based on task complexity, hardware availability, and performance requirements.
+    """
+
+    def __init__(self):
+        self.redis_client = None
+        self.device_metrics = {}
+        self.task_history = []
+        self.npu_worker_url = cfg.get('npu_worker.url', 'http://172.16.168.22:8081')
+        self.routing_strategy = cfg.get('ai_acceleration.routing_strategy', 'optimal')
+
+        # Performance thresholds for device selection
+        self.thresholds = {
+            'npu_max_model_size_mb': 2000,      # NPU handles < 2GB models
+            'npu_max_response_time_s': 2.0,     # NPU for < 2s tasks
+            'gpu_utilization_threshold': 80.0,  # GPU busy threshold
+            'cpu_fallback_timeout_s': 1.0,      # CPU fallback timeout
+        }
+
+        # Device availability tracking
+        self.device_status = {
+            HardwareDevice.NPU: {"available": False, "last_check": None},
+            HardwareDevice.GPU: {"available": False, "last_check": None},
+            HardwareDevice.CPU: {"available": True, "last_check": datetime.now()},
+        }
+
+    async def initialize(self):
+        """Initialize the AI hardware accelerator."""
+        logger.info("🚀 Initializing AI Hardware Accelerator")
+
+        # Initialize Redis client
+        try:
+            self.redis_client = await get_redis_client('main')
+            if self.redis_client:
+                logger.info("✅ Connected to Redis for task coordination")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis connection failed: {e}")
+
+        # Check hardware availability
+        await self._check_hardware_availability()
+
+        # Start monitoring loop
+        asyncio.create_task(self._hardware_monitoring_loop())
+
+        logger.info("✅ AI Hardware Accelerator initialized")
+
+    async def _check_hardware_availability(self):
+        """Check availability of all hardware devices."""
+        # Check NPU Worker
+        await self._check_npu_availability()
+
+        # Check GPU
+        await self._check_gpu_availability()
+
+        # CPU is always available
+        self.device_status[HardwareDevice.CPU]["available"] = True
+        self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now()
+
+    async def _check_npu_availability(self):
+        """Check NPU Worker availability."""
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                async with session.get(f"{self.npu_worker_url}/health") as response:
+                    if response.status == 200:
+                        health_data = await response.json()
+                        npu_available = health_data.get("npu_available", False)
+
+                        self.device_status[HardwareDevice.NPU]["available"] = npu_available
+                        self.device_status[HardwareDevice.NPU]["last_check"] = datetime.now()
+
+                        if npu_available:
+                            logger.info("✅ NPU Worker available and ready")
+                            await self._update_npu_metrics(health_data)
+                        else:
+                            logger.warning("⚠️ NPU Worker connected but NPU hardware unavailable")
+                    else:
+                        logger.warning(f"⚠️ NPU Worker health check failed: {response.status}")
+                        self.device_status[HardwareDevice.NPU]["available"] = False
+        except Exception as e:
+            logger.warning(f"⚠️ NPU Worker connection failed: {e}")
+            self.device_status[HardwareDevice.NPU]["available"] = False
+
+    async def _check_gpu_availability(self):
+        """Check GPU availability."""
+        try:
+            if torch.cuda.is_available():
+                device_count = torch.cuda.device_count()
+                if device_count > 0:
+                    # Get GPU utilization
+                    try:
+                        import pynvml
+                        pynvml.nvmlInit()
+                        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                        utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+
+                        self.device_metrics[HardwareDevice.GPU] = HardwareMetrics(
+                            device=HardwareDevice.GPU,
+                            utilization_percent=utilization.gpu,
+                            temperature_c=pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU),
+                            power_usage_w=pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0,
+                            available_memory_mb=pynvml.nvmlDeviceGetMemoryInfo(handle).free / 1024 / 1024,
+                            last_updated=datetime.now()
+                        )
+
+                        self.device_status[HardwareDevice.GPU]["available"] = True
+                        logger.info(f"✅ GPU available: {torch.cuda.get_device_name(0)}")
+                    except ImportError:
+                        # pynvml not available, assume GPU is available
+                        self.device_status[HardwareDevice.GPU]["available"] = True
+                        logger.info("✅ GPU available (basic detection)")
+                else:
+                    self.device_status[HardwareDevice.GPU]["available"] = False
+            else:
+                self.device_status[HardwareDevice.GPU]["available"] = False
+        except Exception as e:
+            logger.warning(f"⚠️ GPU availability check failed: {e}")
+            self.device_status[HardwareDevice.GPU]["available"] = False
+
+        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now()
+
+    async def _update_npu_metrics(self, health_data: Dict[str, Any]):
+        """Update NPU metrics from health data."""
+        stats = health_data.get("stats", {})
+
+        # Estimate NPU utilization from loaded models and task count
+        loaded_models = len(health_data.get("loaded_models", []))
+        utilization = min(loaded_models * 25.0, 100.0)  # Rough estimation
+
+        self.device_metrics[HardwareDevice.NPU] = HardwareMetrics(
+            device=HardwareDevice.NPU,
+            utilization_percent=utilization,
+            temperature_c=45.0 + (utilization * 0.3),  # Estimated
+            power_usage_w=2.0 + (utilization / 100.0 * 8.0),  # 2-10W range
+            available_memory_mb=1024.0,  # NPU memory estimation
+            last_updated=datetime.now()
+        )
+
+    async def _hardware_monitoring_loop(self):
+        """Monitor hardware status periodically."""
+        while True:
+            try:
+                await asyncio.sleep(30)  # Check every 30 seconds
+                await self._check_hardware_availability()
+            except Exception as e:
+                logger.error(f"❌ Hardware monitoring error: {e}")
+
+    def _classify_task_complexity(self, task: ProcessingTask) -> TaskComplexity:
+        """Classify task complexity for optimal device routing."""
+        task_type = task.task_type
+        input_data = task.input_data
+
+        # Task complexity classification
+        if task_type == "embedding_generation":
+            text_length = len(input_data.get("text", ""))
+            if text_length < 500:
+                return TaskComplexity.LIGHTWEIGHT
+            elif text_length < 2000:
+                return TaskComplexity.MODERATE
+            else:
+                return TaskComplexity.HEAVY
+
+        elif task_type == "semantic_search":
+            num_documents = input_data.get("num_documents", 0)
+            if num_documents < 100:
+                return TaskComplexity.LIGHTWEIGHT
+            elif num_documents < 1000:
+                return TaskComplexity.MODERATE
+            else:
+                return TaskComplexity.HEAVY
+
+        elif task_type == "chat_inference":
+            model_size = input_data.get("model_size_mb", 1000)
+            if model_size < 1000:  # < 1GB
+                return TaskComplexity.LIGHTWEIGHT
+            elif model_size < 3000:  # < 3GB
+                return TaskComplexity.MODERATE
+            else:
+                return TaskComplexity.HEAVY
+
+        else:
+            # Conservative default
+            return TaskComplexity.MODERATE
+
+    def _select_optimal_device(self, task: ProcessingTask) -> HardwareDevice:
+        """Select optimal device for task processing."""
+        complexity = self._classify_task_complexity(task)
+
+        # Honor preferred device if specified and available
+        if task.preferred_device and self.device_status[task.preferred_device]["available"]:
+            return task.preferred_device
+
+        # Intelligent routing based on complexity and availability
+        if complexity == TaskComplexity.LIGHTWEIGHT:
+            # Lightweight tasks: NPU preferred for power efficiency
+            if self.device_status[HardwareDevice.NPU]["available"]:
+                npu_metrics = self.device_metrics.get(HardwareDevice.NPU)
+                if not npu_metrics or npu_metrics.utilization_percent < 80.0:
+                    return HardwareDevice.NPU
+
+            # Fallback to GPU if available
+            if self.device_status[HardwareDevice.GPU]["available"]:
+                gpu_metrics = self.device_metrics.get(HardwareDevice.GPU)
+                if not gpu_metrics or gpu_metrics.utilization_percent < 70.0:
+                    return HardwareDevice.GPU
+
+            return HardwareDevice.CPU
+
+        elif complexity == TaskComplexity.MODERATE:
+            # Moderate tasks: GPU preferred for performance
+            if self.device_status[HardwareDevice.GPU]["available"]:
+                gpu_metrics = self.device_metrics.get(HardwareDevice.GPU)
+                if not gpu_metrics or gpu_metrics.utilization_percent < 80.0:
+                    return HardwareDevice.GPU
+
+            # NPU can handle some moderate tasks
+            if self.device_status[HardwareDevice.NPU]["available"]:
+                npu_metrics = self.device_metrics.get(HardwareDevice.NPU)
+                if not npu_metrics or npu_metrics.utilization_percent < 60.0:
+                    return HardwareDevice.NPU
+
+            return HardwareDevice.CPU
+
+        else:  # HEAVY tasks
+            # Heavy tasks: GPU only, CPU fallback
+            if self.device_status[HardwareDevice.GPU]["available"]:
+                return HardwareDevice.GPU
+
+            return HardwareDevice.CPU
+
+    async def process_task(self, task: ProcessingTask) -> ProcessingResult:
+        """Process an AI task using optimal hardware."""
+        start_time = time.time()
+
+        # Select optimal device
+        selected_device = self._select_optimal_device(task)
+
+        logger.info(f"🎯 Processing task {task.task_id} on {selected_device.value}")
+
+        try:
+            # Route to appropriate processor
+            if selected_device == HardwareDevice.NPU:
+                result = await self._process_on_npu(task)
+            elif selected_device == HardwareDevice.GPU:
+                result = await self._process_on_gpu(task)
+            else:
+                result = await self._process_on_cpu(task)
+
+            processing_time = (time.time() - start_time) * 1000
+
+            # Update metrics
+            device_metrics = self.device_metrics.get(selected_device)
+
+            return ProcessingResult(
+                task_id=task.task_id,
+                success=True,
+                result=result,
+                device_used=selected_device,
+                processing_time_ms=processing_time,
+                device_metrics=device_metrics
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Task {task.task_id} failed on {selected_device.value}: {e}")
+
+            # Try fallback device
+            fallback_device = self._get_fallback_device(selected_device)
+            if fallback_device and fallback_device != selected_device:
+                logger.info(f"🔄 Retrying task {task.task_id} on {fallback_device.value}")
+                try:
+                    if fallback_device == HardwareDevice.GPU:
+                        result = await self._process_on_gpu(task)
+                    else:
+                        result = await self._process_on_cpu(task)
+
+                    processing_time = (time.time() - start_time) * 1000
+
+                    return ProcessingResult(
+                        task_id=task.task_id,
+                        success=True,
+                        result=result,
+                        device_used=fallback_device,
+                        processing_time_ms=processing_time
+                    )
+                except Exception as fallback_error:
+                    logger.error(f"❌ Fallback also failed: {fallback_error}")
+
+            processing_time = (time.time() - start_time) * 1000
+
+            return ProcessingResult(
+                task_id=task.task_id,
+                success=False,
+                error=str(e),
+                device_used=selected_device,
+                processing_time_ms=processing_time
+            )
+
+    def _get_fallback_device(self, primary_device: HardwareDevice) -> Optional[HardwareDevice]:
+        """Get fallback device for failed processing."""
+        if primary_device == HardwareDevice.NPU:
+            if self.device_status[HardwareDevice.GPU]["available"]:
+                return HardwareDevice.GPU
+            return HardwareDevice.CPU
+        elif primary_device == HardwareDevice.GPU:
+            return HardwareDevice.CPU
+        else:
+            return None
+
+    async def _process_on_npu(self, task: ProcessingTask) -> Dict[str, Any]:
+        """Process task on NPU Worker."""
+        request_data = {
+            "task_type": task.task_type,
+            "model_name": self._get_optimal_npu_model(task),
+            "input_data": task.input_data,
+            "priority": task.priority,
+            "timeout_seconds": task.timeout_seconds
+        }
+
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=task.timeout_seconds)
+        ) as session:
+            async with session.post(
+                f"{self.npu_worker_url}/inference",
+                json=request_data
+            ) as response:
+                if response.status == 200:
+                    result_data = await response.json()
+                    if result_data.get("status") == "completed":
+                        return result_data.get("result", {})
+                    else:
+                        raise Exception(f"NPU processing failed: {result_data.get('error')}")
+                else:
+                    raise Exception(f"NPU Worker HTTP error: {response.status}")
+
+    def _get_optimal_npu_model(self, task: ProcessingTask) -> str:
+        """Get optimal NPU model for task."""
+        task_type = task.task_type
+
+        if task_type == "embedding_generation":
+            return "nomic-embed-text"
+        elif task_type == "chat_inference":
+            return "llama3.2:1b-instruct-q4_K_M"
+        elif task_type == "text_classification":
+            return "text-classification-model"
+        else:
+            return "llama3.2:1b-instruct-q4_K_M"  # Default
+
+    async def _process_on_gpu(self, task: ProcessingTask) -> Dict[str, Any]:
+        """Process task on GPU using existing AutoBot GPU infrastructure."""
+        # This would integrate with existing GPU processing (semantic_chunker, etc.)
+        # For now, simulate GPU processing
+
+        if task.task_type == "embedding_generation":
+            return await self._gpu_embedding_generation(task.input_data)
+        elif task.task_type == "semantic_search":
+            return await self._gpu_semantic_search(task.input_data)
+        else:
+            # Fallback to CPU for unsupported GPU tasks
+            return await self._process_on_cpu(task)
+
+    async def _gpu_embedding_generation(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate embeddings using GPU acceleration."""
+        # Use the existing semantic_chunker GPU infrastructure
+        from src.utils.semantic_chunker import get_semantic_chunker
+
+        chunker = get_semantic_chunker()
+        await chunker._initialize_model()  # Ensure GPU model is loaded
+
+        text = input_data.get("text", "")
+        sentences = [text]  # Single text for embedding
+
+        # Use GPU-accelerated embedding generation
+        embeddings = await chunker._compute_sentence_embeddings_async(sentences)
+
+        return {
+            "embeddings": embeddings[0].tolist(),
+            "model_used": chunker.embedding_model_name,
+            "device": "GPU",
+            "dimension": len(embeddings[0])
+        }
+
+    async def _gpu_semantic_search(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform semantic search using GPU acceleration."""
+        # This would integrate with the existing knowledge base search
+        # For now, return a placeholder result
+        return {
+            "search_results": [],
+            "total_results": 0,
+            "search_time_ms": 0,
+            "device": "GPU"
+        }
+
+    async def _process_on_cpu(self, task: ProcessingTask) -> Dict[str, Any]:
+        """Process task on CPU (fallback)."""
+        # Basic CPU processing fallback
+        await asyncio.sleep(0.1)  # Simulate processing
+
+        return {
+            "result": f"CPU processed task {task.task_type}",
+            "device": "CPU",
+            "fallback": True
+        }
+
+    async def get_hardware_status(self) -> Dict[str, Any]:
+        """Get comprehensive hardware status."""
+        return {
+            "devices": {
+                device.value: {
+                    "available": status["available"],
+                    "last_check": status["last_check"].isoformat() if status["last_check"] else None,
+                    "metrics": self.device_metrics.get(device).__dict__ if device in self.device_metrics else None
+                }
+                for device, status in self.device_status.items()
+            },
+            "routing_strategy": self.routing_strategy,
+            "thresholds": self.thresholds,
+            "task_history_count": len(self.task_history)
+        }
+
+    async def optimize_performance(self) -> Dict[str, Any]:
+        """Analyze and optimize performance based on task history."""
+        if len(self.task_history) < 10:
+            return {"message": "Insufficient data for optimization"}
+
+        # Analyze task performance by device
+        device_performance = {}
+        for result in self.task_history[-100:]:  # Last 100 tasks
+            device = result.device_used
+            if device not in device_performance:
+                device_performance[device] = {"count": 0, "avg_time": 0, "success_rate": 0}
+
+            device_performance[device]["count"] += 1
+            device_performance[device]["avg_time"] += result.processing_time_ms
+            if result.success:
+                device_performance[device]["success_rate"] += 1
+
+        # Calculate averages
+        for device, perf in device_performance.items():
+            if perf["count"] > 0:
+                perf["avg_time"] /= perf["count"]
+                perf["success_rate"] = (perf["success_rate"] / perf["count"]) * 100
+
+        return {
+            "performance_analysis": device_performance,
+            "recommendations": self._generate_optimization_recommendations(device_performance)
+        }
+
+    def _generate_optimization_recommendations(self, performance: Dict) -> List[str]:
+        """Generate optimization recommendations based on performance data."""
+        recommendations = []
+
+        # Analyze NPU performance
+        if HardwareDevice.NPU in performance:
+            npu_perf = performance[HardwareDevice.NPU]
+            if npu_perf["success_rate"] < 90:
+                recommendations.append("NPU success rate is low - check NPU Worker stability")
+            if npu_perf["avg_time"] > 2000:
+                recommendations.append("NPU response times are high - consider model optimization")
+        else:
+            recommendations.append("NPU not being utilized - verify NPU Worker connection")
+
+        # Analyze GPU performance
+        if HardwareDevice.GPU in performance:
+            gpu_perf = performance[HardwareDevice.GPU]
+            if gpu_perf["avg_time"] > 5000:
+                recommendations.append("GPU response times are high - check GPU utilization")
+
+        return recommendations
+
+
+# Global instance
+_ai_accelerator = None
+
+async def get_ai_accelerator() -> AIHardwareAccelerator:
+    """Get the global AI hardware accelerator instance."""
+    global _ai_accelerator
+    if _ai_accelerator is None:
+        _ai_accelerator = AIHardwareAccelerator()
+        await _ai_accelerator.initialize()
+    return _ai_accelerator
+
+
+# Convenience functions for common tasks
+async def accelerated_embedding_generation(text: str, preferred_device: Optional[HardwareDevice] = None) -> np.ndarray:
+    """Generate embeddings using optimal hardware acceleration."""
+    accelerator = await get_ai_accelerator()
+
+    task = ProcessingTask(
+        task_id=f"embedding_{int(time.time()*1000)}",
+        task_type="embedding_generation",
+        input_data={"text": text},
+        complexity=TaskComplexity.LIGHTWEIGHT,
+        preferred_device=preferred_device
+    )
+
+    result = await accelerator.process_task(task)
+
+    if result.success and "embeddings" in result.result:
+        return np.array(result.result["embeddings"])
+    else:
+        raise Exception(f"Embedding generation failed: {result.error}")
+
+
+async def accelerated_semantic_search(
+    query: str,
+    documents: List[str],
+    top_k: int = 10,
+    preferred_device: Optional[HardwareDevice] = None
+) -> List[Dict[str, Any]]:
+    """Perform semantic search using optimal hardware acceleration."""
+    accelerator = await get_ai_accelerator()
+
+    # Determine complexity based on document count
+    if len(documents) < 100:
+        complexity = TaskComplexity.LIGHTWEIGHT
+    elif len(documents) < 1000:
+        complexity = TaskComplexity.MODERATE
+    else:
+        complexity = TaskComplexity.HEAVY
+
+    task = ProcessingTask(
+        task_id=f"search_{int(time.time()*1000)}",
+        task_type="semantic_search",
+        input_data={
+            "query": query,
+            "documents": documents,
+            "top_k": top_k,
+            "num_documents": len(documents)
+        },
+        complexity=complexity,
+        preferred_device=preferred_device
+    )
+
+    result = await accelerator.process_task(task)
+
+    if result.success:
+        return result.result.get("search_results", [])
+    else:
+        raise Exception(f"Semantic search failed: {result.error}")

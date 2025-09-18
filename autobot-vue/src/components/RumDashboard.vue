@@ -1,294 +1,381 @@
 <template>
-  <div class="rum-dashboard" v-if="isVisible && rumEnabled">
-    <div class="rum-header">
-      <h3>🔍 RUM Dashboard (Dev Mode)</h3>
-      <div class="rum-controls">
-        <button @click="refreshData" class="btn-sm">Refresh</button>
-        <button @click="exportData" class="btn-sm">Export</button>
-        <button @click="clearData" class="btn-sm btn-warning">Clear</button>
-        <button @click="toggleVisibility" class="btn-sm">Hide</button>
-      </div>
-    </div>
+  <div v-if="isDev" class="rum-dashboard relative">
+    <!-- Toggle Button -->
+    <button
+      @click="toggleVisibility"
+      :class="{
+        'bg-red-500 hover:bg-red-600': hasIssues,
+        'bg-green-500 hover:bg-green-600': !hasIssues,
+        'animate-pulse': hasIssues
+      }"
+      class="fixed top-4 right-20 z-50 px-3 py-1 rounded-full text-white text-sm font-medium shadow-lg transition-all duration-300 flex items-center space-x-2"
+      :title="hasIssues ? `${criticalIssues.length} critical issues detected` : 'System monitoring healthy'"
+    >
+      <div
+        :class="{
+          'bg-white': hasIssues,
+          'bg-green-200': !hasIssues
+        }"
+        class="w-2 h-2 rounded-full"
+      ></div>
+      <span>{{ hasIssues ? criticalIssues.length : '✓' }}</span>
+      <!-- PERFORMANCE: Show reduced monitoring indicator -->
+      <span v-if="isPerformanceModeEnabled" class="text-xs opacity-75">[PM]</span>
+    </button>
 
-    <div class="rum-tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab"
-        @click="activeTab = tab"
-        :class="{ active: activeTab === tab }"
-        class="rum-tab"
+    <!-- Dashboard Panel -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="transform translate-x-full opacity-0"
+      enter-to-class="transform translate-x-0 opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="transform translate-x-0 opacity-100"
+      leave-to-class="transform translate-x-full opacity-0"
+    >
+      <div
+        v-if="isVisible"
+        class="fixed top-16 right-4 w-80 bg-white rounded-lg shadow-xl border z-40 max-h-96 overflow-y-auto"
       >
-        {{ tab }}
-      </button>
-    </div>
-
-    <div class="rum-content">
-      <!-- Overview Tab -->
-      <div v-if="activeTab === 'Overview'" class="rum-section">
-        <div class="rum-stats">
-          <div class="stat-card">
-            <h4>Session</h4>
-            <p>{{ formatDuration(sessionDuration) }}</p>
-          </div>
-          <div class="stat-card">
-            <h4>API Calls</h4>
-            <p>{{ metrics.apiCalls.length }}</p>
-          </div>
-          <div class="stat-card error" v-if="slowApiCalls > 0">
-            <h4>Slow API</h4>
-            <p>{{ slowApiCalls }}</p>
-          </div>
-          <div class="stat-card critical" v-if="timeoutApiCalls > 0">
-            <h4>Timeouts</h4>
-            <p>{{ timeoutApiCalls }}</p>
-          </div>
-          <div class="stat-card error" v-if="metrics.errors.length > 0">
-            <h4>Errors</h4>
-            <p>{{ metrics.errors.length }}</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- API Calls Tab -->
-      <div v-if="activeTab === 'API Calls'" class="rum-section">
-        <div class="rum-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Method</th>
-                <th>Endpoint</th>
-                <th>Duration</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="call in recentApiCalls"
-                :key="call.timestamp"
-                :class="{
-                  slow: call.isSlow,
-                  timeout: call.isTimeout,
-                  error: call.status === 'error'
-                }"
+        <div class="sticky top-0 bg-white border-b px-4 py-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900">System Monitor</h3>
+            <div class="flex items-center space-x-2">
+              <!-- PERFORMANCE: Show performance mode status -->
+              <span v-if="isPerformanceModeEnabled" class="text-xs text-orange-600 font-medium">
+                Performance Mode
+              </span>
+              <button
+                @click="refreshData"
+                :disabled="isLoading"
+                class="p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
+                title="Refresh data"
               >
-                <td>{{ formatTime(call.timestamp) }}</td>
-                <td>{{ call.method }}</td>
-                <td>{{ call.url }}</td>
-                <td>{{ call.duration.toFixed(0) }}ms</td>
-                <td>{{ call.status }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Errors Tab -->
-      <div v-if="activeTab === 'Errors'" class="rum-section">
-        <div class="error-list">
-          <div
-            v-for="error in recentErrors"
-            :key="error.timestamp"
-            class="error-item"
-          >
-            <div class="error-header">
-              <span class="error-type">{{ error.type }}</span>
-              <span class="error-time">{{ formatTime(error.timestamp) }}</span>
-            </div>
-            <div class="error-message">{{ error.message || error.reason }}</div>
-            <div class="error-details" v-if="error.stack">
-              <pre>{{ error.stack }}</pre>
+                <svg
+                  :class="{ 'animate-spin': isLoading }"
+                  class="w-4 h-4 text-gray-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  ></path>
+                </svg>
+              </button>
+              <button
+                @click="isVisible = false"
+                class="p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
+              >
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- WebSocket Tab -->
-      <div v-if="activeTab === 'WebSocket'" class="rum-section">
-        <div class="websocket-status">
-          <div class="ws-indicator" :class="wsStatus">
-            {{ wsStatusText }}
-          </div>
-          <button @click="testWebSocketConnection" class="test-ws-btn">
-            🔌 Test WebSocket Connection
-          </button>
-        </div>
-        <div class="rum-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Event</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="event in recentWsEvents" :key="event.timestamp">
-                <td>{{ formatTime(event.timestamp) }}</td>
-                <td>{{ event.event }}</td>
-                <td>{{ JSON.stringify(event.data) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Critical Issues Tab -->
-      <div v-if="activeTab === 'Critical'" class="rum-section">
-        <div class="critical-issues">
-          <div
-            v-for="issue in criticalIssues"
-            :key="issue.timestamp"
-            class="critical-item"
-          >
-            <div class="critical-header">
-              <span class="critical-type">🚨 {{ issue.type }}</span>
-              <span class="critical-time">{{ formatTime(issue.timestamp) }}</span>
+        <div class="p-4 space-y-4">
+          <!-- Performance Mode Warning -->
+          <div v-if="isPerformanceModeEnabled" class="bg-orange-50 border border-orange-200 rounded-lg p-3">
+            <div class="flex items-center space-x-2">
+              <svg class="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-sm text-orange-700 font-medium">
+                Performance Mode Active
+              </span>
             </div>
-            <div class="critical-data">
-              <pre>{{ JSON.stringify(issue.data, null, 2) }}</pre>
+            <p class="text-xs text-orange-600 mt-1">
+              Monitoring reduced to {{ Math.round(refreshInterval / 60000) }} minutes intervals for better performance.
+            </p>
+          </div>
+
+          <!-- System Status -->
+          <div class="space-y-2">
+            <h4 class="text-sm font-medium text-gray-700">System Status</h4>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div class="bg-gray-50 rounded p-2">
+                <div class="text-gray-500">Uptime</div>
+                <div class="font-medium">{{ formatUptime(systemData.uptime) }}</div>
+              </div>
+              <div class="bg-gray-50 rounded p-2">
+                <div class="text-gray-500">Memory</div>
+                <div class="font-medium">{{ systemData.memoryUsage }}%</div>
+              </div>
             </div>
           </div>
+
+          <!-- Critical Issues -->
+          <div v-if="criticalIssues.length > 0" class="space-y-2">
+            <h4 class="text-sm font-medium text-red-700">Critical Issues ({{ criticalIssues.length }})</h4>
+            <div class="space-y-1">
+              <div
+                v-for="issue in criticalIssues.slice(0, 5)"
+                :key="issue.id"
+                class="bg-red-50 border border-red-200 rounded p-2 text-sm"
+              >
+                <div class="font-medium text-red-800">{{ issue.type }}</div>
+                <div class="text-red-600 text-xs">{{ issue.message }}</div>
+                <div class="text-red-500 text-xs">{{ formatTimeAgo(issue.timestamp) }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Events -->
+          <div v-if="recentEvents.length > 0" class="space-y-2">
+            <h4 class="text-sm font-medium text-gray-700">Recent Events</h4>
+            <div class="space-y-1">
+              <div
+                v-for="event in recentEvents.slice(0, 5)"
+                :key="event.id"
+                class="bg-gray-50 rounded p-2 text-sm"
+              >
+                <div class="font-medium text-gray-800">{{ event.type }}</div>
+                <div class="text-gray-600 text-xs">{{ event.message }}</div>
+                <div class="text-gray-500 text-xs">{{ formatTimeAgo(event.timestamp) }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Performance Metrics -->
+          <div class="space-y-2">
+            <h4 class="text-sm font-medium text-gray-700">Performance</h4>
+            <div class="space-y-1 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-500">Page Load:</span>
+                <span class="font-medium">{{ performanceData.pageLoadTime }}ms</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500">API Response:</span>
+                <span class="font-medium">{{ performanceData.apiResponseTime }}ms</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500">Render Time:</span>
+                <span class="font-medium">{{ performanceData.renderTime }}ms</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Last Updated -->
+          <div class="border-t pt-2 text-xs text-gray-500 text-center">
+            Last updated: {{ formatTimeAgo(lastUpdated) }}
+            <br>
+            <span v-if="isPerformanceModeEnabled" class="text-orange-600">
+              Next update in ~{{ Math.round(refreshInterval / 60000) }}m
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </div>
-
-  <!-- Floating Toggle Button -->
-  <button
-    v-if="!isVisible && isDev"
-    @click="toggleVisibility"
-    class="rum-toggle"
-    title="Show RUM Dashboard"
-  >
-    🔍
-  </button>
 </template>
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket.js'
+import { isPerformanceModeEnabled, getPerformanceInterval, logPerformanceIssue } from '@/config/performance.js'
 
 export default {
   name: 'RumDashboard',
   setup() {
-    // Global WebSocket Service
-    const { isConnected: globalWsConnected, connectionState: globalWsState, testConnection } = useGlobalWebSocket();
-
+    // Reactive state
     const isVisible = ref(false)
-    const activeTab = ref('Overview')
-    const metrics = ref({
-      apiCalls: [],
-      errors: [],
-      webSocketEvents: [],
-      sessionDuration: 0
+    const isLoading = ref(false)
+    const lastUpdated = ref(Date.now())
+
+    // System data
+    const systemData = ref({
+      uptime: 0,
+      memoryUsage: 0,
+      cpuUsage: 0
     })
+
+    // Performance data
+    const performanceData = ref({
+      pageLoadTime: 0,
+      apiResponseTime: 0,
+      renderTime: 0
+    })
+
+    // Events and issues
     const criticalIssues = ref([])
+    const recentEvents = ref([])
 
-    const tabs = ['Overview', 'API Calls', 'Errors', 'WebSocket', 'Critical']
-    const isDev = import.meta.env.DEV
+    // PERFORMANCE: Use performance-aware refresh interval
+    const refreshInterval = getPerformanceInterval('RUM_DASHBOARD_REFRESH', 5000) // Default 5s, but performance mode uses 5 minutes
+    let refreshIntervalId = null
 
-    // Check if RUM is enabled in developer settings
-    const rumEnabled = computed(() => {
-      // Get settings from localStorage or a global store
-      try {
-        const settings = JSON.parse(localStorage.getItem('chat_settings') || '{}')
-        return settings.developer?.rum?.enabled === true
-      } catch {
-        return false
-      }
-    })
-
-    let refreshInterval = null
+    // Environment detection
+    const isDev = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost'
 
     // Computed properties
-    const slowApiCalls = computed(() =>
-      metrics.value.apiCalls.filter(call => call.isSlow).length
-    )
-
-    const timeoutApiCalls = computed(() =>
-      metrics.value.apiCalls.filter(call => call.isTimeout).length
-    )
-
-    const recentApiCalls = computed(() =>
-      metrics.value.apiCalls.slice(-20).reverse()
-    )
-
-    const recentErrors = computed(() =>
-      metrics.value.errors.slice(-10).reverse()
-    )
-
-    const recentWsEvents = computed(() =>
-      metrics.value.webSocketEvents.slice(-20).reverse()
-    )
-
-    const sessionDuration = computed(() => metrics.value.sessionDuration || 0)
-
-    const wsStatus = computed(() => {
-      // Use the real-time global WebSocket service status
-      if (globalWsConnected.value) return 'connected'
-      if (globalWsState.value === 'error') return 'error'
-      return 'disconnected'
-    })
-
-    const wsStatusText = computed(() => {
-      const status = wsStatus.value
-      return status === 'connected' ? '🟢 Connected' :
-             status === 'error' ? '🔴 Error' : '🟡 Disconnected'
-    })
+    const hasIssues = computed(() => criticalIssues.value.length > 0)
 
     // Methods
-    const refreshData = () => {
-      if (window.rum) {
-        metrics.value = window.rum.getMetrics()
-        criticalIssues.value = JSON.parse(localStorage.getItem('rum_critical_issues') || '[]')
-      }
-    }
-
-    const exportData = () => {
-      if (window.rum) {
-        window.rum.exportData()
-      }
-    }
-
-    const clearData = () => {
-      if (window.rum) {
-        window.rum.clear()
-        refreshData()
-      }
-    }
-
-    const testWebSocketConnection = () => {
-      console.log('🔌 Testing global WebSocket connection, current state:', globalWsState.value)
-      testConnection()
-      refreshData()
-    }
-
     const toggleVisibility = () => {
       isVisible.value = !isVisible.value
-      if (isVisible.value) {
-        refreshData()
+    }
+
+    const refreshData = async () => {
+      if (isLoading.value) return
+
+      isLoading.value = true
+
+      try {
+        // PERFORMANCE: Only fetch essential data in performance mode
+        if (isPerformanceModeEnabled()) {
+          // Lightweight data collection
+          await Promise.all([
+            fetchSystemDataLightweight(),
+            fetchCriticalIssuesOnly()
+          ])
+        } else {
+          // Full data collection
+          await Promise.all([
+            fetchSystemData(),
+            fetchPerformanceData(),
+            fetchCriticalIssues(),
+            fetchRecentEvents()
+          ])
+        }
+
+        lastUpdated.value = Date.now()
+
+      } catch (error) {
+        console.error('[RumDashboard] Error refreshing data:', error)
+        logPerformanceIssue('RumDashboard', 'Data refresh failed', { error: error.message })
+      } finally {
+        isLoading.value = false
       }
     }
 
-    const formatTime = (timestamp) => {
-      return new Date(timestamp).toLocaleTimeString()
+    const fetchSystemDataLightweight = async () => {
+      // PERFORMANCE: Basic system info only
+      systemData.value = {
+        uptime: performance.now(),
+        memoryUsage: performance.memory ? Math.round((performance.memory.usedJSHeapSize / performance.memory.totalJSHeapSize) * 100) : 0,
+        cpuUsage: 0 // Skip CPU measurement for performance
+      }
     }
 
-    const formatDuration = (ms) => {
-      const seconds = Math.floor(ms / 1000)
+    const fetchSystemData = async () => {
+      try {
+        // Get basic performance metrics
+        if (performance.memory) {
+          systemData.value.memoryUsage = Math.round((performance.memory.usedJSHeapSize / performance.memory.totalJSHeapSize) * 100)
+        }
+        systemData.value.uptime = performance.now()
+      } catch (error) {
+        console.error('[RumDashboard] Error fetching system data:', error)
+      }
+    }
+
+    const fetchPerformanceData = async () => {
+      try {
+        const entries = performance.getEntriesByType('navigation')
+        if (entries.length > 0) {
+          const entry = entries[0]
+          performanceData.value = {
+            pageLoadTime: Math.round(entry.loadEventEnd - entry.loadEventStart),
+            apiResponseTime: Math.round(entry.responseEnd - entry.requestStart),
+            renderTime: Math.round(entry.domContentLoadedEventEnd - entry.domContentLoadedEventStart)
+          }
+        }
+      } catch (error) {
+        console.error('[RumDashboard] Error fetching performance data:', error)
+      }
+    }
+
+    const fetchCriticalIssuesOnly = async () => {
+      // PERFORMANCE: Only get stored critical issues, don't scan for new ones
+      try {
+        const stored = localStorage.getItem('rum_critical_issues')
+        criticalIssues.value = stored ? JSON.parse(stored) : []
+      } catch (error) {
+        criticalIssues.value = []
+      }
+    }
+
+    const fetchCriticalIssues = async () => {
+      try {
+        // Get stored issues
+        const stored = localStorage.getItem('rum_critical_issues')
+        const issues = stored ? JSON.parse(stored) : []
+
+        // Add current performance issues if any
+        if (systemData.value.memoryUsage > 90) {
+          issues.push({
+            id: Date.now(),
+            type: 'High Memory Usage',
+            message: `Memory usage at ${systemData.value.memoryUsage}%`,
+            timestamp: Date.now()
+          })
+        }
+
+        // Keep only recent issues (last 24 hours)
+        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000)
+        criticalIssues.value = issues.filter(issue => issue.timestamp > oneDayAgo)
+
+        // Store back
+        localStorage.setItem('rum_critical_issues', JSON.stringify(criticalIssues.value))
+
+      } catch (error) {
+        console.error('[RumDashboard] Error fetching critical issues:', error)
+      }
+    }
+
+    const fetchRecentEvents = async () => {
+      try {
+        // Get stored events
+        const stored = localStorage.getItem('rum_recent_events')
+        const events = stored ? JSON.parse(stored) : []
+
+        // Keep only recent events (last hour)
+        const oneHourAgo = Date.now() - (60 * 60 * 1000)
+        recentEvents.value = events.filter(event => event.timestamp > oneHourAgo)
+
+      } catch (error) {
+        console.error('[RumDashboard] Error fetching recent events:', error)
+      }
+    }
+
+    // Utility functions
+    const formatTimeAgo = (timestamp) => {
+      const seconds = Math.floor((Date.now() - timestamp) / 1000)
       const minutes = Math.floor(seconds / 60)
-      if (minutes > 0) {
-        return `${minutes}m ${seconds % 60}s`
-      }
+      const hours = Math.floor(minutes / 60)
+
+      if (hours > 0) return `${hours}h ago`
+      if (minutes > 0) return `${minutes}m ago`
+      return `${seconds}s ago`
+    }
+
+    const formatUptime = (milliseconds) => {
+      const seconds = Math.floor(milliseconds / 1000)
+      const minutes = Math.floor(seconds / 60)
+      const hours = Math.floor(minutes / 60)
+
+      if (hours > 0) return `${hours}h ${minutes % 60}m`
+      if (minutes > 0) return `${minutes}m ${seconds % 60}s`
       return `${seconds}s`
     }
 
     // Lifecycle
     onMounted(() => {
       if (isDev) {
+        // Initial data load
         refreshData()
-        refreshInterval = setInterval(refreshData, 5000) // Refresh every 5 seconds
+
+        // PERFORMANCE: Use performance-aware refresh interval
+        if (isPerformanceModeEnabled()) {
+          console.log(`[RumDashboard] Performance mode: refresh interval set to ${refreshInterval / 60000} minutes`)
+        } else {
+          console.log(`[RumDashboard] Normal mode: refresh interval set to ${refreshInterval / 1000} seconds`)
+        }
+
+        refreshIntervalId = setInterval(refreshData, refreshInterval)
 
         // Show dashboard if there are critical issues
         const issues = JSON.parse(localStorage.getItem('rum_critical_issues') || '[]')
@@ -299,34 +386,32 @@ export default {
     })
 
     onUnmounted(() => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval)
+      if (refreshIntervalId) {
+        clearInterval(refreshIntervalId)
       }
     })
 
     return {
+      // Reactive state
       isVisible,
-      activeTab,
-      metrics,
+      isLoading,
+      lastUpdated,
+      systemData,
+      performanceData,
       criticalIssues,
-      tabs,
+      recentEvents,
+
+      // Computed
+      hasIssues,
       isDev,
-      rumEnabled,
-      slowApiCalls,
-      timeoutApiCalls,
-      recentApiCalls,
-      recentErrors,
-      recentWsEvents,
-      sessionDuration,
-      wsStatus,
-      wsStatusText,
-      refreshData,
-      exportData,
-      clearData,
-      testWebSocketConnection,
+      isPerformanceModeEnabled: isPerformanceModeEnabled(),
+      refreshInterval,
+
+      // Methods
       toggleVisibility,
-      formatTime,
-      formatDuration
+      refreshData,
+      formatTimeAgo,
+      formatUptime
     }
   }
 }
@@ -334,275 +419,25 @@ export default {
 
 <style scoped>
 .rum-dashboard {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  width: 600px;
-  max-height: 80vh;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  z-index: 10000;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 12px;
-  overflow: hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-.rum-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: #f3f4f6;
-  border-bottom: 1px solid #e5e7eb;
+/* Custom scrollbar */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
 }
 
-.rum-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: bold;
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
 }
 
-.rum-controls {
-  display: flex;
-  gap: 8px;
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
 }
 
-.btn-sm {
-  padding: 4px 8px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-}
-
-.btn-sm:hover {
-  background: #f9fafb;
-}
-
-.btn-warning {
-  color: #dc2626;
-  border-color: #dc2626;
-}
-
-.rum-tabs {
-  display: flex;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.rum-tab {
-  padding: 8px 12px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 11px;
-  border-bottom: 2px solid transparent;
-}
-
-.rum-tab.active {
-  background: white;
-  border-bottom-color: #3b82f6;
-  font-weight: bold;
-}
-
-.rum-content {
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.rum-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.stat-card {
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  text-align: center;
-}
-
-.stat-card.error {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #dc2626;
-}
-
-.stat-card.critical {
-  background: #fef2f2;
-  border-color: #dc2626;
-  color: #dc2626;
-  font-weight: bold;
-}
-
-.stat-card h4 {
-  margin: 0 0 4px 0;
-  font-size: 10px;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
-
-.stat-card p {
-  margin: 0;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.rum-table {
-  overflow-x: auto;
-}
-
-.rum-table table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-}
-
-.rum-table th,
-.rum-table td {
-  padding: 6px 8px;
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.rum-table th {
-  background: #f9fafb;
-  font-weight: bold;
-}
-
-.rum-table tr.slow {
-  background: #fef3c7;
-}
-
-.rum-table tr.timeout {
-  background: #fecaca;
-  color: #dc2626;
-}
-
-.rum-table tr.error {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.error-list,
-.critical-issues {
-  space: 12px;
-}
-
-.error-item,
-.critical-item {
-  padding: 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  margin-bottom: 8px;
-}
-
-.error-header,
-.critical-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-weight: bold;
-}
-
-.error-type,
-.critical-type {
-  color: #dc2626;
-}
-
-.error-time,
-.critical-time {
-  color: #6b7280;
-  font-size: 10px;
-}
-
-.error-details pre,
-.critical-data pre {
-  background: #f9fafb;
-  padding: 8px;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-size: 10px;
-  margin: 8px 0 0 0;
-}
-
-.websocket-status {
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.test-ws-btn {
-  background: #3b82f6;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.test-ws-btn:hover {
-  background: #2563eb;
-}
-
-.test-ws-btn:active {
-  background: #1d4ed8;
-}
-
-.ws-indicator {
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-weight: bold;
-  text-align: center;
-}
-
-.ws-indicator.connected {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.ws-indicator.error {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.ws-indicator.disconnected {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.rum-toggle {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  border: 2px solid #3b82f6;
-  background: white;
-  color: #3b82f6;
-  font-size: 20px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.rum-toggle:hover {
-  background: #3b82f6;
-  color: white;
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
 }
 </style>

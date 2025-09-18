@@ -37,7 +37,7 @@ export class BackendFallbackService {
    */
   initializeMockResponses() {
     return {
-      '/api/system/health': {
+      '/api/health': {
         status: 'ok',
         timestamp: new Date().toISOString(),
         services: {
@@ -117,7 +117,7 @@ export class BackendFallbackService {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     try {
-      const response = await fetch(`${backendUrl}/api/system/health`, {
+      const response = await fetch(`${backendUrl}/api/health`, {
         method: 'GET',
         signal: controller.signal,
         headers: {

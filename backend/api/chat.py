@@ -12,38 +12,60 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-# PERFORMANCE FIX: Lazy import heavy modules to prevent startup blocking
-# from src.agents.kb_librarian_agent import get_kb_librarian
-# from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
-# from src.agents.llm_failsafe_agent import get_robust_llm_response
-# from src.conversation import get_conversation_manager
-# from src.simple_chat_workflow import process_chat_message_simple, SimpleWorkflowResult
+# DEPENDENCY MANAGEMENT: Validated lazy loading with proper error handling
+# This replaces the old masking lazy imports with dependency validation
 
-# Lazy import functions to avoid blocking during startup
-def get_kb_librarian_lazy():
-    from src.agents.kb_librarian_agent import get_kb_librarian
-    return get_kb_librarian
+from src.startup_validator import validate_import_quickly
 
-def get_librarian_assistant_lazy():
-    from src.agents.librarian_assistant_agent import LibrarianAssistantAgent
-    return LibrarianAssistantAgent
+# Dependency cache to avoid repeated imports
+_dependency_cache = {}
 
-def get_llm_failsafe_lazy():
-    from src.agents.llm_failsafe_agent import get_robust_llm_response
-    return get_robust_llm_response
+def get_validated_dependency(module_path: str, item_name: str):
+    """Get dependency with validation and caching"""
+    cache_key = f"{module_path}.{item_name}"
 
-def get_conversation_manager_lazy():
-    from src.conversation import get_conversation_manager
-    return get_conversation_manager
+    if cache_key in _dependency_cache:
+        return _dependency_cache[cache_key]
 
-def get_simple_workflow_lazy():
-    # UPDATED: Use consolidated chat workflow with all features
-    from src.chat_workflow_consolidated import process_chat_message_unified, ConsolidatedWorkflowResult
-    return process_chat_message_unified, ConsolidatedWorkflowResult
+    # Validate import first
+    import_ok, error = validate_import_quickly(module_path)
+    if not import_ok:
+        logger.error(f"❌ Failed to import {module_path}: {error}")
+        _dependency_cache[cache_key] = None
+        return None
 
-def get_consolidated_workflow_lazy():
-    from src.chat_workflow_consolidated import process_chat_message_unified, ConsolidatedWorkflowResult
-    return process_chat_message_unified, ConsolidatedWorkflowResult
+    try:
+        module = __import__(module_path, fromlist=[item_name])
+        dependency = getattr(module, item_name)
+        _dependency_cache[cache_key] = dependency
+        logger.debug(f"✅ Successfully loaded {module_path}.{item_name}")
+        return dependency
+    except AttributeError:
+        logger.error(f"❌ {item_name} not found in {module_path}")
+        _dependency_cache[cache_key] = None
+        return None
+    except Exception as e:
+        logger.error(f"❌ Failed to load {module_path}.{item_name}: {e}")
+        _dependency_cache[cache_key] = None
+        return None
+
+# Specific dependency getters with validation
+def get_kb_librarian_validated():
+    return get_validated_dependency('src.agents.kb_librarian_agent', 'get_kb_librarian')
+
+def get_librarian_assistant_validated():
+    return get_validated_dependency('src.agents.librarian_assistant_agent', 'LibrarianAssistantAgent')
+
+def get_llm_failsafe_validated():
+    return get_validated_dependency('src.agents.llm_failsafe_agent', 'get_robust_llm_response')
+
+def get_conversation_manager_validated():
+    return get_validated_dependency('src.conversation', 'get_conversation_manager')
+
+def get_consolidated_workflow_validated():
+    process_func = get_validated_dependency('src.chat_workflow_consolidated', 'process_chat_message_unified')
+    result_class = get_validated_dependency('src.chat_workflow_consolidated', 'ConsolidatedWorkflowResult')
+    return process_func, result_class
 # PERFORMANCE FIX: Critical imports re-enabled with lazy loading
 # These were disabled but are essential for proper error handling and source attribution
 
@@ -95,9 +117,9 @@ async def get_llm_status():
     try:
         # PERFORMANCE FIX: Use lightweight status check to avoid blocking
         # Get basic config-based status without expensive health checks
-        from src.config import config as global_config_manager
+        from src.unified_config import config
 
-        llm_config = global_config_manager.get_llm_config()
+        llm_config = config.get('llm', {})
         provider_type = llm_config.get("provider_type", "local")
 
         # Create lightweight status based on configuration
@@ -659,10 +681,12 @@ async def list_chats(request: Request):
     """List all available chat sessions with improved error handling."""
     request_id = generate_request_id()
 
+    # Import exceptions at the beginning to avoid reference errors
+    AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
+
     try:
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
         if chat_history_manager is None:
-            AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
             raise InternalError(
                 "Chat history manager not initialized",
                 details={"component": "chat_history_manager"},
