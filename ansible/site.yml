@@ -29,6 +29,7 @@
     - common
     - network
     - security
+    - time_sync
     
 # Frontend VMs
 - name: Deploy Frontend Services
