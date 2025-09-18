@@ -1,0 +1,260 @@
+# Enterprise Compliance Configuration for AutoBot
+# Supports SOC2, GDPR, ISO27001, HIPAA, and PCI-DSS compliance requirements
+
+# Enabled compliance frameworks
+enabled_frameworks:
+  - "soc2"      # SOC 2 Type II compliance
+  - "gdpr"      # General Data Protection Regulation
+  - "iso27001"  # ISO/IEC 27001 Information Security Management
+  # - "hipaa"     # Health Insurance Portability and Accountability Act
+  # - "pci_dss"   # Payment Card Industry Data Security Standard
+
+# Audit storage configuration
+audit_storage:
+  base_path: "/home/kali/Desktop/AutoBot/logs/audit"
+  encrypt_sensitive: true          # Encrypt PII and security incidents
+  max_file_size_mb: 100           # Rotate files at 100MB
+  compression_enabled: true        # Compress old audit files
+  integrity_monitoring: true       # Enable file integrity monitoring
+  backup_enabled: true            # Enable audit log backups
+  backup_retention_days: 2555     # 7 years backup retention
+
+# Data retention policies (compliance-driven)
+retention_policies:
+  authentication_events:
+    days: 365
+    frameworks: ["soc2", "iso27001"]
+    description: "User authentication and authorization events"
+    
+  data_access_events:
+    days: 2555  # 7 years for SOC2 compliance
+    frameworks: ["soc2", "gdpr"]
+    description: "Data access and modification events"
+    
+  security_incidents:
+    days: 2555  # 7 years
+    frameworks: ["soc2", "iso27001"]
+    description: "Security incidents and breach notifications"
+    
+  pii_events:
+    days: 2555  # 7 years for GDPR compliance
+    frameworks: ["gdpr"]
+    description: "PII processing and access events"
+    
+  admin_actions:
+    days: 2190  # 6 years
+    frameworks: ["soc2", "iso27001"]
+    description: "Administrative and configuration changes"
+    
+  api_access:
+    days: 365
+    frameworks: ["soc2"]
+    description: "API access and usage logs"
+    
+  file_operations:
+    days: 1095  # 3 years
+    frameworks: ["soc2", "iso27001"]
+    description: "File system operations and access"
+    
+  default:
+    days: 365
+    description: "Default retention for uncategorized events"
+
+# Privacy controls (GDPR compliance)
+privacy_controls:
+  pii_detection: true              # Automatic PII detection in logs
+  anonymization: true              # Anonymize PII in non-essential logs
+  pseudonymization: true           # Pseudonymize personal identifiers
+  consent_tracking: true           # Track user consent for processing
+  right_to_erasure: true          # Support data deletion requests
+  data_portability: true          # Support data export requests
+  purpose_limitation: true        # Limit processing to stated purposes
+  data_minimization: true         # Minimize data collection and retention
+  
+  # PII categories to monitor
+  pii_categories:
+    - "email_addresses"
+    - "ip_addresses"
+    - "user_identifiers"
+    - "session_tokens"
+    - "biometric_data"
+    - "personal_names"
+    - "phone_numbers"
+    - "physical_addresses"
+
+# Compliance reporting configuration
+reporting:
+  daily_summary: true             # Generate daily compliance summary
+  weekly_compliance: true         # Weekly compliance status report
+  monthly_detailed: true          # Detailed monthly compliance report
+  quarterly_audit: true           # Quarterly audit preparation report
+  annual_assessment: true         # Annual compliance assessment
+  real_time_alerts: true         # Real-time compliance violation alerts
+  
+  # Report delivery
+  output_formats: ["json", "pdf", "csv"]
+  distribution:
+    security_team: true
+    compliance_officer: true
+    management: false             # Monthly reports only
+    auditors: false              # On-demand access only
+
+# Real-time monitoring thresholds
+notification_thresholds:
+  failed_authentication_rate: 10    # Per hour
+  security_incident_severity: "medium"
+  pii_access_unusual: 50           # Unusual PII access per hour
+  admin_action_burst: 20           # Admin actions per hour
+  data_export_large: 1000          # Large data exports (MB)
+  compliance_violation_any: 1      # Any compliance violation
+  
+  # Escalation rules
+  escalation_matrix:
+    critical_violations:
+      immediate: ["security_team", "compliance_officer"]
+      within_1_hour: ["ciso", "legal_team"]
+      within_4_hours: ["management"]
+    
+    high_violations:
+      immediate: ["security_team"]
+      within_2_hours: ["compliance_officer"]
+      within_24_hours: ["management"]
+
+# SOC 2 specific configuration
+soc2:
+  trust_service_criteria:
+    - "CC1.1"  # Control Environment
+    - "CC6.1"  # Logical and Physical Access Controls
+    - "CC6.2"  # Authentication
+    - "CC6.3"  # Authorization
+    - "CC7.1"  # System Operations
+    - "CC7.2"  # Monitoring
+    - "CC8.1"  # Change Management
+    - "A1.1"   # Availability - Protection
+    - "A1.2"   # Availability - Recovery
+  
+  evidence_collection:
+    automated_controls: true      # Collect automated control evidence
+    manual_controls: false       # Manual controls require separate process
+    screenshot_evidence: true    # Capture screenshots for evidence
+    log_correlation: true        # Correlate logs across systems
+  
+  audit_preparation:
+    control_testing: true        # Enable control testing features
+    exception_tracking: true     # Track control exceptions
+    remediation_tracking: true   # Track remediation efforts
+
+# GDPR specific configuration  
+gdpr:
+  data_protection_impact_assessment: true
+  privacy_by_design: true
+  data_processing_register: true
+  
+  # Legal basis tracking
+  lawful_basis_categories:
+    - "consent"
+    - "contract"
+    - "legal_obligation"
+    - "vital_interests"
+    - "public_task"
+    - "legitimate_interests"
+  
+  # Data subject rights
+  data_subject_rights:
+    - "right_of_access"           # Article 15
+    - "right_to_rectification"    # Article 16
+    - "right_to_erasure"          # Article 17
+    - "right_to_restrict"         # Article 18
+    - "right_to_data_portability" # Article 20
+    - "right_to_object"           # Article 21
+  
+  breach_notification:
+    supervisory_authority_hours: 72
+    data_subject_notification: true
+    severity_assessment: true
+
+# ISO 27001 specific configuration
+iso27001:
+  security_controls:
+    - "A.9.2.1"  # User registration and de-registration
+    - "A.9.4.1"  # Information access restriction
+    - "A.12.1.2" # Change management
+    - "A.12.4.1" # Event logging
+    - "A.16.1.1" # Incident management
+    - "A.18.1.1" # Compliance
+  
+  risk_management:
+    risk_assessment_enabled: true
+    risk_treatment_tracking: true
+    risk_monitoring: true
+  
+  isms_documentation:
+    policy_compliance: true
+    procedure_compliance: true
+    record_keeping: true
+
+# Encryption and security settings
+security:
+  audit_log_encryption: true      # Encrypt sensitive audit logs
+  encryption_algorithm: "AES-256-GCM"
+  key_rotation_days: 90          # Rotate encryption keys quarterly
+  
+  # Integrity protection
+  log_signing: true              # Digitally sign audit logs
+  hash_verification: true        # Verify log integrity with hashes
+  tamper_detection: true         # Detect log tampering attempts
+  
+  # Access controls
+  audit_log_access:
+    read_roles: ["compliance_officer", "auditor", "security_admin"]
+    write_roles: ["system"]       # Only system can write audit logs
+    admin_roles: ["security_admin"]
+
+# Performance tuning
+performance:
+  batch_size: 1000              # Batch size for log processing
+  flush_interval_seconds: 30    # Flush logs every 30 seconds
+  compression_level: 6          # Compression level (1-9)
+  
+  # Storage optimization
+  archive_after_days: 90        # Archive logs after 90 days
+  compress_archives: true       # Compress archived logs
+  
+  # Query optimization
+  index_events: true           # Index events for fast querying
+  cache_reports: true          # Cache frequently accessed reports
+  cache_ttl_hours: 24         # Cache TTL for reports
+
+# Integration settings
+integrations:
+  siem_export: false           # Export to SIEM systems
+  log_management_platform: false
+  ticketing_system: false     # Integration with IT ticketing
+  
+  # External audit tools
+  external_auditor_access: false
+  read_only_audit_user: false
+
+# Backup and disaster recovery
+backup:
+  enabled: true
+  frequency: "daily"           # daily, weekly, monthly
+  retention_backups: 90        # Keep 90 days of backups
+  offsite_backup: false       # Enable offsite backup storage
+  backup_encryption: true     # Encrypt backup files
+  
+  # Recovery testing
+  test_restore_monthly: false  # Test backup restoration monthly
+  recovery_time_objective_hours: 24
+  recovery_point_objective_hours: 4
+
+# Monitoring and alerting
+monitoring:
+  health_checks: true         # Monitor compliance system health
+  metric_collection: true     # Collect compliance metrics
+  anomaly_detection: true     # Detect unusual patterns
+  
+  # Dashboard configuration
+  compliance_dashboard: true  # Enable compliance dashboard
+  real_time_metrics: true    # Show real-time compliance metrics
+  trend_analysis: true       # Analyze compliance trends
