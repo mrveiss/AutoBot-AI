@@ -1,0 +1,17 @@
+{
+  "command": "uniq",
+  "section": 1,
+  "title": "uniq",
+  "description": "report or omit repeated lines",
+  "synopsis": "uniq [OPTION]... [INPUT [OUTPUT]]",
+  "options": [],
+  "examples": [],
+  "see_also": [
+    "comm",
+    "sort",
+    "UNIQ",
+    "join"
+  ],
+  "last_updated": "2025-09-14T22:02:26",
+  "machine_id": "linux_7618b026bd4e"
+}

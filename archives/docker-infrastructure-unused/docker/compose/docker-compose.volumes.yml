@@ -1,0 +1,38 @@
+# Docker Compose override for centralized volumes
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.volumes.yml up
+
+version: '3.8'
+
+x-shared-volumes: &shared-volumes
+  - ./docker/volumes/prompts:/app/prompts:ro
+  - ./docker/volumes/knowledge_base:/app/knowledge_base:ro
+  - ./docker/volumes/models:/app/models
+  - ./docker/volumes/config:/app/config:ro
+
+services:
+  autobot-backend:
+    volumes:
+      - ./docker/volumes/prompts:/app/prompts:ro
+      - ./docker/volumes/knowledge_base:/app/knowledge_base:ro
+      - ./docker/volumes/models:/app/models
+      - ./docker/volumes/config:/app/config:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+
+  autobot-ai-stack:
+    volumes:
+      - ./docker/volumes/prompts:/app/prompts:ro
+      - ./docker/volumes/knowledge_base:/app/knowledge_base:ro
+      - ./docker/volumes/models:/app/models
+      - ./docker/volumes/config:/app/config:ro
+      - autobot_ai_data:/app/data
+      - autobot_ai_logs:/app/logs
+
+  autobot-npu-worker:
+    volumes:
+      - ./docker/volumes/prompts:/app/prompts:ro
+      - ./docker/volumes/knowledge_base:/app/knowledge_base:ro
+      - ./docker/volumes/models:/app/models
+      - ./docker/volumes/config:/app/config:ro
+      - autobot_npu_logs:/app/logs

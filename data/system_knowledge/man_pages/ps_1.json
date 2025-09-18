@@ -1,0 +1,28 @@
+{
+  "command": "ps",
+  "section": 1,
+  "title": "ps",
+  "description": "report a snapshot of the current processes.",
+  "synopsis": "ps [options]",
+  "options": [],
+  "examples": [
+    {
+      "command": "lstart      STARTED   time the command started. This will be in the form \"DDD mmm HH:MM:SS YYY\" unless changed by the -D option.",
+      "description": "Example usage"
+    },
+    {
+      "command": "lsession    SESSION   displays the login session identifier of a process, if systemd support has been included.",
+      "description": "Example usage"
+    }
+  ],
+  "see_also": [
+    "strftime",
+    "proc",
+    "PS",
+    "top",
+    "pstree",
+    "pgrep"
+  ],
+  "last_updated": "2025-09-14T22:02:34",
+  "machine_id": "linux_7618b026bd4e"
+}

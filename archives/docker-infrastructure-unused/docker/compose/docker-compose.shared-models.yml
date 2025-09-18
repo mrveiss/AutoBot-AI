@@ -1,0 +1,114 @@
+# Docker Compose with Shared Ollama Models
+# This configuration shares Ollama models between Windows and WSL containers
+
+name: autobot
+
+services:
+  # Option 1: Ollama container with Windows model volume mount
+  autobot-ollama-shared:
+    image: ollama/ollama:latest
+    container_name: autobot-ollama-shared
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_OLLAMA_PORT:-11434}:11434"
+    volumes:
+      # Mount Windows Ollama models directory (adjust path as needed)
+      # Windows path: /mnt/c/Users/{username}/.ollama
+      # WSL path: ~/.ollama (if running Ollama in WSL)
+      - /mnt/c/Users/${WINDOWS_USERNAME:-$USER}/.ollama:/root/.ollama
+      # Alternative: Use WSL home directory if Ollama installed in WSL
+      # - ${HOME}/.ollama:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Redis Stack
+  autobot-redis:
+    image: redis/redis-stack:7.4.0-v1
+    container_name: autobot-redis
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_REDIS_PORT:-6379}:6379"
+      - "${AUTOBOT_REDIS_INSIGHT_PORT:-8002}:8002"
+    volumes:
+      - autobot_redis_data:/data
+    environment:
+      - REDIS_ARGS=--appendonly yes --save 60 1
+    networks:
+      - autobot-network
+
+  # AI Stack Container (connects to shared Ollama)
+  autobot-ai-stack:
+    build:
+      context: ../..
+      dockerfile: docker/ai-stack/Dockerfile
+    container_name: autobot-ai-stack
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_AI_STACK_PORT:-8080}:8080"
+    volumes:
+      - ../volumes/prompts:/app/prompts:ro
+      - ../volumes/knowledge_base:/app/knowledge_base:ro
+      - ../volumes/models:/app/models
+      - autobot_ai_data:/app/data
+      - autobot_ai_logs:/app/logs
+    environment:
+      - AI_SERVER_HOST=0.0.0.0
+      - AI_SERVER_PORT=8080
+      - OLLAMA_HOST=autobot-ollama-shared:${AUTOBOT_OLLAMA_PORT:-11434}
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
+    depends_on:
+      - autobot-redis
+      - autobot-ollama-shared
+    networks:
+      - autobot-network
+
+  # NPU Worker (connects to shared Ollama)
+  autobot-npu-worker:
+    build:
+      context: ../..
+      dockerfile: docker/npu-worker/Dockerfile
+    container_name: autobot-npu-worker
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_NPU_WORKER_PORT:-8081}:8081"
+    volumes:
+      - ../volumes/prompts:/app/prompts:ro
+      - ../volumes/models:/app/models
+      - autobot_npu_logs:/app/logs
+    environment:
+      - NPU_WORKER_HOST=0.0.0.0
+      - NPU_WORKER_PORT=8081
+      - OLLAMA_HOST=autobot-ollama-shared:${AUTOBOT_OLLAMA_PORT:-11434}
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
+    depends_on:
+      - autobot-redis
+      - autobot-ollama-shared
+    networks:
+      - autobot-network
+
+networks:
+  autobot-network:
+    driver: bridge
+    name: autobot-network
+
+volumes:
+  autobot_redis_data:
+    name: autobot_redis_data
+  autobot_ai_data:
+    name: autobot_ai_data
+  autobot_ai_logs:
+    name: autobot_ai_logs
+  autobot_npu_logs:
+    name: autobot_npu_logs

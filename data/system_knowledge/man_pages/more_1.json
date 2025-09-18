@@ -1,0 +1,65 @@
+{
+  "command": "more",
+  "section": 1,
+  "title": "more",
+  "description": "display the contents of a file in a terminal",
+  "synopsis": "more [options] file ...",
+  "options": [
+    {
+      "flag": "-d, --silent",
+      "description": "Prompt with \"[Press space to continue, 'q' to quit.]\", and display \"[Press 'h' for instructions.]\" instead of ringing the bell when an illegal key is pressed."
+    },
+    {
+      "flag": "-l, --logical",
+      "description": "Do not pause after any line containing a ^L (form feed)."
+    },
+    {
+      "flag": "-e, --exit-on-eof",
+      "description": "Exit on End-Of-File, enabled by default if POSIXLY_CORRECT environment variable is not set or if not executed on terminal."
+    },
+    {
+      "flag": "-f, --no-pause",
+      "description": "Count logical lines, rather than screen lines (i.e., long lines are not folded)."
+    },
+    {
+      "flag": "-p, --print-over",
+      "description": "Do not scroll. Instead, clear the whole screen and then display the text. Notice that this option is switched on automatically if the executable is named page."
+    },
+    {
+      "flag": "-c, --clean-print",
+      "description": "Do not scroll. Instead, paint each screen from the top, clearing the remainder of each line as it is displayed."
+    },
+    {
+      "flag": "-s, --squeeze",
+      "description": "Squeeze multiple blank lines into one."
+    },
+    {
+      "flag": "-u, --plain",
+      "description": "Suppress underlining. This option is silently ignored as backwards compatibility."
+    },
+    {
+      "flag": "-n, --lines",
+      "description": "number Specify the number of lines per screenful. The number argument is a positive decimal integer. The --lines option shall override any values obtained from any other source, such as number of lines reported by terminal."
+    },
+    {
+      "flag": "-number",
+      "description": "A numeric option means the same as --lines option argument. +number Start displaying each file at line number. +/string The string to be searched in each file before starting to display it."
+    },
+    {
+      "flag": "-h, --help",
+      "description": "Display help text and exit."
+    },
+    {
+      "flag": "-V, --version",
+      "description": "Display version and exit. COMMANDS Interactive commands for more are based on vi(1). Some commands may be preceded by a decimal number, called k in the descriptions below. In the following descriptions, ^X means control-X. h or ? Help; display a summary of these commands. If you forget all other commands, remember this one. SPACE Display next k lines of text. Defaults to current screen size. z Display next k lines of text. Defaults to current screen size. Argument becomes new default. RETURN Display next k lines of text. Defaults to 1. Argument becomes new default. d or ^D Scroll k lines. Default is current scroll size, initially 11. Argument becomes new default. q or Q or INTERRUPT Exit. s Skip forward k lines of text. Defaults to 1. f Skip forward k screenfuls of text. Defaults to 1. b or ^B Skip backwards k screenfuls of text. Defaults to 1. Only works with files, not pipes. ' Go to the place where the last search started. = Display current line number. /pattern Search for kth occurrence of regular expression. Defaults to 1. n Search for kth occurrence of last regular expression. Defaults to 1. !command or :!command Execute command in a subshell. v Start up an editor at current line. The editor is taken from the environment variable VISUAL if defined, or EDITOR if VISUAL is not defined, or defaults to vi(1) if neither VISUAL nor EDITOR is defined. ^L Redraw screen. :n Go to kth next file. Defaults to 1. :p Go to kth previous file. Defaults to 1. :f Display current file name and line number. . Repeat previous command. ENVIRONMENT The more command respects the following environment variables, if they exist: MORE This variable may be set with favored options to more. SHELL Current shell in use (normally set by the shell at login time). TERM The terminal type used by more to get the terminal characteristics necessary to manipulate the screen. VISUAL The editor the user prefers. Invoked when command key v is pressed. EDITOR The editor of choice when VISUAL is not specified. POSIXLY_CORRECT Disable exit-on-eof (see option -e for more details). HISTORY The more command appeared in 3.0BSD. This man page documents more version 5.19 (Berkeley 6/29/88), which is currently in use in the Linux community. Documentation was produced using several other versions of the man page, and extensive inspection of the source code. AUTHORS Eric Shienbrood, UC Berkeley. Modified by Geoff Peck, UCB to add underlining, single spacing. Modified by John Foderaro, UCB to add -c and MORE environment variable."
+    }
+  ],
+  "examples": [],
+  "see_also": [
+    "less",
+    "vi",
+    "MORE"
+  ],
+  "last_updated": "2025-09-14T22:02:23",
+  "machine_id": "linux_7618b026bd4e"
+}

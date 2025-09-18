@@ -1,0 +1,15 @@
+{
+  "command": "groups",
+  "section": 1,
+  "title": "groups",
+  "description": "print the groups a user is in",
+  "synopsis": "groups [OPTION]... [USERNAME]...",
+  "options": [],
+  "examples": [],
+  "see_also": [
+    "GROUPS",
+    "getent"
+  ],
+  "last_updated": "2025-09-14T22:02:47",
+  "machine_id": "linux_7618b026bd4e"
+}

@@ -1,0 +1,33 @@
+metadata:
+  category: system_commands
+  description: Manual page information for sed
+  integration_type: machine_aware_man_pages
+  last_updated: '2025-09-14T22:02:28'
+  machine_id: linux_7618b026bd4e
+  os_type: linux
+  package_manager: apt
+  source: man_pages
+  version: 1.0.0
+tools:
+- common_examples: []
+  installation:
+    system: Pre-installed on most Linux systems
+  last_updated: '2025-09-14T22:02:28'
+  man_page_section: 1
+  name: sed
+  options: []
+  purpose: stream editor for filtering and transforming text
+  related_tools:
+  - perlre
+  - awk
+  - ed
+  - tr
+  - SED
+  - grep
+  source: man sed(1)
+  type: command_line_tool
+  usage:
+    basic: "sed [-V] [--version] [--help] [-n] [--quiet] [--silent]\n           [-l\
+      \ N] [--line-length=N] [-u] [--unbuffered]\n           [-E] [-r] [--regexp-extended]\n\
+      \           [-e script] [--expression=script]\n           [-f script-file] [--file=script-file]\n\
+      \           [script-if-no-other-script]\n           [file...]"

@@ -1,0 +1,96 @@
+{
+  "command": "git",
+  "section": 1,
+  "title": "git",
+  "description": "the stupid content tracker",
+  "synopsis": "git [-v | --version] [-h | --help] [-C <path>] [-c <name>=<value>]\n           [--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]\n           [-p | --paginate | -P | --no-pager] [--no-replace-objects] [--no-lazy-fetch]\n           [--no-optional-locks] [--no-advice] [--bare] [--git-dir=<path>]\n           [--work-tree=<path>] [--namespace=<name>] [--config-env=<name>=<envvar>]\n           <command> [<args>]",
+  "options": [
+    {
+      "flag": "-v, --version",
+      "description": "Prints the Git suite version that the git program came from. This option is internally converted to git version ... and accepts the same options as the git-version(1) command. If --help is also given, it takes precedence over --version."
+    },
+    {
+      "flag": "-h, --help",
+      "description": "Prints the synopsis and a list of the most commonly used commands. If the option --all or -a is given then all available commands are printed. If a Git command is named this option will bring up the manual page for that command. Other options are available to control how the manual page is displayed. See git-help(1) for more information, because git --help ... is converted internally into git help ...."
+    },
+    {
+      "flag": "-C",
+      "description": "<path> Run as if git was started in <path> instead of the current working directory. When multiple -C options are given, each subsequent non-absolute -C <path> is interpreted relative to the preceding -C <path>. If <path> is present but empty, e.g. -C \"\", then the current working directory is left unchanged. This option affects options that expect path name like --git-dir and --work-tree in that their interpretations of the path names would be made relative to the working directory caused by the -C option. For example the following invocations are equivalent: git --git-dir=a.git --work-tree=b -C c status git --git-dir=c/a.git --work-tree=c/b status"
+    },
+    {
+      "flag": "-c",
+      "description": "<name>=<value> Pass a configuration parameter to the command. The value given will override values from configuration files. The <name> is expected in the same format as listed by git config (subkeys separated by dots). Note that omitting the = in git -c foo.bar ... is allowed and sets foo.bar to the boolean true value (just like [foo]bar would in a config file). Including the equals but with an empty value (like git -c foo.bar= ...) sets foo.bar to the empty string which git config --type=bool will convert to false."
+    },
+    {
+      "flag": "--html-path",
+      "description": "Print the path, without trailing slash, where Git\u2019s HTML documentation is installed and exit."
+    },
+    {
+      "flag": "--man-path",
+      "description": "Print the manpath (see man(1)) for the man pages for this version of Git and exit."
+    },
+    {
+      "flag": "--info-path",
+      "description": "Print the path where the Info files documenting this version of Git are installed and exit."
+    },
+    {
+      "flag": "-p, --paginate",
+      "description": "Pipe all output into less (or if set, $PAGER) if standard output is a terminal. This overrides the pager.<cmd> configuration options (see the \"Configuration Mechanism\" section below)."
+    },
+    {
+      "flag": "-P, --no-pager",
+      "description": "Do not pipe Git output into a pager."
+    },
+    {
+      "flag": "--bare",
+      "description": "Treat the repository as a bare repository. If GIT_DIR environment is not set, it is set to the current working directory."
+    },
+    {
+      "flag": "--no-replace-objects",
+      "description": "Do not use replacement refs to replace Git objects. This is equivalent to exporting the GIT_NO_REPLACE_OBJECTS environment variable with any value. See git-replace(1) for more information."
+    },
+    {
+      "flag": "--no-lazy-fetch",
+      "description": "Do not fetch missing objects from the promisor remote on demand. Useful together with git cat-file -e <object> to see if the object is locally available. This is equivalent to setting the GIT_NO_LAZY_FETCH environment variable to 1."
+    },
+    {
+      "flag": "--no-optional-locks",
+      "description": "Do not perform optional operations that require locks. This is equivalent to setting the GIT_OPTIONAL_LOCKS to 0."
+    },
+    {
+      "flag": "--no-advice",
+      "description": "Disable all advice hints from being printed."
+    },
+    {
+      "flag": "--literal-pathspecs",
+      "description": "Treat pathspecs literally (i.e. no globbing, no pathspec magic). This is equivalent to setting the GIT_LITERAL_PATHSPECS environment variable to 1."
+    },
+    {
+      "flag": "--glob-pathspecs",
+      "description": "Add \"glob\" magic to all pathspec. This is equivalent to setting the GIT_GLOB_PATHSPECS environment variable to 1. Disabling globbing on individual pathspecs can be done using pathspec magic \":(literal)\""
+    },
+    {
+      "flag": "--noglob-pathspecs",
+      "description": "Add \"literal\" magic to all pathspec. This is equivalent to setting the GIT_NOGLOB_PATHSPECS environment variable to 1. Enabling globbing on individual pathspecs can be done using pathspec magic \":(glob)\""
+    },
+    {
+      "flag": "--icase-pathspecs",
+      "description": "Add \"icase\" magic to all pathspec. This is equivalent to setting the GIT_ICASE_PATHSPECS environment variable to 1."
+    }
+  ],
+  "examples": [],
+  "see_also": [
+    "git",
+    "gittutorial",
+    "tutorial",
+    "gitworkflows",
+    "giteveryday",
+    "GIT",
+    "migration",
+    "gitcli",
+    "gitglossary",
+    "2"
+  ],
+  "last_updated": "2025-09-14T22:02:55",
+  "machine_id": "linux_7618b026bd4e"
+}

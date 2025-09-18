@@ -1,0 +1,111 @@
+# Hybrid Acceleration Configuration for WSL2
+# Optimizes workload distribution between NVIDIA GPU and CPU
+
+acceleration:
+  # Primary acceleration strategy
+  strategy: "hybrid"
+
+  # Hardware priority for different workload types
+  workload_routing:
+    # Large language model inference (high memory, compute intensive)
+    llm_inference:
+      primary: "cuda"       # NVIDIA RTX 4070 (8GB VRAM)
+      fallback: "cpu"       # Intel Core Ultra 9 (22 cores)
+
+    # Knowledge base operations (embedding, search)
+    knowledge_base:
+      primary: "cpu"        # Fast CPU with Redis caching
+      fallback: "cuda"      # GPU if CPU overloaded
+
+    # System operations (file ops, commands)
+    system_operations:
+      primary: "cpu"        # Native CPU performance
+      fallback: "cpu"       # No GPU needed
+
+    # Image/multimodal processing
+    multimodal:
+      primary: "cuda"       # GPU acceleration for vision
+      fallback: "cpu"       # CPU fallback
+
+    # Small model inference (chat, quick responses)
+    lightweight_inference:
+      primary: "cpu"        # Efficient CPU execution
+      fallback: "cuda"      # GPU if needed
+
+  # Device-specific configurations
+  devices:
+    cuda:
+      enabled: true
+      device_id: 0
+      memory_limit: "7GB"   # Reserve 1GB for system
+      batch_size: 16
+      precision: "fp16"     # Half precision for performance
+
+    cpu:
+      enabled: true
+      threads: 22           # All available cores
+      memory_limit: "32GB"  # Generous memory allocation
+      batch_size: 4
+      precision: "fp32"     # Full precision
+
+    openvino_npu:
+      enabled: false        # Not available in WSL2
+
+    openvino_gpu:
+      enabled: false        # Not available in WSL2
+
+  # Performance monitoring
+  monitoring:
+    enabled: true
+    metrics:
+      - "gpu_utilization"
+      - "gpu_memory_usage"
+      - "cpu_utilization"
+      - "memory_usage"
+      - "inference_latency"
+
+  # Auto-scaling rules
+  auto_scaling:
+    enabled: true
+    rules:
+      - condition: "gpu_utilization > 90%"
+        action: "route_to_cpu"
+        duration: "30s"
+
+      - condition: "gpu_memory_usage > 85%"
+        action: "reduce_batch_size"
+        factor: 0.5
+
+      - condition: "cpu_utilization > 80%"
+        action: "route_to_gpu"
+        workload_types: ["llm_inference", "multimodal"]
+
+# Model-specific configurations
+models:
+  # Large models (>3B parameters) - prefer GPU
+  large_models:
+    device: "cuda"
+    memory_map: true
+    quantization: "int8"
+
+  # Medium models (1-3B parameters) - adaptive
+  medium_models:
+    device: "auto"
+    fallback_chain: ["cuda", "cpu"]
+
+  # Small models (<1B parameters) - prefer CPU
+  small_models:
+    device: "cpu"
+    threading: "parallel"
+
+# Environment-specific settings
+environment:
+  platform: "wsl2"
+  docker_support: true
+  gpu_passthrough: "nvidia-docker"
+
+  # WSL2-specific optimizations
+  wsl2:
+    memory_reclaim: true
+    swap_usage: "minimal"
+    network_optimization: true

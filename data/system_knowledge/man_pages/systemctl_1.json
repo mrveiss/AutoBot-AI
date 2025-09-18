@@ -1,0 +1,174 @@
+{
+  "command": "systemctl",
+  "section": 1,
+  "title": "systemctl",
+  "description": "Control the systemd system and service manager",
+  "synopsis": "systemctl [OPTIONS...] COMMAND [UNIT...]",
+  "options": [
+    {
+      "flag": "-P",
+      "description": "Equivalent to --value --property=, i.e. shows the value of the property without the property name or \"=\". Note that using -P once will also affect all properties listed with"
+    },
+    {
+      "flag": "-a, --all",
+      "description": "When listing units with list-units, also show inactive units and units which are following other units. When showing unit/job/manager properties, show all properties regardless whether they are set or not. To list all units installed in the file system, use the list-unit-files command instead. When listing units with list-dependencies, recursively show dependencies of all dependent units (by default only dependencies of target units are shown). When used with status, show journal messages in full, even if they include unprintable characters or are very long. By default, fields with unprintable characters are abbreviated as \"blob data\". (Note that the pager may escape unprintable characters again.)"
+    },
+    {
+      "flag": "-r, --recursive",
+      "description": "When listing units, also show units of local containers. Units of local containers will be prefixed with the container name, separated by a single colon character (\":\"). Added in version 212."
+    },
+    {
+      "flag": "--reverse",
+      "description": "Show reverse dependencies between units with list-dependencies, i.e. follow dependencies of type WantedBy=, RequiredBy=, UpheldBy=, PartOf=, BoundBy=, instead of Wants= and similar. Added in version 203."
+    },
+    {
+      "flag": "--after",
+      "description": "With list-dependencies, show the units that are ordered before the specified unit. In other words, recursively list units following the After= dependency. Note that any After= dependency is automatically mirrored to create a Before= dependency. Temporal dependencies may be specified explicitly, but are also created implicitly for units which are WantedBy= targets (see systemd.target(5)), and as a result of other directives (for example RequiresMountsFor=). Both explicitly and implicitly introduced dependencies are shown with list-dependencies. When passed to the list-jobs command, for each printed job show which other jobs are waiting for it. May be combined with --before to show both the jobs waiting for each job as well as all jobs each job is waiting for. Added in version 203."
+    },
+    {
+      "flag": "--before",
+      "description": "With list-dependencies, show the units that are ordered after the specified unit. In other words, recursively list units following the Before= dependency. When passed to the list-jobs command, for each printed job show which other jobs it is waiting for. May be combined with --after to show both the jobs waiting for each job as well as all jobs each job is waiting for. Added in version 212."
+    },
+    {
+      "flag": "--with-dependencies",
+      "description": "When used with status, cat, list-units, and list-unit-files, those commands print all specified units and the dependencies of those units. Options --reverse, --after, --before may be used to change what types of dependencies are shown. Added in version 245."
+    },
+    {
+      "flag": "-l, --full",
+      "description": "Do not ellipsize unit names, process tree entries, journal output, or truncate unit descriptions in the output of status, list-units, list-jobs, and list-timers. Also, show installation targets in the output of is-enabled."
+    },
+    {
+      "flag": "--value",
+      "description": "When printing properties with show, only print the value, and skip the property name and \"=\". Also see option -P above. Added in version 230."
+    },
+    {
+      "flag": "--show-types",
+      "description": "When showing sockets, show the type of the socket. Added in version 202."
+    },
+    {
+      "flag": "-T, --show-transaction",
+      "description": "When enqueuing a unit job (for example as effect of a systemctl start invocation or similar), show brief information about all jobs enqueued, covering both the requested job and any added because of unit dependencies. Note that the output will only include jobs immediately part of the transaction requested. It is possible that service start-up program code run as effect of the enqueued jobs might request further jobs to be pulled in. This means that completion of the listed jobs might ultimately entail more jobs than the listed ones. Added in version 242."
+    },
+    {
+      "flag": "--fail",
+      "description": "Shorthand for --job-mode=fail. When used with the kill command, if no units were killed, the operation results in an error. Added in version 227."
+    },
+    {
+      "flag": "-i",
+      "description": "Shortcut for --check-inhibitors=no. Added in version 198."
+    },
+    {
+      "flag": "--dry-run",
+      "description": "Just print what would be done. Currently supported by verbs halt, poweroff, reboot, kexec, suspend, hibernate, hybrid-sleep, suspend-then-hibernate, default, rescue, emergency, and exit. Added in version 236."
+    },
+    {
+      "flag": "-q, --quiet",
+      "description": "Suppress printing of the results of various commands and also the hints about truncated log lines. This does not suppress output of commands for which the printed output is the only result (like show). Errors are always printed."
+    },
+    {
+      "flag": "--no-warn",
+      "description": "Don't generate the warnings shown by default in the following cases: \u2022 when systemctl is invoked without procfs mounted on /proc/, \u2022 when using enable or disable on units without install information (i.e. don't have or have an empty [Install] section), \u2022 when using disable combined with --user on units that are enabled in global scope, \u2022 when a stop-ped, disable-d, or mask-ed unit still has active triggering units, \u2022 when a unit file is changed and requires daemon-reload. Added in version 253."
+    },
+    {
+      "flag": "--no-block",
+      "description": "Do not synchronously wait for the requested operation to finish. If this is not specified, the job will be verified, enqueued and systemctl will wait until the unit's start-up is completed. By passing this argument, it is only verified and enqueued. This option may not be combined with --wait."
+    },
+    {
+      "flag": "--wait",
+      "description": "When used with start or restart, synchronously wait for started units to terminate again. This option may not be combined with --no-block. Note that this will wait forever if any given unit never terminates (by itself or by getting stopped explicitly); particularly services which use \"RemainAfterExit=yes\". When used with is-system-running, wait until the boot process is completed before returning. When used with kill, wait until the signalled units terminate. Note that this will wait forever if any given unit never terminates. Added in version 232."
+    },
+    {
+      "flag": "--user",
+      "description": "Talk to the service manager of the calling user, rather than the service manager of the system."
+    },
+    {
+      "flag": "--system",
+      "description": "Talk to the service manager of the system. This is the implied default."
+    },
+    {
+      "flag": "--failed",
+      "description": "List units in failed state. This is equivalent to --state=failed. Added in version 233."
+    },
+    {
+      "flag": "--no-wall",
+      "description": "Do not send wall message before halt, power-off and reboot."
+    },
+    {
+      "flag": "--global",
+      "description": "When used with enable and disable, operate on the global user configuration directory, thus enabling or disabling a unit file globally for all future logins of all users."
+    },
+    {
+      "flag": "--no-reload",
+      "description": "When used with enable, disable, preset, mask, or unmask, do not implicitly reload daemon configuration after executing the changes."
+    },
+    {
+      "flag": "-f, --force",
+      "description": "When used with enable, overwrite any existing conflicting symlinks. When used with edit, create all of the specified units which do not already exist. When used with suspend, hibernate, hybrid-sleep, or suspend-then-hibernate, the error returned by systemd-logind will be ignored, and the operation will be performed directly through starting the corresponding units. When used with halt, poweroff, reboot, or kexec, execute the selected operation without shutting down all units. However, all processes will be killed forcibly and all file systems are unmounted or remounted read-only. This is hence a drastic but relatively safe option to request an immediate reboot. If --force is specified twice for these operations (with the exception of kexec), they will be executed immediately, without terminating any processes or unmounting any file systems. Warning Specifying --force twice with any of these operations might result in data loss. Note that when --force is specified twice the selected operation is executed by systemctl itself, and the system manager is not contacted. This means the command should succeed even when the system manager has crashed."
+    },
+    {
+      "flag": "--now",
+      "description": "When used with enable, disable, mask, or reenable, also start/stop/try-restart the units after the specified unit file operations succeed. Added in version 220."
+    },
+    {
+      "flag": "--runtime",
+      "description": "When used with enable, disable, edit, (and related commands), make changes only temporarily, so that they are lost on the next reboot. This will have the effect that changes are not made in subdirectories of /etc/ but in /run/, with identical immediate effects, however, since the latter is lost on reboot, the changes are lost too. Similarly, when used with set-property, make changes only temporarily, so that they are lost on the next reboot."
+    },
+    {
+      "flag": "--firmware-setup",
+      "description": "When used with the reboot, poweroff, or halt command, indicate to the system's firmware to reboot into the firmware setup interface for the next boot. Note that this functionality is not available on all systems. Added in version 220."
+    },
+    {
+      "flag": "--plain",
+      "description": "When used with list-dependencies, list-units or list-machines, the output is printed as a list instead of a tree, and the bullet circles are omitted. Added in version 203."
+    },
+    {
+      "flag": "--mkdir",
+      "description": "When used with bind, creates the destination file or directory before applying the bind mount. Note that even though the name of this option suggests that it is suitable only for directories, this option also creates the destination file node to mount over if the object to mount is not a directory, but a regular file, device node, socket or FIFO. Added in version 248."
+    },
+    {
+      "flag": "--marked",
+      "description": "Only allowed with reload-or-restart. Enqueues restart jobs for all units that have the \"needs-restart\" mark, and reload jobs for units that have the \"needs-reload\" mark. When a unit marked for reload does not support reload, restart will be queued. Those properties can be set using set-property Markers=.... Unless --no-block is used, systemctl will wait for the queued jobs to finish. Added in version 248."
+    },
+    {
+      "flag": "--read-only",
+      "description": "When used with bind, creates a read-only bind mount. Added in version 248."
+    },
+    {
+      "flag": "--stdin",
+      "description": "When used with edit, the contents of the file will be read from standard input and the editor will not be launched. In this mode, the old contents of the file are completely replaced. This is useful to \"edit\" unit files from scripts: $ systemctl edit --drop-in=limits.conf --stdin some-service.service <<EOF [Unit] AllowedCPUs=7,11 EOF Multiple drop-ins may be \"edited\" in this mode; the same contents will be written to all of them. Added in version 256."
+    },
+    {
+      "flag": "--no-ask-password",
+      "description": "Do not query the user for authentication for privileged operations."
+    },
+    {
+      "flag": "--no-pager",
+      "description": "Do not pipe output into a pager."
+    },
+    {
+      "flag": "-h, --help",
+      "description": "Print a short help text and exit."
+    },
+    {
+      "flag": "--version",
+      "description": "Print a short version string and exit. EXIT STATUS On success, 0 is returned, a non-zero failure code otherwise. systemctl uses the return codes defined by LSB, as defined in LSB 3.0.0[3]. Table 5. LSB return codes \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2502 Value \u2502 Description in LSB \u2502 Use in systemd \u2502 \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524 \u2502 0 \u2502 \"program is running or service is OK\" \u2502 unit is active \u2502 \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524 \u2502 1 \u2502 \"program is dead and /var/run pid file exists\" \u2502 unit not failed (used by is-failed) \u2502 \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524 \u2502 2 \u2502 \"program is dead and /var/lock lock file exists\" \u2502 unused \u2502 \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524 \u2502 3 \u2502 \"program is not running\" \u2502 unit is not active \u2502 \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524 \u2502 4 \u2502 \"program or service status is unknown\" \u2502 no such unit \u2502 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 The mapping of LSB service states to systemd unit states is imperfect, so it is better to not rely on those return values but to look for specific unit states and substates instead. ENVIRONMENT $SYSTEMD_EDITOR Editor to use when editing units; overrides $EDITOR and $VISUAL. If neither $SYSTEMD_EDITOR nor $EDITOR nor $VISUAL are present or if it is set to an empty string or if their execution failed, systemctl will try to execute well known editors in this order: editor(1), nano(1), vim(1), vi(1). Added in version 218. $SYSTEMD_LOG_LEVEL The maximum log level of emitted messages (messages with a higher log level, i.e. less important ones, will be suppressed). Takes a comma-separated list of values. A value may be either one of (in order of decreasing importance) emerg, alert, crit, err, warning, notice, info, debug, or an integer in the range 0...7. See syslog(3) for more information. Each value may optionally be prefixed with one of console, syslog, kmsg or journal followed by a colon to set the maximum log level for that specific log target (e.g. SYSTEMD_LOG_LEVEL=debug,console:info specifies to log at debug level except when logging to the console which should be at info level). Note that the global maximum log level takes priority over any per target maximum log levels. $SYSTEMD_LOG_COLOR A boolean. If true, messages written to the tty will be colored according to priority. This setting is only useful when messages are written directly to the terminal, because journalctl(1) and other tools that display logs will color messages based on the log level on their own. $SYSTEMD_LOG_TIME A boolean. If true, console log messages will be prefixed with a timestamp. This setting is only useful when messages are written directly to the terminal or a file, because journalctl(1) and other tools that display logs will attach timestamps based on the entry metadata on their own. $SYSTEMD_LOG_LOCATION A boolean. If true, messages will be prefixed with a filename and line number in the source code where the message originates. Note that the log location is often attached as metadata to journal entries anyway. Including it directly in the message text can nevertheless be convenient when debugging programs. $SYSTEMD_LOG_TARGET The destination for log messages. One of console (log to the attached tty), console-prefixed (log to the attached tty but with prefixes encoding the log level and \"facility\", see syslog(3), kmsg (log to the kernel circular log buffer), journal (log to the journal), journal-or-kmsg (log to the journal if available, and to kmsg otherwise), auto (determine the appropriate log target automatically, the default), null (disable log output). $SYSTEMD_PAGER Pager to use when --no-pager is not given; overrides $PAGER. If neither $SYSTEMD_PAGER nor $PAGER are set, a set of well-known pager implementations are tried in turn, including less(1) and more(1), until one is found. If no pager implementation is discovered no pager is invoked. Setting this environment variable to an empty string or the value \"cat\" is equivalent to passing --no-pager. Note: if $SYSTEMD_PAGERSECURE is not set, $SYSTEMD_PAGER (as well as $PAGER) will be silently ignored. $SYSTEMD_LESS Override the options passed to less (by default \"FRSXMK\"). Users might want to change two options in particular: K This option instructs the pager to exit immediately when Ctrl+C is pressed. To allow less to handle Ctrl+C itself to switch back to the pager command prompt, unset this option. If the value of $SYSTEMD_LESS does not include \"K\", and the pager that is invoked is less, Ctrl+C will be ignored by the executable, and needs to be handled by the pager. X This option instructs the pager to not send termcap initialization and deinitialization strings to the terminal. It is set by default to allow command output to remain visible in the terminal even after the pager exits. Nevertheless, this prevents some pager functionality from working, in particular paged output cannot be scrolled with the mouse. Note that setting the regular $LESS environment variable has no effect for less invocations by systemd tools. See less(1) for more discussion. $SYSTEMD_LESSCHARSET Override the charset passed to less (by default \"utf-8\", if the invoking terminal is determined to be UTF-8 compatible). Note that setting the regular $LESSCHARSET environment variable has no effect for less invocations by systemd tools. $SYSTEMD_PAGERSECURE Takes a boolean argument. When true, the \"secure\" mode of the pager is enabled; if false, disabled. If $SYSTEMD_PAGERSECURE is not set at all, secure mode is enabled if the effective UID is not the same as the owner of the login session, see geteuid(2) and sd_pid_get_owner_uid(3). In secure mode, LESSSECURE=1 will be set when invoking the pager, and the pager shall disable commands that open or create new files or start new subprocesses. When $SYSTEMD_PAGERSECURE is not set at all, pagers which are not known to implement secure mode will not be used. (Currently only less(1) implements secure mode.) Note: when commands are invoked with elevated privileges, for example under sudo(8) or pkexec(1), care must be taken to ensure that unintended interactive features are not enabled. \"Secure\" mode for the pager may be enabled automatically as describe above. Setting SYSTEMD_PAGERSECURE=0 or not removing it from the inherited environment allows the user to invoke arbitrary commands. Note that if the $SYSTEMD_PAGER or $PAGER variables are to be honoured, $SYSTEMD_PAGERSECURE must be set too. It might be reasonable to completely disable the pager using --no-pager instead. $SYSTEMD_COLORS Takes a boolean argument. When true, systemd and related utilities will use colors in their output, otherwise the output will be monochrome. Additionally, the variable can take one of the following special values: \"16\", \"256\" to restrict the use of colors to the base 16 or 256 ANSI colors, respectively. This can be specified to override the automatic decision based on $TERM and what the console is connected to. $SYSTEMD_URLIFY The value must be a boolean. Controls whether clickable links should be generated in the output for terminal emulators supporting this. This can be specified to override the decision that systemd makes based on $TERM and other conditions."
+    }
+  ],
+  "examples": [],
+  "see_also": [
+    "unit",
+    "preset",
+    "generator",
+    "loginctl",
+    "control",
+    "special",
+    "systemd",
+    "glob",
+    "machinectl",
+    "wall",
+    "journalctl",
+    "SYSTEMCTL"
+  ],
+  "last_updated": "2025-09-14T22:02:51",
+  "machine_id": "linux_7618b026bd4e"
+}

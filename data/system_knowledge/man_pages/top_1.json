@@ -1,0 +1,12 @@
+{
+  "command": "top",
+  "section": 1,
+  "title": "top",
+  "description": "display Linux processes",
+  "synopsis": "top [options]",
+  "options": [],
+  "examples": [],
+  "see_also": [],
+  "last_updated": "2025-09-14T22:02:35",
+  "machine_id": "linux_7618b026bd4e"
+}

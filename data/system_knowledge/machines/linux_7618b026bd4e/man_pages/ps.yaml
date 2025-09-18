@@ -1,0 +1,38 @@
+metadata:
+  category: system_commands
+  description: Manual page information for ps
+  integration_type: machine_aware_man_pages
+  last_updated: '2025-09-14T22:02:34'
+  machine_id: linux_7618b026bd4e
+  os_type: linux
+  package_manager: apt
+  source: man_pages
+  version: 1.0.0
+tools:
+- common_examples:
+  - command: lstart      STARTED   time the command started. This will be in the form
+      "DDD mmm HH:MM:SS YYY" unless changed by the -D option.
+    description: Example usage
+    expected_output: See man page for detailed output format
+  - command: lsession    SESSION   displays the login session identifier of a process,
+      if systemd support has been included.
+    description: Example usage
+    expected_output: See man page for detailed output format
+  installation:
+    system: Pre-installed on most Linux systems
+  last_updated: '2025-09-14T22:02:34'
+  man_page_section: 1
+  name: ps
+  options: []
+  purpose: report a snapshot of the current processes.
+  related_tools:
+  - strftime
+  - proc
+  - PS
+  - top
+  - pstree
+  - pgrep
+  source: man ps(1)
+  type: command_line_tool
+  usage:
+    basic: ps [options]

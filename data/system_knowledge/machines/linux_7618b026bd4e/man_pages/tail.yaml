@@ -1,0 +1,26 @@
+metadata:
+  category: system_commands
+  description: Manual page information for tail
+  integration_type: machine_aware_man_pages
+  last_updated: '2025-09-14T22:02:20'
+  machine_id: linux_7618b026bd4e
+  os_type: linux
+  package_manager: apt
+  source: man_pages
+  version: 1.0.0
+tools:
+- common_examples: []
+  installation:
+    system: Pre-installed on most Linux systems
+  last_updated: '2025-09-14T22:02:20'
+  man_page_section: 1
+  name: tail
+  options: []
+  purpose: output the last part of files
+  related_tools:
+  - head
+  - TAIL
+  source: man tail(1)
+  type: command_line_tool
+  usage:
+    basic: tail [OPTION]... [FILE]...
