@@ -1,0 +1,213 @@
+---
+# Time synchronization tasks for AutoBot VMs
+
+- name: "Time Sync | Create log directory"
+  file:
+    path: "/var/log/autobot"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags: ['time_sync', 'logging']
+
+- name: "Time Sync | Check current timezone"
+  command: timedatectl show --property=Timezone --value
+  register: current_timezone
+  changed_when: false
+  tags: ['time_sync', 'timezone']
+
+- name: "Time Sync | Display current timezone"
+  debug:
+    msg: "Current timezone: {{ current_timezone.stdout }}, Target: {{ time_sync.timezone }}"
+  tags: ['time_sync', 'timezone']
+
+- name: "Time Sync | Set timezone to match main machine"
+  timezone:
+    name: "{{ time_sync.timezone }}"
+  notify:
+    - restart rsyslog
+    - restart cron
+  when: current_timezone.stdout != time_sync.timezone
+  tags: ['time_sync', 'timezone']
+
+- name: "Time Sync | Install NTP packages"
+  apt:
+    name:
+      - systemd-timesyncd
+      - ntpdate
+      - cron
+    state: present
+    update_cache: yes
+  tags: ['time_sync', 'packages']
+
+- name: "Time Sync | Check if chrony is requested"
+  block:
+    - name: "Time Sync | Install chrony"
+      apt:
+        name: chrony
+        state: present
+
+    - name: "Time Sync | Stop systemd-timesyncd (conflicts with chrony)"
+      systemd:
+        name: systemd-timesyncd
+        state: stopped
+        enabled: no
+
+    - name: "Time Sync | Configure chrony"
+      template:
+        src: chrony.conf.j2
+        dest: "/etc/chrony/chrony.conf"
+        backup: yes
+      notify: restart chrony
+
+    - name: "Time Sync | Enable and start chrony"
+      systemd:
+        name: chrony
+        state: started
+        enabled: yes
+
+  when: time_sync.ntp.use_chrony | default(false)
+  tags: ['time_sync', 'chrony']
+
+- name: "Time Sync | Configure systemd-timesyncd (default)"
+  block:
+    - name: "Time Sync | Stop chrony if running"
+      systemd:
+        name: chrony
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: "Time Sync | Configure systemd-timesyncd"
+      template:
+        src: timesyncd.conf.j2
+        dest: "/etc/systemd/timesyncd.conf"
+        backup: yes
+      notify: restart systemd-timesyncd
+
+    - name: "Time Sync | Enable and start systemd-timesyncd"
+      systemd:
+        name: systemd-timesyncd
+        state: started
+        enabled: yes
+
+  when: not (time_sync.ntp.use_chrony | default(false))
+  tags: ['time_sync', 'systemd-timesyncd']
+
+- name: "Time Sync | Force immediate time synchronization"
+  block:
+    - name: "Time Sync | Stop time sync service temporarily"
+      systemd:
+        name: "{{ 'chrony' if time_sync.ntp.use_chrony else 'systemd-timesyncd' }}"
+        state: stopped
+
+    - name: "Time Sync | Force time sync with ntpdate"
+      shell: |
+        for server in {{ time_sync.ntp.servers | join(' ') }}; do
+          if ntpdate -s $server 2>/dev/null; then
+            echo "Successfully synced with $server"
+            break
+          fi
+        done
+      register: ntpdate_result
+      failed_when: false
+
+    - name: "Time Sync | Restart time sync service"
+      systemd:
+        name: "{{ 'chrony' if time_sync.ntp.use_chrony else 'systemd-timesyncd' }}"
+        state: started
+
+  tags: ['time_sync', 'force_sync']
+
+- name: "Time Sync | Wait for time synchronization"
+  wait_for:
+    timeout: "{{ time_sync.validation.retry_delay * time_sync.validation.sync_retries }}"
+  tags: ['time_sync', 'validation']
+
+- name: "Time Sync | Verify time synchronization status"
+  command: timedatectl status
+  register: time_status
+  changed_when: false
+  tags: ['time_sync', 'validation']
+
+- name: "Time Sync | Display time synchronization status"
+  debug:
+    var: time_status.stdout_lines
+  tags: ['time_sync', 'validation']
+
+- name: "Time Sync | Check if system clock is synchronized"
+  shell: timedatectl status | grep "System clock synchronized" | grep -q "yes"
+  register: clock_sync_check
+  failed_when: false
+  changed_when: false
+  tags: ['time_sync', 'validation']
+
+- name: "Time Sync | Warning if time not synchronized"
+  debug:
+    msg: "WARNING: System clock is not synchronized. Manual intervention may be required."
+  when: clock_sync_check.rc != 0
+  tags: ['time_sync', 'validation']
+
+- name: "Time Sync | Set hardware clock from system clock"
+  command: hwclock --systohc
+  when:
+    - time_sync.hardware_clock.sync_hwclock | default(true)
+    - clock_sync_check.rc == 0
+  tags: ['time_sync', 'hardware_clock']
+
+- name: "Time Sync | Create time sync validation script"
+  template:
+    src: check-time-sync.sh.j2
+    dest: "/usr/local/bin/check-time-sync.sh"
+    mode: '0755'
+    owner: root
+    group: root
+  tags: ['time_sync', 'monitoring']
+
+- name: "Time Sync | Ensure cron service is running"
+  systemd:
+    name: cron
+    state: started
+    enabled: yes
+  tags: ['time_sync', 'monitoring']
+
+- name: "Time Sync | Add cron job for time sync monitoring"
+  cron:
+    name: "AutoBot time sync monitoring"
+    job: "/usr/local/bin/check-time-sync.sh >> {{ time_sync.logging.log_file }} 2>&1"
+    minute: "*/15"
+    user: root
+  tags: ['time_sync', 'monitoring']
+
+- name: "Time Sync | Create logrotate configuration"
+  template:
+    src: time-sync-logrotate.j2
+    dest: "/etc/logrotate.d/autobot-time-sync"
+    mode: '0644'
+  tags: ['time_sync', 'logging']
+
+- name: "Time Sync | Final status check and report"
+  block:
+    - name: "Time Sync | Get final time status"
+      command: timedatectl status
+      register: final_time_status
+      changed_when: false
+
+    - name: "Time Sync | Get current time"
+      command: date '+%Y-%m-%d %H:%M:%S %Z (UTC%z)'
+      register: current_time
+      changed_when: false
+
+    - name: "Time Sync | Report final configuration"
+      debug:
+        msg:
+          - "=== AutoBot Time Synchronization Complete ==="
+          - "Timezone: {{ time_sync.timezone }}"
+          - "Current time: {{ current_time.stdout }}"
+          - "NTP Service: {{ 'chrony' if time_sync.ntp.use_chrony else 'systemd-timesyncd' }}"
+          - "Primary NTP servers: {{ time_sync.ntp.servers[:3] | join(', ') }}"
+          - "Hardware clock sync: {{ 'enabled' if time_sync.hardware_clock.sync_hwclock else 'disabled' }}"
+          - "Monitoring: Enabled (15-minute checks)"
+          - "Log file: {{ time_sync.logging.log_file }}"
+
+  tags: ['time_sync', 'report']
