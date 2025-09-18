@@ -41,6 +41,17 @@ async def get_batch_status():
     }
 
 
+@router.post("/chat-init")
+async def chat_init():
+    """Initialize chat system - required by frontend"""
+    return {
+        "status": "success",
+        "message": "Chat system initialized",
+        "sessions": [],
+        "timestamp": datetime.now().isoformat()
+    }
+
+
 @router.post("/load")
 async def batch_load(batch_request: BatchRequest):
     """
