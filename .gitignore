@@ -331,6 +331,9 @@ reports/**/security_audit_*.json
 # External projects/submodules that are independent repositories
 code-index-mcp/
 mcp-github-project-manager/
+mcp-tools/context7/
+mcp-tools/mcp-structured-thinking/
+mcp-tools/mcp-task-manager-server/
 
 # Large log and analysis files
 *.log.bak
