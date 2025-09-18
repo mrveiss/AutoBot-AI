@@ -416,8 +416,8 @@ export default {
     }
 
     const refreshMachineProfile = async () => {
-      if (!loading.value) return // Safety check
-      
+      if (loading.value.profile) return // Prevent concurrent calls
+
       loading.value.profile = true
       try {
         const response = await ApiClient.get('/knowledge_base/machine_profile')
@@ -442,8 +442,8 @@ export default {
     }
 
     const refreshIntegrationStatus = async () => {
-      if (!loading.value) return // Safety check
-      
+      if (loading.value.status) return // Prevent concurrent calls
+
       loading.value.status = true
       try {
         const response = await ApiClient.get('/knowledge_base/man_pages/summary')
@@ -468,7 +468,7 @@ export default {
     }
 
     const initializeMachineKnowledge = async () => {
-      if (!loading.value) return // Safety check
+      if (loading.value.initialize) return // Prevent concurrent calls
       loading.value.initialize = true
       setProgressMessage('Initializing machine-aware knowledge...', 'info', 0)
       
@@ -502,7 +502,7 @@ export default {
         return
       }
 
-      if (!loading.value) return // Safety check
+      if (loading.value.integrate) return // Prevent concurrent calls
       loading.value.integrate = true
       setProgressMessage('Integrating man pages... This may take a minute.', 'info', 0)
       
@@ -531,7 +531,7 @@ export default {
         return
       }
 
-      if (!loading.value) return // Safety check
+      if (loading.value.search) return // Prevent concurrent calls
       loading.value.search = true
       lastSearchQuery.value = searchQuery.value.trim()
       
@@ -623,13 +623,12 @@ export default {
         updateProgress('Initializing Machine Knowledge', 10, 'Starting initialization...')
         addProgressMessage('Starting machine knowledge initialization', 'info')
 
-        const response = await fetch(`${API_BASE_URL}/machine_knowledge/initialize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+        const response = await ApiClient.post('/knowledge_base/machine_knowledge/initialize', {
+          force: false
         })
 
-        if (!response.ok) {
-          throw new Error(`Failed to initialize: ${response.status}`)
+        if (response.status !== 'success') {
+          throw new Error(response.message || 'Initialization failed')
         }
 
         updateProgress('Machine Knowledge Initialized', 100, 'Initialization complete', 100, 'success')
@@ -660,13 +659,10 @@ export default {
         updateProgress('Integrating Man Pages', 10, 'Starting man page extraction...')
         addProgressMessage('Starting man page integration', 'info')
 
-        const response = await fetch(`${API_BASE_URL}/man_pages/integrate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        })
+        const response = await ApiClient.post('/knowledge_base/man_pages/integrate')
 
-        if (!response.ok) {
-          throw new Error(`Failed to integrate: ${response.status}`)
+        if (response.status !== 'success') {
+          throw new Error(response.message || 'Integration failed')
         }
 
         updateProgress('Man Pages Integrated', 100, 'Integration complete', 100, 'success')

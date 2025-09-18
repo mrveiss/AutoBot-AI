@@ -271,7 +271,7 @@ export class OptimizedServiceIntegration {
     const startTime = performance.now();
     
     try {
-      const response = await this.get('/api/system/health', { timeout: 5000 });
+      const response = await this.get('/api/health', { timeout: 5000 });
       const endTime = performance.now();
       const duration = endTime - startTime;
       

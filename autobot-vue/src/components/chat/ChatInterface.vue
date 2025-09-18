@@ -9,168 +9,37 @@
       <div class="flex-1 flex flex-col min-w-0">
 
         <!-- Chat Header -->
-        <div class="chat-header bg-white border-b border-gray-200 px-6 py-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
-                <i class="fas fa-robot text-white text-sm"></i>
-              </div>
-              <div>
-                <h1 class="text-lg font-semibold text-gray-900">
-                  {{ currentSessionTitle }}
-                </h1>
-                <p class="text-sm text-gray-500">
-                  {{ sessionInfo }}
-                </p>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <!-- Session Actions -->
-              <button
-                v-if="store.currentSessionId"
-                @click="exportSession"
-                class="header-btn"
-                title="Export chat"
-              >
-                <i class="fas fa-download"></i>
-              </button>
-
-              <button
-                v-if="store.currentSessionId"
-                @click="clearSession"
-                class="header-btn"
-                title="Clear chat"
-              >
-                <i class="fas fa-trash"></i>
-              </button>
-
-              <!-- Connection Status -->
-              <div class="connection-status" :class="connectionStatusClass">
-                <i :class="connectionStatusIcon"></i>
-                <span class="text-sm">{{ connectionStatus }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ChatHeader
+          :current-session-id="store.currentSessionId"
+          :current-session-title="currentSessionTitle"
+          :session-info="sessionInfo"
+          :connection-status="connectionStatus"
+          :is-connected="isConnected"
+          @export-session="exportSession"
+          @clear-session="clearSession"
+        />
 
         <!-- Chat/Tools Tabs -->
-        <div class="flex border-b border-gray-200 bg-white flex-shrink-0 overflow-x-auto">
-          <button 
-            @click="activeTab = 'chat'" 
-            :class="['px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap', activeTab === 'chat' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50']"
-          >
-            <i class="fas fa-comments mr-2"></i>
-            Chat
-          </button>
-          <button 
-            @click="activeTab = 'files'" 
-            :class="['px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap', activeTab === 'files' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50']"
-          >
-            <i class="fas fa-folder mr-2"></i>
-            Files
-          </button>
-          <button 
-            @click="activeTab = 'terminal'" 
-            :class="['px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap', activeTab === 'terminal' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50']"
-          >
-            <i class="fas fa-terminal mr-2"></i>
-            Terminal
-          </button>
-          <button 
-            @click="activeTab = 'browser'" 
-            :class="['px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap', activeTab === 'browser' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50']"
-          >
-            <i class="fas fa-globe mr-2"></i>
-            Browser
-          </button>
-          <button 
-            @click="activeTab = 'novnc'" 
-            :class="['px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap', activeTab === 'novnc' ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50']"
-          >
-            <i class="fas fa-desktop mr-2"></i>
-            noVNC
-          </button>
-        </div>
+        <ChatTabs
+          :active-tab="activeTab"
+          @tab-change="activeTab = $event"
+        />
 
         <!-- Chat Content -->
-        <div class="flex-1 flex flex-col min-h-0">
-          <!-- Chat Tab Content -->
-          <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col min-h-0">
-            <ChatMessages />
-            <ChatInput />
-          </div>
-
-          <!-- Files Tab Content -->
-          <div v-else-if="activeTab === 'files'" class="flex-1 flex flex-col min-h-0">
-            <FileBrowser 
-              :key="store.currentSessionId"
-              :chat-context="true"
-              class="flex-1"
-            />
-          </div>
-
-          <!-- Terminal Tab Content -->
-          <div v-else-if="activeTab === 'terminal'" class="flex-1 flex flex-col min-h-0">
-            <XTerminal 
-              :key="store.currentSessionId"
-              :session-id="store.currentSessionId"
-              :chat-context="true"
-              title="Chat Terminal"
-              class="flex-1"
-            />
-          </div>
-
-          <!-- Browser Tab Content -->
-          <div v-else-if="activeTab === 'browser'" class="flex-1 flex flex-col min-h-0">
-            <PopoutChromiumBrowser 
-              :key="store.currentSessionId"
-              :session-id="store.currentSessionId || 'chat-browser'"
-              :chat-context="true"
-              class="flex-1"
-            />
-          </div>
-
-          <!-- noVNC Tab Content -->
-          <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
-            <div class="flex-1 flex flex-col bg-black">
-              <div class="flex justify-between items-center bg-gray-800 text-white px-4 py-2 text-sm">
-                <span>
-                  <i class="fas fa-desktop mr-2"></i>
-                  Remote Desktop (Chat Session: {{ store.currentSessionId?.slice(-8) || 'N/A' }})
-                </span>
-                <a 
-                  :href="novncUrl" 
-                  target="_blank" 
-                  class="text-indigo-300 hover:text-indigo-100 underline"
-                  title="Open noVNC in new window"
-                >
-                  <i class="fas fa-external-link-alt mr-1"></i>
-                  Open in New Window
-                </a>
-              </div>
-              <iframe 
-                :key="`desktop-${store.currentSessionId}`"
-                :src="novncUrl"
-                class="flex-1 w-full border-0"
-                title="noVNC Remote Desktop"
-                allowfullscreen
-              ></iframe>
-            </div>
-          </div>
-        </div>
+        <ChatTabContent
+          :active-tab="activeTab"
+          :current-session-id="store.currentSessionId"
+          :novnc-url="novncUrl"
+        />
       </div>
 
       <!-- Terminal Sidebar -->
-      <!-- Temporarily commented out to fix reactive variable issues -->
-      <!--
       <TerminalSidebar
         v-if="showTerminalSidebar"
         :collapsed="terminalSidebarCollapsed"
         @update:collapsed="terminalSidebarCollapsed = $event"
         @open-new-tab="openTerminalInNewTab"
       />
-      -->
 
       <!-- Dialogs and Modals -->
       <KnowledgePersistenceDialog
@@ -183,8 +52,6 @@
         @chat-compiled="onChatCompiled"
       />
 
-      <!-- Temporarily commented out to fix reactive variable issues -->
-      <!--
       <CommandPermissionDialog
         v-if="showCommandDialog"
         :show="showCommandDialog"
@@ -198,7 +65,6 @@
         @commented="onCommandCommented"
         @close="showCommandDialog = false"
       />
-      -->
 
       <!-- Workflow Progress Widget -->
       <div v-if="showWorkflowProgress" class="workflow-progress-widget">
@@ -217,20 +83,19 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import { ApiClient } from '@/utils/ApiClient.js'
-import batchApiService from '@/services/BatchApiService.js'
+import batchApiService from '@/services/BatchApiService'
 import { API_CONFIG } from '@/config/environment.js'
 
 // Components
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import ChatSidebar from './ChatSidebar.vue'
-import ChatMessages from './ChatMessages.vue'
-import ChatInput from './ChatInput.vue'
+import ChatHeader from './ChatHeader.vue'
+import ChatTabs from './ChatTabs.vue'
+import ChatTabContent from './ChatTabContent.vue'
 import KnowledgePersistenceDialog from '@/components/KnowledgePersistenceDialog.vue'
-import FileBrowser from '@/components/FileBrowser.vue'
-import PopoutChromiumBrowser from '@/components/PopoutChromiumBrowser.vue'
-// import CommandPermissionDialog from '@/components/CommandPermissionDialog.vue' // Temporarily commented out
+import CommandPermissionDialog from '@/components/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/WorkflowProgressWidget.vue'
-import XTerminal from '@/components/XTerminal.vue'
+import TerminalSidebar from '@/components/TerminalSidebar.vue'
 
 // Stores and controller
 const store = useChatStore()
@@ -295,17 +160,6 @@ const sessionInfo = computed(() => {
   return `${messageCount} message${messageCount > 1 ? 's' : ''} • Last: ${lastMessageTime}`
 })
 
-const connectionStatusClass = computed(() => ({
-  'text-green-600': isConnected.value,
-  'text-red-600': !isConnected.value,
-  'text-yellow-600': connectionStatus.value === 'Connecting'
-}))
-
-const connectionStatusIcon = computed(() => {
-  if (!isConnected.value) return 'fas fa-exclamation-circle'
-  if (connectionStatus.value === 'Connecting') return 'fas fa-spinner fa-spin'
-  return 'fas fa-check-circle'
-})
 
 // Methods
 const exportSession = async () => {
@@ -390,7 +244,7 @@ const checkConnection = async () => {
   try {
     // Use ApiClient instead of direct fetch
     const apiClient = new ApiClient()
-    const healthData = await apiClient.get('/api/system/health')
+    const healthData = await apiClient.get('/api/health')
     
     // ApiClient returns data directly on success
     if (healthData) {
@@ -545,40 +399,11 @@ watch(() => activeTab.value, (newTab) => {
   height: 100vh;
 }
 
-.chat-header {
-  flex-shrink: 0;
-}
-
-.header-btn {
-  @apply w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 rounded transition-colors;
-}
-
-.header-btn:hover {
-  @apply bg-gray-100;
-}
-
-.connection-status {
-  @apply flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100;
-}
 
 .workflow-progress-widget {
   @apply fixed bottom-4 right-4 z-50;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .chat-header {
-    @apply px-4 py-3;
-  }
-
-  .chat-header h1 {
-    @apply text-base;
-  }
-
-  .connection-status span {
-    @apply hidden;
-  }
-}
 
 /* Focus trap for dialogs */
 .dialog-overlay {

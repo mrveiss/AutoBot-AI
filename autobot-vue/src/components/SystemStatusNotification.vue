@@ -1,6 +1,8 @@
 <template>
-  <Teleport to="body">
-    <!-- Toast Notifications -->
+  <!-- Wrapper div to avoid fragment root issues -->
+  <div>
+    <Teleport to="body">
+      <!-- Toast Notifications -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
@@ -169,14 +171,18 @@
             </button>
           </div>
         </div>
-      </div>
-    </Transition>
-  </Teleport>
+        </div>
+      </Transition>
+    </Teleport>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAppStore } from '@/stores/useAppStore'
+
+// Now using wrapper div to avoid fragment root issues
+
 import XMarkIcon from '@heroicons/vue/24/outline/XMarkIcon'
 import ExclamationTriangleIcon from '@heroicons/vue/24/outline/ExclamationTriangleIcon'
 import InformationCircleIcon from '@heroicons/vue/24/outline/InformationCircleIcon'
@@ -199,19 +205,13 @@ export interface SystemStatusNotificationProps {
   allowDismiss?: boolean
   showDetails?: boolean
   autoHide?: number // Auto hide after X milliseconds
-  notification?: {
-    visible: boolean
-    severity: 'info' | 'warning' | 'error' | 'success'
-    title: string
-    message: string
-    statusDetails?: SystemStatusDetails
-    allowDismiss?: boolean
-    showDetails?: boolean
-    autoHide?: number
-  }
 }
 
 const props = withDefaults(defineProps<SystemStatusNotificationProps>(), {
+  visible: true,
+  severity: 'info',
+  title: '',
+  message: '',
   allowDismiss: true,
   showDetails: false,
   autoHide: 0
@@ -226,20 +226,17 @@ const emit = defineEmits<{
 
 const appStore = useAppStore()
 
-// Computed properties for handling both prop formats
+// Computed properties for notification data
 const notificationData = computed(() => {
-  if (props.notification) {
-    return props.notification
-  }
   return {
-    visible: props.visible ?? true,
-    severity: props.severity ?? 'info',
-    title: props.title ?? '',
-    message: props.message ?? '',
+    visible: props.visible,
+    severity: props.severity,
+    title: props.title,
+    message: props.message,
     statusDetails: props.statusDetails,
-    allowDismiss: props.allowDismiss ?? true,
-    showDetails: props.showDetails ?? false,
-    autoHide: props.autoHide ?? 0
+    allowDismiss: props.allowDismiss,
+    showDetails: props.showDetails,
+    autoHide: props.autoHide
   }
 })
 

@@ -49,9 +49,7 @@ DEV_MODE=false
 PROD_MODE=false
 NO_BROWSER=false
 DESKTOP_ACCESS=true  # Enable by default per CLAUDE.md guidelines
-BUILD=false
-NO_BUILD=false
-REBUILD=false
+# Removed unused BUILD flags - no build process in distributed VM architecture
 VNC_PID=""
 
 # VM Configuration (Distributed Architecture)
@@ -66,6 +64,7 @@ declare -A VMS=(
 )
 
 # Service ports
+BACKEND_HOST=172.16.168.20
 BACKEND_PORT=8001
 FRONTEND_PORT=5173
 REDIS_PORT=6379
@@ -98,17 +97,15 @@ ${YELLOW}Options:${NC}
   --no-browser        Don't launch browser automatically
   --desktop           Enable desktop access via VNC
   --no-desktop        Disable desktop access via VNC
-  --build             Force build even if images exist
-  --no-build          Skip Docker builds (fastest restart)
-  --rebuild           Force rebuild everything (clean slate)
+# No build options needed - distributed VM architecture uses pre-configured VMs
   --status            Show current system status
   --stop              Stop all AutoBot services (backend + VMs)
   --restart           Restart all services (backend + all VMs)
   --help              Show this help message
 
 ${BLUE}Examples:${NC}
-  $0 --dev                    # Start backend in development mode
-  $0 --prod                   # Start backend in production mode
+  $0 --dev                    # Development mode with debugging and hot reload
+  $0 --prod                   # Production mode
   $0 --status                 # Show current distributed system status
   $0 --stop                   # Stop all AutoBot services
   $0 --restart                # Restart all services (backend + VMs)
@@ -131,7 +128,11 @@ check_vm_services() {
         echo -e "${GREEN}✅ Running${NC}"
     else
         echo -e "${RED}❌ Not running${NC}"
-        echo -e "${YELLOW}    Start with: ssh $SSH_USER@${VMS["frontend"]} 'sudo systemctl start autobot-frontend-dev'${NC}"
+        if [ "$DEV_MODE" = true ]; then
+            echo -e "${YELLOW}    Start with: ssh $SSH_USER@${VMS["frontend"]} 'cd autobot-vue && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
+        else
+            echo -e "${YELLOW}    Start with: ssh $SSH_USER@${VMS["frontend"]} 'sudo systemctl start nginx'${NC}"
+        fi
     fi
     
     # Check Redis
@@ -140,7 +141,7 @@ check_vm_services() {
         echo -e "${GREEN}✅ Running${NC}"
     else
         echo -e "${RED}❌ Not running${NC}"
-        echo -e "${YELLOW}    Start with: ssh $SSH_USER@${VMS["redis"]} 'docker run -d --name autobot-redis-stack -p 6379:6379 -p 8001:8001 -v redis-data:/data redis/redis-stack:latest'${NC}"
+        echo -e "${YELLOW}    Start with: bash scripts/vm-management/start-redis.sh${NC}"
     fi
     
     # Check other services
@@ -153,12 +154,34 @@ check_vm_services() {
         local vm_ip="${VMS[$service]}"
         
         echo -n "  $service ($vm_ip:$port)... "
-        if timeout 5 curl -s "http://$vm_ip:$port/health" >/dev/null 2>&1; then
-            echo -e "${GREEN}✅ Running${NC}"
-        else
-            echo -e "${RED}❌ Not running${NC}"
-            echo -e "${YELLOW}    Start with scripts/vm-management/start-$service.sh${NC}"
-        fi
+        # Use service-specific health checks based on setup.sh implementation
+        case $service in
+            "npu-worker")
+                if timeout 5 curl -s "http://$vm_ip:$port" >/dev/null 2>&1; then
+                    echo -e "${GREEN}✅ Running${NC}"
+                else
+                    echo -e "${RED}❌ Not running${NC}"
+                    echo -e "${YELLOW}    Start with: ssh $SSH_USER@$vm_ip 'cd npu-worker && python simple_npu_worker.py'${NC}"
+                fi
+                ;;
+            "ai-stack")
+                # AI Stack uses Ollama on port 11434, not the configured port
+                if timeout 5 curl -s "http://$vm_ip:11434" >/dev/null 2>&1; then
+                    echo -e "${GREEN}✅ Running (Ollama)${NC}"
+                else
+                    echo -e "${RED}❌ Not running${NC}"
+                    echo -e "${YELLOW}    Start with: ssh $SSH_USER@$vm_ip 'ollama serve'${NC}"
+                fi
+                ;;
+            "browser")
+                if timeout 5 curl -s "http://$vm_ip:$port" >/dev/null 2>&1; then
+                    echo -e "${GREEN}✅ Running${NC}"
+                else
+                    echo -e "${RED}❌ Not running${NC}"
+                    echo -e "${YELLOW}    Start with: ssh $SSH_USER@$vm_ip 'cd browser && node playwright-server.js'${NC}"
+                fi
+                ;;
+        esac
     done
 }
 
@@ -176,9 +199,9 @@ show_system_status() {
     
     # Backend Status (Local WSL)
     echo -e "${CYAN}🔧 Backend Service (WSL - 172.16.168.20):${NC}"
-    if curl -s http://localhost:$BACKEND_PORT/api/health &> /dev/null; then
+    if curl -s http://$BACKEND_HOST:$BACKEND_PORT/api/health &> /dev/null; then
         echo -e "${GREEN}  ✅ Backend Running${NC}"
-        echo -e "${BLUE}    URL: http://localhost:$BACKEND_PORT${NC}"
+        echo -e "${BLUE}    URL: http://$BACKEND_HOST:$BACKEND_PORT${NC}"
     else
         echo -e "${RED}  ❌ Backend Not Responding${NC}"
         echo -e "${YELLOW}    Start with: bash run_autobot.sh --dev${NC}"
@@ -274,7 +297,7 @@ restart_all_services() {
     log "Waiting for backend to be ready..."
     local backend_ready=false
     for i in {1..30}; do
-        if curl -s http://localhost:8001/api/health > /dev/null 2>&1; then
+        if curl -s http://$BACKEND_HOST:$BACKEND_PORT/api/health > /dev/null 2>&1; then
             backend_ready=true
             break
         fi
@@ -329,6 +352,7 @@ while [[ $# -gt 0 ]]; do
         --dev)
             DEV_MODE=true
             PROD_MODE=false
+# Development mode - no build steps in distributed VM architecture
             shift
             ;;
         --prod)
@@ -360,22 +384,7 @@ while [[ $# -gt 0 ]]; do
             restart_all_services
             exit 0
             ;;
-        --build)
-            BUILD=true
-            NO_BUILD=false
-            shift
-            ;;
-        --no-build)
-            NO_BUILD=true
-            BUILD=false
-            shift
-            ;;
-        --rebuild)
-            REBUILD=true
-            BUILD=true
-            NO_BUILD=false
-            shift
-            ;;
+# Removed unused build options - no build process in distributed architecture
         --help|-h)
             print_usage
             exit 0
@@ -483,35 +492,52 @@ check_vm_connectivity() {
 start_frontend_dev() {
     if [ "$DEV_MODE" = true ]; then
         echo -e "${CYAN}🔧 Starting Frontend Development Mode...${NC}"
-        
-        # Check if we have Ansible connectivity
-        if command -v ansible &> /dev/null && [ -f "ansible/inventory/production.yml" ]; then
-            echo "  📡 Managing frontend development service on VM..."
-            
-            # Restart the systemd service for development mode
-            ansible frontend -i ansible/inventory/production.yml -m systemd -a "name=autobot-frontend-dev state=restarted enabled=yes daemon_reload=yes" -b 2>/dev/null
-            
-            echo "  ⏳ Waiting for frontend service to start..."
-            sleep 8
-            
-            # Check if frontend is now running
-            if timeout 15 curl -s "http://${VMS["frontend"]}:$FRONTEND_PORT" >/dev/null 2>&1; then
-                echo -e "${GREEN}  ✅ Frontend development service started successfully${NC}"
-                echo -e "${BLUE}  🌐 Frontend URL: http://172.16.168.21:5173${NC}"
-                echo -e "${CYAN}  🔧 Native Vite dev server with hot reload enabled${NC}"
-                
-                # Show service status
-                echo "  📋 Service status:"
-                ansible frontend -i ansible/inventory/production.yml -m shell -a "systemctl is-active autobot-frontend-dev" -b 2>/dev/null | grep -v "CHANGED" | sed 's/^/    /'
-            else
-                echo -e "${RED}  ❌ Frontend failed to start${NC}"
-                echo -e "${YELLOW}  💡 Check service: ansible frontend -i ansible/inventory/production.yml -m shell -a 'systemctl status autobot-frontend-dev' -b${NC}"
-                echo -e "${YELLOW}  💡 Check logs: ansible frontend -i ansible/inventory/production.yml -m shell -a 'journalctl -u autobot-frontend-dev -n 20' -b${NC}"
-            fi
+
+        # Development mode: Sync code and start Vite dev server manually
+        echo "  📦 Syncing frontend code to VM..."
+
+        # Check if sync script exists
+        if [ -f "scripts/utilities/sync-frontend.sh" ]; then
+            ./scripts/utilities/sync-frontend.sh
+        elif [ -f "sync-frontend.sh" ]; then
+            ./sync-frontend.sh
         else
-            warning "Ansible not available. Cannot start remote frontend development mode."
-            echo -e "${YELLOW}  Manual start: ssh autobot@172.16.168.21 'sudo systemctl start autobot-frontend-dev'${NC}"
-            echo -e "${YELLOW}  Check status: ssh autobot@172.16.168.21 'sudo systemctl status autobot-frontend-dev'${NC}"
+            echo -e "${YELLOW}  ⚠️  Sync script not found - code may be outdated on frontend VM${NC}"
+        fi
+
+        # Check if frontend is already running
+        if timeout 5 curl -s "http://${VMS["frontend"]}:$FRONTEND_PORT" >/dev/null 2>&1; then
+            echo -e "${GREEN}  ✅ Frontend development server already running${NC}"
+            echo -e "${BLUE}  🌐 Frontend URL: http://172.16.168.21:5173${NC}"
+            echo -e "${CYAN}  📝 Logs: ssh autobot@172.16.168.21 'tail -f /tmp/vite.log'${NC}"
+            return 0
+        fi
+
+        echo "  🚀 Starting Vite dev server on frontend VM..."
+
+        # Only kill processes if we need to start fresh
+        echo "  🧹 Cleaning up existing processes..."
+        # Use more targeted process cleanup to avoid hanging
+        timeout 5 ssh -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "pkill -f 'npm.*dev' 2>/dev/null || true; pkill -f 'vite.*5173' 2>/dev/null || true" 2>/dev/null || echo "    Process cleanup completed (timeout protection)"
+        echo "  ⏳ Waiting for socket cleanup..."
+        sleep 2
+
+        # Start Vite dev server in background
+        ssh -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "cd autobot-vue && VITE_BACKEND_HOST=172.16.168.20 VITE_BACKEND_PORT=8001 nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 &" 2>/dev/null
+
+        echo "  ⏳ Waiting for frontend dev server to start..."
+        sleep 8
+
+        # Check if frontend is now running
+        if timeout 15 curl -s "http://${VMS["frontend"]}:$FRONTEND_PORT" >/dev/null 2>&1; then
+            echo -e "${GREEN}  ✅ Frontend development server started successfully${NC}"
+            echo -e "${BLUE}  🌐 Frontend URL: http://172.16.168.21:5173${NC}"
+            echo -e "${CYAN}  🔧 Native Vite dev server with hot reload enabled${NC}"
+            echo -e "${CYAN}  📝 Logs: ssh autobot@172.16.168.21 'tail -f /tmp/vite.log'${NC}"
+        else
+            echo -e "${RED}  ❌ Frontend failed to start${NC}"
+            echo -e "${YELLOW}  💡 Check logs: ssh autobot@172.16.168.21 'tail -f /tmp/vite.log'${NC}"
+            echo -e "${YELLOW}  💡 Manual start: ssh autobot@172.16.168.21 'cd autobot-vue && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
         fi
     fi
 }
@@ -563,10 +589,16 @@ start_backend() {
     
     # Set up Python environment
     export PYTHONPATH="$PWD"
-    
+
+    # Activate virtual environment if it exists (from setup.sh)
+    if [ -d "venv" ]; then
+        log "Activating Python virtual environment..."
+        source venv/bin/activate
+    fi
+
     # Ensure logs directory exists
     mkdir -p logs
-    
+
     # Start backend with proper error handling
     if [ "$DEV_MODE" = true ]; then
         log "Starting backend in development mode..."
@@ -579,7 +611,7 @@ start_backend() {
     # Wait for backend to start
     local backend_ready=false
     for i in {1..30}; do
-        if curl -s http://localhost:$BACKEND_PORT/api/health > /dev/null 2>&1; then
+        if curl -s http://$BACKEND_HOST:$BACKEND_PORT/api/health > /dev/null 2>&1; then
             backend_ready=true
             break
         fi

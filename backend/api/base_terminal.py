@@ -237,11 +237,20 @@ class BaseTerminalWebSocket(ABC):
         logger.info(f"{self.terminal_type} cleanup completed")
 
     async def execute_command(self, command: str) -> bool:
-        """Send command to PTY shell with common handling"""
+        """Send command to PTY shell with security validation"""
         if not command.strip():
             return False
 
-        logger.info(f"{self.terminal_type} executing: {command}")
+        # SECURITY: Validate command before execution
+        if not await self.validate_command(command):
+            logger.warning(f"SECURITY: Command blocked by validation: {command}")
+            await self.send_message({
+                "type": "error", 
+                "message": f"Command blocked by security policy: {command}"
+            })
+            return False
+
+        logger.info(f"{self.terminal_type} executing validated command: {command}")
 
         try:
             # Send command to PTY shell
@@ -256,8 +265,42 @@ class BaseTerminalWebSocket(ABC):
             return False
 
     async def validate_command(self, command: str) -> bool:
-        """Validate command before execution (override in subclasses)"""
-        return True
+        """Validate command before execution with security policy"""
+        if not command or not command.strip():
+            return False
+            
+        try:
+            # Import here to avoid circular imports
+            from src.secure_command_executor import SecureCommandExecutor, CommandRisk
+            
+            # Lazy initialize secure executor
+            if not hasattr(self, '_secure_executor'):
+                self._secure_executor = SecureCommandExecutor()
+            
+            # Assess command risk
+            risk, reasons = self._secure_executor.assess_command_risk(command)
+            
+            if risk == CommandRisk.FORBIDDEN:
+                logger.warning(f"SECURITY: Blocked forbidden command in {self.terminal_type}: {command} - {reasons}")
+                return False
+            elif risk == CommandRisk.HIGH:
+                logger.warning(f"SECURITY: Blocked high-risk command in {self.terminal_type}: {command} - {reasons}")
+                return False
+            elif risk == CommandRisk.MODERATE:
+                logger.info(f"SECURITY: Moderate-risk command in {self.terminal_type}: {command} - {reasons}")
+                # Could implement approval mechanism here if needed
+                # For now, allow moderate risk commands with logging
+                return True
+            else:
+                logger.debug(f"SECURITY: Safe command in {self.terminal_type}: {command}")
+                return True
+                
+        except ImportError:
+            logger.error("SECURITY WARNING: SecureCommandExecutor not available, allowing command without validation")
+            return True  # Fail open to prevent system lockout, but log the security issue
+        except Exception as e:
+            logger.error(f"SECURITY ERROR: Command validation failed for {command}: {e}")
+            return False  # Fail closed on validation errors
 
     def get_terminal_stats(self) -> dict:
         """Get terminal session statistics"""

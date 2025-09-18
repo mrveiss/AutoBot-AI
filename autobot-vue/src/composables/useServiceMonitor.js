@@ -60,7 +60,7 @@ export function useServiceMonitor() {
   
   const statusMessage = computed(() => {
     switch (overallStatus.value) {
-      case 'online': return 'All systems operational'
+      case 'online': return `${serviceSummary.value.online} services online`
       case 'warning': return `${serviceSummary.value.warning} service(s) need attention`
       case 'error': return `${serviceSummary.value.error} service(s) have errors`
       case 'offline': return `${serviceSummary.value.offline} service(s) offline`

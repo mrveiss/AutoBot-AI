@@ -1,10 +1,12 @@
 // DEPRECATED: This file is being replaced by AppConfig.js
 // Centralized Environment Configuration using new AppConfigService
-// 
+//
 // MIGRATION: All components should now use AppConfig.js instead of this file
 // This file is maintained for backward compatibility during migration
+//
+// NOTE: To avoid circular dependencies, this file no longer imports AppConfig.js
+// Use AppConfig.js directly for new code
 
-import appConfig from './AppConfig.js';
 import { buildDefaultServiceUrl } from './defaults.js';
 
 // Legacy API_CONFIG for backward compatibility
@@ -84,7 +86,7 @@ export const API_CONFIG = {
 
 export const ENDPOINTS = {
   // System
-  HEALTH: '/api/system/health',
+  HEALTH: '/api/health',
   INFO: '/api/system/info',
   METRICS: '/api/system/metrics',
 

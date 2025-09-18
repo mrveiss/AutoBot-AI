@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed top-4 right-4 z-30">
+  <div class="fixed top-4 left-4 z-30 lg:left-auto lg:right-4">
     <!-- Main status indicator -->
     <button
       @click="toggleDetails"
@@ -38,7 +38,7 @@
         class="fixed inset-0 z-30"
         @click="showDetails = false"
       >
-        <div class="fixed top-16 right-4 z-40 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border dark:border-gray-700 max-h-96 overflow-hidden"
+        <div class="fixed top-16 left-4 lg:left-auto lg:right-4 z-40 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border dark:border-gray-700 max-h-96 overflow-hidden"
              @click.stop>
           <!-- Header -->
           <div class="flex items-center justify-between p-4 border-b dark:border-gray-700">
@@ -236,7 +236,7 @@ const getNotificationIcon = (severity: SystemSeverity) => {
 const getStatusDescription = (status: string): string => {
   switch (status) {
     case 'success':
-      return 'All systems operational'
+      return ''  // No redundant text for success state
     case 'warning':
       return 'Some systems experiencing issues'
     case 'error':

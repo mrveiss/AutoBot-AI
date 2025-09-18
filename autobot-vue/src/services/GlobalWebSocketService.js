@@ -158,9 +158,10 @@ class GlobalWebSocketService {
   async quickHealthCheck() {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 2000)
-    
+
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/health`, { 
+      // Use relative URL to go through Vite proxy in development
+      const response = await fetch('/api/health', {
         signal: controller.signal,
         cache: 'no-store'
       })

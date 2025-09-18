@@ -50,12 +50,20 @@ export class ApiClient {
     if (this.settings?.backend?.api_endpoint) {
       // Ensure we don't get URL duplication from corrupted settings
       let settingsUrl = this.settings.backend.api_endpoint;
-      if (settingsUrl.includes(this.baseUrl)) {
-        // Settings URL already contains the base URL, use as-is
-        this.baseUrl = settingsUrl;
-      } else if (!settingsUrl.startsWith('http')) {
-        // Relative URL, prepend base
-        this.baseUrl = `${this.baseUrl}${settingsUrl}`;
+
+      // Clean up any existing protocol prefixes in settings URL to avoid duplication
+      if (settingsUrl.startsWith('http://http://') || settingsUrl.startsWith('https://https://')) {
+        // Fix double protocol issue
+        settingsUrl = settingsUrl.replace(/^https?:\/\//, '');
+      }
+
+      if (!settingsUrl.startsWith('http')) {
+        // Relative URL or partial URL, prepend base only if not already included
+        if (settingsUrl.startsWith('/')) {
+          this.baseUrl = `${this.baseUrl}${settingsUrl}`;
+        } else {
+          this.baseUrl = `${this.baseUrl}/${settingsUrl}`;
+        }
       } else {
         // Absolute URL, use as-is
         this.baseUrl = settingsUrl;
@@ -90,8 +98,24 @@ export class ApiClient {
   // Enhanced request method that uses AppConfig when possible
   async requestWithConfig(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse> {
     const baseUrl = await this.getBaseUrl();
-    const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
-    
+
+    // Clean URL construction to prevent double protocols
+    let url: string;
+    if (endpoint.startsWith('http')) {
+      url = endpoint;
+    } else {
+      // Ensure endpoint starts with / for proper concatenation
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      url = `${baseUrl}${cleanEndpoint}`;
+    }
+
+    // Validate URL to catch double protocol issues
+    if (url.includes('http://http://') || url.includes('https://https://')) {
+      console.error('MALFORMED URL DETECTED:', url);
+      // Fix by removing the duplicate protocol
+      url = url.replace(/^(https?:\/\/)(https?:\/\/)/, '$1');
+    }
+
     return this._makeRequest(url, options);
   }
 
@@ -163,9 +187,23 @@ export class ApiClient {
 
   // Generic request method with error handling and timeout (legacy - use requestWithConfig for new code)
   async request(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse> {
-    // Handle absolute URLs vs relative endpoints
-    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
-    
+    // Handle absolute URLs vs relative endpoints with clean URL construction
+    let url: string;
+    if (endpoint.startsWith('http')) {
+      url = endpoint;
+    } else {
+      // Ensure endpoint starts with / for proper concatenation
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      url = `${this.baseUrl}${cleanEndpoint}`;
+    }
+
+    // Validate URL to catch double protocol issues
+    if (url.includes('http://http://') || url.includes('https://https://')) {
+      console.error('MALFORMED URL DETECTED in legacy request:', url);
+      // Fix by removing the duplicate protocol
+      url = url.replace(/^(https?:\/\/)(https?:\/\/)/, '$1');
+    }
+
     return this._makeRequest(url, options);
   }
 
@@ -346,7 +384,7 @@ export class ApiClient {
 
   // Health and status methods
   async checkHealth(): Promise<any> {
-    const response = await this.get('/api/system/health');
+    const response = await this.get('/api/health');
     return response.json();
   }
 

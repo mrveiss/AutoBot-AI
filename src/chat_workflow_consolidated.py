@@ -200,10 +200,10 @@ class ConsolidatedChatWorkflow:
             except Exception as e:
                 logger.warning(f"Advanced classification not available: {e}")
                 self.classification_agent = None
-                self.web_research_integration = False
+                self.web_research_integration = True
         else:
             self.classification_agent = None
-            self.web_research_integration = False
+            self.web_research_integration = True
         
         # Knowledge base initialization
         if KNOWLEDGE_BASE_AVAILABLE:
@@ -283,7 +283,7 @@ class ConsolidatedChatWorkflow:
     async def process_message(self, 
                             user_message: str, 
                             chat_id: Optional[str] = None,
-                            enable_research: bool = True,
+                            enable_research: bool = True  # Enterprise: Research enabled by default,
                             enable_kb_search: bool = True, **kwargs) -> ConsolidatedWorkflowResult:
         """
         Main message processing method combining ALL features from all previous implementations

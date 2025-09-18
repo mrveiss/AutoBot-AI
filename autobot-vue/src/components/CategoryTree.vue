@@ -49,7 +49,7 @@ export default {
     const loadCategories = async () => {
       loading.value = true;
       try {
-        const response = await apiClient.get('/api/categories');
+        const response = await apiClient.get('/api/knowledge_base/categories');
         const data = await response.json();
         
         if (data.success) {

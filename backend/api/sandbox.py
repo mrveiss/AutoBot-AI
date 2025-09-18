@@ -16,7 +16,7 @@ from src.secure_sandbox_executor import (
     SandboxExecutionMode,
     SandboxSecurityLevel,
     execute_in_sandbox,
-    secure_sandbox,
+    get_secure_sandbox,
 )
 
 router = APIRouter()
@@ -81,8 +81,16 @@ async def execute_command(request: SandboxExecuteRequest):
             environment=request.environment,
         )
 
+        # Get sandbox instance with lazy initialization
+        sandbox = get_secure_sandbox()
+        if sandbox is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Secure sandbox unavailable - command execution blocked for security"
+            )
+        
         # Execute command
-        result = await secure_sandbox.execute_command(request.command, config)
+        result = await sandbox.execute_command(request.command, config)
 
         return JSONResponse(
             status_code=200 if result.success else 400,
@@ -136,8 +144,16 @@ async def execute_script(request: SandboxScriptRequest):
             environment=request.environment,
         )
 
+        # Get sandbox instance with lazy initialization
+        sandbox = get_secure_sandbox()
+        if sandbox is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Secure sandbox unavailable - script execution blocked for security"
+            )
+        
         # Execute script
-        result = await secure_sandbox.execute_script(
+        result = await sandbox.execute_script(
             request.script_content, request.language, config
         )
 
@@ -206,8 +222,16 @@ async def execute_batch(request: SandboxBatchRequest):
             enable_network=request.enable_network,
         )
 
+        # Get sandbox instance with lazy initialization
+        sandbox = get_secure_sandbox()
+        if sandbox is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Secure sandbox unavailable - batch execution blocked for security"
+            )
+        
         # Execute as script
-        result = await secure_sandbox.execute_script(script_content, "bash", config)
+        result = await sandbox.execute_script(script_content, "bash", config)
 
         return JSONResponse(
             status_code=200 if result.success else 400,
@@ -241,7 +265,31 @@ async def get_sandbox_stats():
     - Available security levels
     """
     try:
-        stats = await secure_sandbox.get_sandbox_stats()
+        # Get sandbox instance with lazy initialization
+        sandbox = get_secure_sandbox()
+        if sandbox is None:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "error": "Secure sandbox unavailable",
+                    "statistics": {
+                        "successful_executions": 0,
+                        "failed_executions": 0,
+                        "active_containers": 0
+                    },
+                    "capabilities": {
+                        "security_levels": ["high", "medium", "low"],
+                        "execution_modes": ["command", "script", "batch", "interactive"],
+                        "supported_languages": ["bash", "sh", "python", "python3"],
+                        "monitoring_enabled": False,
+                        "network_isolation": False,
+                        "resource_limits": False,
+                    },
+                }
+            )
+        
+        stats = await sandbox.get_sandbox_stats()
 
         return JSONResponse(
             status_code=200,

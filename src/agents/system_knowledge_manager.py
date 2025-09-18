@@ -26,10 +26,11 @@ class SystemKnowledgeManager:
         self.knowledge_base = knowledge_base
         self.librarian = EnhancedKBLibrarian(knowledge_base)
 
-        # Paths
-        self.system_knowledge_dir = Path("system_knowledge")
-        self.runtime_knowledge_dir = Path("data/system_knowledge")
-        self.backup_dir = Path("data/system_knowledge_backups")
+        # Paths - use absolute paths to avoid working directory issues
+        project_root = Path(__file__).parent.parent.parent  # Go up 3 levels: src/agents/system_knowledge_manager.py -> AutoBot/
+        self.system_knowledge_dir = project_root / "system_knowledge"
+        self.runtime_knowledge_dir = project_root / "data/system_knowledge"
+        self.backup_dir = project_root / "data/system_knowledge_backups"
 
         # Ensure directories exist
         self.runtime_knowledge_dir.mkdir(parents=True, exist_ok=True)

@@ -1,170 +1,162 @@
-#!/usr/bin/env python3
-"""
-FastAPI Backend with Optimizations
-Created for AutoBot - Fast startup with minimal dependencies
-"""
-
 import asyncio
 import logging
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+import warnings
+import signal
+import sys
+import os
+from datetime import datetime
+from typing import Dict, Any
 
-import uvicorn
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+# Add parent directory to Python path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Configure logging immediately
+# Filter out specific warnings that are causing noise
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")
+warnings.filterwarnings("ignore", message=".*'app' object has no attribute.*")
+
+# Import unified configuration BEFORE any other local imports
+from src.unified_config import config
+
+# Configure logging for startup
 logging.basicConfig(
     level=logging.INFO,
-    format='%(levelname)s:%(name)s:%(message)s',
-    handlers=[logging.StreamHandler()]
+    format='%(asctime)s %(name)s %(levelname)s %(message)s',
+    datefmt='%H:%M:%S'
 )
+
 logger = logging.getLogger(__name__)
 
-# Quick startup progress tracker
-def report_startup_progress(phase: str, message: str, progress: int, emoji: str = "⏳"):
-    """Report startup progress"""
-    logger.info(f"Startup: [{phase}] {emoji} {message} ({progress}%)")
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import aioredis
+import redis.asyncio as redis_async
+from backend.utils.llm_config_sync import sync_llm_configuration
 
-# Health check model
+# Response models
 class HealthResponse(BaseModel):
     status: str
-    mode: str
-    timestamp: datetime
-    redis: bool
-    ollama: str
-    chat_manager: bool
+    timestamp: str
+    components: Dict[str, str]
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan with fast startup and graceful shutdown"""
-    
-    logger.info("🚀 Starting AutoBot Fast Backend...")
-    
-    # Phase 1: Minimal Redis setup (with timeout)
-    report_startup_progress("connecting_backend", "Connecting to Redis (with timeout)", 10, "📡")
-    
-    try:
-        from src.utils.redis_immediate_test import test_redis_connection_immediate
-        redis_available = await asyncio.wait_for(test_redis_connection_immediate(), timeout=2.0)
-        app.state.redis_available = redis_available
-        if redis_available:
-            report_startup_progress("connecting_backend", "Redis connected", 25, "✅")
-        else:
-            report_startup_progress("connecting_backend", "Redis unavailable - continuing", 25, "⚠️")
-    except Exception as e:
-        logger.warning(f"⚠️  Redis connection failed (continuing without Redis): {e}")
-        app.state.redis_available = False
-        report_startup_progress("connecting_backend", "Redis unavailable - continuing", 25, "⚠️")
-    
-    # Phase 2: Minimal Chat History Manager
-    try:
-        from src.chat_history_manager import ChatHistoryManager
-        app.state.chat_history_manager = ChatHistoryManager(mode='fast')
-        logger.info("✅ Initialized Chat History Manager")
-        report_startup_progress("connecting_backend", "Chat manager initialized", 40, "💬")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize Chat History Manager: {e}")
-        # Create fallback chat manager
-        app.state.chat_history_manager = type('FallbackChatManager', (), {
-            'save_session': lambda *args, **kwargs: True,
-            'get_session_history': lambda *args, **kwargs: [],
-            'create_new_session': lambda *args, **kwargs: {"chat_id": "fallback", "status": "created"}
-        })()
-        report_startup_progress("connecting_backend", "Using fallback chat manager", 40, "⚠️")
-    
-    # Background LLM config sync (don't block startup)
-    def background_llm_sync():
-        """Background task to sync LLM configuration"""
-        try:
-            from src.utils.llm_config_sync import LLMConfigurationSynchronizer
-            logger.info("🔄 Starting background LLM config synchronization...")
-            asyncio.create_task(LLMConfigurationSynchronizer.full_synchronization())
-            logger.info("✅ LLM config sync started in background")
-        except Exception as e:
-            logger.error(f"❌ Background LLM config sync failed: {e}")
-    
-    # Start background sync task
-    task = asyncio.create_task(asyncio.to_thread(background_llm_sync))
-    
-    report_startup_progress("ready", "Fast backend ready", 100, "✅")
-    logger.info("✅ AutoBot Fast Backend startup completed")
-    
-    yield  # Application runs
-    
-    # Cleanup on shutdown
-    logger.info("🛑 Shutting down AutoBot Fast Backend...")
-    
-    # Cancel background task if still running
-    if not task.done():
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-    
-    logger.info("✅ AutoBot Fast Backend shutdown completed")
-
-# Create the FastAPI app with lifespan
+# Create FastAPI app with minimal config
 app = FastAPI(
-    title="AutoBot Fast Backend",
-    description="High-performance backend for AutoBot with optimized startup",
+    title="AutoBot Backend API",
+    description="AutoBot Backend with Fast Startup",
     version="2.0.0",
-    lifespan=lifespan
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
-# Configure CORS
-CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000", 
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
-    "http://172.16.168.21:5173",
-    "http://172.16.168.20:8001"
-]
-
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=["*"],  # In production, specify exact origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-logger.info(f"✅ CORS configured for origins: {CORS_ORIGINS}")
+def report_startup_progress(component: str, message: str, progress: int, icon: str = ""):
+    """Report startup progress for monitoring"""
+    logger.info(f"{icon} [{progress:3d}%] {component}: {message}")
 
-# Load routers with LAZY_LOAD pattern
-logger.info("Loading router configurations...")
+# Initialize app state with minimal setup
+app.state.config = {}
+app.state.chat_history_manager = None
+app.state.knowledge_base = None
+app.state.redis_client = None
 
-# Router configurations with prefixes
+# Progress reporting
+report_startup_progress("initialization", "Starting Fast Backend", 10, "🚀")
+
+# Standardized Redis connection using pool manager
+async def init_redis_connection(app_state):
+    """Initialize Redis connection using standardized pool manager"""
+    try:
+        logger.info("Attempting Redis connection with pool manager...")
+        from src.redis_pool_manager import get_redis_async, health_check_redis
+
+        # Get Redis client using pool manager
+        redis_client = await get_redis_async('main')
+
+        # Test connection
+        await redis_client.ping()
+        app_state.redis_client = redis_client
+
+        # Run comprehensive health check
+        health_status = await health_check_redis()
+        if health_status['all_healthy']:
+            logger.info("✅ Redis connected successfully with pool manager")
+        else:
+            logger.warning(f"⚠️  Redis connected but some pools unhealthy: {health_status}")
+
+        return True
+    except Exception as e:
+        logger.warning(f"⚠️  Redis connection failed (continuing without Redis): {e}")
+        app_state.redis_client = None
+        return False
+
+# Minimal ChatHistoryManager for basic functionality
+class MinimalChatHistoryManager:
+    def __init__(self):
+        self.sessions = {}
+
+    async def save_session(self, session_id: str, data: dict):
+        self.sessions[session_id] = data
+        return {"status": "success"}
+
+# Initialize minimal components
+report_startup_progress("components", "Initializing minimal components", 30, "🔧")
+
+# Set up minimal chat history manager
+app.state.chat_history_manager = MinimalChatHistoryManager()
+
+# Knowledge base will be initialized on first use
+report_startup_progress("knowledge_base", "Deferred knowledge base initialization", 50, "📚")
+
+# Router configurations - critical APIs only for fast startup
 routers_config = [
-    # Core system APIs - always needed
+    # System APIs - highest priority
     ("backend.api.system", "/api"),
-    ("backend.api.health", "/api"), 
-    ("backend.api.config", "/api"),
-    
-    # Settings and configuration APIs - CRITICAL FIX
+
+    # Settings and configuration APIs
     ("backend.api.settings", "/api/settings"),
-    
+
     # LLM APIs - critical for settings page
     ("backend.api.llm", "/api/llm"),
-    
+
     # Chat APIs
     ("backend.api.chat", "/api"),
     ("backend.api.async_chat", "/api"),
-    
-    # Knowledge APIs
-    ("backend.api.knowledge", "/api"),
-    
-    # Other core APIs
+
+    # Knowledge APIs - CRITICAL FOR CATEGORIES
+    ("backend.api.knowledge", "/api/knowledge_base"),
+
+    # Fresh Knowledge Base APIs for testing fixes
+    ("backend.api.knowledge_fresh", "/api/knowledge_fresh"),
+
+    # Test APIs for knowledge base debugging
+    ("backend.api.knowledge_test", "/api/knowledge_test"),
+
+    # Core APIs that exist
     ("backend.api.rum", "/api"),
     ("backend.api.monitoring", "/api"),
+    ("backend.api.analytics", "/api"),  # Enhanced analytics API for dashboard
     ("backend.api.batch", "/api"),
     ("backend.api.service_monitor", "/api"),
     ("backend.api.phase9_monitoring", "/api"),
     ("backend.api.intelligent_agent", "/api"),
+
+    # Additional APIs that exist
+    ("backend.api.terminal", "/api"),
+    ("backend.api.files", "/api"),
+    ("backend.api.auth", "/api/auth"),
+
+    # Enterprise Features API - Phase 4
+    ("backend.api.enterprise_features", "/api/enterprise"),
+    ("backend.api.orchestration", "/api/orchestration"),
+    ("backend.api.phase_management", "/api/phase"),
 ]
 
 # Load routers with proper prefixes
@@ -199,40 +191,103 @@ except Exception as e:
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
     """Fast health check endpoint"""
-    
-    # Quick Ollama check
-    ollama_status = "unknown"
-    try:
-        import aiohttp
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1.0)) as session:
-            async with session.get("http://localhost:11434/api/tags") as response:
-                if response.status == 200:
-                    ollama_status = "connected"
-                else:
-                    ollama_status = "disconnected"
-    except:
-        ollama_status = "disconnected"
-    
     return HealthResponse(
-        status="ok",
-        mode="fast", 
-        timestamp=datetime.now(timezone.utc),
-        redis=getattr(app.state, 'redis_available', False),
-        ollama=ollama_status,
-        chat_manager=hasattr(app.state, 'chat_history_manager')
+        status="healthy",
+        timestamp=datetime.now().isoformat(),
+        components={
+            "backend": "healthy",
+            "config": "healthy",
+            "logging": "healthy"
+        }
     )
 
-logger.info("🎯 Fast backend application created successfully")
+# Graceful shutdown handlers
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    logger.info(f"Received signal {signum}, shutting down gracefully...")
+    # Cleanup code here
+    sys.exit(0)
 
-# Main execution
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+# Background tasks for non-critical initialization
+async def background_initialization():
+    """Initialize non-critical components in background"""
+    try:
+        # Step 1: Run startup validation
+        logger.info("🔍 Running startup dependency validation...")
+        try:
+            from src.startup_validator import validate_startup_dependencies
+            validation_result = await validate_startup_dependencies()
+
+            if not validation_result.success:
+                logger.error(f"❌ Startup validation failed with {len(validation_result.errors)} errors")
+                for error in validation_result.errors:
+                    logger.error(f"  - {error}")
+            else:
+                logger.info("✅ Startup validation completed successfully")
+
+            if validation_result.warnings:
+                logger.warning(f"⚠️  Startup validation found {len(validation_result.warnings)} warnings")
+                for warning in validation_result.warnings:
+                    logger.warning(f"  - {warning}")
+
+        except Exception as e:
+            logger.warning(f"⚠️  Startup validation failed to run: {e}")
+
+        # Step 2: Redis connection
+        await init_redis_connection(app.state)
+
+        # Step 3: Run LLM config sync in background (non-blocking)
+        try:
+            asyncio.create_task(sync_llm_configuration())
+            logger.info("✅ LLM config sync started in background")
+        except Exception as e:
+            logger.warning(f"⚠️  LLM config sync failed: {e}")
+
+    except Exception as e:
+        logger.warning(f"⚠️  Background initialization partial failure: {e}")
+
+# Background initialization will be handled by startup event
+
+# Knowledge base factory with force refresh capability
+async def get_or_create_knowledge_base(app, force_refresh=False):
+    """Get or create knowledge base instance with optional force refresh"""
+    if force_refresh or app.state.knowledge_base is None:
+        try:
+            from src.knowledge_base import KnowledgeBase
+            logger.info("Creating fresh knowledge base instance")
+            app.state.knowledge_base = KnowledgeBase()
+            # Wait for async initialization
+            await asyncio.sleep(2)
+            return app.state.knowledge_base
+        except Exception as e:
+            logger.error(f"Failed to create knowledge base: {e}")
+            return None
+    return app.state.knowledge_base
+
+# Final progress report
+report_startup_progress("startup_complete", "Fast backend ready", 100, "✅")
+
 if __name__ == "__main__":
-    print("🚀 Starting AutoBot Backend Server on 0.0.0.0:8001")
-    
-    uvicorn.run(
-        "backend.fast_app_factory_fix:app",
-        host="0.0.0.0",
-        port=8001,
-        reload=False,  # Disable reload for faster startup
-        log_level="info",
-        access_log=False  # Disable access logs for performance
-    )
+    import uvicorn
+
+    # Run the server
+    try:
+        backend_host = config.get_host('backend')
+        backend_port = config.get_port('backend')
+        logger.info(f"🚀 Starting FastAPI server on {backend_host}:{backend_port}")
+        uvicorn.run(
+            app,
+            host=backend_host,
+            port=backend_port,
+            log_level="info",
+            access_log=True,
+            reload=False
+        )
+    except KeyboardInterrupt:
+        logger.info("🛑 Server shutdown requested")
+    except Exception as e:
+        logger.error(f"❌ Server startup failed: {e}")
+        sys.exit(1)

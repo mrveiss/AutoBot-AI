@@ -207,11 +207,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'monitoring-default',
-        component: () => import('@/components/SystemMonitor.vue'),
-        meta: {
-          title: 'System Monitor',
-          parent: 'monitoring'
-        }
+        redirect: '/monitoring/system'
       },
       {
         path: 'system',
@@ -309,33 +305,57 @@ const router = createRouter({
   }
 })
 
-// Global navigation guards
-router.beforeEach((to, from, next) => {
-  const appStore = useAppStore()
-  
-  console.log('[Router DEBUG] Navigating to:', to.path)
-  console.log('[Router DEBUG] Route matched:', to.matched.length > 0)
-  console.log('[Router DEBUG] AppStore.updateRoute type:', typeof appStore?.updateRoute)
+// Error handling for routing failures
+router.onError((error) => {
+  console.error('Router error:', error)
 
-  // Update document title
-  if (to.meta.title) {
-    document.title = `${to.meta.title} - AutoBot Pro`
-  }
-
-  // Update active tab in store
-  if (to.name && typeof to.name === 'string') {
-    const tabName = to.name.split('-')[0] // Extract main section (e.g., 'chat' from 'chat-session')
-    if (['chat', 'desktop', 'knowledge', 'tools', 'monitoring', 'secrets', 'settings'].includes(tabName)) {
-      appStore.updateRoute(tabName as any)
+  // Handle chunk loading failures
+  if (error.message.includes('Loading chunk') || error.message.includes('Loading CSS chunk')) {
+    console.warn('Chunk loading failed, attempting page reload...')
+    // Force reload to get fresh chunks - but only once to prevent infinite loops
+    if (!sessionStorage.getItem('chunk-reload-attempted')) {
+      sessionStorage.setItem('chunk-reload-attempted', 'true')
+      window.location.reload()
+    } else {
+      // If reload already attempted, navigate to safe route
+      sessionStorage.removeItem('chunk-reload-attempted')
+      router.push('/chat').catch(() => {
+        console.error('Failed to navigate to fallback route')
+      })
     }
   }
+})
 
-  // Handle authentication (if needed in future)
-  if (to.meta.requiresAuth) {
-    // Check authentication status
-    // For now, just proceed
+// Global navigation guards
+router.beforeEach((to, from, next) => {
+  try {
+    const appStore = useAppStore()
+
+    console.log('[Router DEBUG] Navigating to:', to.path)
+    console.log('[Router DEBUG] Route matched:', to.matched.length > 0)
+
+    // Update document title
+    if (to.meta.title) {
+      document.title = `${to.meta.title} - AutoBot Pro`
+    }
+
+    // Update active tab in store (with null safety)
+    if (to.name && typeof to.name === 'string' && appStore && typeof appStore.updateRoute === 'function') {
+      const tabName = to.name.split('-')[0] // Extract main section
+      const validTabs = ['chat', 'knowledge', 'tools', 'monitoring', 'secrets', 'settings'] as const
+      type ValidTab = typeof validTabs[number]
+
+      if ((validTabs as readonly string[]).includes(tabName)) {
+        appStore.updateRoute(tabName as ValidTab)
+      }
+    }
+
+    // Always call next() to ensure navigation continues
     next()
-  } else {
+
+  } catch (error) {
+    console.error('Navigation guard error:', error)
+    // Even on error, continue navigation to prevent blocking
     next()
   }
 })

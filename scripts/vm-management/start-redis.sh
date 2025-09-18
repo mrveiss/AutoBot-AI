@@ -69,8 +69,8 @@ dir /var/lib/redis-stack
 logfile /var/log/redis-stack/redis-stack.log
 loglevel notice
 
-# RedisInsight
-loadmodule /opt/redis-stack/lib/redisinsight.so
+# RedisInsight on port 8002 (avoiding conflict with backend port 8001)
+loadmodule /opt/redis-stack/lib/redisinsight.so port=8002
 REDIS_CONFIG
         
         echo "Creating Redis data directory..."
@@ -107,7 +107,7 @@ EOF
         success "Redis service started on $REDIS_IP:6379"
         echo ""
         echo -e "${CYAN}Redis URL: redis://$REDIS_IP:6379${NC}"
-        echo -e "${CYAN}RedisInsight: http://$REDIS_IP:8001${NC}"
+        echo -e "${CYAN}RedisInsight: http://$REDIS_IP:8002${NC}"
         echo -e "${BLUE}Test connection: redis-cli -h $REDIS_IP ping${NC}"
         echo -e "${BLUE}Check logs: ssh $SSH_USER@$REDIS_IP 'sudo journalctl -u redis-stack-server -f'${NC}"
     else

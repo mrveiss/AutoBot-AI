@@ -596,7 +596,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         """Get summary of integrated man pages for current machine"""
         machine_dir = self._get_machine_knowledge_dir()
         summary_file = machine_dir / "man_page_integration_summary.json"
-        
+
         if not summary_file.exists():
             return {"status": "not_integrated", "message": "Man pages not yet integrated"}
             
