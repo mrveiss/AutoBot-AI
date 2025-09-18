@@ -1,0 +1,35 @@
+metadata:
+  category: system_commands
+  description: Manual page information for htop
+  integration_type: machine_aware_man_pages
+  last_updated: '2025-09-14T22:02:37'
+  machine_id: linux_7618b026bd4e
+  os_type: linux
+  package_manager: apt
+  source: man_pages
+  version: 1.0.0
+tools:
+- common_examples: []
+  installation:
+    system: Pre-installed on most Linux systems
+  last_updated: '2025-09-14T22:02:37'
+  man_page_section: 1
+  name: htop
+  options: []
+  purpose: htop - interactive process viewer
+  related_tools:
+  - uptime
+  - proc
+  - PMAPI
+  - free
+  - top
+  - PCPIntro
+  - ps
+  - conf
+  - pmdaopenmetrics
+  - HTOP
+  - htop
+  source: man htop(1)
+  type: command_line_tool
+  usage:
+    basic: "htop [-dCFhpustvH]\n       pcp-htop [-dCFhpustvH] [--host/-h host]"

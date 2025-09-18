@@ -1,0 +1,17 @@
+{
+  "command": "nslookup",
+  "section": 1,
+  "title": "nslookup",
+  "description": "query Internet name servers interactively",
+  "synopsis": "nslookup [-option] [name | -] [server]",
+  "options": [],
+  "examples": [],
+  "see_also": [
+    "NSLOOKUP",
+    "named",
+    "dig",
+    "host"
+  ],
+  "last_updated": "2025-09-14T22:02:06",
+  "machine_id": "linux_7618b026bd4e"
+}

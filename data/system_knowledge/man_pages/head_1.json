@@ -1,0 +1,15 @@
+{
+  "command": "head",
+  "section": 1,
+  "title": "head",
+  "description": "output the first part of files",
+  "synopsis": "head [OPTION]... [FILE]...",
+  "options": [],
+  "examples": [],
+  "see_also": [
+    "tail",
+    "HEAD"
+  ],
+  "last_updated": "2025-09-14T22:02:19",
+  "machine_id": "linux_7618b026bd4e"
+}

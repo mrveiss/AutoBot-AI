@@ -1,0 +1,14 @@
+{
+  "command": "id",
+  "section": 1,
+  "title": "id",
+  "description": "print real and effective user and group IDs",
+  "synopsis": "id [OPTION]... [USER]...",
+  "options": [],
+  "examples": [],
+  "see_also": [
+    "ID"
+  ],
+  "last_updated": "2025-09-14T22:02:45",
+  "machine_id": "linux_7618b026bd4e"
+}

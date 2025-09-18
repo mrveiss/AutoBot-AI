@@ -1,0 +1,16 @@
+{
+  "command": "sort",
+  "section": 1,
+  "title": "sort",
+  "description": "sort lines of text files",
+  "synopsis": "sort [OPTION]... [FILE]...\n       sort [OPTION]... --files0-from=F",
+  "options": [],
+  "examples": [],
+  "see_also": [
+    "uniq",
+    "SORT",
+    "shuf"
+  ],
+  "last_updated": "2025-09-14T22:02:25",
+  "machine_id": "linux_7618b026bd4e"
+}

@@ -1,0 +1,24 @@
+{
+  "command": "htop",
+  "section": 1,
+  "title": "htop, pcp",
+  "description": "htop - interactive process viewer",
+  "synopsis": "htop [-dCFhpustvH]\n       pcp-htop [-dCFhpustvH] [--host/-h host]",
+  "options": [],
+  "examples": [],
+  "see_also": [
+    "uptime",
+    "proc",
+    "PMAPI",
+    "free",
+    "top",
+    "PCPIntro",
+    "ps",
+    "conf",
+    "pmdaopenmetrics",
+    "HTOP",
+    "htop"
+  ],
+  "last_updated": "2025-09-14T22:02:37",
+  "machine_id": "linux_7618b026bd4e"
+}

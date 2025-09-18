@@ -1,0 +1,14 @@
+{
+  "command": "wc",
+  "section": 1,
+  "title": "wc",
+  "description": "print newline, word, and byte counts for each file",
+  "synopsis": "wc [OPTION]... [FILE]...\n       wc [OPTION]... --files0-from=F",
+  "options": [],
+  "examples": [],
+  "see_also": [
+    "WC"
+  ],
+  "last_updated": "2025-09-14T22:02:24",
+  "machine_id": "linux_7618b026bd4e"
+}

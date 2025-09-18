@@ -1,0 +1,28 @@
+metadata:
+  category: system_commands
+  description: Manual page information for python3
+  integration_type: machine_aware_man_pages
+  last_updated: '2025-09-14T22:02:59'
+  machine_id: linux_7618b026bd4e
+  os_type: linux
+  package_manager: apt
+  source: man_pages
+  version: 1.0.0
+tools:
+- common_examples: []
+  installation:
+    system: Pre-installed on most Linux systems
+  last_updated: '2025-09-14T22:02:59'
+  man_page_section: 1
+  name: python3
+  options: []
+  purpose: an interpreted, interactive, object-oriented programming language
+  related_tools: []
+  source: man python3(1)
+  type: command_line_tool
+  usage:
+    basic: "python [ -B ] [ -b ] [ -d ] [ -E ] [ -h ] [ -i ] [ -I ]\n            \
+      \  [ -m module-name ] [ -q ] [ -O ] [ -OO ] [ -s ] [ -S ] [ -u ]\n         \
+      \     [ -v ] [ -V ] [ -W argument ] [ -x ] [ -X option ] [ -?  ]\n         \
+      \     [ --check-hash-based-pycs default | always | never ]\n              [\
+      \ -c command | script | - ] [ arguments ]"

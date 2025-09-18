@@ -1,0 +1,163 @@
+# Redis Database Separation Configuration for AutoBot
+# This configuration maps different application components to isolated Redis databases
+# to prevent data conflicts and improve performance monitoring
+
+databases:
+  # Core application data
+  main: 0                    # Main application state, primary data storage
+
+  # Knowledge management system
+  knowledge: 1               # Knowledge base documents, search indexes, embeddings
+
+  # Prompt and template management
+  prompts: 2                 # Prompt templates, prompt history, template caching
+
+  # Agent communication and coordination
+  agents: 3                  # Inter-agent messaging, agent states, coordination data
+
+  # Performance and system metrics
+  metrics: 4                 # System performance data, usage statistics, monitoring
+
+  # General purpose caching
+  cache: 5                   # LLM response caching, API response caching, temporary data
+
+  # User session management
+  sessions: 6                # User sessions, authentication tokens, session state
+
+  # Task and workflow management
+  tasks: 7                   # Task queues, workflow states, job scheduling
+
+  # Centralized logging data
+  logs: 8                    # Log aggregation, log indexing, log analytics
+
+  # Temporary data storage
+  temp: 9                    # Temporary files, intermediate processing data
+
+  # Backup and recovery data
+  backup: 10                 # Backup metadata, recovery points, data snapshots
+
+# Connection settings for each database type
+connection_settings:
+  host: localhost
+  port: 6379
+  password: ${AUTOBOT_REDIS_PASSWORD}      # Secure generated password
+  timeout: 30
+  retry_on_timeout: true
+  max_retries: 3
+  retry_delay: 1
+
+  # Connection pool settings
+  max_connections: 100
+
+  # Memory optimization
+  decode_responses: true
+
+# Database-specific configurations
+database_configs:
+  # Main database - high availability
+  main:
+    max_memory_policy: "allkeys-lru"
+    maxmemory: "256mb"
+
+  # Knowledge base - optimized for search
+  knowledge:
+    max_memory_policy: "volatile-lru"
+    maxmemory: "512mb"
+
+  # Prompts - persistent storage
+  prompts:
+    max_memory_policy: "noeviction"
+    maxmemory: "128mb"
+
+  # Agents - fast communication
+  agents:
+    max_memory_policy: "allkeys-lfu"
+    maxmemory: "256mb"
+
+  # Metrics - time-based eviction
+  metrics:
+    max_memory_policy: "volatile-ttl"
+    maxmemory: "256mb"
+
+  # Cache - aggressive eviction
+  cache:
+    max_memory_policy: "allkeys-lru"
+    maxmemory: "512mb"
+
+  # Sessions - secure storage
+  sessions:
+    max_memory_policy: "volatile-lru"
+    maxmemory: "128mb"
+
+  # Tasks - workflow optimization
+  tasks:
+    max_memory_policy: "allkeys-lfu"
+    maxmemory: "256mb"
+
+  # Logs - time-based retention
+  logs:
+    max_memory_policy: "volatile-ttl"
+    maxmemory: "384mb"
+
+  # Temp - aggressive cleanup
+  temp:
+    max_memory_policy: "allkeys-lru"
+    maxmemory: "128mb"
+
+  # Backup - persistent storage
+  backup:
+    max_memory_policy: "noeviction"
+    maxmemory: "256mb"
+
+# Security settings
+security:
+  enable_auth: false          # Set to true in production
+  require_pass: false         # Set to true in production with password
+
+# Monitoring and alerting for Seq integration
+monitoring:
+  enable_keyspace_notifications: true
+  keyspace_events: "Ex"       # Expired and evicted events
+  slow_log_enabled: true
+  slow_log_max_len: 128
+  slow_log_slower_than: 10000  # 10ms threshold
+
+  # Seq logging integration
+  seq_endpoint: "http://localhost:5341"
+  seq_api_key: "${AUTOBOT_SEQ_ADMIN_PASSWORD}"  # Secure generated password
+  enable_seq_forwarding: true
+
+# Backup settings
+backup:
+  enable_snapshots: true
+  snapshot_frequency: 3600     # Every hour
+  max_snapshots: 24           # Keep 24 hours
+  snapshot_compression: true
+
+# Centralized logging configuration for Seq
+logging:
+  # All Redis operations will be forwarded to Seq
+  forward_to_seq: true
+  seq_batch_size: 100
+  seq_flush_interval: 30       # seconds
+
+  # Log levels to forward
+  levels:
+    - ERROR
+    - WARN
+    - INFO
+    - DEBUG
+
+  # Component-specific logging
+  components:
+    main: INFO
+    knowledge: INFO
+    prompts: INFO
+    agents: DEBUG           # More verbose for agent debugging
+    metrics: WARN
+    cache: WARN
+    sessions: INFO
+    tasks: INFO
+    logs: ERROR             # Only log errors to avoid recursion
+    temp: WARN
+    backup: INFO

@@ -1,0 +1,236 @@
+{
+  "command": "nano",
+  "section": 1,
+  "title": "nano",
+  "description": "Nano's ANOther text editor, inspired by Pico",
+  "synopsis": "nano [options] [[+line[,column]] file]...\n\n       nano [options] [[+[crCR]{/|?}string] file]...\n\nNOTICE\n       Since version 8.0, to be newcomer friendly, ^F starts a forward search, ^B starts a backward search, M-F searches the next occurrence forward, and M-B searches the next occurrence backward.\n       If you want those keystrokes to do what they did before version 8.0, add the following lines at the end of your nanorc file:\n\n           bind ^F forward main\n           bind ^B back main\n           bind M-F formatter main\n           bind M-B linter main",
+  "options": [
+    {
+      "flag": "-A, --smarthome",
+      "description": "Make the Home key smarter. When Home is pressed anywhere but at the very beginning of non-whitespace characters on a line, the cursor jumps to that beginning (either forwards or backwards). If the cursor is already at that position, it jumps to the true beginning of the line."
+    },
+    {
+      "flag": "-B, --backup",
+      "description": "When saving a file, back up the previous version of it, using the current filename suffixed with a tilde (~)."
+    },
+    {
+      "flag": "-C",
+      "description": "directory, --backupdir=directory Make and keep not just one backup file, but make and keep a uniquely numbered one every time a file is saved \u2014 when backups are enabled (-B). The uniquely numbered files are stored in the specified directory."
+    },
+    {
+      "flag": "-D, --boldtext",
+      "description": "For the interface, use bold instead of reverse video. This can be overridden for specific elements by setting the options titlecolor, statuscolor, promptcolor, minicolor, keycolor, numbercolor, and/or selectedcolor in your nanorc file. See nanorc(5)."
+    },
+    {
+      "flag": "-E, --tabstospaces",
+      "description": "Convert each typed tab to spaces \u2014 to the number of spaces that a tab at that position would take up. (Note: pasted tabs are not converted.)"
+    },
+    {
+      "flag": "-F, --multibuffer",
+      "description": "Read a file into a new buffer by default."
+    },
+    {
+      "flag": "-G, --locking",
+      "description": "Use vim-style file locking when editing files."
+    },
+    {
+      "flag": "-H, --historylog",
+      "description": "Save the last hundred search strings and replacement strings and executed commands, so they can be easily reused in later sessions."
+    },
+    {
+      "flag": "-I, --ignorercfiles",
+      "description": "Don't look at the system's nanorc nor at the user's nanorc."
+    },
+    {
+      "flag": "-J",
+      "description": "number, --guidestripe=number Draw a vertical stripe at the given column, to help judge the width of the text. (The color of the stripe can be changed with set stripecolor in your nanorc file.)"
+    },
+    {
+      "flag": "-K, --rawsequences",
+      "description": "Interpret escape sequences directly, instead of asking ncurses to translate them. (If you need this option to get some keys to work properly, it means that the terminfo terminal de\u2010 scription that is used does not fully match the actual behavior of your terminal. This can happen when you ssh into a BSD machine, for example.) Using this option disables nano's mouse support."
+    },
+    {
+      "flag": "-L, --nonewlines",
+      "description": "Don't automatically add a newline when a text does not end with one. (This can cause you to save non-POSIX text files.)"
+    },
+    {
+      "flag": "-M, --trimblanks",
+      "description": "Snip trailing whitespace from the wrapped line when automatic hard-wrapping occurs or when text is justified."
+    },
+    {
+      "flag": "-N, --noconvert",
+      "description": "Disable automatic conversion of files from DOS/Mac format."
+    },
+    {
+      "flag": "-O, --bookstyle",
+      "description": "When justifying, treat any line that starts with whitespace as the beginning of a paragraph (unless auto-indenting is on)."
+    },
+    {
+      "flag": "-P, --positionlog",
+      "description": "For the 200 most recent files, log the last position of the cursor, and place it at that position again upon reopening such a file."
+    },
+    {
+      "flag": "-Q",
+      "description": "\"regex\", --quotestr=\"regex\" Set the regular expression for matching the quoting part of a line. The default value is \"^([ \\t]*([!#%:;>|}]|//))+\". (Note that \\t stands for an actual Tab.) This makes it possi\u2010 ble to rejustify blocks of quoted text when composing email, and to rewrap blocks of line comments when writing source code."
+    },
+    {
+      "flag": "-R, --restricted",
+      "description": "Restricted mode: don't read or write to any file not specified on the command line. This means: don't read or write history files; don't allow suspending; don't allow spell check\u2010 ing; don't allow a file to be appended to, prepended to, or saved under a different name if it already has one; and don't make backup files. Restricted mode can also be activated by invoking nano with any name beginning with 'r' (e.g. \"rnano\")."
+    },
+    {
+      "flag": "-S, --softwrap",
+      "description": "Display over multiple screen rows lines that exceed the screen's width. (You can make this soft-wrapping occur at whitespace instead of rudely at the screen's edge, by using also"
+    },
+    {
+      "flag": "-T",
+      "description": "number, --tabsize=number Set the size (width) of a tab to number columns. The value of number must be greater than 0. The default value is 8."
+    },
+    {
+      "flag": "-U, --quickblank",
+      "description": "Make status-bar messages disappear after 1 keystroke instead of after 20. Note that option -c (--constantshow) overrides this. When option --minibar or --zero is in effect,"
+    },
+    {
+      "flag": "--quickblank",
+      "description": "makes a message disappear after 0.8 seconds instead of after the default 1.5 seconds."
+    },
+    {
+      "flag": "-V, --version",
+      "description": "Show the current version number and exit."
+    },
+    {
+      "flag": "-W, --wordbounds",
+      "description": "Detect word boundaries differently by treating punctuation characters as part of a word."
+    },
+    {
+      "flag": "-X",
+      "description": "\"characters\", --wordchars=\"characters\" Specify which other characters (besides the normal alphanumeric ones) should be considered as part of a word. When using this option, you probably want to omit -W (--wordbounds)."
+    },
+    {
+      "flag": "-Y",
+      "description": "name, --syntax=name Specify the name of the syntax highlighting to use from among the ones defined in the nanorc files."
+    },
+    {
+      "flag": "-Z, --zap",
+      "description": "Let an unmodified Backspace or Delete erase the marked region (instead of a single character, and without affecting the cutbuffer)."
+    },
+    {
+      "flag": "-a, --atblanks",
+      "description": "When doing soft line wrapping, wrap lines at whitespace instead of always at the edge of the screen."
+    },
+    {
+      "flag": "-b, --breaklonglines",
+      "description": "Automatically hard-wrap the current line when it becomes overlong. (This option is the opposite of -w (--nowrap) -- the last one given takes effect.)"
+    },
+    {
+      "flag": "-c, --constantshow",
+      "description": "Constantly report the cursor position on the status bar. Note that this overrides option -U (--quickblank)."
+    },
+    {
+      "flag": "-d, --rebinddelete",
+      "description": "Interpret the Delete and Backspace keys differently so that both Backspace and Delete work properly. You should only use this option when on your system either Backspace acts like Delete or Delete acts like Backspace."
+    },
+    {
+      "flag": "-e, --emptyline",
+      "description": "Do not use the line below the title bar, leaving it entirely blank."
+    },
+    {
+      "flag": "-f",
+      "description": "file, --rcfile=file Read only this file for setting nano's options, instead of reading both the system-wide and the user's nanorc files."
+    },
+    {
+      "flag": "-g, --showcursor",
+      "description": "Make the cursor visible in the file browser (putting it on the highlighted item) and in the help viewer. Useful for braille users and people with poor vision."
+    },
+    {
+      "flag": "-h, --help",
+      "description": "Show a summary of the available command-line options and exit."
+    },
+    {
+      "flag": "-i, --autoindent",
+      "description": "Automatically indent a newly created line to the same number of tabs and/or spaces as the previous line (or as the next line if the previous line is the beginning of a paragraph)."
+    },
+    {
+      "flag": "-j, --jumpyscrolling",
+      "description": "Scroll the buffer contents per half-screen instead of per line."
+    },
+    {
+      "flag": "-k, --cutfromcursor",
+      "description": "Make the 'Cut Text' command (normally ^K) cut from the current cursor position to the end of the line, instead of cutting the entire line."
+    },
+    {
+      "flag": "-l, --linenumbers",
+      "description": "Display line numbers to the left of the text area. (Any line with an anchor additionally gets a mark in the margin.)"
+    },
+    {
+      "flag": "-m, --mouse",
+      "description": "Enable mouse support, if available for your system. When enabled, mouse clicks can be used to place the cursor, set the mark (with a double click), and execute shortcuts. The mouse works in the X Window System, and on the console when gpm is running. Text can still be selected through dragging by holding down the Shift key."
+    },
+    {
+      "flag": "-n, --noread",
+      "description": "Treat any name given on the command line as a new file. This allows nano to write to named pipes: it starts with a blank buffer, and writes to the pipe when the user saves the \"file\". This way nano can be used as an editor in combination with for instance gpg without having to write sensitive data to disk first."
+    },
+    {
+      "flag": "-o",
+      "description": "directory, --operatingdir=directory Set the operating directory. This makes nano set up something similar to a chroot."
+    },
+    {
+      "flag": "-p, --preserve",
+      "description": "Preserve the XOFF and XON sequences (^S and ^Q) so that they are caught by the terminal (stopping and resuming the output). Note that option -/ (--modernbindings) overrides this."
+    },
+    {
+      "flag": "-q, --indicator",
+      "description": "Display a \"scrollbar\" on the righthand side of the edit window. It shows the position of the viewport in the buffer and how much of the buffer is covered by the viewport."
+    },
+    {
+      "flag": "-r",
+      "description": "number, --fill=number Set the target width for justifying and automatic hard-wrapping at this number of columns. If the value is 0 or less, wrapping occurs at the width of the screen minus number columns, allowing the wrap point to vary along with the width of the screen if the screen is resized. The default value is -8."
+    },
+    {
+      "flag": "-s",
+      "description": "\"program [argument ...]\", --speller=\"program [argument ...]\" Use this command to perform spell checking and correcting, instead of using the built-in corrector that calls hunspell(1) or spell(1)."
+    },
+    {
+      "flag": "-t, --saveonexit",
+      "description": "Save a changed buffer without prompting (when exiting with ^X)."
+    },
+    {
+      "flag": "-u, --unix",
+      "description": "Save a file by default in Unix format. This overrides nano's default behavior of saving a file in the format that it had. (This option has no effect when you also use --noconvert.)"
+    },
+    {
+      "flag": "-v, --view",
+      "description": "Just view the file and disallow editing: read-only mode. This mode allows the user to open also other files for viewing, unless --restricted is given too."
+    },
+    {
+      "flag": "-w, --nowrap",
+      "description": "Do not automatically hard-wrap the current line when it becomes overlong. This is the default. (This option is the opposite of -b (--breaklonglines) \u2014 the last one given takes ef\u2010 fect.)"
+    },
+    {
+      "flag": "-x, --nohelp",
+      "description": "Don't show the two help lines at the bottom of the screen."
+    },
+    {
+      "flag": "-y, --afterends",
+      "description": "Make Ctrl+Right and Ctrl+Delete stop at word ends instead of beginnings."
+    },
+    {
+      "flag": "-z, --listsyntaxes",
+      "description": "List the names of the available syntaxes and exit."
+    },
+    {
+      "flag": "-_, --minibar",
+      "description": "Suppress the title bar and instead show information about the current buffer at the bottom of the screen, in the space for the status bar. In this \"mini bar\" the filename is shown on the left, followed by an asterisk if the buffer has been modified. On the right are displayed the current line and column number, the code of the character under the cursor (in Unicode format: U+xxxx), the same flags as are shown by --stateflags, and a percentage that expresses how far the cursor is into the file (linewise). When a file is loaded or saved, and also when switching between buffers, the number of lines in the buffer is displayed after the filename. This number is cleared upon the next keystroke, or replaced with an [i/n] counter when multiple buffers are open. The line plus column numbers and the character code are displayed only when --constantshow is used, and can be toggled on and off with M-C. The state flags are displayed only when --stateflags is used."
+    },
+    {
+      "flag": "-0, --zero",
+      "description": "Hide all elements of the interface (title bar, status bar, and help lines) and use all rows of the terminal for showing the contents of the buffer. The status bar appears only when there is a significant message, and disappears after 1.5 seconds or upon the next keystroke. With M-Z the title bar plus status bar can be toggled. With M-X the help lines."
+    }
+  ],
+  "examples": [],
+  "see_also": [
+    "NANO",
+    "nanorc"
+  ],
+  "last_updated": "2025-09-14T22:03:08",
+  "machine_id": "linux_7618b026bd4e"
+}
