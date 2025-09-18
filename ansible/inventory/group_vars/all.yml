@@ -53,9 +53,25 @@ network:
 # ==========================================
 
 system:
-  timezone: "UTC"
+  timezone: "Europe/Riga"  # Match main machine timezone (EEST, +0300)
   locale: "en_US.UTF-8"
-  
+
+  # Time synchronization configuration
+  time_sync:
+    enabled: true
+    timezone: "Europe/Riga"  # Main machine timezone
+    ntp_servers:
+      - "0.lv.pool.ntp.org"
+      - "1.lv.pool.ntp.org"
+      - "2.lv.pool.ntp.org"
+      - "3.lv.pool.ntp.org"
+    fallback_servers:
+      - "time.google.com"
+      - "time.cloudflare.com"
+      - "pool.ntp.org"
+    monitoring_enabled: true
+    force_sync_on_deploy: true
+
   # Package management
   package_update: true
   package_upgrade: true
