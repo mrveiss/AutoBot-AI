@@ -283,7 +283,7 @@ class ConsolidatedChatWorkflow:
     async def process_message(self, 
                             user_message: str, 
                             chat_id: Optional[str] = None,
-                            enable_research: bool = True  # Enterprise: Research enabled by default,
+                            enable_research: bool = True,  # Enterprise: Research enabled by default
                             enable_kb_search: bool = True, **kwargs) -> ConsolidatedWorkflowResult:
         """
         Main message processing method combining ALL features from all previous implementations
