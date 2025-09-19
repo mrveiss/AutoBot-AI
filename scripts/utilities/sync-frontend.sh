@@ -36,7 +36,7 @@ if [ ! -f "$SSH_KEY" ]; then
 fi
 
 # Test SSH connection
-if ! ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$REMOTE_USER@$REMOTE_HOST" "echo 'Connection test successful'" > /dev/null 2>&1; then
+if ! ssh -T -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$REMOTE_USER@$REMOTE_HOST" "echo 'Connection test successful'" > /dev/null 2>&1; then
     log_error "Cannot connect to $REMOTE_HOST using SSH key"
     exit 1
 fi
@@ -79,7 +79,7 @@ log_info "Sync completed successfully! ✓"
 # Optional: Restart Vite dev server if needed
 if [ "$2" == "--restart" ]; then
     log_info "Restarting Vite dev server..."
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
-        "pkill -f 'vite.*--host.*5173' || true; sleep 2; cd /home/autobot/autobot-vue && VITE_BACKEND_HOST=172.16.168.20 VITE_BACKEND_PORT=8001 npm run dev -- --host 0.0.0.0 --port 5173 > /dev/null 2>&1 &"
+    ssh -T -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
+        "pkill -f 'vite.*--host.*5173' || true; sleep 2; cd /home/autobot/autobot-vue && VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20} VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001} npm run dev -- --host 0.0.0.0 --port 5173 > /dev/null 2>&1 &"
     log_info "Vite dev server restarted ✓"
 fi
