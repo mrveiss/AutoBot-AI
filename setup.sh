@@ -435,8 +435,7 @@ EOF
         sudo apt-get update -qq
         sudo apt-get install -y python3 python3-pip python3-venv git curl \
                                 build-essential \
-                                wget gpg \
-                                docker.io docker-compose
+                                wget gpg
 
         # Create working directories
         mkdir -p /home/autobot/{backend,venv,logs,models}
@@ -461,13 +460,10 @@ EOF
         # Install Ollama for local LLM serving
         curl -fsSL https://ollama.ai/install.sh | sh
 
-        # Add autobot user to docker group
-        sudo usermod -aG docker autobot
 
         echo "AI Stack VM prepared - code will be synced from main machine"
         echo "- Ollama LLM server installed"
         echo "- AI/ML Python environment ready"
-        echo "- Docker available for containerized AI services"
 EOF
     
     # Browser VM (172.16.168.25)
