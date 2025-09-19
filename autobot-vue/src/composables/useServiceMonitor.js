@@ -2,7 +2,7 @@
  * Service Monitoring Composable
  * Provides real-time service status monitoring
  */
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, getCurrentInstance } from 'vue'
 import { apiService } from '@/services/api.js'
 
 export function useServiceMonitor() {
@@ -97,7 +97,7 @@ export function useServiceMonitor() {
       error.value = null
       
       console.log('Fetching service status...')
-      const data = await apiService.get('/api/monitoring/services/status')
+      const data = await apiService.get('/api/services/status')
       console.log('Service status response:', data)
       console.log('Response type:', typeof data)
       
@@ -144,7 +144,7 @@ export function useServiceMonitor() {
   // Quick health check (lighter weight)
   const fetchHealthCheck = async () => {
     try {
-      const data = await apiService.get('/api/monitoring/services/health')
+      const data = await apiService.get('/api/services/health')
       
       if (data && typeof data === 'object') {
         overallStatus.value = data.status
@@ -231,9 +231,14 @@ export function useServiceMonitor() {
     startMonitoring()
   })
   
-  onUnmounted(() => {
-    stopMonitoring()
-  })
+  const instance = getCurrentInstance()
+  if (instance) {
+    onUnmounted(() => {
+      stopMonitoring()
+    })
+  } else {
+    console.warn('useServiceMonitor: Not inside Vue component, manual cleanup required')
+  }
   
   return {
     // State

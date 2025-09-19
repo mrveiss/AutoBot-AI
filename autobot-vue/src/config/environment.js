@@ -13,30 +13,30 @@ import { buildDefaultServiceUrl } from './defaults.js';
 export const API_CONFIG = {
   // Dynamic URLs - these now use AppConfig service
   get BASE_URL() {
-    // Synchronous fallback - components should use appConfig.getServiceUrl('backend') instead
+    // Components should use appConfig.getServiceUrl('backend') instead
     const backendHost = import.meta.env.VITE_BACKEND_HOST;
-    const backendPort = import.meta.env.VITE_BACKEND_PORT || '8001';
-    const protocol = import.meta.env.VITE_HTTP_PROTOCOL || 'http';
-    
-    if (backendHost) {
+    const backendPort = import.meta.env.VITE_BACKEND_PORT;
+    const protocol = import.meta.env.VITE_HTTP_PROTOCOL;
+
+    if (backendHost && backendPort && protocol) {
       return `${protocol}://${backendHost}:${backendPort}`;
     }
-    
-    // Fallback to backend VM using centralized defaults
+
+    // Use centralized configuration service
     return buildDefaultServiceUrl('backend');
   },
   
   get WS_BASE_URL() {
-    // Synchronous fallback - components should use appConfig.getWebSocketUrl() instead
+    // Components should use appConfig.getWebSocketUrl() instead
     const backendHost = import.meta.env.VITE_BACKEND_HOST;
-    const backendPort = import.meta.env.VITE_BACKEND_PORT || '8001';
+    const backendPort = import.meta.env.VITE_BACKEND_PORT;
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    
-    if (backendHost) {
+
+    if (backendHost && backendPort) {
       return `${wsProtocol}//${backendHost}:${backendPort}/ws`;
     }
-    
-    return `${wsProtocol}//localhost:${backendPort}/ws`;
+
+    throw new Error('WebSocket configuration missing: VITE_BACKEND_HOST and VITE_BACKEND_PORT must be set');
   },
 
   get DESKTOP_VNC_URL() {
@@ -44,8 +44,15 @@ export const API_CONFIG = {
     const envUrl = import.meta.env.VITE_DESKTOP_VNC_URL;
     if (envUrl) return envUrl;
     
-    const vncHost = import.meta.env.VITE_DESKTOP_VNC_HOST || '172.16.168.20';
-    return `http://${vncHost}:6080/vnc.html?autoconnect=true&password=autobot&resize=remote&reconnect=true&quality=9&compression=9`;
+    const vncHost = import.meta.env.VITE_DESKTOP_VNC_HOST;
+    const vncPort = import.meta.env.VITE_DESKTOP_VNC_PORT;
+    const vncPassword = import.meta.env.VITE_DESKTOP_VNC_PASSWORD;
+
+    if (!vncHost || !vncPort || !vncPassword) {
+      throw new Error('Desktop VNC configuration missing: VITE_DESKTOP_VNC_HOST, VITE_DESKTOP_VNC_PORT, and VITE_DESKTOP_VNC_PASSWORD must be set');
+    }
+
+    return `http://${vncHost}:${vncPort}/vnc.html?autoconnect=true&password=${vncPassword}&resize=remote&reconnect=true&quality=9&compression=9`;
   },
 
   get TERMINAL_VNC_URL() {
@@ -53,8 +60,15 @@ export const API_CONFIG = {
     const envUrl = import.meta.env.VITE_TERMINAL_VNC_URL;
     if (envUrl) return envUrl;
     
-    const vncHost = import.meta.env.VITE_TERMINAL_VNC_HOST || '172.16.168.20';
-    return `http://${vncHost}:6080/vnc.html?autoconnect=true&password=autobot&resize=remote&reconnect=true&quality=9&compression=9`;
+    const vncHost = import.meta.env.VITE_TERMINAL_VNC_HOST;
+    const vncPort = import.meta.env.VITE_TERMINAL_VNC_PORT;
+    const vncPassword = import.meta.env.VITE_TERMINAL_VNC_PASSWORD;
+
+    if (!vncHost || !vncPort || !vncPassword) {
+      throw new Error('Terminal VNC configuration missing: VITE_TERMINAL_VNC_HOST, VITE_TERMINAL_VNC_PORT, and VITE_TERMINAL_VNC_PASSWORD must be set');
+    }
+
+    return `http://${vncHost}:${vncPort}/vnc.html?autoconnect=true&password=${vncPassword}&resize=remote&reconnect=true&quality=9&compression=9`;
   },
 
   get PLAYWRIGHT_VNC_URL() {
@@ -62,8 +76,15 @@ export const API_CONFIG = {
     const envUrl = import.meta.env.VITE_PLAYWRIGHT_VNC_URL;
     if (envUrl) return envUrl;
     
-    const vncHost = import.meta.env.VITE_PLAYWRIGHT_VNC_HOST || 'localhost';
-    return `http://${vncHost}:6081/vnc.html?autoconnect=true&password=playwright&resize=remote&reconnect=true&quality=9&compression=9`;
+    const vncHost = import.meta.env.VITE_PLAYWRIGHT_VNC_HOST;
+    const vncPort = import.meta.env.VITE_PLAYWRIGHT_VNC_PORT;
+    const vncPassword = import.meta.env.VITE_PLAYWRIGHT_VNC_PASSWORD;
+
+    if (!vncHost || !vncPort || !vncPassword) {
+      throw new Error('Playwright VNC configuration missing: VITE_PLAYWRIGHT_VNC_HOST, VITE_PLAYWRIGHT_VNC_PORT, and VITE_PLAYWRIGHT_VNC_PASSWORD must be set');
+    }
+
+    return `http://${vncHost}:${vncPort}/vnc.html?autoconnect=true&password=${vncPassword}&resize=remote&reconnect=true&quality=9&compression=9`;
   },
 
   PLAYWRIGHT_API_URL: import.meta.env.VITE_PLAYWRIGHT_API_URL || '/api/playwright',

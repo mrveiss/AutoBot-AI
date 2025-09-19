@@ -5,7 +5,7 @@
  * Use this in any Vue component to get real-time updates regardless of page/tab.
  */
 
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, getCurrentInstance } from 'vue'
 import globalWebSocketService from '@/services/GlobalWebSocketService.js'
 
 export function useGlobalWebSocket() {
@@ -53,11 +53,16 @@ export function useGlobalWebSocket() {
   }
 
   /**
-   * Cleanup on unmount
+   * Cleanup on unmount - only if inside a Vue component
    */
-  onUnmounted(() => {
-    unsubscribers.forEach(unsubscribe => unsubscribe())
-  })
+  const instance = getCurrentInstance()
+  if (instance) {
+    onUnmounted(() => {
+      unsubscribers.forEach(unsubscribe => unsubscribe())
+    })
+  } else {
+    console.warn('useGlobalWebSocket: Not inside Vue component, manual cleanup required')
+  }
 
   return {
     // State

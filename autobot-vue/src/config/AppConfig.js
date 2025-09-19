@@ -1,6 +1,6 @@
 /**
  * AppConfigService - Centralized Frontend Configuration Management
- * 
+ *
  * Replaces all hardcoded URLs and provides dynamic service discovery.
  * Single source of truth for all frontend configuration needs.
  */
@@ -13,7 +13,7 @@ export class AppConfigService {
     this.config = this.initializeConfig();
     this.configLoaded = false;
     this.debugMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG === 'true';
-    
+
     this.log('AppConfigService initialized');
   }
 
@@ -84,7 +84,7 @@ export class AppConfigService {
             icon: 'fas fa-server'
           },
           vm1: {
-            id: 'vm1', 
+            id: 'vm1',
             name: 'VM1 - Frontend',
             ip: import.meta.env.VITE_VM1_IP || '172.16.168.21',
             role: 'frontend',
@@ -93,7 +93,7 @@ export class AppConfigService {
           vm2: {
             id: 'vm2',
             name: 'VM2 - NPU Worker',
-            ip: import.meta.env.VITE_VM2_IP || '172.16.168.22', 
+            ip: import.meta.env.VITE_VM2_IP || '172.16.168.22',
             role: 'worker',
             icon: 'fas fa-microchip'
           },
@@ -220,8 +220,17 @@ export class AppConfigService {
    */
   async getApiUrl(endpoint = '', options = {}) {
     const baseUrl = await this.serviceDiscovery.getServiceUrl('backend');
-    let fullUrl = `${baseUrl}${endpoint}`;
-    
+
+    // CRITICAL FIX: Handle proxy mode when baseUrl is empty
+    let fullUrl;
+    if (!baseUrl) {
+      // Proxy mode - use relative URL
+      fullUrl = endpoint;
+    } else {
+      // Direct mode - construct full URL
+      fullUrl = `${baseUrl}${endpoint}`;
+    }
+
     // Add cache-busting parameters if enabled
     if (!this.config.api.disableCache && options.cacheBust !== false) {
       const separator = fullUrl.includes('?') ? '&' : '?';
@@ -229,8 +238,8 @@ export class AppConfigService {
       const timestampParam = `_t=${Date.now()}`;
       fullUrl = `${fullUrl}${separator}${cacheBustParam}&${timestampParam}`;
     }
-    
-    this.log(`Generated API URL: ${fullUrl}`);
+
+    this.log(`Generated API URL: ${fullUrl} (proxy mode: ${!baseUrl})`);
     return fullUrl;
   }
 
@@ -245,7 +254,7 @@ export class AppConfigService {
       this.log('Failed to resolve API URL:', urlError.message);
       throw new Error(`Service URL resolution failed: ${urlError.message}`);
     }
-    
+
     const defaultHeaders = {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
@@ -254,35 +263,35 @@ export class AppConfigService {
       'X-Request-Time': Date.now().toString(),
       'Content-Type': 'application/json'
     };
-    
+
     // Merge headers
     const headers = {
       ...defaultHeaders,
       ...options.headers
     };
-    
+
     const fetchOptions = {
       ...options,
       headers,
       cache: 'no-store'
     };
-    
+
     // Add timeout handling
     const controller = new AbortController();
     const timeout = options.timeout || this.config.api.timeout;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     fetchOptions.signal = controller.signal;
-    
+
     try {
       this.log(`API Request: ${options.method || 'GET'} ${url}`);
       const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
-      
+
       this.log(`API Response: ${response.status} ${response.statusText}`);
       return response;
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       // Enhanced error logging and categorization
       if (error.name === 'AbortError') {
         this.log(`API request timeout after ${timeout}ms: ${url}`);
@@ -320,9 +329,9 @@ export class AppConfigService {
     } catch (error) {
       this.log('Failed to load remote configuration, using defaults:', error.message);
       this.configLoaded = true; // Mark as loaded to prevent infinite retries
-      
+
       // If it's a network error, we should still function with defaults
-      if (error.message.includes('Failed to fetch') || 
+      if (error.message.includes('Failed to fetch') ||
           error.message.includes('Network Error') ||
           error.name === 'AbortError') {
         this.log('Network connectivity issues detected, continuing with local configuration');
@@ -356,7 +365,7 @@ export class AppConfigService {
    * Get configuration value with dot notation
    */
   get(path, defaultValue = null) {
-    return path.split('.').reduce((obj, key) => 
+    return path.split('.').reduce((obj, key) =>
       (obj && obj[key] !== undefined) ? obj[key] : defaultValue, this.config
     );
   }
@@ -391,7 +400,7 @@ export class AppConfigService {
         timeout: 5000,
         cacheBust: true
       });
-      
+
       if (response.ok) {
         this.log('API connection validation successful');
         return true;
@@ -410,24 +419,24 @@ export class AppConfigService {
    */
   invalidateCache() {
     this.log('Invalidating cache...');
-    
+
     // Update cache bust version
     this.config.api.cacheBustVersion = Date.now().toString();
-    
+
     // Clear localStorage caches
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('autobot_api_') || key.startsWith('autobot_config_')) {
         localStorage.removeItem(key);
       }
     });
-    
+
     // Clear sessionStorage caches
     Object.keys(sessionStorage).forEach(key => {
       if (key.startsWith('autobot_api_') || key.startsWith('autobot_config_')) {
         sessionStorage.removeItem(key);
       }
     });
-    
+
     this.log('Cache invalidated');
   }
 
@@ -446,7 +455,7 @@ export class AppConfigService {
   async getAllServiceUrls() {
     const services = ['backend', 'redis', 'vnc_desktop', 'vnc_terminal', 'vnc_playwright', 'npu_worker', 'ollama', 'playwright'];
     const urls = {};
-    
+
     for (const service of services) {
       try {
         urls[service] = await this.getServiceUrl(service);
@@ -454,7 +463,7 @@ export class AppConfigService {
         urls[service] = `Error: ${error.message}`;
       }
     }
-    
+
     return urls;
   }
 }

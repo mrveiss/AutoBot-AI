@@ -136,7 +136,7 @@ class BatchApiService {
 
       // Load service health
       try {
-        results.service_health = await this.apiClient.get('/api/monitoring/services/health');
+        results.service_health = await this.apiClient.get('/api/services/health');
       } catch (error: any) {
         console.warn('Failed to load service health:', error);
         results.service_health = { error: error.message };

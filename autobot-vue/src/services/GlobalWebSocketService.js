@@ -515,11 +515,18 @@ class GlobalWebSocketService {
 const globalWebSocketService = new GlobalWebSocketService()
 
 // Auto-connect with delay to allow app initialization
-setTimeout(() => {
-  globalWebSocketService.connect().catch(error => {
-    console.error('Initial WebSocket connection failed:', error)
-  })
-}, 500) // Reduced delay
+// Only connect if this is the first import and not already connected
+if (typeof window !== 'undefined' && !window._autobotWebSocketInitialized) {
+  window._autobotWebSocketInitialized = true
+
+  setTimeout(() => {
+    if (!globalWebSocketService.isConnected.value && globalWebSocketService.connectionState.value !== 'connecting') {
+      globalWebSocketService.connect().catch(error => {
+        console.error('Initial WebSocket connection failed:', error)
+      })
+    }
+  }, 500) // Reduced delay
+}
 
 // Global debugging interface
 if (typeof window !== 'undefined') {
