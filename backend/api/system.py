@@ -109,6 +109,7 @@ async def get_frontend_config():
 
 
 @router.get("/health")
+@router.get("/system/health")  # Frontend compatibility alias
 @cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
 async def get_system_health():
     """Get system health status"""
@@ -294,6 +295,197 @@ async def dynamic_import(request: Request, module_name: str = Form(...)):
     except Exception as e:
         logger.error(f"Dynamic import error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
+
+
+@router.get("/health/detailed")
+@cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
+async def get_detailed_health():
+    """Get detailed system health status including all components"""
+    try:
+        # Get basic health status first
+        basic_health = await get_system_health()
+
+        # Add detailed component checks
+        detailed_components = {}
+
+        # Check Redis connection
+        try:
+            from backend.utils.cache_manager import cache_manager
+            await cache_manager._ensure_redis_client()
+            if cache_manager._redis_client:
+                detailed_components["redis"] = "healthy"
+            else:
+                detailed_components["redis"] = "unavailable"
+        except Exception as e:
+            detailed_components["redis"] = f"error: {str(e)}"
+
+        # Check LLM interface
+        try:
+            from src.llm_interface import LLMInterface
+            detailed_components["llm"] = "available"
+        except Exception as e:
+            detailed_components["llm"] = f"import_error: {str(e)}"
+
+        # Check knowledge base
+        try:
+            from src.knowledge_base import KnowledgeBase
+            detailed_components["knowledge_base"] = "available"
+        except Exception as e:
+            detailed_components["knowledge_base"] = f"import_error: {str(e)}"
+
+        # Add system resource info
+        try:
+            import psutil
+            detailed_components["cpu_usage"] = f"{psutil.cpu_percent(interval=0.1)}%"
+            memory = psutil.virtual_memory()
+            detailed_components["memory_usage"] = f"{memory.percent}%"
+            disk = psutil.disk_usage("/")
+            detailed_components["disk_usage"] = f"{(disk.used / disk.total) * 100:.1f}%"
+        except ImportError:
+            detailed_components["system_monitoring"] = "psutil_unavailable"
+        except Exception as e:
+            detailed_components["system_monitoring"] = f"error: {str(e)}"
+
+        # Combine basic and detailed status
+        health_status = basic_health.copy()
+        health_status["components"].update(detailed_components)
+        health_status["detailed"] = True
+
+        # Determine overall status
+        error_components = [comp for comp, status in health_status["components"].items() if "error" in str(status).lower()]
+        if error_components:
+            health_status["status"] = "degraded"
+            health_status["errors"] = error_components
+
+        return health_status
+
+    except Exception as e:
+        logger.error(f"Detailed health check failed: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "detailed": True,
+        }
+
+
+@router.get("/cache/stats")
+@cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
+async def get_cache_stats():
+    """Get cache statistics and performance metrics"""
+    try:
+        from backend.utils.cache_manager import cache_manager
+
+        # Get cache statistics
+        cache_stats = await cache_manager.get_stats()
+
+        # Add timestamp and additional metadata
+        stats_response = {
+            "timestamp": datetime.now().isoformat(),
+            "cache": cache_stats,
+            "performance": {
+                "ttl_default": cache_manager.default_ttl,
+                "prefix": cache_manager.cache_prefix,
+            }
+        }
+
+        # Add Redis info if available
+        if cache_manager._redis_client:
+            try:
+                await cache_manager._ensure_redis_client()
+                info = await cache_manager._redis_client.info()
+                stats_response["redis_info"] = {
+                    "connected_clients": info.get("connected_clients", 0),
+                    "used_memory_human": info.get("used_memory_human", "N/A"),
+                    "total_commands_processed": info.get("total_commands_processed", 0),
+                    "keyspace_hits": info.get("keyspace_hits", 0),
+                    "keyspace_misses": info.get("keyspace_misses", 0),
+                }
+
+                # Calculate hit rate
+                hits = info.get("keyspace_hits", 0)
+                misses = info.get("keyspace_misses", 0)
+                total = hits + misses
+                hit_rate = (hits / total * 100) if total > 0 else 0
+                stats_response["performance"]["hit_rate"] = f"{hit_rate:.2f}%"
+
+            except Exception as e:
+                stats_response["redis_info"] = {"error": str(e)}
+
+        return stats_response
+
+    except Exception as e:
+        logger.error(f"Failed to get cache stats: {str(e)}")
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "cache": {"status": "error"},
+        }
+
+
+@router.get("/cache/activity")
+@cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
+async def get_cache_activity():
+    """Get recent cache activity and key information"""
+    try:
+        from backend.utils.cache_manager import cache_manager
+
+        activity_response = {
+            "timestamp": datetime.now().isoformat(),
+            "activity": {
+                "recent_keys": [],
+                "key_patterns": {},
+                "total_keys": 0,
+            }
+        }
+
+        if cache_manager._redis_client:
+            try:
+                await cache_manager._ensure_redis_client()
+
+                # Get all cache keys
+                cache_keys = await cache_manager._redis_client.keys(f"{cache_manager.cache_prefix}*")
+                activity_response["activity"]["total_keys"] = len(cache_keys)
+
+                # Get recent keys (limit to 20 for performance)
+                recent_keys = []
+                for key in cache_keys[:20]:
+                    try:
+                        # Remove prefix for cleaner display
+                        clean_key = key.replace(cache_manager.cache_prefix, "")
+                        ttl = await cache_manager._redis_client.ttl(key)
+                        recent_keys.append({
+                            "key": clean_key,
+                            "ttl": ttl if ttl > 0 else "no_expiry",
+                        })
+                    except Exception:
+                        recent_keys.append({"key": clean_key, "ttl": "unknown"})
+
+                activity_response["activity"]["recent_keys"] = recent_keys
+
+                # Analyze key patterns
+                key_patterns = {}
+                for key in cache_keys:
+                    clean_key = key.replace(cache_manager.cache_prefix, "")
+                    pattern = clean_key.split(":")[0] if ":" in clean_key else "other"
+                    key_patterns[pattern] = key_patterns.get(pattern, 0) + 1
+
+                activity_response["activity"]["key_patterns"] = key_patterns
+
+            except Exception as e:
+                activity_response["activity"]["error"] = str(e)
+        else:
+            activity_response["activity"]["error"] = "Redis client not available"
+
+        return activity_response
+
+    except Exception as e:
+        logger.error(f"Failed to get cache activity: {str(e)}")
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "activity": {"error": "Failed to retrieve activity"},
+        }
 
 
 @router.get("/metrics")

@@ -5,6 +5,7 @@ Integrates Docker-based Playwright into the main AutoBot application
 
 import asyncio
 import logging
+import os
 from typing import Dict, Any, Optional, List
 import aiohttp
 import json
@@ -318,7 +319,10 @@ async def get_playwright_service() -> PlaywrightService:
     
     if _playwright_service is None:
         # Use correct Playwright container IP address
-        _playwright_service = PlaywrightService(container_host="172.16.168.25")
+        container_host = os.getenv('AUTOBOT_BROWSER_SERVICE_HOST')
+        if not container_host:
+            raise ValueError('AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set')
+        _playwright_service = PlaywrightService(container_host=container_host)
         await _playwright_service.initialize()
         
     return _playwright_service

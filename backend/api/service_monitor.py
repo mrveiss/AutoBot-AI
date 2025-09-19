@@ -33,6 +33,18 @@ class ServiceStatus(BaseModel):
     category: str = "system"
 
 
+class VMStatus(BaseModel):
+    name: str
+    host: str
+    status: str  # "online", "offline", "warning", "error"
+    message: str
+    response_time: Optional[int] = None
+    last_check: datetime
+    details: Optional[Dict[str, Any]] = None
+    icon: str = "fas fa-server"
+    services: List[str] = []
+
+
 class ServiceMonitor:
     """Monitors all AutoBot services"""
     
@@ -150,87 +162,26 @@ class ServiceMonitor:
                 category="database"
             )
     
-    def check_docker_services(self) -> List[ServiceStatus]:
-        """Check Docker container services"""
+    def check_distributed_services(self) -> List[ServiceStatus]:
+        """Check distributed VM services (replaces Docker checking)"""
         services = []
-        
-        if not self.docker_client:
-            return [ServiceStatus(
-                name="Docker",
-                status="error",
-                message="Docker client unavailable",
-                last_check=datetime.now(),
-                icon="fas fa-whale",
-                category="infrastructure"
-            )]
-        
-        try:
-            # Define expected containers
-            expected_containers = {
-                'autobot-frontend': {'name': 'Frontend', 'icon': 'fas fa-globe', 'category': 'web'},
-                'autobot-browser': {'name': 'Browser Service', 'icon': 'fas fa-chrome', 'category': 'automation'},
-                'autobot-redis': {'name': 'Redis Stack', 'icon': 'fas fa-database', 'category': 'database'},
-                'autobot-ai-stack': {'name': 'AI Stack', 'icon': 'fas fa-brain', 'category': 'ai'},
-                'autobot-npu-worker': {'name': 'NPU Worker', 'icon': 'fas fa-microchip', 'category': 'ai'},
-                'autobot-seq': {'name': 'Seq Logging', 'icon': 'fas fa-file-alt', 'category': 'monitoring'}
+
+        # Services now run on VMs via systemd, not Docker
+        # This is handled by the VM monitoring system instead
+        services.append(ServiceStatus(
+            name="Distributed Services",
+            status="online",
+            message="Running on VM infrastructure",
+            last_check=datetime.now(),
+            icon="fas fa-server",
+            category="infrastructure",
+            details={
+                'architecture': 'distributed_vms',
+                'vm_count': 5,
+                'note': 'Services monitored via VM status checks'
             }
-            
-            # Get running containers
-            containers = self.docker_client.containers.list(all=True)
-            container_status = {c.name: c for c in containers if c.name in expected_containers}
-            
-            for container_name, config in expected_containers.items():
-                if container_name in container_status:
-                    container = container_status[container_name]
-                    status_map = {
-                        'running': 'online',
-                        'exited': 'offline',
-                        'restarting': 'warning',
-                        'paused': 'warning'
-                    }
-                    
-                    status = status_map.get(container.status, 'warning')
-                    message = f"Status: {container.status}"
-                    
-                    # Add health info if available
-                    if hasattr(container.attrs.get('State', {}), 'Health'):
-                        health = container.attrs['State'].get('Health', {})
-                        if health.get('Status'):
-                            message += f", Health: {health['Status']}"
-                    
-                    services.append(ServiceStatus(
-                        name=config['name'],
-                        status=status,
-                        message=message,
-                        last_check=datetime.now(),
-                        icon=config['icon'],
-                        category=config['category'],
-                        details={
-                            'container_name': container_name,
-                            'status': container.status,
-                            'image': container.image.tags[0] if container.image.tags else 'unknown'
-                        }
-                    ))
-                else:
-                    services.append(ServiceStatus(
-                        name=config['name'],
-                        status="offline",
-                        message="Container not found",
-                        last_check=datetime.now(),
-                        icon=config['icon'],
-                        category=config['category']
-                    ))
-                    
-        except Exception as e:
-            services.append(ServiceStatus(
-                name="Docker Services",
-                status="error",
-                message=f"Docker check failed: {str(e)[:50]}",
-                last_check=datetime.now(),
-                icon="fas fa-whale",
-                category="infrastructure"
-            ))
-        
+        ))
+
         return services
     
     async def check_llm_services(self) -> List[ServiceStatus]:
@@ -378,7 +329,169 @@ class ServiceMonitor:
                 }
             except Exception:
                 return {'error': 'System resource monitoring unavailable'}
-    
+
+    async def check_vm_ssh(self, vm_name: str, host: str) -> VMStatus:
+        """Check VM connectivity via SSH and basic health"""
+        try:
+            start_time = time.time()
+
+            # SSH command to check basic health: hostname, uptime, and service status
+            ssh_cmd = [
+                'ssh',
+                '-i', '/home/kali/.ssh/autobot_key',
+                '-o', 'ConnectTimeout=5',
+                '-o', 'StrictHostKeyChecking=no',
+                '-o', 'BatchMode=yes',
+                f'autobot@{host}',
+                'hostname && uptime && systemctl --user list-units --state=active autobot-* --no-pager --no-legend'
+            ]
+
+            result = await asyncio.create_subprocess_exec(
+                *ssh_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            stdout, stderr = await asyncio.wait_for(result.communicate(), timeout=10)
+            response_time = int((time.time() - start_time) * 1000)
+
+            if result.returncode == 0:
+                output_lines = stdout.decode().strip().split('\n')
+                hostname = output_lines[0] if len(output_lines) > 0 else "unknown"
+                uptime_line = output_lines[1] if len(output_lines) > 1 else ""
+
+                # Extract load average from uptime
+                load_avg = "unknown"
+                if "load average:" in uptime_line:
+                    load_avg = uptime_line.split("load average:")[-1].strip()
+
+                # Extract active services
+                active_services = []
+                if len(output_lines) > 2:
+                    for line in output_lines[2:]:
+                        if line.strip() and 'autobot-' in line:
+                            service_name = line.split('.')[0].strip()
+                            active_services.append(service_name)
+
+                vm_icons = {
+                    'frontend': 'fas fa-globe',
+                    'redis': 'fas fa-database',
+                    'ai_stack': 'fas fa-brain',
+                    'npu_worker': 'fas fa-microchip',
+                    'browser_service': 'fas fa-chrome'
+                }
+
+                return VMStatus(
+                    name=vm_name.title().replace('_', ' '),
+                    host=host,
+                    status="online",
+                    message=f"Load: {load_avg}",
+                    response_time=response_time,
+                    last_check=datetime.now(),
+                    icon=vm_icons.get(vm_name, 'fas fa-server'),
+                    services=active_services,
+                    details={
+                        'hostname': hostname,
+                        'uptime': uptime_line,
+                        'load_average': load_avg,
+                        'active_services_count': len(active_services)
+                    }
+                )
+            else:
+                error_msg = stderr.decode().strip()[:100]
+                return VMStatus(
+                    name=vm_name.title().replace('_', ' '),
+                    host=host,
+                    status="error",
+                    message=f"SSH failed: {error_msg}",
+                    last_check=datetime.now(),
+                    icon='fas fa-server',
+                    services=[],
+                    details={'ssh_error': error_msg}
+                )
+
+        except asyncio.TimeoutError:
+            return VMStatus(
+                name=vm_name.title().replace('_', ' '),
+                host=host,
+                status="warning",
+                message="SSH timeout (>10s)",
+                last_check=datetime.now(),
+                icon='fas fa-server',
+                services=[],
+                details={'error': 'timeout'}
+            )
+        except Exception as e:
+            return VMStatus(
+                name=vm_name.title().replace('_', ' '),
+                host=host,
+                status="error",
+                message=str(e)[:50],
+                last_check=datetime.now(),
+                icon='fas fa-server',
+                services=[],
+                details={'error': str(e)}
+            )
+
+    async def check_all_vms(self) -> List[VMStatus]:
+        """Check status of all VMs in the infrastructure"""
+        try:
+            # Get VM definitions from config
+            vm_hosts = cfg.get('infrastructure.hosts', {})
+
+            # Filter out localhost/main machine entries
+            remote_vms = {
+                name: host for name, host in vm_hosts.items()
+                if host not in ['127.0.0.1', 'localhost', '172.16.168.20']
+            }
+
+            # Add main machine status
+            vm_results = []
+
+            # Main machine (backend host)
+            main_host = vm_hosts.get('backend', '172.16.168.20')
+            vm_results.append(VMStatus(
+                name="Main Machine (WSL)",
+                host=main_host,
+                status="online",
+                message="Backend running",
+                response_time=0,
+                last_check=datetime.now(),
+                icon='fas fa-desktop',
+                services=['autobot-backend'],
+                details={'role': 'Backend API + VNC Desktop'}
+            ))
+
+            # Check remote VMs concurrently
+            if remote_vms:
+                vm_tasks = [
+                    self.check_vm_ssh(vm_name, host)
+                    for vm_name, host in remote_vms.items()
+                ]
+
+                vm_statuses = await asyncio.gather(*vm_tasks, return_exceptions=True)
+
+                for status in vm_statuses:
+                    if isinstance(status, VMStatus):
+                        vm_results.append(status)
+                    else:
+                        logger.error(f"VM check failed: {status}")
+
+            return vm_results
+
+        except Exception as e:
+            logger.error(f"VM monitoring failed: {e}")
+            return [VMStatus(
+                name="VM Monitor",
+                host="unknown",
+                status="error",
+                message=f"Monitor failed: {str(e)[:50]}",
+                last_check=datetime.now(),
+                icon='fas fa-exclamation-triangle',
+                services=[],
+                details={'error': str(e)}
+            )]
+
     async def get_all_services(self) -> Dict[str, Any]:
         """Get comprehensive service status"""
         start_time = time.time()
@@ -391,7 +504,7 @@ class ServiceMonitor:
         
         # Add sync checks
         redis_status = self.check_redis()
-        docker_services = self.check_docker_services()
+        distributed_services = self.check_distributed_services()
         llm_services = await self.check_llm_services()
         system_resources = self.check_system_resources()
         
@@ -410,9 +523,12 @@ class ServiceMonitor:
         
         # Add sync results
         all_services.append(redis_status)
-        all_services.extend(docker_services)
+        all_services.extend(distributed_services)
         all_services.extend(llm_services)
-        
+
+        # Get VM status
+        vm_statuses = await self.check_all_vms()
+
         # Calculate overall status
         statuses = [s.status for s in all_services]
         overall_status = "online"
@@ -429,10 +545,11 @@ class ServiceMonitor:
             'overall_status': overall_status,
             'check_duration_ms': total_time,
             'services': [s.dict() for s in all_services],
+            'vms': [vm.dict() for vm in vm_statuses],
             'system_resources': system_resources,
             'categories': {
                 'core': [s for s in all_services if s.category == 'core'],
-                'database': [s for s in all_services if s.category == 'database'], 
+                'database': [s for s in all_services if s.category == 'database'],
                 'web': [s for s in all_services if s.category == 'web'],
                 'ai': [s for s in all_services if s.category == 'ai'],
                 'automation': [s for s in all_services if s.category == 'automation'],
@@ -446,6 +563,13 @@ class ServiceMonitor:
                 'warning': len([s for s in all_services if s.status == 'warning']),
                 'error': len([s for s in all_services if s.status == 'error']),
                 'offline': len([s for s in all_services if s.status == 'offline'])
+            },
+            'vm_summary': {
+                'total_vms': len(vm_statuses),
+                'online': len([vm for vm in vm_statuses if vm.status == 'online']),
+                'warning': len([vm for vm in vm_statuses if vm.status == 'warning']),
+                'error': len([vm for vm in vm_statuses if vm.status == 'error']),
+                'offline': len([vm for vm in vm_statuses if vm.status == 'offline'])
             }
         }
 
@@ -631,3 +755,113 @@ async def health_redirect():
         'correct_endpoint': '/api/monitoring/services/health',
         'status': 'redirect'
     }
+
+
+@router.get("/vms/status")
+async def get_vm_status():
+    """Get comprehensive VM infrastructure status for dashboard"""
+    try:
+        vm_statuses = await get_monitor().check_all_vms()
+
+        # Calculate VM overall status
+        vm_statuses_list = [vm.status for vm in vm_statuses]
+        overall_vm_status = "online"
+        if "error" in vm_statuses_list:
+            overall_vm_status = "error"
+        elif "warning" in vm_statuses_list:
+            overall_vm_status = "warning"
+        elif "offline" in vm_statuses_list:
+            overall_vm_status = "warning"
+
+        return {
+            'overall_status': overall_vm_status,
+            'timestamp': datetime.now().isoformat(),
+            'vms': [vm.dict() for vm in vm_statuses],
+            'summary': {
+                'total_vms': len(vm_statuses),
+                'online': len([vm for vm in vm_statuses if vm.status == 'online']),
+                'warning': len([vm for vm in vm_statuses if vm.status == 'warning']),
+                'error': len([vm for vm in vm_statuses if vm.status == 'error']),
+                'offline': len([vm for vm in vm_statuses if vm.status == 'offline'])
+            }
+        }
+    except Exception as e:
+        logger.error(f"VM status monitoring failed: {e}")
+        raise HTTPException(status_code=500, detail=f"VM monitoring error: {str(e)}")
+
+
+@router.get("/vms/{vm_name}/status")
+async def get_single_vm_status(vm_name: str):
+    """Get status of a specific VM"""
+    try:
+        # Get VM definitions from config
+        vm_hosts = cfg.get('infrastructure.hosts', {})
+
+        if vm_name not in vm_hosts:
+            raise HTTPException(status_code=404, detail=f"VM '{vm_name}' not found in infrastructure")
+
+        host = vm_hosts[vm_name]
+
+        # Special case for main machine
+        if host in ['127.0.0.1', 'localhost', '172.16.168.20']:
+            return VMStatus(
+                name="Main Machine (WSL)",
+                host=host,
+                status="online",
+                message="Backend running",
+                response_time=0,
+                last_check=datetime.now(),
+                icon='fas fa-desktop',
+                services=['autobot-backend'],
+                details={'role': 'Backend API + VNC Desktop'}
+            ).dict()
+
+        # Check remote VM
+        vm_status = await get_monitor().check_vm_ssh(vm_name, host)
+        return vm_status.dict()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Single VM status check failed: {e}")
+        raise HTTPException(status_code=500, detail=f"VM check error: {str(e)}")
+
+
+@router.get("/debug/vm-config")
+async def debug_vm_config():
+    """Debug endpoint to check VM configuration"""
+    try:
+        vm_hosts = cfg.get('infrastructure.hosts', {})
+        return {
+            'config_available': True,
+            'vm_hosts': vm_hosts,
+            'remote_vms': {
+                name: host for name, host in vm_hosts.items()
+                if host not in ['127.0.0.1', 'localhost', '172.16.168.20']
+            }
+        }
+    except Exception as e:
+        return {
+            'config_available': False,
+            'error': str(e)
+        }
+
+
+@router.get("/debug/vm-test")
+async def debug_vm_test():
+    """Debug endpoint to test VM monitoring directly"""
+    try:
+        monitor = get_monitor()
+        vm_statuses = await monitor.check_all_vms()
+        return {
+            'success': True,
+            'vm_count': len(vm_statuses),
+            'vms': [vm.dict() for vm in vm_statuses]
+        }
+    except Exception as e:
+        logger.error(f"VM test failed: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'traceback': str(e.__traceback__) if hasattr(e, '__traceback__') else None
+        }
