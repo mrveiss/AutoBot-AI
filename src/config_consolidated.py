@@ -118,13 +118,13 @@ class ConsolidatedConfigManager:
         """Load comprehensive default configuration"""
         return {
             "backend": {
-                "api_endpoint": "http://localhost:8001",
-                "server_host": "localhost", 
-                "server_port": 8001,
+                "api_endpoint": f"http://{os.getenv('AUTOBOT_BACKEND_HOST')}:{os.getenv('AUTOBOT_BACKEND_PORT')}",
+                "server_host": os.getenv('AUTOBOT_BACKEND_HOST'),
+                "server_port": int(os.getenv('AUTOBOT_BACKEND_PORT', 0)),
                 "timeout": 60,
                 "max_retries": 3,
                 "streaming": False,
-                "cors_origins": ["http://localhost:5173", "http://localhost:3000"]
+                "cors_origins": [f"http://{os.getenv('AUTOBOT_FRONTEND_HOST')}:{os.getenv('AUTOBOT_FRONTEND_PORT')}", f"http://{os.getenv('AUTOBOT_BROWSER_SERVICE_HOST')}:{os.getenv('AUTOBOT_BROWSER_SERVICE_PORT')}"]
             },
             "frontend": {
                 "server_host": "localhost",
@@ -161,8 +161,8 @@ class ConsolidatedConfigManager:
                     "provider": "ollama",
                     "providers": {
                         "ollama": {
-                            "host": "http://localhost:11434",
-                            "endpoint": "http://localhost:11434/api/generate",
+                            "host": f"http://{os.getenv('AUTOBOT_OLLAMA_HOST')}:{os.getenv('AUTOBOT_OLLAMA_PORT')}",
+                            "endpoint": f"http://{os.getenv('AUTOBOT_OLLAMA_HOST')}:{os.getenv('AUTOBOT_OLLAMA_PORT')}/api/generate",
                             "selected_model": "llama3.2:1b-instruct-q4_K_M",
                             "classification_model": "gemma2:2b",
                             "models": []

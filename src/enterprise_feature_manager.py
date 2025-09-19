@@ -55,7 +55,9 @@ class EnterpriseFeatureManager:
     """Manages enterprise-grade features and capabilities"""
 
     def __init__(self, config_path: Optional[Path] = None):
-        self.config_path = config_path or Path(__file__).parent.parent / "config" / "enterprise_features.json"
+        import os
+        base_dir = os.getenv('AUTOBOT_BASE_DIR', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        self.config_path = config_path or Path(base_dir) / "config" / "enterprise_features.json"
         self.features: Dict[str, EnterpriseFeature] = {}
         self.vm_topology = self._initialize_vm_topology()
         self.resource_pools = self._initialize_resource_pools()
@@ -68,46 +70,67 @@ class EnterpriseFeatureManager:
 
     def _initialize_vm_topology(self) -> Dict[str, Dict[str, Any]]:
         """Initialize 6-VM distributed topology"""
+        import os
+
+        backend_host = os.getenv('AUTOBOT_BACKEND_HOST')
+        backend_port = os.getenv('AUTOBOT_BACKEND_PORT')
+        vnc_port = os.getenv('AUTOBOT_VNC_PORT')
+        frontend_host = os.getenv('AUTOBOT_FRONTEND_HOST')
+        frontend_port = os.getenv('AUTOBOT_FRONTEND_PORT')
+        npu_worker_host = os.getenv('AUTOBOT_NPU_WORKER_HOST')
+        npu_worker_port = os.getenv('AUTOBOT_NPU_WORKER_PORT')
+        redis_host = os.getenv('AUTOBOT_REDIS_HOST')
+        redis_port = os.getenv('AUTOBOT_REDIS_PORT')
+        ai_stack_host = os.getenv('AUTOBOT_AI_STACK_HOST')
+        ai_stack_port = os.getenv('AUTOBOT_AI_STACK_PORT')
+        browser_service_host = os.getenv('AUTOBOT_BROWSER_SERVICE_HOST')
+        browser_service_port = os.getenv('AUTOBOT_BROWSER_SERVICE_PORT')
+
+        if not all([backend_host, backend_port, vnc_port, frontend_host, frontend_port,
+                   npu_worker_host, npu_worker_port, redis_host, redis_port,
+                   ai_stack_host, ai_stack_port, browser_service_host, browser_service_port]):
+            raise ValueError('VM topology configuration missing: All AUTOBOT_*_HOST and AUTOBOT_*_PORT environment variables must be set')
+
         return {
             "main_machine": {
-                "ip": "172.16.168.20",
+                "ip": backend_host,
                 "services": ["backend_api", "desktop_vnc", "terminal_vnc"],
-                "ports": [8001, 6080],
+                "ports": [int(backend_port), int(vnc_port)],
                 "capabilities": ["coordination", "management", "user_interface"],
                 "resources": {"cpu_cores": 22, "memory_gb": 32, "gpu": "RTX_4070"}
             },
             "frontend_vm": {
-                "ip": "172.16.168.21",
+                "ip": frontend_host,
                 "services": ["web_interface"],
-                "ports": [5173],
+                "ports": [int(frontend_port)],
                 "capabilities": ["web_ui", "user_interaction"],
                 "resources": {"cpu_cores": 4, "memory_gb": 8}
             },
             "npu_worker_vm": {
-                "ip": "172.16.168.22",
+                "ip": npu_worker_host,
                 "services": ["ai_acceleration", "npu_worker"],
-                "ports": [8081],
+                "ports": [int(npu_worker_port)],
                 "capabilities": ["ai_acceleration", "npu_processing", "hardware_optimization"],
                 "resources": {"cpu_cores": 4, "memory_gb": 8, "npu": "Intel_NPU"}
             },
             "redis_vm": {
-                "ip": "172.16.168.23",
+                "ip": redis_host,
                 "services": ["redis_server", "data_storage"],
-                "ports": [6379],
+                "ports": [int(redis_port)],
                 "capabilities": ["data_persistence", "caching", "session_storage"],
                 "resources": {"cpu_cores": 2, "memory_gb": 16, "storage_gb": 100}
             },
             "ai_stack_vm": {
-                "ip": "172.16.168.24",
+                "ip": ai_stack_host,
                 "services": ["ai_processing", "llm_inference"],
-                "ports": [8080],
+                "ports": [int(ai_stack_port)],
                 "capabilities": ["ai_processing", "llm_inference", "knowledge_processing"],
                 "resources": {"cpu_cores": 8, "memory_gb": 16, "gpu_acceleration": True}
             },
             "browser_vm": {
-                "ip": "172.16.168.25",
+                "ip": browser_service_host,
                 "services": ["web_automation", "playwright_server"],
-                "ports": [3000],
+                "ports": [int(browser_service_port)],
                 "capabilities": ["web_automation", "browser_control", "scraping"],
                 "resources": {"cpu_cores": 4, "memory_gb": 8, "display": True}
             }
@@ -688,10 +711,22 @@ class EnterpriseFeatureManager:
 
     def _get_fallback_endpoints(self) -> Dict[str, str]:
         """Get fallback service endpoints"""
+        import os
+
+        backend_host = os.getenv('AUTOBOT_BACKEND_HOST')
+        backend_port = os.getenv('AUTOBOT_BACKEND_PORT')
+        frontend_host = os.getenv('AUTOBOT_FRONTEND_HOST')
+        frontend_port = os.getenv('AUTOBOT_FRONTEND_PORT')
+        ai_stack_host = os.getenv('AUTOBOT_AI_STACK_HOST')
+        ai_stack_port = os.getenv('AUTOBOT_AI_STACK_PORT')
+
+        if not all([backend_host, backend_port, frontend_host, frontend_port, ai_stack_host, ai_stack_port]):
+            raise ValueError('Fallback endpoint configuration missing: All AUTOBOT_*_HOST and AUTOBOT_*_PORT environment variables must be set')
+
         return {
-            "backend_api": "http://172.16.168.20:8001/health",
-            "web_interface": "http://172.16.168.21:5173/health",
-            "ai_processing": "http://172.16.168.24:8080/health"
+            "backend_api": f"http://{backend_host}:{backend_port}/health",
+            "web_interface": f"http://{frontend_host}:{frontend_port}/health",
+            "ai_processing": f"http://{ai_stack_host}:{ai_stack_port}/health"
         }
 
     def _check_research_capabilities(self) -> bool:
