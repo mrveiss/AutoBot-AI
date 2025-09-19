@@ -6,6 +6,7 @@ This creates a completely new knowledge base instance for testing the fixes
 from fastapi import APIRouter, Request
 import asyncio
 import logging
+import os
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -82,10 +83,17 @@ async def debug_redis_connection():
         import aioredis
 
         # Test direct Redis connection to the knowledge base
+        redis_host = os.getenv('AUTOBOT_REDIS_HOST')
+        redis_port = os.getenv('AUTOBOT_REDIS_PORT')
+        redis_db = os.getenv('AUTOBOT_REDIS_DB_KNOWLEDGE')
+
+        if not all([redis_host, redis_port, redis_db]):
+            raise ValueError('Redis configuration missing: AUTOBOT_REDIS_HOST, AUTOBOT_REDIS_PORT, and AUTOBOT_REDIS_DB_KNOWLEDGE must be set')
+
         redis_client = redis.Redis(
-            host="172.16.168.23",
-            port=6379,
-            db=1,  # Knowledge base database
+            host=redis_host,
+            port=int(redis_port),
+            db=int(redis_db),  # Knowledge base database
             decode_responses=False,
             socket_timeout=5
         )

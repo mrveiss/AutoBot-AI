@@ -677,6 +677,7 @@ async def create_new_chat(request: Request):
 
 
 @router.get("/chats")
+@router.get("/chat/chats")  # Frontend compatibility alias
 async def list_chats(request: Request):
     """List all available chat sessions with improved error handling."""
     request_id = generate_request_id()
