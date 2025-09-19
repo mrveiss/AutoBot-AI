@@ -2,8 +2,26 @@
   <div v-if="isSettingsLoaded" class="settings-section">
     <h3>Cache Management</h3>
 
+    <!-- Cache API Unavailable Warning -->
+    <div v-if="!cacheApiAvailable" class="cache-unavailable-warning">
+      <div class="warning-content">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div class="warning-text">
+          <h4>Cache API Unavailable</h4>
+          <p>
+            The cache management API is not available in the current backend configuration.
+            Cache features are disabled to prevent errors.
+          </p>
+          <small>
+            This is normal when using the fast backend for development.
+            Cache functionality would be available in the full backend configuration.
+          </small>
+        </div>
+      </div>
+    </div>
+
     <!-- Cache Configuration -->
-    <div class="cache-configuration">
+    <div v-if="cacheApiAvailable" class="cache-configuration">
       <h4>Cache Configuration</h4>
       <div class="setting-item">
         <label for="cache-enabled">Enable Caching</label>
@@ -47,7 +65,7 @@
     </div>
 
     <!-- Cache Activity Log -->
-    <div class="cache-activity">
+    <div v-if="cacheApiAvailable" class="cache-activity">
       <h4>
         Cache Activity
         <button @click="$emit('refresh-cache-activity')" class="small-btn">
@@ -56,20 +74,32 @@
       </h4>
       <div class="activity-log">
         <div
-          v-for="activity in cacheActivity"
-          :key="activity.id"
-          :class="['activity-item', activity.type]"
+          v-if="cacheActivity.length === 0"
+          class="no-activity"
+        >
+          No cache activity recorded
+        </div>
+        <div
+          v-for="(activity, index) in cacheActivity"
+          :key="activity.id || index"
+          :class="['activity-item', activity.type || 'info']"
         >
           <span class="timestamp">{{ activity.timestamp }}</span>
-          <span class="message">{{ activity.message }}</span>
+          <span class="message">{{ activity.message || activity.operation }}</span>
         </div>
       </div>
     </div>
 
     <!-- Cache Statistics -->
-    <div v-if="cacheStats" class="cache-stats">
+    <div v-if="cacheApiAvailable && cacheStats" class="cache-stats">
       <h4>Cache Statistics</h4>
-      <div class="stats-grid">
+      <div v-if="cacheStats.status === 'unavailable'" class="stats-unavailable">
+        <p>{{ cacheStats.message }}</p>
+      </div>
+      <div v-else-if="cacheStats.status === 'error'" class="stats-error">
+        <p>{{ cacheStats.message }}</p>
+      </div>
+      <div v-else class="stats-grid">
         <div class="stat-item">
           <label>Total Items:</label>
           <span>{{ cacheStats.totalItems || 0 }}</span>
@@ -90,7 +120,7 @@
     </div>
 
     <!-- Redis Database Cache Controls -->
-    <div class="cache-section">
+    <div v-if="cacheApiAvailable" class="cache-section">
       <h4>Redis Database Caches</h4>
       <div class="redis-cache-grid">
         <div v-for="(dbInfo, dbName) in redisStats" :key="dbName" class="redis-db-item">
@@ -127,7 +157,7 @@
     </div>
 
     <!-- Application Cache Controls -->
-    <div class="cache-section">
+    <div v-if="cacheApiAvailable" class="cache-section">
       <h4>Application Caches</h4>
       <div class="app-cache-controls">
         <button
@@ -155,7 +185,7 @@
     </div>
 
     <!-- General Cache Controls -->
-    <div class="cache-controls">
+    <div v-if="cacheApiAvailable" class="cache-controls">
       <button
         @click="$emit('refresh-cache-stats')"
         class="refresh-btn"
@@ -170,6 +200,34 @@
         <i class="fas fa-fire"></i> Warm Up Caches
       </button>
     </div>
+
+    <!-- Alternative Cache Information (when API unavailable) -->
+    <div v-if="!cacheApiAvailable" class="cache-alternative-info">
+      <h4>Alternative Cache Information</h4>
+      <div class="alternative-info-content">
+        <div class="info-item">
+          <i class="fas fa-info-circle"></i>
+          <div>
+            <strong>Browser Cache:</strong>
+            Your browser is still caching API responses and static assets automatically.
+          </div>
+        </div>
+        <div class="info-item">
+          <i class="fas fa-database"></i>
+          <div>
+            <strong>Redis Cache:</strong>
+            Redis databases are still operational for session storage and data persistence.
+          </div>
+        </div>
+        <div class="info-item">
+          <i class="fas fa-server"></i>
+          <div>
+            <strong>Full Backend:</strong>
+            Switch to the full backend configuration to access advanced cache management features.
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -180,6 +238,7 @@ interface CacheActivity {
   timestamp: string
   message: string
   type: string
+  operation?: string
 }
 
 interface RedisDbInfo {
@@ -197,6 +256,8 @@ interface CacheStats {
   expiredItems?: number
   redis_databases?: { [key: string]: RedisDbInfo }
   total_redis_keys?: number
+  status?: string
+  message?: string
 }
 
 interface CacheConfig {
@@ -212,6 +273,7 @@ interface Props {
   cacheStats: CacheStats | null
   isSaving: boolean
   isClearing: boolean
+  cacheApiAvailable: boolean
 }
 
 interface Emits {
@@ -260,6 +322,45 @@ const formatBytes = (bytes: number): string => {
   font-size: 18px;
   border-bottom: 2px solid #3498db;
   padding-bottom: 8px;
+}
+
+.cache-unavailable-warning {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.warning-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.warning-content i {
+  color: #856404;
+  font-size: 20px;
+  margin-top: 2px;
+}
+
+.warning-text h4 {
+  margin: 0 0 8px 0;
+  color: #856404;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.warning-text p {
+  margin: 0 0 8px 0;
+  color: #856404;
+  line-height: 1.4;
+}
+
+.warning-text small {
+  color: #6c5014;
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 .cache-configuration {
@@ -383,6 +484,13 @@ const formatBytes = (bytes: number): string => {
   padding: 10px;
 }
 
+.no-activity {
+  color: #6c757d;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
 .activity-item {
   display: flex;
   justify-content: space-between;
@@ -418,6 +526,23 @@ const formatBytes = (bytes: number): string => {
   font-weight: 600;
 }
 
+.stats-unavailable,
+.stats-error {
+  padding: 16px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.stats-unavailable {
+  background: #e2e3e5;
+  color: #6c757d;
+}
+
+.stats-error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -441,6 +566,47 @@ const formatBytes = (bytes: number): string => {
 .stat-item span {
   font-weight: 600;
   color: #007acc;
+}
+
+.cache-alternative-info {
+  background: #d1ecf1;
+  border: 1px solid #bee5eb;
+  border-radius: 6px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.cache-alternative-info h4 {
+  margin: 0 0 16px 0;
+  color: #0c5460;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.alternative-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+}
+
+.info-item i {
+  color: #0c5460;
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.info-item div {
+  color: #0c5460;
+  line-height: 1.4;
 }
 
 .cache-section {
@@ -686,6 +852,21 @@ const formatBytes = (bytes: number): string => {
     border-bottom-color: #4fc3f7;
   }
 
+  .cache-unavailable-warning {
+    background: #664d03;
+    border-color: #b08800;
+  }
+
+  .warning-content i,
+  .warning-text h4,
+  .warning-text p {
+    color: #ffecb5;
+  }
+
+  .warning-text small {
+    color: #ffeaa7;
+  }
+
   .cache-configuration {
     background: #383838;
     border-color: #555;
@@ -727,6 +908,21 @@ const formatBytes = (bytes: number): string => {
   .stat-item label {
     color: #e0e0e0;
   }
+
+  .cache-alternative-info {
+    background: #184956;
+    border-color: #2e8a9a;
+  }
+
+  .cache-alternative-info h4,
+  .info-item i,
+  .info-item div {
+    color: #d1ecf1;
+  }
+
+  .info-item {
+    background: rgba(255, 255, 255, 0.1);
+  }
 }
 
 /* Mobile responsive */
@@ -764,6 +960,14 @@ const formatBytes = (bytes: number): string => {
   .refresh-btn {
     flex: 1;
     justify-content: center;
+  }
+
+  .alternative-info-content {
+    gap: 8px;
+  }
+
+  .info-item {
+    padding: 8px;
   }
 }
 </style>

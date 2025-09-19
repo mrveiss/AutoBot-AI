@@ -703,7 +703,7 @@ export default {
     const lastUpdateTime = ref(null)
     const updateInterval = ref(30000) // 30 seconds
     const totalDataPoints = ref(0)
-    let realTimeUpdateTimer = null
+    let realTimeUpdateTimer = null;
 
     // Progress tracking
     const loadingProgress = ref({
@@ -1045,7 +1045,7 @@ export default {
             }
             
             // Add severity scoring based on duplication patterns
-            let severity = 'low_priority'
+            let severity = 'low_priority';
             if (dup.name === 'main' || dup.name === '__init__') {
               severity = 'high_priority'  // Common patterns that should be unique
             } else if (dup.name.includes('test_') || dup.name.includes('_wrapper')) {
@@ -1092,7 +1092,7 @@ export default {
           // Generate realistic mock data using central configuration
           const backendUrl = await appConfig.getServiceUrl('backend').catch(() => 'http://172.16.168.20:8001')
           const npuWorkerUrl = await appConfig.getServiceUrl('npu_worker').catch(() => 'http://172.16.168.22:8081')
-          const frontendPort = appConfig.config?.services?.frontend?.port || '5173'
+          const frontendPort = appConfig.config?.services?.frontend?.port || '5173';
 
           data = {
             total_hardcodes: 8,

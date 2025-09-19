@@ -166,13 +166,7 @@ onMounted(() => {
   focusInput()
 
   // Enhanced focus handling for automated testing
-  document.addEventListener('click', (event) => {
-    const terminalContainer = document.querySelector('.terminal-window-standalone')
-    if (terminalContainer && terminalContainer.contains(event.target as Node) &&
-        event.target !== terminalInput.value && props.canInput) {
-      nextTick(() => focusInput())
-    }
-  })
+  document.addEventListener('click', handleDocumentClick)
 
   // Periodic focus check for automation scenarios
   const focusInterval = setInterval(() => {
@@ -186,11 +180,23 @@ onMounted(() => {
   window.terminalFocusInterval = focusInterval
 })
 
+// Define document click handler function for proper cleanup
+const handleDocumentClick = (event) => {
+  const terminalContainer = document.querySelector('.terminal-window-standalone')
+  if (terminalContainer && terminalContainer.contains(event.target as Node) &&
+      event.target !== terminalInput.value && props.canInput) {
+    nextTick(() => focusInput())
+  }
+}
+
 onUnmounted(() => {
   if (window.terminalFocusInterval) {
     clearInterval(window.terminalFocusInterval)
     window.terminalFocusInterval = null
   }
+
+  // Clean up document event listener
+  document.removeEventListener('click', handleDocumentClick)
 })
 
 // Expose methods for parent component

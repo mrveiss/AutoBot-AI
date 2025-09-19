@@ -575,23 +575,76 @@ export default {
 
     const refreshSystemStatus = async () => {
       try {
-        // Simulate API call to get real system status
-        const response = await fetch('/api/health');
-        if (response.ok) {
-          const healthData = await response.json();
+        // Get VM status from dedicated backend endpoint (fast)
+        const vmResponse = await fetch('/api/vms/status');
+        const updatedServices = [];
 
-          // Update system status based on real data
-          const hasErrors = systemServices.value.some(s => s.status === 'error');
-          const hasWarnings = systemServices.value.some(s => s.status === 'warning');
+        if (vmResponse.ok) {
+          const vmData = await vmResponse.json();
 
-          systemStatus.value = {
-            isHealthy: !hasErrors && !hasWarnings,
-            hasIssues: hasErrors,
-            lastChecked: new Date()
-          };
+          // Add VM status from backend aggregation
+          if (vmData.vms) {
+            vmData.vms.forEach(vm => {
+              updatedServices.push({
+                name: vm.name,
+                status: vm.status === 'online' ? 'healthy' :
+                        vm.status === 'warning' ? 'warning' : 'error',
+                statusText: vm.message || vm.status
+              });
+            });
+          }
         }
+
+        // Get basic services from lightweight endpoint
+        try {
+          const servicesResponse = await fetch('/api/services', { timeout: 5000 });
+          if (servicesResponse.ok) {
+            const servicesData = await servicesResponse.json();
+
+            // Map backend services to frontend display
+            const serviceMap = {
+              'backend': 'Backend API',
+              'redis': 'Redis',
+              'ollama': 'Ollama'
+            };
+
+            if (servicesData.services) {
+              Object.entries(servicesData.services).forEach(([key, service]) => {
+                const displayName = serviceMap[key] || key;
+                updatedServices.push({
+                  name: displayName,
+                  status: service.status === 'online' ? 'healthy' :
+                          service.status === 'warning' ? 'warning' : 'error',
+                  statusText: service.health || service.status
+                });
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Services endpoint failed, using fallback data');
+        }
+
+        // Add frontend and websocket status (local)
+        updatedServices.push(
+          { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
+          { name: 'WebSocket', status: 'healthy', statusText: 'Connected' }
+        );
+
+        // Update systemServices with real data
+        systemServices.value = updatedServices;
+
+        // Update system status based on real data
+        const hasErrors = systemServices.value.some(s => s.status === 'error');
+        const hasWarnings = systemServices.value.some(s => s.status === 'warning');
+
+        systemStatus.value = {
+          isHealthy: !hasErrors && !hasWarnings,
+          hasIssues: hasErrors,
+          lastChecked: new Date()
+        };
       } catch (error) {
         console.warn('Failed to refresh system status:', error);
+        // Keep existing values on error
       }
     };
 
@@ -689,7 +742,7 @@ export default {
     };
 
     // Lifecycle hooks
-    onMounted(() => {
+    onMounted(async () => {
       console.log('[App] Initializing optimized AutoBot application...');
 
       // Add global click listener for mobile nav
@@ -719,7 +772,8 @@ export default {
         // OPTIMIZED: Start optimized health monitoring
         startOptimizedHealthCheck();
 
-        // Initialize system status
+        // Initialize system status from backend
+        await refreshSystemStatus();
         updateSystemStatus();
 
         // OPTIMIZED: Setup router monitoring (event-driven)

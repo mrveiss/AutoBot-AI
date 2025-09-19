@@ -853,7 +853,7 @@ interface BackendSettings {
 }
 
 interface Props {
-  backendSettings: BackendSettings | null
+  backendSettings: BackendSettings | null | undefined
   isSettingsLoaded: boolean
   activeBackendSubTab: string
   healthStatus: HealthStatus | null
