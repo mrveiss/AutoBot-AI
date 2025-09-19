@@ -410,7 +410,7 @@ export default {
       this.loading = true
       try {
         // Check monitoring status
-        const statusResponse = await fetch('/api/monitoring/phase9/status')
+        const statusResponse = await fetch('/api/monitoring/status')
         const status = await statusResponse.json()
         this.monitoringActive = status.active
         
@@ -433,7 +433,7 @@ export default {
     async refreshDashboard() {
       try {
         // Get dashboard data
-        const dashboardResponse = await fetch('/api/monitoring/phase9/dashboard')
+        const dashboardResponse = await fetch('/api/monitoring/dashboard')
         this.dashboardData = await dashboardResponse.json()
         
         // Extract metrics
@@ -443,7 +443,7 @@ export default {
         this.services = Object.values(this.dashboardData.services || {})
         
         // Get alerts
-        const alertsResponse = await fetch('/api/monitoring/phase9/alerts')
+        const alertsResponse = await fetch('/api/monitoring/alerts')
         this.allAlerts = await alertsResponse.json()
         
         // Get recommendations
@@ -457,7 +457,7 @@ export default {
     
     async refreshRecommendations() {
       try {
-        const response = await fetch('/api/monitoring/phase9/optimization/recommendations')
+        const response = await fetch('/api/monitoring/optimization/recommendations')
         this.recommendations = await response.json()
       } catch (error) {
         console.error('Failed to get recommendations:', error)
@@ -468,7 +468,7 @@ export default {
       this.loading = true
       try {
         const endpoint = this.monitoringActive ? 'stop' : 'start'
-        const response = await fetch(`/api/monitoring/phase9/${endpoint}`, {
+        const response = await fetch(`/api/monitoring/${endpoint}`, {
           method: 'POST'
         })
         
@@ -500,7 +500,7 @@ export default {
       this.connectionStatus = 'connecting'
       
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${protocol}//${window.location.host}/api/monitoring/phase9/realtime`
+      const wsUrl = `${protocol}//${window.location.host}/api/monitoring/realtime`
       
       this.websocket = new WebSocket(wsUrl)
       
@@ -771,7 +771,7 @@ export default {
       if (!chart) return
       
       try {
-        const response = await fetch('/api/monitoring/phase9/metrics/query', {
+        const response = await fetch('/api/monitoring/metrics/query', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

@@ -219,15 +219,21 @@ onMounted(async () => {
   connectionCheckInterval = setInterval(checkConnection, 10000)
   
   // Listen for fullscreen changes
-  document.addEventListener('fullscreenchange', () => {
-    isFullscreen.value = !!document.fullscreenElement
-  })
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
 })
+
+// Define fullscreen handler function for proper cleanup
+const handleFullscreenChange = () => {
+  isFullscreen.value = !!document.fullscreenElement
+}
 
 onUnmounted(() => {
   if (connectionCheckInterval) {
     clearInterval(connectionCheckInterval)
   }
+
+  // Clean up event listener
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 </script>
 

@@ -261,28 +261,32 @@ const checkConnection = async () => {
   }
 }
 
-const startHeartbeat = () => {
-  // Check connection every 30 seconds
-  const interval = setInterval(checkConnection, 30000)
+// Interval refs for proper cleanup
+const heartbeatInterval = ref(null)
+const autoSaveInterval = ref(null)
 
-  onUnmounted(() => {
-    clearInterval(interval)
-  })
+const startHeartbeat = () => {
+  // Clear any existing interval first
+  if (heartbeatInterval.value) {
+    clearInterval(heartbeatInterval.value)
+  }
+  // Check connection every 30 seconds
+  heartbeatInterval.value = setInterval(checkConnection, 30000)
 }
 
 // Auto-save functionality
 const enableAutoSave = () => {
+  // Clear any existing interval first
+  if (autoSaveInterval.value) {
+    clearInterval(autoSaveInterval.value)
+  }
   // Auto-save current session every 2 minutes
-  const interval = setInterval(() => {
+  autoSaveInterval.value = setInterval(() => {
     if (store.settings.autoSave && store.currentSessionId) {
       controller.saveChatSession()
         .catch(error => console.warn('Auto-save failed:', error))
     }
   }, 2 * 60 * 1000)
-
-  onUnmounted(() => {
-    clearInterval(interval)
-  })
 }
 
 // Keyboard shortcuts
@@ -368,7 +372,19 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
+
+  // Clean up intervals
+  if (heartbeatInterval.value) {
+    clearInterval(heartbeatInterval.value)
+    heartbeatInterval.value = null
+  }
+
+  if (autoSaveInterval.value) {
+    clearInterval(autoSaveInterval.value)
+    autoSaveInterval.value = null
+  }
 })
 
 // Watch for session changes to update title

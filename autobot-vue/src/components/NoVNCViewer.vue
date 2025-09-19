@@ -412,12 +412,20 @@ const formatTime = (date: Date) => {
   return date.toLocaleTimeString()
 }
 
+// Refs for cleanup
+const loadingTimeout = ref(null)
+
+// Define fullscreen handler function for proper cleanup
+const handleFullscreenChange = () => {
+  isFullscreen.value = !!document.fullscreenElement
+}
+
 // Lifecycle
 onMounted(() => {
   lastConnectionAttempt.value = new Date()
-  
+
   // Set initial loading timeout
-  const loadingTimeout = setTimeout(() => {
+  loadingTimeout.value = setTimeout(() => {
     if (isLoading.value) {
       connectionError.value = true
       isLoading.value = false
@@ -426,27 +434,27 @@ onMounted(() => {
       lastError.value = 'Initial load timeout'
     }
   }, 12000)
-  
-  // Cleanup timeout if component unmounts
-  onUnmounted(() => {
-    clearTimeout(loadingTimeout)
-  })
-  
+
   // Auto-check service status after initial load
   setTimeout(() => {
     if (connectionError.value) {
       checkVNCService()
     }
   }, 3000)
-  
+
   // Listen for fullscreen changes
-  document.addEventListener('fullscreenchange', () => {
-    isFullscreen.value = !!document.fullscreenElement
-  })
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('fullscreenchange', () => {})
+  // Clean up timeout
+  if (loadingTimeout.value) {
+    clearTimeout(loadingTimeout.value)
+    loadingTimeout.value = null
+  }
+
+  // Clean up event listener
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 </script>
 
