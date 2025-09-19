@@ -54,7 +54,7 @@ start_redis_vm() {
 start_frontend_vm() {
     log "Starting Frontend service on VM (172.16.168.21)..."
     
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF'
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF'
         # Check required packages and install if missing (requires passwordless sudo)
         if ! command -v nc >/dev/null 2>&1 || ! command -v node >/dev/null 2>&1; then
             echo "Missing required packages. Attempting installation..."
@@ -124,7 +124,7 @@ EOF
 start_npu_worker_vm() {
     log "Starting NPU Worker service on VM (172.16.168.22)..."
     
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.22" << 'EOF'
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.22" << 'EOF'
         # Check required packages and install if missing (requires passwordless sudo)
         if ! command -v python3 >/dev/null 2>&1; then
             echo "Missing Python3. Attempting installation..."
@@ -213,7 +213,7 @@ EOF
 start_ai_stack_vm() {
     log "Starting AI Stack service on VM (172.16.168.24)..."
     
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.24" << 'EOF'
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.24" << 'EOF'
         # Ensure required packages are installed
         if ! command -v python3 >/dev/null 2>&1; then
             echo "Installing required packages (python3, venv)..."
@@ -294,7 +294,7 @@ EOF
 start_browser_vm() {
     log "Starting Browser service on VM (172.16.168.25)..."
     
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.25" << 'EOF'
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.25" << 'EOF'
         # Ensure required packages are installed (including Xvfb for headless browser)
         if ! command -v python3 >/dev/null 2>&1 || ! command -v Xvfb >/dev/null 2>&1; then
             echo "Installing required packages (python3, venv, xvfb)..."
@@ -394,7 +394,7 @@ check_ssh_connectivity() {
         vm_ip=${VMS[$vm_name]}
         echo -n "  Testing $vm_name ($vm_ip)... "
         
-        if timeout 5 ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
             echo -e "${GREEN}✅ Connected${NC}"
         else
             echo -e "${RED}❌ Failed${NC}"

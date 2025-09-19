@@ -42,7 +42,7 @@ warning() {
 stop_frontend_vm() {
     log "Stopping Frontend service on VM (172.16.168.21)..."
 
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF' || true
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF' || true
         # Stop frontend processes - only kill processes owned by current user
         pkill -u "$(whoami)" -f "npm.*dev" 2>/dev/null || echo "No npm dev processes to stop"
         pkill -u "$(whoami)" -f "node.*vite" 2>/dev/null || echo "No Vite processes to stop"
@@ -56,21 +56,27 @@ EOF
 stop_npu_worker_vm() {
     log "Stopping NPU Worker service on VM (172.16.168.22)..."
 
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.22" << 'EOF' || true
-        # Stop NPU worker processes - only kill processes owned by current user
-        pkill -u "$(whoami)" -f "npu.*worker" 2>/dev/null || echo "No NPU worker processes to stop"
-        pkill -u "$(whoami)" -f "python.*8081" 2>/dev/null || echo "No Python processes on port 8081 to stop"
-
-        # Try to stop any systemd services if running
-        if systemctl is-active --quiet npu-worker 2>/dev/null; then
-            if sudo -n systemctl stop npu-worker 2>/dev/null; then
-                echo "NPU Worker systemd service stopped"
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.22" << 'EOF' || true
+        # Stop NPU Worker systemd service
+        if systemctl is-active autobot-npu-worker >/dev/null 2>&1; then
+            echo "Stopping NPU Worker systemd service..."
+            if sudo -n systemctl stop autobot-npu-worker 2>/dev/null; then
+                echo "NPU Worker service stopped via systemctl"
             else
-                echo "Note: NPU Worker systemd service requires manual stop"
+                echo "Warning: Could not stop NPU Worker service (passwordless sudo not configured)"
+                echo "Attempting to kill processes directly..."
+                pkill -u "$(whoami)" -f "npu_worker_main.py" 2>/dev/null && echo "Stopped NPU worker main process"
             fi
+        else
+            echo "NPU Worker service not running"
         fi
 
-        echo "NPU Worker service stop attempted"
+        # Disable auto-restart
+        if sudo -n systemctl disable autobot-npu-worker 2>/dev/null; then
+            echo "Disabled NPU Worker auto-restart"
+        fi
+
+        echo "NPU Worker service stopped"
 EOF
 
     success "NPU Worker VM service stopped"
@@ -78,38 +84,41 @@ EOF
 
 stop_redis_vm() {
     log "Stopping Redis service on VM (172.16.168.23)..."
-    
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.23" << 'EOF' || true
-        # Stop Redis Stack service
+
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.23" << 'EOF' || true
+        # Stop Redis Stack systemd service
         if systemctl is-active redis-stack-server >/dev/null 2>&1; then
-            echo "Stopping Redis Stack service..."
-            # Try passwordless sudo first
+            echo "Stopping Redis Stack systemd service..."
             if sudo -n systemctl stop redis-stack-server 2>/dev/null; then
-                echo "Redis Stack stopped via systemctl"
+                echo "Redis Stack service stopped via systemctl"
             else
-                echo "Warning: Could not stop Redis Stack (passwordless sudo not configured)"
-                # Try to stop with regular process kill
-                pkill redis-stack-server 2>/dev/null || true
+                echo "Warning: Could not stop Redis Stack service (passwordless sudo not configured)"
+                echo "Attempting to kill processes directly..."
+                pkill -u "$(whoami)" -f "redis-stack-server" 2>/dev/null && echo "Stopped Redis Stack wrapper script"
+                pkill -u "$(whoami)" -f "/opt/redis-stack/bin/redis-server" 2>/dev/null && echo "Stopped Redis server process"
             fi
-        fi
-        
-        # Stop any standalone Redis processes (try both ways)
-        if sudo -n pkill redis-server 2>/dev/null; then
-            echo "Redis processes stopped via sudo"
         else
-            pkill redis-server 2>/dev/null || echo "Note: Some Redis processes may still be running"
+            echo "Redis Stack service not running"
         fi
-        
+
+        # Disable auto-restart and mask service to prevent any restart
+        if sudo -n systemctl disable redis-stack-server 2>/dev/null; then
+            echo "Disabled Redis Stack auto-restart"
+        fi
+        if sudo -n systemctl mask redis-stack-server 2>/dev/null; then
+            echo "Masked Redis Stack service to prevent restart"
+        fi
+
         echo "Redis service stopped"
 EOF
-    
+
     success "Redis VM service stopped"
 }
 
 stop_ai_stack_vm() {
     log "Stopping AI Stack service on VM (172.16.168.24)..."
 
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.24" << 'EOF' || true
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.24" << 'EOF' || true
         # Stop AI stack processes - only kill processes owned by current user
         pkill -u "$(whoami)" -f "ai.*stack" 2>/dev/null || echo "No AI stack processes to stop"
         pkill -u "$(whoami)" -f "python.*8080" 2>/dev/null || echo "No Python processes on port 8080 to stop"
@@ -124,18 +133,41 @@ EOF
 stop_browser_vm() {
     log "Stopping Browser service on VM (172.16.168.25)..."
 
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.25" << 'EOF' || true
-        # Stop browser service processes - only kill processes owned by current user
-        pkill -u "$(whoami)" -f "browser.*service" 2>/dev/null || echo "No browser service processes to stop"
-        pkill -u "$(whoami)" -f "python.*3000" 2>/dev/null || echo "No Python processes on port 3000 to stop"
+    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.25" << 'EOF' || true
+        # Stop Browser systemd services
+        if systemctl is-active autobot-browser.service >/dev/null 2>&1; then
+            echo "Stopping Browser systemd service..."
+            if sudo -n systemctl stop autobot-browser.service 2>/dev/null; then
+                echo "Browser service stopped via systemctl"
+            else
+                echo "Warning: Could not stop Browser service (passwordless sudo not configured)"
+            fi
+        fi
 
-        # Stop Xvfb processes
-        pkill -u "$(whoami)" -f "Xvfb.*:99" 2>/dev/null || echo "No Xvfb processes to stop"
+        if systemctl is-active autobot-browser-service.service >/dev/null 2>&1; then
+            echo "Stopping Browser service systemd service..."
+            if sudo -n systemctl stop autobot-browser-service.service 2>/dev/null; then
+                echo "Browser service service stopped via systemctl"
+            fi
+        fi
 
-        # Kill any remaining browser processes (only owned by current user)
-        pkill -u "$(whoami)" chromium 2>/dev/null || echo "No Chromium processes to stop"
-        pkill -u "$(whoami)" firefox 2>/dev/null || echo "No Firefox processes to stop"
-        pkill -u "$(whoami)" playwright 2>/dev/null || echo "No Playwright processes to stop"
+        # Disable auto-restart and mask services
+        if sudo -n systemctl disable autobot-browser.service 2>/dev/null; then
+            echo "Disabled Browser auto-restart"
+        fi
+        if sudo -n systemctl mask autobot-browser.service 2>/dev/null; then
+            echo "Masked Browser service to prevent restart"
+        fi
+        if sudo -n systemctl disable autobot-browser-service.service 2>/dev/null; then
+            echo "Disabled Browser service auto-restart"
+        fi
+        if sudo -n systemctl mask autobot-browser-service.service 2>/dev/null; then
+            echo "Masked Browser service service to prevent restart"
+        fi
+
+        # Kill remaining processes if any
+        pkill -u "$(whoami)" -f "playwright-server.js" 2>/dev/null && echo "Stopped remaining Playwright server processes"
+        pkill -u "$(whoami)" -f "headless_shell" 2>/dev/null && echo "Stopped remaining Chromium processes"
 
         echo "Browser service stopped"
 EOF
@@ -159,7 +191,7 @@ check_ssh_connectivity() {
         vm_ip=${VMS[$vm_name]}
         echo -n "  Testing $vm_name ($vm_ip)... "
         
-        if timeout 5 ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
             echo -e "${GREEN}✅ Connected${NC}"
             accessible_vms+=("$vm_name")
         else
@@ -229,7 +261,7 @@ main() {
     fi
     
     echo -n "  Redis (172.16.168.23:6379)... "
-    if echo "PING" | nc -w 1 172.16.168.23 6379 | grep -q "PONG" 2>/dev/null; then
+    if echo "PING" | nc -w 1 172.16.168.23 6379 2>/dev/null | grep -q "PONG" 2>/dev/null; then
         echo -e "${YELLOW}⚠️  Still running${NC}"
     else
         echo -e "${GREEN}✅ Stopped${NC}"
