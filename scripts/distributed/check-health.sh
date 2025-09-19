@@ -5,7 +5,7 @@ echo "🏥 AutoBot Distributed Services Health Check"
 echo "============================================="
 
 declare -A SERVICES=(
-    ["Backend (Local)"]="127.0.0.1:8002/api/health"
+    ["Backend (Local)"]="127.0.0.1:8001/api/health"
     ["Redis VM"]="172.16.168.23:6379"
     ["NPU Worker VM"]="172.16.168.22:8081/health" 
     ["Frontend VM"]="172.16.168.21:5173"

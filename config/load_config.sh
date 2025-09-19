@@ -39,7 +39,7 @@ get_config() {
             "infrastructure.ports.redis") echo "6379" ;;
             "infrastructure.ports.ollama") echo "11434" ;;
             "infrastructure.ports.vnc") echo "6080" ;;
-            "infrastructure.ports.websocket") echo "8002" ;;
+            "infrastructure.ports.websocket") echo "8001" ;;
             *) echo "null" ;;
         esac
     fi
