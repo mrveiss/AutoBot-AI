@@ -1,0 +1,640 @@
+#!/usr/bin/env python3
+"""
+Multi-Modal AI Processing API Endpoints
+Provides REST API access to GPU-accelerated multi-modal AI capabilities
+"""
+
+import asyncio
+import base64
+import io
+import logging
+import time
+from typing import List, Optional, Dict, Any, Union
+import uuid
+import numpy as np
+from pathlib import Path
+
+from fastapi import APIRouter, File, UploadFile, HTTPException, Form, Depends
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+import torch
+
+# Import AutoBot multi-modal components
+from src.unified_multimodal_processor import (
+    unified_processor,
+    MultiModalInput,
+    ModalityType,
+    ProcessingIntent
+)
+from src.ai_hardware_accelerator import accelerated_embedding_generation, HardwareDevice
+from src.npu_semantic_search import get_npu_search_engine
+
+logger = logging.getLogger(__name__)
+
+# Initialize router
+router = APIRouter(prefix="/api/multimodal", tags=["multimodal"])
+
+# Pydantic models for request/response
+class CrossModalSearchRequest(BaseModel):
+    query: Union[str, bytes]
+    query_modality: str = Field(..., description="Type of query: text, image, audio")
+    target_modalities: Optional[List[str]] = Field(default=None, description="Target modalities to search")
+    limit: int = Field(default=10, ge=1, le=100, description="Maximum results per modality")
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+class TextProcessingRequest(BaseModel):
+    text: str = Field(..., description="Text content to process")
+    intent: str = Field(default="analysis", description="Processing intent")
+    metadata: Optional[Dict[str, Any]] = Field(default=None)
+
+class EmbeddingRequest(BaseModel):
+    content: Union[str, bytes]
+    modality: str = Field(..., description="Content modality: text, image, audio")
+    preferred_device: Optional[str] = Field(default=None, description="Preferred processing device")
+
+class MultiModalResponse(BaseModel):
+    success: bool
+    result_id: str
+    modality: str
+    processing_time: float
+    confidence: float
+    result_data: Dict[str, Any]
+    device_used: Optional[str] = None
+    error_message: Optional[str] = None
+
+class CrossModalSearchResponse(BaseModel):
+    query: str
+    query_modality: str
+    results: Dict[str, List[Dict[str, Any]]]
+    total_found: int
+    processing_time: float
+
+# Helper functions
+def _get_processing_intent(intent_str: str) -> ProcessingIntent:
+    """Convert string intent to ProcessingIntent enum."""
+    intent_mapping = {
+        "analysis": ProcessingIntent.SCREEN_ANALYSIS,
+        "visual_qa": ProcessingIntent.VISUAL_QA,
+        "voice_command": ProcessingIntent.VOICE_COMMAND,
+        "automation": ProcessingIntent.AUTOMATION_TASK,
+        "content_generation": ProcessingIntent.CONTENT_GENERATION,
+        "decision_making": ProcessingIntent.DECISION_MAKING
+    }
+    return intent_mapping.get(intent_str.lower(), ProcessingIntent.SCREEN_ANALYSIS)
+
+def _get_modality_type(modality_str: str) -> ModalityType:
+    """Convert string modality to ModalityType enum."""
+    modality_mapping = {
+        "text": ModalityType.TEXT,
+        "image": ModalityType.IMAGE,
+        "audio": ModalityType.AUDIO,
+        "video": ModalityType.VIDEO,
+        "combined": ModalityType.COMBINED
+    }
+    return modality_mapping.get(modality_str.lower(), ModalityType.TEXT)
+
+# API Endpoints
+
+@router.post("/process/image", response_model=MultiModalResponse)
+async def process_image(
+    file: UploadFile = File(...),
+    intent: str = Form(default="analysis"),
+    question: Optional[str] = Form(default=None)
+):
+    """Process uploaded image with GPU-accelerated vision models."""
+    start_time = time.time()
+
+    try:
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+
+        # Read image data
+        image_data = await file.read()
+        if len(image_data) == 0:
+            raise HTTPException(status_code=400, detail="Empty image file")
+
+        # Create multi-modal input
+        input_id = f"image_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+        metadata = {"filename": file.filename, "content_type": file.content_type}
+        if question:
+            metadata["question"] = question
+
+        modal_input = MultiModalInput(
+            input_id=input_id,
+            modality_type=ModalityType.IMAGE,
+            intent=_get_processing_intent(intent),
+            data=image_data,
+            metadata=metadata
+        )
+
+        # Process with unified processor
+        result = await unified_processor.process(modal_input)
+
+        processing_time = time.time() - start_time
+
+        return MultiModalResponse(
+            success=result.success,
+            result_id=result.result_id,
+            modality=result.modality_type.value,
+            processing_time=processing_time,
+            confidence=result.confidence,
+            result_data=result.result_data or {},
+            device_used=result.metadata.get("device_used") if result.metadata else None,
+            error_message=result.error_message
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Image processing failed: {e}")
+        processing_time = time.time() - start_time
+        return MultiModalResponse(
+            success=False,
+            result_id=f"error_{int(time.time())}",
+            modality="image",
+            processing_time=processing_time,
+            confidence=0.0,
+            result_data={},
+            error_message=str(e)
+        )
+
+@router.post("/process/audio", response_model=MultiModalResponse)
+async def process_audio(
+    file: UploadFile = File(...),
+    intent: str = Form(default="voice_command")
+):
+    """Process uploaded audio with GPU-accelerated speech models."""
+    start_time = time.time()
+
+    try:
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('audio/'):
+            raise HTTPException(status_code=400, detail="File must be an audio file")
+
+        # Read audio data
+        audio_data = await file.read()
+        if len(audio_data) == 0:
+            raise HTTPException(status_code=400, detail="Empty audio file")
+
+        # Create multi-modal input
+        input_id = f"audio_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+        metadata = {"filename": file.filename, "content_type": file.content_type}
+
+        modal_input = MultiModalInput(
+            input_id=input_id,
+            modality_type=ModalityType.AUDIO,
+            intent=_get_processing_intent(intent),
+            data=audio_data,
+            metadata=metadata
+        )
+
+        # Process with unified processor
+        result = await unified_processor.process(modal_input)
+
+        processing_time = time.time() - start_time
+
+        return MultiModalResponse(
+            success=result.success,
+            result_id=result.result_id,
+            modality=result.modality_type.value,
+            processing_time=processing_time,
+            confidence=result.confidence,
+            result_data=result.result_data or {},
+            device_used=result.metadata.get("device_used") if result.metadata else None,
+            error_message=result.error_message
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Audio processing failed: {e}")
+        processing_time = time.time() - start_time
+        return MultiModalResponse(
+            success=False,
+            result_id=f"error_{int(time.time())}",
+            modality="audio",
+            processing_time=processing_time,
+            confidence=0.0,
+            result_data={},
+            error_message=str(e)
+        )
+
+@router.post("/process/text", response_model=MultiModalResponse)
+async def process_text(request: TextProcessingRequest):
+    """Process text with contextual understanding."""
+    start_time = time.time()
+
+    try:
+        # Create multi-modal input
+        input_id = f"text_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+
+        modal_input = MultiModalInput(
+            input_id=input_id,
+            modality_type=ModalityType.TEXT,
+            intent=_get_processing_intent(request.intent),
+            data=request.text,
+            metadata=request.metadata or {}
+        )
+
+        # Process with unified processor
+        result = await unified_processor.process(modal_input)
+
+        processing_time = time.time() - start_time
+
+        return MultiModalResponse(
+            success=result.success,
+            result_id=result.result_id,
+            modality=result.modality_type.value,
+            processing_time=processing_time,
+            confidence=result.confidence,
+            result_data=result.result_data or {},
+            device_used=result.metadata.get("device_used") if result.metadata else None,
+            error_message=result.error_message
+        )
+
+    except Exception as e:
+        logger.error(f"Text processing failed: {e}")
+        processing_time = time.time() - start_time
+        return MultiModalResponse(
+            success=False,
+            result_id=f"error_{int(time.time())}",
+            modality="text",
+            processing_time=processing_time,
+            confidence=0.0,
+            result_data={},
+            error_message=str(e)
+        )
+
+@router.post("/embeddings/generate")
+async def generate_embedding(request: EmbeddingRequest):
+    """Generate embeddings for any modality."""
+    start_time = time.time()
+
+    try:
+        # Map device preference
+        device_preference = None
+        if request.preferred_device:
+            device_mapping = {
+                "gpu": HardwareDevice.GPU,
+                "npu": HardwareDevice.NPU,
+                "cpu": HardwareDevice.CPU
+            }
+            device_preference = device_mapping.get(request.preferred_device.lower())
+
+        # Generate embedding
+        embedding = await accelerated_embedding_generation(
+            content=request.content,
+            modality=request.modality,
+            preferred_device=device_preference
+        )
+
+        processing_time = time.time() - start_time
+
+        return {
+            "success": True,
+            "embedding": embedding.tolist(),
+            "dimension": len(embedding),
+            "modality": request.modality,
+            "processing_time": processing_time,
+            "device_used": str(device_preference) if device_preference else "auto"
+        }
+
+    except Exception as e:
+        logger.error(f"Embedding generation failed: {e}")
+        processing_time = time.time() - start_time
+        return {
+            "success": False,
+            "error": str(e),
+            "processing_time": processing_time
+        }
+
+@router.post("/search/cross-modal", response_model=CrossModalSearchResponse)
+async def cross_modal_search(request: CrossModalSearchRequest):
+    """Perform cross-modal similarity search."""
+    start_time = time.time()
+
+    try:
+        # Get NPU search engine
+        search_engine = await get_npu_search_engine()
+
+        # Perform cross-modal search
+        results = await search_engine.cross_modal_search(
+            query=request.query,
+            query_modality=request.query_modality,
+            target_modalities=request.target_modalities,
+            limit=request.limit,
+            similarity_threshold=request.similarity_threshold
+        )
+
+        # Convert results to serializable format
+        serialized_results = {}
+        total_found = 0
+
+        for modality, modality_results in results.items():
+            serialized_modality_results = []
+            for result in modality_results:
+                serialized_modality_results.append({
+                    "content": result.content,
+                    "modality": result.modality,
+                    "metadata": result.metadata,
+                    "score": result.score,
+                    "doc_id": result.doc_id,
+                    "source_modality": result.source_modality,
+                    "fusion_confidence": result.fusion_confidence
+                })
+            serialized_results[modality] = serialized_modality_results
+            total_found += len(serialized_modality_results)
+
+        processing_time = time.time() - start_time
+
+        return CrossModalSearchResponse(
+            query=str(request.query),
+            query_modality=request.query_modality,
+            results=serialized_results,
+            total_found=total_found,
+            processing_time=processing_time
+        )
+
+    except Exception as e:
+        logger.error(f"Cross-modal search failed: {e}")
+        processing_time = time.time() - start_time
+        return CrossModalSearchResponse(
+            query=str(request.query),
+            query_modality=request.query_modality,
+            results={},
+            total_found=0,
+            processing_time=processing_time
+        )
+
+@router.get("/stats")
+async def get_multimodal_stats():
+    """Get multi-modal processing statistics and system status."""
+    try:
+        # Get unified processor stats
+        processor_stats = unified_processor.get_stats()
+
+        # Get GPU status
+        gpu_available = torch.cuda.is_available()
+        gpu_stats = {}
+        if gpu_available:
+            gpu_stats = {
+                "gpu_memory_allocated_mb": torch.cuda.memory_allocated() / 1024 / 1024,
+                "gpu_memory_reserved_mb": torch.cuda.memory_reserved() / 1024 / 1024,
+                "gpu_device_count": torch.cuda.device_count(),
+                "gpu_device_name": torch.cuda.get_device_name(0) if torch.cuda.device_count() > 0 else None
+            }
+
+        # Get search engine status
+        search_engine_status = {}
+        try:
+            search_engine = await get_npu_search_engine()
+            search_engine_status = await search_engine.get_health_status()
+        except Exception as e:
+            search_engine_status = {"error": str(e), "status": "unavailable"}
+
+        return {
+            "success": True,
+            "timestamp": time.time(),
+            "processor_stats": processor_stats,
+            "gpu_available": gpu_available,
+            "gpu_stats": gpu_stats,
+            "search_engine_status": search_engine_status,
+            "system_status": "healthy"
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get multimodal stats: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": time.time(),
+            "system_status": "error"
+        }
+
+@router.post("/fusion/combine")
+async def combine_multimodal_inputs(
+    text: Optional[str] = Form(default=None),
+    image_file: Optional[UploadFile] = File(default=None),
+    audio_file: Optional[UploadFile] = File(default=None),
+    intent: str = Form(default="decision_making")
+):
+    """Combine multiple modalities using attention-based fusion."""
+    start_time = time.time()
+
+    try:
+        inputs = []
+
+        # Process text input
+        if text:
+            text_input = MultiModalInput(
+                input_id=f"text_{int(time.time() * 1000)}",
+                modality_type=ModalityType.TEXT,
+                intent=_get_processing_intent(intent),
+                data=text
+            )
+            inputs.append(text_input)
+
+        # Process image input
+        if image_file:
+            image_data = await image_file.read()
+            image_input = MultiModalInput(
+                input_id=f"image_{int(time.time() * 1000)}",
+                modality_type=ModalityType.IMAGE,
+                intent=_get_processing_intent(intent),
+                data=image_data,
+                metadata={"filename": image_file.filename}
+            )
+            inputs.append(image_input)
+
+        # Process audio input
+        if audio_file:
+            audio_data = await audio_file.read()
+            audio_input = MultiModalInput(
+                input_id=f"audio_{int(time.time() * 1000)}",
+                modality_type=ModalityType.AUDIO,
+                intent=_get_processing_intent(intent),
+                data=audio_data,
+                metadata={"filename": audio_file.filename}
+            )
+            inputs.append(audio_input)
+
+        if not inputs:
+            raise HTTPException(status_code=400, detail="At least one input modality required")
+
+        # Process all inputs
+        results = []
+        for modal_input in inputs:
+            result = await unified_processor.process(modal_input)
+            results.append(result)
+
+        # Create combined input for fusion
+        combined_input = MultiModalInput(
+            input_id=f"combined_{int(time.time() * 1000)}",
+            modality_type=ModalityType.COMBINED,
+            intent=_get_processing_intent(intent),
+            data="",  # Not used for combined
+            metadata={
+                "image": image_file.filename if image_file else None,
+                "audio": audio_file.filename if audio_file else None,
+                "text_preview": text[:100] if text else None
+            }
+        )
+
+        # Use the internal _process_combined method
+        fusion_result = await unified_processor._process_combined(combined_input)
+
+        processing_time = time.time() - start_time
+
+        return {
+            "success": fusion_result.success,
+            "fusion_result": fusion_result.result_data,
+            "individual_results": [
+                {
+                    "modality": r.modality_type.value,
+                    "confidence": r.confidence,
+                    "data": r.result_data
+                } for r in results
+            ],
+            "processing_time": processing_time,
+            "fusion_confidence": fusion_result.confidence,
+            "modalities_combined": len(inputs)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Multi-modal fusion failed: {e}")
+        processing_time = time.time() - start_time
+        return {
+            "success": False,
+            "error": str(e),
+            "processing_time": processing_time
+        }
+
+# Performance monitoring endpoints
+@router.get("/performance/stats")
+async def get_performance_stats():
+    """Get comprehensive performance statistics for multi-modal processing."""
+    try:
+        # Get performance metrics from monitor
+        performance_metrics = await unified_processor.performance_monitor.monitor_processing_performance()
+
+        # Get processor-specific stats
+        processor_stats = unified_processor.get_stats()
+
+        # Combine all performance data
+        return {
+            "success": True,
+            "timestamp": time.time(),
+            "performance_metrics": performance_metrics,
+            "processor_stats": processor_stats,
+            "optimization_status": {
+                "auto_optimization_enabled": True,
+                "mixed_precision_enabled": unified_processor.use_amp,
+                "device": str(unified_processor.device),
+                "batch_sizes": unified_processor.performance_monitor.batch_sizes
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get performance stats: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+@router.post("/performance/optimize")
+async def optimize_performance():
+    """Manually trigger performance optimization."""
+    try:
+        optimization_result = await unified_processor.performance_monitor.optimize_gpu_memory()
+
+        return {
+            "success": True,
+            "timestamp": time.time(),
+            "optimization_result": optimization_result,
+            "message": "Performance optimization completed"
+        }
+
+    except Exception as e:
+        logger.error(f"Performance optimization failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+@router.get("/performance/summary")
+async def get_performance_summary():
+    """Get a concise performance summary."""
+    try:
+        summary = unified_processor.performance_monitor.get_performance_summary()
+
+        return {
+            "success": True,
+            "timestamp": time.time(),
+            "summary": summary
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get performance summary: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+@router.post("/performance/batch-size")
+async def update_batch_size(
+    modality: str,
+    batch_size: int
+):
+    """Update optimal batch size for a specific modality."""
+    try:
+        if modality not in unified_processor.performance_monitor.batch_sizes:
+            return {
+                "success": False,
+                "error": f"Unknown modality: {modality}",
+                "available_modalities": list(unified_processor.performance_monitor.batch_sizes.keys())
+            }
+
+        if batch_size < 1 or batch_size > 128:
+            return {
+                "success": False,
+                "error": "Batch size must be between 1 and 128"
+            }
+
+        old_size = unified_processor.performance_monitor.batch_sizes[modality]
+        unified_processor.performance_monitor.batch_sizes[modality] = batch_size
+
+        return {
+            "success": True,
+            "timestamp": time.time(),
+            "modality": modality,
+            "old_batch_size": old_size,
+            "new_batch_size": batch_size,
+            "message": f"Updated {modality} batch size from {old_size} to {batch_size}"
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to update batch size: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+# Health check endpoint
+@router.get("/health")
+async def health_check():
+    """Health check for multi-modal API."""
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "gpu_available": torch.cuda.is_available(),
+        "processor_ready": unified_processor is not None,
+        "performance_monitoring": unified_processor.performance_monitor is not None,
+        "mixed_precision_enabled": getattr(unified_processor, 'use_amp', False)
+    }
