@@ -182,8 +182,6 @@ bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
 - `setup.sh` - Added to standardized setup script
 - `run_autobot.sh` - Added to startup script
 - `.env` and `.env.localhost` - Added to environment files
-- `docker/backend/Dockerfile` - Added to Docker image
-- `docker-compose.yml` - Added to AI stack and NPU worker services
 
 **Environment Variables**:
 ```bash
@@ -368,7 +366,7 @@ User Response
 **Root Cause**:
 
 - Redis connection in `app_factory.py` was blocking with 30s timeout
-- DNS resolution of `host.docker.internal` was adding additional delays
+- DNS resolution was adding additional delays
 - Multiple Redis connection attempts during initialization
 
 **Solution**: Created `backend/fast_app_factory_fix.py` with:
@@ -392,13 +390,13 @@ User Response
 **Solution**: Added minimal ChatHistoryManager initialization in fast_app_factory_fix.py
 **Status**: Chat save operations now working successfully
 
-### 4. Docker Infrastructure Fixes (COMPLETED)
+### 4. Infrastructure Fixes (COMPLETED)
 
 **Fixed Issues**:
 
-- Invalid backend service dependency in docker-compose files
+- Invalid backend service dependency in compose files
 - AI Stack trying to import non-existent `src.ai_server` module
-- Containers being removed on shutdown (now preserved by default)
+- Services being removed on shutdown (now preserved by default)
 - Browser not launching in dev mode (fixed with proven logic from run_agent.sh)
 
 ## Setup and Installation
@@ -424,10 +422,9 @@ OPTIONS:
 
 **What setup.sh does:**
 - ✅ Installs all required dependencies
-- ✅ Configures distributed VM infrastructure 
+- ✅ Configures distributed VM infrastructure
 - ✅ Sets up environment variables for all VMs
 - ✅ Initializes Redis databases
-- ✅ Prepares Docker containers
 - ✅ Configures Ollama LLM service
 - ✅ Sets up VNC desktop access
 - ✅ Validates all service connections
@@ -449,7 +446,7 @@ bash run_autobot.sh [OPTIONS]
 OPTIONS:
   --dev              Development mode with auto-reload and debugging
   --prod             Production mode (default)
-  --no-build         Skip Docker builds (fastest restart)
+  --no-build         Skip builds (fastest restart)
   --build            Force build even if images exist
   --rebuild          Force rebuild everything (clean slate)
   --no-desktop       Disable VNC desktop access
@@ -464,7 +461,7 @@ OPTIONS:
 bash run_autobot.sh --dev --no-build
 ```
 - Fastest startup for development
-- Uses existing containers
+- Uses existing services
 - Auto-reload and debugging enabled
 
 **Fresh Development Setup:**
@@ -487,7 +484,7 @@ bash run_autobot.sh --prod
 ```bash
 bash run_autobot.sh --dev --rebuild
 ```
-- Complete rebuild of all containers
+- Complete rebuild of all services
 - Use when major changes are made
 
 ### Desktop Access (VNC)
@@ -561,7 +558,7 @@ Desktop access is **enabled by default** on all modes:
 - `setup.sh`: Standardized setup and installation script
 - `run_autobot.sh`: Main startup script (replaces all other run methods)
 - `backend/fast_app_factory_fix.py`: Fast backend with Redis timeout fix
-- `docker-compose.yml`: Distributed VM Docker configuration
+- `compose.yml`: Distributed VM configuration
 - `.env`: Main environment configuration for distributed infrastructure
 - `config/config.yaml`: Central configuration file
 
@@ -574,10 +571,10 @@ All major issues have been resolved:
 3. **Chat Functionality**: Save endpoints working correctly
 4. **Frontend-Backend Connectivity**: Fixed via Vite proxy configuration
 5. **WebSocket Communication**: Real-time connections stable and working
-6. **Docker Services**: All containers running successfully
+6. **VM Services**: All services running successfully
 7. **Knowledge Base**: Async population with GPU acceleration working
 8. **Hardware Optimization**: Full utilization of Intel Ultra 9 185H + RTX 4070
-9. **Container Management**: Smart build system - only rebuilds when necessary
+9. **Service Management**: Smart build system - only rebuilds when necessary
 10. **VNC Desktop Access**: Enabled by default with kex integration
 11. **Deadlock Prevention**: Async file I/O eliminates event loop blocking
 12. **Memory Leak Protection**: Automatic cleanup prevents unbounded growth
@@ -588,7 +585,7 @@ The application is now fully functional with:
 - Backend responding on port 8001 (main machine)
 - **Single Frontend VM** running on 172.16.168.21:5173 with proxy to backend
 - **VNC desktop access on port 6080 (enabled by default)**
-- All Docker services healthy
+- All VM services healthy
 - Chat save operations working
 - WebSocket real-time communication active
 - No blocking Redis connections
@@ -648,8 +645,8 @@ The application is now fully functional with:
    - Result: Backend now responsive, chat endpoints work without timeout
 
 7. **Terminal Integration Errors**: "@xterm/xterm" import failures
-   - Root cause: Missing npm packages in Docker container
-   - Solution: Added packages to package.json and rebuilt frontend container with --no-cache
+   - Root cause: Missing npm packages in frontend service
+   - Solution: Added packages to package.json and rebuilt frontend service with --no-cache
    - Result: Terminal components load successfully
 
 8. **Batch API 404 Errors**: /api/batch/chat-init not found
@@ -670,12 +667,12 @@ The application is now fully functional with:
 ### System Architecture Status
 
 - **Backend**: Running on host with fast startup (2s vs 30s)
-- **Frontend**: Containerized with hot reload
-- **Redis**: Containerized, healthy, 2-second connection timeout
-- **Browser Service**: Containerized, Playwright ready
-- **AI Stack**: Containerized, health checks passing
-- **NPU Worker**: Containerized, ready for GPU tasks
-- **Seq Logging**: Containerized, collecting logs
+- **Frontend**: VM-based with hot reload
+- **Redis**: VM-based, healthy, 2-second connection timeout
+- **Browser Service**: VM-based, Playwright ready
+- **AI Stack**: VM-based, health checks passing
+- **NPU Worker**: VM-based, ready for GPU tasks
+- **Seq Logging**: VM-based, collecting logs
 - **📚 Documentation**: Complete enterprise-grade documentation suite
 
 All services now start cleanly and maintain stable operations.
@@ -751,7 +748,8 @@ All services now start cleanly and maintain stable operations.
 **CRITICAL**:
 
 - Ignore any assumptions and reason from facts only.
-- use subagents and available mcp's to find the solutions.
+- launch multiple agents in parallel to handle the different aspects of task
+- use subagents in parallel and available mcp's to find the solutions.
 - work on one problem at a time, it could be that problem you are working on  is caused by another problem, leave no stone unturned.
 - If something is not working, look into logs for clues, check all logs.
 - Timeout is not a solution to problem.
@@ -763,16 +761,25 @@ All services now start cleanly and maintain stable operations.
 - Allways trace  all errors full way, if its a frontend error, trace it all the way to backend, if backend all the way to frontend, allways look in to logs.
 - when installing dependency allways update the install scripts for the fresh deployments.
 
-## Remote Host Development Rules
+## ⚠️ CRITICAL: Remote Host Development Rules
 
-**MANDATORY - NEVER EDIT CODE DIRECTLY ON REMOTE HOSTS**:
+**🚨 MANDATORY - NEVER EDIT CODE DIRECTLY ON REMOTE HOSTS 🚨**
+
+**This rule MUST NEVER BE BROKEN under any circumstances:**
 
 - **ALL code edits MUST be made locally** and then synced to remote hosts
 - **NEVER use SSH to edit files directly** on remote VMs (172.16.168.21-25)
 - **NEVER use remote text editors** (vim, nano, etc.) on remote hosts
+- **NEVER use vi, vim, nano, emacs** or any editor on remote machines
 - **Configuration changes MUST be made locally** and deployed via sync scripts
+- **ALWAYS use sync scripts to push changes** to remote machines after local edits
 
-### 🔐 CERTIFICATE-BASED SSH AUTHENTICATION (2025-09-12)
+**🔄 MANDATORY WORKFLOW AFTER ANY CODE CHANGES:**
+1. **Edit locally** - Make ALL changes in `/home/kali/Desktop/AutoBot/`
+2. **Immediately sync** - Use appropriate sync script after each edit session
+3. **Never skip sync** - Remote machines must stay synchronized with local changes
+
+### 🔐 CERTIFICATE-BASED SSH AUTHENTICATION
 
 **MANDATORY: Use SSH keys instead of passwords for all operations**
 
@@ -821,23 +828,48 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
 - ~~`sshpass -p "autobot" ssh`~~ → Use `ssh -i ~/.ssh/autobot_key`
 - ~~`sshpass -p "autobot" scp`~~ → Use `scp -i ~/.ssh/autobot_key`
 
-**Proper Workflow for Remote Changes**:
-1. **Edit locally** - Make all changes in `/home/kali/Desktop/AutoBot/`
+**🔄 MANDATORY WORKFLOW FOR REMOTE CHANGES (STRICTLY ENFORCED)**:
+1. **Edit locally** - Make ALL changes in `/home/kali/Desktop/AutoBot/`
 2. **Test locally** - Verify changes work on local development environment
-3. **Sync to remote** - Use `./sync-frontend.sh` or tar/scp method
+3. **IMMEDIATELY sync to remote** - Use `./sync-frontend.sh` or appropriate sync script
 4. **Verify on remote** - Check that changes are applied correctly
+5. **NEVER skip step 3** - Remote sync is mandatory after every edit session
+
+**⚠️ CONSEQUENCES OF VIOLATING THIS RULE:**
+- **Configuration drift** between local and remote environments
+- **Lost development work** due to sync conflicts
+- **System architecture violations** requiring manual cleanup
+- **Port conflicts** and service disruption
+- **Broken distributed system coordination**
+- **Unrecoverable state inconsistencies**
 
 **Sync Methods**:
 - **Frontend production build**: `./sync-frontend.sh` (builds and deploys to /var/www/html/)
 - **Frontend source code**: `tar czf /tmp/frontend-src.tar.gz --exclude=node_modules --exclude=dist --exclude=.git -C autobot-vue . && sshpass -p "autobot" scp -o StrictHostKeyChecking=no /tmp/frontend-src.tar.gz autobot@172.16.168.21:/tmp/ && sshpass -p "autobot" ssh -o StrictHostKeyChecking=no autobot@172.16.168.21 "cd /home/autobot/autobot-vue && tar xzf /tmp/frontend-src.tar.gz"`
 - **Backend/other services**: Use ansible playbooks or custom sync scripts
 
-**Why This Rule Exists**:
-- Maintains single source of truth (local development)
-- Prevents configuration drift between environments
-- Ensures reproducible deployments
-- Allows proper version control tracking
-- Prevents accidental production changes
+**🎯 WHY THIS RULE MUST NEVER BE BROKEN:**
+
+**💥 CRITICAL ISSUE: NO CODE TRACKING ON REMOTE MACHINES**
+- **No version control** on remote VMs - changes are completely untracked
+- **No backup system** - edits made remotely are never saved or recorded
+- **No change history** - impossible to know what was modified, when, or by whom
+- **No rollback capability** - cannot undo or revert remote changes
+
+**⚠️ REMOTE MACHINES ARE EPHEMERAL:**
+- **Can be reinstalled at any moment** without warning
+- **All local changes will be PERMANENTLY LOST** during reinstallation
+- **No recovery mechanism** for work done directly on remote machines
+- **Complete work loss** is inevitable with direct remote editing
+
+**📍 ONLY LOCAL MACHINE HAS:**
+- **Git version control** - every change tracked and recoverable
+- **Permanent storage** - work survives system restarts and updates
+- **Change tracking** - full history of what was modified and when
+- **Backup protection** - code is preserved and can be restored
+
+**🚨 ZERO TOLERANCE POLICY:**
+Direct editing on remote machines (172.16.168.21-25) **GUARANTEES WORK LOSS** when machines are reinstalled. We cannot track remote changes and cannot recover lost work.
 
 ## Fixes Applied During This Session
 
@@ -852,8 +884,8 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
 
 ### 3. Terminal Package Persistence
 - Added @xterm packages to `autobot-vue/package.json` dependencies
-- Rebuilt frontend container with --no-cache to ensure persistence
-- Packages now survive container restarts and rebuilds
+- Rebuilt frontend service with --no-cache to ensure persistence
+- Packages now survive service restarts and rebuilds
 
 ### 4. Multiple Async/Blocking Operation Fixes
 - **KB Librarian Agent**: Replaced sync file I/O with `asyncio.to_thread()`
@@ -967,7 +999,7 @@ class OllamaConnectionPool:
 
 ##### 5. **Standardized Service Addressing** (`src/config.py` lines 72-105)
 - **Single Source of Truth**: Centralized service URL generation function
-- **Environment Detection**: Automatic host resolution (container vs host)
+- **Environment Detection**: Automatic host resolution (VM vs host)
 - **Configuration Logging**: Debug output for service addressing
 - **Consistency**: All services use standardized addressing patterns
 
@@ -983,18 +1015,10 @@ def get_standardized_service_address(service_name: str, port: int, protocol: str
     return f"{protocol}://{host}:{port}"
 ```
 
-##### 6. **Docker Health Check Fixes** (`docker-compose.yml`)
-- **Replaced `curl` with `wget`**: More reliable for Node.js containers
+##### 6. **VM Health Check Fixes**
+- **Replaced `curl` with `wget`**: More reliable for Node.js services
 - **Consistent Health Endpoints**: Standardized health check URLs
 - **Proper Timeouts**: 10-second timeout with 3 retries
-
-```yaml
-healthcheck:
-  test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
-  interval: 30s
-  timeout: 10s
-  retries: 3
-```
 
 #### **Impact and Results**
 
@@ -1039,10 +1063,10 @@ These fixes address the **root architectural causes** rather than symptoms, maki
 curl http://localhost:8001/api/health
 
 # Redis connection
-docker exec autobot-redis redis-cli ping
+redis-cli -h 172.16.168.23 ping
 
 # View logs
-docker compose logs -f
+tail -f logs/backend.log
 ```
 
 ### Frontend Debugging
