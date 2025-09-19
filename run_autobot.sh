@@ -472,7 +472,7 @@ check_vm_connectivity() {
         vm_ip=${VMS[$vm_name]}
         echo -n "  Testing $vm_name ($vm_ip)... "
         
-        if timeout 5 ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
             echo -e "${GREEN}✅ Connected${NC}"
         else
             echo -e "${RED}❌ Failed${NC}"
@@ -513,20 +513,26 @@ start_frontend_dev() {
             return 0
         fi
 
-        echo "  🚀 Starting Vite dev server on frontend VM..."
-
         # Only kill processes if we need to start fresh
         echo "  🧹 Cleaning up existing processes..."
         # Use more targeted process cleanup to avoid hanging
-        timeout 5 ssh -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "pkill -f 'npm.*dev' 2>/dev/null || true; pkill -f 'vite.*5173' 2>/dev/null || true" 2>/dev/null || echo "    Process cleanup completed (timeout protection)"
+        timeout 5 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "pkill -f 'npm.*dev' 2>/dev/null || true; pkill -f 'vite.*5173' 2>/dev/null || true" 2>/dev/null || echo "    Process cleanup completed (timeout protection)"
         echo "  ⏳ Waiting for socket cleanup..."
         sleep 2
 
         # Start Vite dev server in background
-        ssh -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "cd autobot-vue && VITE_BACKEND_HOST=172.16.168.20 VITE_BACKEND_PORT=8001 nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 &" 2>/dev/null
+        echo "  🚀 Starting Vite dev server on frontend VM..."
 
-        echo "  ⏳ Waiting for frontend dev server to start..."
-        sleep 8
+        # Start Vite with forced SSH disconnection
+        timeout 5 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "cd autobot-vue && VITE_BACKEND_HOST=$BACKEND_HOST VITE_BACKEND_PORT=$BACKEND_PORT nohup npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT > /tmp/vite.log 2>&1 < /dev/null & sleep 1" || echo "  📤 Vite startup command sent"
+
+        echo "  ⏳ Starting npm process..."
+        sleep 2
+
+        echo "  📦 Loading dependencies and building..."
+        sleep 3
+
+        echo "  🔍 Testing server response..."
 
         # Check if frontend is now running
         if timeout 15 curl -s "http://${VMS["frontend"]}:$FRONTEND_PORT" >/dev/null 2>&1; then
