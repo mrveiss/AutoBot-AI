@@ -972,8 +972,13 @@ class ConfigManager:
             return env_url
 
         # Then check configuration
-        host = self.get_nested("memory.redis.host", cfg.get_host('redis', '172.16.168.23'))
-        port = self.get_nested("memory.redis.port", 6379)
+        redis_host = os.getenv('AUTOBOT_REDIS_HOST')
+        redis_port = os.getenv('AUTOBOT_REDIS_PORT')
+        if not redis_host or not redis_port:
+            raise ValueError('Redis configuration missing: AUTOBOT_REDIS_HOST and AUTOBOT_REDIS_PORT environment variables must be set')
+
+        host = self.get_nested("memory.redis.host", redis_host)
+        port = self.get_nested("memory.redis.port", int(redis_port))
 
         return f"redis://{host}:{port}"
 

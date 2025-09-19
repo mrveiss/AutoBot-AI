@@ -5,6 +5,7 @@ Intelligent routing and optimization for NPU/GPU/CPU semantic processing
 """
 
 import asyncio
+import io
 import json
 import logging
 import time
@@ -14,12 +15,25 @@ from enum import Enum
 from typing import Dict, Any, List, Optional, Tuple, Union
 import aiohttp
 import torch
+import torch.nn.functional as F
+from PIL import Image
 from datetime import datetime, timedelta
 
 # Import centralized components
 from src.config import cfg
 from src.utils.redis_client import get_redis_client
 from src.utils.logging_manager import get_llm_logger
+
+# Import transformers models for multi-modal embeddings
+try:
+    from transformers import (
+        CLIPModel, CLIPProcessor,
+        Wav2Vec2Model, Wav2Vec2Processor
+    )
+    import librosa
+    MULTIMODAL_MODELS_AVAILABLE = True
+except ImportError:
+    MULTIMODAL_MODELS_AVAILABLE = False
 
 logger = get_llm_logger("ai_hardware_accelerator")
 
@@ -85,7 +99,12 @@ class AIHardwareAccelerator:
         self.redis_client = None
         self.device_metrics = {}
         self.task_history = []
-        self.npu_worker_url = cfg.get('npu_worker.url', 'http://172.16.168.22:8081')
+        import os
+        npu_worker_host = os.getenv('AUTOBOT_NPU_WORKER_HOST')
+        npu_worker_port = os.getenv('AUTOBOT_NPU_WORKER_PORT')
+        if not npu_worker_host or not npu_worker_port:
+            raise ValueError('NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and AUTOBOT_NPU_WORKER_PORT environment variables must be set')
+        self.npu_worker_url = cfg.get('npu_worker.url', f'http://{npu_worker_host}:{npu_worker_port}')
         self.routing_strategy = cfg.get('ai_acceleration.routing_strategy', 'optimal')
 
         # Performance thresholds for device selection
@@ -103,6 +122,18 @@ class AIHardwareAccelerator:
             HardwareDevice.CPU: {"available": True, "last_check": datetime.now()},
         }
 
+        # Multi-modal models
+        self.clip_model = None
+        self.clip_processor = None
+        self.wav2vec_model = None
+        self.wav2vec_processor = None
+
+        # Projection matrices for unified embedding space (512 dimensions)
+        self.text_projection = None
+        self.image_projection = None
+        self.audio_projection = None
+        self.unified_dim = 512  # Common embedding dimension
+
     async def initialize(self):
         """Initialize the AI hardware accelerator."""
         logger.info("🚀 Initializing AI Hardware Accelerator")
@@ -117,6 +148,10 @@ class AIHardwareAccelerator:
 
         # Check hardware availability
         await self._check_hardware_availability()
+
+        # Initialize multi-modal models if GPU is available
+        if self.device_status[HardwareDevice.GPU]["available"]:
+            await self._initialize_multimodal_models()
 
         # Start monitoring loop
         asyncio.create_task(self._hardware_monitoring_loop())
@@ -436,26 +471,156 @@ class AIHardwareAccelerator:
             # Fallback to CPU for unsupported GPU tasks
             return await self._process_on_cpu(task)
 
+    async def _initialize_multimodal_models(self):
+        """Initialize multi-modal models for embeddings."""
+        if not MULTIMODAL_MODELS_AVAILABLE:
+            logger.warning("Multi-modal models not available. Install transformers library.")
+            return
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        logger.info(f"Initializing multi-modal models on {device}")
+
+        try:
+            # Initialize CLIP for image embeddings
+            self.clip_processor = CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32')
+            self.clip_model = CLIPModel.from_pretrained(
+                'openai/clip-vit-base-patch32',
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+            ).to(device)
+            self.clip_model.eval()
+
+            # Initialize Wav2Vec2 for audio embeddings
+            self.wav2vec_processor = Wav2Vec2Processor.from_pretrained('facebook/wav2vec2-base-960h')
+            self.wav2vec_model = Wav2Vec2Model.from_pretrained(
+                'facebook/wav2vec2-base-960h',
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+            ).to(device)
+            self.wav2vec_model.eval()
+
+            # Initialize projection matrices for unified space
+            # CLIP: 512 dims, Wav2Vec2: 768 dims, Text: varies
+            self.text_projection = torch.nn.Linear(384, self.unified_dim).to(device)  # MiniLM outputs 384
+            self.image_projection = torch.nn.Linear(512, self.unified_dim).to(device)  # CLIP outputs 512
+            self.audio_projection = torch.nn.Linear(768, self.unified_dim).to(device)  # Wav2Vec2 outputs 768
+
+            logger.info("✅ Multi-modal models initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize multi-modal models: {e}")
+
     async def _gpu_embedding_generation(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate embeddings using GPU acceleration."""
-        # Use the existing semantic_chunker GPU infrastructure
-        from src.utils.semantic_chunker import get_semantic_chunker
+        """Generate embeddings using GPU acceleration for multi-modal inputs."""
+        modality = input_data.get('modality', 'text')
+        content = input_data.get('content') or input_data.get('text', '')
 
-        chunker = get_semantic_chunker()
-        await chunker._initialize_model()  # Ensure GPU model is loaded
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        text = input_data.get("text", "")
-        sentences = [text]  # Single text for embedding
+        try:
+            if modality == 'text':
+                # Use existing text embedding infrastructure
+                from src.utils.semantic_chunker import get_semantic_chunker
+                chunker = get_semantic_chunker()
+                await chunker._initialize_model()
 
-        # Use GPU-accelerated embedding generation
-        embeddings = await chunker._compute_sentence_embeddings_async(sentences)
+                sentences = [content] if isinstance(content, str) else content
+                embeddings = await chunker._compute_sentence_embeddings_async(sentences)
+                raw_embedding = embeddings[0] if len(embeddings) > 0 else np.zeros(384)
 
-        return {
-            "embeddings": embeddings[0].tolist(),
-            "model_used": chunker.embedding_model_name,
-            "device": "GPU",
-            "dimension": len(embeddings[0])
-        }
+                # Project to unified space
+                if self.text_projection:
+                    with torch.no_grad():
+                        emb_tensor = torch.tensor(raw_embedding, dtype=torch.float32).to(device)
+                        unified_embedding = self.text_projection(emb_tensor)
+                        unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
+                        final_embedding = unified_embedding.cpu().numpy()
+                else:
+                    final_embedding = raw_embedding
+
+            elif modality == 'image' and self.clip_model:
+                # CLIP image embeddings
+                if isinstance(content, bytes):
+                    image = Image.open(io.BytesIO(content)).convert('RGB')
+                elif isinstance(content, str):
+                    image = Image.open(content).convert('RGB')
+                else:
+                    image = content
+
+                with torch.no_grad():
+                    inputs = self.clip_processor(images=image, return_tensors='pt')
+                    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+                    if torch.cuda.is_available():
+                        with torch.autocast(device_type='cuda', dtype=torch.float16):
+                            image_features = self.clip_model.get_image_features(**inputs)
+                    else:
+                        image_features = self.clip_model.get_image_features(**inputs)
+
+                    # Project to unified space
+                    if self.image_projection:
+                        unified_embedding = self.image_projection(image_features.squeeze())
+                        unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
+                        final_embedding = unified_embedding.cpu().numpy()
+                    else:
+                        final_embedding = image_features.cpu().numpy().squeeze()
+
+            elif modality == 'audio' and self.wav2vec_model:
+                # Wav2Vec2 audio embeddings
+                if isinstance(content, bytes):
+                    audio_array = np.frombuffer(content, dtype=np.float32)
+                elif isinstance(content, str):
+                    audio_array, _ = librosa.load(content, sr=16000)
+                else:
+                    audio_array = content
+
+                with torch.no_grad():
+                    inputs = self.wav2vec_processor(
+                        audio_array,
+                        sampling_rate=16000,
+                        return_tensors='pt'
+                    )
+                    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+                    if torch.cuda.is_available():
+                        with torch.autocast(device_type='cuda', dtype=torch.float16):
+                            features = self.wav2vec_model(**inputs).last_hidden_state
+                    else:
+                        features = self.wav2vec_model(**inputs).last_hidden_state
+
+                    # Average pool to get single embedding
+                    audio_embedding = torch.mean(features, dim=1).squeeze()
+
+                    # Project to unified space
+                    if self.audio_projection:
+                        unified_embedding = self.audio_projection(audio_embedding)
+                        unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
+                        final_embedding = unified_embedding.cpu().numpy()
+                    else:
+                        final_embedding = audio_embedding.cpu().numpy()
+
+            else:
+                raise ValueError(f"Unsupported modality: {modality}")
+
+            # Clear GPU cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            return {
+                "embeddings": final_embedding.tolist(),
+                "modality": modality,
+                "device": "GPU",
+                "dimension": len(final_embedding),
+                "unified_space": True
+            }
+
+        except Exception as e:
+            logger.error(f"GPU embedding generation failed: {e}")
+            # Fallback to CPU
+            return {
+                "embeddings": np.zeros(self.unified_dim).tolist(),
+                "modality": modality,
+                "device": "GPU",
+                "dimension": self.unified_dim,
+                "error": str(e)
+            }
 
     async def _gpu_semantic_search(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Perform semantic search using GPU acceleration."""
@@ -559,15 +724,33 @@ async def get_ai_accelerator() -> AIHardwareAccelerator:
 
 
 # Convenience functions for common tasks
-async def accelerated_embedding_generation(text: str, preferred_device: Optional[HardwareDevice] = None) -> np.ndarray:
-    """Generate embeddings using optimal hardware acceleration."""
+async def accelerated_embedding_generation(
+    content: Union[str, bytes, np.ndarray],
+    modality: str = 'text',
+    preferred_device: Optional[HardwareDevice] = None
+) -> np.ndarray:
+    """
+    Generate embeddings using optimal hardware acceleration.
+
+    Args:
+        content: Input content (text string, image bytes/path, audio array/path)
+        modality: Type of input ('text', 'image', 'audio')
+        preferred_device: Preferred hardware device for processing
+
+    Returns:
+        np.ndarray: Unified embedding vector (512 dimensions)
+    """
     accelerator = await get_ai_accelerator()
 
     task = ProcessingTask(
-        task_id=f"embedding_{int(time.time()*1000)}",
+        task_id=f"embedding_{modality}_{int(time.time()*1000)}",
         task_type="embedding_generation",
-        input_data={"text": text},
-        complexity=TaskComplexity.LIGHTWEIGHT,
+        input_data={
+            "content": content,
+            "modality": modality,
+            "text": content if modality == 'text' else None  # Backward compatibility
+        },
+        complexity=TaskComplexity.LIGHTWEIGHT if modality == 'text' else TaskComplexity.MODERATE,
         preferred_device=preferred_device
     )
 
@@ -576,7 +759,33 @@ async def accelerated_embedding_generation(text: str, preferred_device: Optional
     if result.success and "embeddings" in result.result:
         return np.array(result.result["embeddings"])
     else:
-        raise Exception(f"Embedding generation failed: {result.error}")
+        raise Exception(f"Embedding generation failed for {modality}: {result.error}")
+
+
+async def compute_cross_modal_similarity(
+    embedding1: np.ndarray,
+    embedding2: np.ndarray
+) -> float:
+    """
+    Compute cosine similarity between embeddings from different modalities.
+
+    Args:
+        embedding1: First embedding vector
+        embedding2: Second embedding vector
+
+    Returns:
+        float: Cosine similarity score between -1 and 1
+    """
+    # Normalize vectors
+    norm1 = np.linalg.norm(embedding1)
+    norm2 = np.linalg.norm(embedding2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    # Compute cosine similarity
+    similarity = np.dot(embedding1, embedding2) / (norm1 * norm2)
+    return float(similarity)
 
 
 async def accelerated_semantic_search(

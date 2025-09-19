@@ -160,8 +160,13 @@ class GeneralChatProcessor:
             # Convert to Ollama format
             messages = [{"role": message.role, "content": message.content}]
             
-            # Use optimized streaming
-            url = "http://localhost:11434/api/chat"
+            # Use optimized streaming with environment variables
+            import os
+            ollama_host = os.getenv('AUTOBOT_OLLAMA_HOST')
+            ollama_port = os.getenv('AUTOBOT_OLLAMA_PORT')
+            if not ollama_host or not ollama_port:
+                raise ValueError('Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set')
+            url = f"http://{ollama_host}:{ollama_port}/api/chat"
             data = {
                 "model": "llama3.1:8b",
                 "messages": messages,

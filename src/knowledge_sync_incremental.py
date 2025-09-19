@@ -84,7 +84,12 @@ class IncrementalKnowledgeSync:
     5. Advanced RAG with hybrid search
     """
 
-    def __init__(self, project_root: str = "/home/kali/Desktop/AutoBot"):
+    def __init__(self, project_root: str = None):
+        import os
+        if project_root is None:
+            project_root = os.getenv('AUTOBOT_BASE_DIR')
+            if not project_root:
+                raise ValueError('Project root configuration missing: AUTOBOT_BASE_DIR environment variable must be set')
         self.project_root = Path(project_root)
         self.sync_state_path = self.project_root / "data" / "incremental_sync_state.json"
         self.file_metadata_path = self.project_root / "data" / "file_metadata.json"
@@ -563,14 +568,14 @@ class IncrementalKnowledgeSync:
 
 
 # Convenience functions for integration
-async def run_incremental_sync(project_root: str = "/home/kali/Desktop/AutoBot") -> SyncMetrics:
+async def run_incremental_sync(project_root: str = None) -> SyncMetrics:
     """Run incremental sync and return metrics."""
     sync = IncrementalKnowledgeSync(project_root)
     await sync.initialize()
     return await sync.perform_incremental_sync()
 
 async def start_background_sync_daemon(
-    project_root: str = "/home/kali/Desktop/AutoBot",
+    project_root: str = None,
     check_interval_minutes: int = 15
 ):
     """Start background sync daemon."""

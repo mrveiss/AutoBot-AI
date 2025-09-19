@@ -9,7 +9,8 @@ import json
 import logging
 import time
 import uuid
-from typing import Dict, Any, List, Optional, Tuple
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Tuple, Union
 import numpy as np
 from dataclasses import dataclass
 import aiohttp
@@ -25,6 +26,14 @@ from src.ai_hardware_accelerator import (
 from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
 from src.config import cfg
+
+# Import ChromaDB for multi-modal vector storage
+try:
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
 
 logger = get_llm_logger("npu_semantic_search")
 
@@ -52,6 +61,18 @@ class SearchMetrics:
     hardware_utilization: Dict[str, float]
 
 
+@dataclass
+class MultiModalSearchResult:
+    """Multi-modal search result with cross-modal metadata."""
+    content: Any  # Could be text, image path, audio path, etc.
+    modality: str  # 'text', 'image', 'audio', 'multimodal'
+    metadata: Dict[str, Any]
+    score: float
+    doc_id: str
+    source_modality: Optional[str] = None  # Original modality for fused embeddings
+    fusion_confidence: Optional[float] = None
+
+
 class NPUSemanticSearch:
     """
     NPU-Enhanced Semantic Search Engine for AutoBot.
@@ -75,7 +96,23 @@ class NPUSemanticSearch:
         self.similarity_threshold = 0.7  # Minimum similarity for results
 
         # NPU Worker configuration
-        self.npu_worker_url = cfg.get('npu_worker.url', 'http://172.16.168.22:8081')
+        import os
+        npu_worker_host = os.getenv('AUTOBOT_NPU_WORKER_HOST')
+        npu_worker_port = os.getenv('AUTOBOT_NPU_WORKER_PORT')
+        if not npu_worker_host or not npu_worker_port:
+            raise ValueError('NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and AUTOBOT_NPU_WORKER_PORT environment variables must be set')
+        self.npu_worker_url = cfg.get('npu_worker.url', f'http://{npu_worker_host}:{npu_worker_port}')
+
+        # ChromaDB multi-modal collections
+        self.chroma_client = None
+        self.chroma_db_path = Path("data/chromadb")
+        self.collections = {}
+        self.collection_names = {
+            'text': 'autobot_text_embeddings',
+            'image': 'autobot_image_embeddings',
+            'audio': 'autobot_audio_embeddings',
+            'multimodal': 'autobot_multimodal_fused'
+        }
 
     async def initialize(self):
         """Initialize NPU semantic search engine."""
@@ -96,6 +133,9 @@ class NPUSemanticSearch:
             logger.info("✅ Knowledge base vector store ready")
         else:
             logger.warning("⚠️ Knowledge base vector store not ready, using basic search")
+
+        # Initialize ChromaDB for multi-modal storage
+        await self._initialize_chromadb()
 
         # Test NPU connectivity
         await self._test_npu_connectivity()
@@ -495,6 +535,219 @@ class NPUSemanticSearch:
             "hardware_status": await self._get_hardware_utilization() if self.ai_accelerator else {},
             "knowledge_base_ready": self.knowledge_base.vector_store is not None if self.knowledge_base else False
         }
+
+    async def _initialize_chromadb(self):
+        """Initialize ChromaDB client and multi-modal collections."""
+        if not CHROMADB_AVAILABLE:
+            logger.warning("ChromaDB not available. Multi-modal storage disabled.")
+            return
+
+        try:
+            # Create data directory if it doesn't exist
+            self.chroma_db_path.mkdir(parents=True, exist_ok=True)
+
+            # Initialize ChromaDB client
+            self.chroma_client = chromadb.PersistentClient(
+                path=str(self.chroma_db_path),
+                settings=ChromaSettings(
+                    allow_reset=True,
+                    anonymized_telemetry=False
+                )
+            )
+
+            # Initialize collections for each modality
+            for modality, collection_name in self.collection_names.items():
+                try:
+                    # Try to get existing collection
+                    collection = self.chroma_client.get_collection(name=collection_name)
+                    logger.info(f"✅ Loaded existing ChromaDB collection: {collection_name}")
+                except ValueError:
+                    # Create new collection if it doesn't exist
+                    collection = self.chroma_client.create_collection(
+                        name=collection_name,
+                        metadata={"modality": modality, "description": f"AutoBot {modality} embeddings"}
+                    )
+                    logger.info(f"✅ Created new ChromaDB collection: {collection_name}")
+
+                self.collections[modality] = collection
+
+            logger.info("✅ ChromaDB multi-modal collections initialized")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize ChromaDB: {e}")
+            self.chroma_client = None
+
+    async def store_multimodal_embedding(
+        self,
+        content: Any,
+        modality: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        doc_id: Optional[str] = None
+    ) -> bool:
+        """
+        Store multi-modal content with embeddings in appropriate ChromaDB collection.
+
+        Args:
+            content: The content to store (text, image path, audio data, etc.)
+            modality: Type of content ('text', 'image', 'audio')
+            metadata: Additional metadata to store
+            doc_id: Document ID (auto-generated if not provided)
+
+        Returns:
+            bool: True if storage successful, False otherwise
+        """
+        if not self.chroma_client or modality not in self.collections:
+            logger.warning(f"ChromaDB not available or unsupported modality: {modality}")
+            return False
+
+        try:
+            # Generate embedding using enhanced accelerated_embedding_generation
+            embedding = await accelerated_embedding_generation(
+                content=content,
+                modality=modality,
+                preferred_device=HardwareDevice.GPU
+            )
+
+            # Prepare metadata
+            doc_metadata = {
+                "modality": modality,
+                "timestamp": time.time(),
+                "content_preview": str(content)[:200] if isinstance(content, str) else f"{modality}_content",
+                **(metadata or {})
+            }
+
+            # Generate document ID if not provided
+            if doc_id is None:
+                doc_id = f"{modality}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+
+            # Store in appropriate collection
+            collection = self.collections[modality]
+            collection.add(
+                embeddings=[embedding.tolist()],
+                metadatas=[doc_metadata],
+                documents=[str(content)],
+                ids=[doc_id]
+            )
+
+            # Also store in fused collection if we have multi-modal fusion capability
+            if modality != 'multimodal' and self.ai_accelerator:
+                try:
+                    # Generate fused embedding (this would use the fusion engine)
+                    fused_metadata = {
+                        **doc_metadata,
+                        "source_modality": modality,
+                        "fusion_type": "single_modal_to_unified"
+                    }
+
+                    multimodal_collection = self.collections.get('multimodal')
+                    if multimodal_collection:
+                        multimodal_collection.add(
+                            embeddings=[embedding.tolist()],  # Use same embedding for now
+                            metadatas=[fused_metadata],
+                            documents=[str(content)],
+                            ids=[f"fused_{doc_id}"]
+                        )
+
+                except Exception as e:
+                    logger.warning(f"Failed to store in multimodal collection: {e}")
+
+            logger.info(f"✅ Stored {modality} content with ID: {doc_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to store multimodal embedding: {e}")
+            return False
+
+    async def cross_modal_search(
+        self,
+        query: Any,
+        query_modality: str,
+        target_modalities: Optional[List[str]] = None,
+        limit: int = 10,
+        similarity_threshold: Optional[float] = None
+    ) -> Dict[str, List[MultiModalSearchResult]]:
+        """
+        Perform cross-modal similarity search.
+
+        Args:
+            query: Query content (text, image, audio)
+            query_modality: Type of query ('text', 'image', 'audio')
+            target_modalities: Modalities to search in (None for all)
+            limit: Maximum results per modality
+            similarity_threshold: Minimum similarity score
+
+        Returns:
+            Dict mapping modality to search results
+        """
+        if not self.chroma_client:
+            logger.warning("ChromaDB not available for cross-modal search")
+            return {}
+
+        try:
+            # Generate query embedding
+            query_embedding = await accelerated_embedding_generation(
+                content=query,
+                modality=query_modality,
+                preferred_device=HardwareDevice.GPU
+            )
+
+            # Determine target modalities
+            if target_modalities is None:
+                target_modalities = ['text', 'image', 'audio', 'multimodal']
+
+            # Use configured threshold if not provided
+            threshold = similarity_threshold or self.similarity_threshold
+
+            results = {}
+
+            # Search across specified modalities
+            for modality in target_modalities:
+                if modality not in self.collections:
+                    continue
+
+                try:
+                    collection = self.collections[modality]
+
+                    # Perform similarity search
+                    search_results = collection.query(
+                        query_embeddings=[query_embedding.tolist()],
+                        n_results=limit,
+                        include=["metadatas", "documents", "distances"]
+                    )
+
+                    # Convert to MultiModalSearchResult objects
+                    modality_results = []
+                    if search_results['ids'] and len(search_results['ids'][0]) > 0:
+                        for i in range(len(search_results['ids'][0])):
+                            # Convert distance to similarity score (ChromaDB uses L2 distance)
+                            distance = search_results['distances'][0][i]
+                            similarity = 1.0 / (1.0 + distance)  # Convert distance to similarity
+
+                            if similarity >= threshold:
+                                metadata = search_results['metadatas'][0][i]
+                                result = MultiModalSearchResult(
+                                    content=search_results['documents'][0][i],
+                                    modality=modality,
+                                    metadata=metadata,
+                                    score=similarity,
+                                    doc_id=search_results['ids'][0][i],
+                                    source_modality=metadata.get('source_modality'),
+                                    fusion_confidence=metadata.get('fusion_confidence')
+                                )
+                                modality_results.append(result)
+
+                    results[modality] = modality_results
+                    logger.info(f"Found {len(modality_results)} results in {modality} collection")
+
+                except Exception as e:
+                    logger.error(f"Search failed for modality {modality}: {e}")
+                    results[modality] = []
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Cross-modal search failed: {e}")
+            return {}
 
     async def optimize_for_workload(self, workload_type: str = "balanced") -> Dict[str, Any]:
         """Optimize search engine for specific workload types."""

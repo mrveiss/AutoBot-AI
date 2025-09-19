@@ -93,6 +93,7 @@ class ScreenState:
     automation_opportunities: List[Dict[str, Any]]
     context_analysis: Dict[str, Any]
     confidence_score: float
+    multimodal_analysis: Optional[List[Dict[str, Any]]] = None  # New field for multi-modal processing results
 
 
 class ScreenAnalyzer:
@@ -103,14 +104,18 @@ class ScreenAnalyzer:
         self.element_classifier = ElementClassifier()
         self.context_analyzer = ContextAnalyzer()
 
+        # Multi-modal processor integration
+        self.multimodal_processor = unified_processor
+        self.enable_multimodal_analysis = True
+
         # Cache recent screenshots for comparison
         self.screenshot_cache: List[Tuple[float, np.ndarray]] = []
         self.cache_size = 5
 
-        logger.info("Screen Analyzer initialized")
+        logger.info("Screen Analyzer initialized with multi-modal processing")
 
     async def analyze_current_screen(
-        self, session_id: Optional[str] = None
+        self, session_id: Optional[str] = None, context_audio: Optional[bytes] = None
     ) -> ScreenState:
         """Analyze the current screen state comprehensively"""
 
@@ -127,30 +132,72 @@ class ScreenAnalyzer:
                 if screenshot is None:
                     raise RuntimeError("Failed to capture screenshot")
 
-                # Process with multi-modal processor
-                modal_input = ModalInput(
-                    input_id=f"screen_analysis_{int(time.time())}",
-                    modality_type=ModalityType.IMAGE,
-                    processing_intent=ProcessingIntent.SCREEN_ANALYSIS,
-                    content=screenshot,
-                    metadata={"session_id": session_id},
-                    timestamp=time.time(),
-                    priority=TaskPriority.HIGH,
-                )
+                # Process with enhanced multi-modal processor
+                modal_inputs = []
 
-                processing_result = await multimodal_processor.process_input(
-                    modal_input
+                # Always process screenshot with unified processor
+                image_input = MultiModalInput(
+                    input_id=f"screen_vision_{int(time.time())}",
+                    modality_type=ModalityType.IMAGE,
+                    intent=ProcessingIntent.SCREEN_ANALYSIS,
+                    data=screenshot,
+                    metadata={"session_id": session_id}
                 )
+                modal_inputs.append(image_input)
+
+                # Add audio context if provided (e.g., voice commands about screen)
+                if context_audio and self.enable_multimodal_analysis:
+                    audio_input = MultiModalInput(
+                        input_id=f"screen_audio_{int(time.time())}",
+                        modality_type=ModalityType.AUDIO,
+                        intent=ProcessingIntent.VOICE_COMMAND,
+                        data=context_audio,
+                        metadata={"session_id": session_id, "context": "screen_analysis"}
+                    )
+                    modal_inputs.append(audio_input)
+
+                # Process all modalities
+                processing_results = []
+                for modal_input in modal_inputs:
+                    result = await self.multimodal_processor.process(modal_input)
+                    processing_results.append(result)
+
+                # Combine results if multi-modal
+                primary_result = processing_results[0]  # Image processing result
+                if len(processing_results) > 1:
+                    combined_input = MultiModalInput(
+                        input_id=f"screen_combined_{int(time.time())}",
+                        modality_type=ModalityType.COMBINED,
+                        intent=ProcessingIntent.SCREEN_ANALYSIS,
+                        data="",  # Not used for combined
+                        metadata={
+                            "image_result": processing_results[0].result_data,
+                            "audio_result": processing_results[1].result_data,
+                            "session_id": session_id
+                        }
+                    )
+                    combined_result = await self.multimodal_processor.process(combined_input)
+                    # Use combined result as primary if successful
+                    if combined_result.success:
+                        primary_result = combined_result
 
                 # Extract UI elements with advanced classification
                 ui_elements = await self._detect_and_classify_elements(
-                    screenshot, processing_result.results
+                    screenshot, primary_result.result_data or {}
                 )
 
-                # Analyze context and automation opportunities
+                # Enhanced context analysis with multi-modal understanding
                 context_analysis = await self.context_analyzer.analyze_context(
                     screenshot, ui_elements
                 )
+
+                # Add multi-modal context if available
+                if len(processing_results) > 1 and processing_results[1].result_data:
+                    voice_intent = processing_results[1].result_data.get("transcribed_text", "")
+                    context_analysis["multimodal_understanding"] = primary_result.result_data
+                    context_analysis["cross_modal_confidence"] = primary_result.confidence
+                    context_analysis["voice_intent"] = voice_intent
+
                 automation_opportunities = await self._find_automation_opportunities(
                     ui_elements, context_analysis
                 )
@@ -160,18 +207,27 @@ class ScreenAnalyzer:
                     timestamp=time.time(),
                     screenshot=screenshot,
                     ui_elements=ui_elements,
-                    text_regions=processing_result.results.get("text_content", {}).get(
+                    text_regions=primary_result.result_data.get("text_content", {}).get(
                         "text_regions", []
-                    ),
-                    dominant_colors=processing_result.results.get(
+                    ) if primary_result.result_data else [],
+                    dominant_colors=primary_result.result_data.get(
                         "dominant_colors", []
-                    ),
-                    layout_structure=processing_result.results.get(
+                    ) if primary_result.result_data else [],
+                    layout_structure=primary_result.result_data.get(
                         "layout_analysis", {}
-                    ),
+                    ) if primary_result.result_data else {},
                     automation_opportunities=automation_opportunities,
                     context_analysis=context_analysis,
-                    confidence_score=processing_result.confidence,
+                    confidence_score=max(r.confidence for r in processing_results),
+                    multimodal_analysis=[
+                        {
+                            "modality": r.modality_type.value if hasattr(r.modality_type, 'value') else str(r.modality_type),
+                            "confidence": r.confidence,
+                            "data": r.result_data,
+                            "success": r.success,
+                            "processing_time": getattr(r, 'processing_time', 0.0)
+                        } for r in processing_results
+                    ]
                 )
 
                 # Update screenshot cache
@@ -513,6 +569,88 @@ class ScreenAnalyzer:
             logger.error(f"Change region identification failed: {e}")
             return []
 
+    async def find_elements_by_voice_description(
+        self, voice_description: str, screenshot: np.ndarray
+    ) -> List[UIElement]:
+        """Find UI elements matching voice description using cross-modal search"""
+        try:
+            # Import npu_semantic_search for cross-modal capabilities
+            from src.npu_semantic_search import NPUSearchEngine
+
+            # Get NPU search engine instance
+            search_engine = NPUSearchEngine()
+
+            # Use cross-modal search to find UI elements matching voice description
+            search_results = await search_engine.cross_modal_search(
+                query=voice_description,
+                query_modality="text",
+                target_modalities=["image"],
+                limit=10,
+                similarity_threshold=0.7
+            )
+
+            # Map search results back to UI elements on current screen
+            matched_elements = await self._map_search_to_ui_elements(search_results, screenshot)
+
+            logger.info(f"Found {len(matched_elements)} elements matching voice description: '{voice_description}'")
+            return matched_elements
+
+        except Exception as e:
+            logger.error(f"Voice-guided element detection failed: {e}")
+            return []
+
+    async def _map_search_to_ui_elements(
+        self, search_results: Dict[str, List[Dict[str, Any]]], screenshot: np.ndarray
+    ) -> List[UIElement]:
+        """Map cross-modal search results to UI elements on current screen"""
+        matched_elements = []
+
+        try:
+            # Process image search results
+            image_results = search_results.get("image", [])
+
+            for i, result in enumerate(image_results):
+                # Extract metadata for UI element construction
+                content = result.get("content", "")
+                metadata = result.get("metadata", {})
+                score = result.get("score", 0.0)
+
+                # Create bounding box estimate (in real implementation, would use more sophisticated mapping)
+                # For now, create a centered bounding box as placeholder
+                h, w = screenshot.shape[:2]
+                bbox = {
+                    "x": w // 4,
+                    "y": h // 4,
+                    "width": w // 2,
+                    "height": h // 2
+                }
+
+                # Create UI element from search result
+                ui_element = UIElement(
+                    element_id=f"voice_detected_{i}_{int(time.time())}",
+                    element_type=ElementType.UNKNOWN,  # Would need classification
+                    bbox=bbox,
+                    center_point=(bbox["x"] + bbox["width"] // 2, bbox["y"] + bbox["height"] // 2),
+                    confidence=score,
+                    text_content=content,
+                    attributes={
+                        "voice_description_match": True,
+                        "search_score": score,
+                        "source_modality": result.get("source_modality", "image")
+                    },
+                    possible_interactions=[InteractionType.CLICK],
+                    screenshot_region=None,
+                    ocr_data=metadata
+                )
+
+                matched_elements.append(ui_element)
+
+            return matched_elements
+
+        except Exception as e:
+            logger.error(f"Search result mapping failed: {e}")
+            return []
+
 
 class ElementClassifier:
     """Classifies UI elements based on visual features"""
@@ -778,7 +916,7 @@ class ComputerVisionSystem:
         logger.info("Computer Vision System initialized")
 
     async def analyze_and_understand_screen(
-        self, session_id: Optional[str] = None
+        self, session_id: Optional[str] = None, context_audio: Optional[bytes] = None
     ) -> Dict[str, Any]:
         """Comprehensive screen analysis and understanding"""
 
@@ -792,7 +930,7 @@ class ComputerVisionSystem:
             try:
                 # Perform comprehensive screen analysis
                 screen_state = await self.screen_analyzer.analyze_current_screen(
-                    session_id
+                    session_id, context_audio
                 )
 
                 # Detect changes from previous analysis

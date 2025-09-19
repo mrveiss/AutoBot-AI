@@ -46,7 +46,7 @@ except ImportError:
 
 try:
     from src.utils.logging_manager import get_llm_logger
-    logger = get_llm_logger()
+    logger = get_llm_logger(__name__)
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)
@@ -471,10 +471,14 @@ class LLMInterface:
 
     async def check_ollama_connection(self) -> bool:
         """Check if Ollama service is available"""
-        # CRITICAL FIX: Ensure localhost override for connection check
-        if self.ollama_host and "172.16.168.20" in self.ollama_host:
-            self.ollama_host = "http://localhost:11434"
-            logger.debug(f"[CONNECTION_CHECK] Fixed Ollama URL to localhost: {self.ollama_host}")
+        # CRITICAL FIX: Ensure Ollama host from environment variables
+        import os
+        ollama_host = os.getenv('AUTOBOT_OLLAMA_HOST')
+        ollama_port = os.getenv('AUTOBOT_OLLAMA_PORT')
+        if not ollama_host or not ollama_port:
+            raise ValueError('Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set')
+        self.ollama_host = f"http://{ollama_host}:{ollama_port}"
+        logger.debug(f"[CONNECTION_CHECK] Using Ollama URL from environment: {self.ollama_host}")
         
         try:
             async def make_request():
@@ -720,10 +724,14 @@ class LLMInterface:
         """
         Enhanced Ollama chat completion with improved streaming and timeout handling
         """
-        # CRITICAL FIX: Ensure localhost override for every request
-        if self.ollama_host and "172.16.168.20" in self.ollama_host:
-            self.ollama_host = "http://localhost:11434"
-            logger.debug(f"[REQUEST] Fixed Ollama URL to localhost: {self.ollama_host}")
+        # CRITICAL FIX: Ensure Ollama host from environment variables
+        import os
+        ollama_host = os.getenv('AUTOBOT_OLLAMA_HOST')
+        ollama_port = os.getenv('AUTOBOT_OLLAMA_PORT')
+        if not ollama_host or not ollama_port:
+            raise ValueError('Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set')
+        self.ollama_host = f"http://{ollama_host}:{ollama_port}"
+        logger.debug(f"[REQUEST] Using Ollama URL from environment: {self.ollama_host}")
         
         url = f"{self.ollama_host}/api/chat"
         headers = {"Content-Type": "application/json"}
@@ -975,10 +983,14 @@ class LLMInterface:
     async def get_available_models(self, provider: str = "ollama") -> List[str]:
         """Get available models for a provider"""
         if provider == "ollama":
-            # CRITICAL FIX: Ensure localhost override for model retrieval
-            if self.ollama_host and "172.16.168.20" in self.ollama_host:
-                self.ollama_host = "http://localhost:11434"
-                logger.debug(f"[MODEL_LIST] Fixed Ollama URL to localhost: {self.ollama_host}")
+            # CRITICAL FIX: Ensure Ollama host from environment variables
+            import os
+            ollama_host = os.getenv('AUTOBOT_OLLAMA_HOST')
+            ollama_port = os.getenv('AUTOBOT_OLLAMA_PORT')
+            if not ollama_host or not ollama_port:
+                raise ValueError('Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set')
+            self.ollama_host = f"http://{ollama_host}:{ollama_port}"
+            logger.debug(f"[MODEL_LIST] Using Ollama URL from environment: {self.ollama_host}")
             
             try:
                 async with self._get_session() as session:
