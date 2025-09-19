@@ -1,6 +1,6 @@
 /**
  * ServiceDiscovery - Dynamic Service URL Resolution
- * 
+ *
  * Handles environment-aware service discovery, replacing all hardcoded URLs.
  * Supports Docker, native VM, and development environments.
  */
@@ -12,7 +12,7 @@ export default class ServiceDiscovery {
     this.cache = new Map();
     this.cacheTimeout = 60000; // 1 minute cache
     this.debugMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG === 'true';
-    
+
     this.log('ServiceDiscovery initialized');
   }
 
@@ -21,7 +21,7 @@ export default class ServiceDiscovery {
    */
   async getServiceUrl(serviceName, options = {}) {
     const cacheKey = `${serviceName}_${JSON.stringify(options)}`;
-    
+
     // Check cache first
     if (!options.skipCache && this.cache.has(cacheKey)) {
       const cached = this.cache.get(cacheKey);
@@ -34,32 +34,32 @@ export default class ServiceDiscovery {
     let url;
     try {
       url = await this._resolveServiceUrl(serviceName, options);
-      
+
       // Cache the result
       this.cache.set(cacheKey, {
         url,
         timestamp: Date.now()
       });
-      
+
       this.log(`Resolved ${serviceName}:`, url);
       return url;
     } catch (error) {
       this.log(`Failed to resolve ${serviceName}:`, error.message);
-      
+
       // For critical services, provide fallback URLs instead of throwing
       const fallbackUrl = this._getFallbackUrl(serviceName);
       if (fallbackUrl) {
         this.log(`Using fallback URL for ${serviceName}:`, fallbackUrl);
-        
+
         // Cache the fallback result to avoid repeated failures
         this.cache.set(cacheKey, {
           url: fallbackUrl,
           timestamp: Date.now()
         });
-        
+
         return fallbackUrl;
       }
-      
+
       // If no fallback available, still throw but with enhanced error message
       throw new Error(`Failed to resolve service '${serviceName}': ${error.message}. No fallback URL configured.`);
     }
@@ -71,7 +71,7 @@ export default class ServiceDiscovery {
   async _resolveServiceUrl(serviceName, options = {}) {
     const envMappings = this._getEnvironmentMappings();
     const serviceConfig = envMappings[serviceName];
-    
+
     if (!serviceConfig) {
       throw new Error(`Unknown service: ${serviceName}`);
     }
@@ -81,6 +81,18 @@ export default class ServiceDiscovery {
     if (envUrl) {
       this.log(`Using environment variable ${serviceConfig.envVar}:`, envUrl);
       return envUrl;
+    }
+
+    // CRITICAL FIX: For backend service, check if we should use proxy mode
+    if (serviceName === 'backend') {
+      const backendHost = import.meta.env.VITE_BACKEND_HOST;
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+
+      // If both are empty/undefined, use empty string to trigger proxy mode
+      if (!backendHost && !apiBaseUrl) {
+        this.log('Backend service using proxy mode (empty URL)');
+        return '';
+      }
     }
 
     // Build URL from host, port, and protocol
@@ -230,7 +242,8 @@ export default class ServiceDiscovery {
    * Get host for development environment
    */
   _getDevHost(serviceConfig) {
-    // In development, prefer localhost for most services
+    // CRITICAL FIX: In development with Vite dev server, prefer proxy mode for backend
+    // Only return localhost for non-backend services
     return 'localhost';
   }
 
@@ -240,12 +253,12 @@ export default class ServiceDiscovery {
   _getProdHost(serviceConfig) {
     // In production, use current hostname or fallback
     const currentHost = window.location.hostname;
-    
+
     // Use fallback hosts if current host is localhost
     if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
       return serviceConfig.fallbackHosts?.[0] || currentHost;
     }
-    
+
     return currentHost;
   }
 
@@ -277,32 +290,37 @@ export default class ServiceDiscovery {
    */
   _getFallbackUrl(serviceName) {
     try {
+      // CRITICAL FIX: For backend service, return empty string to trigger proxy mode
+      if (serviceName === 'backend') {
+        this.log('Backend service fallback: using proxy mode (empty URL)');
+        return '';
+      }
+
       // Handle VNC services
       if (serviceName.startsWith('vnc_')) {
         const vncType = serviceName.replace('vnc_', '');
         return buildDefaultVncUrl(vncType);
       }
-      
+
       // Handle regular services
       const serviceMap = {
-        'backend': 'backend',
         'npu_worker': 'npu_worker',
         'redis': 'redis',
         'browser': 'browser',
         'ai_stack': 'ai_stack'
       };
-      
+
       const defaultServiceName = serviceMap[serviceName];
       if (defaultServiceName) {
         return buildDefaultServiceUrl(defaultServiceName);
       }
-      
+
       // Legacy services that need special handling
       const legacyFallbacks = {
         'ollama': buildDefaultServiceUrl('backend').replace(':8001', ':11434'),
         'playwright': buildDefaultServiceUrl('browser')
       };
-      
+
       return legacyFallbacks[serviceName] || null;
     } catch (error) {
       console.warn(`Failed to build fallback URL for ${serviceName}:`, error.message);
@@ -315,9 +333,17 @@ export default class ServiceDiscovery {
    */
   async getWebSocketUrl(endpoint = '') {
     const backendUrl = await this.getServiceUrl('backend');
+
+    // If backend URL is empty (proxy mode), use relative WebSocket path
+    if (!backendUrl) {
+      const wsUrl = `/ws${endpoint}`;
+      this.log('WebSocket URL (proxy mode):', wsUrl);
+      return wsUrl;
+    }
+
     const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
     const backendHost = new URL(backendUrl).host;
-    
+
     const wsUrl = `${wsProtocol}//${backendHost}/ws${endpoint}`;
     this.log('WebSocket URL:', wsUrl);
     return wsUrl;
@@ -329,9 +355,35 @@ export default class ServiceDiscovery {
   async testConnectivity(serviceName, timeout = 5000) {
     try {
       const url = await this.getServiceUrl(serviceName);
+
+      // Handle proxy mode for backend service
+      if (serviceName === 'backend' && !url) {
+        // In proxy mode, test relative endpoint
+        const testUrl = '/api/health';
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        const response = await fetch(testUrl, {
+          method: 'HEAD',
+          signal: controller.signal,
+          mode: 'cors'
+        });
+
+        clearTimeout(timeoutId);
+
+        return {
+          serviceName,
+          url: 'proxy mode',
+          accessible: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          note: 'Using Vite proxy'
+        };
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
-      
+
       // Use different endpoints based on service type
       let testEndpoint = '/health';
       if (serviceName.startsWith('vnc_')) {
@@ -348,15 +400,15 @@ export default class ServiceDiscovery {
           note: 'Redis connectivity requires specialized client'
         };
       }
-      
+
       const response = await fetch(`${url}${testEndpoint}`, {
         method: 'HEAD', // Use HEAD to avoid downloading content
         signal: controller.signal,
         mode: 'cors'
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       const result = {
         serviceName,
         url,
@@ -364,7 +416,7 @@ export default class ServiceDiscovery {
         status: response.status,
         statusText: response.statusText
       };
-      
+
       this.log(`Connectivity test for ${serviceName}:`, result);
       return result;
     } catch (error) {
@@ -374,7 +426,7 @@ export default class ServiceDiscovery {
       } catch (urlError) {
         // URL resolution also failed
       }
-      
+
       const result = {
         serviceName,
         url: serviceUrl,
@@ -382,7 +434,7 @@ export default class ServiceDiscovery {
         error: error.name === 'AbortError' ? 'Connection timeout' : error.message,
         errorType: error.name || 'Unknown'
       };
-      
+
       this.log(`Connectivity test failed for ${serviceName}:`, result);
       return result;
     }
@@ -396,7 +448,7 @@ export default class ServiceDiscovery {
     const results = await Promise.all(
       services.map(service => this.testConnectivity(service))
     );
-    
+
     return results.reduce((acc, result) => {
       acc[result.serviceName] = result;
       return acc;

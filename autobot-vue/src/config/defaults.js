@@ -12,66 +12,66 @@ export const DEFAULT_CONFIG = {
   network: {
     // Backend VM - Main API server
     backend: {
-      host: '172.16.168.20',
-      port: '8001',
-      protocol: 'http'
+      host: import.meta.env.VITE_BACKEND_HOST,
+      port: import.meta.env.VITE_BACKEND_PORT,
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL
     },
     
     // Frontend VM - Vue.js development server
     frontend: {
-      host: '172.16.168.21', 
-      port: '5173',
-      protocol: 'http'
+      host: import.meta.env.VITE_FRONTEND_HOST,
+      port: import.meta.env.VITE_FRONTEND_PORT,
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL
     },
     
     // NPU Worker VM - AI processing
     npu_worker: {
-      host: '172.16.168.22',
-      port: '8081',
-      protocol: 'http'
+      host: import.meta.env.VITE_NPU_WORKER_HOST,
+      port: import.meta.env.VITE_NPU_WORKER_PORT,
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL
     },
     
     // Redis VM - Database server
     redis: {
-      host: '172.16.168.23',
-      port: '6379',
+      host: import.meta.env.VITE_REDIS_HOST,
+      port: import.meta.env.VITE_REDIS_PORT,
       protocol: 'redis'
     },
     
     // AI Stack VM - LLM services
     ai_stack: {
-      host: '172.16.168.24',
-      port: '8080',
-      protocol: 'http'
+      host: import.meta.env.VITE_AI_STACK_HOST,
+      port: import.meta.env.VITE_AI_STACK_PORT,
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL
     },
     
     // Browser Service VM - Playwright automation
     browser: {
-      host: '172.16.168.25',
-      port: '3000',
-      protocol: 'http'
+      host: import.meta.env.VITE_BROWSER_HOST,
+      port: import.meta.env.VITE_BROWSER_PORT,
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL
     }
   },
 
   // VNC Service Configuration
   vnc: {
     desktop: {
-      host: '172.16.168.20', // Usually same as backend
-      port: '6080',
-      protocol: 'http',
-      password: 'autobot'
+      host: import.meta.env.VITE_DESKTOP_VNC_HOST,
+      port: import.meta.env.VITE_DESKTOP_VNC_PORT,
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL,
+      password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD
     },
     terminal: {
-      host: '172.16.168.20', // Usually same as backend
-      port: '6080',
-      protocol: 'http',
-      password: 'autobot'
+      host: import.meta.env.VITE_TERMINAL_VNC_HOST,
+      port: import.meta.env.VITE_TERMINAL_VNC_PORT,
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL,
+      password: import.meta.env.VITE_TERMINAL_VNC_PASSWORD
     },
     playwright: {
-      host: '172.16.168.25', // Browser service VM
-      port: '6081', 
-      protocol: 'http',
-      password: 'playwright'
+      host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST,
+      port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT,
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL,
+      password: import.meta.env.VITE_PLAYWRIGHT_VNC_PASSWORD
     }
   },
 

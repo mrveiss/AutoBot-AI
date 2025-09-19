@@ -76,13 +76,14 @@ export class ApiClient {
     const backendHost = import.meta.env.VITE_BACKEND_HOST;
     const backendPort = import.meta.env.VITE_BACKEND_PORT || '8001';
     const protocol = import.meta.env.VITE_HTTP_PROTOCOL || 'http';
-    
+
     if (backendHost) {
       return `${protocol}://${backendHost}:${backendPort}`;
     }
-    
-    // Fallback to localhost for development
-    return `${protocol}://localhost:${backendPort}`;
+
+    // CRITICAL FIX: When VITE_BACKEND_HOST is empty, use empty string for relative URLs
+    // This enables Vite proxy instead of falling back to localhost
+    return '';
   }
 
   // Get base URL using AppConfig service (recommended)
@@ -122,25 +123,25 @@ export class ApiClient {
   // Private method for making the actual request
   private async _makeRequest(url: string, options: RequestOptions = {}): Promise<ApiResponse> {
     const method = options.method || 'GET';
-    
+
     // Debug URL construction
     if (url.includes('http://') && url.lastIndexOf('http://') > 0) {
       console.error('DUPLICATE URL DETECTED:', url);
     }
-    
+
     const startTime = performance.now();
-    
+
     // Set up headers
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers
     };
-    
+
     // Set up timeout
     const controller = new AbortController();
     const timeout = options.timeout || this.timeout;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
+
     try {
       const fetchOptions = {
         method,
@@ -148,27 +149,27 @@ export class ApiClient {
         body: options.body,
         signal: controller.signal
       };
-      
+
       const response = await fetch(url, fetchOptions);
       const endTime = performance.now();
-      
+
       // Track API call if RUM is available
       if (window.rum) {
         window.rum.trackApiCall(method, url, startTime, endTime, response.status);
       }
-      
+
       clearTimeout(timeoutId);
       return response as ApiResponse;
-      
+
     } catch (error) {
       clearTimeout(timeoutId);
       const endTime = performance.now();
-      
+
       // Track API call failure if RUM is available
       if (window.rum) {
         window.rum.trackApiCall(method, url, startTime, endTime, 'error', error as Error);
       }
-      
+
       console.error(`[ApiClient] ${method} ${url} failed:`, error);
       throw error;
     }
@@ -187,12 +188,16 @@ export class ApiClient {
 
   // Generic request method with error handling and timeout (legacy - use requestWithConfig for new code)
   async request(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse> {
-    // Handle absolute URLs vs relative endpoints with clean URL construction
+    // CRITICAL FIX: Handle relative URLs for Vite proxy when baseUrl is empty
     let url: string;
     if (endpoint.startsWith('http')) {
+      // Absolute URL
       url = endpoint;
+    } else if (!this.baseUrl) {
+      // Use relative URL when baseUrl is empty (proxy mode)
+      url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     } else {
-      // Ensure endpoint starts with / for proper concatenation
+      // Construct full URL with baseUrl
       const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       url = `${this.baseUrl}${cleanEndpoint}`;
     }

@@ -195,13 +195,13 @@ class ApiService {
     return this.post('/api/knowledge_base/document/content', { document_id: documentId })
   }
 
-  // Monitoring & Health - New endpoints per backend specs
+  // Monitoring & Health - Updated to working endpoints
   async getServiceHealth(): Promise<ApiResponse> {
-    return this.get('/api/monitoring/health')
+    return this.get('/api/services/health')
   }
 
   async getSystemMetrics(): Promise<ApiResponse> {
-    return this.get('/api/monitoring/metrics')
+    return this.get('/api/resources')
   }
 }
 
