@@ -19,10 +19,10 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import Phase 9 monitoring components
-from src.utils.phase9_performance_monitor import (
+from src.utils.performance_monitor import (
     phase9_monitor,
-    start_phase9_monitoring,
-    stop_phase9_monitoring,
+    start_monitoring,
+    stop_monitoring,
     get_phase9_performance_dashboard,
     collect_phase9_metrics,
     add_phase9_alert_callback
@@ -44,7 +44,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(logs_dir / 'phase9_monitoring.log')
+        logging.FileHandler(logs_dir / 'monitoring.log')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ class Phase9MonitoringManager:
             logger.info("Starting Phase 9 comprehensive performance monitoring...")
             
             # Start core monitoring
-            await start_phase9_monitoring()
+            await start_monitoring()
             
             # Start periodic optimization if enabled
             if self.config["gpu_optimization_enabled"]:
@@ -159,7 +159,7 @@ class Phase9MonitoringManager:
             logger.info("Stopping Phase 9 performance monitoring...")
             
             # Stop core monitoring
-            await stop_phase9_monitoring()
+            await stop_monitoring()
             
             self.monitoring_active = False
             

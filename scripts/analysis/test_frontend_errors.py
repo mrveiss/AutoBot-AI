@@ -5,6 +5,7 @@ import asyncio
 from playwright.async_api import async_playwright
 import json
 import sys
+from src.constants import NetworkConstants, ServiceURLs
 
 async def capture_console_errors():
     async with async_playwright() as p:
@@ -37,7 +38,7 @@ async def capture_console_errors():
         # Navigate to the page
         print("Loading AutoBot frontend...")
         try:
-            response = await page.goto("http://localhost:5173", wait_until="networkidle", timeout=30000)
+            response = await page.goto(ServiceURLs.FRONTEND_LOCAL, wait_until="networkidle", timeout=30000)
             print(f"Page loaded with status: {response.status}")
         except Exception as e:
             print(f"Failed to load page: {e}")

@@ -126,12 +126,13 @@ async def test_api_integration():
 
     try:
         import aiohttp
+from src.constants import NetworkConstants, ServiceURLs
 
         # Test awareness endpoints
         endpoints_to_test = [
-            "http://localhost:8001/api/llm-awareness/status",
-            "http://localhost:8001/api/llm-awareness/context",
-            "http://localhost:8001/api/llm-awareness/capabilities",
+            "ServiceURLs.BACKEND_LOCAL/api/llm-awareness/status",
+            "ServiceURLs.BACKEND_LOCAL/api/llm-awareness/context",
+            "ServiceURLs.BACKEND_LOCAL/api/llm-awareness/capabilities",
         ]
 
         async with aiohttp.ClientSession() as session:

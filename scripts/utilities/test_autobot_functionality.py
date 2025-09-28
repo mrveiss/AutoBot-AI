@@ -28,8 +28,8 @@ class AutoBotFunctionalityTest:
 
     def __init__(self):
         self.services = {
-            "frontend": "http://localhost:5173",
-            "backend": "http://localhost:8001",
+            "frontend": ServiceURLs.FRONTEND_LOCAL,
+            "backend": ServiceURLs.BACKEND_LOCAL,
             "npu_worker": "http://localhost:8081",
             "ai_stack": "http://localhost:8080",
             "redis": "localhost:6379",
@@ -245,6 +245,7 @@ class AutoBotFunctionalityTest:
 
             # Check if key processes are running
             import subprocess
+from src.constants import NetworkConstants, ServiceURLs
 
             result = subprocess.run(
                 ["ps", "aux"], capture_output=True, text=True, timeout=5

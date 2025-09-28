@@ -149,10 +149,10 @@ class AutoBotVectorStoreAnalysis:
             from llama_index.core import VectorStoreIndex, Settings
             
             # Configure with working model
-            llm = Ollama(model="gemma3:270m", base_url="http://localhost:11434")
+            llm = Ollama(model="gemma3:270m", base_url=ServiceURLs.OLLAMA_LOCAL)
             embed_model = OllamaEmbedding(
                 model_name="nomic-embed-text:latest",
-                base_url="http://localhost:11434"
+                base_url=ServiceURLs.OLLAMA_LOCAL
             )
             
             Settings.llm = llm
@@ -214,7 +214,7 @@ class AutoBotVectorStoreAnalysis:
             
             embeddings = OllamaEmbeddings(
                 model="nomic-embed-text:latest",
-                base_url="http://localhost:11434"
+                base_url=ServiceURLs.OLLAMA_LOCAL
             )
             fixes_attempted.append("Initialized Ollama embeddings")
             
@@ -463,10 +463,10 @@ class AutoBotVectorStoreAnalysis:
             from llama_index.core import VectorStoreIndex, Settings
             
             # Use working model
-            llm = Ollama(model="gemma3:270m", base_url="http://localhost:11434", request_timeout=10.0)
+            llm = Ollama(model="gemma3:270m", base_url=ServiceURLs.OLLAMA_LOCAL, request_timeout=10.0)
             embed_model = OllamaEmbedding(
                 model_name="nomic-embed-text:latest", 
-                base_url="http://localhost:11434"
+                base_url=ServiceURLs.OLLAMA_LOCAL
             )
             
             Settings.llm = llm
@@ -555,11 +555,12 @@ class AutoBotVectorStoreAnalysis:
                 fixes_attempted.append("Using modern langchain-ollama package")
             except ImportError:
                 from langchain_community.embeddings import OllamaEmbeddings  
+from src.constants import NetworkConstants, ServiceURLs
                 fixes_attempted.append("Using langchain-community embeddings")
             
             embeddings = OllamaEmbeddings(
                 model="nomic-embed-text:latest",
-                base_url="http://localhost:11434"
+                base_url=ServiceURLs.OLLAMA_LOCAL
             )
             
             # Create on DB 0 where Redis Search indices are allowed

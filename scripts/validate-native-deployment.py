@@ -14,6 +14,7 @@ import redis
 import sys
 import json
 import time
+import os
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -75,7 +76,7 @@ class DeploymentValidator:
             r = redis.Redis(
                 host=service.host, 
                 port=service.port, 
-                password="autobot123",
+                password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')),
                 socket_timeout=service.timeout,
                 decode_responses=True
             )
@@ -197,7 +198,7 @@ class DeploymentValidator:
         
         # Test Redis connection from backend perspective
         try:
-            r = redis.Redis(host='172.16.168.23', port=6379, password='autobot123', decode_responses=True)
+            r = redis.Redis(host='172.16.168.23', port=6379, password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')), decode_responses=True)
             r.ping()
             connectivity_tests.append({"test": "Backend → Redis", "status": "success", "message": "Connection successful"})
             print("✅ Backend → Redis: Connection successful")

@@ -6,6 +6,7 @@ Upload documentation files directly to knowledge base using file upload API.
 import os
 import glob
 import requests
+from src.constants import NetworkConstants, ServiceURLs
 
 
 def upload_docs():
@@ -37,7 +38,7 @@ def upload_docs():
                 files = {"file": (os.path.basename(file_path), f, "text/plain")}
 
                 resp = requests.post(
-                    "http://localhost:8001/api/knowledge_base/add_file",
+                    "ServiceURLs.BACKEND_LOCAL/api/knowledge_base/add_file",
                     files=files,
                     timeout=15,
                 )
@@ -57,7 +58,7 @@ def upload_docs():
     if added_count > 0:
         try:
             test_resp = requests.post(
-                "http://localhost:8001/api/knowledge_base/search",
+                "ServiceURLs.BACKEND_LOCAL/api/knowledge_base/search",
                 json={"query": "installation", "limit": 3},
                 timeout=5,
             )
@@ -69,7 +70,7 @@ def upload_docs():
 
                 # Try debian search too
                 debian_resp = requests.post(
-                    "http://localhost:8001/api/knowledge_base/search",
+                    "ServiceURLs.BACKEND_LOCAL/api/knowledge_base/search",
                     json={"query": "debian", "limit": 3},
                     timeout=5,
                 )

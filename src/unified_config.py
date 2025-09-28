@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List
 import yaml
 import re
+from src.constants import NetworkConstants, ServiceURLs
 
 logger = logging.getLogger(__name__)
 
@@ -385,7 +386,7 @@ class UnifiedConfig:
         
         dynamic_origins = [
             f"http://{frontend_host}:{frontend_port}",
-            "http://localhost:5173",
+            ServiceURLs.FRONTEND_LOCAL,
             "http://127.0.0.1:5173"
         ]
         

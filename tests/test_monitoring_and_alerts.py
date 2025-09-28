@@ -857,7 +857,7 @@ class MonitoringAndAlertingTester:
         
         # Create detailed report
         report = {
-            "autobot_phase9_monitoring_report": {
+            "autobot_monitoring_report": {
                 "execution": {
                     "timestamp": self.timestamp,
                     "total_duration": total_duration,

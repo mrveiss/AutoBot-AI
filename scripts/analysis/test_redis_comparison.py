@@ -73,7 +73,7 @@ async def test_llamaindex_redis():
         # Test embedding model
         embed_model = OllamaEmbedding(
             model_name="nomic-embed-text:latest",
-            base_url="http://localhost:11434"
+            base_url=ServiceURLs.OLLAMA_LOCAL
         )
         
         # Create index from existing vector store
@@ -123,7 +123,7 @@ async def test_langchain_redis():
         # Initialize embedding model
         embeddings = OllamaEmbeddings(
             model="nomic-embed-text:latest",
-            base_url="http://localhost:11434"
+            base_url=ServiceURLs.OLLAMA_LOCAL
         )
         
         if modern_langchain:
@@ -235,6 +235,7 @@ async def analyze_existing_data():
     logger.info("\n=== Analyzing Existing Redis Data ===")
     try:
         import redis
+from src.constants import NetworkConstants, ServiceURLs
         client = redis.Redis(host='localhost', port=6379, db=2, decode_responses=True)
         
         # Get sample documents

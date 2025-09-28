@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.backup_manager import BackupManager
 from src.utils.service_registry import ServiceStatus, get_service_registry
+from src.utils.script_utils import ScriptFormatter
 
 
 class RollbackStrategy:
@@ -71,22 +72,11 @@ class RollbackManager:
 
     def print_header(self, title: str):
         """Print formatted header."""
-        print(f"\n{'=' * 60}")
-        print(f"  {title}")
-        print("=" * 60)
+        ScriptFormatter.print_header(title)
 
     def print_step(self, step: str, status: str = "info"):
         """Print step with status."""
-        status_icons = {
-            "info": "ℹ️",
-            "success": "✅",
-            "warning": "⚠️",
-            "error": "❌",
-            "running": "🔄",
-            "rollback": "🔙",
-        }
-        icon = status_icons.get(status, "•")
-        print(f"{icon} {step}")
+        ScriptFormatter.print_step(step, status)
 
     def _load_rollback_config(self) -> Dict[str, Any]:
         """Load rollback configuration."""

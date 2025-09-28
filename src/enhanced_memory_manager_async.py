@@ -39,6 +39,10 @@ class Priority(Enum):
     CRITICAL = 9
 
 
+# Alias for backward compatibility
+TaskPriority = Priority
+
+
 @dataclass
 class TaskEntry:
     """Enhanced task entry with comprehensive tracking"""

@@ -5,6 +5,7 @@ import json
 import time
 
 import requests
+from src.constants import NetworkConstants, ServiceURLs
 
 
 def test_gui_chat():
@@ -19,7 +20,7 @@ def test_gui_chat():
     # Step 1: Navigate to AutoBot GUI
     print("\n1. Navigating to AutoBot GUI...")
     scrape_data = {
-        "url": "http://localhost:5173",
+        "url": ServiceURLs.FRONTEND_LOCAL,
         "waitFor": "body",
         "screenshot": True,
     }
@@ -39,7 +40,7 @@ def test_gui_chat():
     # Step 2: Click on the chat input
     print("\n2. Clicking on chat input...")
     click_data = {
-        "url": "http://localhost:5173",
+        "url": ServiceURLs.FRONTEND_LOCAL,
         "selector": 'textarea[placeholder*="Type your message"], input[placeholder*="Type your message"]',
         "action": "click",
     }
@@ -57,7 +58,7 @@ def test_gui_chat():
     # Step 3: Type a message
     print("\n3. Typing test message...")
     type_data = {
-        "url": "http://localhost:5173",
+        "url": ServiceURLs.FRONTEND_LOCAL,
         "selector": 'textarea[placeholder*="Type your message"], input[placeholder*="Type your message"]',
         "action": "type",
         "text": "Hello, can you hear me?",
@@ -76,7 +77,7 @@ def test_gui_chat():
     # Step 4: Submit the message
     print("\n4. Submitting message...")
     submit_data = {
-        "url": "http://localhost:5173",
+        "url": ServiceURLs.FRONTEND_LOCAL,
         "selector": 'button[type="submit"], button:has-text("Send"), button[aria-label*="send"]',
         "action": "click",
     }
@@ -91,7 +92,7 @@ def test_gui_chat():
             # Try pressing Enter instead
             print("⚠️  Send button not found, trying Enter key...")
             enter_data = {
-                "url": "http://localhost:5173",
+                "url": ServiceURLs.FRONTEND_LOCAL,
                 "selector": 'textarea[placeholder*="Type your message"], input[placeholder*="Type your message"]',
                 "action": "press",
                 "key": "Enter",
@@ -106,7 +107,7 @@ def test_gui_chat():
     # Step 5: Take screenshot of result
     print("\n5. Taking screenshot of chat result...")
     screenshot_data = {
-        "url": "http://localhost:5173",
+        "url": ServiceURLs.FRONTEND_LOCAL,
         "waitFor": ".message, .chat-message",
         "screenshot": True,
     }

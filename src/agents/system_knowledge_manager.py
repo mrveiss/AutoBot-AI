@@ -712,3 +712,55 @@ class SystemKnowledgeManager:
                     procedure_data = yaml.safe_load(f)
 
                 await self._import_single_procedure(procedure_data)
+
+    def get_knowledge_categories(self) -> Dict[str, Any]:
+        """
+        Get knowledge base categories structure.
+
+        Returns a dictionary with success status and categories structure
+        that can be used by the knowledge base stats system.
+
+        Returns:
+            Dict with 'success' boolean and 'categories' dict
+        """
+        try:
+            # Return basic category structure for system knowledge
+            categories = {
+                "documentation": {
+                    "description": "System documentation and guides",
+                    "subcategories": {
+                        "setup": "Setup and installation guides",
+                        "configuration": "Configuration files and options",
+                        "troubleshooting": "Problem resolution guides"
+                    }
+                },
+                "system": {
+                    "description": "System knowledge and procedures",
+                    "subcategories": {
+                        "commands": "System commands and utilities",
+                        "workflows": "Automated workflows and procedures",
+                        "security": "Security tools and practices"
+                    }
+                },
+                "configuration": {
+                    "description": "Configuration templates and examples",
+                    "subcategories": {
+                        "templates": "Configuration templates",
+                        "examples": "Example configurations",
+                        "best_practices": "Configuration best practices"
+                    }
+                }
+            }
+
+            return {
+                "success": True,
+                "categories": categories
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get knowledge categories: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "categories": {}
+            }

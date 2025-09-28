@@ -25,9 +25,10 @@ async def populate_with_chromadb():
     from llama_index.embeddings.ollama import OllamaEmbedding
     from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
     from llama_index.vector_stores.chroma import ChromaVectorStore
+from src.constants import NetworkConstants, ServiceURLs
 
     # Set up LLM and embedding model with configurable URL
-    ollama_base_url = os.getenv("AUTOBOT_OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_base_url = os.getenv("AUTOBOT_OLLAMA_BASE_URL", ServiceURLs.OLLAMA_LOCAL)
     llm = LlamaIndexOllamaLLM(
         model="artifish/llama3.2-uncensored:latest", base_url=ollama_base_url
     )

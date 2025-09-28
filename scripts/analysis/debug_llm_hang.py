@@ -119,7 +119,7 @@ async def test_ollama_direct():
         
         print("Step 1: Testing Ollama health endpoint...")
         async with aiohttp.ClientSession() as session:
-            async with session.get("http://localhost:11434/api/tags") as response:
+            async with session.get("ServiceURLs.OLLAMA_LOCAL/api/tags") as response:
                 if response.status == 200:
                     data = await response.json()
                     models = [model["name"] for model in data.get("models", [])]
@@ -138,7 +138,7 @@ async def test_ollama_direct():
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
-                "http://localhost:11434/api/chat", 
+                "ServiceURLs.OLLAMA_LOCAL/api/chat", 
                 json=chat_data,
                 headers={"Content-Type": "application/json"}
             ) as response:
@@ -156,6 +156,7 @@ async def test_ollama_direct():
     except Exception as e:
         print(f"❌ Direct Ollama test failed: {e}")
         import traceback
+from src.constants import NetworkConstants, ServiceURLs
         traceback.print_exc()
         return False
 

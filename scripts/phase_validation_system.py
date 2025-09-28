@@ -21,6 +21,7 @@ import requests
 # Import centralized Redis client
 sys.path.append(str(Path(__file__).parent.parent))
 from src.utils.redis_client import get_redis_client
+from src.constants import NetworkConstants, ServiceURLs
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -185,7 +186,7 @@ class PhaseValidationCriteria:
                 "autobot-vue/package.json",
                 "autobot-vue/src/components/",
             ],
-            "endpoints": ["http://localhost:5173"],
+            "endpoints": [ServiceURLs.FRONTEND_LOCAL],
             "ui_features": ["chat_interface", "terminal_interface", "settings_panel"],
             "weight": 75,
         },
@@ -314,8 +315,8 @@ class PhaseValidator:
         self.project_root = project_root or Path(__file__).parent.parent
         self.validation_results = {}
         self.overall_score = 0
-        self.backend_url = "http://localhost:8001"
-        self.frontend_url = "http://localhost:5173"
+        self.backend_url = ServiceURLs.BACKEND_LOCAL
+        self.frontend_url = ServiceURLs.FRONTEND_LOCAL
 
     async def validate_all_phases(self) -> Dict[str, Any]:
         """Validate all development phases"""
@@ -613,7 +614,7 @@ class PhaseValidator:
                 # Check if Ollama is accessible
                 try:
                     response = requests.get(
-                        "http://localhost:11434/api/tags", timeout=3
+                        "ServiceURLs.OLLAMA_LOCAL/api/tags", timeout=3
                     )
                     return response.status_code == 200
                 except Exception:

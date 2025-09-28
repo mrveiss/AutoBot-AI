@@ -6,8 +6,9 @@ Test script to verify LLM connection and model loading fixes
 import requests
 import json
 import sys
+from src.constants import NetworkConstants, ServiceURLs
 
-BASE_URL = "http://localhost:8001"
+BASE_URL = ServiceURLs.BACKEND_LOCAL
 
 def test_endpoint(name, url, expected_keys=None):
     """Test an endpoint and check response"""

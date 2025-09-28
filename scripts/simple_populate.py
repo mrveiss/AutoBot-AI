@@ -18,9 +18,10 @@ print("=== Simple Knowledge Base Population ===")
 
 # Check if system is running
 import requests
+from src.constants import NetworkConstants, ServiceURLs
 
 try:
-    resp = requests.get("http://localhost:8001/api/system/health", timeout=2)
+    resp = requests.get("ServiceURLs.BACKEND_LOCAL/api/system/health", timeout=2)
     print(f"✓ Backend is running: {resp.status_code}")
 except Exception:
     print("❌ Backend not running, starting with direct KB access")
@@ -64,7 +65,7 @@ try:
             }
 
             resp = requests.post(
-                "http://localhost:8001/api/knowledge_base/add_text",
+                "ServiceURLs.BACKEND_LOCAL/api/knowledge_base/add_text",
                 json=data,
                 timeout=10,
             )
@@ -83,7 +84,7 @@ try:
     # Test search
     if added_count > 0:
         test_resp = requests.post(
-            "http://localhost:8001/api/knowledge_base/search",
+            "ServiceURLs.BACKEND_LOCAL/api/knowledge_base/search",
             json={"query": "autobot", "limit": 2},
             timeout=5,
         )

@@ -15,6 +15,8 @@ from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
 import json
 
+from src.constants.network_constants import NetworkConstants, ServiceURLs
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -57,27 +59,27 @@ class DistributedServiceDiscovery:
         
         # Primary service endpoints (distributed architecture)
         primary_services = {
-            "redis": ServiceEndpoint("172.16.168.23", 6379, "redis"),
-            "backend": ServiceEndpoint("172.16.168.20", 8001, "http"),
-            "frontend": ServiceEndpoint("172.16.168.21", 5173, "http"),
-            "npu_worker": ServiceEndpoint("172.16.168.22", 8081, "http"),
-            "ai_stack": ServiceEndpoint("172.16.168.24", 8080, "http"),
-            "browser": ServiceEndpoint("172.16.168.25", 3000, "http"),
-            "ollama": ServiceEndpoint("127.0.0.1", 11434, "http"),  # Local service
+            "redis": ServiceEndpoint(NetworkConstants.REDIS_VM_IP, NetworkConstants.REDIS_PORT, "redis"),
+            "backend": ServiceEndpoint(NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.BACKEND_PORT, "http"),
+            "frontend": ServiceEndpoint(NetworkConstants.FRONTEND_VM_IP, NetworkConstants.FRONTEND_PORT, "http"),
+            "npu_worker": ServiceEndpoint(NetworkConstants.NPU_WORKER_VM_IP, NetworkConstants.NPU_WORKER_PORT, "http"),
+            "ai_stack": ServiceEndpoint(NetworkConstants.AI_STACK_VM_IP, NetworkConstants.AI_STACK_PORT, "http"),
+            "browser": ServiceEndpoint(NetworkConstants.BROWSER_VM_IP, NetworkConstants.BROWSER_SERVICE_PORT, "http"),
+            "ollama": ServiceEndpoint(NetworkConstants.LOCALHOST_IP, NetworkConstants.OLLAMA_PORT, "http"),  # Local service
         }
-        
+
         # Backup endpoints for failover
         backup_endpoints = {
             "redis": [
-                ServiceEndpoint("127.0.0.1", 6379, "redis"),  # Local Redis fallback
-                ServiceEndpoint("172.16.168.20", 6379, "redis"),  # Backend host Redis
+                ServiceEndpoint(NetworkConstants.LOCALHOST_IP, NetworkConstants.REDIS_PORT, "redis"),  # Local Redis fallback
+                ServiceEndpoint(NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.REDIS_PORT, "redis"),  # Backend host Redis
             ],
             "backend": [
-                ServiceEndpoint("127.0.0.1", 8001, "http"),  # Local backend
+                ServiceEndpoint(NetworkConstants.LOCALHOST_IP, NetworkConstants.BACKEND_PORT, "http"),  # Local backend
             ],
             "ollama": [
-                ServiceEndpoint("172.16.168.24", 11434, "http"),  # AI Stack host
-                ServiceEndpoint("172.16.168.22", 11434, "http"),  # NPU Worker host
+                ServiceEndpoint(NetworkConstants.AI_STACK_VM_IP, NetworkConstants.OLLAMA_PORT, "http"),  # AI Stack host
+                ServiceEndpoint(NetworkConstants.NPU_WORKER_VM_IP, NetworkConstants.OLLAMA_PORT, "http"),  # NPU Worker host
             ]
         }
         

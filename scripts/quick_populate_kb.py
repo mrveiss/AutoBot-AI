@@ -16,7 +16,22 @@ logging.basicConfig(level=logging.INFO)
 async def main():
     try:
         kb = KnowledgeBase()
-        await kb.ainit()
+
+        # Wait for Redis initialization to complete
+        max_wait = 15  # Maximum 15 seconds
+        for i in range(max_wait):
+            if kb.redis_client is not None and kb.vector_store is not None:
+                print(f"Knowledge base initialized after {i} seconds")
+                break
+            await asyncio.sleep(1)
+
+        if kb.redis_client is None:
+            print("❌ Redis client failed to initialize after 15 seconds")
+            return
+
+        if kb.vector_store is None:
+            print("❌ Vector store failed to initialize, but continuing with Redis operations")
+            # We can still add documents to Redis even without vector store
 
         # Add some test documents
         documents = [
@@ -64,15 +79,26 @@ async def main():
                 "category": doc["category"]
             })
 
-            # Also add to vector store for search
-            await kb.add_text_with_semantic_chunking(
-                content=f"{doc['title']}\n\n{doc['content']}",
-                metadata={
-                    "title": doc["title"],
-                    "source": doc["source"],
-                    "category": doc["category"]
-                }
-            )
+            # Also add to vector store for search (if available)
+            if kb.vector_store is not None:
+                try:
+                    result = await kb.add_document(
+                        content=f"{doc['title']}\n\n{doc['content']}",
+                        metadata={
+                            "title": doc["title"],
+                            "source": doc["source"],
+                            "category": doc["category"]
+                        }
+                    )
+
+                    if result.get("status") == "success":
+                        print(f"✅ Added to vector store: {doc['title']}")
+                    else:
+                        print(f"❌ Failed to add to vector store: {doc['title']} - {result.get('message', 'Unknown error')}")
+                except Exception as e:
+                    print(f"❌ Exception adding to vector store: {doc['title']} - {e}")
+            else:
+                print(f"⚠️ Vector store not available, skipping vector indexing for: {doc['title']}")
 
             print(f"Added: {doc['title']}")
 
@@ -80,9 +106,19 @@ async def main():
         all_doc_keys = kb.redis_client.keys("doc:*")
         print(f"\nVerification: Found {len(all_doc_keys)} documents in Redis")
 
-        # Test search
-        results = await kb.search("AutoBot", top_k=3)
-        print(f"Test search for 'AutoBot' returned {len(results)} results")
+        # Test search (if vector store available)
+        if kb.vector_store is not None:
+            try:
+                results = await kb.search("AutoBot", similarity_top_k=3)
+                print(f"Test search for 'AutoBot' returned {len(results)} results")
+
+                # Show a sample result if any found
+                if results:
+                    print(f"Sample result: {results[0].get('text', 'No text')[:100]}...")
+            except Exception as e:
+                print(f"❌ Search test failed: {e}")
+        else:
+            print("⚠️ Vector store not available, skipping search test")
 
         print("\nKnowledge base populated successfully!")
 

@@ -21,6 +21,9 @@ import aiosqlite
 from src.config import config as global_config_manager
 from src.config_helper import cfg
 
+# Import shared path utilities
+from src.utils.common import PathUtils
+
 
 @dataclass
 class MemoryEntry:
@@ -49,7 +52,7 @@ class AsyncLongTermMemoryManager:
         memory_config = self.config.get("memory", {})
         data_config = self.config.get("data", {})
         default_db_path = cfg.get_path("data", "long_term_db") or "data/agent_memory.db"
-        self.db_path = self._resolve_path(
+        self.db_path = PathUtils.resolve_path(
             memory_config.get("long_term_db_path")
             or data_config.get("long_term_db_path", default_db_path)
         )
@@ -67,11 +70,6 @@ class AsyncLongTermMemoryManager:
         self.logger = logging.getLogger(__name__)
         logging.info(f"Async long-term memory manager initialized at {self.db_path}")
 
-    def _resolve_path(self, path: str) -> str:
-        """Resolve relative paths to absolute paths"""
-        if not os.path.isabs(path):
-            return os.path.abspath(path)
-        return path
 
     async def _init_memory_db(self):
         """Initialize async SQLite database with comprehensive memory tables"""

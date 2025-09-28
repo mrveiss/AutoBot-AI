@@ -150,7 +150,7 @@ def update_autobot_config():
             {
                 "default_provider": "ollama",
                 "ollama": {
-                    "host": "http://localhost:11434",
+                    "host": ServiceURLs.OLLAMA_LOCAL,
                     "gpu_enabled": True,
                     "gpu_layers": 999,
                     "context_length": 4096,
@@ -250,6 +250,7 @@ def test_gpu_inference():
 
         # Simple CUDA availability test
         import torch
+from src.constants import NetworkConstants, ServiceURLs
 
         if torch.cuda.is_available():
             device_name = torch.cuda.get_device_name(0)

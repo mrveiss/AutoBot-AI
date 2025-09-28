@@ -9,6 +9,7 @@ import sys
 import glob
 import requests
 from pathlib import Path
+from src.constants import NetworkConstants, ServiceURLs
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -56,7 +57,7 @@ def upload_docs_as_searchable_facts():
             }
 
             resp = requests.post(
-                "http://localhost:8001/api/knowledge_base/add_text",
+                "ServiceURLs.BACKEND_LOCAL/api/knowledge_base/add_text",
                 json=data,
                 timeout=10,
             )
@@ -84,7 +85,7 @@ def upload_docs_as_searchable_facts():
         try:
             # Check if there's a fact search endpoint
             resp = requests.get(
-                f"http://localhost:8001/api/knowledge_base/get_fact?query={query}",
+                f"ServiceURLs.BACKEND_LOCAL/api/knowledge_base/get_fact?query={query}",
                 timeout=5,
             )
             if resp.status_code == 200:

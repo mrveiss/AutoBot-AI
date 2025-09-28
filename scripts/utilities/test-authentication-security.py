@@ -7,6 +7,7 @@ Tests the newly implemented authentication and authorization system
 import asyncio
 import json
 import sys
+import os
 from pathlib import Path
 
 # Add project root to path
@@ -37,7 +38,7 @@ class SecurityTester:
         """Test password hashing functionality"""
         print("🧪 Testing password hashing...")
         
-        password = "test123456"
+        password = os.urandom(16).hex()  # Generate secure random password
         hash1 = self.auth_middleware.hash_password(password)
         hash2 = self.auth_middleware.hash_password(password)
         

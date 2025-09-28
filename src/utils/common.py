@@ -463,3 +463,121 @@ class ConfigUtils:
             current = current[key]
 
         current[keys[-1]] = value
+
+
+class PathUtils:
+    """Path-related utility functions"""
+
+    @staticmethod
+    def resolve_path(path: str) -> str:
+        """
+        Resolve relative paths to absolute paths
+
+        Args:
+            path: Path to resolve (can be relative or absolute)
+
+        Returns:
+            Absolute path string
+        """
+        if not path:
+            return ""
+
+        path_obj = Path(path)
+
+        if not path_obj.is_absolute():
+            return str(path_obj.resolve())
+
+        return str(path_obj)
+
+    @staticmethod
+    def ensure_path_exists(path: Union[str, Path], is_file: bool = False) -> bool:
+        """
+        Ensure path exists, creating directories as needed
+
+        Args:
+            path: Path to ensure exists
+            is_file: Whether path is a file (will create parent directory)
+
+        Returns:
+            True if path exists or was created successfully
+        """
+        path_obj = Path(path)
+
+        try:
+            if is_file:
+                # Create parent directory for file
+                path_obj.parent.mkdir(parents=True, exist_ok=True)
+                return True
+            else:
+                # Create directory
+                path_obj.mkdir(parents=True, exist_ok=True)
+                return True
+        except Exception as e:
+            logging.error(f"Failed to ensure path exists {path}: {e}")
+            return False
+
+    @staticmethod
+    def normalize_path(path: Union[str, Path]) -> str:
+        """
+        Normalize path by resolving relative components and converting to string
+
+        Args:
+            path: Path to normalize
+
+        Returns:
+            Normalized path string
+        """
+        return str(Path(path).resolve())
+
+    @staticmethod
+    def get_relative_path(path: Union[str, Path], base: Union[str, Path]) -> str:
+        """
+        Get relative path from base directory
+
+        Args:
+            path: Target path
+            base: Base directory
+
+        Returns:
+            Relative path string
+        """
+        try:
+            path_obj = Path(path).resolve()
+            base_obj = Path(base).resolve()
+            return str(path_obj.relative_to(base_obj))
+        except ValueError:
+            # If path is not relative to base, return absolute path
+            return str(Path(path).resolve())
+
+    @staticmethod
+    def is_safe_path(path: Union[str, Path], allowed_dirs: Optional[list] = None) -> bool:
+        """
+        Check if path is safe (within allowed directories)
+
+        Args:
+            path: Path to check
+            allowed_dirs: List of allowed base directories (optional)
+
+        Returns:
+            True if path is safe
+        """
+        try:
+            path_obj = Path(path).resolve()
+
+            # Basic safety checks
+            if '..' in str(path_obj):
+                return False
+
+            if allowed_dirs:
+                for allowed_dir in allowed_dirs:
+                    allowed_path = Path(allowed_dir).resolve()
+                    try:
+                        path_obj.relative_to(allowed_path)
+                        return True
+                    except ValueError:
+                        continue
+                return False
+
+            return True
+        except Exception:
+            return False

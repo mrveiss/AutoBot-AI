@@ -15,7 +15,7 @@ from dataclasses import dataclass, asdict
 import psutil
 
 # Import monitoring components
-from src.utils.phase9_performance_monitor import phase9_monitor
+from src.utils.performance_monitor import phase9_monitor
 
 logger = logging.getLogger(__name__)
 

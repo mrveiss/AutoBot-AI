@@ -129,6 +129,7 @@ class AutoBotMonitor:
         # Test command validator if available
         try:
             from src.security.command_validator import get_command_validator
+from src.constants import NetworkConstants, ServiceURLs
             validator = get_command_validator()
             
             # Quick functionality test
@@ -200,7 +201,7 @@ class AutoBotMonitor:
         try:
             # Check if backend is running
             result = subprocess.run([
-                "curl", "-s", "http://localhost:8001/api/system/health"
+                "curl", "-s", "ServiceURLs.BACKEND_LOCAL/api/system/health"
             ], capture_output=True, timeout=5)
             
             if result.returncode != 0:

@@ -365,6 +365,26 @@ class ConfigManager:
         """Get NPU configuration"""
         return self.get_section("npu")
 
+    def get_llm_config(self) -> Dict[str, Any]:
+        """Get LLM configuration for orchestrator"""
+        # Get the full backend.llm configuration
+        backend_config = self.get_section("backend")
+        llm_config = backend_config.get("llm", {})
+
+        # Extract ollama configuration from the nested structure
+        ollama_config = {}
+        if llm_config.get("local", {}).get("providers", {}).get("ollama"):
+            ollama_provider = llm_config["local"]["providers"]["ollama"]
+            ollama_config = {
+                "ollama": {
+                    "selected_model": ollama_provider.get("selected_model"),
+                    "models": ollama_provider.get("models", []),
+                    "endpoint": ollama_provider.get("endpoint", ServiceURLs.OLLAMA_LOCAL)
+                }
+            }
+
+        return ollama_config
+
     def is_feature_enabled(self, feature: str) -> bool:
         """
         Check if a feature is enabled
@@ -382,34 +402,43 @@ class ConfigManager:
         return self._config_cache.copy()
 
 
-# Singleton instance for global access
-config_manager = ConfigManager()
+# DEPRECATED: This file now imports from unified_config_manager for backward compatibility
+# All new code should import directly from src.unified_config_manager
+
+from src.unified_config_manager import unified_config_manager
+from src.constants import NetworkConstants, ServiceURLs
+
+# Backward compatibility aliases
+config_manager = unified_config_manager
+
+logger.warning("DEPRECATED: src.utils.config_manager is deprecated. Use src.unified_config_manager instead.")
 
 
 # Convenience functions for common operations
 def get_config(key: str, default: Any = None) -> Any:
     """Get configuration value"""
-    return config_manager.get(key, default)
+    return unified_config_manager.get(key, default)
 
 
 def get_config_section(section: str) -> Dict[str, Any]:
     """Get configuration section"""
-    return config_manager.get_section(section)
+    return unified_config_manager.get_nested(section, {})
 
 
 def is_feature_enabled(feature: str) -> bool:
     """Check if feature is enabled"""
-    return config_manager.is_feature_enabled(feature)
+    return unified_config_manager.get_nested(f"{feature}.enabled", False)
 
 
 def reload_config():
     """Reload configuration from file"""
-    config_manager.reload()
+    unified_config_manager.reload()
 
 
 def validate_config() -> List[str]:
     """Validate configuration and return issues"""
-    return config_manager.validate_config()
+    validation_result = unified_config_manager.validate_config()
+    return validation_result.get("issues", [])
 
 
 # Backward compatibility - create instance that mimics src.config
@@ -417,12 +446,12 @@ class Config:
     """Backward compatibility wrapper for existing config usage"""
 
     def __init__(self):
-        self._manager = config_manager
+        self._manager = unified_config_manager
 
     @property
     def config(self) -> Dict[str, Any]:
         """Get complete configuration"""
-        return self._manager.get_all_config()
+        return self._manager.to_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value"""
