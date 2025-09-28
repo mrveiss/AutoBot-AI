@@ -239,6 +239,10 @@ tests/**/*.result
 tests/**/*.tmp
 tests/**/*.log
 
+# === REPORTS FOLDER ===
+# All reports are generated content and should not be committed
+reports/
+
 # === REPORTS AND ANALYSIS (GENERATED) ===
 # Generated reports that can be recreated
 docs/reports/*.json
@@ -252,20 +256,6 @@ docs/reports/accessibility-*.json
 docs/reports/console-*.json
 docs/reports/frontend-*.json
 docs/reports/backend-*.json
-
-# === REPORTS (NOW ORGANIZED IN reports/ FOLDER) ===
-# All reports now stored in reports/ subdirectories by type
-# Maximum 2 reports per type for comparison purposes
-# Use scripts/utilities/report_manager.py for management
-
-# Dynamic report data (should not be committed)
-reports/memory/
-reports/monitoring/
-reports/phase_validation_*.json
-reports/state_tracking/
-reports/codebase_analysis_*.json
-reports/**/*.html
-reports/**/*.db
 
 # Legacy report patterns (prevent in root)
 /*_analysis_report.json
