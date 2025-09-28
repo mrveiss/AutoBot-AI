@@ -234,6 +234,7 @@ htmlcov/
 # === TEST GENERATED FILES ===
 # All test-generated files must be in test_results folder
 test_results/
+tests/results/
 tests/**/output/
 tests/**/*.generated
 tests/**/*.report
