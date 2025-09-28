@@ -490,7 +490,7 @@ class UnifiedConfigManager:
             "ollama": {
                 "selected_model": selected_model,
                 "models": backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("models", []),
-                "endpoint": backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("endpoint", ServiceURLs.OLLAMA_LOCAL)
+                "endpoint": backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("endpoint", "http://localhost:11434")
             },
             "unified": backend_llm  # New unified format
         }
