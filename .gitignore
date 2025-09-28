@@ -64,6 +64,11 @@ data/agent_*
 # Dynamic report data in data directory
 data/reports/
 
+# Analysis outputs - large JSON files and results
+analysis/**/*.json
+analysis/**/results.txt
+analysis/**/output.txt
+
 # Backend data
 backend/data/chats/*
 

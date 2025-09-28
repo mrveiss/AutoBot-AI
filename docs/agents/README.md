@@ -2,6 +2,9 @@
 
 This documentation provides comprehensive information about all agents in the AutoBot system, their roles, interactions, and integration patterns.
 
+> **📋 For system status updates and fixes, see:** [`../system-state.md`](../system-state.md)
+> **📋 For development guidelines and project setup, see:** [`../../CLAUDE.md`](../../CLAUDE.md)
+
 ## 📋 Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
