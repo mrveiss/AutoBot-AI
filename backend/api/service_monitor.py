@@ -64,6 +64,9 @@ class ServiceMonitor:
             )
         except Exception as e:
             logger.warning(f"Could not initialize Redis client: {e}")
+        
+        # Note: Docker client initialization removed - we use VM monitoring instead
+        # Services now run on VMs via systemd, not Docker containers
     
     async def check_backend_api(self) -> ServiceStatus:
         """Check backend API health"""

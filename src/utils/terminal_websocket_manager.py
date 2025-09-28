@@ -138,7 +138,15 @@ class TerminalWebSocketManager:
             attrs[3] &= ~termios.ECHO  # Disable echo
             termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
 
-            # Start shell process
+            # Start shell process with safer preexec_fn
+            def safe_preexec():
+                """Safe preexec function that handles errors gracefully"""
+                try:
+                    os.setsid()
+                except OSError as e:
+                    # Log but don't fail - some environments don't support setsid
+                    logger.warning(f"setsid failed in preexec_fn: {e}")
+            
             self.process = subprocess.Popen(
                 ["/bin/bash", "-i"],  # Interactive bash
                 stdin=slave_fd,
@@ -146,7 +154,7 @@ class TerminalWebSocketManager:
                 stderr=slave_fd,
                 cwd=self.current_dir,
                 env=self.env,
-                preexec_fn=os.setsid,
+                preexec_fn=safe_preexec,
                 start_new_session=True,
             )
 
