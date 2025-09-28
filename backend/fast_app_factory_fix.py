@@ -123,6 +123,18 @@ async def health_check():
         "uptime_human": f"{uptime_seconds:.1f} seconds"
     }
 
+# Version endpoint (requested by frontend)
+@app.get("/api/version")
+async def version_info():
+    """API version information"""
+    return {
+        "version": "1.0.0",
+        "backend": "fast_factory",
+        "api_version": "v1",
+        "timestamp": datetime.now().isoformat(),
+        "description": "AutoBot Backend API with timeout fixes"
+    }
+
 report_startup_progress("health", "Health endpoint active", 40, "❤️")
 
 # Define routers to load
@@ -293,6 +305,21 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
 async def background_initialization():
     """Initialize non-critical components in background"""
     try:
+        # Step 0: Initialize orchestrator (CRITICAL for chat functionality)
+        logger.info("🤖 Initializing orchestrator...")
+        try:
+            from src.lightweight_orchestrator import lightweight_orchestrator
+
+            await lightweight_orchestrator.startup()
+            app.state.lightweight_orchestrator = lightweight_orchestrator
+            # Also store as 'orchestrator' for chat API compatibility
+            app.state.orchestrator = lightweight_orchestrator
+            logger.info("✅ Orchestrator initialized successfully")
+            report_startup_progress("orchestrator", "Orchestrator ready", 50, "🤖")
+        except Exception as e:
+            logger.error(f"❌ Orchestrator initialization failed: {e}")
+            # Continue with other initialization even if orchestrator fails
+
         # Step 1: Initialize knowledge base early
         logger.info("🧠 Starting knowledge base initialization...")
         try:

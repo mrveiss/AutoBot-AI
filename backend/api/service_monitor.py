@@ -10,13 +10,13 @@ import time
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-import docker
 import redis
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 # Import unified configuration system - NO HARDCODED VALUES
 from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -49,17 +49,11 @@ class ServiceMonitor:
     """Monitors all AutoBot services"""
     
     def __init__(self):
-        self.docker_client = None
         self.redis_client = None
         self._initialize_clients()
-    
+
     def _initialize_clients(self):
         """Initialize monitoring clients"""
-        try:
-            self.docker_client = docker.from_env()
-        except Exception as e:
-            logger.warning(f"Could not initialize Docker client: {e}")
-        
         try:
             self.redis_client = redis.Redis(
                 host=cfg.get_host('redis'),
@@ -763,7 +757,6 @@ async def get_all_services():
         # Quick Ollama check
         try:
             import aiohttp
-            from src.constants.network_constants import NetworkConstants, ServiceURLs
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
                 async with session.get(f'{ServiceURLs.OLLAMA_LOCAL}/api/version') as response:
                     if response.status == 200:
