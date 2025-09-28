@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
-import { createRouteComponent, createLazyComponent, setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
+import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 
 // Initialize global async component error handler
 setupAsyncComponentErrorHandler()
@@ -49,12 +49,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'chat-default',
-        component: createLazyComponent(() => import('@/components/chat/ChatInterface.vue'), 'ChatInterface')
+        component: () => import('@/components/chat/ChatInterface.vue')
       },
       {
         path: ':sessionId',
         name: 'chat-session',
-        component: createLazyComponent(() => import('@/components/chat/ChatInterface.vue'), 'ChatInterface'),
+        component: () => import('@/components/chat/ChatInterface.vue'),
         props: true,
         meta: {
           title: 'Chat Session',
@@ -82,7 +82,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'search',
         name: 'knowledge-search',
-        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeSearch.vue'), 'KnowledgeSearch'),
+        component: () => import('@/components/knowledge/KnowledgeSearch.vue'),
         meta: {
           title: 'Search Knowledge',
           parent: 'knowledge'
@@ -91,7 +91,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'categories',
         name: 'knowledge-categories',
-        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeCategories.vue'), 'KnowledgeCategories'),
+        component: () => import('@/components/knowledge/KnowledgeCategories.vue'),
         meta: {
           title: 'Categories',
           parent: 'knowledge'
@@ -100,7 +100,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'upload',
         name: 'knowledge-upload',
-        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeUpload.vue'), 'KnowledgeUpload'),
+        component: () => import('@/components/knowledge/KnowledgeUpload.vue'),
         meta: {
           title: 'Upload Content',
           parent: 'knowledge'
@@ -109,7 +109,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'manage',
         name: 'knowledge-manage',
-        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeEntries.vue'), 'KnowledgeEntries'),
+        component: () => import('@/components/knowledge/KnowledgeEntries.vue'),
         meta: {
           title: 'Manage Entries',
           parent: 'knowledge'
@@ -118,7 +118,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'stats',
         name: 'knowledge-stats',
-        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeStats.vue'), 'KnowledgeStats'),
+        component: () => import('@/components/knowledge/KnowledgeStats.vue'),
         meta: {
           title: 'Statistics',
           parent: 'knowledge'
@@ -127,7 +127,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'manpages',
         name: 'knowledge-manpages',
-        component: createLazyComponent(() => import('@/components/ManPageManager.vue'), 'ManPageManager'),
+        component: () => import('@/components/ManPageManager.vue'),
         meta: {
           title: 'Man Pages',
           parent: 'knowledge'
@@ -154,7 +154,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'terminal',
         name: 'tools-terminal',
-        component: createLazyComponent(() => import('@/components/Terminal.vue'), 'Terminal'),
+        component: () => import('@/components/Terminal.vue'),
         meta: {
           title: 'Terminal',
           parent: 'tools'
@@ -163,7 +163,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'terminal/:sessionId',
         name: 'tools-terminal-session',
-        component: createLazyComponent(() => import('@/components/Terminal.vue'), 'Terminal'),
+        component: () => import('@/components/Terminal.vue'),
         props: true,
         meta: {
           title: 'Terminal Session',
@@ -173,7 +173,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'files',
         name: 'tools-files',
-        component: createLazyComponent(() => import('@/components/FileBrowser.vue'), 'FileBrowser'),
+        component: () => import('@/components/FileBrowser.vue'),
         meta: {
           title: 'File Browser',
           parent: 'tools'
@@ -182,7 +182,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'browser',
         name: 'tools-browser',
-        component: createLazyComponent(() => import('@/components/ToolsBrowser.vue'), 'ToolsBrowser'),
+        component: () => import('@/components/ToolsBrowser.vue'),
         meta: {
           title: 'Browser',
           parent: 'tools'
@@ -191,7 +191,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'novnc',
         name: 'tools-novnc',
-        component: createLazyComponent(() => import('@/components/NoVNCViewer.vue'), 'NoVNCViewer'),
+        component: () => import('@/components/NoVNCViewer.vue'),
         meta: {
           title: 'noVNC Remote Desktop',
           parent: 'tools'
@@ -200,7 +200,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'voice',
         name: 'tools-voice',
-        component: createLazyComponent(() => import('@/components/VoiceInterface.vue'), 'VoiceInterface'),
+        component: () => import('@/components/VoiceInterface.vue'),
         meta: {
           title: 'Voice Interface',
           parent: 'tools'
@@ -209,7 +209,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'chat-debug',
         name: 'tools-chat-debug',
-        component: createLazyComponent(() => import('@/views/ChatDebugView.vue'), 'ChatDebugView'),
+        component: () => import('@/views/ChatDebugView.vue'),
         meta: {
           title: 'Chat Debug',
           parent: 'tools'
@@ -236,7 +236,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'system',
         name: 'monitoring-system',
-        component: createLazyComponent(() => import('@/components/SystemMonitor.vue'), 'SystemMonitor'),
+        component: () => import('@/components/SystemMonitor.vue'),
         meta: {
           title: 'System Monitor',
           parent: 'monitoring'
@@ -245,7 +245,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'analytics',
         name: 'monitoring-analytics',
-        component: createLazyComponent(() => import('@/components/CodebaseAnalytics.vue'), 'CodebaseAnalytics'),
+        component: () => import('@/components/CodebaseAnalytics.vue'),
         meta: {
           title: 'Analytics',
           parent: 'monitoring'
@@ -254,7 +254,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'rum',
         name: 'monitoring-rum',
-        component: createLazyComponent(() => import('@/components/RumDashboard.vue'), 'RumDashboard'),
+        component: () => import('@/components/RumDashboard.vue'),
         meta: {
           title: 'RUM Dashboard',
           parent: 'monitoring'
@@ -263,7 +263,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'validation',
         name: 'monitoring-validation',
-        component: createLazyComponent(() => import('@/components/ValidationDashboard.vue'), 'ValidationDashboard'),
+        component: () => import('@/components/ValidationDashboard.vue'),
         meta: {
           title: 'Validation',
           parent: 'monitoring'
@@ -272,7 +272,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'logs',
         name: 'monitoring-logs',
-        component: createLazyComponent(() => import('@/components/LogViewer.vue'), 'LogViewer'),
+        component: () => import('@/components/LogViewer.vue'),
         meta: {
           title: 'Log Viewer',
           parent: 'monitoring'
