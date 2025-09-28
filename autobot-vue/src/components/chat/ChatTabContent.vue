@@ -18,9 +18,10 @@
     <!-- Terminal Tab Content -->
     <div v-else-if="activeTab === 'terminal'" class="flex-1 flex flex-col min-h-0">
       <Terminal
-        :key="currentSessionId"
-        :sessionType="'simple'"
+        :key="`chat-terminal-${currentSessionId}`"
+        :sessionType="'main'"
         :autoConnect="true"
+        :chatSessionId="currentSessionId"
         class="flex-1"
       />
     </div>

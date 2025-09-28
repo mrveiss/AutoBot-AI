@@ -10,7 +10,7 @@
         @loading-complete="handleSidebarLoadingComplete"
         @loading-error="handleSidebarLoadingError"
         @loading-timeout="handleSidebarLoadingTimeout"
-        class="h-full"
+        class="sidebar-loading-view h-full w-80 flex-shrink-0"
       >
         <ChatSidebar />
       </UnifiedLoadingView>
@@ -43,7 +43,7 @@
           @loading-complete="handleContentLoadingComplete"
           @loading-error="handleContentLoadingError"
           @loading-timeout="handleContentLoadingTimeout"
-          class="flex-1"
+          class="flex-1 min-h-0"
         >
           <ChatTabContent
             :active-tab="activeTab"
@@ -53,12 +53,8 @@
         </UnifiedLoadingView>
       </div>
 
-      <!-- Terminal Sidebar -->
-      <Terminal
-        v-if="showTerminalSidebar"
-        :sessionType="'simple'"
-        :autoConnect="true"
-      />
+      <!-- REMOVED: Terminal Sidebar (line 57-61) - causes duplicate terminals -->
+      <!-- The Terminal component is now ONLY shown in ChatTabContent when activeTab === 'terminal' -->
 
       <!-- Dialogs and Modals -->
       <KnowledgePersistenceDialog
@@ -115,7 +111,6 @@ import ChatTabContent from './ChatTabContent.vue'
 import KnowledgePersistenceDialog from '@/components/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/WorkflowProgressWidget.vue'
-import Terminal from '@/components/Terminal.vue'
 
 // Stores and controller
 const store = useChatStore()
@@ -140,9 +135,8 @@ const currentWorkflowId = ref<string | null>(null)
 // Tab state
 const activeTab = ref<string>('chat')
 
-// Terminal sidebar state
-const showTerminalSidebar = ref<boolean>(false)
-const terminalSidebarCollapsed = ref<boolean>(false)
+// REMOVED: Terminal sidebar state (showTerminalSidebar, terminalSidebarCollapsed)
+// These were causing the duplicate terminal issue
 
 // Connection state with stabilized status management
 const baseConnectionStatus = ref('Connected')
@@ -322,7 +316,7 @@ const checkConnection = async () => {
     // Use ApiClient instead of direct fetch
     const apiClient = new ApiClient()
     const healthData = await apiClient.get('/api/health')
-    
+
     // ApiClient returns data directly on success
     if (healthData) {
       isConnected.value = true
@@ -511,24 +505,31 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
   }
 })
 
-// Typing status is now handled automatically by the computed connectionStatus
-
-// Watch for tab changes to show/hide terminal sidebar
-watch(() => activeTab.value, (newTab) => {
-  showTerminalSidebar.value = newTab === 'terminal'
-})
+// REMOVED: Watch for tab changes to show/hide terminal sidebar
+// This was causing the duplicate terminal issue:
+// watch(() => activeTab.value, (newTab) => {
+//   showTerminalSidebar.value = newTab === 'terminal'
+// })
 </script>
 
 <style scoped>
+/* Removed conflicting height declaration - now relies on parent container */
 .chat-interface {
-  height: 100vh;
+  /* height: 100vh; - REMOVED: This was causing layout conflicts */
 }
 
+/* CRITICAL FIX: Override UnifiedLoadingView default width for sidebar */
+.sidebar-loading-view {
+  /* Override the default w-full behavior from UnifiedLoadingView */
+  width: 320px !important; /* Force w-80 equivalent (320px) */
+  flex-shrink: 0 !important;
+  max-width: 320px !important;
+  min-width: 320px !important;
+}
 
 .workflow-progress-widget {
   @apply fixed bottom-4 right-4 z-50;
 }
-
 
 /* Focus trap for dialogs */
 .dialog-overlay {
