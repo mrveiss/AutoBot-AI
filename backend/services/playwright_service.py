@@ -163,7 +163,7 @@ class PlaywrightService:
                     
         except Exception as e:
             import traceback
-from src.constants import NetworkConstants, ServiceURLs
+from src.constants.network_constants import NetworkConstants, ServiceURLs
             error_details = f"Exception: {type(e).__name__}: {str(e)}"
             if hasattr(e, '__cause__') and e.__cause__:
                 error_details += f" | Caused by: {e.__cause__}"
