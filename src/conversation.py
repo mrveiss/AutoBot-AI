@@ -738,3 +738,11 @@ class ConversationManager:
 
 # Global conversation manager instance
 conversation_manager = ConversationManager()
+
+
+def get_conversation_manager() -> ConversationManager:
+    """Get the global conversation manager instance"""
+    global conversation_manager
+    if conversation_manager is None:
+        conversation_manager = ConversationManager()
+    return conversation_manager
