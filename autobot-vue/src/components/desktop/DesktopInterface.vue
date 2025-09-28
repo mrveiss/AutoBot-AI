@@ -210,6 +210,27 @@ const checkConnection = async () => {
   }
 }
 
+// UnifiedLoadingView event handlers
+const handleDesktopConnected = () => {
+  console.log('[DesktopInterface] Desktop connection established')
+  loading.value = false
+  connectionStatus.value = 'Connected'
+}
+
+const handleDesktopError = (error) => {
+  console.error('[DesktopInterface] Desktop connection error:', error)
+  loading.value = false
+  connectionStatus.value = 'Error'
+  error.value = `Desktop service error: ${error.message || error}`
+}
+
+const handleDesktopTimeout = () => {
+  console.warn('[DesktopInterface] Desktop connection timeout')
+  loading.value = false
+  connectionStatus.value = 'Timeout'
+  error.value = 'Desktop service connection timed out. Service may be starting up.'
+}
+
 let connectionCheckInterval
 
 onMounted(async () => {
@@ -271,45 +292,7 @@ onUnmounted(() => {
   min-height: 600px;
 }
 
-.loading-overlay {
-  @apply absolute inset-0 bg-white dark:bg-gray-900 flex items-center justify-center z-10;
-}
-
-.loading-spinner {
-  @apply flex flex-col items-center space-y-4;
-}
-
-.spinner {
-  @apply w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin;
-}
-
-.loading-text {
-  @apply text-gray-600 dark:text-gray-400 text-sm;
-}
-
-.error-overlay {
-  @apply absolute inset-0 bg-white dark:bg-gray-900 flex items-center justify-center z-10;
-}
-
-.error-content {
-  @apply text-center p-8 max-w-md;
-}
-
-.error-icon {
-  @apply text-4xl mb-4;
-}
-
-.error-content h3 {
-  @apply text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2;
-}
-
-.error-content p {
-  @apply text-gray-600 dark:text-gray-400 mb-4;
-}
-
-.reconnect-btn {
-  @apply px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors;
-}
+/* Loading and error styles moved to UnifiedLoadingView */
 
 .desktop-controls {
   @apply px-6 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between;
