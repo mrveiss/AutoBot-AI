@@ -10,34 +10,45 @@
     </div>
 
     <div class="desktop-container">
-      <div class="vnc-wrapper">
-        <iframe 
-          ref="vncFrame"
-          :src="vncUrl"
-          class="vnc-iframe"
-          title="Remote Desktop - XFCE Environment"
-          frameborder="0"
-          allowfullscreen
-        ></iframe>
-      </div>
-      
-      <div v-if="loading" class="loading-overlay">
-        <div class="loading-spinner">
-          <div class="spinner"></div>
-          <p class="loading-text">Connecting to desktop...</p>
-        </div>
-      </div>
+      <UnifiedLoadingView
+        loading-key="desktop-vnc"
+        :has-content="!loading && !error"
+        :auto-timeout-ms="15000"
+        @loading-complete="handleDesktopConnected"
+        @loading-error="handleDesktopError"
+        @loading-timeout="handleDesktopTimeout"
+        class="h-full"
+      >
+        <template #loading-message>
+          <div class="text-center">
+            <p class="text-gray-600 dark:text-gray-400">Connecting to desktop...</p>
+            <p class="text-sm text-gray-500 mt-2">{{ connectionStatus }}</p>
+          </div>
+        </template>
 
-      <div v-if="error" class="error-overlay">
-        <div class="error-content">
-          <div class="error-icon">⚠️</div>
-          <h3>Desktop Connection Error</h3>
-          <p>{{ error }}</p>
-          <button @click="reconnect" class="reconnect-btn">
-            Reconnect
-          </button>
+        <template #error-content>
+          <div class="text-center p-6">
+            <div class="text-4xl mb-4">⚠️</div>
+            <h3 class="text-lg font-semibold mb-2">Desktop Connection Error</h3>
+            <p class="text-gray-600 mb-4">{{ error }}</p>
+            <button @click="reconnect" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+              Reconnect
+            </button>
+          </div>
+        </template>
+
+        <!-- Desktop iframe content -->
+        <div class="vnc-wrapper h-full">
+          <iframe
+            ref="vncFrame"
+            :src="vncUrl"
+            class="vnc-iframe"
+            title="Remote Desktop - XFCE Environment"
+            frameborder="0"
+            allowfullscreen
+          ></iframe>
         </div>
-      </div>
+      </UnifiedLoadingView>
     </div>
 
     <div class="desktop-controls">
@@ -59,6 +70,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { API_CONFIG } from '@/config/environment.js'
 import appConfig from '@/config/AppConfig.js'
+import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 
 const vncFrame = ref(null)
 const loading = ref(true)
@@ -106,7 +118,7 @@ const loadVncUrl = async () => {
       console.log('[DesktopInterface] Using fallback VNC URL:', API_CONFIG.DESKTOP_VNC_URL);
     } else {
       // Last resort - construct a default VNC URL
-      const defaultVncUrl = 'http://172.16.168.21:6080/vnc.html?autoconnect=true&password=autobot';
+      const defaultVncUrl = 'http://172.16.168.20:6080/vnc.html?autoconnect=true&password=autobot';
       vncUrl.value = defaultVncUrl;
       console.log('[DesktopInterface] Using last resort VNC URL:', defaultVncUrl);
     }

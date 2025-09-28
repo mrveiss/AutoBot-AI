@@ -148,20 +148,53 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function deleteSession(sessionId: string) {
-    const sessionIndex = sessions.value.findIndex(s => s.id === sessionId)
-    if (sessionIndex !== -1) {
-      sessions.value.splice(sessionIndex, 1)
+  function deleteSession(sessionId: string): boolean {
+    // CRITICAL FIX: Enhanced session deletion with validation and persistence verification
+    console.log(`🗑️ Attempting to delete session: ${sessionId}`)
 
-      // If deleted session was current, switch to another or create new
-      if (currentSessionId.value === sessionId) {
-        if (sessions.value.length > 0) {
-          switchToSession(sessions.value[0].id)
-        } else {
-          currentSessionId.value = null
-        }
+    const sessionIndex = sessions.value.findIndex(s => s.id === sessionId)
+    if (sessionIndex === -1) {
+      console.warn(`⚠️ Session ${sessionId} not found in store`)
+      return false // Session doesn't exist
+    }
+
+    const session = sessions.value[sessionIndex]
+    console.log(`📝 Found session to delete: "${session.title}" (${sessionId})`)
+
+    // Store count before deletion for verification
+    const beforeCount = sessions.value.length
+
+    // Remove session from array
+    sessions.value.splice(sessionIndex, 1)
+
+    // Verify deletion occurred
+    const afterCount = sessions.value.length
+    const deletionSucceeded = afterCount === beforeCount - 1
+
+    if (!deletionSucceeded) {
+      console.error(`❌ Session deletion failed - count before: ${beforeCount}, after: ${afterCount}`)
+      return false
+    }
+
+    console.log(`✅ Session removed from array (${beforeCount} → ${afterCount})`)
+
+    // If deleted session was current, switch to another or clear
+    if (currentSessionId.value === sessionId) {
+      if (sessions.value.length > 0) {
+        console.log(`🔄 Switching to first available session: ${sessions.value[0].id}`)
+        switchToSession(sessions.value[0].id)
+      } else {
+        console.log(`🔄 No sessions remaining, clearing current session`)
+        currentSessionId.value = null
       }
     }
+
+    // Force reactivity trigger to ensure Pinia persistence activates
+    // This is critical for ensuring localStorage is updated
+    sessions.value = [...sessions.value]
+
+    console.log(`✅ Session ${sessionId} successfully deleted from store`)
+    return true
   }
 
   function updateSessionTitle(sessionId: string, title: string) {
@@ -173,8 +206,10 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function clearAllSessions() {
+    console.log(`🗑️ Clearing all ${sessions.value.length} sessions`)
     sessions.value = []
     currentSessionId.value = null
+    console.log(`✅ All sessions cleared`)
   }
 
   function updateSettings(newSettings: Partial<ChatSettings>) {
@@ -211,7 +246,7 @@ export const useChatStore = defineStore('chat', () => {
 
     // Generate unique desktop session ID
     const desktopSessionId = `desktop-${sessionId}-${Date.now()}`
-    
+
     // Initialize desktop session if not exists
     if (!session.desktopSession) {
       session.desktopSession = {
@@ -235,7 +270,7 @@ export const useChatStore = defineStore('chat', () => {
     const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || 'http://172.16.168.20:6080/vnc.html'
     const params = new URLSearchParams({
       autoconnect: 'true',
-      password: 'autobot',
+      password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot',
       resize: 'remote',
       reconnect: 'true',
       quality: '9',
@@ -248,7 +283,7 @@ export const useChatStore = defineStore('chat', () => {
     })
 
     const desktopUrl = `${baseUrl}?${params.toString()}`
-    
+
     // Cache the URL in session
     if (session.desktopSession) {
       session.desktopSession.vncUrl = desktopUrl
@@ -276,6 +311,46 @@ export const useChatStore = defineStore('chat', () => {
   function getDesktopContext(sessionId: string): Record<string, any> {
     const session = sessions.value.find(s => s.id === sessionId)
     return session?.desktopSession?.automationContext || {}
+  }
+
+  // CRITICAL FIX: Debug method to verify persistence state
+  function debugPersistenceState(): void {
+    try {
+      const persistedData = localStorage.getItem('autobot-chat-store')
+      if (persistedData) {
+        const parsed = JSON.parse(persistedData)
+        console.log('📊 Persistence Debug:')
+        console.log(`  Store sessions: ${sessions.value.length}`)
+        console.log(`  Persisted sessions: ${parsed.sessions?.length || 0}`)
+        console.log(`  Store currentSessionId: ${currentSessionId.value}`)
+        console.log(`  Persisted currentSessionId: ${parsed.currentSessionId}`)
+
+        // Check for specific session IDs
+        const storeIds = sessions.value.map(s => s.id)
+        const persistedIds = parsed.sessions?.map((s: any) => s.id) || []
+        console.log(`  Store IDs: [${storeIds.join(', ')}]`)
+        console.log(`  Persisted IDs: [${persistedIds.join(', ')}]`)
+
+        // Find discrepancies
+        const missingFromPersisted = storeIds.filter(id => !persistedIds.includes(id))
+        const extraInPersisted = persistedIds.filter((id: string) => !storeIds.includes(id))
+
+        if (missingFromPersisted.length > 0) {
+          console.warn(`⚠️ Sessions in store but not persisted: [${missingFromPersisted.join(', ')}]`)
+        }
+        if (extraInPersisted.length > 0) {
+          console.warn(`⚠️ Sessions persisted but not in store: [${extraInPersisted.join(', ')}]`)
+        }
+
+        if (missingFromPersisted.length === 0 && extraInPersisted.length === 0) {
+          console.log('✅ Store and persistence are in sync')
+        }
+      } else {
+        console.log('📊 No persisted data found in localStorage')
+      }
+    } catch (error) {
+      console.error('❌ Error checking persistence state:', error)
+    }
   }
 
   return {
@@ -310,7 +385,9 @@ export const useChatStore = defineStore('chat', () => {
     createDesktopSession,
     getDesktopUrl,
     updateDesktopContext,
-    getDesktopContext
+    getDesktopContext,
+    // Debug method
+    debugPersistenceState
   }
 }, {
   persist: {

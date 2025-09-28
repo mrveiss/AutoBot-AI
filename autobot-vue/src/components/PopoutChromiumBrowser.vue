@@ -159,12 +159,20 @@
       <!-- VNC Browser with Playwright Integration -->
       <div v-if="browserMode === 'vnc'" class="w-full h-full relative">
         <!-- API Connection Status Overlay -->
-        <div v-if="browserStatus === 'connecting'" class="absolute inset-0 bg-gray-100 flex items-center justify-center z-10">
-          <div class="text-center">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+        <UnifiedLoadingView
+          v-if="browserStatus === 'connecting'"
+          loading-key="playwright-connecting"
+          :has-content="false"
+          :auto-timeout-ms="10000"
+          @loading-complete="handlePlaywrightConnected"
+          @loading-error="handlePlaywrightError"
+          @loading-timeout="handlePlaywrightTimeout"
+          class="absolute inset-0 bg-gray-100 z-10"
+        >
+          <template #loading-message>
             <p class="text-sm text-gray-600">Connecting to Playwright service...</p>
-          </div>
-        </div>
+          </template>
+        </UnifiedLoadingView>
 
         <!-- API Error Overlay -->
         <div v-if="browserStatus === 'error'" class="absolute inset-0 bg-red-50 flex items-center justify-center z-10">
@@ -252,13 +260,23 @@
       </div>
 
       <!-- Session Loading -->
-      <div v-else-if="loading" class="flex items-center justify-center h-full">
-        <div class="text-center">
-          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p class="text-gray-600">Initializing browser session...</p>
-          <p class="text-sm text-gray-500 mt-2">Session ID: {{ sessionId || 'Not available' }}</p>
-        </div>
-      </div>
+      <UnifiedLoadingView
+        v-else-if="loading"
+        loading-key="browser-session-init"
+        :has-content="false"
+        :auto-timeout-ms="15000"
+        @loading-complete="handleSessionInitialized"
+        @loading-error="handleSessionError"
+        @loading-timeout="handleSessionTimeout"
+        class="h-full"
+      >
+        <template #loading-message>
+          <div class="text-center">
+            <p class="text-gray-600">Initializing browser session...</p>
+            <p class="text-sm text-gray-500 mt-2">Session ID: {{ sessionId || 'Not available' }}</p>
+          </div>
+        </template>
+      </UnifiedLoadingView>
 
       <!-- Developer Tools Overlay -->
       <div v-if="showDevTools" class="absolute bottom-0 left-0 right-0 h-1/3 bg-gray-900 border-t border-gray-600">
@@ -309,6 +327,7 @@ import type { Ref } from 'vue'
 import type { AutomationResults, SearchData, TestData, MessageData } from '@/types/browser'
 import { API_CONFIG } from '@/config/environment.js'
 import apiClient from '@/utils/ApiClient.ts'
+import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 
 interface ConsoleLogEntry {
   timestamp: string
@@ -318,6 +337,9 @@ interface ConsoleLogEntry {
 
 export default {
   name: 'PopoutChromiumBrowser',
+  components: {
+    UnifiedLoadingView
+  },
   props: {
     sessionId: {
       type: String,
@@ -713,6 +735,44 @@ export default {
       }
     })
 
+    // UnifiedLoadingView event handlers
+    const handlePlaywrightConnected = () => {
+      console.log('[PopoutChromiumBrowser] Playwright connection established')
+      browserStatus.value = 'connected'
+    }
+
+    const handlePlaywrightError = (error: any) => {
+      console.error('[PopoutChromiumBrowser] Playwright connection error:', error)
+      browserStatus.value = 'error'
+      addConsoleLog('error', `Playwright connection failed: ${error.message || error}`)
+    }
+
+    const handlePlaywrightTimeout = () => {
+      console.warn('[PopoutChromiumBrowser] Playwright connection timeout')
+      browserStatus.value = 'error'
+      addConsoleLog('warning', 'Playwright connection timed out')
+    }
+
+    const handleSessionInitialized = () => {
+      console.log('[PopoutChromiumBrowser] Browser session initialized')
+      loading.value = false
+      browserStatus.value = 'ready'
+    }
+
+    const handleSessionError = (error: any) => {
+      console.error('[PopoutChromiumBrowser] Session initialization error:', error)
+      loading.value = false
+      browserStatus.value = 'error'
+      addConsoleLog('error', `Session initialization failed: ${error.message || error}`)
+    }
+
+    const handleSessionTimeout = () => {
+      console.warn('[PopoutChromiumBrowser] Session initialization timeout')
+      loading.value = false
+      browserStatus.value = 'error'
+      addConsoleLog('warning', 'Session initialization timed out')
+    }
+
     return {
       // State
       loading,
@@ -764,7 +824,15 @@ export default {
       handleInteraction,
       hideInteractionOverlay,
       addConsoleLog,
-      getLogColor
+      getLogColor,
+
+      // UnifiedLoadingView event handlers
+      handlePlaywrightConnected,
+      handlePlaywrightError,
+      handlePlaywrightTimeout,
+      handleSessionInitialized,
+      handleSessionError,
+      handleSessionTimeout
     }
   }
 }

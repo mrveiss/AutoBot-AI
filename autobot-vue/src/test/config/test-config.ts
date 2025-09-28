@@ -6,12 +6,13 @@
  */
 
 import { vi } from 'vitest'
+from src.constants import NetworkConstants, ServiceURLs
 
 // Test environment configuration
 export const TEST_CONFIG = {
   // API Configuration
   api: {
-    baseUrl: process.env.VITE_API_BASE_URL || 'http://localhost:8001',
+    baseUrl: process.env.VITE_API_BASE_URL || ServiceURLs.BACKEND_LOCAL,
     timeout: 30000, // 30 seconds to match real timeout behavior
     retryAttempts: 3,
     retryDelay: 1000,

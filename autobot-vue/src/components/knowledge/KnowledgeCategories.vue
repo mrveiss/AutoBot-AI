@@ -660,7 +660,7 @@ const loadCategoryDocuments = async (categoryPath: string) => {
   selectedCategoryPath.value = categoryPath
   
   try {
-    const response = await apiClient.get(`/api/knowledge/category/${categoryPath}/documents?limit=20`)
+    const response = await apiClient.get(`/api/knowledge_base/category/${categoryPath}/documents?limit=20`)
     const result = await response.json()
     
     if (result.success) {
@@ -684,7 +684,7 @@ const closeCategoryDocuments = () => {
 
 const openDocument = async (document: any) => {
   try {
-    const response = await apiClient.post('/api/knowledge/document/content', {
+    const response = await apiClient.post('/api/knowledge_base/document/content', {
       source: document.source
     })
     const result = await response.json()

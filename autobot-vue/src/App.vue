@@ -412,35 +412,20 @@
 
     <!-- Main Content Area with Router -->
     <main id="main-content" class="flex-1 overflow-hidden" role="main">
-      <!-- Loading Screen -->
-      <div v-if="isLoading" class="flex items-center justify-center h-full">
-        <div class="text-center">
-          <div class="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p class="text-gray-600">Loading AutoBot...</p>
-        </div>
-      </div>
-
-      <!-- Error Screen -->
-      <div v-else-if="hasErrors" class="flex items-center justify-center h-full">
-        <div class="text-center">
-          <div class="text-red-500 mb-4">
-            <svg class="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-            </svg>
-          </div>
-          <h2 class="text-xl font-semibold text-gray-900 mb-2">System Error</h2>
-          <p class="text-gray-600 mb-4">An error occurred while loading AutoBot.</p>
-          <button
-            @click="clearAllCaches"
-            class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200"
-          >
-            Refresh System
-          </button>
-        </div>
-      </div>
-
-      <!-- Use router-view for all content to enable proper sub-routing -->
-      <router-view v-else class="h-full" />
+      <!-- Unified Loading System -->
+      <UnifiedLoadingView
+        loading-key="app-main"
+        :has-content="!isLoading && !hasErrors"
+        :on-retry="clearAllCaches"
+        :auto-timeout-ms="15000"
+        @loading-complete="handleLoadingComplete"
+        @loading-error="handleLoadingError"
+        @loading-timeout="handleLoadingTimeout"
+        class="h-full"
+      >
+        <!-- Use router-view for all content to enable proper sub-routing -->
+        <router-view class="h-full" />
+      </UnifiedLoadingView>
     </main>
   </div>
 </template>
@@ -456,12 +441,14 @@ import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
+import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
 
 export default {
   name: 'App',
 
   components: {
     SystemStatusNotification,
+    UnifiedLoadingView,
   },
 
   setup() {
@@ -671,6 +658,30 @@ export default {
       }
     };
 
+    // Unified loading event handlers
+    const handleLoadingComplete = () => {
+      console.log('[App] Loading completed successfully');
+      if (appStore && typeof appStore.setLoading === 'function') {
+        appStore.setLoading(false);
+      }
+    };
+
+    const handleLoadingError = (error) => {
+      console.error('[App] Loading error:', error);
+      handleGlobalError(new Error(error));
+    };
+
+    const handleLoadingTimeout = () => {
+      console.warn('[App] Loading timed out - continuing with available content');
+      if (appStore && typeof appStore.addSystemNotification === 'function') {
+        appStore.addSystemNotification({
+          severity: 'warning',
+          title: 'Loading Timeout',
+          message: 'Some components took longer than expected to load, but the application is ready to use.'
+        });
+      }
+    };
+
     // OPTIMIZED: Intelligent system health monitoring
     const startOptimizedHealthCheck = () => {
       console.log('[App] Starting optimized health monitoring system...');
@@ -832,6 +843,11 @@ export default {
       closeMobileNav,
       clearAllCaches,
       handleGlobalError,
+
+      // Unified loading handlers
+      handleLoadingComplete,
+      handleLoadingError,
+      handleLoadingTimeout,
 
       // System status methods
       toggleSystemStatus,

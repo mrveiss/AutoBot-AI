@@ -24,6 +24,13 @@
       <span>Backend offline - using cached settings</span>
     </div>
 
+    <!-- User Management Settings -->
+    <UserManagementSettings
+      v-if="activeTab === 'user'"
+      :isSettingsLoaded="isSettingsLoaded"
+      @setting-changed="updateUserSetting"
+    />
+
     <!-- Chat Settings -->
     <ChatSettings
       v-if="activeTab === 'chat'"
@@ -126,6 +133,7 @@ import axios from 'axios'
 // Import sub-components
 import ErrorBoundary from './ErrorBoundary.vue'
 import SettingsTabNavigation from './settings/SettingsTabNavigation.vue'
+import UserManagementSettings from './settings/UserManagementSettings.vue'
 import ChatSettings from './settings/ChatSettings.vue'
 import BackendSettings from './settings/BackendSettings.vue'
 import UISettings from './settings/UISettings.vue'
@@ -137,8 +145,38 @@ import DeveloperSettings from './settings/DeveloperSettings.vue'
 // Import services
 import cacheService from '../services/CacheService.js'
 
+// Type definitions
+interface SettingsStructure {
+  chat: Record<string, any> | null
+  backend: Record<string, any> | null
+  ui: Record<string, any> | null
+  logging: Record<string, any> | null
+  prompts: Record<string, any> | null
+  developer: Record<string, any> | null
+}
+
+interface CacheActivityItem {
+  timestamp: string
+  operation: string
+  key: string
+  result: string
+  duration_ms: number
+}
+
+interface HealthStatus {
+  status?: string
+  message?: string
+  basic_health?: any
+  detailed_available?: boolean
+}
+
+interface CacheStats {
+  status?: string
+  message?: string
+}
+
 // Initialize settings with proper structure to prevent undefined props
-const getDefaultSettings = () => ({
+const getDefaultSettings = (): SettingsStructure => ({
   chat: null,
   backend: null,
   ui: null,
@@ -148,16 +186,17 @@ const getDefaultSettings = () => ({
 })
 
 // Reactive state
-const settings = ref(getDefaultSettings())
-const hasUnsavedChanges = ref(false)
-const isSettingsLoaded = ref(false)
-const settingsLoadingStatus = ref('loading')
-const isSaving = ref(false)
-const isClearing = ref(false)
-const healthStatus = ref(null)
-const cacheApiAvailable = ref(false)
+const settings = ref<SettingsStructure>(getDefaultSettings())
+const hasUnsavedChanges = ref<boolean>(false)
+const isSettingsLoaded = ref<boolean>(false)
+const settingsLoadingStatus = ref<'loading' | 'loaded' | 'offline'>('loading')
+const isSaving = ref<boolean>(false)
+const isClearing = ref<boolean>(false)
+const healthStatus = ref<HealthStatus | null>(null)
+const cacheApiAvailable = ref<boolean>(false)
 
 const tabs = ref([
+  { id: 'user', label: 'User Management' },
   { id: 'chat', label: 'Chat' },
   { id: 'backend', label: 'Backend' },
   { id: 'ui', label: 'UI' },
@@ -175,100 +214,106 @@ const cacheConfig = reactive({
   defaultTTL: 300,
   maxCacheSizeMB: 100
 })
-const cacheActivity = ref([])
-const cacheStats = ref(null)
+const cacheActivity = ref<CacheActivityItem[]>([])
+const cacheStats = ref<CacheStats | null>(null)
 
 // Helper functions
 const markAsChanged = () => {
   hasUnsavedChanges.value = true
 }
 
-const updateChatSetting = (key, value) => {
+const updateChatSetting = (key: string, value: any) => {
   if (!settings.value.chat) {
     settings.value.chat = {}
   }
-  settings.value.chat[key] = value
+  settings.value.chat![key] = value
   markAsChanged()
 }
 
-const updateBackendSetting = (key, value) => {
+const updateUserSetting = (key: string, value: any) => {
+  // Handle user management settings
+  console.log('User setting updated:', key, value)
+  markAsChanged()
+}
+
+const updateBackendSetting = (key: string, value: any) => {
   if (!settings.value.backend) {
     settings.value.backend = {}
   }
   // Handle nested settings for memory and agents
   if (key.includes('.')) {
     const keys = key.split('.')
-    let obj = settings.value.backend
+    let obj: any = settings.value.backend
     for (let i = 0; i < keys.length - 1; i++) {
-      if (!obj[keys[i]]) obj[keys[i]] = {}
-      obj = obj[keys[i]]
+      if (!obj![keys[i]]) obj![keys[i]] = {}
+      obj = obj![keys[i]]
     }
-    obj[keys[keys.length - 1]] = value
+    obj![keys[keys.length - 1]] = value
   } else {
-    settings.value.backend[key] = value
+    settings.value.backend![key] = value
   }
   markAsChanged()
 }
 
-const updateLLMSetting = (key, value) => {
+const updateLLMSetting = (key: string, value: any) => {
   if (!settings.value.backend) {
     settings.value.backend = {}
   }
-  if (!settings.value.backend.llm) {
-    settings.value.backend.llm = {}
+  if (!(settings.value.backend as any).llm) {
+    (settings.value.backend as any).llm = {}
   }
   const keys = key.split('.')
-  let obj = settings.value.backend.llm
+  let obj: any = (settings.value.backend as any).llm
   for (let i = 0; i < keys.length - 1; i++) {
-    if (!obj[keys[i]]) obj[keys[i]] = {}
-    obj = obj[keys[i]]
+    if (!obj![keys[i]]) obj![keys[i]] = {}
+    obj = obj![keys[i]]
   }
-  obj[keys[keys.length - 1]] = value
+  obj![keys[keys.length - 1]] = value
   markAsChanged()
 }
 
-const updateUISetting = (key, value) => {
+const updateUISetting = (key: string, value: any) => {
   if (!settings.value.ui) {
     settings.value.ui = {}
   }
-  settings.value.ui[key] = value
+  settings.value.ui![key] = value
   markAsChanged()
 }
 
-const updateLoggingSetting = (key, value) => {
+const updateLoggingSetting = (key: string, value: any) => {
   if (!settings.value.logging) {
     settings.value.logging = {}
   }
-  settings.value.logging[key] = value
+  settings.value.logging![key] = value
   markAsChanged()
 }
 
-const updateDeveloperSetting = (key, value) => {
+const updateDeveloperSetting = (key: string, value: any) => {
   if (!settings.value.developer) {
     settings.value.developer = {}
   }
-  settings.value.developer[key] = value
+  settings.value.developer![key] = value
   markAsChanged()
 }
 
-const updateRUMSetting = (key, value) => {
+const updateRUMSetting = (key: string, value: any) => {
   if (!settings.value.developer) {
     settings.value.developer = {}
   }
-  if (!settings.value.developer.rum) {
-    settings.value.developer.rum = {}
+  if (!(settings.value.developer as any).rum) {
+    (settings.value.developer as any).rum = {}
   }
-  settings.value.developer.rum[key] = value
+  (settings.value.developer as any).rum[key] = value
   markAsChanged()
 }
 
-const updateCacheConfig = (key, value) => {
-  cacheConfig[key] = value
+const updateCacheConfig = (key: string, value: any) => {
+  (cacheConfig as any)[key] = value
   markAsChanged()
 }
 
-const getCurrentLLMDisplay = () => {
-  const llmConfig = settings.value.backend?.llm
+const getCurrentLLMDisplay = (): string => {
+  const llmConfig = (settings.value.backend as any)?.llm
   if (!llmConfig) return 'Not configured'
 
   const providerType = llmConfig.provider_type || 'local'
@@ -283,9 +328,19 @@ const getCurrentLLMDisplay = () => {
   }
 }
 
+// Add guard to prevent infinite loading loops
+let isLoadingSettings = false
+
 // Load settings on mount
 const loadSettings = async () => {
+  // Prevent concurrent loading calls that cause infinite loops
+  if (isLoadingSettings) {
+    console.log('Settings loading already in progress, skipping duplicate call')
+    return
+  }
+
   try {
+    isLoadingSettings = true
     settingsLoadingStatus.value = 'loading'
     const response = await axios.get('/api/settings')
     // Merge response data with default structure to ensure all sections exist
@@ -308,6 +363,8 @@ const loadSettings = async () => {
       }
       isSettingsLoaded.value = true
     }
+  } finally {
+    isLoadingSettings = false
   }
 }
 
@@ -327,7 +384,10 @@ const saveSettings = async () => {
 
 const discardChanges = () => {
   hasUnsavedChanges.value = false
-  loadSettings()
+  // Only reload if not already loading to prevent loops
+  if (!isLoadingSettings) {
+    loadSettings()
+  }
 }
 
 // Cache management functions with proper error handling
@@ -339,7 +399,7 @@ const checkCacheApiAvailability = async () => {
     console.log('Cache API is available')
   } catch (error) {
     cacheApiAvailable.value = false
-    console.log('Cache API not available, disabling cache features:', error.message)
+    console.log('Cache API not available, disabling cache features:', (error as any)?.message || 'Unknown error')
   }
 }
 
@@ -377,7 +437,7 @@ const refreshCacheActivity = async () => {
         key: 'settings',
         result: 'hit',
         duration_ms: 1.2
-      }
+      } as CacheActivityItem
     ]
   } catch (error) {
     console.error('Failed to refresh cache activity:', error)
@@ -391,7 +451,7 @@ const refreshCacheStats = async () => {
     cacheStats.value = {
       status: 'unavailable',
       message: 'Cache API not available in fast backend'
-    }
+    } as CacheStats
     return
   }
 
@@ -403,11 +463,11 @@ const refreshCacheStats = async () => {
     cacheStats.value = {
       status: 'error',
       message: 'Failed to load cache statistics'
-    }
+    } as CacheStats
   }
 }
 
-const clearCache = async (type) => {
+const clearCache = async (type: string) => {
   if (!cacheApiAvailable.value) {
     console.warn('Cache API not available, cannot clear cache')
     return
@@ -424,7 +484,7 @@ const clearCache = async (type) => {
   }
 }
 
-const clearRedisCache = async (database) => {
+const clearRedisCache = async (database: string) => {
   if (!cacheApiAvailable.value) {
     console.warn('Cache API not available, cannot clear Redis cache')
     return
@@ -442,7 +502,7 @@ const clearRedisCache = async (database) => {
   }
 }
 
-const clearCacheType = async (cacheType) => {
+const clearCacheType = async (cacheType: string) => {
   if (!cacheApiAvailable.value) {
     console.warn('Cache API not available, cannot clear cache type')
     return
@@ -479,27 +539,27 @@ const warmupCaches = async () => {
 }
 
 // Prompt management functions
-const selectPrompt = (prompt) => {
+const selectPrompt = (prompt: any) => {
   if (!settings.value.prompts) {
     settings.value.prompts = {}
   }
-  settings.value.prompts.selectedPrompt = prompt
-  settings.value.prompts.editedContent = prompt.content || ''
+  (settings.value.prompts as any).selectedPrompt = prompt
+  ;(settings.value.prompts as any).editedContent = prompt.content || ''
 }
 
-const updatePromptEditedContent = (content) => {
+const updatePromptEditedContent = (content: string) => {
   if (!settings.value.prompts) {
     settings.value.prompts = {}
   }
-  settings.value.prompts.editedContent = content
+  (settings.value.prompts as any).editedContent = content
 }
 
 const clearSelectedPrompt = () => {
   if (!settings.value.prompts) {
     settings.value.prompts = {}
   }
-  settings.value.prompts.selectedPrompt = null
-  settings.value.prompts.editedContent = ''
+  ;(settings.value.prompts as any).selectedPrompt = null
+  ;(settings.value.prompts as any).editedContent = ''
 }
 
 const loadPrompts = async () => {
@@ -508,7 +568,7 @@ const loadPrompts = async () => {
     if (!settings.value.prompts) {
       settings.value.prompts = {}
     }
-    settings.value.prompts.list = response.data
+    (settings.value.prompts as any).list = response.data
   } catch (error) {
     console.error('Failed to load prompts:', error)
   }
@@ -516,10 +576,10 @@ const loadPrompts = async () => {
 
 const savePrompt = async () => {
   try {
-    const prompt = settings.value.prompts?.selectedPrompt
+    const prompt = (settings.value.prompts as any)?.selectedPrompt
     if (prompt) {
       await axios.put(`/api/prompts/${prompt.id}`, {
-        content: settings.value.prompts.editedContent
+        content: (settings.value.prompts as any).editedContent
       })
       clearSelectedPrompt()
       await loadPrompts()
@@ -529,7 +589,7 @@ const savePrompt = async () => {
   }
 }
 
-const revertPromptToDefault = async (promptId) => {
+const revertPromptToDefault = async (promptId: string) => {
   try {
     await axios.post(`/api/prompts/${promptId}/revert`)
     clearSelectedPrompt()
@@ -555,14 +615,14 @@ const loadHealthStatus = async () => {
       healthStatus.value = {
         basic_health: fallbackResponse.data,
         detailed_available: false
-      }
+      } as HealthStatus
       console.log('Loaded basic health status as fallback')
     } catch (fallbackError) {
       console.error('Failed to load any health status:', fallbackError)
       healthStatus.value = {
         status: 'unavailable',
         message: 'Health endpoints not available'
-      }
+      } as HealthStatus
     }
   }
 }

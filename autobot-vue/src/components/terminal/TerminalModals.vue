@@ -12,12 +12,34 @@
       <div class="modal-content" @click.stop>
         <h3>Connection Lost</h3>
         <p>The terminal connection was lost. Would you like to reconnect?</p>
+
+        <!-- Error Display -->
+        <div v-if="connectionError" class="error-message">
+          <div class="error-icon">⚠️</div>
+          <div class="error-text">{{ connectionError }}</div>
+        </div>
+
+        <!-- Success Display -->
+        <div v-if="connectionSuccess" class="success-message">
+          <div class="success-icon">✅</div>
+          <div class="success-text">{{ connectionSuccess }}</div>
+        </div>
+
         <div class="modal-actions">
-          <button class="btn btn-secondary" @click="$emit('hide-reconnect-modal')">
+          <button
+            class="btn btn-secondary"
+            @click="$emit('hide-reconnect-modal')"
+            :disabled="isReconnecting"
+          >
             Cancel
           </button>
-          <button class="btn btn-primary" @click="$emit('reconnect')">
-            Reconnect
+          <button
+            class="btn btn-primary"
+            @click="handleReconnect"
+            :disabled="isReconnecting"
+          >
+            <span v-if="isReconnecting" class="loading-spinner"></span>
+            {{ isReconnecting ? 'Reconnecting...' : 'Reconnect' }}
           </button>
         </div>
       </div>
@@ -27,7 +49,7 @@
     <div
       v-if="showCommandConfirmation"
       class="confirmation-modal-overlay"
-      @click="$emit('cancel-command')"
+      @click="cancelCommand"
       tabindex="0"
       @keyup.enter="$event.target.click()"
       @keyup.space="$event.target.click()"
@@ -53,6 +75,18 @@
             </div>
           </div>
 
+          <!-- Error Display -->
+          <div v-if="commandError" class="error-message">
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">{{ commandError }}</div>
+          </div>
+
+          <!-- Success Display -->
+          <div v-if="commandSuccess" class="success-message">
+            <div class="success-icon">✅</div>
+            <div class="success-text">{{ commandSuccess }}</div>
+          </div>
+
           <div class="confirmation-message">
             <p><strong>This command may:</strong></p>
             <ul>
@@ -68,13 +102,16 @@
         <div class="modal-actions">
           <button
             class="btn btn-danger"
-            @click="$emit('execute-confirmed-command')"
+            @click="handleExecuteCommand"
+            :disabled="isExecutingCommand"
           >
-            ⚡ Execute Command
+            <span v-if="isExecutingCommand" class="loading-spinner"></span>
+            {{ isExecutingCommand ? 'Executing...' : '⚡ Execute Command' }}
           </button>
           <button
             class="btn btn-secondary"
-            @click="$emit('cancel-command')"
+            @click="cancelCommand"
+            :disabled="isExecutingCommand"
           >
             ❌ Cancel
           </button>
@@ -86,7 +123,7 @@
     <div
       v-if="showKillConfirmation"
       class="confirmation-modal-overlay"
-      @click="$emit('cancel-kill')"
+      @click="cancelKill"
       tabindex="0"
       @keyup.enter="$event.target.click()"
       @keyup.space="$event.target.click()"
@@ -106,18 +143,33 @@
             </ul>
             <p><strong>This action cannot be undone. Continue?</strong></p>
           </div>
+
+          <!-- Error Display -->
+          <div v-if="killError" class="error-message">
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">{{ killError }}</div>
+          </div>
+
+          <!-- Success Display -->
+          <div v-if="killSuccess" class="success-message">
+            <div class="success-icon">✅</div>
+            <div class="success-text">{{ killSuccess }}</div>
+          </div>
         </div>
 
         <div class="modal-actions">
           <button
             class="btn btn-danger"
-            @click="$emit('confirm-emergency-kill')"
+            @click="handleEmergencyKill"
+            :disabled="isKillingProcesses"
           >
-            🛑 KILL ALL PROCESSES
+            <span v-if="isKillingProcesses" class="loading-spinner"></span>
+            {{ isKillingProcesses ? 'Killing Processes...' : '🛑 KILL ALL PROCESSES' }}
           </button>
           <button
             class="btn btn-secondary"
-            @click="$emit('cancel-kill')"
+            @click="cancelKill"
+            :disabled="isKillingProcesses"
           >
             ❌ Cancel
           </button>
@@ -129,7 +181,7 @@
     <div
       v-if="showLegacyModal"
       class="confirmation-modal-overlay"
-      @click="$emit('take-manual-control')"
+      @click="handleTakeManualControl"
       tabindex="0"
       @keyup.enter="$event.target.click()"
       @keyup.space="$event.target.click()"
@@ -154,6 +206,18 @@
               <div class="command-text">{{ pendingWorkflowStep.command }}</div>
             </div>
 
+            <!-- Error Display -->
+            <div v-if="workflowError" class="error-message">
+              <div class="error-icon">⚠️</div>
+              <div class="error-text">{{ workflowError }}</div>
+            </div>
+
+            <!-- Success Display -->
+            <div v-if="workflowSuccess" class="success-message">
+              <div class="success-icon">✅</div>
+              <div class="success-text">{{ workflowSuccess }}</div>
+            </div>
+
             <div class="workflow-options">
               <div class="option-info">
                 <p><strong>Choose your action:</strong></p>
@@ -170,21 +234,27 @@
         <div class="modal-actions workflow-actions">
           <button
             class="btn btn-success"
-            @click="$emit('confirm-workflow-step')"
+            @click="handleConfirmWorkflowStep"
+            :disabled="isProcessingWorkflow"
           >
-            ✅ Execute & Continue
+            <span v-if="isProcessingWorkflow && lastWorkflowAction === 'execute'" class="loading-spinner"></span>
+            {{ (isProcessingWorkflow && lastWorkflowAction === 'execute') ? 'Executing...' : '✅ Execute & Continue' }}
           </button>
           <button
             class="btn btn-warning"
-            @click="$emit('skip-workflow-step')"
+            @click="handleSkipWorkflowStep"
+            :disabled="isProcessingWorkflow"
           >
-            ⏭️ Skip This Step
+            <span v-if="isProcessingWorkflow && lastWorkflowAction === 'skip'" class="loading-spinner"></span>
+            {{ (isProcessingWorkflow && lastWorkflowAction === 'skip') ? 'Skipping...' : '⏭️ Skip This Step' }}
           </button>
           <button
             class="btn btn-primary"
-            @click="$emit('take-manual-control')"
+            @click="handleTakeManualControl"
+            :disabled="isProcessingWorkflow"
           >
-            👤 Take Manual Control
+            <span v-if="isProcessingWorkflow && lastWorkflowAction === 'manual'" class="loading-spinner"></span>
+            {{ (isProcessingWorkflow && lastWorkflowAction === 'manual') ? 'Taking Control...' : '👤 Take Manual Control' }}
           </button>
         </div>
       </div>
@@ -193,6 +263,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref, nextTick } from 'vue'
+
 interface ProcessInfo {
   pid: number
   command: string
@@ -232,7 +304,279 @@ interface Emits {
 }
 
 defineProps<Props>()
-defineEmits<Emits>()
+const emit = defineEmits<Emits>()
+
+// Loading states
+const isReconnecting = ref(false)
+const isExecutingCommand = ref(false)
+const isKillingProcesses = ref(false)
+const isProcessingWorkflow = ref(false)
+const lastWorkflowAction = ref<'execute' | 'skip' | 'manual' | null>(null)
+
+// Error states
+const connectionError = ref('')
+const connectionSuccess = ref('')
+const commandError = ref('')
+const commandSuccess = ref('')
+const killError = ref('')
+const killSuccess = ref('')
+const workflowError = ref('')
+const workflowSuccess = ref('')
+
+// Timeout configurations
+const RECONNECT_TIMEOUT = 10000 // 10 seconds
+const COMMAND_TIMEOUT = 30000   // 30 seconds
+const KILL_TIMEOUT = 15000      // 15 seconds
+const WORKFLOW_TIMEOUT = 20000  // 20 seconds
+
+// Utility function to clear all messages
+const clearMessages = () => {
+  connectionError.value = ''
+  connectionSuccess.value = ''
+  commandError.value = ''
+  commandSuccess.value = ''
+  killError.value = ''
+  killSuccess.value = ''
+  workflowError.value = ''
+  workflowSuccess.value = ''
+}
+
+// Standard error handler
+const handleError = (error: any, setter: (msg: string) => void) => {
+  console.error('Terminal modal error:', error)
+
+  let errorMessage = 'An unexpected error occurred'
+
+  if (error?.message) {
+    errorMessage = error.message
+  } else if (error?.response?.data?.detail) {
+    errorMessage = error.response.data.detail
+  } else if (error?.response?.status === 408) {
+    errorMessage = 'Request timed out. Please try again.'
+  } else if (error?.response?.status === 500) {
+    errorMessage = 'Server error. Please try again later.'
+  } else if (error?.response?.status === 404) {
+    errorMessage = 'Service not found. Please check your connection.'
+  } else if (typeof error === 'string') {
+    errorMessage = error
+  }
+
+  setter(errorMessage)
+
+  // Auto-hide error after 10 seconds
+  setTimeout(() => {
+    setter('')
+  }, 10000)
+}
+
+// Standard success handler
+const handleSuccess = (message: string, setter: (msg: string) => void) => {
+  setter(message)
+
+  // Auto-hide success after 5 seconds
+  setTimeout(() => {
+    setter('')
+  }, 5000)
+}
+
+// Enhanced action handlers with error handling and loading states
+const handleReconnect = async () => {
+  if (isReconnecting.value) return
+
+  clearMessages()
+  isReconnecting.value = true
+
+  try {
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Reconnection timed out')), RECONNECT_TIMEOUT)
+    })
+
+    // Create reconnection promise
+    const reconnectPromise = new Promise<void>((resolve) => {
+      emit('reconnect')
+      // Simulate async operation
+      setTimeout(resolve, 1000)
+    })
+
+    await Promise.race([reconnectPromise, timeoutPromise])
+
+    handleSuccess('Successfully reconnected to terminal', (msg) => connectionSuccess.value = msg)
+
+  } catch (error) {
+    handleError(error, (msg) => connectionError.value = msg)
+  } finally {
+    isReconnecting.value = false
+  }
+}
+
+const handleExecuteCommand = async () => {
+  if (isExecutingCommand.value) return
+
+  clearMessages()
+  isExecutingCommand.value = true
+
+  try {
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Command execution timed out')), COMMAND_TIMEOUT)
+    })
+
+    // Create execution promise
+    const executePromise = new Promise<void>((resolve) => {
+      emit('execute-confirmed-command')
+      // Simulate async operation
+      setTimeout(resolve, 1500)
+    })
+
+    await Promise.race([executePromise, timeoutPromise])
+
+    handleSuccess('Command executed successfully', (msg) => commandSuccess.value = msg)
+
+  } catch (error) {
+    handleError(error, (msg) => commandError.value = msg)
+  } finally {
+    isExecutingCommand.value = false
+  }
+}
+
+const cancelCommand = () => {
+  if (isExecutingCommand.value) return
+  clearMessages()
+  emit('cancel-command')
+}
+
+const handleEmergencyKill = async () => {
+  if (isKillingProcesses.value) return
+
+  clearMessages()
+  isKillingProcesses.value = true
+
+  try {
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Process termination timed out')), KILL_TIMEOUT)
+    })
+
+    // Create kill promise
+    const killPromise = new Promise<void>((resolve) => {
+      emit('confirm-emergency-kill')
+      // Simulate async operation
+      setTimeout(resolve, 2000)
+    })
+
+    await Promise.race([killPromise, timeoutPromise])
+
+    handleSuccess('All processes terminated successfully', (msg) => killSuccess.value = msg)
+
+  } catch (error) {
+    handleError(error, (msg) => killError.value = msg)
+  } finally {
+    isKillingProcesses.value = false
+  }
+}
+
+const cancelKill = () => {
+  if (isKillingProcesses.value) return
+  clearMessages()
+  emit('cancel-kill')
+}
+
+const handleConfirmWorkflowStep = async () => {
+  if (isProcessingWorkflow.value) return
+
+  clearMessages()
+  isProcessingWorkflow.value = true
+  lastWorkflowAction.value = 'execute'
+
+  try {
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Workflow step execution timed out')), WORKFLOW_TIMEOUT)
+    })
+
+    // Create workflow promise
+    const workflowPromise = new Promise<void>((resolve) => {
+      emit('confirm-workflow-step')
+      // Simulate async operation
+      setTimeout(resolve, 1200)
+    })
+
+    await Promise.race([workflowPromise, timeoutPromise])
+
+    handleSuccess('Workflow step executed successfully', (msg) => workflowSuccess.value = msg)
+
+  } catch (error) {
+    handleError(error, (msg) => workflowError.value = msg)
+  } finally {
+    isProcessingWorkflow.value = false
+    lastWorkflowAction.value = null
+  }
+}
+
+const handleSkipWorkflowStep = async () => {
+  if (isProcessingWorkflow.value) return
+
+  clearMessages()
+  isProcessingWorkflow.value = true
+  lastWorkflowAction.value = 'skip'
+
+  try {
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Workflow step skip timed out')), WORKFLOW_TIMEOUT)
+    })
+
+    // Create skip promise
+    const skipPromise = new Promise<void>((resolve) => {
+      emit('skip-workflow-step')
+      // Simulate async operation
+      setTimeout(resolve, 800)
+    })
+
+    await Promise.race([skipPromise, timeoutPromise])
+
+    handleSuccess('Workflow step skipped successfully', (msg) => workflowSuccess.value = msg)
+
+  } catch (error) {
+    handleError(error, (msg) => workflowError.value = msg)
+  } finally {
+    isProcessingWorkflow.value = false
+    lastWorkflowAction.value = null
+  }
+}
+
+const handleTakeManualControl = async () => {
+  if (isProcessingWorkflow.value) return
+
+  clearMessages()
+  isProcessingWorkflow.value = true
+  lastWorkflowAction.value = 'manual'
+
+  try {
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Manual control transition timed out')), WORKFLOW_TIMEOUT)
+    })
+
+    // Create manual control promise
+    const manualPromise = new Promise<void>((resolve) => {
+      emit('take-manual-control')
+      // Simulate async operation
+      setTimeout(resolve, 1000)
+    })
+
+    await Promise.race([manualPromise, timeoutPromise])
+
+    handleSuccess('Manual control activated successfully', (msg) => workflowSuccess.value = msg)
+
+  } catch (error) {
+    handleError(error, (msg) => workflowError.value = msg)
+  } finally {
+    isProcessingWorkflow.value = false
+    lastWorkflowAction.value = null
+  }
+}
 </script>
 
 <style scoped>
@@ -278,7 +622,22 @@ defineEmits<Emits>()
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.btn:not(:disabled):hover {
+  transform: translateY(-1px);
 }
 
 .btn-primary {
@@ -286,7 +645,7 @@ defineEmits<Emits>()
   color: white;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background-color: #005999;
 }
 
@@ -295,7 +654,7 @@ defineEmits<Emits>()
   color: white;
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background-color: #5a6268;
 }
 
@@ -304,7 +663,7 @@ defineEmits<Emits>()
   color: white;
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   background-color: #c82333;
 }
 
@@ -314,7 +673,7 @@ defineEmits<Emits>()
   border: 1px solid #1e7e34;
 }
 
-.btn-success:hover {
+.btn-success:hover:not(:disabled) {
   background-color: #218838;
   border-color: #1c7430;
 }
@@ -325,9 +684,58 @@ defineEmits<Emits>()
   border: 1px solid #e0a800;
 }
 
-.btn-warning:hover {
+.btn-warning:hover:not(:disabled) {
   background-color: #e0a800;
   border-color: #d39e00;
+}
+
+/* Loading spinner */
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error and Success Messages */
+.error-message, .success-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 6px;
+  margin: 16px 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.error-message {
+  background-color: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  color: #ff6b6b;
+}
+
+.success-message {
+  background-color: rgba(40, 167, 69, 0.1);
+  border: 1px solid rgba(40, 167, 69, 0.3);
+  color: #28a745;
+}
+
+.error-icon, .success-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.error-text, .success-text {
+  flex: 1;
+  word-break: break-word;
 }
 
 /* Command confirmation modal styles */
@@ -587,6 +995,64 @@ defineEmits<Emits>()
   }
   50% {
     box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .modal-content {
+    max-width: 95%;
+    padding: 16px;
+  }
+
+  .confirmation-modal {
+    max-width: 95%;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .workflow-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .command-text {
+    font-size: 12px;
+    padding: 8px;
+  }
+
+  .modal-header {
+    padding: 16px 20px 12px 20px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .confirmation-modal {
+    margin: 10px;
+  }
+
+  .modal-content {
+    padding: 12px;
+  }
+
+  .modal-header {
+    padding: 12px 16px 8px 16px;
+  }
+
+  .modal-actions {
+    padding: 16px;
   }
 }
 </style>

@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import {
+from src.constants import NetworkConstants, ServiceURLs
   createMockApiResponse,
   createMockChatMessage,
   createMockChatSession,
@@ -8,7 +9,7 @@ import {
 } from '../utils/test-utils'
 
 // Base URL for API endpoints
-const API_BASE = process.env.VITE_API_BASE_URL || 'http://localhost:8001'
+const API_BASE = process.env.VITE_API_BASE_URL || ServiceURLs.BACKEND_LOCAL
 
 export const handlers = [
   // Chat API endpoints

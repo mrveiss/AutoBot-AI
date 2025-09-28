@@ -86,7 +86,7 @@ export const routeConfig: RouteConfig[] = [
       {
         path: '/tools/terminal',
         name: 'tools-terminal',
-        component: 'TerminalWindow',
+        component: 'Terminal',
         description: 'Terminal interface',
         icon: 'fas fa-terminal'
       },

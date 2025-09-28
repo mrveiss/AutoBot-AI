@@ -1,20 +1,35 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAppStore } from '@/stores/useAppStore'
+import { useUserStore } from '@/stores/useUserStore'
+import { createRouteComponent, createLazyComponent, setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 
-// Views (Page-level components)
-const ChatView = () => import('@/views/ChatView.vue')
-const KnowledgeView = () => import('@/views/KnowledgeView.vue')
-const ToolsView = () => import('@/views/ToolsView.vue')
-const MonitoringView = () => import('@/views/MonitoringView.vue')
-const SecretsView = () => import('@/views/SecretsView.vue')
-const SettingsView = () => import('@/views/SettingsView.vue')
-const NotFoundView = () => import('@/views/NotFoundView.vue')
+// Initialize global async component error handler
+setupAsyncComponentErrorHandler()
+
+// Views (Page-level components) - Use direct imports for simple containers to avoid circular dependencies
+import ChatView from '@/views/ChatView.vue'
+import KnowledgeView from '@/views/KnowledgeView.vue'
+import ToolsView from '@/views/ToolsView.vue'
+import MonitoringView from '@/views/MonitoringView.vue'
+import SecretsView from '@/views/SecretsView.vue'
+import SettingsView from '@/views/SettingsView.vue'
+import NotFoundView from '@/views/NotFoundView.vue'
 
 // Route configuration
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: '/chat'
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: createLazyComponent(() => import('@/components/auth/LoginForm.vue'), 'LoginForm'),
+    meta: {
+      title: 'Login',
+      hideInNav: true,
+      requiresAuth: false
+    }
   },
   {
     path: '/dashboard',
@@ -34,12 +49,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'chat-default',
-        component: () => import('@/components/chat/ChatInterface.vue')
+        component: createLazyComponent(() => import('@/components/chat/ChatInterface.vue'), 'ChatInterface')
       },
       {
         path: ':sessionId',
         name: 'chat-session',
-        component: () => import('@/components/chat/ChatInterface.vue'),
+        component: createLazyComponent(() => import('@/components/chat/ChatInterface.vue'), 'ChatInterface'),
         props: true,
         meta: {
           title: 'Chat Session',
@@ -67,7 +82,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'search',
         name: 'knowledge-search',
-        component: () => import('@/components/knowledge/KnowledgeSearch.vue'),
+        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeSearch.vue'), 'KnowledgeSearch'),
         meta: {
           title: 'Search Knowledge',
           parent: 'knowledge'
@@ -76,7 +91,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'categories',
         name: 'knowledge-categories',
-        component: () => import('@/components/knowledge/KnowledgeCategories.vue'),
+        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeCategories.vue'), 'KnowledgeCategories'),
         meta: {
           title: 'Categories',
           parent: 'knowledge'
@@ -85,7 +100,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'upload',
         name: 'knowledge-upload',
-        component: () => import('@/components/knowledge/KnowledgeUpload.vue'),
+        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeUpload.vue'), 'KnowledgeUpload'),
         meta: {
           title: 'Upload Content',
           parent: 'knowledge'
@@ -94,7 +109,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'manage',
         name: 'knowledge-manage',
-        component: () => import('@/components/knowledge/KnowledgeEntries.vue'),
+        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeEntries.vue'), 'KnowledgeEntries'),
         meta: {
           title: 'Manage Entries',
           parent: 'knowledge'
@@ -103,7 +118,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'stats',
         name: 'knowledge-stats',
-        component: () => import('@/components/knowledge/KnowledgeStats.vue'),
+        component: createLazyComponent(() => import('@/components/knowledge/KnowledgeStats.vue'), 'KnowledgeStats'),
         meta: {
           title: 'Statistics',
           parent: 'knowledge'
@@ -112,7 +127,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'manpages',
         name: 'knowledge-manpages',
-        component: () => import('@/components/ManPageManager.vue'),
+        component: createLazyComponent(() => import('@/components/ManPageManager.vue'), 'ManPageManager'),
         meta: {
           title: 'Man Pages',
           parent: 'knowledge'
@@ -139,7 +154,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'terminal',
         name: 'tools-terminal',
-        component: () => import('@/components/XTerminal.vue'),
+        component: createLazyComponent(() => import('@/components/Terminal.vue'), 'Terminal'),
         meta: {
           title: 'Terminal',
           parent: 'tools'
@@ -148,7 +163,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'terminal/:sessionId',
         name: 'tools-terminal-session',
-        component: () => import('@/components/XTerminal.vue'),
+        component: createLazyComponent(() => import('@/components/Terminal.vue'), 'Terminal'),
         props: true,
         meta: {
           title: 'Terminal Session',
@@ -158,7 +173,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'files',
         name: 'tools-files',
-        component: () => import('@/components/FileBrowser.vue'),
+        component: createLazyComponent(() => import('@/components/FileBrowser.vue'), 'FileBrowser'),
         meta: {
           title: 'File Browser',
           parent: 'tools'
@@ -167,7 +182,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'browser',
         name: 'tools-browser',
-        component: () => import('@/components/ToolsBrowser.vue'),
+        component: createLazyComponent(() => import('@/components/ToolsBrowser.vue'), 'ToolsBrowser'),
         meta: {
           title: 'Browser',
           parent: 'tools'
@@ -176,7 +191,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'novnc',
         name: 'tools-novnc',
-        component: () => import('@/components/NoVNCViewer.vue'),
+        component: createLazyComponent(() => import('@/components/NoVNCViewer.vue'), 'NoVNCViewer'),
         meta: {
           title: 'noVNC Remote Desktop',
           parent: 'tools'
@@ -185,9 +200,18 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'voice',
         name: 'tools-voice',
-        component: () => import('@/components/VoiceInterface.vue'),
+        component: createLazyComponent(() => import('@/components/VoiceInterface.vue'), 'VoiceInterface'),
         meta: {
           title: 'Voice Interface',
+          parent: 'tools'
+        }
+      },
+      {
+        path: 'chat-debug',
+        name: 'tools-chat-debug',
+        component: createLazyComponent(() => import('@/views/ChatDebugView.vue'), 'ChatDebugView'),
+        meta: {
+          title: 'Chat Debug',
           parent: 'tools'
         }
       }
@@ -212,7 +236,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'system',
         name: 'monitoring-system',
-        component: () => import('@/components/SystemMonitor.vue'),
+        component: createLazyComponent(() => import('@/components/SystemMonitor.vue'), 'SystemMonitor'),
         meta: {
           title: 'System Monitor',
           parent: 'monitoring'
@@ -221,7 +245,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'analytics',
         name: 'monitoring-analytics',
-        component: () => import('@/components/CodebaseAnalytics.vue'),
+        component: createLazyComponent(() => import('@/components/CodebaseAnalytics.vue'), 'CodebaseAnalytics'),
         meta: {
           title: 'Analytics',
           parent: 'monitoring'
@@ -230,7 +254,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'rum',
         name: 'monitoring-rum',
-        component: () => import('@/components/RumDashboard.vue'),
+        component: createLazyComponent(() => import('@/components/RumDashboard.vue'), 'RumDashboard'),
         meta: {
           title: 'RUM Dashboard',
           parent: 'monitoring'
@@ -239,7 +263,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'validation',
         name: 'monitoring-validation',
-        component: () => import('@/components/ValidationDashboard.vue'),
+        component: createLazyComponent(() => import('@/components/ValidationDashboard.vue'), 'ValidationDashboard'),
         meta: {
           title: 'Validation',
           parent: 'monitoring'
@@ -248,7 +272,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'logs',
         name: 'monitoring-logs',
-        component: () => import('@/components/LogViewer.vue'),
+        component: createLazyComponent(() => import('@/components/LogViewer.vue'), 'LogViewer'),
         meta: {
           title: 'Log Viewer',
           parent: 'monitoring'
@@ -305,34 +329,146 @@ const router = createRouter({
   }
 })
 
-// Error handling for routing failures
+// Enhanced error handling for routing failures
 router.onError((error) => {
-  console.error('Router error:', error)
+  console.error('[Router] Navigation error:', error)
 
-  // Handle chunk loading failures
-  if (error.message.includes('Loading chunk') || error.message.includes('Loading CSS chunk')) {
-    console.warn('Chunk loading failed, attempting page reload...')
-    // Force reload to get fresh chunks - but only once to prevent infinite loops
-    if (!sessionStorage.getItem('chunk-reload-attempted')) {
-      sessionStorage.setItem('chunk-reload-attempted', 'true')
-      window.location.reload()
-    } else {
-      // If reload already attempted, navigate to safe route
-      sessionStorage.removeItem('chunk-reload-attempted')
-      router.push('/chat').catch(() => {
-        console.error('Failed to navigate to fallback route')
+  // Handle chunk loading failures with enhanced error recovery
+  if (error.message.includes('Loading chunk') ||
+      error.message.includes('Loading CSS chunk') ||
+      error.message.includes('ChunkLoadError')) {
+
+    console.warn('[Router] Chunk loading failed, attempting recovery...', {
+      error: error.message,
+      url: window.location.href,
+      timestamp: new Date().toISOString()
+    })
+
+    // Track chunk loading failures
+    if (window.rum) {
+      window.rum.trackError('router_chunk_load_failed', {
+        message: error.message,
+        stack: error.stack,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    // Enhanced recovery strategy
+    const handleChunkError = () => {
+      const reloadAttempted = sessionStorage.getItem('chunk-reload-attempted')
+      const reloadCount = parseInt(sessionStorage.getItem('chunk-reload-count') || '0', 10)
+
+      if (!reloadAttempted && reloadCount < 2) {
+        // First attempt: Try page reload
+        sessionStorage.setItem('chunk-reload-attempted', 'true')
+        sessionStorage.setItem('chunk-reload-count', (reloadCount + 1).toString())
+
+        console.log('[Router] Attempting page reload for chunk recovery...')
+
+        // Clear service worker cache if available
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => registration.unregister())
+          }).finally(() => {
+            window.location.reload()
+          })
+        } else {
+          window.location.reload()
+        }
+      } else {
+        // Fallback: Navigate to safe route
+        console.log('[Router] Max reload attempts reached, navigating to fallback route...')
+        sessionStorage.removeItem('chunk-reload-attempted')
+        sessionStorage.removeItem('chunk-reload-count')
+
+        router.push('/chat').catch((fallbackError) => {
+          console.error('[Router] Failed to navigate to fallback route, hard redirect:', fallbackError)
+          window.location.href = '/chat'
+        })
+      }
+    }
+
+    handleChunkError()
+  } else {
+    // Handle other router errors
+    console.error('[Router] Non-chunk error occurred:', error)
+
+    if (window.rum) {
+      window.rum.trackError('router_navigation_error', {
+        message: error.message,
+        stack: error.stack,
+        url: window.location.href
       })
     }
   }
 })
 
-// Global navigation guards
-router.beforeEach((to, from, next) => {
+// Global navigation guards with enhanced error handling
+router.beforeEach(async (to, from, next) => {
   try {
     const appStore = useAppStore()
+    const userStore = useUserStore()
 
-    console.log('[Router DEBUG] Navigating to:', to.path)
-    console.log('[Router DEBUG] Route matched:', to.matched.length > 0)
+    console.log('[Router] Navigating to:', to.path)
+    console.log('[Router] Route matched:', to.matched.length > 0)
+
+    // Clear chunk reload flags on successful navigation
+    if (to.matched.length > 0) {
+      sessionStorage.removeItem('chunk-reload-attempted')
+      sessionStorage.removeItem('chunk-reload-count')
+    }
+
+    // Initialize user store from storage if not already done
+    if (!userStore.isAuthenticated) {
+      userStore.initializeFromStorage()
+    }
+
+    // Check authentication requirements
+    const requiresAuth = to.matched.some(record => record.meta.requiresAuth === true)
+
+    if (requiresAuth && !userStore.isAuthenticated) {
+      console.log('[Router] Authentication required, redirecting to login')
+
+      // Track authentication redirect
+      if (window.rum) {
+        window.rum.trackUserInteraction('auth_redirect', null, {
+          from: from.path,
+          to: to.path,
+          reason: 'authentication_required'
+        })
+      }
+
+      // Redirect to login with intended destination
+      next({
+        name: 'login',
+        query: { redirect: to.fullPath }
+      })
+      return
+    }
+
+    // If user is authenticated and trying to access login page, redirect to dashboard
+    if (to.name === 'login' && userStore.isAuthenticated) {
+      console.log('[Router] User already authenticated, redirecting to dashboard')
+      next({ path: '/dashboard' })
+      return
+    }
+
+    // Check for expired tokens
+    if (userStore.isAuthenticated && userStore.isTokenExpired) {
+      console.log('[Router] Token expired, logging out user')
+      userStore.logout()
+
+      // If the route requires auth, redirect to login
+      if (requiresAuth) {
+        next({
+          name: 'login',
+          query: { redirect: to.fullPath, reason: 'token_expired' }
+        })
+        return
+      }
+    }
 
     // Update document title
     if (to.meta.title) {
@@ -350,24 +486,50 @@ router.beforeEach((to, from, next) => {
       }
     }
 
-    // Always call next() to ensure navigation continues
+    // Track navigation attempt
+    if (window.rum) {
+      window.rum.trackUserInteraction('route_navigation_start', null, {
+        from: from.path,
+        to: to.path,
+        routeName: to.name?.toString(),
+        authenticated: userStore.isAuthenticated,
+        requiresAuth: requiresAuth
+      })
+    }
+
+    // Continue navigation
     next()
 
   } catch (error) {
-    console.error('Navigation guard error:', error)
+    console.error('[Router] Navigation guard error:', error)
+
+    if (window.rum) {
+      window.rum.trackError('navigation_guard_error', {
+        message: error.message,
+        stack: error.stack,
+        from: from.path,
+        to: to.path
+      })
+    }
+
     // Even on error, continue navigation to prevent blocking
     next()
   }
 })
 
-router.afterEach((to) => {
-  // Track page views for analytics
+router.afterEach((to, from) => {
+  // Track successful page views for analytics
   if (window.rum) {
     window.rum.trackUserInteraction('page_view', null, {
       page: to.path,
-      title: to.meta.title
+      title: to.meta.title,
+      from: from.path,
+      routeName: to.name?.toString()
     })
   }
+
+  // Log successful navigation
+  console.log('[Router] Successfully navigated to:', to.path)
 })
 
 // Route helper functions

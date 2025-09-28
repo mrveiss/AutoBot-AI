@@ -71,6 +71,37 @@ export class ApiClient {
     }
   }
 
+  // Get authentication headers from user store
+  getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+
+    try {
+      // Try to get auth from localStorage (user store persistence)
+      const storedAuth = localStorage.getItem('autobot_auth');
+      if (storedAuth) {
+        const authData = JSON.parse(storedAuth);
+
+        if (authData.token) {
+          headers['Authorization'] = `Bearer ${authData.token}`;
+        }
+      }
+
+      // Alternative: get session ID if available
+      const storedUser = localStorage.getItem('autobot_user');
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        if (userData.sessionId) {
+          headers['X-Session-ID'] = userData.sessionId;
+        }
+      }
+
+    } catch (error) {
+      console.warn('Failed to get authentication headers:', error);
+    }
+
+    return headers;
+  }
+
   // Get synchronous base URL for constructor (fallback only)
   getSyncBaseUrl(): string {
     const backendHost = import.meta.env.VITE_BACKEND_HOST;
@@ -131,9 +162,10 @@ export class ApiClient {
 
     const startTime = performance.now();
 
-    // Set up headers
+    // Set up headers with authentication
     const headers = {
       'Content-Type': 'application/json',
+      ...this.getAuthHeaders(),
       ...options.headers
     };
 
@@ -271,27 +303,27 @@ export class ApiClient {
   }
 
   async createNewChat(): Promise<any> {
-    const response = await this.post('/api/chat/chats/new');
+    const response = await this.post('/api/chats/new');
     return response.json();
   }
 
   async getChatList(): Promise<any> {
-    const response = await this.get('/api/chat/chats');
+    const response = await this.get('/api/chats');
     return response.json();
   }
 
   async getChatMessages(chatId: string): Promise<any> {
-    const response = await this.get(`/api/chat/chats/${chatId}`);
+    const response = await this.get(`/api/chats/${chatId}`);
     return response.json();
   }
 
   async saveChatMessages(chatId: string, messages: any[]): Promise<any> {
-    const response = await this.post(`/api/chat/chats/${chatId}/save`, { messages });
+    const response = await this.post(`/api/chats/${chatId}/save`, { messages });
     return response.json();
   }
 
   async deleteChat(chatId: string): Promise<any> {
-    const response = await this.delete(`/api/chat/chats/${chatId}`);
+    const response = await this.delete(`/api/chats/${chatId}`);
     return response.json();
   }
 

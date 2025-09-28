@@ -77,7 +77,7 @@ export default defineConfig({
             // Add cache-busting headers to proxied requests
             proxyReq.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             proxyReq.setHeader('X-Cache-Bust', Date.now().toString());
-            
+
             // Only log proxy requests in debug mode to reduce noise
             if (process.env.NODE_ENV === 'development' && process.env.DEBUG_PROXY === 'true') {
               console.debug('Proxying request:', req.method, req.url, 'to', options.target);
@@ -120,50 +120,110 @@ export default defineConfig({
     assetsDir: '.',
     emptyOutDir: true,
     cssMinify: 'esbuild', // Use esbuild instead of lightningcss
-    chunkSizeWarningLimit: 1000, // Increase limit since we have good chunking strategy
+    chunkSizeWarningLimit: 2000, // Increase limit to accommodate larger chunks
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Split Vue and related dependencies into their own chunk
-          if (id.includes('vue') || id.includes('vue-router') || id.includes('@vue')) {
-            return 'vue';
+          // Vue core (keep together)
+          if (id.includes('node_modules/vue/') ||
+              id.includes('node_modules/@vue/') ||
+              id.includes('node_modules/vue-router/')) {
+            return 'vue-core';
           }
-          // Split large component groups
-          if (id.includes('/src/components/Terminal') || id.includes('/src/components/Workflow')) {
+
+          // Async components (separate from static imports to avoid conflicts)
+          if (id.includes('/src/components/async/')) {
+            return 'async-components';
+          }
+
+          // Large UI component groups
+          if (id.includes('/src/components/Terminal') ||
+              id.includes('/src/components/XTerminal') ||
+              id.includes('/src/components/Workflow')) {
             return 'terminal-workflow';
           }
-          if (id.includes('/src/components/Chat') || id.includes('/src/components/Knowledge')) {
+
+          if (id.includes('/src/components/Chat') ||
+              id.includes('/src/components/Knowledge') ||
+              id.includes('/src/components/chat/') ||
+              id.includes('/src/components/knowledge/')) {
             return 'chat-knowledge';
           }
-          if (id.includes('/src/components/Settings') || id.includes('/src/components/Dashboard')) {
+
+          if (id.includes('/src/components/Settings') ||
+              id.includes('/src/components/settings/') ||
+              id.includes('/src/components/Dashboard') ||
+              id.includes('/src/components/monitoring/')) {
             return 'settings-dashboard';
           }
-          // Split utilities and services into their own chunk
-          if (id.includes('/src/utils/') || id.includes('/src/services/')) {
-            return 'utils';
+
+          // File management components
+          if (id.includes('/src/components/FileBrowser') ||
+              id.includes('/src/components/FileUpload')) {
+            return 'file-management';
           }
-          // Split node_modules by library type
+
+          // Utilities and services
+          if (id.includes('/src/utils/') || id.includes('/src/services/')) {
+            return 'utils-services';
+          }
+
+          // View components
+          if (id.includes('/src/views/')) {
+            return 'views';
+          }
+
+          // Stores
+          if (id.includes('/src/stores/')) {
+            return 'stores';
+          }
+
+          // Node modules - split by size and functionality
           if (id.includes('node_modules')) {
-            // Large UI libraries
+            // Large libraries
             if (id.includes('monaco-editor') || id.includes('codemirror')) {
-              return 'editor';
+              return 'editor-libs';
             }
+
             // Charts and visualization
-            if (id.includes('chart') || id.includes('d3')) {
-              return 'charts';
+            if (id.includes('chart') || id.includes('d3') || id.includes('echarts')) {
+              return 'chart-libs';
             }
+
+            // Terminal libraries
+            if (id.includes('@xterm/')) {
+              return 'terminal-libs';
+            }
+
             // HTTP and networking
-            if (id.includes('axios') || id.includes('socket')) {
-              return 'network';
+            if (id.includes('axios') || id.includes('socket') || id.includes('fetch')) {
+              return 'network-libs';
             }
+
+            // UI libraries
+            if (id.includes('tailwind') || id.includes('@headless') || id.includes('@heroicons')) {
+              return 'ui-libs';
+            }
+
             // Everything else
             return 'vendor';
           }
         },
-        // Add cache-busting hash to asset filenames with longer hash for better cache invalidation
-        assetFileNames: 'assets/[name]-[hash:16][extname]',
-        chunkFileNames: 'js/[name]-[hash:16].js',
-        entryFileNames: 'js/[name]-[hash:16].js',
+
+        // Improved cache-busting strategy
+        assetFileNames: (assetInfo) => {
+          const info = assetInfo.name.split('.');
+          const ext = info[info.length - 1];
+          if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(ext)) {
+            return `assets/images/[name]-[hash:12][extname]`;
+          }
+          if (/woff2?|eot|ttf|otf/i.test(ext)) {
+            return `assets/fonts/[name]-[hash:12][extname]`;
+          }
+          return `assets/[name]-[hash:12][extname]`;
+        },
+        chunkFileNames: 'js/[name]-[hash:12].js',
+        entryFileNames: 'js/[name]-[hash:12].js',
       },
     },
   }
