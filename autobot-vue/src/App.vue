@@ -430,7 +430,7 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/useAppStore'
@@ -479,7 +479,6 @@ export default {
       { name: 'Browser Service', status: 'healthy', statusText: 'Running' }
     ]);
 
-    let systemHealthCheck = null;
     let notificationCleanup = null;
 
     // Computed properties
@@ -607,7 +606,7 @@ export default {
               });
             }
           }
-        } catch (e) {
+        } catch (_error) {
           console.warn('Services endpoint failed, using fallback data');
         }
 

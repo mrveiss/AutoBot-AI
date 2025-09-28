@@ -33,21 +33,21 @@ class PerformanceOptimizedDiagnostics:
     """
 
     def __init__(self):
-        self.system_info = self._get_system_info()
-        self.redis_client = None
-        self._initialize_redis()
-        
         # Performance monitoring settings
         self.max_user_permission_timeout = 30.0  # Reduced from 600s to 30s
         self.permission_retry_attempts = 2
         self.memory_warning_threshold = 0.8  # 80% memory usage warning
-        
+
+        self.system_info = self._get_system_info()
+        self.redis_client = None
+        self._initialize_redis()
+
         logger.info("Performance-optimized diagnostics initialized")
 
     def _initialize_redis(self):
         """Initialize Redis client with timeout protection"""
         try:
-            self.redis_client = get_redis_client(async_client=False, timeout=2.0)
+            self.redis_client = get_redis_client()
             if self.redis_client and self.redis_client.ping():
                 logger.info("Diagnostics: Redis connection established")
             else:
