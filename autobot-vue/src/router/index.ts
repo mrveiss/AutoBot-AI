@@ -24,7 +24,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'login',
-    component: createLazyComponent(() => import('@/components/auth/LoginForm.vue'), 'LoginForm'),
+    component: () => import('@/components/auth/LoginForm.vue'),
     meta: {
       title: 'Login',
       hideInNav: true,
