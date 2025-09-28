@@ -20,13 +20,14 @@ from fastapi.staticfiles import StaticFiles
 # Import API routers
 from backend.api.agent import router as agent_router
 from backend.api.agent_config import router as agent_config_router
-from backend.api.chat import router as chat_router
+from backend.api.chat_consolidated import router as chat_router
 from backend.api.developer import (
     api_registry,
     enhanced_404_handler,
     enhanced_405_handler,
 )
 from backend.api.developer import router as developer_router
+from backend.api.embeddings import router as embeddings_router
 from backend.api.error_monitoring import router as error_monitoring_router
 from backend.api.files import router as files_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
@@ -34,6 +35,7 @@ from backend.api.kb_librarian import router as kb_librarian_router
 from backend.api.knowledge import router as knowledge_router
 from backend.api.llm import router as llm_router
 from backend.api.metrics import router as metrics_router
+from backend.api.monitoring import router as monitoring_router
 from backend.api.prompts import router as prompts_router
 from backend.api.redis import router as redis_router
 from backend.api.research_browser import router as research_browser_router
@@ -461,7 +463,7 @@ def add_middleware(app: FastAPI) -> None:
             "dev_origins",
             [
                 "http://127.0.0.1:5173",  # Vite dev server
-                "http://localhost:5173",  # Alternative localhost
+                ServiceURLs.FRONTEND_LOCAL,  # Alternative localhost
                 "http://127.0.0.1:3000",  # Alternative dev port
                 "http://localhost:3000",  # Alternative localhost dev port
             ],
@@ -537,6 +539,7 @@ def add_api_routes(app: FastAPI) -> None:
         ),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
+        (embeddings_router, "/embeddings", ["embeddings"], "embeddings"),
         (kb_librarian_router, "/kb-librarian", ["kb-librarian"], "kb_librarian"),
         (terminal_router, "/terminal", ["terminal"], "terminal"),
         (
@@ -547,6 +550,7 @@ def add_api_routes(app: FastAPI) -> None:
         ),
         (workflow_router, "/workflow", ["workflow"], "workflow"),
         (metrics_router, "/metrics", ["metrics"], "metrics"),
+        (monitoring_router, "/monitoring", ["monitoring"], "monitoring"),
         (templates_router, "/templates", ["templates"], "templates"),
         (scheduler_router, "/scheduler", ["scheduler"], "scheduler"),
         (secrets_router, "/secrets", ["secrets"], "secrets"),
@@ -584,21 +588,10 @@ def add_api_routes(app: FastAPI) -> None:
     except ImportError:
         logger.info("Advanced workflow orchestrator not available - skipping router")
 
-    # Add chat knowledge router if available
-    try:
-        from backend.api.chat_knowledge import router as chat_knowledge_router
-
-        routers_config.append(
-            (
-                chat_knowledge_router,
-                "/chat_knowledge",
-                ["chat_knowledge"],
-                "chat_knowledge",
-            )
-        )
-        logger.info("Chat knowledge router registered")
-    except ImportError:
-        logger.info("Chat knowledge router not available - skipping router")
+    # Chat knowledge functionality is now included in the consolidated chat router
+    # No need for separate chat_knowledge router import as it's consolidated
+    # The consolidated chat router includes ALL knowledge management endpoints
+    logger.info("Chat knowledge functionality included in consolidated chat router")
 
     # Add project state router if available
     try:
@@ -823,6 +816,7 @@ def add_utility_routes(app: FastAPI) -> None:
         to prevent 404 errors in Chrome/Edge developer console.
         """
         from fastapi.responses import JSONResponse
+from src.constants import NetworkConstants, ServiceURLs
 
         return JSONResponse(status_code=200, content={})
 

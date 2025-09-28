@@ -135,7 +135,7 @@ class PlaywrightService:
                 "results": []
             }
 
-    async def test_frontend(self, frontend_url: str = "http://localhost:5173") -> Dict[str, Any]:
+    async def test_frontend(self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL) -> Dict[str, Any]:
         """
         Test frontend functionality using embedded Playwright
         
@@ -163,6 +163,7 @@ class PlaywrightService:
                     
         except Exception as e:
             import traceback
+from src.constants import NetworkConstants, ServiceURLs
             error_details = f"Exception: {type(e).__name__}: {str(e)}"
             if hasattr(e, '__cause__') and e.__cause__:
                 error_details += f" | Caused by: {e.__cause__}"
@@ -178,7 +179,7 @@ class PlaywrightService:
     async def send_test_message(
         self, 
         message: str = "what network scanning tools do we have available?",
-        frontend_url: str = "http://localhost:5173"
+        frontend_url: str = ServiceURLs.FRONTEND_LOCAL
     ) -> Dict[str, Any]:
         """
         Send test message through frontend using embedded Playwright
@@ -349,7 +350,7 @@ async def search_web_embedded(query: str, **kwargs) -> Dict[str, Any]:
 async def test_frontend_embedded(frontend_url: str = None) -> Dict[str, Any]:
     """Convenience function for frontend testing"""
     async with playwright_service() as service:
-        return await service.test_frontend(frontend_url or "http://localhost:5173")
+        return await service.test_frontend(frontend_url or ServiceURLs.FRONTEND_LOCAL)
 
 
 async def send_test_message_embedded(message: str, **kwargs) -> Dict[str, Any]:

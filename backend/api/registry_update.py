@@ -5,7 +5,7 @@ Add Phase 9 monitoring router to the registry
 # Read the registry file and add the Phase 9 monitoring entry
 import re
 
-def add_phase9_monitoring_to_registry():
+def add_monitoring_to_registry():
     """Add Phase 9 monitoring router to the registry"""
     
     registry_file = "/home/kali/Desktop/AutoBot/backend/api/registry.py"
@@ -15,9 +15,9 @@ def add_phase9_monitoring_to_registry():
         content = f.read()
     
     # Find the monitoring section and add the Phase 9 monitoring router
-    phase9_router_config = '''            "phase9_monitoring": RouterConfig(
-                name="phase9_monitoring",
-                module_path="backend.api.phase9_monitoring",
+    phase9_router_config = '''            "monitoring": RouterConfig(
+                name="monitoring",
+                module_path="backend.api.monitoring",
                 prefix="/api/monitoring/phase9",
                 tags=["monitoring", "phase9", "gpu", "npu", "performance"],
                 status=RouterStatus.ENABLED,
@@ -37,4 +37,4 @@ def add_phase9_monitoring_to_registry():
     print("Phase 9 monitoring router added to registry successfully!")
 
 if __name__ == "__main__":
-    add_phase9_monitoring_to_registry()
+    add_monitoring_to_registry()

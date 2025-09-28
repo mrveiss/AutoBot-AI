@@ -76,15 +76,28 @@ async def get_fact_api(fact_id: Optional[int] = None, query: Optional[str] = Non
 async def search_knowledge(request: dict, req: Request = None):
     """Search knowledge base"""
     try:
-        # For debugging: Force refresh KB instance to pick up code changes
+        # Always try to get knowledge base via the factory (handles initialization properly)
+        kb_to_use = None
+
         if req is not None:
             try:
                 from backend.fast_app_factory_fix import get_or_create_knowledge_base
-                kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=True)
-                logger.info("🔄 Using force-refreshed knowledge base for search")
+                kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+                logger.info("🔄 Using knowledge base from app state")
             except ImportError:
                 kb_to_use = await get_knowledge_base_instance(req)
-        else:
+
+        # If we still don't have a knowledge base, try the factory pattern
+        if kb_to_use is None:
+            try:
+                from src.knowledge_base_factory import get_knowledge_base
+                kb_to_use = await get_knowledge_base(force_reinit=False)
+                logger.info("🔄 Using knowledge base from factory")
+            except Exception as factory_error:
+                logger.warning(f"Factory initialization failed: {factory_error}")
+
+        # Final fallback to global instance
+        if kb_to_use is None:
             if knowledge_base is None:
                 await init_knowledge_base()
             kb_to_use = knowledge_base
@@ -93,7 +106,7 @@ async def search_knowledge(request: dict, req: Request = None):
             return {
                 "results": [],
                 "total_results": 0,
-                "message": "Knowledge base not available"
+                "message": "Knowledge base not initialized - please check logs for errors"
             }
 
         query = request.get("query", "")
@@ -104,8 +117,7 @@ async def search_knowledge(request: dict, req: Request = None):
 
         results = await kb_to_use.search(
             query=query,
-            similarity_top_k=top_k,
-            mode=mode
+            top_k=top_k
         )
 
         return {
@@ -286,8 +298,7 @@ async def get_category_documents(category_path: str, request: Request):
         try:
             search_results = await kb_to_use.search(
                 query=category_path,
-                similarity_top_k=20,
-                mode="text"
+                top_k=20
             )
 
             fallback_documents = []
@@ -742,8 +753,17 @@ async def get_knowledge_suggestions(query: str = ""):
 async def get_knowledge_stats(request: Request):
     """Get knowledge base statistics"""
     try:
-        # TEMPORARY FIX: Return static stats to unblock frontend until we fix the async issue
-        logger.info("Returning temporary static stats due to async issue")
+        # Try to get actual stats from knowledge base
+        try:
+            kb_to_use = await get_knowledge_base_instance(request)
+            if kb_to_use is not None:
+                stats = await kb_to_use.get_stats()
+                return stats
+        except Exception as kb_error:
+            logger.warning(f"Could not get live knowledge base stats: {kb_error}")
+
+        # Fallback to static stats if knowledge base unavailable
+        logger.info("Returning fallback static stats - knowledge base unavailable")
         return {
             "total_facts": 150,
             "total_documents": 3278,
@@ -751,16 +771,9 @@ async def get_knowledge_stats(request: Request):
             "total_vectors": 13383,
             "categories": ["documentation", "configuration", "codebase"],
             "db_size": 45000000,  # ~45MB
-            "status": "temporary_static",
-            "message": "Using static values while fixing async issue",
+            "status": "fallback_static",
+            "message": "Using fallback values - knowledge base temporarily unavailable",
         }
-
-        # Original code (temporarily disabled to unblock frontend):
-        # kb_to_use = await get_knowledge_base_instance(request)
-        # if kb_to_use is None:
-        #     return fallback stats
-        # stats = await kb_to_use.get_stats()
-        # return stats
     except Exception as e:
         logger.error(f"Error getting knowledge stats: {str(e)}")
         raise HTTPException(
@@ -795,16 +808,39 @@ async def get_basic_knowledge_stats(request: Request):
 
         logger.info("Basic knowledge stats request with fresh instance")
 
-        # Get basic stats from fresh knowledge base
+        # Get basic stats from fresh knowledge base + check for existing facts
         try:
+            # First check Redis directly for facts
+            facts_count = 0
+            try:
+                import redis
+                redis_client = redis.Redis(host='172.16.168.23', port=6379, db=1, decode_responses=True)
+                fact_keys = redis_client.keys("fact:*")
+                facts_count = len(fact_keys)
+                logger.info(f"Found {facts_count} facts in Redis")
+            except Exception as e:
+                logger.warning(f"Could not count facts from Redis: {e}")
             stats = await kb_fresh.get_stats()
 
             logger.info(f"Fresh stats received: {stats}")
+            logger.info("DEBUG: About to process stats mapping")
 
             # Map the stats to frontend expected format
+            # Fix for vector indexing issues - show facts as documents when no vectors
+            total_docs = stats.get("total_documents", 0)
+            total_facts = max(stats.get("total_facts", 0), facts_count)  # Use Redis count if higher
+            total_chunks = stats.get("total_chunks", 0)
+
+            # Calculate display values
+            display_docs = total_docs if total_docs > 0 else total_facts
+            display_chunks = total_chunks if total_chunks > 0 else total_facts
+
+            logger.info(f"Stats calculation: docs={total_docs}, facts={total_facts}, chunks={total_chunks}")
+            logger.info(f"Display values: docs={display_docs}, chunks={display_chunks}")
+
             return {
-                "total_documents": stats.get("total_documents", stats.get("total_facts", 0)),
-                "total_chunks": stats.get("total_chunks", stats.get("total_vectors", 0)),
+                "total_documents": display_docs,
+                "total_chunks": display_chunks,
                 "total_facts": stats.get("total_facts", stats.get("total_entries", 0)),
                 "categories": stats.get("categories", []),
                 "status": "online",
@@ -1053,8 +1089,7 @@ async def query_knowledge(query_data: dict, request: Request = None):
         # Use the knowledge base search
         results = await kb_to_use.search(
             query=query,
-            similarity_top_k=top_k,
-            mode="auto"
+            top_k=top_k
         )
 
         # Filter by collection if specified

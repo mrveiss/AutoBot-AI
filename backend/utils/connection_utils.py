@@ -121,7 +121,7 @@ class ConnectionTester:
             if not ollama_model:
                 ollama_model = global_config_manager.get_nested(
                     "backend.ollama_model",
-                    os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b"),
+                    os.getenv("AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest"),  # Changed from deepseek-r1:14b
                 )
 
             # Default fallbacks with environment variable support
@@ -130,7 +130,7 @@ class ConnectionTester:
 
                 ollama_endpoint = f"{OLLAMA_URL}/api/generate"
             if not ollama_model:
-                ollama_model = os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")
+                ollama_model = os.getenv("AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest")  # Changed from deepseek-r1:14b
 
             # Test Ollama connection
             ollama_check_url = ollama_endpoint.replace("/api/generate", "/api/tags")
@@ -412,7 +412,7 @@ class ConnectionTester:
 
 class ModelManager:
     """Centralized model management for LLM services"""
-    
+
     # Rate limiting for warnings to prevent log spam
     _last_ollama_warning = 0
     _warning_interval = 60  # Only warn once per minute
