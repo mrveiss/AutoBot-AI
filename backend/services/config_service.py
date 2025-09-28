@@ -10,12 +10,13 @@ from typing import Any, Dict
 
 import yaml
 
-from src.config import (
-    BACKEND_HOST_IP,
-    BACKEND_PORT,
-    HTTP_PROTOCOL,
-    REDIS_HOST_IP,
-)
+from src.constants.network_constants import NetworkConstants, ServiceURLs
+
+# Extract constants for easier use
+BACKEND_HOST_IP = NetworkConstants.MAIN_MACHINE_IP
+BACKEND_PORT = NetworkConstants.BACKEND_PORT
+HTTP_PROTOCOL = "http"
+REDIS_HOST_IP = NetworkConstants.REDIS_VM_IP
 from src.unified_config_manager import unified_config_manager
 
 logger = logging.getLogger(__name__)
