@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 from starlette.responses import Response as StarletteResponse
 
-from src.utils.redis_utils import get_redis_client
+from src.utils.redis_database_manager import get_redis_client
 
 # Import models
 from src.models.conversation import ConversationModel
