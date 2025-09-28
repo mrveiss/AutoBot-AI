@@ -112,9 +112,8 @@ class RedisPoolManager:
 
         retry_policy = Retry(
             backoff=ExponentialBackoff(
-                base=1,
-                cap=10,
-                multiplier=self._pool_config.backoff_factor
+                base=0.008,  # Base backoff time in seconds
+                cap=10.0     # Maximum backoff time in seconds
             ),
             retries=self._pool_config.max_retries
         )

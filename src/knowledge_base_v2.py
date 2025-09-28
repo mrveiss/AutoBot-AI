@@ -84,11 +84,11 @@ class KnowledgeBaseV2:
             try:
                 logger.info("Starting async knowledge base initialization...")
 
-                # Step 1: Configure LlamaIndex
-                await self._configure_llama_index()
-
-                # Step 2: Initialize Redis connections
+                # Step 1: Initialize Redis connections first
                 await self._init_redis_connections()
+
+                # Step 2: Configure LlamaIndex (needs Redis for dimension detection)
+                await self._configure_llama_index()
 
                 # Step 3: Initialize vector store
                 await self._init_vector_store()
@@ -105,7 +105,10 @@ class KnowledgeBaseV2:
     async def _configure_llama_index(self):
         """Configure LlamaIndex with Ollama models"""
         try:
-            ollama_url = config.get_service_url('ollama')
+            # Manually construct Ollama URL due to config interpolation issue
+            ollama_host = config.get('infrastructure.hosts.ollama', '127.0.0.1')
+            ollama_port = config.get('infrastructure.ports.ollama', '11434')
+            ollama_url = f"http://{ollama_host}:{ollama_port}"
             llm_timeout = config.get_timeout('llm', 'default', 30.0)
 
             Settings.llm = LlamaIndexOllamaLLM(
@@ -114,8 +117,22 @@ class KnowledgeBaseV2:
                 base_url=ollama_url,
             )
 
+            # Check what embedding model was used for existing data
+            detected_dim = await self._detect_embedding_dimensions()
+            stored_model = await self._detect_stored_embedding_model()
+
+            if stored_model:
+                embed_model_name = stored_model
+                logger.info(f"Using stored embedding model: {embed_model_name} (dimensions: {detected_dim})")
+            elif detected_dim == 768:
+                embed_model_name = "nomic-embed-text"
+                logger.info("Using nomic-embed-text for 768-dimensional vectors")
+            else:
+                embed_model_name = "all-MiniLM-L6-v2"
+                logger.info("Using all-MiniLM-L6-v2 for 384-dimensional vectors")
+
             Settings.embed_model = LlamaIndexOllamaEmbedding(
-                model_name="all-MiniLM-L6-v2",
+                model_name=embed_model_name,
                 base_url=ollama_url,
                 ollama_additional_kwargs={"num_ctx": 2048},
             )
@@ -206,7 +223,7 @@ class KnowledgeBaseV2:
 
     async def _detect_embedding_dimensions(self) -> int:
         """Detect embedding dimensions from existing index"""
-        default_dim = 384  # Default for all-MiniLM-L6-v2
+        default_dim = 768  # Default for nomic-embed-text (match existing data)
 
         try:
             # Check if index exists and get its dimensions

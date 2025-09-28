@@ -36,6 +36,7 @@ from src.utils.service_registry import (
     ServiceRegistry,
     get_service_registry,
 )
+from src.utils.script_utils import ScriptFormatter
 
 
 class AutoBotDeployer:
@@ -60,21 +61,11 @@ class AutoBotDeployer:
 
     def print_header(self, title: str):
         """Print formatted header."""
-        print(f"\n{'=' * 60}")
-        print(f"  {title}")
-        print("=" * 60)
+        ScriptFormatter.print_header(title)
 
     def print_step(self, step: str, status: str = "info"):
         """Print deployment step with status."""
-        status_icons = {
-            "info": "ℹ️",
-            "success": "✅",
-            "warning": "⚠️",
-            "error": "❌",
-            "running": "🔄",
-        }
-        icon = status_icons.get(status, "•")
-        print(f"{icon} {step}")
+        ScriptFormatter.print_step(step, status)
 
     def run_command(
         self, command: str, check: bool = True, cwd: Optional[Path] = None

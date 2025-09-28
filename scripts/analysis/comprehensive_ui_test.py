@@ -43,13 +43,13 @@ class ComprehensiveUITester:
     def __init__(self):
         self.results = UITestResult()
         self.test_urls = [
-            "http://localhost:5173/",
-            "http://localhost:5173/dashboard",
-            "http://localhost:5173/chat", 
-            "http://localhost:5173/knowledge",
-            "http://localhost:5173/tools",
-            "http://localhost:5173/monitoring",
-            "http://localhost:5173/settings"
+            "ServiceURLs.FRONTEND_LOCAL/",
+            "ServiceURLs.FRONTEND_LOCAL/dashboard",
+            "ServiceURLs.FRONTEND_LOCAL/chat", 
+            "ServiceURLs.FRONTEND_LOCAL/knowledge",
+            "ServiceURLs.FRONTEND_LOCAL/tools",
+            "ServiceURLs.FRONTEND_LOCAL/monitoring",
+            "ServiceURLs.FRONTEND_LOCAL/settings"
         ]
         self.console_messages = []
         
@@ -97,6 +97,7 @@ class ComprehensiveUITester:
             
             # Use MCP Puppeteer tools to navigate
             from src.security import conduct_secure_research  # Test if our imports work
+from src.constants import NetworkConstants, ServiceURLs
             
             # Simulate navigation (would use actual Puppeteer MCP in real implementation)
             print(f"  📍 Navigating to {url}")

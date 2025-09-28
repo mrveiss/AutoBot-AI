@@ -24,7 +24,7 @@ class RedisVectorStoreAnalyzer:
         self.redis_host = "localhost"
         self.redis_port = 6379
         self.redis_db = 2
-        self.ollama_base_url = "http://localhost:11434"
+        self.ollama_base_url = ServiceURLs.OLLAMA_LOCAL
         self.embedding_model = "nomic-embed-text:latest"
         
     async def get_available_models(self) -> List[str]:
@@ -570,6 +570,7 @@ async def main():
     
     # Write recommendation to file
     import os
+from src.constants import NetworkConstants, ServiceURLs
     output_file = '/home/kali/Desktop/AutoBot/reports/redis_vector_recommendation.json'
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w') as f:

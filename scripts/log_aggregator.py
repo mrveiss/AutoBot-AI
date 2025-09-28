@@ -43,6 +43,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils.service_registry import get_service_registry
+from src.utils.script_utils import ScriptFormatter
 
 
 class LogLevel:
@@ -123,21 +124,11 @@ class LogAggregator:
 
     def print_header(self, title: str):
         """Print formatted header."""
-        print(f"\n{'=' * 60}")
-        print(f"  {title}")
-        print("=" * 60)
+        ScriptFormatter.print_header(title)
 
     def print_step(self, step: str, status: str = "info"):
         """Print step with status."""
-        status_icons = {
-            "info": "ℹ️",
-            "success": "✅",
-            "warning": "⚠️",
-            "error": "❌",
-            "log": "📝",
-        }
-        icon = status_icons.get(status, "•")
-        print(f"{icon} {step}")
+        ScriptFormatter.print_step(step, status)
 
     def _configure_log_sources(self) -> Dict[str, Dict[str, Any]]:
         """Configure log sources based on deployment."""

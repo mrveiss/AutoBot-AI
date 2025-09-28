@@ -38,6 +38,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from src.utils.script_utils import ScriptFormatter
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -88,21 +89,11 @@ class SecretsManager:
 
     def print_header(self, title: str):
         """Print formatted header."""
-        print(f"\n{'=' * 60}")
-        print(f"  {title}")
-        print("=" * 60)
+        ScriptFormatter.print_header(title)
 
     def print_step(self, step: str, status: str = "info"):
         """Print step with status."""
-        status_icons = {
-            "info": "ℹ️",
-            "success": "✅",
-            "warning": "⚠️",
-            "error": "❌",
-            "secure": "🔒",
-        }
-        icon = status_icons.get(status, "•")
-        print(f"{icon} {step}")
+        ScriptFormatter.print_step(step, status)
 
     def _initialize_encryption(self) -> Fernet:
         """Initialize encryption system."""

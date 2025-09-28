@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
+from src.constants import NetworkConstants, ServiceURLs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -23,8 +24,8 @@ class SettingsLoadingFixer:
     """Diagnose and fix settings loading issues"""
 
     def __init__(self):
-        self.backend_url = "http://localhost:8001"
-        self.frontend_url = "http://localhost:5173"
+        self.backend_url = ServiceURLs.BACKEND_LOCAL
+        self.frontend_url = ServiceURLs.FRONTEND_LOCAL
         self.settings_file = Path("config/settings.json")
         self.issues_found = []
         self.fixes_applied = []
@@ -208,8 +209,8 @@ function resetSettings() {
         },
         backend: {
             use_phi2: false,
-            api_endpoint: 'http://localhost:8001',
-            ollama_endpoint: 'http://localhost:11434',
+            api_endpoint: ServiceURLs.BACKEND_LOCAL,
+            ollama_endpoint: ServiceURLs.OLLAMA_LOCAL,
             ollama_model: 'deepseek-r1:14b',
             streaming: false
         },
@@ -251,9 +252,9 @@ function fixCommonIssues() {
         resetSettings();
     } else {
         // Ensure backend endpoint is correct
-        if (settings.backend && settings.backend.api_endpoint !== 'http://localhost:8001') {
+        if (settings.backend && settings.backend.api_endpoint !== ServiceURLs.BACKEND_LOCAL) {
             console.log('🔧 Fixing backend endpoint...');
-            settings.backend.api_endpoint = 'http://localhost:8001';
+            settings.backend.api_endpoint = ServiceURLs.BACKEND_LOCAL;
             localStorage.setItem('chat_settings', JSON.stringify(settings));
         }
 
@@ -293,7 +294,7 @@ if (!localStorage.getItem('chat_settings')) {
         logger.info("\n" + "=" * 70)
         logger.info("🌐 BROWSER FIX INSTRUCTIONS:")
         logger.info("=" * 70)
-        logger.info("1. Open AutoBot in your browser: http://localhost:5173")
+        logger.info("1. Open AutoBot in your browser: ServiceURLs.FRONTEND_LOCAL")
         logger.info("2. Press F12 to open Developer Tools")
         logger.info("3. Go to the Console tab")
         logger.info(

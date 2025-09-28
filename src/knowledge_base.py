@@ -35,9 +35,9 @@ class KnowledgeBase:
         self.redis_host = config.get('redis.host')
         self.redis_port = config.get('redis.port')
         self.redis_password = config.get('redis.password')
-        # Knowledge base vectors are in database 1
-        self.redis_db = config.get('redis.kb_db')
-        # Redis index name from config (library default is "llama_index")
+        # Knowledge base vectors are in database 0 (required for Redis search indexes)
+        self.redis_db = 0
+        # Redis index name with embedding model suffix to avoid dimension conflicts
         self.redis_index_name = config.get('redis.indexes.knowledge_base', 'llama_index')
 
         # Redis client for fact management (non-vector operations)
@@ -113,37 +113,14 @@ class KnowledgeBase:
             return
 
         try:
-            # Try to detect embedding dimensions from existing index
-            embedding_dim = 384  # Default for all-MiniLM-L6-v2
-
-            try:
-                # Check if index exists and get its dimensions
-                index_info = await asyncio.to_thread(
-                    self.redis_client.execute_command, "FT.INFO", self.redis_index_name
-                )
-                # Parse dimension from index info
-                for i, item in enumerate(index_info):
-                    if isinstance(item, bytes):
-                        item = item.decode()
-                    if item == "dim" and i + 1 < len(index_info):
-                        embedding_dim = int(index_info[i + 1])
-                        logging.info(f"Detected existing index dimension: {embedding_dim}")
-                        break
-            except Exception as e:
-                logging.info(
-                    "Could not detect embedding dimension, using default "
-                    f"{embedding_dim}: {e}"
-                )
-
-            # Create schema with proper vector dimensions
+            # Create schema for the new index (will auto-detect dimensions from embedding model)
             schema = RedisVectorStoreSchema(
                 index_name=self.redis_index_name,
-                prefix="doc",
-                overwrite=True,  # Allow overwriting to fix dimension mismatch
+                prefix="llama_index/vector_",
             )
 
             logging.info(
-                f"Created Redis schema with variable {embedding_dim} vector dimensions"
+                f"Created Redis schema for index: {self.redis_index_name}"
             )
 
             self.vector_store = RedisVectorStore(

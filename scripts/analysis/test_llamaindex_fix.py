@@ -57,10 +57,10 @@ async def test_minimal_llamaindex_fix():
         from llama_index.core import VectorStoreIndex, Settings
         
         # Use a working model
-        llm = Ollama(model="gemma3:270m", base_url="http://localhost:11434")
+        llm = Ollama(model="gemma3:270m", base_url=ServiceURLs.OLLAMA_LOCAL)
         embed_model = OllamaEmbedding(
             model_name="nomic-embed-text:latest",
-            base_url="http://localhost:11434"
+            base_url=ServiceURLs.OLLAMA_LOCAL
         )
         
         # CRITICAL: Set global settings BEFORE creating any indices
@@ -108,6 +108,7 @@ async def test_minimal_llamaindex_fix():
     except Exception as e:
         logger.error(f"❌ LlamaIndex fix test failed: {e}")
         import traceback
+from src.constants import NetworkConstants, ServiceURLs
         logger.error(traceback.format_exc())
         return False, 0
 

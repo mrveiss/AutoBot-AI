@@ -983,11 +983,16 @@ class ConfigManager:
         return f"redis://{host}:{port}"
 
 
-# Global configuration instance
-config = ConfigManager()
+# DEPRECATED: This file now imports from unified_config_manager for backward compatibility
+# All new code should import directly from src.unified_config_manager
 
-# Alias for backward compatibility and consistent naming
-global_config_manager = config
+from src.unified_config_manager import unified_config_manager
+
+# Backward compatibility aliases
+config = unified_config_manager
+global_config_manager = unified_config_manager
+
+logger.warning("DEPRECATED: src.config is deprecated. Use src.unified_config_manager instead.")
 
 
 def log_service_configuration():

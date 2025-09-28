@@ -415,35 +415,45 @@ class ConfigManagerContainer:
             self._instance = None
 
 
-# Global config manager instance
-config_container = ConfigManagerContainer()
+# DEPRECATED: This file now imports from unified_config_manager for backward compatibility
+# All new code should import directly from src.unified_config_manager
+
+from src.unified_config_manager import (
+    unified_config_manager,
+    get_config_manager_async,
+    load_config_async,
+    save_config_async,
+    get_config_value_async,
+    set_config_value_async
+)
+
+logger.warning("DEPRECATED: src.async_config_manager is deprecated. Use src.unified_config_manager instead.")
+
+# Backward compatibility aliases
+config_container = None  # No longer needed
 
 
-# Convenience functions
-async def get_config_manager() -> AsyncConfigManager:
+# Convenience functions for backward compatibility
+async def get_config_manager() -> 'UnifiedConfigManager':
     """Get config manager instance"""
-    return await config_container.get_manager()
+    return await get_config_manager_async()
 
 
 async def load_config(config_type: str) -> Dict[str, Any]:
     """Load configuration"""
-    manager = await get_config_manager()
-    return await manager.load_config(config_type)
+    return await load_config_async(config_type)
 
 
 async def save_config(config_type: str, data: Dict[str, Any]) -> None:
     """Save configuration"""
-    manager = await get_config_manager()
-    await manager.save_config(config_type, data)
+    await save_config_async(config_type, data)
 
 
 async def get_config_value(config_type: str, key: str, default: Any = None) -> Any:
     """Get configuration value"""
-    manager = await get_config_manager()
-    return await manager.get_config_value(config_type, key, default)
+    return await get_config_value_async(config_type, key, default)
 
 
 async def set_config_value(config_type: str, key: str, value: Any) -> None:
     """Set configuration value"""
-    manager = await get_config_manager()
-    await manager.set_config_value(config_type, key, value)
+    await set_config_value_async(config_type, key, value)

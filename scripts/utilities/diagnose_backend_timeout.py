@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class BackendDiagnostic:
     """Diagnose backend timeout issues"""
 
-    def __init__(self, base_url: str = "http://localhost:8001"):
+    def __init__(self, base_url: str = ServiceURLs.BACKEND_LOCAL):
         self.base_url = base_url
         self.results = {}
 
@@ -50,6 +50,7 @@ class BackendDiagnostic:
         try:
             logger.info("🌐 Testing TCP connection with telnet-like approach...")
             import socket
+from src.constants import NetworkConstants, ServiceURLs
 
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(5)

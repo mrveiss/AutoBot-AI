@@ -38,6 +38,7 @@ USAGE:
 import asyncio
 import json
 import logging
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -127,18 +128,18 @@ class ConsolidatedConfigManager:
                 "cors_origins": [f"http://{os.getenv('AUTOBOT_FRONTEND_HOST')}:{os.getenv('AUTOBOT_FRONTEND_PORT')}", f"http://{os.getenv('AUTOBOT_BROWSER_SERVICE_HOST')}:{os.getenv('AUTOBOT_BROWSER_SERVICE_PORT')}"]
             },
             "frontend": {
-                "server_host": "localhost",
+                "server_host": NetworkConstants.LOCALHOST_NAME,
                 "server_port": 5173
             },
             "infrastructure": {
                 "hosts": {
-                    "backend": "172.16.168.20",
-                    "frontend": "172.16.168.21", 
-                    "redis": "172.16.168.23",
-                    "ollama": "172.16.168.20",
-                    "ai_stack": "172.16.168.24",
-                    "npu_worker": "172.16.168.22",
-                    "browser_service": "172.16.168.25"
+                    "backend": NetworkConstants.MAIN_MACHINE_IP,
+                    "frontend": NetworkConstants.FRONTEND_VM_IP,
+                    "redis": NetworkConstants.REDIS_VM_IP,
+                    "ollama": NetworkConstants.MAIN_MACHINE_IP,
+                    "ai_stack": NetworkConstants.AI_STACK_VM_IP,
+                    "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
+                    "browser_service": NetworkConstants.BROWSER_VM_IP
                 },
                 "ports": {
                     "backend": 8001,

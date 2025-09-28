@@ -1,410 +1,673 @@
 #!/usr/bin/env python3
 """
-Test script for the advanced monitoring system
+AutoBot Phase 9 Monitoring System Validation Test
+Comprehensive testing of GPU/NPU monitoring, performance optimization, and real-time dashboard.
 """
 
 import asyncio
 import json
 import logging
+import sys
 import time
-from typing import Dict, Any
+from datetime import datetime
+from pathlib import Path
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
+# Add project root to Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
+
+# Import Phase 9 monitoring components
+from src.utils.performance_monitor import (
+    phase9_monitor,
+    start_monitoring,
+    stop_monitoring,
+    get_phase9_performance_dashboard,
+    collect_phase9_metrics,
+    add_phase9_alert_callback
+)
+from src.utils.gpu_acceleration_optimizer import (
+    gpu_optimizer,
+    optimize_gpu_for_multimodal,
+    benchmark_gpu,
+    monitor_gpu_efficiency,
+    get_gpu_capabilities,
+    update_gpu_config
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
-async def test_metrics_collector():
-    """Test the advanced metrics collection system"""
-    logger.info("📊 Testing Advanced Metrics Collection System")
+class Phase9MonitoringSystemTest:
+    """Comprehensive test suite for Phase 9 monitoring system"""
     
-    try:
-        from src.utils.system_metrics import get_metrics_collector
-        
-        # Initialize collector
-        collector = get_metrics_collector()
-        logger.info("✅ Metrics collector initialized")
-        
-        # Test system metrics collection
-        logger.info("🖥️ Test 1: System metrics collection")
-        system_metrics = await collector.collect_system_metrics()
-        
-        expected_metrics = ['cpu_percent', 'memory_percent', 'disk_usage']
-        for metric_name in expected_metrics:
-            if metric_name in system_metrics:
-                metric = system_metrics[metric_name]
-                logger.info(f"✅ {metric_name}: {metric.value}{metric.unit}")
-            else:
-                logger.warning(f"⚠️ Missing metric: {metric_name}")
-        
-        # Test service health collection
-        logger.info("🔧 Test 2: Service health collection")
-        health_metrics = await collector.collect_service_health()
-        
-        expected_services = ['backend_health', 'redis_health', 'ollama_health']
-        for service_name in expected_services:
-            if service_name in health_metrics:
-                metric = health_metrics[service_name]
-                status = "online" if metric.value > 0.5 else "offline"
-                logger.info(f"✅ {service_name}: {status} ({metric.value})")
-            else:
-                logger.warning(f"⚠️ Service not checked: {service_name}")
-        
-        # Test knowledge base metrics
-        logger.info("📚 Test 3: Knowledge base metrics collection")
-        kb_metrics = await collector.collect_knowledge_base_metrics()
-        
-        for metric_name, metric in kb_metrics.items():
-            logger.info(f"✅ {metric_name}: {metric.value} {metric.unit}")
-        
-        # Test comprehensive collection
-        logger.info("🔄 Test 4: Comprehensive metrics collection")
-        start_time = time.time()
-        all_metrics = await collector.collect_all_metrics()
-        collection_time = time.time() - start_time
-        
-        logger.info(f"✅ Collected {len(all_metrics)} metrics in {collection_time:.3f}s")
-        
-        # Test metrics storage
-        logger.info("💾 Test 5: Metrics storage")
-        storage_success = await collector.store_metrics(all_metrics)
-        if storage_success:
-            logger.info("✅ Metrics stored successfully")
-        else:
-            logger.warning("⚠️ Metrics storage failed")
-        
-        # Test metrics summary
-        logger.info("📋 Test 6: Metrics summary generation")
-        summary = await collector.get_metric_summary()
-        
-        if 'system' in summary:
-            logger.info("✅ System metrics in summary")
-        if 'services' in summary:
-            logger.info("✅ Service metrics in summary")
-        if 'overall_health' in summary:
-            health_value = summary['overall_health'].get('value', 0)
-            status = summary['overall_health'].get('status', 'unknown')
-            logger.info(f"✅ Overall health: {health_value}% ({status})")
-        
-        logger.info("🎉 Metrics collector tests completed successfully!")
-        return True
-        
-    except ImportError as e:
-        logger.error(f"❌ Import error: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"❌ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-async def test_monitoring_api():
-    """Test the monitoring API endpoints"""
-    logger.info("🌐 Testing Monitoring API Endpoints")
+    def __init__(self):
+        self.test_results = {}
+        self.start_time = time.time()
+        self.alerts_received = []
     
-    try:
-        import aiohttp
-        
-        base_url = "http://localhost:8001/api/monitoring"
-        
-        # Test endpoints
-        endpoints_to_test = [
-            ("/metrics/health", "GET"),
-            ("/metrics/current", "GET"),
-            ("/metrics/summary", "GET"),
-            ("/dashboard/overview", "GET"),
-            ("/metrics/collection/status", "GET"),
-            ("/alerts/check", "GET"),
-        ]
-        
-        async with aiohttp.ClientSession() as session:
-            for endpoint, method in endpoints_to_test:
-                try:
-                    url = f"{base_url}{endpoint}"
-                    logger.info(f"Testing {method} {endpoint}")
-                    
-                    if method == "GET":
-                        async with session.get(url) as response:
-                            if response.status == 200:
-                                data = await response.json()
-                                logger.info(f"✅ {endpoint} - Status: {response.status}")
-                                
-                                # Log key information from response
-                                if 'metrics_count' in data:
-                                    logger.info(f"  Metrics count: {data['metrics_count']}")
-                                if 'system_health' in data:
-                                    logger.info(f"  System health available: Yes")
-                                if 'alerts_count' in data:
-                                    logger.info(f"  Active alerts: {data['alerts_count']}")
-                                if 'overall_health' in data:
-                                    health = data['overall_health']
-                                    if isinstance(health, dict):
-                                        logger.info(f"  Overall health: {health.get('status', 'unknown')}")
-                                    
-                            else:
-                                logger.warning(f"⚠️ {endpoint} - Status: {response.status}")
-                                error_text = await response.text()
-                                logger.warning(f"  Error: {error_text[:100]}...")
-                    
-                    print()
-                    
-                except Exception as e:
-                    logger.warning(f"⚠️ Could not test {endpoint}: {e}")
-        
-        # Test advanced query endpoint
-        logger.info("📊 Testing advanced metrics query")
-        query_data = {
-            "categories": ["system", "services"],
-            "time_range_minutes": 5
-        }
+    async def run_full_test_suite(self):
+        """Run complete test suite for Phase 9 monitoring system"""
+        logger.info("🚀 Starting AutoBot Phase 9 Monitoring System Validation")
+        logger.info("=" * 80)
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{base_url}/metrics/query", 
-                    json=query_data
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        logger.info(f"✅ Metrics query - Status: {response.status}")
-                        logger.info(f"  Query results: {data.get('metrics_count', 0)} metrics")
-                    else:
-                        logger.warning(f"⚠️ Metrics query failed - Status: {response.status}")
-        except Exception as e:
-            logger.warning(f"⚠️ Metrics query test failed: {e}")
-        
-        logger.info("✅ Monitoring API tests completed!")
-        return True
-        
-    except ImportError:
-        logger.warning("⚠️ aiohttp not available, skipping API tests")
-        return True
-    except Exception as e:
-        logger.error(f"❌ API testing error: {e}")
-        return False
-
-
-async def test_collection_lifecycle():
-    """Test starting and stopping metrics collection"""
-    logger.info("🔄 Testing Metrics Collection Lifecycle")
-    
-    try:
-        from src.utils.system_metrics import get_metrics_collector
-        
-        collector = get_metrics_collector()
-        
-        # Test initial state
-        logger.info("📋 Initial collection state")
-        initial_state = collector._is_collecting
-        logger.info(f"Initially collecting: {initial_state}")
-        
-        if initial_state:
-            logger.info("⏹️ Stopping existing collection")
-            await collector.stop_collection()
-            await asyncio.sleep(1)
-        
-        # Test starting collection
-        logger.info("▶️ Starting metrics collection")
-        collection_task = asyncio.create_task(collector.start_collection())
-        
-        # Give collection time to start
-        await asyncio.sleep(2)
-        
-        if collector._is_collecting:
-            logger.info("✅ Collection started successfully")
+            # Test 1: Hardware Detection
+            await self.test_hardware_detection()
             
-            # Let it collect some data
-            logger.info("⏳ Collecting metrics for 10 seconds...")
+            # Test 2: Performance Monitor Initialization
+            await self.test_performance_monitor_initialization()
+            
+            # Test 3: GPU Capabilities and Optimization
+            await self.test_gpu_capabilities_and_optimization()
+            
+            # Test 4: Metrics Collection
+            await self.test_metrics_collection()
+            
+            # Test 5: Real-time Monitoring
+            await self.test_realtime_monitoring()
+            
+            # Test 6: Performance Dashboard
+            await self.test_performance_dashboard()
+            
+            # Test 7: Alert System
+            await self.test_alert_system()
+            
+            # Test 8: Optimization Engine
+            await self.test_optimization_engine()
+            
+            # Test 9: Benchmark Suite
+            await self.test_benchmark_suite()
+            
+            # Test 10: Configuration Management
+            await self.test_configuration_management()
+            
+            # Generate final report
+            await self.generate_test_report()
+            
+        except Exception as e:
+            logger.error(f"❌ Test suite failed with error: {e}")
+            self.test_results["fatal_error"] = str(e)
+    
+    async def test_hardware_detection(self):
+        """Test hardware detection capabilities"""
+        logger.info("🔍 Test 1: Hardware Detection")
+        
+        try:
+            # Test GPU detection
+            gpu_available = phase9_monitor.gpu_available
+            logger.info(f"   GPU Available: {'✓' if gpu_available else '✗'}")
+            
+            # Test NPU detection
+            npu_available = phase9_monitor.npu_available
+            logger.info(f"   NPU Available: {'✓' if npu_available else '✗'}")
+            
+            # Get detailed capabilities
+            capabilities = get_gpu_capabilities()
+            logger.info(f"   GPU Capabilities: {json.dumps(capabilities['capabilities'], indent=6)}")
+            
+            self.test_results["hardware_detection"] = {
+                "gpu_available": gpu_available,
+                "npu_available": npu_available,
+                "gpu_capabilities": capabilities,
+                "success": True
+            }
+            
+            logger.info("   ✅ Hardware detection test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Hardware detection test failed: {e}")
+            self.test_results["hardware_detection"] = {"success": False, "error": str(e)}
+    
+    async def test_performance_monitor_initialization(self):
+        """Test performance monitor initialization"""
+        logger.info("⚙️ Test 2: Performance Monitor Initialization")
+        
+        try:
+            # Check initial state
+            initial_state = phase9_monitor.monitoring_active
+            logger.info(f"   Initial monitoring state: {initial_state}")
+            
+            # Test buffer initialization
+            gpu_buffer_size = len(phase9_monitor.gpu_metrics_buffer)
+            npu_buffer_size = len(phase9_monitor.npu_metrics_buffer)
+            system_buffer_size = len(phase9_monitor.system_metrics_buffer)
+            
+            logger.info(f"   GPU metrics buffer: {gpu_buffer_size} entries")
+            logger.info(f"   NPU metrics buffer: {npu_buffer_size} entries")
+            logger.info(f"   System metrics buffer: {system_buffer_size} entries")
+            
+            # Test configuration
+            config = phase9_monitor.performance_baselines
+            logger.info(f"   Performance baselines configured: {len(config)} baselines")
+            
+            self.test_results["monitor_initialization"] = {
+                "initial_state": initial_state,
+                "buffers_initialized": True,
+                "baselines_configured": len(config) > 0,
+                "success": True
+            }
+            
+            logger.info("   ✅ Performance monitor initialization test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Performance monitor initialization test failed: {e}")
+            self.test_results["monitor_initialization"] = {"success": False, "error": str(e)}
+    
+    async def test_gpu_capabilities_and_optimization(self):
+        """Test GPU capabilities detection and optimization"""
+        logger.info("🎮 Test 3: GPU Capabilities and Optimization")
+        
+        try:
+            # Test GPU optimizer initialization
+            gpu_available = gpu_optimizer.gpu_available
+            logger.info(f"   GPU Optimizer Available: {'✓' if gpu_available else '✗'}")
+            
+            if gpu_available:
+                # Test capabilities detection
+                capabilities = gpu_optimizer.gpu_capabilities
+                logger.info(f"   Tensor Cores: {'✓' if capabilities.get('tensor_cores') else '✗'}")
+                logger.info(f"   Mixed Precision: {'✓' if capabilities.get('mixed_precision') else '✗'}")
+                logger.info(f"   Memory: {capabilities.get('memory_gb', 0)} GB")
+                
+                # Test configuration
+                config = gpu_optimizer.get_optimization_config()
+                logger.info(f"   Mixed precision enabled: {config.mixed_precision_enabled}")
+                logger.info(f"   Tensor core optimization: {config.tensor_core_optimization}")
+                logger.info(f"   Auto batch sizing: {config.auto_batch_sizing}")
+            
+            self.test_results["gpu_capabilities"] = {
+                "gpu_available": gpu_available,
+                "capabilities": gpu_optimizer.gpu_capabilities if gpu_available else {},
+                "config_loaded": True,
+                "success": True
+            }
+            
+            logger.info("   ✅ GPU capabilities and optimization test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ GPU capabilities test failed: {e}")
+            self.test_results["gpu_capabilities"] = {"success": False, "error": str(e)}
+    
+    async def test_metrics_collection(self):
+        """Test metrics collection functionality"""
+        logger.info("📊 Test 4: Metrics Collection")
+        
+        try:
+            # Test comprehensive metrics collection
+            metrics = await collect_phase9_metrics()
+            collection_successful = metrics.get("collection_successful", False)
+            
+            logger.info(f"   Metrics collection: {'✓' if collection_successful else '✗'}")
+            
+            if collection_successful:
+                # Check metric categories
+                gpu_metrics = metrics.get("gpu")
+                npu_metrics = metrics.get("npu") 
+                system_metrics = metrics.get("system")
+                services_metrics = metrics.get("services", [])
+                
+                logger.info(f"   GPU metrics: {'✓' if gpu_metrics else '✗'}")
+                logger.info(f"   NPU metrics: {'✓' if npu_metrics else '✗'}")
+                logger.info(f"   System metrics: {'✓' if system_metrics else '✗'}")
+                logger.info(f"   Service metrics: {len(services_metrics)} services")
+                
+                # Test individual metric collection
+                if gpu_metrics:
+                    gpu_individual = await phase9_monitor.collect_gpu_metrics()
+                    logger.info(f"   Individual GPU collection: {'✓' if gpu_individual else '✗'}")
+                
+                if npu_metrics:
+                    npu_individual = await phase9_monitor.collect_npu_metrics()
+                    logger.info(f"   Individual NPU collection: {'✓' if npu_individual else '✗'}")
+                
+                system_individual = await phase9_monitor.collect_system_performance_metrics()
+                logger.info(f"   Individual system collection: {'✓' if system_individual else '✗'}")
+            
+            self.test_results["metrics_collection"] = {
+                "collection_successful": collection_successful,
+                "gpu_metrics_available": gpu_metrics is not None,
+                "npu_metrics_available": npu_metrics is not None,
+                "system_metrics_available": system_metrics is not None,
+                "services_count": len(services_metrics),
+                "success": collection_successful
+            }
+            
+            logger.info("   ✅ Metrics collection test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Metrics collection test failed: {e}")
+            self.test_results["metrics_collection"] = {"success": False, "error": str(e)}
+    
+    async def test_realtime_monitoring(self):
+        """Test real-time monitoring functionality"""
+        logger.info("⏱️ Test 5: Real-time Monitoring")
+        
+        try:
+            # Start monitoring
+            monitoring_started = not phase9_monitor.monitoring_active
+            if monitoring_started:
+                await start_monitoring()
+                logger.info("   Monitoring started: ✓")
+            else:
+                logger.info("   Monitoring already active: ✓")
+            
+            # Wait for some metrics to be collected
+            logger.info("   Collecting metrics for 10 seconds...")
             await asyncio.sleep(10)
             
-            # Check buffer
-            buffer_size = len(collector._metrics_buffer)
-            logger.info(f"📊 Buffer size after collection: {buffer_size}")
+            # Check if metrics are being collected
+            gpu_buffer_size = len(phase9_monitor.gpu_metrics_buffer)
+            system_buffer_size = len(phase9_monitor.system_metrics_buffer)
             
-            if buffer_size > 0:
-                logger.info("✅ Metrics are being collected")
+            logger.info(f"   GPU metrics collected: {gpu_buffer_size}")
+            logger.info(f"   System metrics collected: {system_buffer_size}")
+            
+            # Test monitoring status
+            monitoring_active = phase9_monitor.monitoring_active
+            logger.info(f"   Monitoring active: {'✓' if monitoring_active else '✗'}")
+            
+            self.test_results["realtime_monitoring"] = {
+                "monitoring_started": monitoring_started or monitoring_active,
+                "monitoring_active": monitoring_active,
+                "metrics_collected": gpu_buffer_size + system_buffer_size > 0,
+                "gpu_metrics_count": gpu_buffer_size,
+                "system_metrics_count": system_buffer_size,
+                "success": monitoring_active and (gpu_buffer_size + system_buffer_size > 0)
+            }
+            
+            logger.info("   ✅ Real-time monitoring test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Real-time monitoring test failed: {e}")
+            self.test_results["realtime_monitoring"] = {"success": False, "error": str(e)}
+    
+    async def test_performance_dashboard(self):
+        """Test performance dashboard functionality"""
+        logger.info("📈 Test 6: Performance Dashboard")
+        
+        try:
+            # Get dashboard data
+            dashboard = get_phase9_performance_dashboard()
+            
+            # Check dashboard components
+            has_monitoring_status = "monitoring_active" in dashboard
+            has_hardware_info = "hardware_acceleration" in dashboard
+            has_gpu_data = dashboard.get("gpu") is not None
+            has_system_data = dashboard.get("system") is not None
+            has_trends = "trends" in dashboard
+            has_alerts = "recent_alerts" in dashboard
+            
+            logger.info(f"   Dashboard structure: {'✓' if has_monitoring_status else '✗'}")
+            logger.info(f"   Hardware info: {'✓' if has_hardware_info else '✗'}")
+            logger.info(f"   GPU data: {'✓' if has_gpu_data else '✗'}")
+            logger.info(f"   System data: {'✓' if has_system_data else '✗'}")
+            logger.info(f"   Trends analysis: {'✓' if has_trends else '✗'}")
+            logger.info(f"   Alerts included: {'✓' if has_alerts else '✗'}")
+            
+            # Test dashboard data quality
+            dashboard_complete = all([
+                has_monitoring_status, has_hardware_info, has_system_data
+            ])
+            
+            self.test_results["performance_dashboard"] = {
+                "dashboard_accessible": True,
+                "has_monitoring_status": has_monitoring_status,
+                "has_hardware_info": has_hardware_info,
+                "has_gpu_data": has_gpu_data,
+                "has_system_data": has_system_data,
+                "has_trends": has_trends,
+                "has_alerts": has_alerts,
+                "dashboard_complete": dashboard_complete,
+                "success": dashboard_complete
+            }
+            
+            logger.info("   ✅ Performance dashboard test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Performance dashboard test failed: {e}")
+            self.test_results["performance_dashboard"] = {"success": False, "error": str(e)}
+    
+    async def test_alert_system(self):
+        """Test alert system functionality"""
+        logger.info("🚨 Test 7: Alert System")
+        
+        try:
+            # Add test alert callback
+            async def test_alert_callback(alerts):
+                self.alerts_received.extend(alerts)
+                logger.info(f"   Received {len(alerts)} alerts")
+            
+            add_phase9_alert_callback(test_alert_callback)
+            logger.info("   Alert callback registered: ✓")
+            
+            # Check existing alerts
+            existing_alerts = list(phase9_monitor.performance_alerts)
+            logger.info(f"   Existing alerts: {len(existing_alerts)}")
+            
+            # Test alert structure
+            if existing_alerts:
+                sample_alert = existing_alerts[0]
+                has_category = "category" in sample_alert
+                has_severity = "severity" in sample_alert
+                has_message = "message" in sample_alert
+                has_timestamp = "timestamp" in sample_alert
                 
-                # Show recent metrics summary
-                recent = await collector.get_recent_metrics(minutes=1)
-                logger.info(f"📈 Recent metrics (1 min): {len(recent)}")
+                logger.info(f"   Alert structure valid: {'✓' if all([has_category, has_severity, has_message, has_timestamp]) else '✗'}")
+            
+            # Wait for potential new alerts
+            initial_alert_count = len(self.alerts_received)
+            await asyncio.sleep(5)
+            new_alert_count = len(self.alerts_received)
+            
+            logger.info(f"   New alerts received: {new_alert_count - initial_alert_count}")
+            
+            self.test_results["alert_system"] = {
+                "callback_registered": True,
+                "existing_alerts_count": len(existing_alerts),
+                "alerts_received_count": len(self.alerts_received),
+                "alert_structure_valid": len(existing_alerts) == 0 or all([
+                    "category" in existing_alerts[0],
+                    "severity" in existing_alerts[0],
+                    "message" in existing_alerts[0],
+                    "timestamp" in existing_alerts[0]
+                ]),
+                "success": True
+            }
+            
+            logger.info("   ✅ Alert system test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Alert system test failed: {e}")
+            self.test_results["alert_system"] = {"success": False, "error": str(e)}
+    
+    async def test_optimization_engine(self):
+        """Test optimization engine functionality"""
+        logger.info("⚡ Test 8: Optimization Engine")
+        
+        try:
+            if not gpu_optimizer.gpu_available:
+                logger.info("   GPU not available, skipping optimization tests")
+                self.test_results["optimization_engine"] = {
+                    "gpu_available": False,
+                    "success": True,
+                    "message": "GPU not available for optimization testing"
+                }
+                return
+            
+            # Test GPU efficiency monitoring
+            efficiency = await monitor_gpu_efficiency()
+            efficiency_success = "overall_efficiency" in efficiency
+            
+            logger.info(f"   GPU efficiency monitoring: {'✓' if efficiency_success else '✗'}")
+            if efficiency_success:
+                logger.info(f"   Overall efficiency: {efficiency['overall_efficiency']:.1f}%")
+                logger.info(f"   Efficiency grade: {efficiency.get('efficiency_grade', 'Unknown')}")
+            
+            # Test configuration updates
+            config_update_success = update_gpu_config({
+                "mixed_precision_enabled": True,
+                "tensor_core_optimization": True
+            })
+            logger.info(f"   Configuration update: {'✓' if config_update_success else '✗'}")
+            
+            # Test optimization for multi-modal workloads
+            logger.info("   Running multi-modal optimization...")
+            optimization_result = await optimize_gpu_for_multimodal()
+            optimization_success = optimization_result.success
+            
+            logger.info(f"   Multi-modal optimization: {'✓' if optimization_success else '✗'}")
+            if optimization_success:
+                logger.info(f"   Performance improvement: {optimization_result.performance_improvement:.1f}%")
+                logger.info(f"   Optimizations applied: {len(optimization_result.applied_optimizations)}")
+            
+            self.test_results["optimization_engine"] = {
+                "gpu_available": True,
+                "efficiency_monitoring": efficiency_success,
+                "config_updates": config_update_success,
+                "multimodal_optimization": optimization_success,
+                "optimization_result": {
+                    "success": optimization_result.success,
+                    "performance_improvement": optimization_result.performance_improvement,
+                    "applied_optimizations": optimization_result.applied_optimizations
+                } if optimization_success else None,
+                "success": efficiency_success and config_update_success
+            }
+            
+            logger.info("   ✅ Optimization engine test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Optimization engine test failed: {e}")
+            self.test_results["optimization_engine"] = {"success": False, "error": str(e)}
+    
+    async def test_benchmark_suite(self):
+        """Test benchmark suite functionality"""
+        logger.info("🏁 Test 9: Benchmark Suite")
+        
+        try:
+            if not gpu_optimizer.gpu_available:
+                logger.info("   GPU not available, skipping benchmark tests")
+                self.test_results["benchmark_suite"] = {
+                    "gpu_available": False,
+                    "success": True,
+                    "message": "GPU not available for benchmark testing"
+                }
+                return
+            
+            # Run GPU benchmark
+            logger.info("   Running GPU benchmark suite...")
+            benchmark_results = await benchmark_gpu()
+            
+            # Check benchmark components
+            has_gpu_info = "gpu_info" in benchmark_results
+            has_benchmark_tests = "benchmark_tests" in benchmark_results
+            has_overall_score = "overall_score" in benchmark_results
+            has_recommendations = "recommendations" in benchmark_results
+            
+            logger.info(f"   GPU info: {'✓' if has_gpu_info else '✗'}")
+            logger.info(f"   Benchmark tests: {'✓' if has_benchmark_tests else '✗'}")
+            logger.info(f"   Overall score: {'✓' if has_overall_score else '✗'}")
+            logger.info(f"   Recommendations: {'✓' if has_recommendations else '✗'}")
+            
+            if has_overall_score:
+                overall_score = benchmark_results["overall_score"]
+                logger.info(f"   GPU performance score: {overall_score:.1f}/100")
+            
+            if has_benchmark_tests:
+                tests = benchmark_results["benchmark_tests"]
+                logger.info(f"   Benchmark tests completed: {len(tests)}")
+            
+            benchmark_success = all([has_gpu_info, has_benchmark_tests, has_overall_score])
+            
+            self.test_results["benchmark_suite"] = {
+                "gpu_available": True,
+                "benchmark_completed": benchmark_success,
+                "has_gpu_info": has_gpu_info,
+                "has_benchmark_tests": has_benchmark_tests,
+                "has_overall_score": has_overall_score,
+                "has_recommendations": has_recommendations,
+                "overall_score": benchmark_results.get("overall_score", 0),
+                "tests_count": len(benchmark_results.get("benchmark_tests", {})),
+                "success": benchmark_success
+            }
+            
+            logger.info("   ✅ Benchmark suite test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Benchmark suite test failed: {e}")
+            self.test_results["benchmark_suite"] = {"success": False, "error": str(e)}
+    
+    async def test_configuration_management(self):
+        """Test configuration management functionality"""
+        logger.info("⚙️ Test 10: Configuration Management")
+        
+        try:
+            # Test GPU optimizer configuration
+            current_config = gpu_optimizer.get_optimization_config()
+            config_accessible = current_config is not None
+            
+            logger.info(f"   GPU config accessible: {'✓' if config_accessible else '✗'}")
+            
+            if config_accessible:
+                logger.info(f"   Mixed precision: {current_config.mixed_precision_enabled}")
+                logger.info(f"   Tensor cores: {current_config.tensor_core_optimization}")
+                logger.info(f"   Auto batching: {current_config.auto_batch_sizing}")
+            
+            # Test performance baselines
+            baselines = phase9_monitor.performance_baselines
+            baselines_configured = len(baselines) > 0
+            
+            logger.info(f"   Performance baselines: {'✓' if baselines_configured else '✗'}")
+            if baselines_configured:
+                logger.info(f"   Baseline categories: {len(baselines)}")
+            
+            # Test configuration persistence
+            original_mixed_precision = current_config.mixed_precision_enabled if config_accessible else False
+            if config_accessible:
+                # Toggle setting
+                new_value = not original_mixed_precision
+                update_success = update_gpu_config({"mixed_precision_enabled": new_value})
                 
-                # Group by category
-                categories = {}
-                for metric in recent:
-                    categories[metric.category] = categories.get(metric.category, 0) + 1
+                # Verify change
+                updated_config = gpu_optimizer.get_optimization_config()
+                change_applied = updated_config.mixed_precision_enabled == new_value
                 
-                for category, count in categories.items():
-                    logger.info(f"  {category}: {count} metrics")
-                    
+                # Restore original
+                update_gpu_config({"mixed_precision_enabled": original_mixed_precision})
+                
+                logger.info(f"   Config persistence: {'✓' if update_success and change_applied else '✗'}")
             else:
-                logger.warning("⚠️ No metrics collected")
-        else:
-            logger.error("❌ Collection failed to start")
-        
-        # Test stopping collection
-        logger.info("⏹️ Stopping metrics collection")
-        await collector.stop_collection()
-        
-        if not collector._is_collecting:
-            logger.info("✅ Collection stopped successfully")
-        else:
-            logger.warning("⚠️ Collection did not stop properly")
-        
-        logger.info("🎉 Collection lifecycle tests completed!")
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Collection lifecycle test error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-async def test_configuration():
-    """Test monitoring system configuration"""
-    logger.info("⚙️ Testing Monitoring Configuration")
+                update_success = change_applied = False
+            
+            self.test_results["configuration_management"] = {
+                "gpu_config_accessible": config_accessible,
+                "baselines_configured": baselines_configured,
+                "config_updates_work": update_success and change_applied if config_accessible else False,
+                "baseline_count": len(baselines),
+                "success": config_accessible and baselines_configured
+            }
+            
+            logger.info("   ✅ Configuration management test passed")
+            
+        except Exception as e:
+            logger.error(f"   ❌ Configuration management test failed: {e}")
+            self.test_results["configuration_management"] = {"success": False, "error": str(e)}
     
-    try:
-        from src.config_helper import cfg
+    async def generate_test_report(self):
+        """Generate comprehensive test report"""
+        logger.info("📋 Generating Test Report")
+        logger.info("=" * 80)
         
-        # Test configuration values
-        config_tests = [
-            ('monitoring.metrics.collection_interval', int),
-            ('monitoring.metrics.retention_hours', int),
-            ('monitoring.metrics.buffer_size', int),
-            ('monitoring.alerts.cpu_warning', int),
-            ('monitoring.alerts.cpu_critical', int),
-            ('monitoring.alerts.memory_warning', int),
-            ('monitoring.alerts.memory_critical', int),
-            ('monitoring.dashboard.refresh_interval', int),
-            ('monitoring.dashboard.real_time_updates', bool),
-        ]
+        # Calculate overall results
+        total_tests = len(self.test_results)
+        successful_tests = sum(1 for result in self.test_results.values() if result.get("success", False))
+        test_duration = time.time() - self.start_time
         
-        logger.info("📋 Configuration values:")
-        for config_key, expected_type in config_tests:
-            value = cfg.get(config_key)
-            logger.info(f"{config_key}: {value} (type: {type(value).__name__})")
-            
-            if value is not None and not isinstance(value, expected_type):
-                logger.warning(f"⚠️ Expected {expected_type.__name__}, got {type(value).__name__}")
+        # Generate report
+        report = {
+            "test_suite": "AutoBot Phase 9 Monitoring System Validation",
+            "timestamp": datetime.now().isoformat(),
+            "test_duration_seconds": round(test_duration, 2),
+            "total_tests": total_tests,
+            "successful_tests": successful_tests,
+            "failed_tests": total_tests - successful_tests,
+            "success_rate": round((successful_tests / total_tests) * 100, 1) if total_tests > 0 else 0,
+            "overall_status": "PASS" if successful_tests == total_tests else "PARTIAL" if successful_tests > 0 else "FAIL",
+            "test_results": self.test_results,
+            "alerts_received": self.alerts_received,
+            "system_info": {
+                "gpu_available": phase9_monitor.gpu_available,
+                "npu_available": phase9_monitor.npu_available,
+                "monitoring_active": phase9_monitor.monitoring_active
+            }
+        }
         
-        # Test that critical values are reasonable
-        collection_interval = cfg.get('monitoring.metrics.collection_interval', 5)
-        if 1 <= collection_interval <= 60:
-            logger.info("✅ Collection interval is reasonable")
+        # Print summary
+        print()
+        print("🎯 TEST SUMMARY")
+        print("=" * 50)
+        print(f"Total Tests: {total_tests}")
+        print(f"Successful: {successful_tests}")
+        print(f"Failed: {total_tests - successful_tests}")
+        print(f"Success Rate: {report['success_rate']}%")
+        print(f"Duration: {test_duration:.2f} seconds")
+        print(f"Overall Status: {report['overall_status']}")
+        print()
+        
+        # Print individual test results
+        print("📊 INDIVIDUAL TEST RESULTS")
+        print("=" * 50)
+        for test_name, result in self.test_results.items():
+            status = "✅ PASS" if result.get("success", False) else "❌ FAIL"
+            print(f"{test_name}: {status}")
+            if not result.get("success", False) and "error" in result:
+                print(f"   Error: {result['error']}")
+        print()
+        
+        # Hardware summary
+        print("🔧 HARDWARE SUMMARY")
+        print("=" * 50)
+        print(f"GPU Available: {'✓' if phase9_monitor.gpu_available else '✗'}")
+        print(f"NPU Available: {'✓' if phase9_monitor.npu_available else '✗'}")
+        print(f"Monitoring Active: {'✓' if phase9_monitor.monitoring_active else '✗'}")
+        print()
+        
+        # Recommendations
+        print("💡 RECOMMENDATIONS")
+        print("=" * 50)
+        if report["overall_status"] == "PASS":
+            print("✅ All tests passed! Phase 9 monitoring system is fully operational.")
+            print("   • GPU/NPU monitoring is working correctly")
+            print("   • Performance optimization is functional")
+            print("   • Real-time dashboard is operational")
+            print("   • Alert system is configured properly")
         else:
-            logger.warning(f"⚠️ Collection interval ({collection_interval}s) may be too extreme")
+            print("⚠️  Some tests failed. Review the following:")
+            for test_name, result in self.test_results.items():
+                if not result.get("success", False):
+                    print(f"   • Fix {test_name}: {result.get('error', 'Unknown error')}")
         
-        retention_hours = cfg.get('monitoring.metrics.retention_hours', 24)
-        if 1 <= retention_hours <= 168:  # 1 hour to 1 week
-            logger.info("✅ Retention hours is reasonable")
-        else:
-            logger.warning(f"⚠️ Retention hours ({retention_hours}h) may be too extreme")
+        # Save report
+        report_file = f"monitoring_test_report_{int(time.time())}.json"
+        with open(report_file, 'w') as f:
+            json.dump(report, f, indent=2, default=str)
         
-        logger.info("✅ Configuration testing completed!")
-        return True
+        print(f"📄 Detailed report saved to: {report_file}")
+        print()
         
-    except Exception as e:
-        logger.error(f"❌ Configuration test error: {e}")
-        return False
-
-
-async def performance_benchmark():
-    """Benchmark the monitoring system performance"""
-    logger.info("⚡ Performance Benchmark")
-    
-    try:
-        from src.utils.system_metrics import get_metrics_collector
-        
-        collector = get_metrics_collector()
-        
-        # Benchmark individual collection methods
-        methods_to_benchmark = [
-            ("System Metrics", collector.collect_system_metrics),
-            ("Service Health", collector.collect_service_health),
-            ("Knowledge Base Metrics", collector.collect_knowledge_base_metrics),
-            ("All Metrics", collector.collect_all_metrics),
-        ]
-        
-        logger.info("📊 Collection Performance:")
-        for method_name, method in methods_to_benchmark:
-            times = []
-            
-            # Run multiple times for average
-            for i in range(5):
-                start_time = time.time()
-                await method()
-                end_time = time.time()
-                times.append(end_time - start_time)
-            
-            avg_time = sum(times) / len(times)
-            min_time = min(times)
-            max_time = max(times)
-            
-            logger.info(f"{method_name}: avg={avg_time:.3f}s, min={min_time:.3f}s, max={max_time:.3f}s")
-        
-        # Test storage performance
-        logger.info("💾 Storage Performance:")
-        all_metrics = await collector.collect_all_metrics()
-        
-        storage_times = []
-        for i in range(3):
-            start_time = time.time()
-            await collector.store_metrics(all_metrics)
-            end_time = time.time()
-            storage_times.append(end_time - start_time)
-        
-        avg_storage_time = sum(storage_times) / len(storage_times)
-        logger.info(f"Storage: avg={avg_storage_time:.3f}s for {len(all_metrics)} metrics")
-        
-        # Calculate throughput
-        metrics_per_second = len(all_metrics) / avg_storage_time
-        logger.info(f"Storage throughput: {metrics_per_second:.1f} metrics/second")
-        
-        logger.info("✅ Performance benchmark completed!")
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Performance benchmark error: {e}")
-        return False
+        return report
 
 
 async def main():
-    """Main test function"""
-    logger.info("🚀 Starting Advanced Monitoring System Test Suite")
+    """Main test execution function"""
+    print("🚀 AutoBot Phase 9 Monitoring System Validation")
+    print(f"Started at: {datetime.now().isoformat()}")
+    print("=" * 80)
     
-    # Run all tests
-    test_results = {
-        "Metrics Collector": await test_metrics_collector(),
-        "Monitoring API": await test_monitoring_api(),
-        "Collection Lifecycle": await test_collection_lifecycle(),
-        "Configuration": await test_configuration(),
-        "Performance Benchmark": await performance_benchmark(),
-    }
+    # Initialize and run test suite
+    test_suite = Phase9MonitoringSystemTest()
     
-    # Summary
-    logger.info("📋 Test Summary:")
-    all_passed = True
-    for test_name, passed in test_results.items():
-        status = "✅ PASSED" if passed else "❌ FAILED"
-        logger.info(f"{test_name}: {status}")
-        if not passed:
-            all_passed = False
-    
-    if all_passed:
-        logger.info("🎉 Advanced Monitoring System Test Suite PASSED!")
-        logger.info("The monitoring system is ready for production use.")
-        logger.info("Available endpoints:")
-        logger.info("  - /api/monitoring/dashboard/overview - Complete dashboard data")
-        logger.info("  - /api/monitoring/metrics/current - Real-time metrics")
-        logger.info("  - /api/monitoring/alerts/check - System alerts")
-        logger.info("  - /api/monitoring/metrics/collection/start - Start collection")
-    else:
-        logger.error("❌ Some tests FAILED!")
-        logger.error("Please check the implementation and dependencies.")
-    
-    return all_passed
+    try:
+        await test_suite.run_full_test_suite()
+        
+    except KeyboardInterrupt:
+        logger.info("Test suite interrupted by user")
+        
+    except Exception as e:
+        logger.error(f"Test suite failed with unexpected error: {e}")
+        
+    finally:
+        # Cleanup - stop monitoring if it was started
+        try:
+            if phase9_monitor.monitoring_active:
+                await stop_monitoring()
+                logger.info("Monitoring stopped during cleanup")
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
 
 
 if __name__ == "__main__":

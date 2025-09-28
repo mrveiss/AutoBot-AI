@@ -61,6 +61,7 @@ def test_route_registration():
         # Simulate what happens during app startup
         from fastapi import FastAPI, APIRouter
         from backend.api.workflow import router as workflow_router
+from src.constants import NetworkConstants, ServiceURLs
 
         # Create test app
         app = FastAPI()
@@ -110,4 +111,4 @@ if __name__ == "__main__":
     print(f"\n🔧 To restart backend:")
     print("   1. Stop current backend (Ctrl+C)")
     print("   2. Run: source venv/bin/activate && python main.py")
-    print("   3. Test: curl -X POST http://localhost:8001/api/workflow/execute")
+    print("   3. Test: curl -X POST ServiceURLs.BACKEND_LOCAL/api/workflow/execute")

@@ -28,10 +28,10 @@ async def test_llamaindex_redis_fixed():
         from llama_index.core import VectorStoreIndex, StorageContext, Settings
         
         # Properly configure LLM first
-        llm = Ollama(model="phi:2.7b", base_url="http://localhost:11434")
+        llm = Ollama(model="phi:2.7b", base_url=ServiceURLs.OLLAMA_LOCAL)
         embed_model = OllamaEmbedding(
             model_name="nomic-embed-text:latest",
-            base_url="http://localhost:11434"
+            base_url=ServiceURLs.OLLAMA_LOCAL
         )
         
         # Set global settings
@@ -121,7 +121,7 @@ async def test_langchain_redis_fixed():
         # Initialize embeddings
         embeddings = OllamaEmbeddings(
             model="nomic-embed-text:latest",
-            base_url="http://localhost:11434"
+            base_url=ServiceURLs.OLLAMA_LOCAL
         )
         
         if modern:
@@ -184,6 +184,7 @@ async def check_existing_data_accessibility():
     logger.info("\n=== Checking Direct Data Access ===")
     try:
         import redis
+from src.constants import NetworkConstants, ServiceURLs
         client = redis.Redis(host='localhost', port=6379, db=2, decode_responses=True)
         
         # Count documents in existing index

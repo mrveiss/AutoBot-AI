@@ -1,3 +1,5 @@
+from src.constants import NetworkConstants, ServiceURLs
+
 
 // AutoBot Settings Fix Script
 // Run this in your browser console (F12 -> Console)
@@ -21,8 +23,8 @@ function resetSettings() {
         },
         backend: {
             use_phi2: false,
-            api_endpoint: 'http://localhost:8001',
-            ollama_endpoint: 'http://localhost:11434',
+            api_endpoint: ServiceURLs.BACKEND_LOCAL,
+            ollama_endpoint: ServiceURLs.OLLAMA_LOCAL,
             ollama_model: 'deepseek-r1:14b',
             streaming: false
         },
@@ -64,9 +66,9 @@ function fixCommonIssues() {
         resetSettings();
     } else {
         // Ensure backend endpoint is correct
-        if (settings.backend && settings.backend.api_endpoint !== 'http://localhost:8001') {
+        if (settings.backend && settings.backend.api_endpoint !== ServiceURLs.BACKEND_LOCAL) {
             console.log('🔧 Fixing backend endpoint...');
-            settings.backend.api_endpoint = 'http://localhost:8001';
+            settings.backend.api_endpoint = ServiceURLs.BACKEND_LOCAL;
             localStorage.setItem('chat_settings', JSON.stringify(settings));
         }
 

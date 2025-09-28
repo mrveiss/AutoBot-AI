@@ -26,6 +26,9 @@ from src.config import config as global_config_manager
 # Import database pooling for performance
 from src.utils.database_pool import get_connection_pool
 
+# Import shared path utilities
+from src.utils.common import PathUtils
+
 
 @dataclass
 class MemoryEntry:
@@ -54,7 +57,7 @@ class LongTermMemoryManager:
         memory_config = self.config.get("memory", {})
         data_config = self.config.get("data", {})
         default_db_path = os.getenv("AUTOBOT_LONG_TERM_DB_PATH", "data/agent_memory.db")
-        self.db_path = self._resolve_path(
+        self.db_path = PathUtils.resolve_path(
             memory_config.get("long_term_db_path")
             or data_config.get("long_term_db_path", default_db_path)
         )
@@ -65,53 +68,45 @@ class LongTermMemoryManager:
             "max_entries_per_category", 10000
         )
 
-        # Initialize async database setup
+        # Initialize database setup
         self._initialized = False
-        self._init_lock = asyncio.Lock()
 
         logging.info(f"Long-term memory manager initialized at {self.db_path}")
 
-    def _resolve_path(self, path: str) -> str:
-        """Resolve relative paths to absolute paths"""
-        if not os.path.isabs(path):
-            return os.path.abspath(path)
-        return path
 
-    async def _init_memory_db(self):
-        """Initialize async SQLite database with comprehensive memory tables"""
+    def _init_memory_db(self):
+        """Initialize SQLite database with comprehensive memory tables"""
         if self._initialized:
             return
 
-        async with self._init_lock:
-            if self._initialized:
-                return
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
-            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
 
-            async with aiosqlite.connect(self.db_path) as conn:
-                # Enable WAL mode for better concurrency
-                await conn.execute("PRAGMA journal_mode=WAL")
-                await conn.execute("PRAGMA synchronous=NORMAL")
-                await conn.execute("PRAGMA cache_size=10000")
-                await conn.execute("PRAGMA temp_store=MEMORY")
-                await conn.execute("PRAGMA foreign_keys=ON")
+        # Enable WAL mode for better concurrency
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA cache_size=10000")
+        cursor.execute("PRAGMA temp_store=MEMORY")
+        cursor.execute("PRAGMA foreign_keys=ON")
 
-                # Main memory table for all types of long-term storage
-                await conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS memory_entries (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        category TEXT NOT NULL,
-                        content TEXT NOT NULL,
-                        metadata TEXT, -- JSON string of metadata
-                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        reference_path TEXT, -- Path to referenced markdown files
-                        embedding BLOB, -- Pickled embedding vector
-                        content_hash TEXT, -- Hash for duplicate detection
-                        UNIQUE(category, content_hash)
-                    )
-                    """
-                )
+        # Main memory table for all types of long-term storage
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                content TEXT NOT NULL,
+                metadata TEXT, -- JSON string of metadata
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                reference_path TEXT, -- Path to referenced markdown files
+                embedding BLOB, -- Pickled embedding vector
+                content_hash TEXT, -- Hash for duplicate detection
+                UNIQUE(category, content_hash)
+            )
+            """
+        )
 
         # Task execution logs
         cursor.execute(
@@ -130,7 +125,7 @@ class LongTermMemoryManager:
                 completed_at DATETIME,
                 metadata TEXT -- JSON string for additional data
             )
-        """
+            """
         )
 
         # Agent state snapshots
@@ -145,7 +140,7 @@ class LongTermMemoryManager:
                 system_status TEXT, -- 'idle', 'busy', 'error', 'maintenance'
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        """
+            """
         )
 
         # Configuration change history
@@ -160,7 +155,7 @@ class LongTermMemoryManager:
                 change_reason TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        """
+            """
         )
 
         # Conversation memory for LLM interactions
@@ -176,7 +171,7 @@ class LongTermMemoryManager:
                 response_time_ms INTEGER,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        """
+            """
         )
 
         # Markdown file references
@@ -192,7 +187,7 @@ class LongTermMemoryManager:
                 last_modified DATETIME,
                 FOREIGN KEY (memory_entry_id) REFERENCES memory_entries (id)
             )
-        """
+            """
         )
 
         # Create indexes for performance
@@ -218,6 +213,7 @@ class LongTermMemoryManager:
         conn.commit()
         conn.close()
 
+        self._initialized = True
         logging.info("Long-term memory database initialized successfully")
 
     def store_memory(
@@ -242,6 +238,9 @@ class LongTermMemoryManager:
         Returns:
             ID of stored memory entry
         """
+        # Initialize database if needed
+        self._init_memory_db()
+
         # Use connection pool for better performance
         pool = get_connection_pool(self.db_path)
         with pool.get_connection() as conn:

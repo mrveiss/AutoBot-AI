@@ -272,7 +272,7 @@ class SystemMonitor:
                 "url": f"{API_BASE_URL}/api/system/health",
                 "port": 8001,
             },
-            {"name": "frontend", "url": "http://localhost:5173", "port": 5173},
+            {"name": "frontend", "url": ServiceURLs.FRONTEND_LOCAL, "port": 5173},
             {"name": "redis", "url": None, "port": 6379},
         ]
 
@@ -446,17 +446,17 @@ class SystemMonitor:
             {
                 "service": "backend",
                 "endpoint": "/api/system/health",
-                "url": "http://localhost:8001/api/system/health",
+                "url": "ServiceURLs.BACKEND_LOCAL/api/system/health",
             },
             {
                 "service": "backend",
                 "endpoint": "/api/system/status",
-                "url": "http://localhost:8001/api/system/status",
+                "url": "ServiceURLs.BACKEND_LOCAL/api/system/status",
             },
             {
                 "service": "backend",
                 "endpoint": "/api/chat_knowledge/health",
-                "url": "http://localhost:8001/api/chat_knowledge/health",
+                "url": "ServiceURLs.BACKEND_LOCAL/api/chat_knowledge/health",
             },
             {"service": "redis", "endpoint": "ping", "url": None},
         ]
@@ -877,5 +877,6 @@ async def main():
 
 if __name__ == "__main__":
     import sys
+from src.constants import NetworkConstants, ServiceURLs
 
     sys.exit(asyncio.run(main()))

@@ -20,7 +20,7 @@ class AutoBotMonitor:
     def __init__(self):
         self.backend_port = os.getenv("AUTOBOT_BACKEND_PORT", "8001")
         self.api_base = f"http://localhost:{self.backend_port}"
-        self.frontend_url = "http://localhost:5173"
+        self.frontend_url = ServiceURLs.FRONTEND_LOCAL
 
     def get_system_health(self) -> Dict[str, Any]:
         """Get AutoBot system health status."""
@@ -187,7 +187,7 @@ class AutoBotMonitor:
     def get_ollama_models(self) -> Dict[str, Any]:
         """Get available Ollama models with accessibility testing."""
         try:
-            response = requests.get("http://localhost:11434/api/tags", timeout=10)
+            response = requests.get("ServiceURLs.OLLAMA_LOCAL/api/tags", timeout=10)
             if response.status_code == 200:
                 data = response.json()
                 models = []
@@ -203,7 +203,7 @@ class AutoBotMonitor:
                     # Test model accessibility
                     try:
                         test_response = requests.post(
-                            "http://localhost:11434/api/generate",
+                            "ServiceURLs.OLLAMA_LOCAL/api/generate",
                             json={
                                 "model": model.get("name"),
                                 "prompt": "test",
@@ -324,6 +324,7 @@ class AutoBotMonitor:
         try:
             import openvino
             from openvino.runtime import Core
+from src.constants import NetworkConstants, ServiceURLs
 
             core = Core()
             services["openvino"] = {

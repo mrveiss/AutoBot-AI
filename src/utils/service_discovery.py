@@ -14,6 +14,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
 
+from src.constants.network_constants import NetworkConstants, ServiceURLs
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,74 +93,74 @@ class ServiceDiscovery:
         # VM1: Frontend (Web Interface)
         self.services["frontend"] = ServiceEndpoint(
             name="frontend",
-            host=os.getenv("AUTOBOT_FRONTEND_HOST", "172.16.168.21"),
-            port=int(os.getenv("AUTOBOT_FRONTEND_PORT", "5173")),
+            host=os.getenv("AUTOBOT_FRONTEND_HOST", NetworkConstants.FRONTEND_VM_IP),
+            port=int(os.getenv("AUTOBOT_FRONTEND_PORT", NetworkConstants.FRONTEND_PORT)),
             protocol="http",
             health_endpoint="/",  # Vue.js app health check
             timeout=10.0,
             required=True
         )
-        
+
         # VM2: NPU Worker (AI Hardware Acceleration)
         self.services["npu_worker"] = ServiceEndpoint(
             name="npu_worker",
-            host=os.getenv("AUTOBOT_NPU_WORKER_HOST", "172.16.168.22"),
-            port=int(os.getenv("AUTOBOT_NPU_WORKER_PORT", "8081")),
+            host=os.getenv("AUTOBOT_NPU_WORKER_HOST", NetworkConstants.NPU_WORKER_VM_IP),
+            port=int(os.getenv("AUTOBOT_NPU_WORKER_PORT", NetworkConstants.NPU_WORKER_PORT)),
             protocol="http",
             health_endpoint="/health",
             timeout=15.0,
             required=False  # Optional AI acceleration
         )
-        
+
         # VM3: Redis (Data Layer)
         self.services["redis"] = ServiceEndpoint(
             name="redis",
-            host=os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23"),
-            port=int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+            host=os.getenv("AUTOBOT_REDIS_HOST", NetworkConstants.REDIS_VM_IP),
+            port=int(os.getenv("AUTOBOT_REDIS_PORT", NetworkConstants.REDIS_PORT)),
             protocol="tcp",  # Redis uses TCP, not HTTP
             health_endpoint="",  # Redis PING command
             timeout=5.0,
             required=True
         )
-        
+
         # VM4: AI Stack (AI Processing)
         self.services["ai_stack"] = ServiceEndpoint(
             name="ai_stack",
-            host=os.getenv("AUTOBOT_AI_STACK_HOST", "172.16.168.24"),
-            port=int(os.getenv("AUTOBOT_AI_STACK_PORT", "8080")),
+            host=os.getenv("AUTOBOT_AI_STACK_HOST", NetworkConstants.AI_STACK_VM_IP),
+            port=int(os.getenv("AUTOBOT_AI_STACK_PORT", NetworkConstants.AI_STACK_PORT)),
             protocol="http",
             health_endpoint="/health",
             timeout=20.0,
             required=False  # Optional AI processing
         )
-        
+
         # VM5: Browser Service (Playwright Automation)
         self.services["browser_service"] = ServiceEndpoint(
             name="browser_service",
-            host=os.getenv("AUTOBOT_BROWSER_SERVICE_HOST", "172.16.168.25"),
-            port=int(os.getenv("AUTOBOT_BROWSER_SERVICE_PORT", "3000")),
+            host=os.getenv("AUTOBOT_BROWSER_SERVICE_HOST", NetworkConstants.BROWSER_VM_IP),
+            port=int(os.getenv("AUTOBOT_BROWSER_SERVICE_PORT", NetworkConstants.BROWSER_SERVICE_PORT)),
             protocol="http",
             health_endpoint="/health",
             timeout=10.0,
             required=False  # Optional browser automation
         )
-        
+
         # Main Machine (WSL): Backend API
         self.services["backend"] = ServiceEndpoint(
             name="backend",
-            host=os.getenv("AUTOBOT_BACKEND_HOST", "172.16.168.20"),
-            port=int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
+            host=os.getenv("AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP),
+            port=int(os.getenv("AUTOBOT_BACKEND_PORT", NetworkConstants.BACKEND_PORT)),
             protocol="http",
             health_endpoint="/api/health",
             timeout=5.0,
             required=True
         )
-        
+
         # Main Machine (WSL): Ollama LLM
         self.services["ollama"] = ServiceEndpoint(
             name="ollama",
-            host=os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1"),
-            port=int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
+            host=os.getenv("AUTOBOT_OLLAMA_HOST", NetworkConstants.LOCALHOST_IP),
+            port=int(os.getenv("AUTOBOT_OLLAMA_PORT", NetworkConstants.OLLAMA_PORT)),
             protocol="http",
             health_endpoint="/api/tags",  # Ollama health check
             timeout=10.0,

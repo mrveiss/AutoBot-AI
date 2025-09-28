@@ -22,7 +22,7 @@ class TimeoutAnalyzer:
     
     def __init__(self):
         self.results = {}
-        self.backend_url = "http://localhost:8001"
+        self.backend_url = ServiceURLs.BACKEND_LOCAL
         
     async def test_backend_health(self) -> Dict[str, Any]:
         """Test if backend is responsive"""
@@ -219,6 +219,7 @@ class TimeoutAnalyzer:
             start_time = time.time()
             
             from src.simple_chat_workflow import SimpleChatWorkflow
+from src.constants import NetworkConstants, ServiceURLs
             
             # Create workflow instance
             workflow_create_start = time.time()

@@ -7,6 +7,7 @@ Delivers 60-80% performance improvements across major system metrics
 import asyncio
 import logging
 from typing import Dict, Any
+from src.constants import NetworkConstants, ServiceURLs
 
 from .optimized_stream_processor import get_optimized_llm_interface
 from .optimized_redis_manager import get_optimized_redis_manager  
@@ -138,7 +139,7 @@ class PerformanceOptimizer:
                 start_time = asyncio.get_event_loop().time()
                 
                 # Simple test message
-                test_url = "http://localhost:11434/api/chat"
+                test_url = "ServiceURLs.OLLAMA_LOCAL/api/chat"
                 test_data = {
                     "model": "llama3.1:8b",
                     "messages": [{"role": "user", "content": "Hello"}],

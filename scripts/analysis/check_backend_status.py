@@ -12,7 +12,7 @@ import requests
 
 
 class BackendStatusChecker:
-    def __init__(self, base_url="http://localhost:8001"):
+    def __init__(self, base_url=ServiceURLs.BACKEND_LOCAL):
         self.base_url = base_url
         self.timeout = 5
 
@@ -166,12 +166,13 @@ class BackendStatusChecker:
 def main():
     """Main function for command line usage"""
     import argparse
+from src.constants import NetworkConstants, ServiceURLs
 
     parser = argparse.ArgumentParser(description="Check AutoBot backend API status")
     parser.add_argument(
         "--url",
-        default="http://localhost:8001",
-        help="Backend base URL (default: http://localhost:8001)",
+        default=ServiceURLs.BACKEND_LOCAL,
+        help="Backend base URL (default: ServiceURLs.BACKEND_LOCAL)",
     )
     parser.add_argument(
         "--quick", action="store_true", help="Run quick health check only"

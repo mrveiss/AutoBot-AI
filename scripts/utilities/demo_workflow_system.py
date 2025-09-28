@@ -9,13 +9,14 @@ import aiohttp
 import json
 import time
 from datetime import datetime
+from src.constants import NetworkConstants, ServiceURLs
 
 
 class WorkflowDemo:
     """Demonstrates AutoBot workflow orchestration capabilities."""
 
     def __init__(self):
-        self.base_url = "http://localhost:8001"
+        self.base_url = ServiceURLs.BACKEND_LOCAL
         self.demo_scenarios = [
             {
                 "name": "Simple Query",
