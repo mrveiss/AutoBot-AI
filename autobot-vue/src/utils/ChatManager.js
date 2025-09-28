@@ -198,13 +198,14 @@ class ChatManager {
   // Send a message to the chat API
   async sendMessage(message, options = {}) {
     try {
+      const chatId = options.chatId || this.currentChatId || 'default';
       const requestBody = {
-        message: message.trim(),
+        content: message.trim(),
+        role: "user",
+        session_id: chatId,
         ...options
       };
-
-      const chatId = options.chatId || this.currentChatId || 'default';
-      const response = await fetch(`${this.apiEndpoint}/api/chats/${chatId}/message`, {
+      const response = await fetch(`${this.apiEndpoint}/api/chat/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

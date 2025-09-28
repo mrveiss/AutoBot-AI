@@ -430,9 +430,12 @@ class ApiClient {
 
   // Chat API methods
   async sendChatMessage(message, options = {}) {
-    // Use the correct endpoint with chat ID
-    const chatId = options.chatId || 'default';
-    const response = await this.post(`/api/chats/${chatId}/message`, { message });
+    // Use the correct endpoint for chat messages
+    const response = await this.post(`/api/chat/message`, {
+      content: message,
+      role: "user",
+      session_id: options.chatId || options.session_id || null
+    });
 
     // Check if it's a streaming response
     const contentType = response.headers.get('content-type');
@@ -451,7 +454,7 @@ class ApiClient {
   }
 
   async createNewChat() {
-    const response = await this.post('/api/chats/new');
+    const response = await this.post('/api/chat/sessions');
     return response.json();
   }
 
@@ -461,17 +464,17 @@ class ApiClient {
   }
 
   async getChatMessages(chatId) {
-    const response = await this.get(`/api/chats/${chatId}`);
+    const response = await this.get(`/api/chat/sessions/${chatId}`);
     return response.json();
   }
 
   async saveChatMessages(chatId, messages) {
-    const response = await this.post(`/api/chats/${chatId}/save`, { messages });
+    const response = await this.post(`/api/chat/sessions/${chatId}`, { messages });
     return response.json();
   }
 
   async deleteChat(chatId) {
-    const response = await this.delete(`/api/chats/${chatId}`);
+    const response = await this.delete(`/api/chat/sessions/${chatId}`);
     return response.json();
   }
 
@@ -1022,8 +1025,10 @@ class ApiClient {
 
   // CHAT OPERATIONS (enhanced)
   async sendChatMessage(chatId, message, options = {}) {
-    return this.post(`/api/chats/${chatId}/message`, {
-      message,
+    return this.post(`/api/chat/message`, {
+      content: message,
+      role: "user",
+      session_id: chatId,
       files: options.files || [],
       timestamp: new Date().toISOString(),
       ...options

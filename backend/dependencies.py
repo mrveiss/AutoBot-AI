@@ -50,7 +50,7 @@ def get_knowledge_base(config: ConfigManager = Depends(get_config)):
     """
     from src.knowledge_base import KnowledgeBase
 
-    return KnowledgeBase(config_manager=config)
+    return KnowledgeBase()
 
 
 def get_llm_interface(config: ConfigManager = Depends(get_config)):

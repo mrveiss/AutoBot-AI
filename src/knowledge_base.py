@@ -65,8 +65,8 @@ class KnowledgeBase:
             logging.warning(f"Could not configure LlamaIndex with Ollama: {e}")
             # Keep the vector store functionality available even if LLM fails
 
-        # Initialize Redis connection and vector store
-        asyncio.create_task(self._init_redis_and_vector_store())
+        # Redis initialization flag
+        self._redis_initialized = False
 
     async def _init_redis_and_vector_store(self):
         """Initialize Redis connection and vector store asynchronously"""
@@ -144,6 +144,12 @@ class KnowledgeBase:
             logging.error(f"Failed to initialize vector store: {e}")
             self.vector_store = None
 
+    async def _ensure_redis_initialized(self):
+        """Ensure Redis is initialized before any operations"""
+        if not self._redis_initialized:
+            await self._init_redis_and_vector_store()
+            self._redis_initialized = True
+
     def _get_redis_client(self) -> Optional[redis.Redis]:
         """Get Redis client for sync operations"""
         return self.redis_client
@@ -188,6 +194,8 @@ class KnowledgeBase:
 
     async def store_fact(self, text: str, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
         """Store a fact in the knowledge base"""
+        await self._ensure_redis_initialized()
+
         if not self.redis_client:
             return {"status": "error", "message": "Redis not available"}
 
@@ -298,6 +306,8 @@ class KnowledgeBase:
 
         Performance: Fast (< 100ms) - uses optimized counting methods with async operations
         """
+        await self._ensure_redis_initialized()
+
         # Get real stats from Redis
         try:
             async_redis = await self._get_async_redis_client()
@@ -531,6 +541,7 @@ class KnowledgeBase:
         mode: str
     ) -> List[Dict[str, Any]]:
         """Internal search implementation with timeout protection"""
+        await self._ensure_redis_initialized()
 
         # If vector store is available, use semantic search
         if self.vector_store and self.vector_index and mode in ["vector", "auto"]:
@@ -644,6 +655,7 @@ class KnowledgeBase:
         doc_id: Optional[str]
     ) -> Dict[str, Any]:
         """Internal document addition with proper async handling"""
+        await self._ensure_redis_initialized()
 
         if metadata is None:
             metadata = {}

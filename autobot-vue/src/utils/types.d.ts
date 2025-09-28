@@ -20,8 +20,11 @@ declare module '@/utils/ApiClient.js' {
     post(endpoint: string, data?: any): Promise<Response>
     put(endpoint: string, data?: any): Promise<Response>
     delete(endpoint: string): Promise<Response>
-    uploadFile(file: File, options?: any): Promise<{ path: string; [key: string]: any }>
+    uploadFile(file: File, options?: { metadata?: any }): Promise<Response>
     createNewChat(): Promise<{ chatId: string; [key: string]: any }>
+    sendChatMessage(message: string, options?: any): Promise<any>
+    getChatMessages(chatId: string): Promise<any>
+    request(endpoint: string, options?: any): Promise<Response>
   }
 
   const apiClient: ApiClient
