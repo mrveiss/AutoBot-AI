@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 import yaml
 
-from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.constants.network_constants import NetworkConstants
 
 # Extract constants for easier use
 BACKEND_HOST_IP = NetworkConstants.MAIN_MACHINE_IP
