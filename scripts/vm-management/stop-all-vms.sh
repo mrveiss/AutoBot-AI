@@ -45,7 +45,21 @@ stop_frontend_vm() {
     ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF' || true
         # Stop frontend processes - only kill processes owned by current user
         pkill -u "$(whoami)" -f "npm.*dev" 2>/dev/null || echo "No npm dev processes to stop"
-        pkill -u "$(whoami)" -f "node.*vite" 2>/dev/null || echo "No Vite processes to stop"
+        pkill -u "$(whoami)" -f "npm run dev" 2>/dev/null || echo "No npm run dev processes to stop"
+        pkill -u "$(whoami)" -f "node.*vite" 2>/dev/null || echo "No Vite node processes to stop"
+        pkill -u "$(whoami)" -f "vite.*--host" 2>/dev/null || echo "No Vite dev server processes to stop"
+        pkill -u "$(whoami)" -f "/snap/node.*/bin/node.*vite" 2>/dev/null || echo "No snap node vite processes to stop"
+        pkill -u "$(whoami)" -f "esbuild" 2>/dev/null || echo "No esbuild processes to stop"
+        pkill -u "$(whoami)" -f "sh.*vite" 2>/dev/null || echo "No shell vite processes to stop"
+        pkill -u "$(whoami)" -f "bash.*npm run dev" 2>/dev/null || echo "No bash npm processes to stop"
+
+        # Kill any processes using port 5173
+        if lsof -ti:5173 2>/dev/null; then
+            lsof -ti:5173 | xargs -r kill 2>/dev/null || echo "Failed to kill processes on port 5173"
+        fi
+
+        # Also kill any remaining SSH sessions running frontend commands
+        pkill -u "$(whoami)" -f "ssh.*npm run dev" 2>/dev/null || echo "No SSH frontend sessions to stop"
 
         echo "Frontend service stopped"
 EOF

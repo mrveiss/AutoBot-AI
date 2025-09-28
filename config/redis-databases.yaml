@@ -35,6 +35,9 @@ redis_databases:
   backup:
     db: 10
     description: "Backup and recovery data"
+  codebase:
+    db: 11
+    description: "Codebase analytics and code analysis results"
 
 # Connection settings
 host: localhost
