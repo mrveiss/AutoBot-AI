@@ -88,17 +88,19 @@ async def enable_web_research():
     """Enable web research functionality"""
     try:
         from src.agents.web_research_integration import get_web_research_integration
-        from src.utils.config_manager import config_manager
-        
+        from src.unified_unified_config_manager import unified_unified_config_manager
+        from backend.services.config_service import ConfigService
+
         # Enable in integration
         integration = get_web_research_integration()
         success = await integration.enable_research(user_confirmed=True)
-        
+
         if success:
             # Update configuration
-            config_manager.set_nested("agents.research.enabled", True)
-            config_manager.set_nested("web_research.enabled", True)
-            config_manager.save_settings()
+            unified_unified_config_manager.set_nested("agents.research.enabled", True)
+            unified_unified_config_manager.set_nested("web_research.enabled", True)
+            unified_unified_config_manager.save_settings()
+            ConfigService.clear_cache()
             
             logger.info("Web research enabled by user")
             
@@ -132,17 +134,19 @@ async def disable_web_research():
     """Disable web research functionality"""
     try:
         from src.agents.web_research_integration import get_web_research_integration
-        from src.utils.config_manager import config_manager
-        
+        from src.unified_unified_config_manager import unified_unified_config_manager
+        from backend.services.config_service import ConfigService
+
         # Disable in integration
         integration = get_web_research_integration()
         success = await integration.disable_research()
-        
+
         if success:
             # Update configuration
-            config_manager.set_nested("agents.research.enabled", False)
-            config_manager.set_nested("web_research.enabled", False)
-            config_manager.save_settings()
+            unified_unified_config_manager.set_nested("agents.research.enabled", False)
+            unified_unified_config_manager.set_nested("web_research.enabled", False)
+            unified_unified_config_manager.save_settings()
+            ConfigService.clear_cache()
             
             logger.info("Web research disabled by user")
             
@@ -175,11 +179,11 @@ async def disable_web_research():
 async def get_research_settings():
     """Get current web research settings"""
     try:
-        from src.utils.config_manager import config_manager
+        from src.unified_unified_config_manager import unified_unified_config_manager
         
         # Get settings from config
-        research_config = config_manager.get_nested("agents.research", {})
-        web_research_config = config_manager.get_nested("web_research", {})
+        research_config = unified_config_manager.get_nested("agents.research", {})
+        web_research_config = unified_config_manager.get_nested("web_research", {})
         
         settings = {
             "enabled": research_config.get("enabled", False),
@@ -215,23 +219,25 @@ async def get_research_settings():
 async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
-        from src.utils.config_manager import config_manager
-        
+        from src.unified_config_manager import unified_config_manager
+        from backend.services.config_service import ConfigService
+
         # Update research agent settings
-        config_manager.set_nested("agents.research.enabled", settings.enabled)
-        config_manager.set_nested("agents.research.preferred_method", settings.preferred_method)
-        config_manager.set_nested("agents.research.max_results", settings.max_results)
-        config_manager.set_nested("agents.research.timeout_seconds", settings.timeout_seconds)
-        config_manager.set_nested("agents.research.rate_limit_requests", settings.rate_limit_requests)
-        config_manager.set_nested("agents.research.rate_limit_window", settings.rate_limit_window)
+        unified_config_manager.set_nested("agents.research.enabled", settings.enabled)
+        unified_config_manager.set_nested("agents.research.preferred_method", settings.preferred_method)
+        unified_config_manager.set_nested("agents.research.max_results", settings.max_results)
+        unified_config_manager.set_nested("agents.research.timeout_seconds", settings.timeout_seconds)
+        unified_config_manager.set_nested("agents.research.rate_limit_requests", settings.rate_limit_requests)
+        unified_config_manager.set_nested("agents.research.rate_limit_window", settings.rate_limit_window)
         
         # Update web research settings
-        config_manager.set_nested("web_research.enabled", settings.enabled)
-        config_manager.set_nested("web_research.require_user_confirmation", settings.require_user_confirmation)
-        config_manager.set_nested("web_research.auto_research_threshold", settings.auto_research_threshold)
+        unified_config_manager.set_nested("web_research.enabled", settings.enabled)
+        unified_config_manager.set_nested("web_research.require_user_confirmation", settings.require_user_confirmation)
+        unified_config_manager.set_nested("web_research.auto_research_threshold", settings.auto_research_threshold)
         
-        # Save configuration
-        config_manager.save_settings()
+        # Save configuration and clear cache
+        unified_config_manager.save_settings()
+        ConfigService.clear_cache()
         
         logger.info("Web research settings updated")
         

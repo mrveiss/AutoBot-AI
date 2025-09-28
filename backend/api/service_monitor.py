@@ -330,12 +330,28 @@ class ServiceMonitor:
             except Exception:
                 return {'error': 'System resource monitoring unavailable'}
 
+    def _get_service_check_command(self, vm_name: str) -> str:
+        """Get the appropriate service check command for each VM based on architecture"""
+        service_checks = {
+            'frontend': 'ps aux | grep -v grep | grep -c "vite\\|node.*vue\\|nginx" || echo "0"',
+            'redis': 'systemctl is-active redis-server || ps aux | grep -v grep | grep -c redis-server || echo "offline"',
+            'ai_stack': 'ps aux | grep -v grep | grep -c "python.*ai\\|ollama" || echo "0"',
+            'npu_worker': 'ps aux | grep -v grep | grep -c "npu\\|openvino" || echo "0"',
+            'browser_service': 'ps aux | grep -v grep | grep -c "playwright\\|chromium" || echo "0"'
+        }
+
+        # Return the specific check for this VM, or a generic process count
+        return service_checks.get(vm_name, 'ps aux | grep -v grep | wc -l')
+
     async def check_vm_ssh(self, vm_name: str, host: str) -> VMStatus:
         """Check VM connectivity via SSH and basic health"""
         try:
             start_time = time.time()
 
-            # SSH command to check basic health: hostname, uptime, and service status
+            # SSH command to check basic health: hostname, uptime, and service status based on VM type
+            # Different VMs have different expected services
+            service_cmd = self._get_service_check_command(vm_name)
+
             ssh_cmd = [
                 'ssh',
                 '-i', '/home/kali/.ssh/autobot_key',
@@ -343,7 +359,7 @@ class ServiceMonitor:
                 '-o', 'StrictHostKeyChecking=no',
                 '-o', 'BatchMode=yes',
                 f'autobot@{host}',
-                'hostname && uptime && systemctl --user list-units --state=active autobot-* --no-pager --no-legend'
+                f'hostname && uptime && {service_cmd}'
             ]
 
             result = await asyncio.create_subprocess_exec(
@@ -360,18 +376,41 @@ class ServiceMonitor:
                 hostname = output_lines[0] if len(output_lines) > 0 else "unknown"
                 uptime_line = output_lines[1] if len(output_lines) > 1 else ""
 
-                # Extract load average from uptime
+                # Extract load average from uptime (FIXED parsing)
                 load_avg = "unknown"
+                uptime_display = "unknown"
                 if "load average:" in uptime_line:
                     load_avg = uptime_line.split("load average:")[-1].strip()
+                    # Extract just the uptime part for display (before load average)
+                    uptime_part = uptime_line.split("load average:")[0].strip()
+                    # Remove the current time from the beginning
+                    if "up " in uptime_part:
+                        uptime_display = uptime_part.split("up ", 1)[1].strip()
+                        # Clean up extra info after the uptime (users, etc.)
+                        if "," in uptime_display and ("user" in uptime_display or "load" in uptime_display):
+                            uptime_display = uptime_display.split(",")[0].strip()
 
-                # Extract active services
+                # Extract service status (FIXED for correct VM architecture)
+                service_status = "unknown"
                 active_services = []
                 if len(output_lines) > 2:
-                    for line in output_lines[2:]:
-                        if line.strip() and 'autobot-' in line:
-                            service_name = line.split('.')[0].strip()
-                            active_services.append(service_name)
+                    service_result = output_lines[2].strip()
+                    # Parse service check result based on VM type
+                    if vm_name == 'redis':
+                        if service_result == 'active':
+                            active_services = ['redis-server']
+                            service_status = "Redis active"
+                        else:
+                            service_status = f"Redis: {service_result}"
+                    elif service_result.isdigit():
+                        service_count = int(service_result)
+                        if service_count > 0:
+                            active_services = [f'{vm_name}_services']
+                            service_status = f"{service_count} processes"
+                        else:
+                            service_status = "No expected services running"
+                    else:
+                        service_status = service_result
 
                 vm_icons = {
                     'frontend': 'fas fa-globe',
@@ -385,15 +424,17 @@ class ServiceMonitor:
                     name=vm_name.title().replace('_', ' '),
                     host=host,
                     status="online",
-                    message=f"Load: {load_avg}",
+                    message=f"Up: {uptime_display}",
                     response_time=response_time,
                     last_check=datetime.now(),
                     icon=vm_icons.get(vm_name, 'fas fa-server'),
                     services=active_services,
                     details={
                         'hostname': hostname,
-                        'uptime': uptime_line,
+                        'uptime': uptime_display,
+                        'uptime_raw': uptime_line,
                         'load_average': load_avg,
+                        'service_status': service_status,
                         'active_services_count': len(active_services)
                     }
                 )
@@ -448,18 +489,21 @@ class ServiceMonitor:
             # Add main machine status
             vm_results = []
 
-            # Main machine (backend host)
+            # Main machine (backend host) - FIXED: Only backend API + VNC Desktop, NO frontend
             main_host = vm_hosts.get('backend', '172.16.168.20')
             vm_results.append(VMStatus(
                 name="Main Machine (WSL)",
                 host=main_host,
                 status="online",
-                message="Backend running",
+                message="Backend API + VNC",
                 response_time=0,
                 last_check=datetime.now(),
                 icon='fas fa-desktop',
-                services=['autobot-backend'],
-                details={'role': 'Backend API + VNC Desktop'}
+                services=['backend-api', 'vnc-desktop'],  # FIXED: Correct services only
+                details={
+                    'role': 'Backend API (port 8001) + VNC Desktop (port 6080)',
+                    'note': 'Frontend runs on VM1, not here'
+                }
             ))
 
             # Check remote VMs concurrently
@@ -699,10 +743,10 @@ async def get_all_services():
         redis_port = os.environ.get('REDIS_PORT', '6379')
         
         services = {
-            "backend": {"status": "online", "url": "http://localhost:8001", "health": "✅"},
+            "backend": {"status": "online", "url": ServiceURLs.BACKEND_LOCAL, "health": "✅"},
             "redis": {"status": "checking", "url": f"redis://{redis_host}:{redis_port}", "health": "⏳"},
-            "ollama": {"status": "checking", "url": "http://localhost:11434", "health": "⏳"},
-            "frontend": {"status": "checking", "url": "http://localhost:5173", "health": "⏳"}
+            "ollama": {"status": "checking", "url": ServiceURLs.OLLAMA_LOCAL, "health": "⏳"},
+            "frontend": {"status": "checking", "url": ServiceURLs.FRONTEND_LOCAL, "health": "⏳"}
         }
         
         # Quick Redis check
@@ -719,8 +763,9 @@ async def get_all_services():
         # Quick Ollama check
         try:
             import aiohttp
+            from src.constants import NetworkConstants, ServiceURLs
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
-                async with session.get('http://localhost:11434/api/version') as response:
+                async with session.get(f'{ServiceURLs.OLLAMA_LOCAL}/api/version') as response:
                     if response.status == 200:
                         services["ollama"]["status"] = "online"
                         services["ollama"]["health"] = "✅"

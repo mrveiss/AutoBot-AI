@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.utils.connection_utils import ConnectionTester
+from backend.services.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -112,21 +113,21 @@ DEFAULT_AGENT_CONFIGS = {
 async def list_agents():
     """Get list of all available agents with their configurations"""
     try:
-        from src.config import config as global_config_manager
+        from src.unified_config_manager import unified_config_manager
 
-        llm_config = global_config_manager.get_llm_config()
+        llm_config = unified_config_manager.get_llm_config()
         provider_type = llm_config.get("provider_type", "local")
 
         agents = []
         for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
             # Get current model from config or use default
-            current_model = global_config_manager.get_nested(
+            current_model = unified_config_manager.get_nested(
                 f"agents.{agent_id}.model", config["default_model"]
             )
-            current_provider = global_config_manager.get_nested(
+            current_provider = unified_config_manager.get_nested(
                 f"agents.{agent_id}.provider", config["provider"]
             )
-            enabled = global_config_manager.get_nested(
+            enabled = unified_config_manager.get_nested(
                 f"agents.{agent_id}.enabled", config["enabled"]
             )
 
@@ -174,18 +175,18 @@ async def get_agent_config(agent_id: str):
         if agent_id not in DEFAULT_AGENT_CONFIGS:
             raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-        from src.config import config as global_config_manager
+        from src.unified_config_manager import unified_config_manager
 
         base_config = DEFAULT_AGENT_CONFIGS[agent_id]
 
         # Get current configuration
-        current_model = global_config_manager.get_nested(
+        current_model = unified_config_manager.get_nested(
             f"agents.{agent_id}.model", base_config["default_model"]
         )
-        current_provider = global_config_manager.get_nested(
+        current_provider = unified_config_manager.get_nested(
             f"agents.{agent_id}.provider", base_config["provider"]
         )
-        enabled = global_config_manager.get_nested(
+        enabled = unified_config_manager.get_nested(
             f"agents.{agent_id}.enabled", base_config["enabled"]
         )
 
@@ -231,7 +232,7 @@ async def update_agent_model(agent_id: str, update: AgentModelUpdate):
         if agent_id not in DEFAULT_AGENT_CONFIGS:
             raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-        from src.config import config as global_config_manager
+        from src.unified_config_manager import unified_config_manager
 
         # Validate the update request
         if update.agent_id != agent_id:
@@ -241,14 +242,15 @@ async def update_agent_model(agent_id: str, update: AgentModelUpdate):
             )
 
         # Update the configuration
-        global_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
+        unified_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
         if update.provider:
-            global_config_manager.set_nested(
+            unified_config_manager.set_nested(
                 f"agents.{agent_id}.provider", update.provider
             )
 
-        # Save the configuration
-        global_config_manager.save_settings()
+        # Save the configuration and clear cache
+        unified_config_manager.save_settings()
+        ConfigService.clear_cache()
 
         logger.info(
             f"Updated agent {agent_id} model to {update.model} "
@@ -290,10 +292,11 @@ async def enable_agent(agent_id: str):
         if agent_id not in DEFAULT_AGENT_CONFIGS:
             raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-        from src.config import config as global_config_manager
+        from src.unified_config_manager import unified_config_manager
 
-        global_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
-        global_config_manager.save_settings()
+        unified_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
+        unified_config_manager.save_settings()
+        ConfigService.clear_cache()
 
         logger.info(f"Enabled agent {agent_id}")
 
@@ -320,10 +323,11 @@ async def disable_agent(agent_id: str):
         if agent_id not in DEFAULT_AGENT_CONFIGS:
             raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-        from src.config import config as global_config_manager
+        from src.unified_config_manager import unified_config_manager
 
-        global_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
-        global_config_manager.save_settings()
+        unified_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
+        unified_config_manager.save_settings()
+        ConfigService.clear_cache()
 
         logger.info(f"Disabled agent {agent_id}")
 
@@ -352,10 +356,10 @@ async def check_agent_health(agent_id: str):
         if agent_id not in DEFAULT_AGENT_CONFIGS:
             raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-        from src.config import config as global_config_manager
+        from src.unified_config_manager import unified_config_manager
 
-        enabled = global_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
-        model = global_config_manager.get_nested(
+        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
+        model = unified_config_manager.get_nested(
             f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
         )
 
@@ -415,7 +419,7 @@ async def check_agent_health(agent_id: str):
 async def get_agents_overview():
     """Get overview of all agents' status for dashboard"""
     try:
-        from src.config import config as global_config_manager
+        from src.unified_config_manager import unified_config_manager
 
         total_agents = len(DEFAULT_AGENT_CONFIGS)
         enabled_agents = 0
@@ -424,10 +428,10 @@ async def get_agents_overview():
         agent_summary = []
 
         for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-            enabled = global_config_manager.get_nested(
+            enabled = unified_config_manager.get_nested(
                 f"agents.{agent_id}.enabled", config["enabled"]
             )
-            model = global_config_manager.get_nested(
+            model = unified_config_manager.get_nested(
                 f"agents.{agent_id}.model", config["default_model"]
             )
 

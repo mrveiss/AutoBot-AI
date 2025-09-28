@@ -30,10 +30,10 @@ class RouterConfig:
 
 class APIRegistry:
     """Central registry for all API endpoints and routers"""
-    
+
     def __init__(self):
         self.routers = self._initialize_routers()
-    
+
     def _initialize_routers(self) -> Dict[str, RouterConfig]:
         """Initialize all router configurations"""
         return {
@@ -45,13 +45,13 @@ class APIRegistry:
                 tags=["system", "health"],
                 description="System health, metrics, and information"
             ),
-            "async_chat": RouterConfig(
-                name="async_chat",
-                module_path="backend.api.async_chat",
-                prefix="/api/async_chat",
-                tags=["chat", "async"],
-                description="Async chat interface with dependency injection",
-                version="v2"
+            "chat_consolidated": RouterConfig(
+                name="chat_consolidated",
+                module_path="backend.api.chat_consolidated",
+                prefix="/api",
+                tags=["chat", "consolidated", "all"],
+                description="CONSOLIDATED chat router with ALL functionality from 5 routers - ZERO functionality loss",
+                version="v1.0"
             ),
             "settings": RouterConfig(
                 name="settings",
@@ -81,15 +81,10 @@ class APIRegistry:
                 tags=["developer", "debug", "config"],
                 description="Developer mode configuration and debugging utilities"
             ),
-            
-            # Chat and Communication
-            "chat": RouterConfig(
-                name="chat",
-                module_path="backend.api.chat",
-                prefix="/api/chat",
-                tags=["chat", "messaging"],
-                description="Chat interface and message handling"
-            ),
+
+            # Chat and Communication - NOW CONSOLIDATED
+            # OLD: Separate chat.py, async_chat.py, chat_unified.py, chat_improved.py, chat_knowledge.py
+            # NEW: All functionality consolidated into single router with ZERO loss
             "websockets": RouterConfig(
                 name="websockets",
                 module_path="backend.api.websockets",
@@ -97,7 +92,7 @@ class APIRegistry:
                 tags=["websockets", "realtime"],
                 description="WebSocket endpoints for real-time communication"
             ),
-            
+
             # Knowledge Management
             "knowledge": RouterConfig(
                 name="knowledge",
@@ -107,15 +102,8 @@ class APIRegistry:
                 status=RouterStatus.ENABLED,
                 description="Knowledge base operations and search"
             ),
-            "chat_knowledge": RouterConfig(
-                name="chat_knowledge",
-                module_path="backend.api.chat_knowledge",
-                prefix="/api/chat_knowledge",
-                tags=["knowledge", "chat"],
-                status=RouterStatus.LAZY_LOAD,
-                description="Chat-specific knowledge management"
-            ),
-            
+            # chat_knowledge functionality now included in consolidated chat router
+
             # Agent and AI
             "agent_config": RouterConfig(
                 name="agent_config",
@@ -139,7 +127,7 @@ class APIRegistry:
                 status=RouterStatus.LAZY_LOAD,
                 description="LLM integration and management"
             ),
-            
+
             # File and Content Management
             "files": RouterConfig(
                 name="files",
@@ -155,7 +143,7 @@ class APIRegistry:
                 tags=["templates"],
                 description="Template management and rendering"
             ),
-            
+
             # Security
             "secrets": RouterConfig(
                 name="secrets",
@@ -165,7 +153,7 @@ class APIRegistry:
                 requires_auth=True,
                 description="Secrets and credential management"
             ),
-            
+
             # Development and Automation
             "playwright": RouterConfig(
                 name="playwright",
@@ -198,7 +186,7 @@ class APIRegistry:
                 status=RouterStatus.DISABLED,  # Not in fast backend
                 description="Workflow automation and orchestration"
             ),
-            
+
             # Performance Optimization
             "batch": RouterConfig(
                 name="batch",
@@ -207,7 +195,7 @@ class APIRegistry:
                 tags=["batch", "optimization"],
                 description="Batch API endpoints for optimized initial loading"
             ),
-            
+
             # Monitoring and Analytics
             "service_monitor": RouterConfig(
                 name="service_monitor",
@@ -235,14 +223,6 @@ class APIRegistry:
             "monitoring": RouterConfig(
                 name="monitoring",
                 module_path="backend.api.monitoring",
-                prefix="/api/monitoring/advanced",
-                tags=["monitoring", "metrics"],
-                status=RouterStatus.DISABLED,  # Not in fast backend
-                description="Advanced system monitoring and analytics"
-            ),
-            "phase9_monitoring": RouterConfig(
-                name="phase9_monitoring",
-                module_path="backend.api.phase9_monitoring",
                 prefix="/api/monitoring/phase9",
                 tags=["monitoring", "phase9", "gpu", "npu", "performance"],
                 status=RouterStatus.ENABLED,
@@ -263,7 +243,7 @@ class APIRegistry:
                 status=RouterStatus.ENABLED,  # Enable for fast backend
                 description="Validation and testing dashboard"
             ),
-            
+
             # Intelligence and AI Agent
             "intelligent_agent": RouterConfig(
                 name="intelligent_agent",
@@ -273,7 +253,7 @@ class APIRegistry:
                 status=RouterStatus.LAZY_LOAD,  # Lazy load to avoid startup blocking
                 description="Intelligent agent system for goal processing"
             ),
-            
+
             # MCP Bridge for Knowledge Base
             "knowledge_mcp": RouterConfig(
                 name="knowledge_mcp",
@@ -283,7 +263,7 @@ class APIRegistry:
                 status=RouterStatus.ENABLED,
                 description="MCP bridge for LLM access to knowledge base via LlamaIndex"
             ),
-            
+
             # Research and Browser Automation
             "research_browser": RouterConfig(
                 name="research_browser",
@@ -293,7 +273,7 @@ class APIRegistry:
                 status=RouterStatus.ENABLED,
                 description="Browser automation for research tasks with user interaction support"
             ),
-            
+
             # Startup Status and Messages - DISABLED per user request to remove splash screen
             "startup": RouterConfig(
                 name="startup",
@@ -303,7 +283,7 @@ class APIRegistry:
                 status=RouterStatus.DISABLED,
                 description="Friendly startup messages and status updates for frontend"
             ),
-            
+
             # Hot Reload for Development
             "hot_reload": RouterConfig(
                 name="hot_reload",
@@ -314,25 +294,25 @@ class APIRegistry:
                 description="Hot reload functionality for chat workflow modules during development"
             ),
         }
-    
+
     def get_enabled_routers(self) -> Dict[str, RouterConfig]:
         """Get all enabled routers"""
         return {
             name: config for name, config in self.routers.items()
             if config.status in [RouterStatus.ENABLED, RouterStatus.LAZY_LOAD]
         }
-    
+
     def get_router_by_name(self, name: str) -> Optional[RouterConfig]:
         """Get router configuration by name"""
         return self.routers.get(name)
-    
+
     def get_routers_by_tag(self, tag: str) -> Dict[str, RouterConfig]:
         """Get all routers with specific tag"""
         return {
             name: config for name, config in self.routers.items()
             if tag in config.tags
         }
-    
+
     def get_endpoint_list(self) -> List[Dict]:
         """Get list of all endpoints for documentation"""
         endpoints = []
@@ -347,7 +327,7 @@ class APIRegistry:
                 "version": config.version
             })
         return endpoints
-    
+
     def validate_dependencies(self) -> Dict[str, List[str]]:
         """Validate router dependencies"""
         errors = {}

@@ -61,7 +61,7 @@ async def batch_load(batch_request: BatchRequest):
     Example request:
     {
         "requests": [
-            {"endpoint": "/api/chat/chats", "method": "GET"},
+            {"endpoint": "/api/chats", "method": "GET"},
             {"endpoint": "/api/system/health", "method": "GET"},
             {"endpoint": "/api/knowledge_base/stats", "method": "GET"}
         ]

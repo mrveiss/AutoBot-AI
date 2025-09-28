@@ -19,9 +19,35 @@ async def get_settings():
         raise HTTPException(status_code=500, detail=f"Error getting settings: {str(e)}")
 
 
+@router.get("/settings")
+async def get_settings_explicit():
+    """Get application settings - explicit /settings endpoint for frontend compatibility"""
+    try:
+        return ConfigService.get_full_config()
+    except Exception as e:
+        logger.error(f"Error getting settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting settings: {str(e)}")
+
+
 @router.post("/")
 async def save_settings(settings_data: dict):
     """Save application settings"""
+    try:
+        # Only save if there's actual data to save
+        if not settings_data:
+            logger.warning("Received empty settings data, skipping save")
+            return {"status": "skipped", "message": "No data to save"}
+
+        result = ConfigService.save_full_config(settings_data)
+        return result
+    except Exception as e:
+        logger.error(f"Error saving settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error saving settings: {str(e)}")
+
+
+@router.post("/settings")
+async def save_settings_explicit(settings_data: dict):
+    """Save application settings - explicit /settings endpoint for frontend compatibility"""
     try:
         # Only save if there's actual data to save
         if not settings_data:
@@ -91,10 +117,10 @@ async def clear_cache():
     """Clear application cache - includes config cache"""
     try:
         logger.info("Settings clear-cache endpoint called - clearing config cache")
-        
+
         # Clear the ConfigService cache to force reload of settings
         ConfigService.clear_cache()
-        
+
         return {
             "status": "success",
             "message": "Configuration cache cleared. Settings will be reloaded on next request.",

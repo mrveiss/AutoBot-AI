@@ -13,7 +13,8 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from src.config import config as global_config_manager
+from src.unified_config_manager import unified_config_manager
+from backend.services.config_service import ConfigService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ api_registry = APIRegistry()
 @router.get("/endpoints")
 async def get_api_endpoints():
     """Get all registered API endpoints (developer mode)"""
-    developer_mode = global_config_manager.get_nested("developer.enabled", False)
+    developer_mode = unified_config_manager.get_nested("developer.enabled", False)
 
     if not developer_mode:
         raise HTTPException(status_code=403, detail="Developer mode is not enabled")
@@ -94,7 +95,7 @@ async def get_api_endpoints():
 @router.get("/config")
 async def get_developer_config():
     """Get developer mode configuration"""
-    developer_config = global_config_manager.get_nested("developer", {})
+    developer_config = unified_config_manager.get_nested("developer", {})
     return {
         "enabled": developer_config.get("enabled", False),
         "enhanced_errors": developer_config.get("enhanced_errors", True),
@@ -107,12 +108,13 @@ async def get_developer_config():
 async def update_developer_config(config: dict):
     """Update developer mode configuration"""
     # Update the configuration
-    current_config = global_config_manager.get_nested("developer", {})
+    current_config = unified_config_manager.get_nested("developer", {})
     current_config.update(config)
 
     # Save to config file
-    global_config_manager.set_nested("developer", current_config)
-    global_config_manager.save_settings()
+    unified_config_manager.set_nested("developer", current_config)
+    unified_config_manager.save_settings()
+    ConfigService.clear_cache()
 
     logger.info(f"Developer configuration updated: {config}")
     return {"status": "success", "config": current_config}
@@ -121,16 +123,16 @@ async def update_developer_config(config: dict):
 @router.get("/system-info")
 async def get_system_info():
     """Get system information for debugging"""
-    developer_mode = global_config_manager.get_nested("developer.enabled", False)
+    developer_mode = unified_config_manager.get_nested("developer.enabled", False)
 
     if not developer_mode:
         raise HTTPException(status_code=403, detail="Developer mode is not enabled")
 
     return {
-        "config_loaded": bool(global_config_manager.to_dict()),
-        "backend_config": global_config_manager.get_backend_config(),
-        "redis_config": global_config_manager.get_redis_config(),
-        "llm_config": global_config_manager.get_nested("llm_config", {}),
+        "config_loaded": bool(unified_config_manager.to_dict()),
+        "backend_config": unified_config_manager.get_backend_config(),
+        "redis_config": unified_config_manager.get_redis_config(),
+        "llm_config": unified_config_manager.get_nested("llm_config", {}),
         "available_routers": api_registry.routers,
     }
 
@@ -138,8 +140,8 @@ async def get_system_info():
 # Custom exception handler for 404 errors with developer mode enhancements
 async def enhanced_404_handler(request: Request, exc: HTTPException):
     """Enhanced 404 handler that provides helpful suggestions in developer mode"""
-    developer_mode = global_config_manager.get_nested("developer.enabled", False)
-    enhanced_errors = global_config_manager.get_nested(
+    developer_mode = unified_config_manager.get_nested("developer.enabled", False)
+    enhanced_errors = unified_config_manager.get_nested(
         "developer.enhanced_errors", True
     )
 
@@ -174,8 +176,8 @@ async def enhanced_404_handler(request: Request, exc: HTTPException):
 # Custom exception handler for 405 errors (Method Not Allowed)
 async def enhanced_405_handler(request: Request, exc: HTTPException):
     """Enhanced 405 handler for developer mode"""
-    developer_mode = global_config_manager.get_nested("developer.enabled", False)
-    enhanced_errors = global_config_manager.get_nested(
+    developer_mode = unified_config_manager.get_nested("developer.enabled", False)
+    enhanced_errors = unified_config_manager.get_nested(
         "developer.enhanced_errors", True
     )
 

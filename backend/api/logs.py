@@ -32,7 +32,7 @@ CONTAINER_LOGS = {
     "npu-worker": "autobot-npu-worker"
 }
 
-@router.get("/sources")
+@router.get("/logs/sources")
 async def get_log_sources():
     """Get all available log sources (files + Docker containers)"""
     try:
@@ -87,7 +87,7 @@ async def get_log_sources():
         logger.error(f"Error getting log sources: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/recent")
+@router.get("/logs/recent")
 async def get_recent_logs(limit: int = 100):
     """Get recent log entries across all log files"""
     try:
@@ -127,7 +127,7 @@ async def get_recent_logs(limit: int = 100):
         }
 
 
-@router.get("/list")
+@router.get("/logs/list")
 async def list_logs() -> List[Dict[str, Any]]:
     """List all available log files (backward compatibility)"""
     try:
@@ -137,7 +137,7 @@ async def list_logs() -> List[Dict[str, Any]]:
         logger.error(f"Error listing logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/read/{filename}")
+@router.get("/logs/read/{filename}")
 async def read_log(
     filename: str,
     lines: int = Query(100, description="Number of lines to read"),
@@ -186,7 +186,7 @@ async def read_log(
         logger.error(f"Error reading log {filename}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/container/{service}")
+@router.get("/logs/container/{service}")
 async def read_container_logs(
     service: str,
     lines: int = Query(100, ge=1, le=10000, description="Number of lines to read"),
@@ -289,7 +289,7 @@ def parse_docker_log_line(line: str, service: str) -> Dict[str, Any]:
     
     return parsed
 
-@router.get("/unified")
+@router.get("/logs/unified")
 async def get_unified_logs(
     lines: int = Query(100, ge=1, le=1000, description="Total number of lines to return"),
     level: Optional[str] = Query(None, description="Filter by log level"),
@@ -388,7 +388,7 @@ def parse_file_log_line(line: str, source: str) -> Dict[str, Any]:
     
     return parsed
 
-@router.get("/stream/{filename}")
+@router.get("/logs/stream/{filename}")
 async def stream_log(filename: str):
     """Stream log file content"""
     try:
@@ -413,7 +413,7 @@ async def stream_log(filename: str):
         logger.error(f"Error streaming log {filename}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.websocket("/tail/{filename}")
+@router.websocket("/logs/tail/{filename}")
 async def tail_log(websocket: WebSocket, filename: str):
     """WebSocket endpoint to tail log file in real-time"""
     await websocket.accept()
@@ -460,7 +460,7 @@ async def tail_log(websocket: WebSocket, filename: str):
         except:
             pass
 
-@router.get("/search")
+@router.get("/logs/search")
 async def search_logs(
     query: str = Query(..., description="Search query"),
     filename: Optional[str] = Query(None, description="Specific file to search"),
@@ -521,7 +521,7 @@ async def search_logs(
         logger.error(f"Error searching logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/clear/{filename}")
+@router.delete("/logs/clear/{filename}")
 async def clear_log(filename: str):
     """Clear a log file (truncate to 0 bytes)"""
     try:

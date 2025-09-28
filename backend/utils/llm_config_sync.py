@@ -256,6 +256,12 @@ async def sync_llm_configuration() -> Dict[str, Any]:
     return await LLMConfigurationSynchronizer.full_synchronization()
 
 
+# Additional convenience function for backward compatibility
+async def sync_llm_config_async() -> Dict[str, Any]:
+    """Async function to synchronize LLM configuration with agents"""
+    return await LLMConfigurationSynchronizer.full_synchronization()
+
+
 if __name__ == "__main__":
     # Direct execution for testing/debugging
     import asyncio

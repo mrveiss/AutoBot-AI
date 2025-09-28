@@ -1344,7 +1344,7 @@ async def get_analytics_status():
 # ============================================================================
 
 @router.get("/monitoring/phase9/status")
-async def get_phase9_monitoring_status():
+async def get_monitoring_status():
     """Get Phase 9 monitoring status for dashboard"""
     try:
         collector = analytics_controller.metrics_collector
@@ -1581,7 +1581,7 @@ async def get_phase9_optimization_recommendations():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/monitoring/phase9/start")
-async def start_phase9_monitoring():
+async def start_monitoring():
     """Start Phase 9 monitoring"""
     try:
         # Start metrics collection
@@ -1602,7 +1602,7 @@ async def start_phase9_monitoring():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/monitoring/phase9/stop")
-async def stop_phase9_monitoring():
+async def stop_monitoring():
     """Stop Phase 9 monitoring"""
     try:
         # Stop metrics collection
