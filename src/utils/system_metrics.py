@@ -156,8 +156,18 @@ class SystemMetricsCollector:
                         # Special Redis health check
                         redis_client = await self._get_redis_client()
                         if redis_client:
-                            await redis_client.ping()
-                            health_value = 1.0
+                            # Handle both sync and async Redis clients
+                            try:
+                                if hasattr(redis_client, 'ping'):
+                                    ping_result = redis_client.ping()
+                                    if asyncio.iscoroutine(ping_result):
+                                        await ping_result
+                                    health_value = 1.0
+                                else:
+                                    health_value = 0.0
+                            except Exception as ping_error:
+                                self.logger.warning(f"Redis ping failed: {ping_error}")
+                                health_value = 0.0
                         else:
                             health_value = 0.0
                     else:
