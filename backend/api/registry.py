@@ -164,7 +164,7 @@ class APIRegistry:
             ),
             "terminal": RouterConfig(
                 name="terminal",
-                module_path="backend.api.terminal_consolidated",
+                module_path="backend.api.terminal",
                 prefix="/api/terminal",
                 tags=["terminal", "execution"],
                 status=RouterStatus.ENABLED,  # Enable for fast backend

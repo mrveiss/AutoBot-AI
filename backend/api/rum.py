@@ -55,18 +55,19 @@ class RumConfig(BaseModel):
 
 
 def setup_rum_logger():
-    """Set up dedicated RUM logger that writes to logs/rum.log"""
+    """Set up dedicated RUM logger using centralized path configuration"""
     rum_logger = logging.getLogger('rum')
     rum_logger.setLevel(getattr(logging, rum_config['log_level'].upper(), logging.INFO))
-    
-    # Create logs directory in proper location
-    from pathlib import Path
-    project_root = Path(__file__).parent.parent.parent
-    logs_dir = project_root / 'logs' / 'backend'
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create file handler for RUM logs
-    handler = logging.FileHandler(logs_dir / 'rum.log')
+
+    # Use centralized path management
+    from backend.utils.paths_manager import get_rum_log_path, ensure_log_directory
+
+    # Ensure logs directory exists
+    ensure_log_directory()
+
+    # Create file handler for RUM logs using centralized path
+    rum_log_path = get_rum_log_path()
+    handler = logging.FileHandler(rum_log_path)
     formatter = logging.Formatter(
         '%(asctime)s - RUM - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'

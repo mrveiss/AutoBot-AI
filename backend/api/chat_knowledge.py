@@ -119,8 +119,11 @@ class ChatKnowledgeManager:
         self.file_associations: Dict[str, List[ChatFileAssociation]] = {}
         self.pending_decisions: Dict[str, List[Dict[str, Any]]] = {}
 
-        # Initialize storage directory
-        self.storage_dir = "data/chat_knowledge"
+        # Initialize storage directory using centralized path management
+        from backend.utils.paths_manager import get_data_path, ensure_data_directory
+
+        ensure_data_directory()
+        self.storage_dir = str(get_data_path("chat_knowledge"))
         os.makedirs(self.storage_dir, exist_ok=True)
 
         logger.info("ChatKnowledgeManager initialized")

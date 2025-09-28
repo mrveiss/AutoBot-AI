@@ -99,9 +99,9 @@ echo ""
 echo -e "${CYAN}🔥 Starting Backend Coordinator...${NC}"
 
 # Kill any existing backend process
-if pgrep -f "uvicorn.*fast_app_factory_fix:app" > /dev/null; then
+if pgrep -f "python.*backend/main.py" > /dev/null; then
     echo "Stopping existing backend process..."
-    pkill -f "uvicorn.*fast_app_factory_fix:app"
+    pkill -f "python.*backend/main.py"
     sleep 2
 fi
 
@@ -113,13 +113,7 @@ echo "Starting FastAPI backend coordinator..."
 cd backend
 
 # Start backend in background with logging
-nohup uvicorn fast_app_factory_fix:app \
-    --host 0.0.0.0 \
-    --port 8001 \
-    --reload \
-    --log-level info \
-    --access-log \
-    > ../logs/backend-coordinator.log 2>&1 &
+nohup python main.py > ../logs/backend-coordinator.log 2>&1 &
 
 BACKEND_PID=$!
 echo "Backend coordinator started with PID: $BACKEND_PID"
@@ -158,6 +152,6 @@ echo ""
 echo -e "${CYAN}📋 Management Commands:${NC}"
 echo "  Health Check: bash scripts/distributed/check-health.sh"
 echo "  View Logs: tail -f logs/backend-coordinator.log"
-echo "  Stop Backend: pkill -f 'uvicorn.*fast_app_factory_fix:app'"
+echo "  Stop Backend: pkill -f 'python.*backend/main.py'"
 echo ""
 echo -e "${BLUE}Backend coordinator is now running in distributed mode!${NC}"

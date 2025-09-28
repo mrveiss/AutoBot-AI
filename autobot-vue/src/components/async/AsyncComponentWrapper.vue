@@ -32,7 +32,7 @@
   <!-- Custom error fallback for async loading failures -->
   <AsyncErrorFallback
     v-if="showAsyncError"
-    :error="asyncError"
+    :error="asyncError ?? undefined"
     :component-name="componentDisplayName"
     :retry-count="retryCount"
     :max-retries="maxRetries"
@@ -104,10 +104,10 @@ const rum = inject<RumAgent>('rum', {
   trackUserInteraction: () => {}
 })
 
-// Loading timer
+// Loading timer - use browser-compatible types instead of NodeJS
 let loadingStartTime = 0
-let loadingTimer: NodeJS.Timeout | null = null
-let progressTimer: NodeJS.Timeout | null = null
+let loadingTimer: ReturnType<typeof setInterval> | null = null
+let progressTimer: ReturnType<typeof setInterval> | null = null
 
 // Create async component with retry logic
 const asyncComponent = ref<Component | null>(null)
@@ -124,7 +124,10 @@ async function loadComponent(attempt = 1): Promise<void> {
 
     if (component) {
       asyncComponent.value = component.default || component
-      emit('loaded', asyncComponent.value)
+      // Fix emit type issue - ensure component is not null
+      if (asyncComponent.value) {
+        emit('loaded', asyncComponent.value)
+      }
 
       const loadTime = Date.now() - loadingStartTime
       console.log(`[AsyncWrapper] Successfully loaded ${props.componentName} in ${loadTime}ms`)
@@ -134,17 +137,19 @@ async function loadComponent(attempt = 1): Promise<void> {
       showAsyncError.value = false
       retryCount.value = 0
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`[AsyncWrapper] Failed to load ${props.componentName}:`, error)
 
-    asyncError.value = error
+    // Properly type the error
+    const typedError = error instanceof Error ? error : new Error(String(error))
+    asyncError.value = typedError
 
     // Track loading error
     rum.trackError('async_component_load_failed', {
       component: props.componentName,
       attempt,
-      message: error.message,
-      stack: error.stack
+      message: typedError.message,
+      stack: typedError.stack
     })
 
     if (attempt < props.maxRetries) {
@@ -162,7 +167,7 @@ async function loadComponent(attempt = 1): Promise<void> {
       // Max retries reached
       console.error(`[AsyncWrapper] Max retries reached for ${props.componentName}`)
       showAsyncError.value = true
-      emit('error', error)
+      emit('error', typedError)
     }
   } finally {
     stopLoadingTimer()

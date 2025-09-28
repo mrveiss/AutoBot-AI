@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from backend.api.simple_terminal_websocket import SimpleTerminalSession
+from backend.api.terminal import ConsolidatedTerminalWebSocket
 from src.enhanced_orchestrator import EnhancedOrchestrator
 
 # Import existing orchestrator and workflow components
@@ -128,7 +128,7 @@ class WorkflowAutomationManager:
 
     def __init__(self):
         self.active_workflows: Dict[str, ActiveWorkflow] = {}
-        self.terminal_sessions: Dict[str, SimpleTerminalSession] = {}
+        self.terminal_sessions: Dict[str, ConsolidatedTerminalWebSocket] = {}
         self.orchestrator = Orchestrator()
         self.enhanced_orchestrator = EnhancedOrchestrator()
 

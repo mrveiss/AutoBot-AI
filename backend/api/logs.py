@@ -91,7 +91,7 @@ async def get_log_sources():
 async def get_recent_logs(limit: int = 100):
     """Get recent log entries across all log files"""
     try:
-        log_dir = "/home/kali/Desktop/AutoBot/data/logs"
+        log_dir = "/home/kali/Desktop/AutoBot/logs"
         recent_entries = []
         
         # Get the most recent log file

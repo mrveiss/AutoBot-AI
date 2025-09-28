@@ -277,7 +277,7 @@ show_summary() {
     log "INFO" ""
     log "INFO" "Next Steps:"
     log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=/home/kali/Desktop/AutoBot/.env.hybrid"
-    log "INFO" "  2. Restart backend: python backend/fast_app_factory_fix.py"
+    log "INFO" "  2. Restart backend: python backend/main.py"
     log "INFO" "  3. Access frontend: http://172.16.168.21:5173"
     log "INFO" ""
     log "INFO" "Log file: $LOG_FILE"

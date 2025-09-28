@@ -29,7 +29,7 @@ if curl -s http://localhost:8001/api/health >/dev/null 2>&1; then
     echo -e "${GREEN}✅ Backend accessible via localhost:8001${NC}"
 else
     echo -e "${RED}❌ Backend not accessible via localhost:8001${NC}"
-    echo -e "${YELLOW}💡 Make sure backend is running with: python -m uvicorn backend.fast_app_factory_fix:app --host 0.0.0.0 --port 8001${NC}"
+    echo -e "${YELLOW}💡 Make sure backend is running with: python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001${NC}"
     exit 1
 fi
 

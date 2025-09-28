@@ -14,16 +14,16 @@ declare module '@/utils/ChatIdGenerator.js' {
   export function generateMessageId(): string
 }
 
-declare module '@/utils/ApiClient.ts' {
+declare module '@/utils/ApiClient.js' {
   interface ApiClient {
     get(endpoint: string): Promise<Response>
     post(endpoint: string, data?: any): Promise<Response>
     put(endpoint: string, data?: any): Promise<Response>
     delete(endpoint: string): Promise<Response>
-    uploadFile(file: File): Promise<{ path: string; [key: string]: any }>
+    uploadFile(file: File, options?: any): Promise<{ path: string; [key: string]: any }>
     createNewChat(): Promise<{ chatId: string; [key: string]: any }>
   }
-  
+
   const apiClient: ApiClient
   export default apiClient
 }

@@ -100,14 +100,22 @@ class SecretsManager:
     """Manages encrypted secrets with dual scope support"""
 
     def __init__(self):
-        self.secrets_file = "data/secrets.json"
-        self.key_file = "data/secrets.key"
-        self._ensure_directories()
+        # Use centralized path management
+        from backend.utils.paths_manager import get_data_path, ensure_data_directory
+
+        # Ensure data directory exists
+        ensure_data_directory()
+
+        # Get paths using centralized configuration
+        self.secrets_file = str(get_data_path("secrets.json"))
+        self.key_file = str(get_data_path("secrets.key"))
         self._initialize_encryption()
 
     def _ensure_directories(self):
-        """Ensure data directory exists"""
-        os.makedirs("data", exist_ok=True)
+        """Ensure data directory exists - now handled by centralized paths"""
+        # This method is kept for compatibility but functionality moved to centralized paths
+        from backend.utils.paths_manager import ensure_data_directory
+        ensure_data_directory()
 
     def _initialize_encryption(self):
         """Initialize or load encryption key"""

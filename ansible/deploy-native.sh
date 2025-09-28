@@ -291,7 +291,7 @@ show_summary() {
     log "INFO" ""
     log "INFO" "🚀 Next Steps:"
     log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=/home/kali/Desktop/AutoBot/.env.native"
-    log "INFO" "  2. Start backend on WSL: python backend/fast_app_factory_fix.py"
+    log "INFO" "  2. Start backend on WSL: python backend/main.py"
     log "INFO" "  3. Access AutoBot: http://172.16.168.21"
     log "INFO" ""
     log "INFO" "🎯 PRIMARY APP ACCESS: http://172.16.168.21"

@@ -150,14 +150,16 @@ const retry = async () => {
       await props.onRetry()
     }
 
-  } catch (retryError) {
-    console.error(`[AsyncErrorFallback] Retry failed for ${props.componentName}:`, retryError)
+  } catch (retryError: unknown) {
+    // Properly type the retry error
+    const typedRetryError = retryError instanceof Error ? retryError : new Error(String(retryError))
+    console.error(`[AsyncErrorFallback] Retry failed for ${props.componentName}:`, typedRetryError)
 
     if (rum) {
       rum.trackError('async_component_retry_failed', {
         component: props.componentName,
         originalError: props.error?.message,
-        retryError: retryError.message,
+        retryError: typedRetryError.message,
         retryCount: props.retryCount + 1
       })
     }

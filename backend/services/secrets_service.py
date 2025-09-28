@@ -26,7 +26,11 @@ class SecretsService:
     def __init__(self, db_path: str = None, encryption_key: Optional[str] = None):
         """Initialize the secrets service with encryption"""
         if db_path is None:
-            db_path = os.getenv("AUTOBOT_SECRETS_DB_PATH", "data/secrets.db")
+            # Use centralized path management for default path
+            from backend.utils.paths_manager import get_data_path, ensure_data_directory
+            ensure_data_directory()
+            db_path = str(get_data_path("secrets.db"))
+
         self.db_path = db_path
         self._ensure_db_directory()
 
