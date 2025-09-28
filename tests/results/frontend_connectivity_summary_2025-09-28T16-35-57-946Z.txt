@@ -1,0 +1,68 @@
+
+Frontend Connectivity Test Results
+==================================
+Timestamp: 2025-09-28T16:35:34.667Z
+Total Tests: 6
+Passed: 4
+Failed: 2
+
+Test Details:
+❌ Frontend Loads (11002ms) - page.goto: Timeout 10000ms exceeded.
+Call log:
+[2m  - navigating to "http://172.16.168.21:5173/", waiting until "networkidle"[22m
+
+✅ Backend Health Check (26ms)
+✅ Proxy Configuration (4252ms)
+✅ Chat Functionality (2296ms)
+❌ Settings API (5298ms) - Settings API failed: 500 http://172.16.168.21:5173/api/settings
+✅ ApiRepository Configuration (4ms)
+
+
+Errors Found:
+- api_error: undefined
+- console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+- console: 🚨🚨🚨 CRITICAL ISSUE: {type: error, severity: critical, timestamp: 2025-09-28T16:35:36.198Z, sessionId: rum_y4ts4fhs2_1759077335380, data: Object}
+- console: Failed to get chat list: Error: HTTP 500: Internal Server Error
+    at ChatRepository.request (http://172.16.168.21:5173/src/models/repositories/ApiRepository.ts:108:15)
+    at async ChatRepository.getChatList (http://172.16.168.21:5173/src/models/repositories/ChatRepository.ts:68:24)
+    at async Proxy.loadChatSessions (http://172.16.168.21:5173/src/models/controllers/ChatController.ts:229:24)
+    at async initializeChatInterface (http://172.16.168.21:5173/src/components/chat/ChatInterface.vue:253:13)
+    at async http://172.16.168.21:5173/src/components/chat/ChatInterface.vue:283:7
+- test_failure: page.goto: Timeout 10000ms exceeded.
+Call log:
+[2m  - navigating to "http://172.16.168.21:5173/", waiting until "networkidle"[22m
+
+- api_error: undefined
+- console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+- console: 🚨🚨🚨 CRITICAL ISSUE: {type: error, severity: critical, timestamp: 2025-09-28T16:35:46.708Z, sessionId: rum_j5jei5loi_1759077346311, data: Object}
+- console: Failed to get chat list: Error: HTTP 500: Internal Server Error
+    at ChatRepository.request (http://172.16.168.21:5173/src/models/repositories/ApiRepository.ts:108:15)
+    at async ChatRepository.getChatList (http://172.16.168.21:5173/src/models/repositories/ChatRepository.ts:68:24)
+    at async Proxy.loadChatSessions (http://172.16.168.21:5173/src/models/controllers/ChatController.ts:229:24)
+    at async initializeChatInterface (http://172.16.168.21:5173/src/components/chat/ChatInterface.vue:253:13)
+    at async http://172.16.168.21:5173/src/components/chat/ChatInterface.vue:283:7
+- api_error: undefined
+- console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+- console: 🚨🚨🚨 CRITICAL ISSUE: {type: error, severity: critical, timestamp: 2025-09-28T16:35:50.943Z, sessionId: rum_pbfp4bt75_1759077350567, data: Object}
+- console: Failed to get chat list: Error: HTTP 500: Internal Server Error
+    at ChatRepository.request (http://172.16.168.21:5173/src/models/repositories/ApiRepository.ts:108:15)
+    at async ChatRepository.getChatList (http://172.16.168.21:5173/src/models/repositories/ChatRepository.ts:68:24)
+    at async Proxy.loadChatSessions (http://172.16.168.21:5173/src/models/controllers/ChatController.ts:229:24)
+    at async initializeChatInterface (http://172.16.168.21:5173/src/components/chat/ChatInterface.vue:253:13)
+    at async http://172.16.168.21:5173/src/components/chat/ChatInterface.vue:283:7
+- api_error: undefined
+- console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+- console: 🚨🚨🚨 CRITICAL ISSUE: {type: error, severity: critical, timestamp: 2025-09-28T16:35:53.213Z, sessionId: rum_q06sc9g6b_1759077352837, data: Object}
+- console: Failed to get chat list: Error: HTTP 500: Internal Server Error
+    at ChatRepository.request (http://172.16.168.21:5173/src/models/repositories/ApiRepository.ts:108:15)
+    at async ChatRepository.getChatList (http://172.16.168.21:5173/src/models/repositories/ChatRepository.ts:68:24)
+    at async Proxy.loadChatSessions (http://172.16.168.21:5173/src/models/controllers/ChatController.ts:229:24)
+    at async initializeChatInterface (http://172.16.168.21:5173/src/components/chat/ChatInterface.vue:253:13)
+    at async http://172.16.168.21:5173/src/components/chat/ChatInterface.vue:283:7
+- api_error: undefined
+- console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+- console: Failed to load settings: AxiosError
+- test_failure: Settings API failed: 500 http://172.16.168.21:5173/api/settings
+
+
+Summary: 2 TESTS FAILED ❌
