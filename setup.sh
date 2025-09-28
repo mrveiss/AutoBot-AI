@@ -48,211 +48,101 @@ print_usage() {
     echo "  VM4 AI Stack:   172.16.168.24 - AI processing services"
     echo "  VM5 Browser:    172.16.168.25 - Web automation (Playwright)"
     echo ""
-    echo -e "${BLUE}Examples:${NC}"
-    echo "  $0                          # Complete distributed setup (development mode)"
-    echo "  $0 --development            # Development setup with Vite dev servers"
-    echo "  $0 --production             # Production setup with nginx and systemd services"
-    echo "  $0 initial --development    # Fresh development environment setup"
-    echo "  $0 vm-services --production # Deploy production services to VMs"
-    echo "  $0 distributed              # Same as above"
-    echo "  $0 backend-only             # Setup only WSL backend"
-    echo "  $0 ssh-keys --force         # Regenerate SSH keys"
-    echo "  $0 vm-services              # Install services on VMs"
-    echo "  $0 knowledge --force        # Force knowledge base re-setup"
+    echo -e "${CYAN}Examples:${NC}"
+    echo "  $0 initial                    # Complete distributed setup"
+    echo "  $0 distributed --development  # Development mode setup"
+    echo "  $0 backend-only --production  # Backend only production setup"
+    echo "  $0 ssh-keys                   # Generate SSH keys for VMs"
+    echo "  $0 knowledge                  # Setup knowledge base"
+    echo ""
+    exit 0
 }
 
-# Default options
-SETUP_TYPE="initial"
-DEPLOYMENT_MODE="distributed"
-ENVIRONMENT_MODE="development"  # development or production
-FORCE_SETUP=false
-SKIP_DEPS=false
-
-# VM Configuration
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
-declare -A VMS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
-)
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        initial|distributed|backend-only|agent|ssh-keys|vm-services|knowledge|desktop|repair)
-            SETUP_TYPE="$1"
-            shift
-            ;;
-        --distributed)
-            DEPLOYMENT_MODE="distributed"
-            shift
-            ;;
-        --backend-only)
-            DEPLOYMENT_MODE="backend-only"
-            shift
-            ;;
-        --development)
-            ENVIRONMENT_MODE="development"
-            shift
-            ;;
-        --production)
-            ENVIRONMENT_MODE="production"
-            shift
-            ;;
-        --force)
-            FORCE_SETUP=true
-            shift
-            ;;
-        --skip-deps)
-            SKIP_DEPS=true
-            shift
-            ;;
-        --help|-h)
-            print_usage
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            print_usage
-            exit 1
-            ;;
-    esac
-done
-
+# Logging functions
 log() {
-    echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
-}
-
-error() {
-    echo -e "${RED}[ERROR]${NC} $1" >&2
+    echo -e "${CYAN}[INFO]${NC} $1"
 }
 
 success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-warning() {
+warn() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-run_setup_script() {
-    local script_path="$1"
-    local description="$2"
-    
-    if [ -f "$script_path" ]; then
-        echo -e "${CYAN}🔧 $description...${NC}"
-        if [ "${script_path##*.}" = "py" ]; then
-            python3 "$script_path"
-        else
-            bash "$script_path"
-        fi
-    else
-        echo -e "${YELLOW}⚠️  Setup script not found: $script_path${NC}"
-        echo -e "${CYAN}ℹ️  You may need to create this script for distributed deployment${NC}"
-    fi
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
-setup_ssh_keys() {
-    log "Setting up SSH keys for VM connectivity..."
-    
-    # Generate SSH key if it doesn't exist
-    if [ ! -f "$SSH_KEY" ] || [ "$FORCE_SETUP" = true ]; then
-        log "Generating SSH key for VM access..."
-        ssh-keygen -t rsa -b 4096 -f "$SSH_KEY" -N "" -q
-        chmod 600 "$SSH_KEY"
-        chmod 644 "$SSH_KEY.pub"
-        success "SSH key generated: $SSH_KEY"
-    else
-        log "SSH key already exists: $SSH_KEY"
-    fi
-    
-    # Display public key for manual distribution
-    echo ""
-    echo -e "${YELLOW}📋 MANUAL STEP REQUIRED:${NC}"
-    echo -e "${CYAN}Copy this public key to each VM's ~/.ssh/authorized_keys file:${NC}"
-    echo ""
-    echo -e "${BLUE}$(cat "$SSH_KEY.pub")${NC}"
-    echo ""
-    echo -e "${YELLOW}For each VM (172.16.168.21-25), run:${NC}"
-    echo -e "${CYAN}  1. ssh autobot@VM_IP${NC}"
-    echo -e "${CYAN}  2. mkdir -p ~/.ssh${NC}"
-    echo -e "${CYAN}  3. echo 'PUBLIC_KEY_ABOVE' >> ~/.ssh/authorized_keys${NC}"
-    echo -e "${CYAN}  4. chmod 600 ~/.ssh/authorized_keys${NC}"
-    echo -e "${CYAN}  5. chmod 700 ~/.ssh${NC}"
-    echo ""
-    
-    # Test connectivity
-    log "Testing VM connectivity..."
-    local connectivity_success=0
-    local total_vms=${#VMS[@]}
-    
-    for vm_name in "${!VMS[@]}"; do
-        vm_ip=${VMS[$vm_name]}
-        echo -n "  Testing $vm_name ($vm_ip)... "
-        
-        if timeout 10 ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'Connection successful'" >/dev/null 2>&1; then
-            echo -e "${GREEN}✅ Connected${NC}"
-            ((connectivity_success++))
-        else
-            echo -e "${RED}❌ Failed${NC}"
-            echo -e "${YELLOW}    Ensure VM is running and SSH key is properly installed${NC}"
-        fi
-    done
-    
-    if [ $connectivity_success -eq $total_vms ]; then
-        success "All VMs are accessible via SSH"
-    else
-        warning "$connectivity_success/$total_vms VMs are accessible"
-        echo -e "${YELLOW}Please configure remaining VMs manually${NC}"
-    fi
-}
-
-setup_backend_dependencies() {
-    log "Setting up backend dependencies (WSL main machine)..."
-    
-    # Check if we're on WSL/Linux
-    if [[ ! -f /etc/os-release ]]; then
-        error "This setup is designed for Linux/WSL environments"
+# Check if we're running in the correct directory
+check_autobot_directory() {
+    if [ ! -f "config/config.yaml.template" ] || [ ! -d "backend" ] || [ ! -d "autobot-vue" ]; then
+        error "Please run this script from the AutoBot root directory"
+        error "Required files: config/config.yaml.template, backend/, autobot-vue/"
         exit 1
     fi
-    
-    # Install system dependencies
-    if [ "$SKIP_DEPS" = false ]; then
-        log "Installing system dependencies..."
-        
-        # Update package list
-        sudo apt-get update -qq
-        
-        # Install essential packages
-        sudo apt-get install -y \
-            python3 \
-            python3-pip \
-            python3-venv \
-            curl \
-            wget \
-            git \
-            ssh \
-            redis-tools \
-            build-essential \
-            pkg-config \
-            libssl-dev \
-            libffi-dev \
-            nodejs \
-            npm
-        
-        success "System dependencies installed"
+}
+
+# Detect OS and distribution
+detect_os() {
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if grep -qi microsoft /proc/version 2>/dev/null; then
+            OS="wsl"
+            DISTRO=$(lsb_release -si 2>/dev/null || echo "Unknown")
+        else
+            OS="linux"
+            DISTRO=$(lsb_release -si 2>/dev/null || echo "Unknown")
+        fi
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        OS="macos"
+        DISTRO="macOS"
+    else
+        OS="unknown"
+        DISTRO="Unknown"
     fi
-    
-    # Setup Python virtual environment
+
+    log "Detected OS: $OS ($DISTRO)"
+}
+
+# Check system requirements
+check_requirements() {
+    log "Checking system requirements..."
+
+    # Check Python
+    if ! command -v python3 &> /dev/null; then
+        error "Python 3 is not installed. Please install Python 3.8 or later."
+        exit 1
+    fi
+
+    # Check Node.js for frontend builds
+    if ! command -v node &> /dev/null; then
+        warn "Node.js not found. Frontend builds may not work."
+        warn "Please install Node.js 16+ for frontend development."
+    fi
+
+    # Check available memory and disk space
+    if command -v free &> /dev/null; then
+        MEMORY_MB=$(free -m | awk 'NR==2{print $2}')
+        if [ "$MEMORY_MB" -lt 4096 ]; then
+            warn "System has less than 4GB RAM. Performance may be affected."
+        fi
+    fi
+
+    success "System requirements check completed"
+}
+
+# Setup Python virtual environment and dependencies
+setup_python_environment() {
+    log "Setting up Python environment..."
+
+    # Create virtual environment if it doesn't exist or if forced
     if [ ! -d "venv" ] || [ "$FORCE_SETUP" = true ]; then
         log "Creating Python virtual environment..."
         python3 -m venv venv
         source venv/bin/activate
         pip install --upgrade pip
-        
+
         # Install Python dependencies from config/requirements.txt
         if [ -f "config/requirements.txt" ]; then
             log "Installing AutoBot Python dependencies..."
@@ -270,151 +160,116 @@ setup_backend_dependencies() {
             pip install llama-index llama-index-llms-ollama llama-index-embeddings-ollama
             pip install playwright>=1.40.0 selenium>=4.15.0
         fi
-        
+
+        # Install voice processing dependencies (optional)
+        if [ -f "config/requirements-voice.txt" ]; then
+            log "Installing voice processing dependencies..."
+            # Install voice dependencies with fallback handling
+            pip install speechrecognition==3.10.0 pydub==0.25.1 gtts==2.3.1 pyttsx3 || warn "Some voice dependencies failed to install - voice features may be limited"
+        fi
+
         success "Python environment configured"
     else
         log "Python virtual environment already exists"
     fi
-    
+
     # Setup Node.js dependencies for frontend (if present)
-    if [ -d "autobot-vue" ]; then
-        log "Installing frontend dependencies..."
+    if [ -d "autobot-vue" ] && command -v npm &> /dev/null; then
+        log "Setting up Node.js dependencies for Vue frontend..."
         cd autobot-vue
-        npm install
-        cd ..
-        success "Frontend dependencies installed"
-    fi
-    
-    # Create necessary directories
-    mkdir -p logs data config backup
-    
-    success "Backend dependencies setup completed"
-}
-
-install_vm_services() {
-    log "Installing services on distributed VMs..."
-    
-    if [ ! -f "$SSH_KEY" ]; then
-        error "SSH key not found. Run: bash setup.sh ssh-keys"
-        exit 1
-    fi
-    
-    # Frontend VM (172.16.168.21) - Environment-specific setup
-    if [ "$ENVIRONMENT_MODE" = "development" ]; then
-        log "Setting up Frontend VM (172.16.168.21) for DEVELOPMENT mode..."
-        ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF'
-            # Update system
-            sudo apt-get update -qq
-            sudo apt-get install -y nodejs npm git curl
-
-            # Create working directory for development
-            mkdir -p /home/autobot/autobot-vue
-
-            echo "Frontend VM prepared for development mode"
-            echo "- Code will be synced from main machine"
-            echo "- Use './scripts/utilities/sync-frontend.sh' to deploy code"
-            echo "- Start dev server: ssh autobot@172.16.168.21 'cd autobot-vue && npm run dev -- --host 0.0.0.0 --port 5173'"
-            echo "- Access: http://172.16.168.21:5173"
-EOF
-    elif [ "$ENVIRONMENT_MODE" = "production" ]; then
-        log "Setting up Frontend VM (172.16.168.21) for PRODUCTION mode..."
-        ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF'
-            # Update system
-            sudo apt-get update -qq
-            sudo apt-get install -y nodejs npm git curl nginx
-
-            # Create service directories
-            sudo mkdir -p /opt/autobot/frontend
-            sudo chown autobot:autobot /opt/autobot/frontend
-
-            # Create nginx configuration for production
-            sudo tee /etc/nginx/sites-available/autobot-frontend > /dev/null << 'NGINX_EOF'
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-
-    server_name autobot-frontend;
-    root /opt/autobot/frontend/dist;
-    index index.html;
-
-    # Frontend static files
-    location / {
-        try_files $uri $uri/ /index.html;
-        expires 1d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # API proxy to backend
-    location /api/ {
-        proxy_pass http://172.16.168.20:8001/api/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_timeout 30s;
-    }
-
-    # WebSocket proxy
-    location /ws/ {
-        proxy_pass http://172.16.168.20:8001/ws/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # Gzip compression
-    gzip on;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
-}
-NGINX_EOF
-
-            # Enable nginx site
-            sudo ln -sf /etc/nginx/sites-available/autobot-frontend /etc/nginx/sites-enabled/
-            sudo rm -f /etc/nginx/sites-enabled/default
-
-            # Test nginx configuration
-            sudo nginx -t
-
-            echo "Frontend VM prepared for production mode"
-            echo "- Code will be deployed to /opt/autobot/frontend/"
-            echo "- Use ansible playbook for production deployment"
-            echo "- Nginx configured to serve static files and proxy API calls"
-            echo "- Access: http://172.16.168.21"
-EOF
-    fi
-    
-    # Redis VM (172.16.168.23)
-    log "Setting up Redis VM (172.16.168.23)..."
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.23" << 'EOF'
-        # Update system and install basic tools
-        sudo apt-get update -qq
-        sudo apt-get install -y curl wget netcat-openbsd
-        
-        echo "Redis VM setup completed"
-EOF
-    
-    # NPU Worker VM (172.16.168.22)
-    log "Setting up NPU Worker VM (172.16.168.22)..."
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.22" << 'EOF'
-        # Update system
-        sudo apt-get update -qq
-        sudo apt-get install -y python3 python3-pip python3-venv git curl build-essential \
-                                nodejs npm \
-                                intel-opencl-icd \
-                                ocl-icd-opencl-dev \
-                                pkg-config
-
-        # Create working directories
-        mkdir -p /home/autobot/{autobot-npu-worker,venv,logs}
-
-        # Setup Python environment for NPU worker
-        cd /home/autobot
-        if [ ! -d "venv" ]; then
-            python3 -m venv venv
+        if [ ! -d "node_modules" ] || [ "$FORCE_SETUP" = true ]; then
+            npm install
+            success "Node.js dependencies installed"
+        else
+            log "Node.js dependencies already installed"
         fi
-        source venv/bin/activate
+        cd ..
+    fi
+}
+
+# Generate SSH keys for VM connectivity
+generate_ssh_keys() {
+    log "Generating SSH keys for VM connectivity..."
+
+    SSH_KEY_PATH="$HOME/.ssh/autobot_key"
+
+    if [ ! -f "$SSH_KEY_PATH" ] || [ "$FORCE_SETUP" = true ]; then
+        log "Creating SSH key pair..."
+        ssh-keygen -t rsa -b 4096 -f "$SSH_KEY_PATH" -N "" -C "autobot-vm-access"
+        chmod 600 "$SSH_KEY_PATH"
+        chmod 644 "$SSH_KEY_PATH.pub"
+        success "SSH keys generated: $SSH_KEY_PATH"
+
+        # Display public key for VM setup
+        echo -e "\n${YELLOW}Public key for VM setup:${NC}"
+        cat "$SSH_KEY_PATH.pub"
+        echo ""
+        echo -e "${CYAN}Copy this public key to ~/.ssh/authorized_keys on all VMs${NC}"
+    else
+        log "SSH keys already exist"
+        success "Using existing SSH keys: $SSH_KEY_PATH"
+    fi
+}
+
+# Setup configuration files
+setup_configuration() {
+    log "Setting up configuration files..."
+
+    # Create config.yaml from template if it doesn't exist
+    if [ ! -f "config/config.yaml" ]; then
+        log "Creating config.yaml from template..."
+        cp config/config.yaml.template config/config.yaml
+
+        # Enable voice interface by default
+        if command -v sed &> /dev/null; then
+            sed -i 's/enabled: false/enabled: true/' config/config.yaml || warn "Could not enable voice interface in config"
+        fi
+
+        success "Configuration file created"
+    else
+        log "Configuration file already exists"
+    fi
+
+    # Create required directories
+    log "Creating required directories..."
+    mkdir -p data/chats data/knowledge logs temp reports analysis models outputs
+    mkdir -p logs/ai-ml analysis/ai-ml outputs/ai-ml
+
+    # Setup .env file for environment variables
+    if [ ! -f ".env" ]; then
+        log "Creating .env file..."
+        cat > .env << EOF
+# AutoBot Environment Configuration
+NODE_ENV=development
+BACKEND_URL=http://172.16.168.20:8001
+FRONTEND_URL=http://172.16.168.21:5173
+REDIS_URL=redis://172.16.168.23:6379
+NPU_WORKER_URL=http://172.16.168.22:8081
+AI_STACK_URL=http://172.16.168.24:8080
+BROWSER_VM_URL=http://172.16.168.25:3000
+
+# Security
+SECRET_KEY=your-secret-key-here
+
+# Voice Interface
+VOICE_ENABLED=true
+EOF
+        success ".env file created"
+    else
+        log ".env file already exists"
+    fi
+}
+
+# Setup NPU Worker (VM2)
+setup_npu_worker() {
+    log "Setting up NPU Worker environment..."
+
+    # Create NPU-specific requirements and install
+    if command -v pip &> /dev/null; then
+        log "Installing NPU dependencies..."
+        # Activate virtual environment if it exists
+        [ -f "venv/bin/activate" ] && source venv/bin/activate
+
         pip install --upgrade pip
 
         # Install NPU-specific dependencies
@@ -423,29 +278,25 @@ EOF
         pip install fastapi uvicorn aiohttp requests pyyaml
         pip install psutil numpy opencv-python pillow
 
-        echo "NPU Worker VM prepared - code will be synced from main machine"
-        echo "- OpenVINO and NPU drivers installed"
-        echo "- Python environment ready for AI acceleration"
-EOF
-    
-    # AI Stack VM (172.16.168.24)
-    log "Setting up AI Stack VM (172.16.168.24)..."
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.24" << 'EOF'
-        # Update system
-        sudo apt-get update -qq
-        sudo apt-get install -y python3 python3-pip python3-venv git curl \
-                                build-essential \
-                                wget gpg
+        success "NPU Worker dependencies installed"
+    else
+        warn "pip not available, skipping NPU dependency installation"
+    fi
 
-        # Create working directories
-        mkdir -p /home/autobot/{backend,venv,logs,models}
+    # Setup NPU model directory
+    mkdir -p models/npu models/onnx models/openvino
 
-        # Setup Python environment for AI processing
-        cd /home/autobot
-        if [ ! -d "venv" ]; then
-            python3 -m venv venv
-        fi
-        source venv/bin/activate
+    log "NPU Worker setup completed"
+}
+
+# Setup AI Stack (VM4)
+setup_ai_stack() {
+    log "Setting up AI Stack environment..."
+
+    if command -v pip &> /dev/null; then
+        log "Installing AI/ML dependencies..."
+        [ -f "venv/bin/activate" ] && source venv/bin/activate
+
         pip install --upgrade pip
 
         # Install AI/ML dependencies from AutoBot requirements
@@ -457,203 +308,236 @@ EOF
         pip install llama-index llama-index-llms-ollama llama-index-embeddings-ollama
         pip install langchain langchain-community langchain-experimental
 
-        # Install Ollama for local LLM serving
-        curl -fsSL https://ollama.ai/install.sh | sh
+        success "AI Stack dependencies installed"
+    else
+        warn "pip not available, skipping AI dependency installation"
+    fi
 
+    # Setup AI model directories
+    mkdir -p models/llm models/embeddings models/vision
 
-        echo "AI Stack VM prepared - code will be synced from main machine"
-        echo "- Ollama LLM server installed"
-        echo "- AI/ML Python environment ready"
-EOF
-    
-    # Browser VM (172.16.168.25)
-    log "Setting up Browser VM (172.16.168.25)..."
-    ssh -i "$SSH_KEY" "$SSH_USER@172.16.168.25" << 'EOF'
-        # Update system
-        sudo apt-get update -qq
-        sudo apt-get install -y python3 python3-pip python3-venv nodejs npm git curl \
-                                chromium-browser firefox-esr xvfb \
-                                libnss3-dev libatk-bridge2.0-dev libdrm2 libxkbcommon0 \
-                                libgtk-3-dev libx11-xcb1
+    log "AI Stack setup completed"
+}
 
-        # Create working directories
-        mkdir -p /home/autobot/{browser-automation,venv,logs}
+# Setup Browser VM (VM5)
+setup_browser_vm() {
+    log "Setting up Browser VM environment..."
 
-        # Setup Python environment
-        cd /home/autobot
-        if [ ! -d "venv" ]; then
-            python3 -m venv venv
-        fi
-        source venv/bin/activate
+    if command -v pip &> /dev/null; then
+        log "Installing browser automation dependencies..."
+        [ -f "venv/bin/activate" ] && source venv/bin/activate
+
         pip install --upgrade pip
 
-        # Install Python web automation dependencies
+        # Install browser automation dependencies
         pip install playwright>=1.40.0 selenium>=4.15.0
         pip install fastapi>=0.115.0 uvicorn>=0.30.0
         pip install httpx>=0.25.0 requests>=2.32.4
         pip install beautifulsoup4>=4.12.0 newspaper3k>=0.2.8
 
-        # Install Playwright browsers and dependencies
-        playwright install
-        playwright install-deps
+        # Install Playwright browsers
+        if command -v playwright &> /dev/null; then
+            log "Installing Playwright browsers..."
+            playwright install --with-deps
+        fi
 
-        # Install Node.js Playwright globally for CLI access
-        npm install -g playwright@^1.40.0
-
-        # Verify Playwright installation
-        playwright --version
-
-        echo "Browser VM prepared - code will be synced from main machine"
-        echo "- Playwright and browsers installed"
-        echo "- Python web automation environment ready"
-        echo "- Chromium, Firefox available for automation"
-EOF
-    
-    success "VM services installation completed with proper AutoBot dependencies"
-    echo ""
-    echo -e "${YELLOW}📦 Dependencies Installed:${NC}"
-    echo -e "${CYAN}  • NPU Worker: OpenVINO, PyTorch, Transformers${NC}"
-    echo -e "${CYAN}  • AI Stack: Ollama, ChromaDB, LlamaIndex, LangChain${NC}"
-    echo -e "${CYAN}  • Browser: Playwright, Selenium, Web automation${NC}"
-    echo -e "${CYAN}  • Redis: Redis Stack server active${NC}"
-    echo -e "${CYAN}  • Frontend: Node.js 20+, Vue 3, Vite dev server${NC}"
-}
-
-setup_vm_networking() {
-    log "Configuring VM networking and firewall rules..."
-    
-    # This is a placeholder for network configuration
-    # In a real setup, you'd configure:
-    # - Firewall rules to allow communication between VMs
-    # - DNS resolution for VM hostnames
-    # - Load balancing if needed
-    # - SSL/TLS certificates
-    
-    warning "Network configuration is environment-specific"
-    echo -e "${CYAN}Please ensure the following network configuration:${NC}"
-    echo -e "${BLUE}  1. VMs can communicate with each other on specified ports${NC}"
-    echo -e "${BLUE}  2. Firewall rules allow required service ports${NC}"
-    echo -e "${BLUE}  3. DNS resolution works for VM IP addresses${NC}"
-    echo -e "${BLUE}  4. SSL/TLS certificates are configured if needed${NC}"
-    
-    success "Network configuration guidelines provided"
-}
-
-run_distributed_setup() {
-    echo -e "${GREEN}🚀 AutoBot Distributed VM Setup${NC}"
-    echo -e "${BLUE}======================================${NC}"
-    echo ""
-    
-    log "Starting distributed VM setup..."
-    log "Architecture: 6-VM distributed system"
-    echo ""
-    
-    # Step 1: SSH Keys
-    setup_ssh_keys
-    echo ""
-    
-    # Step 2: Backend Dependencies
-    setup_backend_dependencies
-    echo ""
-    
-    # Step 3: VM Services
-    install_vm_services
-    echo ""
-    
-    # Step 4: Network Configuration
-    setup_vm_networking
-    echo ""
-    
-    # Step 5: Knowledge Base (if available)
-    run_setup_script "scripts/setup/knowledge/fresh_kb_setup.py" "Setting up knowledge base"
-    
-    # Step 6: VNC Desktop (optional)
-    run_setup_script "scripts/setup/install-vnc-headless.sh" "Setting up VNC desktop environment"
-    
-    success "Distributed VM setup completed!"
-    echo ""
-    echo -e "${BLUE}📋 Next Steps:${NC}"
-    echo -e "${CYAN}  1. Verify all VMs are running: bash run_autobot.sh --status${NC}"
-    echo -e "${CYAN}  2. Start backend: bash run_autobot.sh --dev${NC}"
-
-    if [ "$ENVIRONMENT_MODE" = "development" ]; then
-        echo -e "${CYAN}  3. Sync frontend code: ./scripts/utilities/sync-frontend.sh${NC}"
-        echo -e "${CYAN}  4. Start frontend dev server: ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 'cd autobot-vue && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
-        echo -e "${CYAN}  5. Access frontend: http://172.16.168.21:5173${NC}"
-        echo -e "${YELLOW}  📝 Development Mode: Hot reload enabled, Vite dev server running${NC}"
-    elif [ "$ENVIRONMENT_MODE" = "production" ]; then
-        echo -e "${CYAN}  3. Deploy frontend: ansible-playbook ansible/playbooks/deploy-native-services.yml --tags frontend${NC}"
-        echo -e "${CYAN}  4. Start nginx: ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 'sudo systemctl start nginx'${NC}"
-        echo -e "${CYAN}  5. Access frontend: http://172.16.168.21${NC}"
-        echo -e "${YELLOW}  📝 Production Mode: Static files served by nginx, optimized builds${NC}"
+        success "Browser VM dependencies installed"
+    else
+        warn "pip not available, skipping browser dependency installation"
     fi
+
+    log "Browser VM setup completed"
+}
+
+# Setup VNC Desktop environment
+setup_desktop() {
+    log "Setting up VNC desktop environment..."
+
+    if [ "$OS" = "linux" ] || [ "$OS" = "wsl" ]; then
+        # Create VNC startup script
+        cat > scripts/start_vnc.sh << 'EOF'
+#!/bin/bash
+# Start VNC server for AutoBot desktop access
+
+# Kill any existing VNC servers
+vncserver -kill :1 2>/dev/null || true
+
+# Start new VNC server
+vncserver :1 -geometry 1920x1080 -depth 24
+
+echo "VNC server started on :1 (port 5901)"
+echo "Connect using VNC viewer to: localhost:5901"
+EOF
+        chmod +x scripts/start_vnc.sh
+
+        success "VNC desktop setup completed"
+    else
+        log "VNC desktop setup skipped (not applicable for this OS)"
+    fi
+}
+
+# Setup knowledge base
+setup_knowledge_base() {
+    log "Setting up knowledge base..."
+
+    # Create knowledge base directories
+    mkdir -p data/knowledge_base/documents data/knowledge_base/embeddings
+    mkdir -p data/chromadb
+
+    # Initialize knowledge base if Python is available
+    if [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
+
+        if [ -f "scripts/populate_kb_chromadb.py" ]; then
+            log "Initializing knowledge base with sample data..."
+            python scripts/populate_kb_chromadb.py || warn "Knowledge base initialization failed"
+        fi
+    fi
+
+    success "Knowledge base setup completed"
+}
+
+# Repair existing installation
+repair_installation() {
+    log "Repairing AutoBot installation..."
+
+    # Re-run key setup steps with force
+    FORCE_SETUP=true
+
+    setup_python_environment
+    setup_configuration
+
+    # Reinstall requirements
+    if [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
+
+        if [ -f "config/requirements.txt" ]; then
+            pip install -r config/requirements.txt --force-reinstall
+        fi
+
+        if [ -f "config/requirements-voice.txt" ]; then
+            pip install speechrecognition==3.10.0 pydub==0.25.1 gtts==2.3.1 pyttsx3 --force-reinstall || warn "Voice dependencies repair incomplete"
+        fi
+    fi
+
+    success "Installation repair completed"
+}
+
+# Main setup orchestration
+main() {
+    echo -e "${GREEN}============================================${NC}"
+    echo -e "${GREEN}        AutoBot Distributed Setup        ${NC}"
+    echo -e "${GREEN}============================================${NC}"
+    echo ""
+
+    # Parse command line arguments
+    SETUP_TYPE="initial"
+    FORCE_SETUP=false
+    SKIP_DEPS=false
+    DEVELOPMENT_MODE=false
+    PRODUCTION_MODE=false
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            initial|distributed|backend-only|agent|ssh-keys|vm-services|knowledge|desktop|repair)
+                SETUP_TYPE="$1"
+                shift
+                ;;
+            --force)
+                FORCE_SETUP=true
+                shift
+                ;;
+            --skip-deps)
+                SKIP_DEPS=true
+                shift
+                ;;
+            --development)
+                DEVELOPMENT_MODE=true
+                shift
+                ;;
+            --production)
+                PRODUCTION_MODE=true
+                shift
+                ;;
+            --help|-h)
+                print_usage
+                ;;
+            *)
+                error "Unknown option: $1"
+                print_usage
+                ;;
+        esac
+    done
+
+    # Initial checks
+    check_autobot_directory
+    detect_os
+    check_requirements
+
+    # Execute setup based on type
+    case $SETUP_TYPE in
+        initial|distributed)
+            log "Starting complete distributed setup..."
+            setup_python_environment
+            generate_ssh_keys
+            setup_configuration
+            setup_knowledge_base
+            success "Complete distributed setup finished"
+            ;;
+        backend-only)
+            log "Starting backend-only setup..."
+            setup_python_environment
+            setup_configuration
+            success "Backend-only setup finished"
+            ;;
+        agent)
+            log "Starting agent environment setup..."
+            setup_python_environment
+            setup_configuration
+            success "Agent setup finished"
+            ;;
+        ssh-keys)
+            generate_ssh_keys
+            ;;
+        vm-services)
+            log "Setting up VM-specific services..."
+            setup_npu_worker
+            setup_ai_stack
+            setup_browser_vm
+            success "VM services setup finished"
+            ;;
+        knowledge)
+            setup_knowledge_base
+            ;;
+        desktop)
+            setup_desktop
+            ;;
+        repair)
+            repair_installation
+            ;;
+        *)
+            error "Unknown setup type: $SETUP_TYPE"
+            print_usage
+            ;;
+    esac
+
+    echo ""
+    echo -e "${GREEN}============================================${NC}"
+    echo -e "${GREEN}           Setup Complete!               ${NC}"
+    echo -e "${GREEN}============================================${NC}"
+    echo ""
+    echo -e "${CYAN}Next steps:${NC}"
+    echo "1. Configure your LLM API keys in config/config.yaml"
+    echo "2. Start AutoBot with: bash run_autobot.sh --dev"
+    echo "3. Access the web interface at: http://172.16.168.21:5173"
+    echo "4. Access the desktop via VNC at: http://127.0.0.1:6080/vnc.html"
+    echo ""
+    echo -e "${YELLOW}For voice features:${NC}"
+    echo "- Microphone access may require additional system setup"
+    echo "- Voice interface is enabled by default in config"
+    echo "- Test voice features in the web interface settings"
     echo ""
 }
 
-run_backend_only_setup() {
-    echo -e "${GREEN}🚀 AutoBot Backend-Only Setup${NC}"
-    echo -e "${BLUE}=====================================${NC}"
-    echo ""
-    
-    log "Setting up backend dependencies only..."
-    setup_backend_dependencies
-    
-    # Basic agent setup
-    run_setup_script "scripts/setup/setup_agent.sh" "Setting up AutoBot agent"
-    
-    # Knowledge base setup
-    run_setup_script "scripts/setup/knowledge/fresh_kb_setup.py" "Setting up knowledge base"
-    
-    # VNC desktop setup
-    run_setup_script "scripts/setup/install-vnc-headless.sh" "Setting up VNC desktop environment"
-    
-    success "Backend-only setup completed!"
-    echo ""
-    echo -e "${BLUE}📋 Next Steps:${NC}"
-    echo -e "${CYAN}  1. Start backend: bash run_autobot.sh --dev${NC}"
-    echo -e "${CYAN}  2. Backend will be available at: http://172.16.168.20:8001${NC}"
-    echo -e "${CYAN}  3. Note: VM services need to be configured separately${NC}"
-    echo ""
-}
-
-# Main execution
-echo -e "${GREEN}🔧 AutoBot Setup - $SETUP_TYPE${NC}"
-echo -e "${BLUE}Deployment Mode: $DEPLOYMENT_MODE${NC}"
-echo -e "${CYAN}Environment Mode: $ENVIRONMENT_MODE${NC}"
-echo ""
-
-case "$SETUP_TYPE" in
-    "initial"|"distributed")
-        run_distributed_setup
-        ;;
-    "backend-only")
-        run_backend_only_setup
-        ;;
-    "ssh-keys")
-        setup_ssh_keys
-        ;;
-    "vm-services")
-        install_vm_services
-        ;;
-    "agent")
-        run_setup_script "scripts/setup/setup_agent.sh" "Setting up AutoBot agent"
-        ;;
-    "knowledge")
-        run_setup_script "scripts/setup/knowledge/fresh_kb_setup.py" "Setting up knowledge base"
-        ;;
-    "desktop")
-        run_setup_script "scripts/setup/install-vnc-headless.sh" "Setting up VNC desktop environment"
-        ;;
-    "repair")
-        run_setup_script "scripts/setup/setup_repair.sh" "Running setup repair"
-        ;;
-    *)
-        error "Unknown setup type: $SETUP_TYPE"
-        print_usage
-        exit 1
-        ;;
-esac
-
-echo ""
-echo -e "${GREEN}🎉 AutoBot $SETUP_TYPE setup completed!${NC}"
-echo -e "${BLUE}Environment: $ENVIRONMENT_MODE mode${NC}"
+# Run main function
+main "$@"

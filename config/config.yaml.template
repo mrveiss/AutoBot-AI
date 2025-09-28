@@ -123,6 +123,89 @@ security:
   enable_encryption: true  # Changed to true for better security by default
   session_timeout_minutes: 30
 
+# Security Configuration for Authentication and Authorization
+security_config:
+  enable_auth: true
+  audit_log_file: logs/audit.log
+  allowed_users:
+    admin:
+      password_hash: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4SH.LKhO/y  # password: autobotadmin123
+      role: admin
+      email: admin@autobot.local
+      created_at: '2025-01-01T00:00:00Z'
+    developer:
+      password_hash: $2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lrw3vjPiS394C2u  # password: dev123secure
+      role: developer
+      email: dev@autobot.local
+      created_at: '2025-01-01T00:00:00Z'
+    readonly:
+      password_hash: $2b$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi  # password: readonly123
+      role: readonly
+      email: readonly@autobot.local
+      created_at: '2025-01-01T00:00:00Z'
+  roles:
+    admin:
+      permissions:
+      - allow_all
+      description: Full system access with all permissions
+    developer:
+      permissions:
+      - files.*
+      - allow_goal_submission
+      - allow_kb_read
+      - allow_kb_write
+      - allow_chat_control
+      - allow_agent_control
+      - allow_command_approval
+      - allow_voice_listen
+      - allow_voice_speak
+      description: Development access with most permissions except system commands
+    editor:
+      permissions:
+      - files.view
+      - files.download
+      - files.upload
+      - files.create
+      - allow_goal_submission
+      - allow_kb_read
+      - allow_kb_write
+      - allow_chat_control
+      description: Content editing and knowledge base management
+    user:
+      permissions:
+      - files.view
+      - files.download
+      - allow_goal_submission
+      - allow_kb_read
+      - allow_chat_control
+      description: Basic user access for interaction
+    readonly:
+      permissions:
+      - files.view
+      - files.download
+      - allow_kb_read
+      description: Read-only access for viewing content
+    guest:
+      permissions:
+      - files.view
+      description: Very limited guest access
+  password_policy:
+    min_length: 12
+    require_uppercase: true
+    require_lowercase: true
+    require_numbers: true
+    require_special_chars: true
+    max_age_days: 90
+  session_config:
+    session_timeout_minutes: 30
+    max_concurrent_sessions: 5
+    require_2fa: false
+  audit_config:
+    log_all_actions: true
+    log_failed_attempts: true
+    retention_days: 365
+    sensitive_data_masking: true
+
 # UI Configuration
 ui:
   animations: true

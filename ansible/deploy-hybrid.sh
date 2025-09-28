@@ -239,8 +239,9 @@ validate_deployment() {
     # Test Redis connection
     if python3 -c "
 import redis
+import os
 try:
-    r = redis.Redis(host='172.16.168.23', port=6379, password='autobot123', decode_responses=True)
+    r = redis.Redis(host='172.16.168.23', port=6379, password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')), decode_responses=True)
     r.ping()
     print('✅ Backend can connect to VM Redis')
 except Exception as e:

@@ -84,9 +84,9 @@ start_frontend_vm() {
             echo "Run: bash scripts/utilities/sync-to-vm.sh frontend"
         fi
         
-        cd ~/AutoBot/autobot-vue 2>/dev/null || {
+        cd ~/autobot-vue 2>/dev/null || {
             echo "AutoBot frontend directory not found. Creating placeholder..."
-            mkdir -p ~/AutoBot/autobot-vue
+            mkdir -p ~/autobot-vue
             echo "Run sync script to deploy frontend: bash scripts/utilities/sync-to-vm.sh frontend"
             exit 1
         }
@@ -97,7 +97,10 @@ start_frontend_vm() {
         # Set environment variables for backend connection
         export VITE_BACKEND_HOST=172.16.168.20
         export VITE_BACKEND_PORT=8001
-        
+
+        # Create logs directory
+        mkdir -p logs
+
         # Start frontend
         nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
         
