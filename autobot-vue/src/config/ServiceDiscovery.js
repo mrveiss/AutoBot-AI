@@ -119,7 +119,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_BACKEND_PORT',
         port: '8001',
         protocol: 'http',
-        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP, 'host.docker.internal']
+        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP]
       },
       redis: {
         envVar: 'VITE_REDIS_URL',
@@ -127,7 +127,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_REDIS_PORT',
         port: '6379',
         protocol: 'redis',
-        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP, 'host.docker.internal']
+        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP]
       },
       vnc_desktop: {
         envVar: 'VITE_DESKTOP_VNC_URL',
@@ -167,7 +167,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_OLLAMA_PORT',
         port: '11434',
         protocol: 'http',
-        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP, 'host.docker.internal']
+        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP]
       },
       playwright: {
         envVar: 'VITE_PLAYWRIGHT_API_URL',
@@ -175,7 +175,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_PLAYWRIGHT_PORT',
         port: '3000',
         protocol: 'http',
-        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP, 'host.docker.internal']
+        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP]
       }
     };
   }
@@ -267,8 +267,8 @@ export default class ServiceDiscovery {
    * Get host for Docker environment
    */
   _getDockerHost(serviceConfig) {
-    // Docker environment - use host.docker.internal or localhost
-    return 'host.docker.internal';
+    // Docker environment - use proper VM IPs instead of host.docker.internal
+    return serviceConfig.fallbackHosts?.[0] || 'localhost';
   }
 
   /**

@@ -11,6 +11,6 @@
 
 <style scoped>
 .chat-view {
-  height: calc(100vh - 80px);
+  height: calc(100vh - 64px); /* Fixed: Match actual header height (h-16 = 64px) */
 }
 </style>
