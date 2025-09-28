@@ -38,6 +38,48 @@ bash setup.sh system       # System configuration
 - VM4 AI Stack: 172.16.168.24 - AI processing
 - VM5 Browser: 172.16.168.25 - Web automation
 
+## Redis Database Architecture
+
+AutoBot uses a comprehensive Redis database architecture with specialized databases for different data types. This organization enables individual database repopulation and maintenance.
+
+### Database Allocation
+
+| Database | Purpose | Current Keys | Description |
+|----------|---------|--------------|-------------|
+| **DB 0** | **Vectors** | 14,047 | LlamaIndex vectors with Redis search index support |
+| **DB 1** | **Knowledge Facts** | 27 | Knowledge base facts and metadata |
+| **DB 2** | **Prompts** | 0 | AI prompt templates and configurations |
+| **DB 3** | **Other System Data** | 200 | Restored system data and miscellaneous |
+| **DB 4** | **Metrics** | 1 | Performance and system metrics |
+| **DB 5** | **Cache** | 0 | Temporary cached data |
+| **DB 6** | **Sessions** | 0 | User session data |
+| **DB 7** | **Tasks** | 0 | Task management and workflow data |
+| **DB 8** | **Analytics** | 24,803 | Code analytics and indexing data |
+| **DB 9** | **Temp** | 0 | Temporary data storage |
+| **DB 10** | **Backup** | 20 | Backup and recovery data |
+| **DB 11** | **Additional Data** | 6,627 | Extended system data |
+| **DB 15** | **Testing** | 0 | Test data and development |
+
+### Key Features
+
+- **Individual Repopulation**: Each database can be cleared and repopulated independently
+- **Redis Search Support**: DB 0 supports Redis search indexes for vector operations
+- **Logical Separation**: Different data types are isolated for better maintainability
+- **Scalable Design**: Easy to add new databases for specific use cases
+
+### Management Commands
+
+```bash
+# Check database sizes
+for db in {0..15}; do echo -n "DB$db: "; redis-cli -h 172.16.168.23 -p 6379 -n $db DBSIZE; done
+
+# Clear specific database (example: temp data)
+redis-cli -h 172.16.168.23 -p 6379 -n 9 FLUSHDB
+
+# Backup specific database
+redis-cli -h 172.16.168.23 -p 6379 -n 0 --rdb vectors_backup.rdb
+```
+
 ## Access Points
 
 - **Frontend:** http://172.16.168.21:5173
@@ -88,7 +130,7 @@ bash setup.sh system       # System configuration
 All critical issues resolved with permanent architectural fixes:
 - ✅ Chat persistence across sessions
 - ✅ 100% API endpoint functionality
-- ✅ Knowledge base fully operational (13,383 vectors)
+- ✅ Knowledge base fully operational (14,047 vectors with search support)
 - ✅ Distributed VM infrastructure stable
 - ✅ Multi-service coordination working
 - ✅ Hardware optimization active
