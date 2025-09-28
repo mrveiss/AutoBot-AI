@@ -29,10 +29,10 @@ import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import KnowledgeSearch from './KnowledgeSearch.vue'
 import KnowledgeCategories from './KnowledgeCategories.vue'
 
-// Lazy load heavier components
-const KnowledgeEntries = defineAsyncComponent(() => import('./KnowledgeEntries.vue'))
-const KnowledgeUpload = defineAsyncComponent(() => import('./KnowledgeUpload.vue'))
-const KnowledgeStats = defineAsyncComponent(() => import('./KnowledgeStats.vue'))
+// Lazy load heavier components using direct dynamic imports for Vue Router compatibility
+const KnowledgeEntries = () => import('./KnowledgeEntries.vue')
+const KnowledgeUpload = () => import('./KnowledgeUpload.vue')
+const KnowledgeStats = () => import('./KnowledgeStats.vue')
 
 const store = useKnowledgeStore()
 

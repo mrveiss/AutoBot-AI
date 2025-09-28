@@ -60,7 +60,11 @@ export function createAsyncComponent(
   } = options
 
   // Lazy load the wrapper component to avoid circular dependencies
-  const AsyncComponentWrapper = defineAsyncComponent(() => import('@/components/async/AsyncComponentWrapper.vue'))
+  const AsyncComponentWrapper = defineAsyncComponent({
+    loader: () => import('@/components/async/AsyncComponentWrapper.vue'),
+    delay: 200,
+    timeout: 10000
+  })
 
   // Create a wrapper component that uses AsyncComponentWrapper
   return defineComponent({
