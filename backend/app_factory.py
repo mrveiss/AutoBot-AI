@@ -43,7 +43,7 @@ from src.constants.network_constants import NetworkConstants, ServiceURLs
 # Import API routers with proper error handling
 from backend.api.agent import router as agent_router
 from backend.api.agent_config import router as agent_config_router
-from backend.api.chat_consolidated import router as chat_router
+from backend.api.chat import router as chat_router
 from backend.api.developer import (
     api_registry,
     enhanced_404_handler,
@@ -76,7 +76,7 @@ from backend.api.workflow import router as workflow_router
 # Import core components
 from src.chat_history_manager import ChatHistoryManager
 from src.config import config as global_config_manager
-from src.diagnostics import Diagnostics
+from src.diagnostics import PerformanceOptimizedDiagnostics
 from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.knowledge_base import KnowledgeBase
 from src.security_layer import SecurityLayer
@@ -282,7 +282,7 @@ async def initialize_components_background(app: FastAPI):
 
         # Initialize remaining core components
         try:
-            app.state.diagnostics = Diagnostics()
+            app.state.diagnostics = PerformanceOptimizedDiagnostics()
             app.state.voice_interface = VoiceInterface()
             app.state.security_layer = SecurityLayer()
             app.state.enhanced_security_layer = EnhancedSecurityLayer()
@@ -406,8 +406,13 @@ async def create_lifespan_manager(app: FastAPI):
 def add_middleware(app: FastAPI) -> None:
     """Add comprehensive middleware to the FastAPI application."""
     # Build CORS origins dynamically from configuration
-    backend_config = global_config_manager.get_backend_config()
-    cors_origins = backend_config.get("cors_origins", [])
+    try:
+        backend_config = global_config_manager.get_config_section("backend")
+        cors_origins = backend_config.get("cors_origins", [])
+    except Exception as e:
+        logger.warning(f"Could not load backend config: {e}, using defaults")
+        backend_config = {}
+        cors_origins = []
 
     if not cors_origins:
         cors_origins = [

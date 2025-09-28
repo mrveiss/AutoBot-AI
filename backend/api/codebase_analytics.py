@@ -77,8 +77,8 @@ async def get_redis_connection():
                 port=port,
                 db=11,  # Dedicated DB for codebase analytics
                 decode_responses=True,
-                socket_timeout=10,  # Increased timeout for large operations
-                socket_connect_timeout=5,  # Increased connection timeout
+                socket_timeout=3,
+                socket_connect_timeout=3
             )
             # Test connection
             redis_client.ping()
@@ -713,7 +713,6 @@ async def clear_codebase_cache():
                 redis_client.delete(*keys_to_delete)
 
             storage_type = "redis"
-            deleted_count = len(keys_to_delete)
         else:
             # Clear in-memory storage
             global _in_memory_storage
@@ -731,143 +730,11 @@ async def clear_codebase_cache():
 
         return JSONResponse({
             "status": "success",
-            "message": f"Cleared {deleted_count} cache entries from {storage_type}",
-            "deleted_keys": deleted_count,
+            "message": f"Cleared {len(keys_to_delete) if redis_client else deleted_count} cache entries from {storage_type}",
+            "deleted_keys": len(keys_to_delete) if redis_client else deleted_count,
             "storage_type": storage_type
         })
 
     except Exception as e:
         logger.error(f"Failed to clear cache: {e}")
         raise HTTPException(status_code=500, detail=f"Cache clear failed: {str(e)}")
-
-@router.get("/declarations")
-async def get_codebase_declarations():
-    """Get declaration analysis from codebase analysis cache"""
-    try:
-        redis_client = await get_redis_connection()
-
-        if redis_client:
-            # Try to get from Redis
-            stats_data = redis_client.get("codebase:stats")
-            if stats_data:
-                stats = json.loads(stats_data)
-
-                # Extract declaration information
-                declarations = []
-                total_functions = 0
-                total_classes = 0
-
-                # Process stored file analysis data
-                for key in redis_client.scan_iter(match="codebase:file:*"):
-                    file_data = redis_client.get(key)
-                    if file_data:
-                        analysis = json.loads(file_data)
-                        file_path = key.decode().replace("codebase:file:", "")
-
-                        # Add functions
-                        for func in analysis.get("functions", []):
-                            declarations.append({
-                                "name": func["name"],
-                                "type": "function",
-                                "file_path": file_path,
-                                "line": func.get("line", 0)
-                            })
-                            total_functions += 1
-
-                        # Add classes
-                        for cls in analysis.get("classes", []):
-                            declarations.append({
-                                "name": cls["name"],
-                                "type": "class",
-                                "file_path": file_path,
-                                "line": cls.get("line", 0)
-                            })
-                            total_classes += 1
-
-                return JSONResponse({
-                    "status": "success",
-                    "total_count": len(declarations),
-                    "functions": total_functions,
-                    "classes": total_classes,
-                    "declarations": declarations[:100],  # Limit to first 100
-                    "storage_type": "redis"
-                })
-            else:
-                return JSONResponse({
-                    "status": "error",
-                    "message": "No codebase data found. Run indexing first.",
-                    "total_count": 0,
-                    "functions": 0,
-                    "classes": 0,
-                    "declarations": []
-                })
-        else:
-            # Fallback to in-memory storage
-            return JSONResponse({
-                "status": "error",
-                "message": "Storage not available. Run indexing first.",
-                "total_count": 0,
-                "functions": 0,
-                "classes": 0,
-                "declarations": []
-            })
-
-    except Exception as e:
-        logger.error(f"Failed to get declarations: {e}")
-        raise HTTPException(status_code=500, detail=f"Declarations retrieval failed: {str(e)}")
-
-@router.get("/duplicates")
-async def get_codebase_duplicates():
-    """Get duplicate code analysis from codebase analysis cache"""
-    try:
-        redis_client = await get_redis_connection()
-
-        if redis_client:
-            # Try to get from Redis
-            duplicates = []
-            function_names = defaultdict(list)
-
-            # Process stored file analysis data to find duplicates
-            for key in redis_client.scan_iter(match="codebase:file:*"):
-                file_data = redis_client.get(key)
-                if file_data:
-                    analysis = json.loads(file_data)
-                    file_path = key.decode().replace("codebase:file:", "")
-
-                    # Check for duplicate function names
-                    for func in analysis.get("functions", []):
-                        function_names[func["name"]].append({
-                            "file_path": file_path,
-                            "line": func.get("line", 0),
-                            "type": "function"
-                        })
-
-            # Find actual duplicates (names appearing in multiple files)
-            for name, occurrences in function_names.items():
-                if len(occurrences) > 1:
-                    duplicates.append({
-                        "code_snippet": f"function {name}",
-                        "files": [occ["file_path"] for occ in occurrences],
-                        "lines": [occ["line"] for occ in occurrences],
-                        "type": "function_duplicate",
-                        "severity": "medium" if len(occurrences) <= 3 else "high"
-                    })
-
-            return JSONResponse({
-                "status": "success",
-                "total_count": len(duplicates),
-                "duplicates": duplicates[:50],  # Limit to first 50
-                "storage_type": "redis"
-            })
-        else:
-            # Fallback to in-memory storage
-            return JSONResponse({
-                "status": "error",
-                "message": "Storage not available. Run indexing first.",
-                "total_count": 0,
-                "duplicates": []
-            })
-
-    except Exception as e:
-        logger.error(f"Failed to get duplicates: {e}")
-        raise HTTPException(status_code=500, detail=f"Duplicates retrieval failed: {str(e)}")
