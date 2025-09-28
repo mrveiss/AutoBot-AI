@@ -1,0 +1,42 @@
+{
+  "tasks": [
+    {
+      "id": "24b75bee-fd6d-42a7-b624-2b8f1abc9d3e",
+      "name": "Enhance ConfigHelper for Hardcoded Value Centralization",
+      "description": "Extend the existing ConfigHelper system in src/config_helper.py to handle the remaining 1,047 hardcoded values (896 file paths + 151 URLs) identified in the analysis. Add new methods for environment-specific overrides while maintaining backward compatibility with existing cfg.get() calls.",
+      "notes": "CRITICAL: Maintain backward compatibility - all existing cfg.get() calls must continue working unchanged. Follow existing naming conventions (snake_case) and error handling patterns.",
+      "status": "completed",
+      "dependencies": [],
+      "createdAt": "2025-09-21T08:29:20.024Z",
+      "updatedAt": "2025-09-21T08:31:53.251Z",
+      "relatedFiles": [
+        {
+          "path": "/home/kali/Desktop/AutoBot/src/config_helper.py",
+          "type": "TO_MODIFY",
+          "description": "Extend ConfigHelper class with hardcoded value methods",
+          "lineStart": 1,
+          "lineEnd": 272
+        },
+        {
+          "path": "/home/kali/Desktop/AutoBot/config/complete.yaml",
+          "type": "REFERENCE",
+          "description": "Reference for existing configuration structure",
+          "lineStart": 1,
+          "lineEnd": 789
+        },
+        {
+          "path": "/home/kali/Desktop/AutoBot/tests/results/code_analysis_report_20250921_103114.md",
+          "type": "REFERENCE",
+          "description": "Source of 1,047 hardcoded values to be centralized",
+          "lineStart": 24,
+          "lineEnd": 35
+        }
+      ],
+      "implementationGuide": "EXTEND existing ConfigHelper class (DO NOT replace):\\n\\n```python\\n# Add to src/config_helper.py\\nclass ConfigHelper:\\n    def get_hardcoded_value(self, category: str, key: str, env: str = None) -> str:\\n        env_config = self._load_environment_config(env or self._detect_environment())\\n        override_path = f'hardcoded_overrides.{category}.{key}'\\n        return env_config.get(override_path) or self.get(f'{category}.{key}')\\n        \\n    def _load_environment_config(self, env: str) -> dict:\\n        env_file = Path(__file__).parent.parent / 'config' / 'environments' / f'{env}.yaml'\\n        return yaml.safe_load(env_file.open()) if env_file.exists() else {}\\n        \\n    def _detect_environment(self) -> str:\\n        return os.getenv('AUTOBOT_ENVIRONMENT', 'development')\\n```\\n\\nUse existing patterns: yaml.safe_load, Path operations, logging with logger.info/error, try/catch blocks",
+      "verificationCriteria": "1. All existing cfg.get() calls continue working unchanged. 2. New get_hardcoded_value() method successfully retrieves values from environment configs. 3. Environment detection works correctly. 4. Backward compatibility tests pass. 5. No breaking changes to existing functionality.",
+      "analysisResult": "Configuration Centralization for AutoBot: Extend existing ConfigHelper system to centralize 1,047 hardcoded values (896 file paths + 151 URLs), implement environment-specific profiles, automated deployment pipelines, and operational excellence frameworks for the 6-VM distributed infrastructure while preserving all existing functionality and architectural patterns.",
+      "summary": "Successfully enhanced ConfigHelper system with hardcoded value centralization capabilities. Implemented get_hardcoded_value() method, environment detection, caching, and safe fallback mechanisms. All existing cfg.get() calls continue to work unchanged, maintaining full backward compatibility. Added comprehensive error handling, logging, and convenience functions following existing patterns. Testing verified all functionality works correctly including environment detection, value retrieval, and error handling.",
+      "completedAt": "2025-09-21T08:31:53.164Z"
+    }
+  ]
+}
