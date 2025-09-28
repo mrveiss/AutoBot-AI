@@ -816,7 +816,7 @@ def add_utility_routes(app: FastAPI) -> None:
         to prevent 404 errors in Chrome/Edge developer console.
         """
         from fastapi.responses import JSONResponse
-from src.constants import NetworkConstants, ServiceURLs
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
         return JSONResponse(status_code=200, content={})
 

@@ -763,7 +763,7 @@ async def get_all_services():
         # Quick Ollama check
         try:
             import aiohttp
-            from src.constants import NetworkConstants, ServiceURLs
+            from src.constants.network_constants import NetworkConstants, ServiceURLs
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
                 async with session.get(f'{ServiceURLs.OLLAMA_LOCAL}/api/version') as response:
                     if response.status == 200:
