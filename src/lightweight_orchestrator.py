@@ -209,6 +209,66 @@ class LightweightOrchestrator:
                 "routing_reason": "requires_full_orchestration",
             }
 
+    async def process_message(self, user_message: str, chat_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        """
+        Process a chat message through the lightweight orchestrator.
+        
+        This method provides compatibility with the chat API's expectations
+        while using the consolidated chat workflow for actual processing.
+        """
+        try:
+            # Import the consolidated workflow for actual message processing
+            from src.chat_workflow_consolidated import process_chat_message_unified
+            
+            logger.info(f"Processing message via lightweight orchestrator for chat {chat_id}")
+            
+            # Use the consolidated workflow to process the message
+            result = await process_chat_message_unified(
+                user_message=user_message,
+                chat_id=chat_id,
+                **kwargs
+            )
+            
+            # Convert the result to a dictionary format expected by the chat API
+            return {
+                "response": result.response if hasattr(result, 'response') else str(result),
+                "message_type": result.message_type.value if hasattr(result, 'message_type') else "response",
+                "knowledge_status": result.knowledge_status.value if hasattr(result, 'knowledge_status') else "none",
+                "sources": result.sources if hasattr(result, 'sources') else [],
+                "kb_results": result.kb_results if hasattr(result, 'kb_results') else [],
+                "workflow_messages": result.workflow_messages if hasattr(result, 'workflow_messages') else []
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in lightweight orchestrator process_message: {e}")
+            return {
+                "response": f"I encountered an error processing your message: {str(e)}",
+                "message_type": "error",
+                "knowledge_status": "error",
+                "sources": [],
+                "kb_results": [],
+                "workflow_messages": []
+            }
+
+    @property
+    def llm_interface(self):
+        """
+        Provide an llm_interface compatible object for chat API compatibility.
+        
+        This creates a simple interface that delegates to the consolidated workflow.
+        """
+        class LLMInterfaceAdapter:
+            async def get_response(self, message: str, **kwargs) -> str:
+                try:
+                    from src.chat_workflow_consolidated import process_chat_message_unified
+                    result = await process_chat_message_unified(user_message=message, **kwargs)
+                    return result.response if hasattr(result, 'response') else str(result)
+                except Exception as e:
+                    logger.error(f"Error in LLM interface adapter: {e}")
+                    return f"I encountered an error: {str(e)}"
+        
+        return LLMInterfaceAdapter()
+
 
 # Global instance for use across the application
 lightweight_orchestrator = LightweightOrchestrator()
