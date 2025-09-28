@@ -62,7 +62,7 @@ class ApiClient {
         '/api/settings/': 10 * 60 * 1000, // 10 minutes for settings
         '/api/system/health': 30 * 1000,   // 30 seconds for health
         '/api/prompts/': 15 * 60 * 1000,   // 15 minutes for prompts (they change rarely)
-        '/api/chat/chats': 2 * 60 * 1000,  // 2 minutes for chat list
+        '/api/chats': 2 * 60 * 1000,  // 2 minutes for chat list
       }
     };
 
@@ -432,7 +432,7 @@ class ApiClient {
   async sendChatMessage(message, options = {}) {
     // Use the correct endpoint with chat ID
     const chatId = options.chatId || 'default';
-    const response = await this.post(`/api/chat/chats/${chatId}/message`, { message });
+    const response = await this.post(`/api/chats/${chatId}/message`, { message });
 
     // Check if it's a streaming response
     const contentType = response.headers.get('content-type');
@@ -451,27 +451,27 @@ class ApiClient {
   }
 
   async createNewChat() {
-    const response = await this.post('/api/chat/chats/new');
+    const response = await this.post('/api/chats/new');
     return response.json();
   }
 
   async getChatList() {
-    const response = await this.get('/api/chat/chats');
+    const response = await this.get('/api/chats');
     return response.json();
   }
 
   async getChatMessages(chatId) {
-    const response = await this.get(`/api/chat/chats/${chatId}`);
+    const response = await this.get(`/api/chats/${chatId}`);
     return response.json();
   }
 
   async saveChatMessages(chatId, messages) {
-    const response = await this.post(`/api/chat/chats/${chatId}/save`, { messages });
+    const response = await this.post(`/api/chats/${chatId}/save`, { messages });
     return response.json();
   }
 
   async deleteChat(chatId) {
-    const response = await this.delete(`/api/chat/chats/${chatId}`);
+    const response = await this.delete(`/api/chats/${chatId}`);
     return response.json();
   }
 
@@ -605,12 +605,12 @@ class ApiClient {
 
   // Cleanup methods (integrating chat_api functionality)
   async cleanupMessages() {
-    const response = await this.post('/api/chat/chats/cleanup_messages');
+    const response = await this.post('/api/chats/cleanup_messages');
     return response.json();
   }
 
   async cleanupAllChatData() {
-    const response = await this.post('/api/chat/chats/cleanup_all');
+    const response = await this.post('/api/chats/cleanup_all');
     return response.json();
   }
 
@@ -856,7 +856,7 @@ class ApiClient {
   async getApiStatus() {
     const endpoints = [
       '/api/system/health',
-      '/api/chat/chats',
+      '/api/chats',
       '/api/settings/',
       '/api/prompts'
     ];

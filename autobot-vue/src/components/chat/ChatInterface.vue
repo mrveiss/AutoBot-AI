@@ -2,8 +2,18 @@
   <ErrorBoundary fallback="Chat interface failed to load. Please refresh the page.">
     <div class="chat-interface flex h-full bg-white overflow-hidden">
 
-      <!-- Chat Sidebar -->
-      <ChatSidebar />
+      <!-- Chat Sidebar with Unified Loading -->
+      <UnifiedLoadingView
+        loading-key="chat-sidebar"
+        :has-content="store.sessions.length > 0"
+        :auto-timeout-ms="10000"
+        @loading-complete="handleSidebarLoadingComplete"
+        @loading-error="handleSidebarLoadingError"
+        @loading-timeout="handleSidebarLoadingTimeout"
+        class="h-full"
+      >
+        <ChatSidebar />
+      </UnifiedLoadingView>
 
       <!-- Main Chat Area -->
       <div class="flex-1 flex flex-col min-w-0">
@@ -25,20 +35,29 @@
           @tab-change="activeTab = $event"
         />
 
-        <!-- Chat Content -->
-        <ChatTabContent
-          :active-tab="activeTab"
-          :current-session-id="store.currentSessionId"
-          :novnc-url="novncUrl"
-        />
+        <!-- Chat Content with Unified Loading -->
+        <UnifiedLoadingView
+          loading-key="chat-content"
+          :has-content="store.currentMessages.length > 0"
+          :auto-timeout-ms="15000"
+          @loading-complete="handleContentLoadingComplete"
+          @loading-error="handleContentLoadingError"
+          @loading-timeout="handleContentLoadingTimeout"
+          class="flex-1"
+        >
+          <ChatTabContent
+            :active-tab="activeTab"
+            :current-session-id="store.currentSessionId"
+            :novnc-url="novncUrl"
+          />
+        </UnifiedLoadingView>
       </div>
 
       <!-- Terminal Sidebar -->
-      <TerminalSidebar
+      <Terminal
         v-if="showTerminalSidebar"
-        :collapsed="terminalSidebarCollapsed"
-        @update:collapsed="terminalSidebarCollapsed = $event"
-        @open-new-tab="openTerminalInNewTab"
+        :sessionType="'simple'"
+        :autoConnect="true"
       />
 
       <!-- Dialogs and Modals -->
@@ -88,6 +107,7 @@ import { API_CONFIG } from '@/config/environment.js'
 
 // Components
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import ChatSidebar from './ChatSidebar.vue'
 import ChatHeader from './ChatHeader.vue'
 import ChatTabs from './ChatTabs.vue'
@@ -95,7 +115,7 @@ import ChatTabContent from './ChatTabContent.vue'
 import KnowledgePersistenceDialog from '@/components/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/WorkflowProgressWidget.vue'
-import TerminalSidebar from '@/components/TerminalSidebar.vue'
+import Terminal from '@/components/Terminal.vue'
 
 // Stores and controller
 const store = useChatStore()
@@ -124,17 +144,47 @@ const activeTab = ref<string>('chat')
 const showTerminalSidebar = ref<boolean>(false)
 const terminalSidebarCollapsed = ref<boolean>(false)
 
-// Connection state
-const connectionStatus = ref('Connected')
+// Connection state with stabilized status management
+const baseConnectionStatus = ref('Connected')
 const isConnected = ref(true)
 const lastHeartbeat = ref(Date.now())
+const connectionStatus = computed(() => {
+  // If typing, show typing status temporarily
+  if (store.isTyping) {
+    return 'AI is typing...'
+  }
+  // Otherwise show base connection status
+  return baseConnectionStatus.value
+})
 
-// Tool URLs - Dynamic per-chat desktop URLs
+// Initialization state to prevent flickering
+const isInitializing = ref(true)
+const initializationTimeout = ref(null)
+
+// Tool URLs - Dynamic per-chat desktop URLs (cached to prevent reload cycles)
 const novncUrl = computed(() => {
   if (!store.currentSessionId) {
     return API_CONFIG.PLAYWRIGHT_VNC_URL // Fallback for no session
   }
-  return store.getDesktopUrl(store.currentSessionId)
+
+  // Get session without side effects to prevent reactive loops
+  const session = store.sessions.find(s => s.id === store.currentSessionId)
+  const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || 'http://172.16.168.20:6080/vnc.html'
+
+  if (!session?.desktopSession) {
+    // Return base URL without creating session to prevent reactive side effects
+    return baseUrl + '?autoconnect=true&password=autobot&resize=remote'
+  }
+
+  // Use existing desktop session data
+  const params = new URLSearchParams({
+    autoconnect: 'true',
+    password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot',
+    resize: 'remote',
+    session: session.desktopSession.id || store.currentSessionId
+  })
+
+  return `${baseUrl}?${params.toString()}`
 })
 
 // Computed
@@ -205,6 +255,33 @@ const clearSession = async () => {
   }
 }
 
+// Unified loading event handlers
+const handleSidebarLoadingComplete = () => {
+  console.log('[ChatInterface] Sidebar loading completed')
+}
+
+const handleSidebarLoadingError = (error) => {
+  console.error('[ChatInterface] Sidebar loading error:', error)
+  appStore.setGlobalError('Failed to load chat sessions')
+}
+
+const handleSidebarLoadingTimeout = () => {
+  console.warn('[ChatInterface] Sidebar loading timed out')
+}
+
+const handleContentLoadingComplete = () => {
+  console.log('[ChatInterface] Content loading completed')
+}
+
+const handleContentLoadingError = (error) => {
+  console.error('[ChatInterface] Content loading error:', error)
+  appStore.setGlobalError('Failed to load chat content')
+}
+
+const handleContentLoadingTimeout = () => {
+  console.warn('[ChatInterface] Content loading timed out')
+}
+
 // Terminal tab handler
 const openTerminalInNewTab = () => {
   // Open terminal in a new browser tab by navigating to tools/terminal
@@ -249,15 +326,15 @@ const checkConnection = async () => {
     // ApiClient returns data directly on success
     if (healthData) {
       isConnected.value = true
-      connectionStatus.value = 'Connected'
+      baseConnectionStatus.value = 'Connected'
       lastHeartbeat.value = Date.now()
     } else {
       isConnected.value = false
-      connectionStatus.value = 'Disconnected'
+      baseConnectionStatus.value = 'Disconnected'
     }
   } catch (error) {
     isConnected.value = false
-    connectionStatus.value = 'Disconnected'
+    baseConnectionStatus.value = 'Disconnected'
   }
 }
 
@@ -270,8 +347,8 @@ const startHeartbeat = () => {
   if (heartbeatInterval.value) {
     clearInterval(heartbeatInterval.value)
   }
-  // Check connection every 30 seconds
-  heartbeatInterval.value = setInterval(checkConnection, 30000)
+  // Check connection every 60 seconds (reduced from 30 to minimize UI updates)
+  heartbeatInterval.value = setInterval(checkConnection, 60000)
 }
 
 // Auto-save functionality
@@ -311,44 +388,77 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
   }
 }
 
-// Initialize chat interface with batch loading
+// Initialize chat interface with instant loading (no artificial delays)
 const initializeChatInterface = async () => {
   try {
-    console.log('🚀 Starting batch chat interface initialization')
-    
-    // Use batch API for optimized loading
-    const data = await batchApiService.initializeChatInterface()
-    
-    // Process batch results
-    if (data.chat_sessions && !data.chat_sessions.error) {
-      // Load sessions into store if we got valid data
-      if (Array.isArray(data.chat_sessions)) {
-        data.chat_sessions.forEach(session => {
-          store.importSession(session)
+    console.log('🚀 Starting instant chat interface initialization')
+
+    // Clear any existing timeout
+    if (initializationTimeout.value) {
+      clearTimeout(initializationTimeout.value)
+    }
+
+    // Set a maximum timeout to prevent infinite loading
+    const MAX_INIT_TIME = 5000 // 5 seconds max
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Initialization timeout')), MAX_INIT_TIME)
+    })
+
+    try {
+      // Race between initialization and timeout
+      const data = await Promise.race([
+        batchApiService.initializeChatInterface(),
+        timeoutPromise
+      ])
+
+      // Process batch results
+      if (data.chat_sessions && !data.chat_sessions.error) {
+        // Load sessions into store if we got valid data
+        if (Array.isArray(data.chat_sessions)) {
+          data.chat_sessions.forEach(session => {
+            store.importSession(session)
+          })
+        }
+      } else if (store.sessions.length === 0) {
+        // Fallback to individual loading if batch failed
+        console.log('📡 Falling back to individual chat session loading')
+        await controller.loadChatSessions().catch(err => {
+          console.warn('Session loading failed:', err)
         })
       }
-    } else if (store.sessions.length === 0) {
-      // Fallback to individual loading if batch failed
-      console.log('📡 Falling back to individual chat session loading')
-      await controller.loadChatSessions()
+
+      // Update connection status from batch data
+      if (data.system_health && !data.system_health.error) {
+        isConnected.value = data.system_health.status === 'healthy'
+        baseConnectionStatus.value = isConnected.value ? 'Connected' : 'Disconnected'
+      }
+    } catch (timeoutError) {
+      console.warn('⏱️ Initialization timed out, continuing without data:', timeoutError)
+      // Continue with empty state - GUI should still be usable
     }
-    
-    // Update connection status from batch data
-    if (data.system_health && !data.system_health.error) {
-      isConnected.value = data.system_health.status === 'healthy'
-      connectionStatus.value = isConnected.value ? 'Connected' : 'Disconnected'
-    }
-    
-    console.log('✅ Batch chat initialization completed')
-    
+
+    // End loading state immediately - no artificial delays
+    isInitializing.value = false
+    console.log('✅ Chat interface initialization completed (instant)')
+
   } catch (error) {
     console.error('❌ Chat initialization failed:', error)
-    // Fallback to traditional loading
+    // Fallback to traditional loading with timeout protection
     if (store.sessions.length === 0) {
-      await controller.loadChatSessions().catch(err => 
-        console.warn('Fallback session loading failed:', err)
-      )
+      const fallbackTimeout = new Promise(resolve => setTimeout(resolve, 2000))
+      await Promise.race([
+        controller.loadChatSessions().catch(err => {
+          console.warn('Fallback session loading failed:', err)
+        }),
+        fallbackTimeout
+      ])
     }
+
+    // End loading state immediately even on error
+    isInitializing.value = false
+  } finally {
+    // Guarantee loading state ends no matter what
+    isInitializing.value = false
   }
 }
 
@@ -385,6 +495,12 @@ onUnmounted(() => {
     clearInterval(autoSaveInterval.value)
     autoSaveInterval.value = null
   }
+
+  // Clean up initialization timeout
+  if (initializationTimeout.value) {
+    clearTimeout(initializationTimeout.value)
+    initializationTimeout.value = null
+  }
 })
 
 // Watch for session changes to update title
@@ -395,14 +511,7 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
   }
 })
 
-// Watch for typing status changes
-watch(() => store.isTyping, (isTyping) => {
-  if (isTyping) {
-    connectionStatus.value = 'AI is typing...'
-  } else if (isConnected.value) {
-    connectionStatus.value = 'Connected'
-  }
-})
+// Typing status is now handled automatically by the computed connectionStatus
 
 // Watch for tab changes to show/hide terminal sidebar
 watch(() => activeTab.value, (newTab) => {

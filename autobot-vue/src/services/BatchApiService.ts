@@ -120,7 +120,7 @@ class BatchApiService {
     try {
       // Load chat sessions
       try {
-        results.chat_sessions = await this.apiClient.get('/api/chat/chats');
+        results.chat_sessions = await this.apiClient.get('/api/chats');
       } catch (error: any) {
         console.warn('Failed to load chat sessions:', error);
         results.chat_sessions = { error: error.message };

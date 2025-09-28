@@ -6,6 +6,7 @@
  */
 
 import { buildDefaultServiceUrl, buildDefaultVncUrl } from './defaults.js';
+import { NetworkConstants } from '../constants/network-constants.js';
 
 export default class ServiceDiscovery {
   constructor() {
@@ -118,7 +119,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_BACKEND_PORT',
         port: '8001',
         protocol: 'http',
-        fallbackHosts: ['localhost', '127.0.0.1', 'host.docker.internal']
+        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP, 'host.docker.internal']
       },
       redis: {
         envVar: 'VITE_REDIS_URL',
@@ -126,7 +127,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_REDIS_PORT',
         port: '6379',
         protocol: 'redis',
-        fallbackHosts: ['localhost', '127.0.0.1', 'host.docker.internal']
+        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP, 'host.docker.internal']
       },
       vnc_desktop: {
         envVar: 'VITE_DESKTOP_VNC_URL',
@@ -134,7 +135,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_DESKTOP_VNC_PORT',
         port: '6080',
         protocol: 'http',
-        fallbackHosts: ['172.16.168.20', 'localhost', '127.0.0.1'] // Backend VM first
+        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // Backend VM first
       },
       vnc_terminal: {
         envVar: 'VITE_TERMINAL_VNC_URL',
@@ -142,7 +143,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_TERMINAL_VNC_PORT',
         port: '6080',
         protocol: 'http',
-        fallbackHosts: ['172.16.168.20', 'localhost', '127.0.0.1'] // Backend VM first
+        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // Backend VM first
       },
       vnc_playwright: {
         envVar: 'VITE_PLAYWRIGHT_VNC_URL',
@@ -150,7 +151,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_PLAYWRIGHT_VNC_PORT',
         port: '6081',
         protocol: 'http',
-        fallbackHosts: ['localhost', '127.0.0.1'] // Usually same machine as frontend
+        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // Usually same machine as frontend
       },
       npu_worker: {
         envVar: 'VITE_NPU_WORKER_URL',
@@ -158,7 +159,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_NPU_WORKER_PORT',
         port: '8081',
         protocol: 'http',
-        fallbackHosts: ['172.16.168.22', 'localhost', '127.0.0.1'] // NPU VM first
+        fallbackHosts: [NetworkConstants.NPU_WORKER_VM_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // NPU VM first
       },
       ollama: {
         envVar: 'VITE_OLLAMA_URL',
@@ -166,7 +167,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_OLLAMA_PORT',
         port: '11434',
         protocol: 'http',
-        fallbackHosts: ['localhost', '127.0.0.1', 'host.docker.internal']
+        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP, 'host.docker.internal']
       },
       playwright: {
         envVar: 'VITE_PLAYWRIGHT_API_URL',
@@ -174,7 +175,7 @@ export default class ServiceDiscovery {
         portVar: 'VITE_PLAYWRIGHT_PORT',
         port: '3000',
         protocol: 'http',
-        fallbackHosts: ['localhost', '127.0.0.1', 'host.docker.internal']
+        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP, 'host.docker.internal']
       }
     };
   }

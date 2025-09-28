@@ -17,11 +17,10 @@
 
     <!-- Terminal Tab Content -->
     <div v-else-if="activeTab === 'terminal'" class="flex-1 flex flex-col min-h-0">
-      <XTerminal
+      <Terminal
         :key="currentSessionId"
-        :session-id="currentSessionId"
-        :chat-context="true"
-        title="Chat Terminal"
+        :sessionType="'simple'"
+        :autoConnect="true"
         class="flex-1"
       />
     </div>
@@ -72,7 +71,7 @@ import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
 import FileBrowser from '@/components/FileBrowser.vue'
 import PopoutChromiumBrowser from '@/components/PopoutChromiumBrowser.vue'
-import XTerminal from '@/components/XTerminal.vue'
+import Terminal from '@/components/Terminal.vue'
 
 interface Props {
   activeTab: string

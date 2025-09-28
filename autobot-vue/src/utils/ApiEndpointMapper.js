@@ -128,18 +128,21 @@ class ApiEndpointMapper {
     });
 
     this.registerMapping({
-      component: 'TerminalWindow.vue',
+      component: 'Terminal.vue',
       functions: [
         'executeCommand', 'createSession', 'getSession', 'deleteSession',
-        'sendInput', 'getSessionHistory'
+        'sendInput', 'getSessionHistory', 'connectTerminal', 'sendCommand'
       ],
       endpoints: [
         '/api/terminal/execute',
         '/api/terminal/sessions',
         '/api/terminal/sessions/{session_id}',
-        '/api/terminal/sessions/{session_id}/input'
+        '/api/terminal/sessions/{session_id}/input',
+        '/api/ws/simple/{session_id}',
+        '/api/ws/secure/{session_id}',
+        '/api/ws/terminal/{session_id}'
       ],
-      description: 'Terminal command execution and session management'
+      description: 'Terminal command execution and session management with WebSocket support'
     });
 
     this.registerMapping({

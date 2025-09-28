@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import type { Router } from 'vue-router'
+from src.constants import NetworkConstants, ServiceURLs
 
 /**
  * Setup helpers for consistent test environment configuration
@@ -10,7 +11,7 @@ import type { Router } from 'vue-router'
 // Mock environment variables
 export const setupTestEnv = () => {
   process.env.NODE_ENV = 'test'
-  process.env.VITE_API_BASE_URL = 'http://localhost:8001'
+  process.env.VITE_API_BASE_URL = ServiceURLs.BACKEND_LOCAL
   process.env.VITE_WS_URL = 'ws://localhost:8001/ws'
 }
 

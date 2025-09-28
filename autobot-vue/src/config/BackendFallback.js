@@ -1,6 +1,6 @@
 /**
  * BackendFallbackService - Intelligent Backend Connection Management
- * 
+ *
  * Provides smart backend connection handling with multiple fallback strategies:
  * - Automatic backend discovery and health checking
  * - Mock mode for development when backend is unavailable
@@ -8,14 +8,16 @@
  * - Real-time connection recovery
  */
 
+import { NetworkConstants, ServiceURLs } from '../constants/network-constants.js';
+
 export class BackendFallbackService {
   constructor() {
     // SINGLE FRONTEND SERVER ARCHITECTURE:
-    // Frontend VM (172.16.168.21) connects to Backend VM (172.16.168.20:8001)
+    // Frontend VM connects to Backend VM using centralized constants
     this.backendHosts = [
-      '172.16.168.20:8001',  // Primary: Backend VM
-      'localhost:8001',       // Fallback: Local development
-      '127.0.0.1:8001'       // Final fallback
+      `${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`,  // Primary: Backend VM
+      `${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.BACKEND_PORT}`,   // Fallback: Local development
+      `${NetworkConstants.LOCALHOST_IP}:${NetworkConstants.BACKEND_PORT}`      // Final fallback
     ];
     
     this.currentBackend = null;

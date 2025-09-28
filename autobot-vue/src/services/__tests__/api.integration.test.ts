@@ -3,6 +3,7 @@ import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { apiService } from '../api.js'
 import {
+from src.constants import NetworkConstants, ServiceURLs
   createMockApiResponse,
   createMockChatMessage,
   createMockChatSession,
@@ -13,7 +14,7 @@ import {
 // Setup MSW server for integration tests
 const server = setupServer()
 
-const API_BASE = 'http://localhost:8001'
+const API_BASE = ServiceURLs.BACKEND_LOCAL
 
 describe('API Service Integration Tests', () => {
   beforeAll(() => {

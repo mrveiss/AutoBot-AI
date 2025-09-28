@@ -18,6 +18,11 @@ export const API_CONFIG = {
     const backendPort = import.meta.env.VITE_BACKEND_PORT;
     const protocol = import.meta.env.VITE_HTTP_PROTOCOL;
 
+    // PROXY MODE: When VITE_BACKEND_HOST is empty, use relative URLs for Vite proxy
+    if (!backendHost) {
+      return ''; // Empty string forces relative URLs which go through Vite proxy
+    }
+
     if (backendHost && backendPort && protocol) {
       return `${protocol}://${backendHost}:${backendPort}`;
     }
@@ -32,11 +37,25 @@ export const API_CONFIG = {
     const backendPort = import.meta.env.VITE_BACKEND_PORT;
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
+    // If backend host and port are set, use them
     if (backendHost && backendPort) {
       return `${wsProtocol}//${backendHost}:${backendPort}/ws`;
     }
 
-    throw new Error('WebSocket configuration missing: VITE_BACKEND_HOST and VITE_BACKEND_PORT must be set');
+    // Development proxy mode: use current host with /ws endpoint
+    // This leverages Vite's proxy configuration
+    if (import.meta.env.DEV) {
+      return `${wsProtocol}//${window.location.host}/ws`;
+    }
+
+    // Fallback to environment variable if available
+    const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL;
+    if (wsBaseUrl) {
+      return wsBaseUrl;
+    }
+
+    // Last resort: use default backend configuration
+    return buildDefaultServiceUrl('backend').replace('http', 'ws') + '/ws';
   },
 
   get DESKTOP_VNC_URL() {
@@ -112,9 +131,9 @@ export const ENDPOINTS = {
   METRICS: '/api/system/metrics',
 
   // Chat
-  CHAT: '/api/chat/chats',
-  CHATS: '/api/chat/chats',
-  CHAT_NEW: '/api/chat/chats/new',
+  CHAT: '/api/chats',
+  CHATS: '/api/chats',
+  CHAT_NEW: '/api/chats/new',
 
   // Knowledge Base
   KNOWLEDGE_SEARCH: '/api/knowledge_base/search',
