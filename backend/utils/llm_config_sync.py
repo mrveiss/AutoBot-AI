@@ -15,6 +15,9 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional
 
+# Import network constants
+from src.constants.network_constants import NetworkConstants, ServiceURLs
+
 logger = logging.getLogger(__name__)
 
 
