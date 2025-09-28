@@ -1,0 +1,596 @@
+<template>
+  <div class="terminal-container">
+    <!-- Terminal Header (matching browser/desktop style) -->
+    <div class="terminal-header bg-gray-100 border-b border-gray-300 p-2 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="flex space-x-1">
+          <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+          <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+          <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+        </div>
+        <div class="flex items-center space-x-2 text-sm">
+          <i class="fas fa-terminal text-green-600"></i>
+          <span class="font-medium">{{ props.chatSessionId ? 'Chat Terminal' : 'System Terminal' }}</span>
+          <span class="text-xs text-gray-500">{{ props.chatSessionId ? 'Chat Session' : 'Independent Tool' }}</span>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <!-- Terminal Controls -->
+        <div class="flex items-center space-x-1">
+          <button @click="toggleConnection" :class="connectionButtonClass" :disabled="isConnecting" class="terminal-btn" :title="connectionButtonText">
+            <i :class="connectionIconClass"></i>
+          </button>
+
+          <button @click="clearTerminal" class="terminal-btn" title="Clear Terminal">
+            <i class="fas fa-trash"></i>
+          </button>
+
+          <button @click="copyTerminalOutput" class="terminal-btn" title="Copy Output">
+            <i class="fas fa-copy"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terminal Body (contained design) -->
+    <div class="terminal-body">
+      <div class="terminal-status" v-if="statusMessage">
+        <i :class="statusIconClass"></i>
+        {{ statusMessage }}
+      </div>
+
+      <div
+        ref="terminalElement"
+        class="terminal-output"
+        :class="{ 'terminal-connected': isConnected }"
+      >
+        <div v-for="(line, index) in terminalLines" :key="index" class="terminal-line">
+          <span class="line-prefix">{{ line.prefix }}</span>
+          <span :class="line.type">{{ line.content }}</span>
+        </div>
+        <div v-if="isConnected" class="terminal-prompt">
+          <span class="prompt">{{ currentPrompt }}</span>
+          <input
+            ref="commandInput"
+            v-model="currentCommand"
+            @keydown="handleKeydown"
+            @keyup="handleKeyup"
+            class="command-input"
+            :disabled="!isConnected"
+            placeholder="Enter command..."
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+
+// Props
+interface Props {
+  sessionType?: 'simple' | 'secure' | 'main'
+  autoConnect?: boolean
+  chatSessionId?: string | null
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  sessionType: 'simple',
+  autoConnect: true,
+  chatSessionId: null
+})
+
+// State
+const sessionId = ref(
+  props.chatSessionId
+    ? `chat_terminal_${props.chatSessionId}_${Date.now()}`
+    : `system_terminal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+)
+const isConnected = ref(false)
+const isConnecting = ref(false)
+const websocket = ref<WebSocket | null>(null)
+const statusMessage = ref('')
+const terminalLines = ref<Array<{prefix: string, content: string, type: string}>>([])
+const currentCommand = ref('')
+const currentPrompt = ref('$ ')
+const commandHistory = ref<string[]>([])
+const historyIndex = ref(-1)
+
+// Refs
+const terminalElement = ref<HTMLElement>()
+const commandInput = ref<HTMLInputElement>()
+
+// Computed
+const connectionButtonClass = computed(() => ({
+  'connect-btn': !isConnected.value,
+  'disconnect-btn': isConnected.value,
+  'connecting': isConnecting.value
+}))
+
+const connectionIconClass = computed(() => {
+  if (isConnecting.value) return 'fas fa-spinner fa-spin'
+  return isConnected.value ? 'fas fa-plug' : 'fas fa-power-off'
+})
+
+const connectionButtonText = computed(() => {
+  if (isConnecting.value) return 'Connecting...'
+  return isConnected.value ? 'Disconnect' : 'Connect'
+})
+
+const statusIconClass = computed(() => {
+  if (isConnecting.value) return 'fas fa-spinner fa-spin text-blue-500'
+  if (isConnected.value) return 'fas fa-check-circle text-green-500'
+  return 'fas fa-exclamation-circle text-red-500'
+})
+
+// Methods
+const getWebSocketUrl = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = '172.16.168.20:8001' // Backend VM
+
+  switch (props.sessionType) {
+    case 'secure':
+      return `${protocol}//${host}/api/ws/secure/${sessionId.value}`
+    case 'main':
+      return `${protocol}//${host}/api/ws/terminal/${sessionId.value}`
+    default:
+      return `${protocol}//${host}/api/ws/simple/${sessionId.value}`
+  }
+}
+
+const connectTerminal = async () => {
+  if (isConnecting.value || isConnected.value) return
+
+  try {
+    isConnecting.value = true
+    statusMessage.value = 'Connecting to terminal...'
+
+    const wsUrl = getWebSocketUrl()
+    console.log('[WorkingTerminal] Connecting to:', wsUrl)
+
+    websocket.value = new WebSocket(wsUrl)
+
+    websocket.value.onopen = () => {
+      isConnected.value = true
+      isConnecting.value = false
+      statusMessage.value = 'Connected to terminal'
+      addTerminalLine('system', 'Terminal connected successfully', 'success')
+
+      // Focus input
+      nextTick(() => {
+        commandInput.value?.focus()
+      })
+
+      setTimeout(() => {
+        statusMessage.value = ''
+      }, 3000)
+    }
+
+    websocket.value.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        handleTerminalMessage(data)
+      } catch (error) {
+        // Handle plain text messages
+        addTerminalLine('', event.data, 'output')
+      }
+    }
+
+    websocket.value.onerror = (error) => {
+      console.error('[WorkingTerminal] WebSocket error:', error)
+      statusMessage.value = 'Connection error'
+      addTerminalLine('system', 'Connection error occurred', 'error')
+    }
+
+    websocket.value.onclose = (event) => {
+      isConnected.value = false
+      isConnecting.value = false
+      if (event.code !== 1000) {
+        statusMessage.value = 'Connection lost'
+        addTerminalLine('system', `Connection closed (${event.code})`, 'error')
+      } else {
+        statusMessage.value = 'Disconnected'
+        addTerminalLine('system', 'Terminal disconnected', 'info')
+      }
+    }
+
+  } catch (error) {
+    console.error('[WorkingTerminal] Connection failed:', error)
+    isConnecting.value = false
+    statusMessage.value = 'Failed to connect'
+    addTerminalLine('system', `Connection failed: ${error}`, 'error')
+  }
+}
+
+const disconnectTerminal = () => {
+  if (websocket.value) {
+    websocket.value.close(1000, 'User disconnected')
+    websocket.value = null
+  }
+  isConnected.value = false
+  isConnecting.value = false
+  statusMessage.value = 'Disconnected'
+}
+
+const toggleConnection = () => {
+  if (isConnected.value) {
+    disconnectTerminal()
+  } else {
+    connectTerminal()
+  }
+}
+
+const sendCommand = (command: string) => {
+  if (!isConnected.value || !websocket.value) {
+    addTerminalLine('system', 'Not connected to terminal', 'error')
+    return
+  }
+
+  try {
+    // Add command to history
+    if (command.trim() && commandHistory.value[commandHistory.value.length - 1] !== command) {
+      commandHistory.value.push(command)
+      if (commandHistory.value.length > 100) {
+        commandHistory.value.shift()
+      }
+    }
+    historyIndex.value = -1
+
+    // Display command in terminal
+    addTerminalLine(currentPrompt.value, command, 'command')
+
+    // Send command to backend
+    const message = {
+      type: 'command',
+      data: command,
+      session_id: sessionId.value
+    }
+
+    websocket.value.send(JSON.stringify(message))
+    currentCommand.value = ''
+
+  } catch (error) {
+    console.error('[WorkingTerminal] Failed to send command:', error)
+    addTerminalLine('system', `Failed to send command: ${error}`, 'error')
+  }
+}
+
+const handleTerminalMessage = (data: any) => {
+  switch (data.type) {
+    case 'output':
+      addTerminalLine('', data.data, 'output')
+      break
+    case 'error':
+      addTerminalLine('', data.data, 'error')
+      break
+    case 'prompt':
+      currentPrompt.value = data.data || '$ '
+      break
+    case 'status':
+      statusMessage.value = data.message
+      break
+    default:
+      addTerminalLine('', JSON.stringify(data), 'info')
+  }
+}
+
+const addTerminalLine = (prefix: string, content: string, type: string = 'output') => {
+  terminalLines.value.push({
+    prefix,
+    content,
+    type
+  })
+
+  // Limit terminal history
+  if (terminalLines.value.length > 1000) {
+    terminalLines.value.splice(0, 100)
+  }
+
+  // Auto-scroll
+  nextTick(() => {
+    if (terminalElement.value) {
+      terminalElement.value.scrollTop = terminalElement.value.scrollHeight
+    }
+  })
+}
+
+const clearTerminal = () => {
+  terminalLines.value = []
+  addTerminalLine('system', 'Terminal cleared', 'info')
+}
+
+const copyTerminalOutput = async () => {
+  try {
+    const output = terminalLines.value
+      .map(line => `${line.prefix}${line.content}`)
+      .join('\n')
+
+    await navigator.clipboard.writeText(output)
+    addTerminalLine('system', 'Terminal output copied to clipboard', 'info')
+  } catch (error) {
+    addTerminalLine('system', 'Failed to copy terminal output', 'error')
+  }
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  switch (event.key) {
+    case 'Enter':
+      event.preventDefault()
+      if (currentCommand.value.trim()) {
+        sendCommand(currentCommand.value.trim())
+      }
+      break
+
+    case 'ArrowUp':
+      event.preventDefault()
+      if (commandHistory.value.length > 0) {
+        if (historyIndex.value === -1) {
+          historyIndex.value = commandHistory.value.length - 1
+        } else if (historyIndex.value > 0) {
+          historyIndex.value--
+        }
+        currentCommand.value = commandHistory.value[historyIndex.value] || ''
+      }
+      break
+
+    case 'ArrowDown':
+      event.preventDefault()
+      if (historyIndex.value !== -1) {
+        if (historyIndex.value < commandHistory.value.length - 1) {
+          historyIndex.value++
+          currentCommand.value = commandHistory.value[historyIndex.value]
+        } else {
+          historyIndex.value = -1
+          currentCommand.value = ''
+        }
+      }
+      break
+
+    case 'Tab':
+      event.preventDefault()
+      // TODO: Implement tab completion
+      break
+  }
+}
+
+const handleKeyup = (event: KeyboardEvent) => {
+  // Reset history navigation when typing
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+    historyIndex.value = -1
+  }
+}
+
+// Lifecycle
+onMounted(() => {
+  if (props.chatSessionId) {
+    addTerminalLine('system', `Chat Terminal (Session: ${props.chatSessionId.slice(-8)})`, 'info')
+    addTerminalLine('system', `Terminal session: ${sessionId.value}`, 'info')
+    addTerminalLine('system', `Connection type: ${props.sessionType}`, 'info')
+    addTerminalLine('system', `Note: This terminal is associated with chat session ${props.chatSessionId.slice(-8)}`, 'info')
+  } else {
+    addTerminalLine('system', `System Terminal (Independent)`, 'info')
+    addTerminalLine('system', `Session: ${sessionId.value}`, 'info')
+    addTerminalLine('system', `Connection type: ${props.sessionType}`, 'info')
+    addTerminalLine('system', `Note: This terminal is not associated with any chat session`, 'warning')
+  }
+
+  if (props.autoConnect) {
+    connectTerminal()
+  }
+})
+
+onUnmounted(() => {
+  disconnectTerminal()
+})
+</script>
+
+<style scoped>
+/* Container styling matching browser/desktop design */
+.terminal-container {
+  @apply flex flex-col h-full bg-white border-0 border-t border-l border-r border-gray-300 overflow-hidden;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  min-height: 400px;
+  /* Remove shadow and border-radius to prevent overlap with tabs */
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+/* Terminal button styling matching browser controls */
+.terminal-btn {
+  @apply px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors duration-200;
+}
+
+.terminal-btn:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.terminal-btn.connect-btn {
+  @apply text-green-600 hover:text-green-800 hover:bg-green-100;
+}
+
+.terminal-btn.disconnect-btn {
+  @apply text-red-600 hover:text-red-800 hover:bg-red-100;
+}
+
+.terminal-btn.connecting {
+  @apply text-blue-600;
+}
+
+/* Terminal body with dark theme */
+.terminal-body {
+  @apply flex-1 flex flex-col bg-gray-900 overflow-hidden;
+}
+
+.terminal-status {
+  @apply px-4 py-2 bg-gray-800 text-gray-300 text-sm flex items-center gap-2 border-b border-gray-700;
+}
+
+.terminal-output {
+  @apply flex-1 p-4 bg-gray-900 text-green-400 overflow-y-auto text-sm leading-relaxed min-h-0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.terminal-connected {
+  @apply border-l-4 border-green-500;
+}
+
+.terminal-output::-webkit-scrollbar {
+  width: 6px;
+}
+
+.terminal-output::-webkit-scrollbar-track {
+  @apply bg-gray-800;
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  @apply bg-gray-600 rounded;
+}
+
+.terminal-output::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500;
+}
+
+.terminal-line {
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+
+.line-prefix {
+  color: #6c757d;
+  user-select: none;
+}
+
+.command {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.output {
+  color: #e9ecef;
+}
+
+.success {
+  color: #28a745;
+}
+
+.error {
+  color: #dc3545;
+}
+
+.info {
+  color: #17a2b8;
+}
+
+.terminal-prompt {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  flex-shrink: 0; /* Prevent prompt from shrinking */
+}
+
+.prompt {
+  color: #6c757d;
+  margin-right: 8px;
+  user-select: none;
+}
+
+.command-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+  padding: 0;
+}
+
+/* Additional styling for terminal line types */
+.terminal-line {
+  @apply mb-1 break-words;
+}
+
+.line-prefix {
+  @apply text-gray-500 select-none mr-2;
+}
+
+.command {
+  @apply text-blue-400 font-medium;
+}
+
+.output {
+  @apply text-green-400;
+}
+
+.error {
+  @apply text-red-400;
+}
+
+.info {
+  @apply text-cyan-400;
+}
+
+.warning {
+  @apply text-yellow-400;
+}
+
+.terminal-prompt {
+  @apply flex items-center mt-2 pt-2 border-t border-gray-700;
+}
+
+.prompt {
+  @apply text-green-500 mr-2 select-none font-semibold;
+}
+
+.command-input {
+  @apply flex-1 bg-transparent border-none text-green-400 outline-none py-1;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.command-input::placeholder {
+  @apply text-gray-500;
+}
+
+.command-input:disabled {
+  @apply opacity-50;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .working-terminal {
+    /* FIXED: Use min-height instead of fixed height for mobile */
+    min-height: 300px; /* Minimum viable height on mobile */
+  }
+
+  .terminal-header {
+    padding: 8px 12px;
+  }
+
+  .terminal-header h3 {
+    font-size: 12px;
+  }
+
+  .terminal-controls button {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .terminal-output {
+    padding: 12px;
+    font-size: 12px;
+  }
+}
+
+/* ADDED: Ensure terminal works well in flex layouts */
+@media (min-width: 769px) {
+  .working-terminal {
+    /* Ensure terminal adapts to container height on larger screens */
+    max-height: 100vh; /* Don't exceed viewport */
+  }
+}
+</style>
