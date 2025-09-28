@@ -98,55 +98,61 @@
 
     <!-- Main VNC Display Area -->
     <div class="flex-1 relative">
-      <!-- noVNC Iframe -->
-      <iframe 
-        v-show="!connectionError && !isLoading"
-        :key="iframeKey"
-        :src="novncUrl"
-        class="w-full h-full border-0"
-        title="noVNC Remote Desktop"
-        allowfullscreen
-        @load="onIframeLoad"
-        @error="onIframeError"
-        ref="vncIframe"
-      ></iframe>
-      
-      <!-- Loading overlay -->
-      <div v-if="isLoading" class="absolute inset-0 bg-gray-900 flex items-center justify-center">
-        <div class="text-center text-white">
-          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p class="text-lg">Connecting to remote desktop...</p>
-          <p class="text-sm text-gray-400 mt-2">{{ loadingMessage }}</p>
-        </div>
-      </div>
-
-      <!-- Connection Error Display -->
-      <div v-if="connectionError && !isLoading" class="absolute inset-0 bg-gray-900 flex items-center justify-center">
-        <div class="text-center text-white max-w-md mx-4">
-          <i class="fas fa-desktop text-6xl text-gray-500 mb-4"></i>
-          <h3 class="text-xl font-semibold mb-2">Desktop Not Available</h3>
-          <p class="text-gray-400 mb-4">
-            Unable to connect to the VNC desktop service. The service may not be running or may be temporarily unavailable.
-          </p>
-          <div class="space-y-2">
-            <button 
-              @click="retryConnection" 
-              class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors flex items-center justify-center gap-2"
-              :disabled="isRetrying"
-            >
-              <i :class="isRetrying ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
-              {{ isRetrying ? 'Connecting...' : 'Try Again' }}
-            </button>
-            <button 
-              @click="openInNewWindow" 
-              class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded transition-colors flex items-center justify-center gap-2"
-            >
-              <i class="fas fa-external-link-alt"></i>
-              Open in New Window
-            </button>
+      <UnifiedLoadingView
+        loading-key="novnc-viewer"
+        :has-content="!isLoading && !connectionError"
+        :auto-timeout-ms="20000"
+        @loading-complete="handleVNCConnected"
+        @loading-error="handleVNCError"
+        @loading-timeout="handleVNCTimeout"
+        class="h-full"
+      >
+        <template #loading-message>
+          <div class="text-center text-white">
+            <p class="text-lg">Connecting to remote desktop...</p>
+            <p class="text-sm text-gray-400 mt-2">{{ loadingMessage }}</p>
           </div>
-        </div>
-      </div>
+        </template>
+
+        <template #error-content>
+          <div class="text-center text-white max-w-md mx-4">
+            <i class="fas fa-desktop text-6xl text-gray-500 mb-4"></i>
+            <h3 class="text-xl font-semibold mb-2">Desktop Not Available</h3>
+            <p class="text-gray-400 mb-4">
+              {{ connectionError || 'Unable to connect to the VNC desktop service. The service may not be running or may be temporarily unavailable.' }}
+            </p>
+            <div class="space-y-2">
+              <button
+                @click="retryConnection"
+                class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors flex items-center justify-center gap-2"
+                :disabled="isRetrying"
+              >
+                <i :class="isRetrying ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
+                {{ isRetrying ? 'Connecting...' : 'Try Again' }}
+              </button>
+              <button
+                @click="openInNewWindow"
+                class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded transition-colors flex items-center justify-center gap-2"
+              >
+                <i class="fas fa-external-link-alt"></i>
+                Open in New Window
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- VNC iframe content -->
+        <iframe
+          :key="iframeKey"
+          :src="novncUrl"
+          class="w-full h-full border-0"
+          title="noVNC Remote Desktop"
+          allowfullscreen
+          @load="onIframeLoad"
+          @error="onIframeError"
+          ref="vncIframe"
+        ></iframe>
+      </UnifiedLoadingView>
     </div>
 
     <!-- Status Bar -->
@@ -189,6 +195,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
+import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 
 // Configuration
 const vncHost = ref('172.16.168.20')  // Main WSL machine
@@ -418,6 +425,32 @@ const loadingTimeout = ref(null)
 // Define fullscreen handler function for proper cleanup
 const handleFullscreenChange = () => {
   isFullscreen.value = !!document.fullscreenElement
+}
+
+// UnifiedLoadingView event handlers
+const handleVNCConnected = () => {
+  console.log('[NoVNCViewer] VNC connection established')
+  isLoading.value = false
+  connectionError.value = false
+  errorDetails.value = ''
+}
+
+const handleVNCError = (error: any) => {
+  console.error('[NoVNCViewer] VNC connection error:', error)
+  isLoading.value = false
+  connectionError.value = true
+  errorDetails.value = `VNC service error: ${error.message || error}`
+  errorCount.value += 1
+  lastError.value = error.message || error
+}
+
+const handleVNCTimeout = () => {
+  console.warn('[NoVNCViewer] VNC connection timeout')
+  isLoading.value = false
+  connectionError.value = true
+  errorDetails.value = 'VNC service connection timed out. Service may be starting up.'
+  errorCount.value += 1
+  lastError.value = 'Connection timeout'
 }
 
 // Lifecycle
