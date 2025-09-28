@@ -55,8 +55,8 @@ class SystemMetricsCollector:
         if self._redis_client is None:
             try:
                 self._redis_client = get_redis_client(
-                    async_client=True,
-                    db=cfg.get('redis.databases.metrics.db', 4)
+                    database="metrics",
+                    async_client=True
                 )
                 if asyncio.iscoroutine(self._redis_client):
                     self._redis_client = await self._redis_client

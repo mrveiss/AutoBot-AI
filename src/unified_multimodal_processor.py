@@ -171,11 +171,27 @@ class VisionProcessor(BaseModalProcessor):
                 # Using smaller model for memory efficiency
                 self.logger.info("Loading BLIP-2 model...")
                 self.blip_processor = Blip2Processor.from_pretrained('Salesforce/blip2-opt-2.7b')
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
-                    'Salesforce/blip2-opt-2.7b',
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                    device_map="auto" if torch.cuda.is_available() else None
-                )
+
+                # Check if accelerate is available for device_map
+                try:
+                    import accelerate
+                    accelerate_available = True
+                except ImportError:
+                    accelerate_available = False
+                    self.logger.warning("accelerate package not available, loading BLIP-2 without device_map")
+
+                # Load BLIP-2 model with device_map only if accelerate is available
+                if accelerate_available and torch.cuda.is_available():
+                    self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                        'Salesforce/blip2-opt-2.7b',
+                        torch_dtype=torch.float16,
+                        device_map="auto"
+                    )
+                else:
+                    self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                        'Salesforce/blip2-opt-2.7b',
+                        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+                    ).to(self.device)
 
                 # Set models to evaluation mode
                 self.clip_model.eval()

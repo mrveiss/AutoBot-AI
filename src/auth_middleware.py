@@ -80,8 +80,8 @@ class AuthenticationMiddleware:
 
         # Store in configuration for consistency across restarts
         try:
-            # Update the config in memory (will be persisted on next config save)
-            config.set('security_config.jwt_secret', secure_secret)
+            # Update the config in memory using the private method (will be persisted on next config save)
+            config._set_nested_value('security_config.jwt_secret', secure_secret)
             logger.info("Generated and stored secure JWT secret")
             return secure_secret
         except Exception as e:
