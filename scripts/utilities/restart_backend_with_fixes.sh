@@ -13,7 +13,7 @@ echo "🔄 AutoBot Backend Restart with Error Fixes"
 echo "============================================="
 
 # Get current backend PID
-BACKEND_PID=$(pgrep -f "uvicorn.*fast_app_factory_fix")
+BACKEND_PID=$(pgrep -f "python.*backend/main.py")
 
 if [ -n "$BACKEND_PID" ]; then
     echo "📍 Found running backend (PID: $BACKEND_PID)"
@@ -75,13 +75,7 @@ cd /home/kali/Desktop/AutoBot
 export PYTHONPATH="/home/kali/Desktop/AutoBot:$PYTHONPATH"
 
 # Start backend in background
-nohup python -m uvicorn backend.fast_app_factory_fix:app \
-    --host 0.0.0.0 \
-    --port 8001 \
-    --log-level info \
-    --access-log \
-    --timeout-keep-alive 120 \
-    > logs/backend_restart.log 2>&1 &
+nohup python backend/main.py > logs/backend_restart.log 2>&1 &
 
 NEW_BACKEND_PID=$!
 echo "🆔 New backend PID: $NEW_BACKEND_PID"

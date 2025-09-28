@@ -287,10 +287,10 @@ restart_all_services() {
     # Start backend
     if [ "$DEV_MODE" = true ]; then
         log "Starting backend in development mode..."
-        nohup python backend/fast_app_factory_fix.py > logs/backend.log 2>&1 &
+        nohup python backend/main.py > logs/backend.log 2>&1 &
     else
         log "Starting backend in production mode..."
-        nohup python backend/fast_app_factory_fix.py > logs/backend.log 2>&1 &
+        nohup python backend/main.py > logs/backend.log 2>&1 &
     fi
     
     # Wait for backend to start
@@ -421,7 +421,7 @@ cleanup() {
     fi
     
     # Stop backend
-    pkill -f "python.*backend/fast_app_factory_fix.py" || true
+    pkill -f "python.*backend/main.py" || true
     
     success "AutoBot backend stopped"
     echo -e "${CYAN}VM services continue running. Use scripts/vm-management/stop-all-vms.sh to stop them.${NC}"
@@ -587,9 +587,9 @@ start_backend() {
     log "Starting AutoBot backend (172.16.168.20:8001)..."
     
     # Check if backend is already running
-    if pgrep -f "python.*backend/fast_app_factory_fix.py" > /dev/null; then
+    if pgrep -f "python.*backend/main.py" > /dev/null; then
         warning "Backend already running, stopping first..."
-        pkill -f "python.*backend/fast_app_factory_fix.py" || true
+        pkill -f "python.*backend/main.py" || true
         sleep 2
     fi
     
@@ -608,10 +608,10 @@ start_backend() {
     # Start backend with proper error handling
     if [ "$DEV_MODE" = true ]; then
         log "Starting backend in development mode..."
-        nohup python backend/fast_app_factory_fix.py > logs/backend.log 2>&1 &
+        nohup python backend/main.py > logs/backend.log 2>&1 &
     else
         log "Starting backend in production mode..."
-        nohup python backend/fast_app_factory_fix.py > logs/backend.log 2>&1 &
+        nohup python backend/main.py > logs/backend.log 2>&1 &
     fi
     
     # Wait for backend to start

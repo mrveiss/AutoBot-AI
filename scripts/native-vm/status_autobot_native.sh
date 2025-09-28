@@ -196,7 +196,7 @@ test_health_endpoint() {
 check_wsl_backend() {
     echo -e "${CYAN}WSL Backend (172.16.168.20:8001):${NC}"
     
-    local backend_pids=$(pgrep -f "fast_app_factory_fix.py\|uvicorn.*api.main:app" 2>/dev/null || true)
+    local backend_pids=$(pgrep -f "main.py\|uvicorn.*api.main:app" 2>/dev/null || true)
     
     if [ -n "$backend_pids" ]; then
         echo -e "  Process Status: ${GREEN}Running (PIDs: $backend_pids)${NC}"

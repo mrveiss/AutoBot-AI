@@ -25,8 +25,14 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
-# Configure sandboxed directory for file operations
-SANDBOXED_ROOT = Path("data/file_manager_root")
+# Configure sandboxed directory for file operations using centralized paths
+from backend.utils.paths_manager import get_data_path, ensure_data_directory
+
+# Ensure data directory exists
+ensure_data_directory()
+
+# Get sandboxed root using centralized path management
+SANDBOXED_ROOT = get_data_path("file_manager_root")
 SANDBOXED_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Maximum file size (50MB)

@@ -156,9 +156,9 @@ check_backend_status() {
 
     # Check if backend is running
     echo -n "  Process Status: "
-    if pgrep -f "python.*backend/fast_app_factory_fix.py" >/dev/null; then
+    if pgrep -f "python.*backend/main.py" >/dev/null; then
         echo -e "${GREEN}✅ Running${NC}"
-        local backend_pid=$(pgrep -f "python.*backend/fast_app_factory_fix.py")
+        local backend_pid=$(pgrep -f "python.*backend/main.py")
         echo "  PID: $backend_pid"
     else
         echo -e "${RED}❌ Not Running${NC}"

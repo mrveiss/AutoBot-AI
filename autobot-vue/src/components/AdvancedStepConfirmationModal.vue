@@ -1,6 +1,6 @@
 <template>
-  <div v-if="visible" class="confirmation-modal-overlay" @click="closeModal" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-    <div class="advanced-step-modal" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
+  <div v-if="visible" class="confirmation-modal-overlay" @click="closeModal" tabindex="0" @keyup.enter="handleKeyUp" @keyup.space="handleKeyUp">
+    <div class="advanced-step-modal" @click.stop tabindex="0" @keyup.enter="handleModalKeyUp" @keyup.space="handleModalKeyUp">
       <!-- Modal Header -->
       <div class="modal-header">
         <h3 class="modal-title">🤖 Advanced Workflow Step Management</h3>
@@ -657,6 +657,21 @@ const cancelCommandEdit = () => {
 const onAutoExecutionChange = () => {
   // Handle auto execution change
   console.log('Auto execution:', enableAutoExecution.value)
+}
+
+// Event handlers for keyboard navigation
+const handleKeyUp = (event: KeyboardEvent) => {
+  const target = event.target as HTMLElement | null
+  if (target && typeof target.click === 'function') {
+    target.click()
+  }
+}
+
+const handleModalKeyUp = (event: KeyboardEvent) => {
+  const target = event.target as HTMLElement | null
+  if (target && typeof target.click === 'function') {
+    target.click()
+  }
 }
 
 // Initialize validation on mount

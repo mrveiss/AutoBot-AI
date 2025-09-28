@@ -322,10 +322,18 @@ async def export_state_data(request: ExportRequest):
     try:
         tracker = get_state_tracker()
 
-        # Generate filename
+        # Generate filename using centralized path management
+        from backend.utils.paths_manager import get_data_path, ensure_data_directory
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"state_tracking_export_{timestamp}.{request.format}"
-        output_path = f"data/reports/state_tracking/{filename}"
+
+        # Ensure data directory and reports subdirectory exist
+        ensure_data_directory()
+        reports_dir = get_data_path("reports/state_tracking")
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        output_path = str(reports_dir / filename)
 
         # Export data
         await tracker.export_state_data(output_path, format=request.format)

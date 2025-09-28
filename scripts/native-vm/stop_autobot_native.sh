@@ -87,7 +87,7 @@ stop_wsl_backend() {
     echo -e "${CYAN}🛑 Stopping WSL Backend...${NC}"
     
     # Find and stop backend processes
-    local backend_pids=$(pgrep -f "fast_app_factory_fix.py\|uvicorn.*api.main:app" 2>/dev/null || true)
+    local backend_pids=$(pgrep -f "main.py\|uvicorn.*api.main:app" 2>/dev/null || true)
     
     if [ -n "$backend_pids" ]; then
         echo "Found backend process(es): $backend_pids"
@@ -202,7 +202,7 @@ verify_services_stopped() {
     
     # Check WSL backend
     echo -n "  Checking WSL Backend... "
-    local backend_pids=$(pgrep -f "fast_app_factory_fix.py\|uvicorn.*api.main:app" 2>/dev/null || true)
+    local backend_pids=$(pgrep -f "main.py\|uvicorn.*api.main:app" 2>/dev/null || true)
     if [ -n "$backend_pids" ]; then
         echo -e "${RED}❌ Still running (PIDs: $backend_pids)${NC}"
         all_stopped=false

@@ -1,10 +1,10 @@
 // ChatInterface TypeScript definitions and setup
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import type { 
-  ChatMessage, 
-  ChatSession, 
-  WebSocketMessage, 
-  LLMResponse, 
+import type {
+  ChatMessage,
+  ChatSession,
+  WebSocketMessage,
+  LLMResponse,
   AppSettings,
   ApiResponse
 } from '@/types/api'
@@ -30,12 +30,12 @@ export function useChatInterface() {
   const chatList = ref<ChatSession[]>([])
   const currentChatId = ref<string | null>(null)
   const attachedFiles = ref<File[]>([])
-  
+
   // UI state
   const systemReloading = ref(false)
   const reloadNeeded = ref(false)
   const chatMessages = ref<HTMLElement | null>(null)
-  
+
   // Knowledge base state
   const kbStatus = ref({
     status: 'loading' as 'loading' | 'ready' | 'error' | 'empty',
@@ -107,11 +107,11 @@ export function useChatInterface() {
   const formatMessage = (text: string, type?: string): string => {
     const cleanedText = escapeJsonChars(text)
     const parsedContent = parseStructuredMessage(cleanedText)
-    
+
     if (parsedContent.length > 0) {
       return parsedContent.map(item => formatSingleMessage(item.text, item.type)).join('')
     }
-    
+
     return formatSingleMessage(cleanedText, type || 'response')
   }
 
@@ -130,18 +130,18 @@ export function useChatInterface() {
 
   const parseStructuredMessage = (text: string): Array<{ type: string; text: string; order: number }> => {
     const messages: Array<{ type: string; text: string; order: number }> = []
-    
+
     // Parse tool output patterns
     const toolPattern = /Tool Used: ([^\n]+)[\n\s]*Output: (.*?)(?=\n\d{2}:\d{2}:\d{2}|\nTool Used:|$)/gis
     let toolMatch
-    
+
     while ((toolMatch = toolPattern.exec(text)) !== null) {
       messages.push({
         type: 'tool_output',
         text: `<strong>${toolMatch[1].trim()}</strong>`,
         order: toolMatch.index
       })
-      
+
       const outputContent = toolMatch[2].trim()
       if (outputContent.startsWith('{') || outputContent.startsWith("{'")) {
         try {
@@ -170,13 +170,13 @@ export function useChatInterface() {
         })
       }
     }
-    
+
     return messages.sort((a, b) => a.order - b.order)
   }
 
   const formatSingleMessage = (text: string, type: string): string => {
     const escapedText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    
+
     switch (type) {
       case 'thought':
         return `<div class="thought-message">
@@ -216,6 +216,14 @@ export function useChatInterface() {
       default:
         return `<div class="regular-message">${escapedText}</div>`
     }
+  }
+
+  // Helper function to ensure sender is valid type
+  const normalizeSender = (sender: string | undefined): "user" | "assistant" | "system" => {
+    if (sender === 'user' || sender === 'assistant' || sender === 'system') {
+      return sender
+    }
+    return 'assistant' // Default fallback
   }
 
   // API interaction functions
@@ -268,9 +276,9 @@ export function useChatInterface() {
         attachments: uploadedFilePaths.length > 0 ? uploadedFilePaths : undefined
       }
 
-      const chatResponse = await apiService.sendMessage(userInput, { 
+      const chatResponse = await apiService.sendMessage(userInput, {
         chatId: currentChatId.value || 'default',
-        ...messageData 
+        ...messageData
       })
 
       // Process response
@@ -307,20 +315,20 @@ export function useChatInterface() {
 
   const determineMessageType = (text: string): string => {
     if (!text) return 'response'
-    
+
     if (text.includes('response_text') || (text.startsWith('{') && text.includes('"status"'))) {
       return 'json'
     }
-    
+
     if (text.includes('Tool Used:') && text.includes('Output:')) {
       return 'tool_output'
     }
-    
+
     if (text.includes('[THOUGHT]') || text.includes('[PLANNING]') ||
         text.includes('[UTILITY]') || text.includes('[DEBUG]')) {
       return 'structured'
     }
-    
+
     return 'response'
   }
 
@@ -329,12 +337,12 @@ export function useChatInterface() {
     try {
       const data = await apiClient.createNewChat()
       const newChatId = data.chatId || generateChatId()
-      
+
       currentChatId.value = newChatId
       messages.value = []
-      
+
       localStorage.setItem('lastChatId', newChatId)
-      
+
       chatList.value.unshift({
         id: newChatId,
         chatId: newChatId,
@@ -364,12 +372,12 @@ export function useChatInterface() {
     try {
       const data = await apiService.getChatMessages(chatId)
       const history = data.data?.history || []
-      
+
       messages.value = history.map((message: any) => ({
         ...message,
         type: message.messageType || message.type || 'default'
       }))
-      
+
       await nextTick()
       if (chatMessages.value) {
         chatMessages.value.scrollTop = chatMessages.value.scrollHeight
@@ -402,7 +410,7 @@ export function useChatInterface() {
         association_type: 'upload',
         metadata: { original_filename: fileName }
       })
-      
+
       if (!chatFileAssociations.value[currentChatId.value || 'default']) {
         chatFileAssociations.value[currentChatId.value || 'default'] = []
       }
@@ -454,7 +462,7 @@ export function useChatInterface() {
       const response = payload as LLMResponse
       messages.value.push({
         id: generateChatId(),
-        sender: response.sender || 'assistant',
+        sender: normalizeSender(response.sender),
         content: response.response || response.content || 'No response content',
         timestamp: new Date().toISOString(),
         type: response.message_type || 'response'

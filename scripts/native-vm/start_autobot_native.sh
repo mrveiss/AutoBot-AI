@@ -255,9 +255,9 @@ start_wsl_backend() {
     set +a
     
     # Start backend
-    if [ -f "backend/fast_app_factory_fix.py" ]; then
+    if [ -f "backend/main.py" ]; then
         echo "Using optimized backend startup..."
-        cd backend && python3 fast_app_factory_fix.py &
+        cd backend && python3 main.py &
     else
         echo "Using standard backend startup..."
         cd backend && python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload &

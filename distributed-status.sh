@@ -23,7 +23,7 @@ echo -e "${BLUE}Daily Operations:${NC}"
 echo "  bash scripts/distributed/check-health.sh          # Health check all services"
 echo "  bash scripts/distributed/start-coordinator.sh     # Start backend coordinator" 
 echo "  tail -f logs/backend-coordinator.log              # View coordinator logs"
-echo "  pkill -f 'uvicorn.*fast_app_factory_fix:app'      # Stop backend coordinator"
+echo "  pkill -f 'python.*backend/main.py'               # Stop backend coordinator"
 
 echo ""
 echo -e "${BLUE}Setup & Configuration:${NC}"

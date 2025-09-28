@@ -69,8 +69,11 @@ analysis/**/*.json
 analysis/**/results.txt
 analysis/**/output.txt
 
-# Backend data
-backend/data/chats/*
+# All data directory contents (moved to unified data/ directory)
+data/chats/*
+data/reports_backend/*
+data/file_manager_root_backend/*
+data/file_manager_root_frontend/*
 
 # === SECURITY & AUTHENTICATION ===
 # SSH keys and certificates
@@ -128,11 +131,10 @@ backend/config/settings.json
 .env.production.local
 
 # === LOG FILES ===
-# All log files should go in data/logs/ directory (new location)
+# All log files go in the unified logs/ directory
 logs/
-data/logs/
 *.log
-# Prevent root directory log files (they belong in data/logs/)
+# Prevent root directory log files (they belong in logs/)
 /backend*.log
 /frontend*.log
 /autobot*.log
