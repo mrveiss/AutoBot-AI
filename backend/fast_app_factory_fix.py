@@ -127,10 +127,17 @@ async def health_check():
 @app.get("/api/version")
 async def version_info():
     """API version information"""
+    # Generate stable build hash to prevent false update prompts
+    # Using app start time + version for consistent build identification
+    import hashlib
+    build_identifier = f"fast_factory_1.0.0_{int(APP_START_TIME)}"
+    build_hash = hashlib.md5(build_identifier.encode()).hexdigest()[:12]
+
     return {
         "version": "1.0.0",
         "backend": "fast_factory",
         "api_version": "v1",
+        "buildHash": build_hash,
         "timestamp": datetime.now().isoformat(),
         "description": "AutoBot Backend API with timeout fixes"
     }
@@ -372,6 +379,22 @@ async def background_initialization():
 
     except Exception as e:
         logger.error(f"Background initialization failed: {e}")
+
+
+async def get_or_create_orchestrator(app: FastAPI):
+    """Get or create orchestrator instance for chat functionality"""
+    orchestrator = getattr(app.state, "orchestrator", None)
+    if orchestrator is None:
+        try:
+            from src.lightweight_orchestrator import lightweight_orchestrator
+            await lightweight_orchestrator.startup()
+            app.state.orchestrator = lightweight_orchestrator
+            orchestrator = lightweight_orchestrator
+            logger.info("✅ Orchestrator created and initialized")
+        except Exception as e:
+            logger.error(f"❌ Failed to create orchestrator: {e}")
+            return None
+    return orchestrator
 
 
 # Error handlers
