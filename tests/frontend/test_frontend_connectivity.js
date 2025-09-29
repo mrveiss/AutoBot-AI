@@ -54,6 +54,9 @@ class FrontendConnectivityTest {
 
     this.page = await this.browser.newPage();
 
+    // Set proper viewport for full page display
+    await this.page.setViewportSize({ width: 1920, height: 1080 });
+
     // Set timeouts
     this.page.setDefaultTimeout(TEST_CONFIG.timeout);
     this.page.setDefaultNavigationTimeout(TEST_CONFIG.navigationTimeout);

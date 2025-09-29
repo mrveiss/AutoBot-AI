@@ -68,12 +68,14 @@ class ResearchBrowserSession:
                         "--disable-background-timer-throttling",
                         "--disable-backgrounding-occluded-windows",
                         "--disable-renderer-backgrounding",
+                        "--window-size=1920,1080",
+                        "--force-device-scale-factor=1",
                     ],
                 )
                 logger.info(f"Launched new browser for session {self.session_id}")
 
             self.context = await self.browser.new_context(
-                viewport={"width": 1280, "height": 720},
+                viewport={"width": 1920, "height": 1080},
                 user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             )
 

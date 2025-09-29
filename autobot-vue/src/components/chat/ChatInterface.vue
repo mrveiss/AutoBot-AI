@@ -32,7 +32,7 @@
         <!-- Chat/Tools Tabs -->
         <ChatTabs
           :active-tab="activeTab"
-          @tab-change="activeTab = $event"
+          @tab-change="handleTabChange"
         />
 
         <!-- Chat Content with Unified Loading -->
@@ -276,7 +276,19 @@ const handleContentLoadingTimeout = () => {
   console.warn('[ChatInterface] Content loading timed out')
 }
 
-// Terminal tab handler
+// Tab change handler - ensures local tab state change without router navigation
+const handleTabChange = (tabKey: string) => {
+  console.log('[ChatInterface] Tab change requested:', tabKey)
+  
+  // Prevent any router navigation and only update local state
+  // This fixes the Terminal tab issue where it was triggering unwanted navigation
+  activeTab.value = tabKey
+  
+  // Log successful tab change
+  console.log('[ChatInterface] Active tab changed to:', activeTab.value)
+}
+
+// Terminal tab handler for explicit new tab opening (not used for tab clicks)
 const openTerminalInNewTab = () => {
   // Open terminal in a new browser tab by navigating to tools/terminal
   window.open('/tools/terminal', '_blank')

@@ -9,8 +9,18 @@ const { chromium } = require('playwright');
 async function quickTest() {
     console.log('🚀 Quick Frontend Test Started\n');
     
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+        headless: true,
+        args: [
+            '--window-size=1920,1080',
+            '--force-device-scale-factor=1',
+            '--disable-web-security'
+        ]
+    });
     const page = await browser.newPage();
+
+    // Set proper viewport size for full page display
+    await page.setViewportSize({ width: 1920, height: 1080 });
     
     const results = {
         pageLoads: false,
@@ -22,9 +32,9 @@ async function quickTest() {
     try {
         // Test 1: Page loads without timeout
         console.log('📱 Testing page load...');
-        await page.goto('http://localhost:5173', { 
+        await page.goto('http://172.16.168.21:5173', {
             waitUntil: 'domcontentloaded',
-            timeout: 15000 
+            timeout: 15000
         });
         
         await page.waitForSelector('#app', { timeout: 5000 });

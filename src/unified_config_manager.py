@@ -495,6 +495,30 @@ class UnifiedConfigManager:
             "unified": backend_llm  # New unified format
         }
 
+    # BACKEND CONFIGURATION METHODS
+
+    def get_backend_config(self) -> Dict[str, Any]:
+        """Get backend configuration with fallback defaults"""
+        backend_config = self.get_nested("backend", {})
+
+        defaults = {
+            "server_host": "0.0.0.0",
+            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
+            "api_endpoint": f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', '8001')}",
+            "timeout": 60,
+            "max_retries": 3,
+            "streaming": False,
+            "cors_origins": [],
+            "allowed_hosts": ["*"],
+            "max_request_size": 10485760,  # 10MB
+        }
+
+        return self._deep_merge(defaults, backend_config)
+
+    def get_config_section(self, section: str) -> Dict[str, Any]:
+        """Get configuration section with fallback defaults"""
+        return self.get_nested(section, {})
+
     # REDIS CONFIGURATION METHODS
 
     def get_redis_config(self) -> Dict[str, Any]:

@@ -268,7 +268,12 @@ class UnifiedConfig:
     def get(self, path: str, default: Any = None) -> Any:
         """Get configuration value using dot notation"""
         return self._get_nested_value(path, default)
-    
+
+    def set_nested(self, path: str, value: Any) -> None:
+        """Set configuration value using dot notation"""
+        with self._lock:
+            self._set_nested_value(path, value)
+
     def get_host(self, service: str, default: str = '127.0.0.1') -> str:
         """Get host IP for a service"""
         return self.get(f'infrastructure.hosts.{service}', default)

@@ -420,3 +420,8 @@ if __name__ == "__main__":
     # Test performance metrics
     metrics = get_performance_metrics()
     print(f"Performance Metrics: {json.dumps(metrics, indent=2)}")
+
+
+# Backward compatibility aliases
+Diagnostics = PerformanceOptimizedDiagnostics
+performance_diagnostics = PerformanceOptimizedDiagnostics()
