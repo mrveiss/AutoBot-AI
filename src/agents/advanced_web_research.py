@@ -159,11 +159,12 @@ class BrowserFingerprint:
     ]
 
     VIEWPORTS = [
-        {"width": 1920, "height": 1080},
-        {"width": 1366, "height": 768},
-        {"width": 1536, "height": 864},
-        {"width": 1440, "height": 900},
-        {"width": 1280, "height": 720},
+        {"width": 1920, "height": 1080},  # Full HD - prioritized
+        {"width": 1920, "height": 1080},  # Duplicate for higher probability
+        {"width": 1536, "height": 864},   # High resolution
+        {"width": 1440, "height": 900},   # MacBook Pro
+        {"width": 1366, "height": 768},   # Common laptop
+        {"width": 1280, "height": 720},   # HD minimum
     ]
 
     def __init__(self):
