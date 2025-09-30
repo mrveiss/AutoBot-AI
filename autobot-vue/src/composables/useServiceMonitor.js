@@ -1,9 +1,11 @@
 /**
  * Service Monitoring Composable
  * Provides real-time service status monitoring
+ * Enhanced with graceful API fallbacks
  */
 import { ref, computed, onMounted, onUnmounted, getCurrentInstance } from 'vue'
 import { apiService } from '@/services/api.js'
+import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 
 export function useServiceMonitor() {
   // Service monitoring state
@@ -141,21 +143,40 @@ export function useServiceMonitor() {
     }
   }
   
-  // Quick health check (lighter weight)
+  // Quick health check (lighter weight) with graceful fallbacks
   const fetchHealthCheck = async () => {
     try {
-      const data = await apiService.get('/api/services/health')
+      console.log('[useServiceMonitor] Performing graceful health check...')
+      
+      // FIXED: Use correct endpoint with graceful fallback
+      // Old: '/api/services/health' -> New: '/api/monitoring/services/health'
+      const response = await apiEndpointMapper.fetchWithFallback('/api/services/health', { timeout: 8000 })
+      const data = await response.json()
+      
+      if (response.fallback) {
+        console.log('[useServiceMonitor] Using fallback data for health check')
+      }
       
       if (data && typeof data === 'object') {
-        overallStatus.value = data.status
-        serviceSummary.value.online = data.healthy || 0
-        serviceSummary.value.total = data.total || 0
-        serviceSummary.value.warning = data.warnings || 0
-        serviceSummary.value.error = data.errors || 0
+        // Handle both direct response and wrapped response formats
+        const healthData = data.data || data
+        
+        overallStatus.value = healthData.status || (response.fallback ? 'warning' : 'unknown')
+        serviceSummary.value.online = healthData.healthy || 0
+        serviceSummary.value.total = healthData.total || 0
+        serviceSummary.value.warning = healthData.warnings || (response.fallback ? 1 : 0)
+        serviceSummary.value.error = healthData.errors || 0
         lastCheck.value = new Date()
+        
+        console.log(`[useServiceMonitor] Health check complete: ${serviceSummary.value.online}/${serviceSummary.value.total} online, fallback: ${response.fallback}`)
       }
     } catch (err) {
-      console.warn('Health check failed:', err.message)
+      console.warn('[useServiceMonitor] Health check failed, using minimal fallback:', err.message)
+      
+      // Provide minimal fallback state
+      overallStatus.value = 'warning'
+      serviceSummary.value = { total: 1, online: 0, warning: 1, error: 0, offline: 0 }
+      lastCheck.value = new Date()
     }
   }
   

@@ -2,18 +2,18 @@
   <!-- Wrapper div to avoid fragment root issues -->
   <div>
     <Teleport to="body">
-      <!-- Toast Notifications -->
+      <!-- Subtle Toast Notifications (Bottom-Right) -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
-      enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
-      enter-to-class="translate-y-0 opacity-100 sm:translate-x-0"
-      leave-active-class="transition duration-150 ease-in"
-      leave-from-class="translate-y-0 opacity-100 sm:translate-x-0"
-      leave-to-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
+      enter-from-class="translate-y-2 opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="translate-y-2 opacity-0"
     >
       <div
         v-show="showNotification && notificationLevel === 'toast'"
-        class="fixed top-4 right-4 max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden z-[9999]"
+        class="fixed bottom-4 right-4 max-w-md w-full bg-white dark:bg-gray-800 shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden z-[9999]"
       >
         <div class="p-4">
           <div class="flex items-start">
@@ -22,21 +22,22 @@
                 :is="statusIcon"
                 :class="[
                   'h-5 w-5',
-                  severity === 'info' ? 'text-blue-400' : 
-                  severity === 'warning' ? 'text-yellow-400' : 
+                  severity === 'info' ? 'text-blue-400' :
+                  severity === 'warning' ? 'text-yellow-400' :
                   severity === 'error' ? 'text-red-400' :
-                  'text-gray-400'
+                  'text-green-400'
                 ]"
               />
             </div>
             <div class="ml-3 w-0 flex-1 pt-0.5">
-              <p class="text-sm font-medium text-gray-900">{{ notificationData.title }}</p>
-              <p class="mt-1 text-sm text-gray-500">{{ notificationData.message }}</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-white">{{ notificationData.title }}</p>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ notificationData.message }}</p>
             </div>
             <div class="ml-4 flex-shrink-0 flex">
               <button
                 @click="dismissNotification"
-                class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                class="bg-white dark:bg-gray-800 rounded-md inline-flex text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                title="Dismiss notification"
               >
                 <span class="sr-only">Close</span>
                 <XMarkIcon class="h-5 w-5" />
@@ -47,7 +48,7 @@
       </div>
     </Transition>
 
-    <!-- Full Screen Overlay -->
+    <!-- Critical Error Overlay (Only for Critical System Errors) -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0"
@@ -59,6 +60,7 @@
       <div
         v-show="showNotification && notificationLevel === 'overlay'"
         class="fixed inset-0 z-[9999] bg-black bg-opacity-25 backdrop-blur-sm flex items-center justify-center p-4"
+        @click.self="dismissNotification"
       >
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto border border-gray-200 dark:border-gray-600 overflow-hidden">
           <!-- Header -->
@@ -92,7 +94,6 @@
                 </h3>
               </div>
               <button
-                v-if="notificationData.allowDismiss"
                 @click="dismissNotification"
                 :class="[
                   'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors',
@@ -102,6 +103,7 @@
                   'hover:text-green-700 dark:hover:text-green-300'
                 ]"
                 aria-label="Close notification"
+                title="Dismiss notification"
               >
                 <XMarkIcon class="w-5 h-5" />
               </button>
@@ -156,7 +158,7 @@
           </div>
 
           <!-- Actions -->
-          <div v-if="notificationData.allowDismiss" class="px-4 py-3 bg-gray-50 dark:bg-gray-700 flex justify-end">
+          <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 flex justify-end">
             <button
               @click="dismissNotification"
               :class="[
@@ -212,9 +214,9 @@ const props = withDefaults(defineProps<SystemStatusNotificationProps>(), {
   severity: 'info',
   title: '',
   message: '',
-  allowDismiss: true,
+  allowDismiss: true, // Always dismissible now
   showDetails: false,
-  autoHide: 0
+  autoHide: 10000 // Auto-hide after 10 seconds by default
 })
 
 const emit = defineEmits<{
@@ -259,11 +261,14 @@ const statusIcon = computed(() => {
 })
 
 const notificationLevel = computed(() => {
-  // Critical errors show as overlay, others as toast
-  if (notificationData.value.severity === 'error' && notificationData.value.statusDetails?.consecutiveFailures && notificationData.value.statusDetails.consecutiveFailures > 3) {
+  // ONLY show overlay for CRITICAL errors with multiple consecutive failures
+  // Most errors should use subtle toast notification at bottom-right
+  if (notificationData.value.severity === 'error' &&
+      notificationData.value.statusDetails?.consecutiveFailures &&
+      notificationData.value.statusDetails.consecutiveFailures > 5) {
     return 'overlay'
   }
-  return 'toast'
+  return 'toast' // Default to subtle toast notification
 })
 
 // Methods - Define before usage in watchers
@@ -275,13 +280,16 @@ const clearAutoHide = () => {
 }
 
 const setupAutoHide = () => {
-  if (notificationData.value.autoHide > 0) {
-    clearAutoHide()
-    autoHideTimer.value = setTimeout(() => {
-      showNotification.value = false
-      emit('expired')
-    }, notificationData.value.autoHide)
-  }
+  // Auto-hide based on severity (always auto-hide to prevent intrusive behavior)
+  const hideDelay = notificationData.value.autoHide > 0
+    ? notificationData.value.autoHide
+    : (notificationData.value.severity === 'error' ? 12000 : 8000)
+
+  clearAutoHide()
+  autoHideTimer.value = setTimeout(() => {
+    showNotification.value = false
+    emit('expired')
+  }, hideDelay)
 }
 
 const dismissNotification = () => {

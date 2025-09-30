@@ -7,6 +7,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '@/stores/useAppStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 
 export function useGlobalErrorHandler() {
   const appStore = useAppStore()
@@ -15,11 +16,50 @@ export function useGlobalErrorHandler() {
 
   const handleGlobalError = (error) => {
     console.error('Global error:', error)
-    if (appStore && typeof appStore.addSystemNotification === 'function') {
+
+    // Extract error message
+    const errorMessage = error.message || 'An unexpected error occurred'
+
+    // Determine if this is a chat-related error
+    const isChatError = errorMessage.includes('Failed to save chat') ||
+                       errorMessage.includes('chat') ||
+                       errorMessage.includes('Chat')
+
+    // Determine if this is a network error
+    const isNetworkError = errorMessage.includes('HTTP 500') ||
+                          errorMessage.includes('Internal Server Error') ||
+                          errorMessage.includes('Failed to fetch') ||
+                          errorMessage.includes('Network Error')
+
+    // Determine if this is a critical system error
+    const isCriticalError = errorMessage.includes('Fatal') ||
+                           errorMessage.includes('System failure') ||
+                           errorMessage.includes('Cannot recover') ||
+                           errorMessage.includes('Application crash')
+
+    // Use appropriate title based on error type
+    let title = 'Application Error'
+    let severity = 'error'
+
+    if (isChatError) {
+      title = isNetworkError ? 'Chat Save Failed' : 'Chat Error'
+      // Don't show network errors as critical - they're temporary
+      severity = isNetworkError ? 'warning' : 'error'
+    } else if (isNetworkError) {
+      title = 'Connection Issue'
+      severity = 'warning'
+    }
+
+    // ALWAYS use subtle notification for ALL errors (non-intrusive)
+    showSubtleErrorNotification(title, errorMessage, severity)
+
+    // ONLY add to system notifications (intrusive) for CRITICAL SYSTEM ERRORS
+    // Do NOT add chat errors, network errors, or routine errors to systemNotifications
+    if (isCriticalError && appStore && typeof appStore.addSystemNotification === 'function') {
       appStore.addSystemNotification({
         severity: 'error',
-        title: 'Application Error',
-        message: error.message || 'An unexpected error occurred'
+        title: title,
+        message: errorMessage
       })
     }
   }
@@ -39,13 +79,16 @@ export function useGlobalErrorHandler() {
 
   const handleLoadingTimeout = () => {
     console.warn('[App] Loading timed out - continuing with available content')
-    if (appStore && typeof appStore.addSystemNotification === 'function') {
-      appStore.addSystemNotification({
-        severity: 'warning',
-        title: 'Loading Timeout',
-        message: 'Some components took longer than expected to load, but the application is ready to use.'
-      })
-    }
+
+    // Use subtle notification for timeout warnings (non-intrusive)
+    showSubtleErrorNotification(
+      'Loading Timeout',
+      'Some components took longer than expected to load, but the application is ready to use.',
+      'warning'
+    )
+
+    // Do NOT add loading timeouts to systemNotifications - they're not critical
+    // The subtle notification is sufficient
   }
 
   const clearAllCaches = async () => {
