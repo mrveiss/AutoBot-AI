@@ -133,6 +133,10 @@ class KnowledgeBase:
                 "LlamaIndex RedisVectorStore initialized with index: "
                 f"{self.redis_index_name}"
             )
+
+            # CRITICAL FIX: Initialize vector index from existing vectors
+            await self._init_vector_index_from_existing()
+
         except ImportError as e:
             logging.warning(
                 f"Could not import RedisVectorStoreSchema: {e}. "
@@ -143,6 +147,34 @@ class KnowledgeBase:
         except Exception as e:
             logging.error(f"Failed to initialize vector store: {e}")
             self.vector_store = None
+
+    async def _init_vector_index_from_existing(self):
+        """Initialize vector index from existing vectors in Redis"""
+        if not self.vector_store:
+            return
+
+        try:
+            # Check if vectors exist in Redis
+            vector_keys = await self._scan_redis_keys_async("llama_index/vector_*")
+
+            if vector_keys:
+                logging.info(f"Found {len(vector_keys)} existing vectors, initializing index")
+
+                # Create storage context and index from existing vector store
+                storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+                self.vector_index = await asyncio.to_thread(
+                    VectorStoreIndex.from_vector_store,
+                    vector_store=self.vector_store,
+                    storage_context=storage_context
+                )
+
+                logging.info(f"Vector index initialized from {len(vector_keys)} existing vectors")
+            else:
+                logging.info("No existing vectors found, vector index will be created when first document is added")
+
+        except Exception as e:
+            logging.error(f"Failed to initialize vector index from existing vectors: {e}")
+            self.vector_index = None
 
     async def _ensure_redis_initialized(self):
         """Ensure Redis is initialized before any operations"""
@@ -781,3 +813,61 @@ class KnowledgeBase:
         except Exception as e:
             logging.error(f"Failed to rebuild search index: {e}")
             return {"status": "error", "message": str(e)}
+
+    async def get_all_facts(self, collection: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get all facts from the knowledge base, optionally filtered by collection.
+
+        Args:
+            collection: Optional collection filter. If "all" or None, returns all facts.
+
+        Returns:
+            List of facts with their metadata
+        """
+        try:
+            if not self.aioredis_client:
+                logging.warning("Redis client not available for get_all_facts")
+                return []
+
+            # Get all fact keys from Redis
+            fact_keys = await self._scan_redis_keys_async("fact:*")
+            logging.info(f"Found {len(fact_keys)} fact keys in Redis")
+
+            if not fact_keys:
+                return []
+
+            facts = []
+            for key in fact_keys:
+                try:
+                    # Get fact data from Redis
+                    fact_data = await self.aioredis_client.get(key)
+                    if fact_data:
+                        import json
+                        fact = json.loads(fact_data)
+
+                        # Filter by collection if specified
+                        if collection and collection != "all":
+                            fact_collection = fact.get("collection", "")
+                            if fact_collection != collection:
+                                continue
+
+                        # Add metadata
+                        fact_id = key.replace("fact:", "")
+                        fact.update({
+                            "id": fact_id,
+                            "key": key,
+                            "collection": fact.get("collection", "general")
+                        })
+
+                        facts.append(fact)
+
+                except Exception as fact_error:
+                    logging.warning(f"Failed to parse fact {key}: {fact_error}")
+                    continue
+
+            logging.info(f"Retrieved {len(facts)} facts (filtered by collection: {collection})")
+            return facts
+
+        except Exception as e:
+            logging.error(f"Failed to get all facts: {e}")
+            return []

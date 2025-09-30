@@ -1,177 +1,90 @@
 <template>
   <div class="knowledge-categories">
+    <!-- Header -->
+    <div class="page-header">
+      <h2><i class="fas fa-folder-tree"></i> Knowledge Categories</h2>
+      <p class="subtitle">Browse organized knowledge by category</p>
+    </div>
+
     <!-- Tab Selection for the 3 main categories -->
     <div class="category-tabs">
-      <button 
-        @click="activeView = 'system'" 
+      <button
+        @click="activeView = 'system'"
         :class="['tab-btn', { active: activeView === 'system' }]"
       >
-        <i class="fas fa-server"></i> System Knowledge
+        <i class="fas fa-server"></i> System Knowledge (Man Pages)
       </button>
-      <button 
-        @click="activeView = 'documentation'" 
-        :class="['tab-btn', { active: activeView === 'documentation' }]"
-      >
-        <i class="fas fa-book"></i> AutoBot Documentation
-      </button>
-      <button 
-        @click="activeView = 'user'" 
+      <button
+        @click="activeView = 'user'"
         :class="['tab-btn', { active: activeView === 'user' }]"
       >
         <i class="fas fa-user-plus"></i> User Knowledge
       </button>
     </div>
 
-    <!-- System Knowledge View -->
+    <!-- System Knowledge View (Man Pages) -->
     <div v-if="activeView === 'system'" class="system-categories">
-      <div class="categories-header">
-        <h3>System Knowledge</h3>
-        <p class="header-description">Environment, tools, and technical capabilities</p>
-      </div>
-      
-      <!-- Category Tree and Population Controls -->
-      
-      <!-- Category Tree and Population Controls -->
-      <div class="population-controls">
-        <CategoryTree 
-          v-model="selectedSystemCategory" 
-          @loaded="onCategoriesLoaded"
-          class="category-tree-container"
-        />
-        
-        <div class="population-actions">
-          <div v-if="selectedSystemCategory" class="selected-category-info">
-            <label>Selected Category:</label>
-            <div class="selected-path">{{ formatCategoryPath(selectedSystemCategory) }}</div>
-          </div>
-          
-          <div class="action-buttons">
-            <button 
-              @click="populateKnowledgeBase" 
-              :disabled="isPopulatingKB"
-              class="action-button primary"
-            >
-              <i :class="isPopulatingKB ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-              {{ isPopulatingKB ? 'Populating...' : selectedSystemCategory ? `Populate ${formatCategoryName(selectedSystemCategory)}` : 'Select a Category' }}
-            </button>
-            
-            <button 
-              @click="getKBStats" 
-              :disabled="isLoadingKBStats"
-              class="action-button secondary"
-            >
-              <i :class="isLoadingKBStats ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
-              View Stats
-            </button>
-          </div>
-          
-          <!-- KB Stats Display -->
-          <div v-if="kbStats" class="kb-stats">
-            <h4>Knowledge Base Statistics</h4>
-            <div class="stat-grid">
-              <div class="stat-item">
-                <span class="stat-label">Total Documents:</span>
-                <span class="stat-value">{{ kbStats.total_documents }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Chunks:</span>
-                <span class="stat-value">{{ kbStats.total_chunks }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Categories:</span>
-                <span class="stat-value">{{ kbStats.categories?.length || 0 }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Facts:</span>
-                <span class="stat-value">{{ kbStats.total_facts }}</span>
-              </div>
-            </div>
-          </div>
-          
-          <p v-if="kbPopulateMessage" :class="['kb-message', kbPopulateMessageType]">
-            {{ kbPopulateMessage }}
-          </p>
+      <div class="view-header">
+        <div>
+          <h3><i class="fas fa-book"></i> System Knowledge (Man Pages)</h3>
+          <p class="view-description">Linux manual pages for all CLI commands available on this machine</p>
         </div>
+        <router-link to="/knowledge/system-knowledge" class="manage-btn">
+          <i class="fas fa-cog"></i> Manage System Knowledge
+        </router-link>
       </div>
-    </div>
 
-    <!-- AutoBot Documentation View -->
-    <div v-if="activeView === 'documentation'" class="documentation-categories">
-      <div class="categories-header">
-        <h3>AutoBot Documentation</h3>
-        <p class="header-description">AutoBot-specific documentation and guides</p>
-      </div>
-      
-      <!-- Category Tree and Population Controls -->
-      <div class="population-controls">
-        <CategoryTree 
-          v-model="selectedDocumentationCategory" 
-          @loaded="onCategoriesLoaded"
-          :filter-category="'documentation'"
-          class="category-tree-container"
-        />
-        
-        <div class="population-actions">
-          <div v-if="selectedDocumentationCategory" class="selected-category-info">
-            <label>Selected Documentation:</label>
-            <div class="selected-path">{{ formatCategoryPath(selectedDocumentationCategory) }}</div>
-            <button 
-              @click="loadCategoryDocuments(selectedDocumentationCategory)" 
-              :disabled="isLoadingCategoryDocs"
-              class="view-docs-button"
-            >
-              <i :class="isLoadingCategoryDocs ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>
-              {{ isLoadingCategoryDocs ? 'Loading...' : 'View Documents' }}
-            </button>
+      <!-- Stats Overview -->
+      <div v-if="kbStats" class="stats-overview">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-file-alt"></i></div>
+          <div class="stat-content">
+            <div class="stat-value">{{ kbStats.total_facts || 0 }}</div>
+            <div class="stat-label">Total Facts</div>
           </div>
-          
-          <div class="action-buttons">
-            <button 
-              @click="populateDocumentation" 
-              :disabled="isPopulatingDoc"
-              class="action-button primary"
-            >
-              <i :class="isPopulatingDoc ? 'fas fa-spinner fa-spin' : 'fas fa-book'"></i>
-              {{ isPopulatingDoc ? 'Populating...' : selectedDocumentationCategory ? `Populate ${formatCategoryName(selectedDocumentationCategory)}` : 'Select Documentation' }}
-            </button>
-            
-            <button 
-              @click="getKBStats" 
-              :disabled="isLoadingKBStats"
-              class="action-button secondary"
-            >
-              <i :class="isLoadingKBStats ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
-              View Stats
-            </button>
-          </div>
-          
-          <!-- KB Stats Display -->
-          <div v-if="kbStats" class="kb-stats">
-            <h4>Knowledge Base Statistics</h4>
-            <div class="stat-grid">
-              <div class="stat-item">
-                <span class="stat-label">Total Documents:</span>
-                <span class="stat-value">{{ kbStats.total_documents }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Chunks:</span>
-                <span class="stat-value">{{ kbStats.total_chunks }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Categories:</span>
-                <span class="stat-value">{{ kbStats.categories?.length || 0 }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Facts:</span>
-                <span class="stat-value">{{ kbStats.total_facts }}</span>
-              </div>
-            </div>
-          </div>
-          
-          <p v-if="docPopulateMessage" :class="['kb-message', docPopulateMessageType]">
-            {{ docPopulateMessage }}
-          </p>
         </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-database"></i></div>
+          <div class="stat-content">
+            <div class="stat-value">{{ kbStats.total_vectors || 0 }}</div>
+            <div class="stat-label">Indexed Vectors</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-folder"></i></div>
+          <div class="stat-content">
+            <div class="stat-value">{{ systemCategories.length }}</div>
+            <div class="stat-label">Categories</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Category Browse Grid -->
+      <div class="category-browse-grid">
+        <div
+          v-for="category in systemCategories"
+          :key="category"
+          class="category-browse-card"
+          @click="browseCategory(category)"
+        >
+          <div class="category-icon">
+            <i :class="getCategoryIcon(category)"></i>
+          </div>
+          <div class="category-info">
+            <h4>{{ formatCategoryName(category) }}</h4>
+            <p>Browse {{ category }} documentation</p>
+          </div>
+          <div class="browse-arrow">
+            <i class="fas fa-arrow-right"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-if="!kbStats || systemCategories.length === 0" class="empty-state">
+        <i class="fas fa-inbox"></i>
+        <h4>No System Knowledge Indexed</h4>
+        <p>Go to <router-link to="/knowledge/system-knowledge">System Knowledge Manager</router-link> to index man pages</p>
       </div>
     </div>
 
@@ -335,80 +248,20 @@
     </div>
     </div>
 
-    <!-- Category Documents Panel -->
-    <div v-if="showCategoryDocuments" class="category-documents-overlay">
-      <div class="category-documents-modal">
-        <div class="modal-header">
-          <h3>{{ formatCategoryPath(selectedCategoryPath) }} - Documents ({{ categoryDocuments.length }})</h3>
-          <button @click="closeCategoryDocuments" class="close-btn">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-
-        <div class="modal-content">
-          <div v-if="categoryDocuments.length === 0" class="no-documents">
-            <i class="fas fa-folder-open"></i>
-            <p>No documents found in this category</p>
-          </div>
-
-          <div v-else class="documents-grid">
-            <div
-              v-for="doc in categoryDocuments"
-              :key="doc.id"
-              class="document-card"
-              @click="openDocument(doc)"
-            >
-              <div class="doc-header">
-                <div class="doc-icon">
-                  <i :class="getTypeIcon(doc.type)"></i>
-                </div>
-                <div class="doc-title">{{ doc.title }}</div>
-              </div>
-              
-              <div class="doc-info">
-                <div class="doc-source">{{ doc.source }}</div>
-                <div class="doc-preview">{{ doc.content_preview }}</div>
-              </div>
-              
-              <div class="doc-footer">
-                <span class="doc-size">{{ (doc.content_length / 1024).toFixed(1) }} KB</span>
-                <span class="doc-score" v-if="doc.score">Score: {{ doc.score.toFixed(3) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Document Viewer Modal -->
-    <div v-if="showDocumentModal && currentDocument" class="document-viewer-overlay">
-      <div class="document-viewer-modal">
-        <div class="viewer-header">
-          <h3>{{ currentDocument.title }}</h3>
-          <div class="header-actions">
-            <span class="document-source">{{ currentDocument.source }}</span>
-            <button @click="showDocumentModal = false" class="close-btn">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="viewer-content">
-          <pre class="document-content">{{ currentDocument.content }}</pre>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import apiClient from '@/utils/ApiClient'
-import CategoryTree from '../CategoryTree.vue'
 import type { KnowledgeCategory, KnowledgeDocument } from '@/stores/useKnowledgeStore'
+
+// Router
+const router = useRouter()
 
 // Stores and controller
 const store = useKnowledgeStore()
@@ -416,23 +269,11 @@ const controller = useKnowledgeController()
 const appStore = useAppStore()
 
 // UI state
-const activeView = ref<'system' | 'documentation' | 'user'>('system')
+const activeView = ref<'system' | 'user'>('system')
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showDocumentsPanel = ref(false)
 const selectedCategory = ref<KnowledgeCategory | null>(null)
-
-// System categories state
-const selectedSystemCategory = ref('')
-const isPopulatingKB = ref(false)
-const kbPopulateMessage = ref('')
-const kbPopulateMessageType = ref<'success' | 'error' | ''>('')
-
-// Documentation categories state  
-const selectedDocumentationCategory = ref('')
-const isPopulatingDoc = ref(false)
-const docPopulateMessage = ref('')
-const docPopulateMessageType = ref<'success' | 'error' | ''>('')
 
 // Shared state
 const isLoadingKBStats = ref(false)
@@ -445,6 +286,11 @@ const showCategoryDocuments = ref(false)
 const selectedCategoryPath = ref('')
 const showDocumentModal = ref(false)
 const currentDocument = ref<any>(null)
+
+// Computed properties
+const systemCategories = computed(() => {
+  return kbStats.value?.categories || []
+})
 
 // Form state
 const categoryForm = ref({
@@ -552,82 +398,25 @@ const getTypeIcon = (type: string): string => {
   return icons[type] || 'fas fa-file'
 }
 
-// System category methods
-const populateKnowledgeBase = async () => {
-  if (!selectedSystemCategory.value) return
-  
-  isPopulatingKB.value = true
-  kbPopulateMessage.value = ''
-  kbPopulateMessageType.value = ''
-  
-  try {
-    const response = await apiClient.post('/api/knowledge_base/populate_documentation', {
-      category: selectedSystemCategory.value
-    })
-    const result = await response.json()
-    
-    if (result.success) {
-      kbPopulateMessage.value = `Successfully populated ${result.added_count} documents for ${formatCategoryName(selectedSystemCategory.value)}`
-      kbPopulateMessageType.value = 'success'
-      await getKBStats()
-    } else {
-      kbPopulateMessage.value = result.detail || 'Failed to populate knowledge base'
-      kbPopulateMessageType.value = 'error'
-    }
-  } catch (error) {
-    console.error('Error populating knowledge base:', error)
-    kbPopulateMessage.value = `Error: ${error.message}`
-    kbPopulateMessageType.value = 'error'
-  } finally {
-    isPopulatingKB.value = false
-    setTimeout(() => {
-      kbPopulateMessage.value = ''
-      kbPopulateMessageType.value = ''
-    }, 5000)
+const getCategoryIcon = (category: string): string => {
+  const icons: Record<string, string> = {
+    'system_commands': 'fas fa-terminal',
+    'commands': 'fas fa-terminal',
+    'troubleshooting': 'fas fa-wrench',
+    'network': 'fas fa-network-wired',
+    'file_system': 'fas fa-folder',
+    'process': 'fas fa-cogs',
+    'security': 'fas fa-shield-alt'
   }
-}
-
-// Documentation category methods
-const populateDocumentation = async () => {
-  if (!selectedDocumentationCategory.value) return
-  
-  isPopulatingDoc.value = true
-  docPopulateMessage.value = ''
-  docPopulateMessageType.value = ''
-  
-  try {
-    const response = await apiClient.post('/api/knowledge_base/populate_documentation', {
-      category: selectedDocumentationCategory.value
-    })
-    const result = await response.json()
-    
-    if (result.success) {
-      docPopulateMessage.value = `Successfully populated ${result.added_count} documents for ${formatCategoryName(selectedDocumentationCategory.value)}`
-      docPopulateMessageType.value = 'success'
-      await getKBStats()
-    } else {
-      docPopulateMessage.value = result.detail || 'Failed to populate documentation'
-      docPopulateMessageType.value = 'error'
-    }
-  } catch (error) {
-    console.error('Error populating documentation:', error)
-    docPopulateMessage.value = `Error: ${error.message}`
-    docPopulateMessageType.value = 'error'
-  } finally {
-    isPopulatingDoc.value = false
-    setTimeout(() => {
-      docPopulateMessage.value = ''
-      docPopulateMessageType.value = ''
-    }, 5000)
-  }
+  return icons[category] || 'fas fa-book'
 }
 
 const getKBStats = async () => {
   isLoadingKBStats.value = true
-  
+
   try {
-    const response = await apiClient.get('/api/knowledge_base/stats/basic')
-    kbStats.value = await response.json()
+    const response = await apiClient.get('/knowledge_base/stats/basic')
+    kbStats.value = response
   } catch (error) {
     console.error('Error fetching KB stats:', error)
   } finally {
@@ -635,71 +424,21 @@ const getKBStats = async () => {
   }
 }
 
-const onCategoriesLoaded = () => {
-  // Categories loaded successfully
-}
-
-const formatCategoryPath = (categoryPath: string) => {
-  return categoryPath.split('/').map(part => 
-    part.split('-').map(word => 
-      word && word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word
-    ).join(' ')
-  ).join(' > ')
-}
-
-const formatCategoryName = (categoryPath: string) => {
-  const parts = categoryPath.split('/')
-  return parts[parts.length - 1].split('-').map(word => 
+const formatCategoryName = (category: string) => {
+  return category.split('_').map(word =>
     word && word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word
   ).join(' ')
 }
 
-// Category documents methods
-const loadCategoryDocuments = async (categoryPath: string) => {
-  isLoadingCategoryDocs.value = true
-  selectedCategoryPath.value = categoryPath
-  
-  try {
-    const response = await apiClient.get(`/api/knowledge_base/category/${categoryPath}/documents?limit=20`)
-    const result = await response.json()
-    
-    if (result.success) {
-      categoryDocuments.value = result.documents
-      showCategoryDocuments.value = true
-    } else {
-      console.error('Failed to load category documents:', result)
-    }
-  } catch (error) {
-    console.error('Error loading category documents:', error)
-  } finally {
-    isLoadingCategoryDocs.value = false
-  }
+const browseCategory = async (category: string) => {
+  // Navigate to search with category filter
+  router.push({
+    path: '/knowledge/search',
+    query: { category }
+  })
 }
 
-const closeCategoryDocuments = () => {
-  showCategoryDocuments.value = false
-  categoryDocuments.value = []
-  selectedCategoryPath.value = ''
-}
-
-const openDocument = async (document: any) => {
-  try {
-    const response = await apiClient.post('/api/knowledge_base/document/content', {
-      source: document.source
-    })
-    const result = await response.json()
-    
-    if (result.success) {
-      // Open document in a modal or new tab
-      showDocumentModal.value = true
-      currentDocument.value = result
-    }
-  } catch (error) {
-    console.error('Error loading document content:', error)
-  }
-}
-
-// Load categories on mount
+// Load data on mount
 onMounted(() => {
   controller.loadCategories()
   getKBStats()
@@ -724,14 +463,34 @@ onUnmounted(() => {
 
 <style scoped>
 .knowledge-categories {
-  padding: 1rem;
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Page Header */
+.page-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.page-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.page-header .subtitle {
+  color: #6b7280;
+  font-size: 1.1rem;
 }
 
 /* Tab Selection */
 .category-tabs {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
   border-bottom: 2px solid #e5e7eb;
   padding-bottom: 0;
 }
@@ -758,18 +517,199 @@ onUnmounted(() => {
   border-bottom-color: #3b82f6;
 }
 
-/* System Categories */
-.system-categories,
-.documentation-categories {
-  background: white;
-  border-radius: 0.5rem;
+/* View Header */
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
   padding: 1.5rem;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.header-description {
+.view-header h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.view-description {
+  color: #6b7280;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+.manage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: #3b82f6;
+  color: white;
+  text-decoration: none;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.manage-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+/* Stats Overview */
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  width: 3rem;
+  height: 3rem;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+}
+
+.stat-label {
   color: #6b7280;
   font-size: 0.875rem;
   margin-top: 0.25rem;
+}
+
+/* Category Browse Grid */
+.category-browse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.category-browse-card {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  border: 2px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.category-browse-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+.category-browse-card .category-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  color: #3b82f6;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+}
+
+.category-browse-card .category-info {
+  flex: 1;
+}
+
+.category-browse-card .category-info h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.category-browse-card .category-info p {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.category-browse-card .browse-arrow {
+  color: #3b82f6;
+  font-size: 1.25rem;
+  transition: transform 0.2s;
+}
+
+.category-browse-card:hover .browse-arrow {
+  transform: translateX(0.25rem);
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 0.75rem;
+  border: 2px dashed #e5e7eb;
+}
+
+.empty-state i {
+  font-size: 3rem;
+  color: #d1d5db;
+  margin-bottom: 1rem;
+}
+
+.empty-state h4 {
+  font-size: 1.25rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: #9ca3af;
+}
+
+.empty-state a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+/* System Categories */
+.system-categories {
+  min-height: 400px;
 }
 
 .population-controls {

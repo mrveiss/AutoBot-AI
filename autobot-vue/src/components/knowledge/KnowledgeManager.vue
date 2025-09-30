@@ -33,25 +33,28 @@ import KnowledgeCategories from './KnowledgeCategories.vue'
 const KnowledgeEntries = () => import('./KnowledgeEntries.vue')
 const KnowledgeUpload = () => import('./KnowledgeUpload.vue')
 const KnowledgeStats = () => import('./KnowledgeStats.vue')
+const KnowledgeAdvanced = () => import('./KnowledgeAdvanced.vue')
 
 const store = useKnowledgeStore()
 
-// Tab configuration
+// Tab configuration - Added Advanced tab
 const tabs = [
   { id: 'search', label: 'Search' },
   { id: 'categories', label: 'Categories' },
   { id: 'upload', label: 'Upload' },
   { id: 'manage', label: 'Manage' },
-  { id: 'stats', label: 'Statistics' }
+  { id: 'stats', label: 'Statistics' },
+  { id: 'advanced', label: 'Advanced' }
 ] as const
 
-// Component mapping
+// Component mapping - Added KnowledgeAdvanced
 const componentMap = {
   search: KnowledgeSearch,
   categories: KnowledgeCategories,
   upload: KnowledgeUpload,
   manage: KnowledgeEntries,
-  stats: KnowledgeStats
+  stats: KnowledgeStats,
+  advanced: KnowledgeAdvanced
 } as const
 
 // Active component based on tab
