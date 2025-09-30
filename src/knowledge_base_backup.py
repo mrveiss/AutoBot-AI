@@ -37,12 +37,12 @@ from pypdf import PdfReader
 from src.circuit_breaker import circuit_breaker_async
 
 # Import the centralized ConfigManager
-from src.config import (
+from src.unified_config_manager import (
     HTTP_PROTOCOL,
     OLLAMA_HOST_IP,
     OLLAMA_PORT,
 )
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.config_helper import cfg
 
 # Import retry mechanism and circuit breaker

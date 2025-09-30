@@ -59,7 +59,7 @@ except ImportError:
         config = None
     except ImportError:
         try:
-            from src.config import config as global_config_manager
+            from src.unified_config_manager import config as global_config_manager
             config = global_config_manager
             cfg = None
         except ImportError:

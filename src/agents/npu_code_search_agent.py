@@ -882,8 +882,15 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return {"status": "error", "error": str(e)}
 
 
-# Global instance for easy access
-npu_code_search = NPUCodeSearchAgent()
+# Global instance for easy access (lazy initialization)
+_npu_code_search = None
+
+def get_npu_code_search():
+    """Get or create the NPU code search agent instance (lazy initialization)"""
+    global _npu_code_search
+    if _npu_code_search is None:
+        _npu_code_search = NPUCodeSearchAgent()
+    return _npu_code_search
 
 
 async def search_codebase(
@@ -904,7 +911,7 @@ async def search_codebase(
     Returns:
         List of search results
     """
-    return await npu_code_search.search_code(query, search_type, language, max_results)
+    return await get_npu_code_search().search_code(query, search_type, language, max_results)
 
 
 async def index_project(root_path: str, force_reindex: bool = False) -> Dict[str, Any]:
@@ -918,4 +925,4 @@ async def index_project(root_path: str, force_reindex: bool = False) -> Dict[str
     Returns:
         Indexing results
     """
-    return await npu_code_search.index_codebase(root_path, force_reindex)
+    return await get_npu_code_search().index_codebase(root_path, force_reindex)

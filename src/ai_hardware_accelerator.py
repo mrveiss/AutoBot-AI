@@ -20,7 +20,7 @@ from PIL import Image
 from datetime import datetime, timedelta
 
 # Import centralized components
-from src.config import cfg
+from src.unified_config_manager import cfg
 from src.utils.redis_client import get_redis_client
 from src.utils.logging_manager import get_llm_logger
 

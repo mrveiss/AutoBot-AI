@@ -25,7 +25,7 @@ from src.ai_hardware_accelerator import (
 )
 from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
-from src.config import cfg
+from src.unified_config_manager import cfg
 
 # Import ChromaDB for multi-modal vector storage
 try:

@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 
 from src.utils.async_redis_manager import AsyncRedisManager, async_redis_manager, initialize_default_redis
 from src.llm_interface import LLMInterface, LLMSettings, get_llm_interface
-from src.async_config_manager import AsyncConfigManager, ConfigManagerContainer, config_container
+from src.unified_config_manager import UnifiedConfigManager, unified_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class AsyncServiceContainer:
         
         # Config Manager
         self._services["config"] = ServiceDescriptor(
-            service_type=AsyncConfigManager,
+            service_type=UnifiedConfigManager,
             factory=self._create_config_manager,
             singleton=True
         )
@@ -77,9 +77,9 @@ class AsyncServiceContainer:
         await initialize_default_redis()
         return async_redis_manager
     
-    async def _create_config_manager(self) -> AsyncConfigManager:
+    async def _create_config_manager(self) -> UnifiedConfigManager:
         """Factory for config manager"""
-        return await config_container.get_manager()
+        return unified_config_manager
     
     async def _create_llm_interface(self) -> LLMInterface:
         """Factory for LLM interface"""
@@ -348,7 +348,7 @@ async def get_redis() -> AsyncRedisManager:
     return await container.get_service("redis")
 
 
-async def get_config() -> AsyncConfigManager:
+async def get_config() -> UnifiedConfigManager:
     """Get config manager"""
     return await container.get_service("config")
 

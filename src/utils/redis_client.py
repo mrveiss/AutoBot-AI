@@ -10,8 +10,8 @@ from typing import Optional, Union
 import redis
 import redis.asyncio as async_redis
 
-from src.config import config as global_config_manager
-from src.utils.config_manager import config_manager
+from src.unified_config_manager import config as global_config_manager
+from src.unified_config_manager import config as config_manager
 from src.utils.redis_database_manager import redis_db_manager
 
 logger = logging.getLogger(__name__)

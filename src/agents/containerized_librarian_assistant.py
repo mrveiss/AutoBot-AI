@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from src.config import config
+from src.unified_config_manager import config
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 

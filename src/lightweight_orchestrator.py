@@ -15,7 +15,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from src.autobot_types import TaskComplexity
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.patterns.conversation_patterns import ConversationPatterns, ConversationType
 
 logger = logging.getLogger(__name__)

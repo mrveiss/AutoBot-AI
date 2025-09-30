@@ -122,7 +122,7 @@ class ResourceFactory:
 
             # Fallback to module-level import and creation
             from src.chat_history_manager import ChatHistoryManager
-            from src.config import config as global_config_manager
+            from src.unified_config_manager import config as global_config_manager
 
             logger.info(
                 "Creating new ChatHistoryManager instance (expensive operation)"

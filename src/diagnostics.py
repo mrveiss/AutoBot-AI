@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
-    from src.config import config as global_config_manager
+    from src.unified_config_manager import config as global_config_manager
     from src.event_manager import event_manager
     from src.utils.redis_client import get_redis_client
 except ImportError as e:

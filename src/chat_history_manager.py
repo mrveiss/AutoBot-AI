@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 # Import the centralized ConfigManager and Redis client utility
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.encryption_service import (
     decrypt_data,
     encrypt_data,

@@ -19,7 +19,7 @@ except ImportError:
     torch = None
 
 # Import the centralized ConfigManager and Redis client utility
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.event_manager import event_manager
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface

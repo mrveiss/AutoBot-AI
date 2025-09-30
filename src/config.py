@@ -424,7 +424,7 @@ class ConfigManager:
         )
 
         # Fallback to environment or config default
-        return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:3b")
+        return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b-instruct-q4_K_M")
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key"""
@@ -612,21 +612,21 @@ class ConfigManager:
             "llm.agent_models",
             {
                 # Core Orchestration - use available model for flexible reasoning
-                "orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:3b"),
-                "default": os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:3b"),
+                "orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:1b-instruct-q4_K_M"),
+                "default": os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:1b-instruct-q4_K_M"),
                 # Specialized Agents - optimized for task complexity
                 "chat": os.getenv("AUTOBOT_CHAT_MODEL", "llama3.2:1b"),
                 "system_commands": os.getenv("AUTOBOT_SYSTEM_CMD_MODEL", "llama3.2:1b"),
-                "rag": os.getenv("AUTOBOT_RAG_MODEL", "dolphin-llama3:8b"),
+                "rag": os.getenv("AUTOBOT_RAG_MODEL", "gemma3:270m"),
                 "knowledge_retrieval": os.getenv(
                     "AUTOBOT_KNOWLEDGE_MODEL", "llama3.2:1b"
                 ),
-                "research": os.getenv("AUTOBOT_RESEARCH_MODEL", "dolphin-llama3:8b"),
+                "research": os.getenv("AUTOBOT_RESEARCH_MODEL", "llama3.2:1b-instruct-q4_K_M"),
                 # Legacy compatibility - use available models
                 "search": os.getenv("AUTOBOT_SEARCH_MODEL", "llama3.2:1b"),
                 "code": os.getenv("AUTOBOT_CODE_MODEL", "llama3.2:1b"),
-                "analysis": os.getenv("AUTOBOT_ANALYSIS_MODEL", "dolphin-llama3:8b"),
-                "planning": os.getenv("AUTOBOT_PLANNING_MODEL", "dolphin-llama3:8b"),
+                "analysis": os.getenv("AUTOBOT_ANALYSIS_MODEL", "llama3.2:1b-instruct-q4_K_M"),
+                "planning": os.getenv("AUTOBOT_PLANNING_MODEL", "llama3.2:1b-instruct-q4_K_M"),
                 # Fallback models for when uncensored is not needed
                 "orchestrator_fallback": os.getenv(
                     "AUTOBOT_ORCHESTRATOR_FALLBACK_MODEL", "llama3.2:3b"

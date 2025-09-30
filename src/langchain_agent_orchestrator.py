@@ -54,7 +54,7 @@ class LangChainAgentOrchestrator:
             return
 
         # Initialize LLM for LangChain using centralized config
-        from src.config import config as global_config
+        from src.unified_config_manager import config as global_config
 
         llm_config = global_config.get_llm_config()
         # Temporarily hardcode model to rule out config parsing issues

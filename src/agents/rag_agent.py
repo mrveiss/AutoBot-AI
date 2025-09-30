@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from src.config import config as global_config_manager
+from src.unified_config_manager import config
 from src.llm_interface import LLMInterface
 
 from .base_agent import AgentRequest
@@ -25,7 +25,13 @@ class RAGAgent(StandardizedAgent):
         """Initialize the RAG Agent with 3B model for complex reasoning."""
         super().__init__("rag")
         self.llm_interface = LLMInterface()
-        self.model_name = global_config_manager.get_task_specific_model("rag")
+
+        # Use unified config with lightweight fallback for performance
+        try:
+            self.model_name = config.get("llm.models.rag", "gemma3:270m")
+        except Exception:
+            self.model_name = "gemma3:270m"
+
         self.capabilities = [
             "document_synthesis",
             "query_reformulation",
@@ -445,6 +451,10 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
 
                 if "content" in response:
                     return response["content"].strip()
+
+            # Handle LLMResponse object
+            if hasattr(response, 'content'):
+                return response.content.strip()
 
             if isinstance(response, str):
                 return response.strip()

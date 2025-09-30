@@ -22,7 +22,7 @@ except ImportError:
     Page = None
     PLAYWRIGHT_AVAILABLE = False
 
-from src.config import config
+from src.unified_config_manager import config
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 

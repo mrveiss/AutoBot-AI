@@ -515,7 +515,7 @@ def get_web_research_integration(config: Optional[Dict[str, Any]] = None) -> Web
         # Load config from config manager if not provided
         if config is None:
             try:
-                from src.utils.config_manager import config_manager
+                from src.unified_config_manager import config_manager
                 config = config_manager.get_nested('web_research', {})
             except Exception as e:
                 logger.warning(f"Could not load web research config: {e}")

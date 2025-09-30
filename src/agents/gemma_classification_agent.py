@@ -11,7 +11,7 @@ import aiohttp
 
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
 
@@ -36,8 +36,8 @@ class GemmaClassificationAgent(StandardizedAgent):
 
         # Preferred models in order of preference (smallest/fastest first)
         self.preferred_models = [
-            "gemma2:2b",  # 2B parameters - ultra fast
-            "gemma3:latest",  # Latest Gemma 3 model
+            "gemma3:270m",  # Ultra lightweight - 291MB - fastest
+            "gemma3:1b",  # 1B parameters - 815MB
             "llama3.2:1b",  # Fallback to existing small model
         ]
 
