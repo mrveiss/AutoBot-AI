@@ -8,18 +8,24 @@ for the FastAPI application.
 Key Features:
 - Integration with async_chat_workflow
 - Centralized workflow state management
+- Redis-backed conversation history persistence
 - Error handling and recovery
 - Performance monitoring
 - Session management
 """
 
 import asyncio
+import json
 import logging
+import os
 import time
+from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 
 from src.async_chat_workflow import AsyncChatWorkflow, WorkflowMessage, MessageType
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +56,137 @@ class ChatWorkflowManager:
         self.default_workflow: Optional[AsyncChatWorkflow] = None
         self._initialized = False
         self._lock = asyncio.Lock()
+        self.redis_client = None
+        self.conversation_history_ttl = 86400  # 24 hours in seconds
+        self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
 
         logger.info("ChatWorkflowManager initialized")
 
+    def _get_conversation_key(self, session_id: str) -> str:
+        """Generate Redis key for conversation history."""
+        return f"chat:conversation:{session_id}"
+
+    async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
+        """Load conversation history from Redis (short-term) or file (long-term)."""
+        try:
+            # Try Redis first (fast access for recent conversations)
+            if self.redis_client is not None:
+                key = self._get_conversation_key(session_id)
+                history_json = self.redis_client.get(key)
+
+                if history_json:
+                    logger.debug(f"Loaded conversation history from Redis for session {session_id}")
+                    return json.loads(history_json)
+
+            # Fall back to file-based transcript (long-term storage)
+            history = await self._load_transcript(session_id)
+            if history:
+                logger.debug(f"Loaded conversation history from file for session {session_id}")
+                # Repopulate Redis cache
+                if self.redis_client is not None:
+                    await self._save_conversation_history(session_id, history)
+
+            return history
+
+        except Exception as e:
+            logger.error(f"Failed to load conversation history: {e}")
+            return []
+
+    async def _save_conversation_history(self, session_id: str, history: List[Dict[str, str]]):
+        """Save conversation history to Redis with TTL."""
+        try:
+            if self.redis_client is None:
+                return
+
+            key = self._get_conversation_key(session_id)
+            history_json = json.dumps(history)
+
+            # Save with 24-hour expiration
+            self.redis_client.setex(key, self.conversation_history_ttl, history_json)
+            logger.debug(f"Saved conversation history for session {session_id} to Redis")
+
+        except Exception as e:
+            logger.error(f"Failed to save conversation history to Redis: {e}")
+
+    def _get_transcript_path(self, session_id: str) -> Path:
+        """Get file path for conversation transcript."""
+        return Path(self.transcript_dir) / f"{session_id}.json"
+
+    async def _append_to_transcript(self, session_id: str, user_message: str, assistant_message: str):
+        """Append message exchange to long-term transcript file."""
+        try:
+            # Ensure transcript directory exists
+            transcript_dir = Path(self.transcript_dir)
+            transcript_dir.mkdir(parents=True, exist_ok=True)
+
+            transcript_path = self._get_transcript_path(session_id)
+
+            # Load existing transcript or create new
+            if transcript_path.exists():
+                with open(transcript_path, 'r', encoding='utf-8') as f:
+                    transcript = json.load(f)
+            else:
+                transcript = {
+                    "session_id": session_id,
+                    "created_at": datetime.now().isoformat(),
+                    "messages": []
+                }
+
+            # Append new exchange
+            transcript["messages"].append({
+                "timestamp": datetime.now().isoformat(),
+                "user": user_message,
+                "assistant": assistant_message
+            })
+
+            transcript["updated_at"] = datetime.now().isoformat()
+            transcript["message_count"] = len(transcript["messages"])
+
+            # Save transcript
+            with open(transcript_path, 'w', encoding='utf-8') as f:
+                json.dump(transcript, f, indent=2, ensure_ascii=False)
+
+            logger.debug(f"Appended to transcript for session {session_id} ({transcript['message_count']} total messages)")
+
+        except Exception as e:
+            logger.error(f"Failed to append to transcript file: {e}")
+
+    async def _load_transcript(self, session_id: str) -> List[Dict[str, str]]:
+        """Load conversation history from transcript file."""
+        try:
+            transcript_path = self._get_transcript_path(session_id)
+
+            if not transcript_path.exists():
+                return []
+
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                transcript = json.load(f)
+
+            # Convert to simple history format (last 10 messages)
+            messages = transcript.get("messages", [])[-10:]
+            return [{"user": msg["user"], "assistant": msg["assistant"]} for msg in messages]
+
+        except Exception as e:
+            logger.error(f"Failed to load transcript file: {e}")
+            return []
+
     async def initialize(self) -> bool:
-        """Initialize the workflow manager with default workflow."""
+        """Initialize the workflow manager with default workflow and Redis."""
         try:
             async with self._lock:
                 if self._initialized:
                     return True
+
+                # Initialize Redis client for conversation history
+                try:
+                    self.redis_client = get_redis_client(async_client=False, database="main")
+                    if self.redis_client:
+                        logger.info("✅ Redis client initialized for conversation history")
+                    else:
+                        logger.warning("⚠️ Redis not available - conversation history will not persist")
+                except Exception as redis_error:
+                    logger.warning(f"⚠️ Redis initialization failed: {redis_error} - continuing without persistence")
+                    self.redis_client = None
 
                 # Create default workflow instance
                 self.default_workflow = AsyncChatWorkflow()
@@ -72,18 +200,22 @@ class ChatWorkflowManager:
             return False
 
     async def get_or_create_session(self, session_id: str) -> WorkflowSession:
-        """Get existing session or create new one."""
+        """Get existing session or create new one, loading history from Redis."""
         async with self._lock:
             if session_id not in self.sessions:
                 # Create new workflow for this session
                 workflow = AsyncChatWorkflow()
 
+                # Load conversation history from Redis
+                conversation_history = await self._load_conversation_history(session_id)
+
                 self.sessions[session_id] = WorkflowSession(
                     session_id=session_id,
-                    workflow=workflow
+                    workflow=workflow,
+                    conversation_history=conversation_history
                 )
 
-                logger.info(f"Created new workflow session: {session_id}")
+                logger.info(f"Created new workflow session: {session_id} with {len(conversation_history)} messages from history")
 
             # Update last activity
             self.sessions[session_id].last_activity = time.time()
@@ -207,14 +339,18 @@ class ChatWorkflowManager:
                             # Keep history manageable (max 10 exchanges)
                             if len(session.conversation_history) > 10:
                                 session.conversation_history = session.conversation_history[-10:]
-                    else:
-                        logger.error(f"[ChatWorkflowManager] Ollama request failed: {response.status_code}")
-                        from src.async_chat_workflow import WorkflowMessage
-                        messages = [WorkflowMessage(
-                            type="error",
-                            content=f"LLM service error: {response.status_code}",
-                            metadata={"error": True}
-                        )]
+
+                            # Persist to both Redis (short-term cache) and file (long-term storage)
+                            await self._save_conversation_history(session_id, session.conversation_history)
+                            await self._append_to_transcript(session_id, message, llm_response)
+                        else:
+                            logger.error(f"[ChatWorkflowManager] Ollama request failed: {response.status_code}")
+                            from src.async_chat_workflow import WorkflowMessage
+                            messages = [WorkflowMessage(
+                                type="error",
+                                content=f"LLM service error: {response.status_code}",
+                                metadata={"error": True}
+                            )]
 
             except Exception as llm_error:
                 logger.error(f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}")
