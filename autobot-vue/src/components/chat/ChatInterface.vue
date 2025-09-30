@@ -16,7 +16,7 @@
       </UnifiedLoadingView>
 
       <!-- Main Chat Area -->
-      <div class="flex-1 flex flex-col min-w-0">
+      <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         <!-- Chat Header -->
         <ChatHeader
@@ -35,7 +35,7 @@
           @tab-change="handleTabChange"
         />
 
-        <!-- Chat Content with Unified Loading -->
+        <!-- Chat Content with Unified Loading - FIXED: Removed overflow-hidden to allow sticky positioning -->
         <UnifiedLoadingView
           loading-key="chat-content"
           :has-content="store.currentMessages.length > 0"
@@ -43,7 +43,7 @@
           @loading-complete="handleContentLoadingComplete"
           @loading-error="handleContentLoadingError"
           @loading-timeout="handleContentLoadingTimeout"
-          class="flex-1 min-h-0"
+          class="flex-1 min-h-0 flex flex-col"
         >
           <ChatTabContent
             :active-tab="activeTab"
@@ -97,9 +97,10 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
-import { ApiClient } from '@/utils/ApiClient.js'
+import ApiClient from '@/utils/ApiClient.js'
 import batchApiService from '@/services/BatchApiService'
-import { API_CONFIG } from '@/config/environment.js'
+// MIGRATED: Using AppConfig.js for better configuration management
+import appConfig from '@/config/AppConfig.js'
 
 // Components
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
@@ -127,16 +128,13 @@ const currentChatContext = ref<any>(null)
 const pendingCommand = ref({
   command: '',
   purpose: '',
-  riskLevel: 'MEDIUM',
+  riskLevel: 'MEDIUM' as const,
   originalMessage: ''
 })
 const currentWorkflowId = ref<string | null>(null)
 
 // Tab state
 const activeTab = ref<string>('chat')
-
-// REMOVED: Terminal sidebar state (showTerminalSidebar, terminalSidebarCollapsed)
-// These were causing the duplicate terminal issue
 
 // Connection state with stabilized status management
 const baseConnectionStatus = ref('Connected')
@@ -151,14 +149,20 @@ const connectionStatus = computed(() => {
   return baseConnectionStatus.value
 })
 
-// Initialization state to prevent flickering
-const isInitializing = ref(true)
-const initializationTimeout = ref(null)
+// FIXED: Tool URLs - Replace async computed with ref and async loader
+const novncUrl = ref('')
 
-// Tool URLs - Dynamic per-chat desktop URLs (cached to prevent reload cycles)
-const novncUrl = computed(() => {
+// Async function to load NoVNC URL
+const loadNovncUrl = async () => {
   if (!store.currentSessionId) {
-    return API_CONFIG.PLAYWRIGHT_VNC_URL // Fallback for no session
+    // MIGRATED: Use AppConfig for VNC URL fallback
+    try {
+      novncUrl.value = await appConfig.getVncUrl('playwright')
+    } catch (error: any) {
+      console.warn('[ChatInterface] Failed to get VNC URL from AppConfig:', error.message)
+      novncUrl.value = import.meta.env.VITE_PLAYWRIGHT_VNC_URL || 'http://172.16.168.25:6080/vnc.html'
+    }
+    return
   }
 
   // Get session without side effects to prevent reactive loops
@@ -167,7 +171,8 @@ const novncUrl = computed(() => {
 
   if (!session?.desktopSession) {
     // Return base URL without creating session to prevent reactive side effects
-    return baseUrl + '?autoconnect=true&password=autobot&resize=remote'
+    novncUrl.value = baseUrl + '?autoconnect=true&password=autobot&resize=remote'
+    return
   }
 
   // Use existing desktop session data
@@ -178,8 +183,8 @@ const novncUrl = computed(() => {
     session: session.desktopSession.id || store.currentSessionId
   })
 
-  return `${baseUrl}?${params.toString()}`
-})
+  novncUrl.value = `${baseUrl}?${params.toString()}`
+}
 
 // Computed
 const currentSessionTitle = computed(() => {
@@ -254,7 +259,7 @@ const handleSidebarLoadingComplete = () => {
   console.log('[ChatInterface] Sidebar loading completed')
 }
 
-const handleSidebarLoadingError = (error) => {
+const handleSidebarLoadingError = (error: any) => {
   console.error('[ChatInterface] Sidebar loading error:', error)
   appStore.setGlobalError('Failed to load chat sessions')
 }
@@ -267,7 +272,7 @@ const handleContentLoadingComplete = () => {
   console.log('[ChatInterface] Content loading completed')
 }
 
-const handleContentLoadingError = (error) => {
+const handleContentLoadingError = (error: any) => {
   console.error('[ChatInterface] Content loading error:', error)
   appStore.setGlobalError('Failed to load chat content')
 }
@@ -279,11 +284,11 @@ const handleContentLoadingTimeout = () => {
 // Tab change handler - ensures local tab state change without router navigation
 const handleTabChange = (tabKey: string) => {
   console.log('[ChatInterface] Tab change requested:', tabKey)
-  
+
   // Prevent any router navigation and only update local state
   // This fixes the Terminal tab issue where it was triggering unwanted navigation
   activeTab.value = tabKey
-  
+
   // Log successful tab change
   console.log('[ChatInterface] Active tab changed to:', activeTab.value)
 }
@@ -322,15 +327,13 @@ const onCommandCommented = (comment: string) => {
   // Handle command comment
 }
 
-// Connection monitoring
+// Connection monitoring - MIGRATED to use AppConfig
 const checkConnection = async () => {
   try {
-    // Use ApiClient instead of direct fetch
-    const apiClient = new ApiClient()
-    const healthData = await apiClient.get('/api/health')
+    // MIGRATED: Use AppConfig for connection validation
+    const isConnectionValid = await appConfig.validateConnection()
 
-    // ApiClient returns data directly on success
-    if (healthData) {
+    if (isConnectionValid) {
       isConnected.value = true
       baseConnectionStatus.value = 'Connected'
       lastHeartbeat.value = Date.now()
@@ -345,8 +348,8 @@ const checkConnection = async () => {
 }
 
 // Interval refs for proper cleanup
-const heartbeatInterval = ref(null)
-const autoSaveInterval = ref(null)
+const heartbeatInterval = ref<number | null>(null)
+const autoSaveInterval = ref<number | null>(null)
 
 const startHeartbeat = () => {
   // Clear any existing interval first
@@ -367,7 +370,7 @@ const enableAutoSave = () => {
   autoSaveInterval.value = setInterval(() => {
     if (store.settings.autoSave && store.currentSessionId) {
       controller.saveChatSession()
-        .catch(error => console.warn('Auto-save failed:', error))
+        .catch((error: any) => console.warn('Auto-save failed:', error))
     }
   }, 2 * 60 * 1000)
 }
@@ -394,84 +397,56 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
   }
 }
 
-// Initialize chat interface with instant loading (no artificial delays)
+// STREAMLINED: Simplified initialization without complex timeout racing
 const initializeChatInterface = async () => {
   try {
-    console.log('🚀 Starting instant chat interface initialization')
+    console.log('🚀 Starting streamlined chat interface initialization')
 
-    // Clear any existing timeout
-    if (initializationTimeout.value) {
-      clearTimeout(initializationTimeout.value)
-    }
-
-    // Set a maximum timeout to prevent infinite loading
-    const MAX_INIT_TIME = 5000 // 5 seconds max
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Initialization timeout')), MAX_INIT_TIME)
+    // Load data with simple timeout
+    const loadPromise = batchApiService.initializeChatInterface()
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Initialization timeout')), 8000)
     })
 
     try {
-      // Race between initialization and timeout
-      const data = await Promise.race([
-        batchApiService.initializeChatInterface(),
-        timeoutPromise
-      ])
+      // Race initialization with timeout
+      const data = await Promise.race([loadPromise, timeoutPromise])
 
-      // Process batch results
-      if (data.chat_sessions && !data.chat_sessions.error) {
-        // Load sessions into store if we got valid data
-        if (Array.isArray(data.chat_sessions)) {
-          data.chat_sessions.forEach(session => {
-            store.importSession(session)
-          })
-        }
-      } else if (store.sessions.length === 0) {
-        // Fallback to individual loading if batch failed
-        console.log('📡 Falling back to individual chat session loading')
-        await controller.loadChatSessions().catch(err => {
-          console.warn('Session loading failed:', err)
+      // Process results
+      if (data.chat_sessions && !data.chat_sessions.error && Array.isArray(data.chat_sessions)) {
+        data.chat_sessions.forEach((session: any) => {
+          store.importSession(session)
         })
       }
 
-      // Update connection status from batch data
+      // Update connection status
       if (data.system_health && !data.system_health.error) {
         isConnected.value = data.system_health.status === 'healthy'
         baseConnectionStatus.value = isConnected.value ? 'Connected' : 'Disconnected'
       }
-    } catch (timeoutError) {
-      console.warn('⏱️ Initialization timed out, continuing without data:', timeoutError)
-      // Continue with empty state - GUI should still be usable
+    } catch (error) {
+      console.warn('⏱️ Initialization failed or timed out, using fallback:', error)
+      // Fallback to individual loading
+      if (store.sessions.length === 0) {
+        await controller.loadChatSessions().catch(console.warn)
+      }
     }
 
-    // End loading state immediately - no artificial delays
-    isInitializing.value = false
-    console.log('✅ Chat interface initialization completed (instant)')
+    console.log('✅ Chat interface initialization completed')
 
   } catch (error) {
     console.error('❌ Chat initialization failed:', error)
-    // Fallback to traditional loading with timeout protection
-    if (store.sessions.length === 0) {
-      const fallbackTimeout = new Promise(resolve => setTimeout(resolve, 2000))
-      await Promise.race([
-        controller.loadChatSessions().catch(err => {
-          console.warn('Fallback session loading failed:', err)
-        }),
-        fallbackTimeout
-      ])
-    }
-
-    // End loading state immediately even on error
-    isInitializing.value = false
-  } finally {
-    // Guarantee loading state ends no matter what
-    isInitializing.value = false
+    appStore.setGlobalError('Failed to initialize chat interface')
   }
 }
 
 // Lifecycle
 onMounted(async () => {
-  // Initialize chat interface with batch loading
+  // Initialize chat interface with streamlined loading
   await initializeChatInterface()
+
+  // Load NoVNC URL after initialization
+  await loadNovncUrl()
 
   // Enable auto-save if not disabled
   if (store.settings.autoSave) {
@@ -501,38 +476,27 @@ onUnmounted(() => {
     clearInterval(autoSaveInterval.value)
     autoSaveInterval.value = null
   }
-
-  // Clean up initialization timeout
-  if (initializationTimeout.value) {
-    clearTimeout(initializationTimeout.value)
-    initializationTimeout.value = null
-  }
 })
 
-// Watch for session changes to update title
+// Watch for session changes to update NoVNC URL
 watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
   if (newSessionId !== oldSessionId) {
-    // Session changed, could load messages if needed
-    console.log('Session changed:', newSessionId)
+    // Session changed, reload NoVNC URL
+    console.log('[ChatInterface] Session changed:', newSessionId)
+    loadNovncUrl()
   }
 })
-
-// REMOVED: Watch for tab changes to show/hide terminal sidebar
-// This was causing the duplicate terminal issue:
-// watch(() => activeTab.value, (newTab) => {
-//   showTerminalSidebar.value = newTab === 'terminal'
-// })
 </script>
 
 <style scoped>
-/* Removed conflicting height declaration - now relies on parent container */
+/* IMPROVED: Better overflow handling for chat interface */
 .chat-interface {
-  /* height: 100vh; - REMOVED: This was causing layout conflicts */
+  /* Removed height: 100vh - now relies on parent container */
 }
 
-/* CRITICAL FIX: Override UnifiedLoadingView default width for sidebar */
+/* CRITICAL FIX: Enhanced sidebar width constraint */
 .sidebar-loading-view {
-  /* Override the default w-full behavior from UnifiedLoadingView */
+  /* Force sidebar width and prevent UnifiedLoadingView override */
   width: 320px !important; /* Force w-80 equivalent (320px) */
   flex-shrink: 0 !important;
   max-width: 320px !important;

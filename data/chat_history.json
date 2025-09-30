@@ -893,5 +893,33 @@
       "sender": "bot"
     },
     "timestamp": "2025-08-24 13:37:26"
+  },
+  {
+    "sender": "fcb9fa66-fe64-4612-a956-0960035dce51",
+    "text": {
+      "id": "436921a2-3738-4d29-9c5b-dc499de3dbde",
+      "content": "test message",
+      "role": "user",
+      "timestamp": "2025-09-29T08:42:19.756613",
+      "metadata": {},
+      "session_id": "fcb9fa66-fe64-4612-a956-0960035dce51"
+    },
+    "messageType": "default",
+    "rawData": null,
+    "timestamp": "2025-09-29 11:42:19"
+  },
+  {
+    "sender": "fcb9fa66-fe64-4612-a956-0960035dce51",
+    "text": {
+      "id": "7840b09c-59bc-4e50-a5fb-cb5dc0312813",
+      "content": "I'm currently unable to generate a response. Please try again.",
+      "role": "assistant",
+      "timestamp": "2025-09-29T08:42:19.765073",
+      "metadata": {},
+      "session_id": "fcb9fa66-fe64-4612-a956-0960035dce51"
+    },
+    "messageType": "default",
+    "rawData": null,
+    "timestamp": "2025-09-29 11:42:19"
   }
 ]

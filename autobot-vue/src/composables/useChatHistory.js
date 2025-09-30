@@ -1,151 +1,208 @@
 /**
- * Shared composable for chat history management
- * Eliminates duplication between ChatInterface.vue and HistoryView.vue
+ * Shared Chat History Composable
+ *
+ * Provides reactive chat history management with proper API endpoints
  */
-import { ref } from 'vue';
+
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import apiClient from '@/utils/ApiClient.js';
 
 export function useChatHistory() {
+  // Reactive state
   const chatList = ref([]);
   const currentChatId = ref(null);
+  const messages = ref([]);
+  const isLoading = ref(false);
+  const error = ref(null);
 
-  // Function to build chat list from local storage
+  // Get current chat from URL hash
+  const getCurrentChatFromUrl = () => {
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    return params.get('chatId');
+  };
+
+  // Set current chat ID and update URL
+  const setCurrentChat = (chatId) => {
+    currentChatId.value = chatId;
+    if (chatId) {
+      window.location.hash = `chatId=${chatId}`;
+    } else {
+      window.location.hash = '';
+    }
+  };
+
+  // Computed properties
+  const currentChat = computed(() => {
+    return chatList.value.find(chat => chat.chatId === currentChatId.value) || null;
+  });
+
+  const chatCount = computed(() => chatList.value.length);
+
+  const hasChats = computed(() => chatList.value.length > 0);
+
+  const sortedChatList = computed(() => {
+    return [...chatList.value].sort((a, b) => new Date(b.date) - new Date(a.date));
+  });
+
+  // Load chat list from backend
+  const loadChatList = async () => {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      console.log('Loading chat list from backend...');
+      const data = await apiClient.getChatList();
+
+      // Handle different response structures
+      const chats = data.chats || data.data || data || [];
+
+      chatList.value = chats.map(chat => ({
+        chatId: chat.session_id || chat.chatId || chat.id,
+        id: chat.session_id || chat.chatId || chat.id, // For compatibility
+        name: chat.title || chat.name || '',
+        preview: chat.preview || 'No subject',
+        date: chat.created_at || chat.date || new Date().toISOString()
+      }));
+
+      console.log(`Loaded ${chatList.value.length} chats from backend`);
+    } catch (error) {
+      console.error('Failed to load chat list from backend:', error);
+      error.value = error.message;
+
+      // Fallback to localStorage
+      await loadChatListFromLocalStorage();
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  // Fallback: Load chat list from localStorage
   const loadChatListFromLocalStorage = () => {
+    console.log('Loading chat list from localStorage fallback...');
+
     const localChats = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && key.startsWith('chat_') && key.endsWith('_messages')) {
         const chatId = key.split('_')[1];
-        const messagesStr = localStorage.getItem(key);
-        if (messagesStr) {
-          try {
-            const messages = JSON.parse(messagesStr);
-            // Look for the first user message to use as a preview
-            const userMessage = messages.find(msg => msg.sender === 'user');
-            const subject = userMessage ?
-              userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') :
-              'No subject';
-
-            localChats.push({
-              chatId,
-              id: chatId, // For HistoryView compatibility
-              date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
-              preview: subject,
-              name: ''
-            });
-          } catch (e) {
-            console.error(`Error parsing messages for chat ${chatId}:`, e);
-          }
+        if (chatId) {
+          localChats.push({
+            chatId,
+            id: chatId,
+            name: '',
+            preview: getChatPreviewFromStorage(chatId),
+            date: new Date().toISOString()
+          });
         }
       }
     }
+
     chatList.value = localChats;
-    return localChats;
+    console.log(`Loaded ${chatList.value.length} chats from localStorage`);
   };
 
-  // Function to fetch chat history from backend with fallback to local storage
-  const loadChatList = async () => {
+  // Get chat preview from localStorage
+  const getChatPreviewFromStorage = (chatId) => {
     try {
-      const response = await apiClient.get('/api/list_sessions');
-      const chats = response.sessions || [];
+      const messagesKey = `chat_${chatId}_messages`;
+      const persistedMessages = localStorage.getItem(messagesKey);
 
-      const processedChats = await Promise.all(chats.map(async (chat) => {
-        try {
-          const messagesResponse = await apiClient.get(`/api/load_session/${chat.chatId}`);
-          const messages = messagesResponse.history || [];
-          const userMessage = messages.find(msg => msg.sender === 'user');
-          const subject = userMessage ?
-            userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') :
-            'No subject';
-
-          return {
-            chatId: chat.chatId,
-            id: chat.chatId, // For HistoryView compatibility
-            date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
-            preview: subject,
-            name: chat.name || ''
-          };
-        } catch (error) {
-          console.error(`Error loading messages for chat ${chat.chatId}:`, error);
-          return {
-            chatId: chat.chatId,
-            id: chat.chatId,
-            date: 'Unknown date',
-            preview: 'Error loading chat',
-            name: chat.name || ''
-          };
-        }
-      }));
-
-      chatList.value = processedChats;
-    } catch (error) {
-      console.error('Error loading chat list from backend:', error);
-      // Fallback to local storage
-      loadChatListFromLocalStorage();
-    }
-  };
-
-  // Function to get a preview of the chat for display
-  const getChatPreview = (chatId) => {
-    const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
-    if (persistedMessages) {
-      try {
+      if (persistedMessages) {
         const chatMessages = JSON.parse(persistedMessages);
         if (chatMessages.length > 0) {
           const userMessage = chatMessages.find(msg => msg.sender === 'user');
           if (userMessage && userMessage.text) {
-            return userMessage.text.substring(0, 20) + (userMessage.text.length > 20 ? '...' : '');
+            return userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '');
           }
         }
-      } catch (e) {
-        console.error('Error parsing chat messages for preview:', e);
       }
+    } catch (e) {
+      console.error(`Error getting chat preview for ${chatId}:`, e);
     }
-    return '';
+    return 'No subject';
   };
 
-  // Function to delete a specific chat
-  const deleteChat = async (chatId) => {
-    if (!chatId) {
-      console.warn('No chat ID provided for deletion');
-      return { success: false, message: 'No chat ID provided' };
-    }
+  // Load messages for a specific chat
+  const loadChatMessages = async (chatId) => {
+    if (!chatId) return [];
+
+    isLoading.value = true;
+    error.value = null;
 
     try {
-      await apiClient.delete(`/api/chat/chats/${chatId}`);
+      console.log(`Loading messages for chat ${chatId}...`);
+      const data = await apiClient.getChatMessages(chatId);
 
-      // Remove from local storage
-      localStorage.removeItem(`chat_${chatId}_messages`);
+      // Handle different response structures
+      const chatMessages = data.messages || data.data || data || [];
 
-      // Remove from chat list
-      chatList.value = chatList.value.filter(chat => chat.chatId !== chatId && chat.id !== chatId);
+      // Normalize message format
+      const normalizedMessages = chatMessages.map(msg => ({
+        ...msg,
+        type: msg.messageType || msg.type || 'response',
+        messageType: undefined // Remove to avoid confusion
+      }));
 
-      // If the deleted chat was active, clear current chat ID
-      if (chatId === currentChatId.value) {
-        currentChatId.value = null;
-        window.location.hash = '';
-      }
+      messages.value = normalizedMessages;
+      console.log(`Loaded ${messages.value.length} messages for chat ${chatId}`);
 
-      return { success: true, message: 'Chat deleted successfully' };
+      return normalizedMessages;
     } catch (error) {
-      console.error('Error deleting chat:', error);
-      return { success: false, message: `Error deleting chat: ${error.message}` };
+      console.error(`Failed to load messages for chat ${chatId}:`, error);
+      error.value = error.message;
+
+      // Fallback to localStorage
+      const localMessages = await loadMessagesFromLocalStorage(chatId);
+      messages.value = localMessages;
+      return localMessages;
+    } finally {
+      isLoading.value = false;
     }
   };
 
-  // Function to create a new chat
+  // Fallback: Load messages from localStorage
+  const loadMessagesFromLocalStorage = async (chatId) => {
+    try {
+      const messagesKey = `chat_${chatId}_messages`;
+      const persistedMessages = localStorage.getItem(messagesKey);
+
+      if (persistedMessages) {
+        const localMessages = JSON.parse(persistedMessages);
+        console.log(`Loaded ${localMessages.length} messages from localStorage for chat ${chatId}`);
+
+        // Normalize localStorage messages
+        return localMessages.map(msg => ({
+          ...msg,
+          type: msg.messageType || msg.type || 'response',
+          messageType: undefined
+        }));
+      }
+    } catch (e) {
+      console.error(`Error loading messages from localStorage for chat ${chatId}:`, e);
+    }
+
+    return [];
+  };
+
+  // Function to create a new chat - FIXED TO USE CORRECT ENDPOINT
   const createNewChat = async () => {
     try {
-      const newChatData = await apiClient.post('/api/chat/chats/new');
-      const newChatId = newChatData.chat_id;
+      // Use the correct endpoint: POST /api/chat/sessions (not /api/chat/chats/new)
+      const newChatData = await apiClient.createNewChat();
+      const newChatId = newChatData.session_id || newChatData.id || newChatData.chat_id;
+
+      if (!newChatId) {
+        throw new Error('No chat ID returned from server');
+      }
 
       // Add to chat list
       const newChat = {
         chatId: newChatId,
         id: newChatId,  // For HistoryView compatibility
-        name: '',
-        preview: '',
-        date: new Date().toLocaleTimeString()
+        name: newChatData.title || '',
+        preview: 'New chat',
+        date: newChatData.created_at || new Date().toISOString()
       };
       chatList.value.push(newChat);
 
@@ -153,70 +210,186 @@ export function useChatHistory() {
       currentChatId.value = newChatId;
       window.location.hash = `chatId=${newChatId}`;
 
-      return { success: true, chatId: newChatId };
+      console.log(`Created new chat with ID: ${newChatId}`);
+      return newChatId;
     } catch (error) {
       console.error('Failed to create new chat:', error);
-      return { success: false, error: error.message };
+      error.value = error.message;
+      throw error;
     }
   };
 
-  // Function to switch to a different chat
-  const switchToChat = (chatId) => {
-    if (chatId === currentChatId.value) return;
+  // Function to delete a chat
+  const deleteChat = async (chatId) => {
+    if (!chatId) {
+      throw new Error('No chat ID provided for deletion');
+    }
 
-    window.location.hash = `chatId=${chatId}`;
-    currentChatId.value = chatId;
+    try {
+      await apiClient.deleteChat(chatId);
+
+      // Remove from localStorage
+      localStorage.removeItem(`chat_${chatId}_messages`);
+
+      // Remove from chat list
+      chatList.value = chatList.value.filter(chat => chat.chatId !== chatId);
+
+      // Clear current chat if it was deleted
+      if (currentChatId.value === chatId) {
+        currentChatId.value = null;
+        messages.value = [];
+        window.location.hash = '';
+      }
+
+      console.log(`Deleted chat ${chatId}`);
+      return true;
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      error.value = error.message;
+      throw error;
+    }
   };
 
-  // Function to edit chat name
-  const editChatName = (chatId, newName) => {
-    const chatIndex = chatList.value.findIndex(chat =>
-      chat.chatId === chatId || chat.id === chatId
-    );
-    if (chatIndex !== -1) {
-      chatList.value[chatIndex].name = newName;
+  // Function to save chat messages (DEPRECATED - messages should be sent individually)
+  const saveChatMessages = async (chatId, messageList) => {
+    console.warn('saveChatMessages is deprecated. Messages should be sent individually via sendChatMessage()');
 
-      // Save updated chat list to local storage
-      const customChatList = chatList.value.map(chat => ({
-        chatId: chat.chatId || chat.id,
+    if (!chatId) {
+      console.warn('No chat ID provided to save messages');
+      return;
+    }
+
+    // Save to localStorage for backward compatibility
+    localStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(messageList));
+
+    // Update messages in state
+    if (currentChatId.value === chatId) {
+      messages.value = messageList;
+    }
+
+    console.log(`Saved ${messageList.length} messages to localStorage for chat ${chatId}`);
+  };
+
+  // Function to send a message
+  const sendMessage = async (messageContent, options = {}) => {
+    if (!messageContent || !messageContent.trim()) {
+      throw new Error('Message content cannot be empty');
+    }
+
+    try {
+      const chatId = options.session_id || currentChatId.value;
+
+      if (!chatId) {
+        throw new Error('No chat session ID available');
+      }
+
+      const result = await apiClient.sendChatMessage(messageContent, {
+        session_id: chatId,
+        ...options
+      });
+
+      // If successful, reload messages for this chat
+      if (result.type === 'json' && result.data.success) {
+        await loadChatMessages(chatId);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      error.value = error.message;
+      throw error;
+    }
+  };
+
+  // Function to update chat name
+  const updateChatName = async (chatId, newName) => {
+    try {
+      // Update via API if available
+      try {
+        await apiClient.updateChatSession(chatId, { title: newName });
+      } catch (apiError) {
+        console.warn('Failed to update chat name via API, updating locally only:', apiError);
+      }
+
+      // Update in local chat list
+      const chatIndex = chatList.value.findIndex(chat => chat.chatId === chatId);
+      if (chatIndex !== -1) {
+        chatList.value[chatIndex].name = newName;
+      }
+
+      // Save to localStorage for backward compatibility
+      const savedChatList = chatList.value.map(chat => ({
+        chatId: chat.chatId,
         name: chat.name
       }));
-      localStorage.setItem('chat_list', JSON.stringify(customChatList));
+      localStorage.setItem('chat_list', JSON.stringify(savedChatList));
 
       return true;
+    } catch (error) {
+      console.error('Error updating chat name:', error);
+      error.value = error.message;
+      return false;
     }
-    return false;
   };
 
-  // Function to load custom chat names from local storage
-  const loadCustomChatNames = () => {
-    const savedChatList = localStorage.getItem('chat_list');
-    if (savedChatList) {
-      try {
-        const customList = JSON.parse(savedChatList);
-        // Update names in the chat list based on custom names
-        chatList.value.forEach(chat => {
-          const customChat = customList.find(c => c.chatId === (chat.chatId || chat.id));
-          if (customChat && customChat.name) {
-            chat.name = customChat.name;
-          }
-        });
-      } catch (e) {
-        console.error('Error loading custom chat list names:', e);
-      }
-    }
+  // Function to clear current error
+  const clearError = () => {
+    error.value = null;
   };
+
+  // Watch for URL changes
+  watch(() => window.location.hash, () => {
+    const chatId = getCurrentChatFromUrl();
+    if (chatId && chatId !== currentChatId.value) {
+      currentChatId.value = chatId;
+      loadChatMessages(chatId);
+    }
+  });
+
+  // Watch for current chat changes
+  watch(currentChatId, async (newChatId, oldChatId) => {
+    if (newChatId && newChatId !== oldChatId) {
+      await loadChatMessages(newChatId);
+    }
+  });
+
+  // Initialize on mount
+  onMounted(async () => {
+    // Load chat list first
+    await loadChatList();
+
+    // Check URL for current chat
+    const urlChatId = getCurrentChatFromUrl();
+    if (urlChatId) {
+      currentChatId.value = urlChatId;
+      await loadChatMessages(urlChatId);
+    }
+  });
 
   return {
+    // Reactive state
     chatList,
     currentChatId,
-    loadChatListFromLocalStorage,
+    messages,
+    isLoading,
+    error,
+
+    // Computed properties
+    currentChat,
+    chatCount,
+    hasChats,
+    sortedChatList,
+
+    // Functions
     loadChatList,
-    getChatPreview,
-    deleteChat,
+    loadChatMessages,
     createNewChat,
-    switchToChat,
-    editChatName,
-    loadCustomChatNames
+    deleteChat,
+    saveChatMessages,
+    sendMessage,
+    updateChatName,
+    setCurrentChat,
+    clearError,
+    getCurrentChatFromUrl
   };
 }
