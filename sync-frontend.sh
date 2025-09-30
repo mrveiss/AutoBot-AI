@@ -74,6 +74,20 @@ if [[ "$DEV_MODE" == "true" ]]; then
         echo -e "${RED}❌ Source sync failed${NC}"
         exit 1
     fi
+
+    # Check if dependencies need repopulation
+    echo -e "${YELLOW}🔍 Checking dependencies status...${NC}"
+    if ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "test -f /home/autobot/autobot-vue/node_modules/.vite/deps/vue.js" 2>/dev/null; then
+        echo -e "${GREEN}✅ Dependencies are current, skipping sync${NC}"
+    else
+        echo -e "${YELLOW}📦 Dependencies missing or outdated, syncing...${NC}"
+        if ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/node_modules/ /home/autobot/autobot-vue/node_modules/; then
+            echo -e "${GREEN}✅ Dependencies sync completed${NC}"
+        else
+            echo -e "${RED}❌ Dependencies sync failed${NC}"
+            exit 1
+        fi
+    fi
     
     # Skip production deployment in dev mode
     echo -e "${GREEN}🎉 Development sync completed!${NC}"

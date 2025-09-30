@@ -303,7 +303,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
-import appConfig from '../config/environment.js'
+import appConfig from '../config/AppConfig.js'
 
 // Reactive data
 const rootPath = ref('/home/kali/Desktop/AutoBot')

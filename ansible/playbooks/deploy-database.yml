@@ -113,7 +113,7 @@
     
     - name: Generate Redis Stack configuration
       template:
-        src: redis-stack.conf.j2
+        src: ../templates/redis/redis-stack.conf.j2
         dest: "{{ redis_config_dir }}/redis-stack.conf"
         owner: "{{ redis_user }}"
         group: "{{ redis_group }}"

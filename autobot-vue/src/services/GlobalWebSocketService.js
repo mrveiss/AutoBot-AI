@@ -7,6 +7,7 @@
  */
 
 import { ref, reactive } from 'vue'
+import { DEFAULT_CONFIG } from '@/config/defaults.js'
 
 class GlobalWebSocketService {
   constructor() {
@@ -14,7 +15,7 @@ class GlobalWebSocketService {
     this.isConnected = ref(false)
     this.connectionState = ref('disconnected') // disconnected, connecting, connected, error
     this.reconnectAttempts = 0
-    this.maxReconnectAttempts = 5 // Reduced from 10 
+    this.maxReconnectAttempts = 5 // Reduced from 10
     this.baseDelay = 1000 // Base delay for exponential backoff
     this.maxDelay = 16000 // Cap at 16 seconds
     this.connectionTimeout = 5000 // Reduced from 10s
@@ -34,35 +35,46 @@ class GlobalWebSocketService {
 
     // Persist connection state across reloads
     this.restoreConnectionState()
-    
+
     console.log('🌐 Global WebSocket Service initialized with URL:', this.state.url)
   }
 
   /**
    * Get WebSocket URL with proper environment detection
+   * CRITICAL: Uses DEFAULT_CONFIG for all defaults - no hardcoded fallbacks
    */
   getWebSocketUrl() {
     try {
-      // Check if we're using Vite proxy in development
-      if (import.meta.env.DEV) {
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws`
-        console.log('🔗 Development WebSocket URL (via proxy):', wsUrl)
+      // Get backend config from defaults.js (which reads from .env with fallbacks)
+      const backendHost = DEFAULT_CONFIG.network.backend.host
+      const backendPort = DEFAULT_CONFIG.network.backend.port
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+
+      // CRITICAL: Only use Vite proxy when actually running on Vite dev server
+      // Vite dev server runs on port 5173, but in production build on VM1,
+      // we need to connect directly to backend
+      const isViteDevServer = import.meta.env.DEV && window.location.port === '5173' &&
+                               window.location.hostname === 'localhost'
+
+      if (isViteDevServer) {
+        // Development mode with Vite dev server - use proxy
+        // FIXED: WebSocket is at /api/ws not /ws
+        const wsUrl = `${wsProtocol}//${window.location.host}/api/ws`
+        console.log('🔗 Development WebSocket URL (via Vite proxy):', wsUrl)
         return wsUrl
       }
 
-      // Production: use environment variables or fallback
-      const backendHost = import.meta.env.VITE_BACKEND_HOST || '172.16.168.20'
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const port = '8001'
-      
-      const wsUrl = `${wsProtocol}//${backendHost}:${port}/ws`
-      console.log('🔗 Production WebSocket URL:', wsUrl)
+      // Production mode or when frontend is on VM1 - connect directly to backend
+      // FIXED: WebSocket is at /api/ws not /ws
+      const wsUrl = `${wsProtocol}//${backendHost}:${backendPort}/api/ws`
+      console.log('🔗 Production WebSocket URL (direct to backend):', wsUrl)
       return wsUrl
-      
+
     } catch (error) {
       console.error('Failed to construct WebSocket URL:', error)
-      return `ws://localhost:8001/ws`
+      // CRITICAL: Error in URL construction - this should never happen
+      // If DEFAULT_CONFIG fails, something is fundamentally wrong
+      throw new Error(`WebSocket URL construction failed: ${error.message}`)
     }
   }
 
@@ -120,7 +132,7 @@ class GlobalWebSocketService {
     console.log('🔌 Connecting WebSocket (attempt', this.reconnectAttempts + 1, '):', wsUrl)
 
     // Track with RUM if available
-    this.trackEvent('connection_attempt', { 
+    this.trackEvent('connection_attempt', {
       url: wsUrl,
       attempt: this.reconnectAttempts + 1
     })
@@ -129,7 +141,7 @@ class GlobalWebSocketService {
       try {
         this.ws = new WebSocket(wsUrl)
         this.setupEventHandlers(resolve, reject)
-        
+
         // Connection timeout
         const timeoutId = setTimeout(() => {
           if (this.connectionState.value === 'connecting') {
@@ -181,20 +193,20 @@ class GlobalWebSocketService {
 
     this.ws.onopen = () => {
       console.log('✅ WebSocket connected successfully')
-      
+
       this.connectionState.value = 'connected'
       this.isConnected.value = true
       this.state.connected = true
       this.reconnectAttempts = 0
       this.state.reconnectCount = 0
       this.state.lastError = null
-      
+
       this.saveConnectionState()
       this.startHeartbeat()
-      
+
       this.trackEvent('connection_opened', { url: this.state.url })
       this.emit('connected', { url: this.state.url })
-      
+
       resolve()
     }
 
@@ -274,7 +286,7 @@ class GlobalWebSocketService {
   handleConnectionError(error) {
     this.connectionState.value = 'error'
     this.state.lastError = error.toString()
-    
+
     this.trackEvent('connection_error', {
       error: error.toString(),
       attempt: this.reconnectAttempts
@@ -300,7 +312,7 @@ class GlobalWebSocketService {
 
     this.reconnectAttempts++
     this.state.reconnectCount = this.reconnectAttempts
-    
+
     // Exponential backoff with jitter
     const backoffDelay = Math.min(
       this.baseDelay * Math.pow(2, this.reconnectAttempts - 1),
@@ -328,13 +340,13 @@ class GlobalWebSocketService {
       try {
         const message = JSON.stringify(data)
         this.ws.send(message)
-        
+
         this.trackEvent('message_sent', {
           dataType: typeof data,
           dataSize: message.length,
           messageType: data.type || 'unknown'
         })
-        
+
         return true
       } catch (error) {
         console.error('❌ Failed to send WebSocket message:', error)
@@ -351,7 +363,7 @@ class GlobalWebSocketService {
    */
   startHeartbeat() {
     this.stopHeartbeat()
-    
+
     this.heartbeatInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.send({ type: 'ping', timestamp: Date.now() })
@@ -376,14 +388,14 @@ class GlobalWebSocketService {
    */
   cleanup() {
     this.stopHeartbeat()
-    
+
     if (this.ws) {
       // Remove event listeners to prevent memory leaks
       this.ws.onopen = null
       this.ws.onmessage = null
       this.ws.onerror = null
       this.ws.onclose = null
-      
+
       if (this.ws.readyState === WebSocket.OPEN) {
         this.ws.close(1000, 'cleanup')
       }
@@ -460,10 +472,22 @@ class GlobalWebSocketService {
 
   /**
    * Track events with RUM if available
+   * Made resilient to RUM initialization issues
    */
   trackEvent(eventType, data) {
-    if (window.rum) {
-      window.rum.trackWebSocketEvent(`global_${eventType}`, data)
+    try {
+      if (window.rum && typeof window.rum.trackWebSocketEvent === 'function') {
+        window.rum.trackWebSocketEvent(`global_${eventType}`, data)
+      } else if (window.rum && typeof window.rum.trackEvent === 'function') {
+        // Fallback to generic trackEvent if trackWebSocketEvent doesn't exist
+        window.rum.trackEvent('websocket', {
+          type: `global_${eventType}`,
+          ...data
+        })
+      }
+    } catch (error) {
+      // Silently fail - RUM tracking is optional and shouldn't break WebSocket
+      console.debug('[GlobalWebSocketService] RUM tracking not available:', error.message)
     }
   }
 
@@ -486,17 +510,17 @@ class GlobalWebSocketService {
    */
   async testConnection() {
     console.log('🧪 Testing WebSocket connection...')
-    
+
     if (this.isConnected.value) {
       return new Promise((resolve) => {
         const timeout = setTimeout(() => resolve(false), 5000)
-        
+
         const handlePong = () => {
           clearTimeout(timeout)
           this.off('pong', handlePong)
           resolve(true)
         }
-        
+
         this.on('pong', handlePong)
         this.send({ type: 'ping', timestamp: Date.now(), test: true })
       })
@@ -531,7 +555,7 @@ if (typeof window !== 'undefined' && !window._autobotWebSocketInitialized) {
 // Global debugging interface
 if (typeof window !== 'undefined') {
   window.globalWS = globalWebSocketService
-  
+
   window.wsDebug = {
     connect: () => globalWebSocketService.connect(),
     disconnect: () => globalWebSocketService.disconnect(),

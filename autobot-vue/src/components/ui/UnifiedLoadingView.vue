@@ -111,7 +111,9 @@ const cancelLoading = () => {
 
 <style scoped>
 .unified-loading-view {
-  @apply relative w-full h-full min-h-[200px];
+  @apply relative h-full min-h-[200px];
+  /* CRITICAL FIX: Remove w-full to prevent width override issues */
+  /* Width is now controlled by parent component/class */
 }
 
 /* Error Container */
@@ -174,7 +176,8 @@ const cancelLoading = () => {
 
 /* Content Container */
 .content-container {
-  @apply relative w-full h-full;
+  @apply relative h-full;
+  /* CRITICAL FIX: Remove w-full to allow parent to control width */
   transition: opacity 0.2s ease;
 }
 

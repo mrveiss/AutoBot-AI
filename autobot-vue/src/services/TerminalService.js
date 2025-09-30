@@ -4,7 +4,7 @@
  */
 
 import { reactive, ref } from 'vue';
-import { API_CONFIG } from '@/config/environment.js';
+import appConfig from '@/config/AppConfig.js';
 import { ApiClient } from '@/utils/ApiClient.js';
 
 // Create ApiClient instance for terminal operations
@@ -27,15 +27,22 @@ class TerminalService {
     this.connectionStates = new Map(); // sessionId -> connection state
     this.reconnectAttempts = new Map(); // sessionId -> attempt count
     this.healthCheckIntervals = new Map(); // sessionId -> interval ID
-    this.baseUrl = this.getWebSocketUrl();
+    this.baseUrl = ''; // Will be loaded async
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000; // Start with 1 second
+    this.initializeWebSocketUrl();
   }
 
-  getWebSocketUrl() {
-    // Use centralized configuration
-    const baseWsUrl = API_CONFIG.WS_BASE_URL.replace('/ws', ''); // Remove default /ws suffix
-    return `${baseWsUrl}/api/terminal/ws`;
+  async initializeWebSocketUrl() {
+    try {
+      const wsUrl = await appConfig.getWebSocketUrl();
+      // WebSocket URL format: ws://host:port/ws
+      // We need: ws://host:port/api/terminal/ws
+      this.baseUrl = `${wsUrl.replace('/ws', '')}/api/terminal/ws`;
+    } catch (error) {
+      console.warn('Using fallback WebSocket URL');
+      this.baseUrl = 'ws://172.16.168.20:8001/api/terminal/ws';
+    }
   }
 
   /**
@@ -164,6 +171,11 @@ class TerminalService {
     if (this.connections.has(sessionId)) {
       console.warn(`Already connected to session ${sessionId}`);
       return;
+    }
+
+    // Ensure WebSocket URL is initialized
+    if (!this.baseUrl) {
+      await this.initializeWebSocketUrl();
     }
 
     this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTING);

@@ -42,6 +42,15 @@ redis:
     timeout: 0
     tcp_backlog: 511
     databases: 16
+
+  # Connection pooling configuration
+  connection:
+    max_connections: 50  # Increased from 20 for higher load
+    min_connections: 5
+    timeout: 5
+    socket_timeout: 5    # Increased from 2 for slower operations
+    socket_connect_timeout: 2
+    retry_on_timeout: true
     
   # Log configuration
   log:
@@ -74,58 +83,55 @@ redis_insight:
 # ==========================================
 
 database_schema:
-  # Redis database assignments (matching application config)
+  # Redis database assignments (matching complete.yaml)
   databases:
     main:
       id: 0
-      description: "Main application data (sessions, cache, etc.)"
-      backup_priority: "high"
-      
-    knowledge:
-      id: 1
-      description: "Knowledge base and documents"
+      description: "Main application data and RediSearch indexes"
       backup_priority: "critical"
-      
+      note: "MUST be DB 0 for RediSearch compatibility"
+
+    knowledge:
+      id: 0
+      description: "Knowledge base vectors and documents (RediSearch)"
+      backup_priority: "critical"
+      note: "RediSearch indexes REQUIRE DB 0"
+
+    metrics:
+      id: 1
+      description: "Performance metrics and monitoring data"
+      backup_priority: "low"
+
     prompts:
       id: 2
       description: "Prompt templates and management"
       backup_priority: "medium"
-      
+
     agents:
       id: 3
       description: "Agent communication and coordination"
       backup_priority: "high"
-      
-    metrics:
+
+    cache:
       id: 4
-      description: "Performance metrics and monitoring"
+      description: "General application cache"
       backup_priority: "low"
-      
-    logs:
-      id: 5
-      description: "Structured logs and events"
-      backup_priority: "medium"
-      
+
     sessions:
       id: 6
       description: "User sessions and authentication"
       backup_priority: "high"
-      
-    workflows:
-      id: 7
-      description: "Workflow state and orchestration"
-      backup_priority: "high"
-      
-    vectors:
+
+    chat_history:
       id: 8
-      description: "Vector embeddings cache"
-      backup_priority: "critical"
-      
-    models:
-      id: 9
-      description: "Model metadata and versioning"
+      description: "Chat conversation history"
+      backup_priority: "high"
+
+    backup:
+      id: 10
+      description: "Backup and recovery data"
       backup_priority: "medium"
-      
+
     testing:
       id: 15
       description: "Test data (isolated from production)"
@@ -174,16 +180,16 @@ model_storage:
 backup:
   # Backup schedule
   schedule:
-    # Critical data (vectors, knowledge) - every 4 hours
+    # Critical data (knowledge, main) - every 4 hours
     critical:
       frequency: "0 */4 * * *"
-      databases: [1, 8]  # knowledge, vectors
+      databases: [0]  # main and knowledge (both on DB 0)
       retention: 72  # hours
-      
-    # High priority data - every 6 hours  
+
+    # High priority data - every 6 hours
     high:
       frequency: "0 */6 * * *"
-      databases: [0, 3, 6, 7]  # main, agents, sessions, workflows
+      databases: [3, 6, 8]  # agents, sessions, chat_history
       retention: 48  # hours
       
     # Medium priority data - daily
