@@ -145,46 +145,68 @@ class ChatWorkflowManager:
                 # Build complete prompt with system context and history
                 full_prompt = system_prompt + conversation_context + f"**Current user message:** {message}\n\nAssistant:"
 
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.post(
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    # Stream the response from Ollama
+                    async with client.stream(
+                        "POST",
                         ollama_url,
                         json={
                             "model": "llama3.2:3b-instruct-q4_K_M",
                             "prompt": full_prompt,
-                            "stream": False,
+                            "stream": True,  # Enable streaming for real-time response
                             "options": {
                                 "temperature": 0.7,
                                 "top_p": 0.9,
                                 "num_ctx": 4096
                             }
                         }
-                    )
+                    ) as response:
+                        if response.status_code == 200:
+                            llm_response = ""
+                            messages = []
 
-                    if response.status_code == 200:
-                        result_data = response.json()
-                        llm_response = result_data.get("response", "No response from LLM")
-                        logger.debug(f"[ChatWorkflowManager] Got LLM response: {llm_response[:100]}...")
+                            # Stream response chunks
+                            async for line in response.aiter_lines():
+                                if line:
+                                    try:
+                                        import json
+                                        chunk_data = json.loads(line)
+                                        chunk_text = chunk_data.get("response", "")
 
-                        # Store this exchange in conversation history
-                        session.conversation_history.append({
-                            "user": message,
-                            "assistant": llm_response
-                        })
+                                        if chunk_text:
+                                            llm_response += chunk_text
 
-                        # Keep history manageable (max 10 exchanges = 20 messages)
-                        if len(session.conversation_history) > 10:
-                            session.conversation_history = session.conversation_history[-10:]
+                                            # Yield streaming chunks
+                                            from src.async_chat_workflow import WorkflowMessage
+                                            messages.append(WorkflowMessage(
+                                                type="response",
+                                                content=chunk_text,
+                                                metadata={
+                                                    "message_type": "llm_response_chunk",
+                                                    "model": "llama3.2:3b-instruct-q4_K_M",
+                                                    "streaming": True
+                                                }
+                                            ))
 
-                        from src.async_chat_workflow import WorkflowMessage
-                        messages = [WorkflowMessage(
-                            type="response",
-                            content=llm_response,
-                            metadata={
-                                "message_type": "llm_response",
-                                "model": "llama3.2:3b-instruct-q4_K_M",
-                                "history_length": len(session.conversation_history)
-                            }
-                        )]
+                                        # Check if this is the final chunk
+                                        if chunk_data.get("done", False):
+                                            break
+
+                                    except json.JSONDecodeError as e:
+                                        logger.error(f"Failed to parse stream chunk: {e}")
+                                        continue
+
+                            logger.debug(f"[ChatWorkflowManager] Completed streaming response: {llm_response[:100]}...")
+
+                            # Store complete exchange in conversation history
+                            session.conversation_history.append({
+                                "user": message,
+                                "assistant": llm_response
+                            })
+
+                            # Keep history manageable (max 10 exchanges)
+                            if len(session.conversation_history) > 10:
+                                session.conversation_history = session.conversation_history[-10:]
                     else:
                         logger.error(f"[ChatWorkflowManager] Ollama request failed: {response.status_code}")
                         from src.async_chat_workflow import WorkflowMessage
