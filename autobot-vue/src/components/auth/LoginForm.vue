@@ -95,7 +95,7 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/useUserStore'
-import { ApiClient } from '@/utils/ApiClient'
+import ApiClient from '@/utils/ApiClient'
 
 const router = useRouter()
 const userStore = useUserStore()

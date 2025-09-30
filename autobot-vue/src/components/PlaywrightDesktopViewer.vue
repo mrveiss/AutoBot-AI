@@ -41,14 +41,14 @@
 
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
-import { API_CONFIG } from '@/config/environment.js';
+import appConfig from '@/config/AppConfig.js';
 
 export default {
   name: 'PlaywrightDesktopViewer',
   setup() {
     const isConnected = ref(false);
     const isConnecting = ref(false);
-    const vncUrl = ref(`${API_CONFIG.PLAYWRIGHT_VNC_URL}?autoconnect=true&resize=scale`);
+    const vncUrl = ref(''); // Will be loaded async
     const vncFrame = ref(null);
     const healthCheckInterval = ref(null);
 
@@ -124,7 +124,19 @@ export default {
       }
     };
 
-    onMounted(() => {
+    onMounted(async () => {
+      // Load VNC URL dynamically
+      try {
+        const dynamicVncUrl = await appConfig.getVncUrl('playwright', {
+          autoconnect: true,
+          resize: 'scale'
+        });
+        vncUrl.value = dynamicVncUrl;
+      } catch (error) {
+        console.warn('Failed to load dynamic VNC URL, using fallback');
+        vncUrl.value = 'http://172.16.168.25:6081/vnc.html?autoconnect=true&resize=scale&password=playwright';
+      }
+
       // Auto-check health on mount
       checkPlaywrightHealth().then(healthy => {
         if (healthy) {

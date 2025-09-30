@@ -5,22 +5,15 @@
  */
 
 const { chromium } = require('playwright');
+const { createOptimalBrowser } = require('./utils/dynamic_playwright');
 
 async function quickTest() {
     console.log('🚀 Quick Frontend Test Started\n');
     
-    const browser = await chromium.launch({
-        headless: true,
-        args: [
-            '--window-size=1920,1080',
-            '--force-device-scale-factor=1',
-            '--disable-web-security'
-        ]
-    });
-    const page = await browser.newPage();
+    // Use dynamic resolution detection for optimal display
+    const { browser, page, config } = await createOptimalBrowser({ chromium }, { headless: true });
 
-    // Set proper viewport size for full page display
-    await page.setViewportSize({ width: 1920, height: 1080 });
+    console.log(`📐 Using viewport: ${config.viewport.width}x${config.viewport.height} (detected: ${config.detectedResolution.width}x${config.detectedResolution.height})`);
     
     const results = {
         pageLoads: false,

@@ -7,6 +7,7 @@
 
 import { inject } from 'vue'
 import type { ApiClientType } from '../plugins/api'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 
 /**
  * Composable to access the centralized API client
@@ -51,12 +52,14 @@ export function useApiWithState() {
         showErrorToast?: boolean
         fallbackValue?: T
         errorMessage?: string
+        silent?: boolean
       } = {}
     ): Promise<T | null> {
       const {
         showErrorToast = true,
         fallbackValue = null,
-        errorMessage = 'An error occurred while fetching data'
+        errorMessage = 'An error occurred while fetching data',
+        silent = false
       } = options
 
       try {
@@ -64,9 +67,23 @@ export function useApiWithState() {
       } catch (error) {
         console.error('API call failed:', error)
 
-        if (showErrorToast) {
-          // You can integrate with your toast/notification system here
-          console.error(errorMessage, error)
+        if (showErrorToast && !silent) {
+          // Use subtle error notification instead of intrusive popup
+          const fullErrorMessage = error.response?.data?.detail || error.message || errorMessage
+
+          // Check if this is a network/server error
+          const isServerError = error.response?.status >= 500 || error.message?.includes('HTTP 500')
+          const isNetworkError = error.message?.includes('Failed to fetch') || error.message?.includes('Network Error')
+
+          // Determine severity
+          const severity = (isServerError || isNetworkError) ? 'warning' : 'error'
+
+          // Show subtle notification
+          showSubtleErrorNotification(
+            isServerError ? 'Server Error' : isNetworkError ? 'Connection Error' : 'API Error',
+            fullErrorMessage,
+            severity
+          )
         }
 
         return fallbackValue as T
@@ -95,7 +112,10 @@ export function useApiWithState() {
     async getHealthStatus() {
       return this.withErrorHandling(
         () => api.checkHealth(),
-        { errorMessage: 'Failed to get API health status' }
+        {
+          errorMessage: 'Failed to get API health status',
+          silent: true // Health checks shouldn't show user notifications
+        }
       )
     }
   }
@@ -182,7 +202,7 @@ export function useChatApi() {
     async saveChatMessages(chatId: string, messages: any[]) {
       return withErrorHandling(
         () => api.saveChatMessages(chatId, messages),
-        { errorMessage: 'Failed to save chat messages' }
+        { errorMessage: 'Failed to save chat - connection issue. Your messages are safely stored locally.' }
       )
     }
   }
@@ -312,7 +332,8 @@ export function useConnectionStatus() {
         () => api.testConnection(),
         {
           errorMessage: 'Connection test failed',
-          fallbackValue: { connected: false, error: 'Connection test failed' }
+          fallbackValue: { connected: false, error: 'Connection test failed' },
+          silent: true // Connection tests shouldn't show user notifications
         }
       )
     },

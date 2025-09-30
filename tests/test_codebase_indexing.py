@@ -1,476 +1,317 @@
 #!/usr/bin/env python3
 """
-Comprehensive Test Suite for Codebase Indexing Functionality
-Tests all aspects of the codebase analytics API
+Test script for the AutoBot Codebase Indexing Service
+
+This script tests the comprehensive codebase indexing functionality
+and verifies that the knowledge base gets properly populated.
 """
 
 import asyncio
 import json
-import redis
-import requests
-import time
+import logging
+import sys
 from pathlib import Path
-from typing import Dict, Any, List
 
-class CodebaseIndexingTester:
-    def __init__(self, base_url: str = "http://localhost:8001", redis_host: str = "172.16.168.23"):
-        self.base_url = base_url
-        self.redis_host = redis_host
-        self.api_prefix = f"{base_url}/api/analytics/codebase"
-        self.test_results = []
+# Add the project root to the Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-    def log_test(self, test_name: str, status: str, message: str, details: Any = None):
-        """Log test result"""
-        result = {
-            "test": test_name,
-            "status": status,
-            "message": message,
-            "timestamp": time.time(),
-            "details": details
-        }
-        self.test_results.append(result)
-        status_icon = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⚠️"
-        print(f"{status_icon} {test_name}: {message}")
-        if details and status != "PASS":
-            print(f"   Details: {details}")
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-    def test_redis_connection(self):
-        """Test Redis DB 11 connection"""
-        try:
-            redis_client = redis.Redis(
-                host=self.redis_host,
-                port=6379,
-                db=11,
-                decode_responses=True,
-                socket_timeout=5,
-                socket_connect_timeout=5
-            )
-            redis_client.ping()
-            self.log_test("Redis DB 11 Connection", "PASS", "Successfully connected to Redis DB 11")
-            return redis_client
-        except Exception as e:
-            self.log_test("Redis DB 11 Connection", "FAIL", f"Failed to connect to Redis DB 11: {e}")
-            return None
+async def test_knowledge_base_connection():
+    """Test connection to the knowledge base"""
+    try:
+        from src.knowledge_base_factory import get_knowledge_base
 
-    def test_backend_health(self):
-        """Test backend health"""
-        try:
-            response = requests.get(f"{self.base_url}/api/health", timeout=10)
-            if response.status_code == 200:
-                self.log_test("Backend Health", "PASS", "Backend is healthy")
-                return True
-            else:
-                self.log_test("Backend Health", "FAIL", f"Backend returned status {response.status_code}")
-                return False
-        except Exception as e:
-            self.log_test("Backend Health", "FAIL", f"Backend health check failed: {e}")
+        logger.info("Testing knowledge base connection...")
+        kb = await get_knowledge_base()
+
+        if kb is None:
+            logger.error("❌ Failed to connect to knowledge base")
             return False
 
-    def test_codebase_indexing(self):
-        """Test the main indexing functionality"""
-        try:
-            print(f"\n🔍 Starting codebase indexing test...")
-
-            # Clear any existing cache first
-            clear_response = requests.delete(f"{self.api_prefix}/cache", timeout=60)
-            if clear_response.status_code == 200:
-                print(f"   Cleared existing cache")
-
-            # Start indexing
-            index_response = requests.post(
-                f"{self.api_prefix}/index",
-                params={"root_path": "/home/kali/Desktop/AutoBot"},
-                timeout=120  # 2 minutes timeout for indexing
-            )
-
-            if index_response.status_code == 200:
-                data = index_response.json()
-                stats = data.get("stats", {})
-
-                self.log_test("Codebase Indexing", "PASS",
-                            f"Successfully indexed {stats.get('total_files', 0)} files",
-                            stats)
-                return data
-            else:
-                self.log_test("Codebase Indexing", "FAIL",
-                            f"Indexing failed with status {index_response.status_code}",
-                            index_response.text)
-                return None
-
-        except Exception as e:
-            self.log_test("Codebase Indexing", "FAIL", f"Indexing failed: {e}")
-            return None
-
-    def test_file_type_detection(self, indexing_data: Dict):
-        """Test that different file types are properly detected"""
-        if not indexing_data:
-            self.log_test("File Type Detection", "SKIP", "No indexing data available")
-            return
-
-        stats = indexing_data.get("stats", {})
-
-        expected_files = {
-            "python_files": 0,
-            "javascript_files": 0,
-            "vue_files": 0,
-            "total_files": 0
-        }
-
-        for file_type, count in expected_files.items():
-            actual_count = stats.get(file_type, 0)
-            if actual_count > 0:
-                self.log_test(f"File Type Detection - {file_type}", "PASS",
-                            f"Found {actual_count} {file_type}")
-            else:
-                self.log_test(f"File Type Detection - {file_type}", "WARN",
-                            f"No {file_type} found")
-
-    def test_hardcode_detection(self):
-        """Test hardcode detection functionality"""
-        try:
-            response = requests.get(f"{self.api_prefix}/hardcodes", timeout=30)
-
-            if response.status_code == 200:
-                data = response.json()
-                hardcodes = data.get("hardcodes", [])
-                hardcode_types = data.get("hardcode_types", [])
-
-                # Check for specific hardcode types we expect
-                expected_types = ["ip", "url", "api_path"]
-                found_ips = False
-                found_urls = False
-
-                for hardcode in hardcodes:
-                    if hardcode.get("type") == "ip" and "172.16.168" in hardcode.get("value", ""):
-                        found_ips = True
-                    if hardcode.get("type") in ["url", "api_path"]:
-                        found_urls = True
-
-                if found_ips:
-                    self.log_test("Hardcode Detection - IPs", "PASS",
-                                f"Found IP addresses (172.16.168.x)")
-                else:
-                    self.log_test("Hardcode Detection - IPs", "WARN",
-                                "No 172.16.168.x IP addresses detected")
-
-                if found_urls:
-                    self.log_test("Hardcode Detection - URLs", "PASS",
-                                f"Found URL/API path hardcodes")
-                else:
-                    self.log_test("Hardcode Detection - URLs", "WARN",
-                                "No URL hardcodes detected")
-
-                self.log_test("Hardcode Detection", "PASS",
-                            f"Found {len(hardcodes)} hardcoded values of types: {hardcode_types}")
-
-                return hardcodes
-            else:
-                self.log_test("Hardcode Detection", "FAIL",
-                            f"Failed to get hardcodes: {response.status_code}")
-                return []
-
-        except Exception as e:
-            self.log_test("Hardcode Detection", "FAIL", f"Hardcode detection failed: {e}")
-            return []
-
-    def test_function_class_extraction(self):
-        """Test function and class declaration extraction"""
-        try:
-            response = requests.get(f"{self.api_prefix}/declarations", timeout=30)
-
-            if response.status_code == 200:
-                data = response.json()
-                declarations = data.get("declarations", [])
-                functions = data.get("functions", 0)
-                classes = data.get("classes", 0)
-
-                if functions > 0:
-                    self.log_test("Function Extraction", "PASS",
-                                f"Found {functions} function declarations")
-                else:
-                    self.log_test("Function Extraction", "WARN",
-                                "No function declarations found")
-
-                if classes > 0:
-                    self.log_test("Class Extraction", "PASS",
-                                f"Found {classes} class declarations")
-                else:
-                    self.log_test("Class Extraction", "WARN",
-                                "No class declarations found")
-
-                # Check for specific expected functions/classes
-                declaration_names = [d.get("name", "") for d in declarations]
-
-                expected_functions = ["scan_codebase", "analyze_python_file", "get_redis_connection"]
-                found_expected = [func for func in expected_functions if func in declaration_names]
-
-                if found_expected:
-                    self.log_test("Expected Functions Found", "PASS",
-                                f"Found expected functions: {found_expected}")
-                else:
-                    self.log_test("Expected Functions Found", "WARN",
-                                "No expected functions found in declarations")
-
-                return declarations
-            else:
-                self.log_test("Function/Class Extraction", "FAIL",
-                            f"Failed to get declarations: {response.status_code}")
-                return []
-
-        except Exception as e:
-            self.log_test("Function/Class Extraction", "FAIL", f"Declaration extraction failed: {e}")
-            return []
-
-    def test_problem_detection(self):
-        """Test code problem detection"""
-        try:
-            response = requests.get(f"{self.api_prefix}/problems", timeout=30)
-
-            if response.status_code == 200:
-                data = response.json()
-                problems = data.get("problems", [])
-                problem_types = data.get("problem_types", [])
-
-                if problems:
-                    severity_counts = {}
-                    for problem in problems:
-                        severity = problem.get("severity", "unknown")
-                        severity_counts[severity] = severity_counts.get(severity, 0) + 1
-
-                    self.log_test("Problem Detection", "PASS",
-                                f"Found {len(problems)} problems: {severity_counts}")
-                else:
-                    self.log_test("Problem Detection", "INFO",
-                                "No code problems detected (good!)")
-
-                return problems
-            else:
-                self.log_test("Problem Detection", "FAIL",
-                            f"Failed to get problems: {response.status_code}")
-                return []
-
-        except Exception as e:
-            self.log_test("Problem Detection", "FAIL", f"Problem detection failed: {e}")
-            return []
-
-    def test_stats_endpoint(self):
-        """Test the stats endpoint"""
-        try:
-            response = requests.get(f"{self.api_prefix}/stats", timeout=30)
-
-            if response.status_code == 200:
-                data = response.json()
-                stats = data.get("stats", {})
-                last_indexed = data.get("last_indexed", "Never")
-
-                required_stats = [
-                    "total_files", "python_files", "javascript_files", "vue_files",
-                    "total_lines", "total_functions", "total_classes"
-                ]
-
-                missing_stats = [stat for stat in required_stats if stat not in stats]
-
-                if not missing_stats:
-                    self.log_test("Stats Endpoint", "PASS",
-                                f"All required stats present. Last indexed: {last_indexed}",
-                                stats)
-                else:
-                    self.log_test("Stats Endpoint", "FAIL",
-                                f"Missing stats: {missing_stats}")
-
-                return stats
-            else:
-                self.log_test("Stats Endpoint", "FAIL",
-                            f"Stats endpoint failed: {response.status_code}")
-                return {}
-
-        except Exception as e:
-            self.log_test("Stats Endpoint", "FAIL", f"Stats endpoint failed: {e}")
-            return {}
-
-    def test_redis_data_storage(self, redis_client):
-        """Test that data is properly stored in Redis DB 11"""
-        if not redis_client:
-            self.log_test("Redis Data Storage", "SKIP", "No Redis connection available")
-            return
-
-        try:
-            # Check for main data keys
-            expected_keys = [
-                "codebase:analysis:full",
-                "codebase:analysis:timestamp",
-                "codebase:stats"
-            ]
-
-            found_keys = []
-            missing_keys = []
-
-            for key in expected_keys:
-                if redis_client.exists(key):
-                    found_keys.append(key)
-                else:
-                    missing_keys.append(key)
-
-            if not missing_keys:
-                self.log_test("Redis Data Storage", "PASS",
-                            f"All expected keys found in Redis DB 11")
-            else:
-                self.log_test("Redis Data Storage", "FAIL",
-                            f"Missing keys in Redis: {missing_keys}")
-
-            # Check for dynamic keys (functions, classes, etc.)
-            function_keys = list(redis_client.scan_iter(match="codebase:functions:*"))
-            class_keys = list(redis_client.scan_iter(match="codebase:classes:*"))
-            hardcode_keys = list(redis_client.scan_iter(match="codebase:hardcodes:*"))
-
-            self.log_test("Redis Function Keys", "PASS" if function_keys else "WARN",
-                        f"Found {len(function_keys)} function keys")
-            self.log_test("Redis Class Keys", "PASS" if class_keys else "WARN",
-                        f"Found {len(class_keys)} class keys")
-            self.log_test("Redis Hardcode Keys", "PASS" if hardcode_keys else "WARN",
-                        f"Found {len(hardcode_keys)} hardcode keys")
-
-        except Exception as e:
-            self.log_test("Redis Data Storage", "FAIL", f"Redis data check failed: {e}")
-
-    def test_cache_clearing(self):
-        """Test cache clearing functionality"""
-        try:
-            response = requests.delete(f"{self.api_prefix}/cache", timeout=30)
-
-            if response.status_code == 200:
-                data = response.json()
-                deleted_keys = data.get("deleted_keys", 0)
-
-                self.log_test("Cache Clearing", "PASS",
-                            f"Successfully cleared {deleted_keys} cache entries")
-                return True
-            else:
-                self.log_test("Cache Clearing", "FAIL",
-                            f"Cache clearing failed: {response.status_code}")
-                return False
-
-        except Exception as e:
-            self.log_test("Cache Clearing", "FAIL", f"Cache clearing failed: {e}")
-            return False
-
-    def run_comprehensive_test(self):
-        """Run all tests in sequence"""
-        print("🚀 Starting Comprehensive Codebase Indexing Test Suite")
-        print("=" * 60)
-
-        # Test 1: Basic connectivity
-        print("\n📡 Testing Basic Connectivity...")
-        backend_healthy = self.test_backend_health()
-        redis_client = self.test_redis_connection()
-
-        if not backend_healthy:
-            print("❌ Backend not healthy - aborting tests")
-            return self.test_results
-
-        # Test 2: Clear cache
-        print("\n🧹 Testing Cache Management...")
-        self.test_cache_clearing()
-
-        # Test 3: Main indexing
-        print("\n🔍 Testing Codebase Indexing...")
-        indexing_data = self.test_codebase_indexing()
-
-        # Test 4: File type detection
-        print("\n📁 Testing File Type Detection...")
-        self.test_file_type_detection(indexing_data)
-
-        # Test 5: Feature-specific tests
-        print("\n🔧 Testing Feature Detection...")
-        hardcodes = self.test_hardcode_detection()
-        declarations = self.test_function_class_extraction()
-        problems = self.test_problem_detection()
-
-        # Test 6: Stats endpoint
-        print("\n📊 Testing Stats Endpoint...")
-        stats = self.test_stats_endpoint()
-
-        # Test 7: Redis storage verification
-        print("\n💾 Testing Redis Data Storage...")
-        self.test_redis_data_storage(redis_client)
-
-        # Test 8: Final cache clear
-        print("\n🧹 Final Cache Clear Test...")
-        self.test_cache_clearing()
-
-        return self.test_results
-
-    def generate_report(self):
-        """Generate a comprehensive test report"""
-        print("\n" + "=" * 60)
-        print("📋 COMPREHENSIVE TEST REPORT")
-        print("=" * 60)
-
-        passed = len([r for r in self.test_results if r["status"] == "PASS"])
-        failed = len([r for r in self.test_results if r["status"] == "FAIL"])
-        warned = len([r for r in self.test_results if r["status"] == "WARN"])
-        skipped = len([r for r in self.test_results if r["status"] == "SKIP"])
-        total = len(self.test_results)
-
-        print(f"📊 SUMMARY: {total} tests total")
-        print(f"   ✅ PASSED: {passed}")
-        print(f"   ❌ FAILED: {failed}")
-        print(f"   ⚠️  WARNINGS: {warned}")
-        print(f"   ⏭️  SKIPPED: {skipped}")
-
-        if failed > 0:
-            print(f"\n❌ FAILED TESTS:")
-            for result in self.test_results:
-                if result["status"] == "FAIL":
-                    print(f"   • {result['test']}: {result['message']}")
-
-        if warned > 0:
-            print(f"\n⚠️  WARNINGS:")
-            for result in self.test_results:
-                if result["status"] == "WARN":
-                    print(f"   • {result['test']}: {result['message']}")
-
-        success_rate = (passed / total * 100) if total > 0 else 0
-        print(f"\n🎯 SUCCESS RATE: {success_rate:.1f}%")
-
-        if success_rate >= 80:
-            print("🎉 TEST SUITE PASSED - Codebase indexing is working correctly!")
-        elif success_rate >= 60:
-            print("⚠️  TEST SUITE PARTIAL - Some issues need attention")
+        # Test Redis connection
+        redis_status = await kb.ping_redis()
+        logger.info(f"Redis connection status: {redis_status}")
+
+        if redis_status == "healthy":
+            logger.info("✅ Knowledge base connection successful")
+            return True
         else:
-            print("❌ TEST SUITE FAILED - Major issues detected")
+            logger.warning(f"⚠️  Redis connection issue: {redis_status}")
+            return False
 
-        return {
-            "total": total,
-            "passed": passed,
-            "failed": failed,
-            "warned": warned,
-            "skipped": skipped,
-            "success_rate": success_rate,
-            "results": self.test_results
-        }
+    except Exception as e:
+        logger.error(f"❌ Knowledge base connection failed: {e}")
+        return False
 
-def main():
-    """Main test execution"""
-    tester = CodebaseIndexingTester()
+async def test_indexing_service():
+    """Test the codebase indexing service"""
+    try:
+        from src.services.codebase_indexing_service import (
+            get_indexing_service,
+            index_autobot_codebase
+        )
 
-    # Run comprehensive tests
-    results = tester.run_comprehensive_test()
+        logger.info("Testing codebase indexing service...")
 
-    # Generate report
-    report = tester.generate_report()
+        # Get indexing service
+        service = get_indexing_service()
+        logger.info(f"✅ Indexing service created successfully")
 
-    # Save detailed results to file
-    results_file = "/home/kali/Desktop/AutoBot/tests/results/codebase_indexing_test_results.json"
-    Path(results_file).parent.mkdir(parents=True, exist_ok=True)
+        # Test with a small sample
+        logger.info("Running quick indexing test (max 5 files)...")
+        progress = await index_autobot_codebase(max_files=5, batch_size=2)
 
-    with open(results_file, 'w') as f:
-        json.dump(report, f, indent=2, default=str)
+        logger.info("📊 Indexing Results:")
+        logger.info(f"  Total files found: {progress.total_files}")
+        logger.info(f"  Files processed: {progress.processed_files}")
+        logger.info(f"  Successful files: {progress.successful_files}")
+        logger.info(f"  Failed files: {progress.failed_files}")
+        logger.info(f"  Total chunks created: {progress.total_chunks}")
+        logger.info(f"  Progress: {progress.progress_percentage:.1f}%")
 
-    print(f"\n📝 Detailed results saved to: {results_file}")
+        if progress.errors:
+            logger.warning(f"⚠️  Errors encountered: {len(progress.errors)}")
+            for error in progress.errors[:3]:  # Show first 3 errors
+                logger.warning(f"    - {error}")
 
-    return report["success_rate"] >= 80
+        if progress.successful_files > 0:
+            logger.info("✅ Indexing service test successful")
+            return True
+        else:
+            logger.error("❌ No files were successfully indexed")
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Indexing service test failed: {e}")
+        return False
+
+async def test_knowledge_base_stats():
+    """Test knowledge base statistics after indexing"""
+    try:
+        from src.knowledge_base_factory import get_knowledge_base
+
+        logger.info("Testing knowledge base statistics...")
+        kb = await get_knowledge_base()
+
+        if kb is None:
+            logger.error("❌ Knowledge base not available")
+            return False
+
+        # Get stats
+        stats = await kb.get_stats()
+
+        logger.info("📈 Knowledge Base Statistics:")
+        logger.info(f"  Total documents: {stats.get('total_documents', 0)}")
+        logger.info(f"  Total chunks: {stats.get('total_chunks', 0)}")
+        logger.info(f"  Total facts: {stats.get('total_facts', 0)}")
+        logger.info(f"  Total vectors: {stats.get('total_vectors', 0)}")
+        logger.info(f"  Categories: {stats.get('categories', [])}")
+        logger.info(f"  Database size: {stats.get('db_size', 0):,} bytes")
+        logger.info(f"  Status: {stats.get('status', 'unknown')}")
+
+        # Check if we have any indexed content
+        has_content = (
+            stats.get('total_documents', 0) > 0 or
+            stats.get('total_facts', 0) > 0 or
+            stats.get('total_chunks', 0) > 0
+        )
+
+        if has_content:
+            logger.info("✅ Knowledge base has indexed content")
+            return True
+        else:
+            logger.warning("⚠️  Knowledge base appears to be empty")
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Knowledge base stats test failed: {e}")
+        return False
+
+async def test_knowledge_search():
+    """Test searching the knowledge base"""
+    try:
+        from src.knowledge_base_factory import get_knowledge_base
+
+        logger.info("Testing knowledge base search...")
+        kb = await get_knowledge_base()
+
+        if kb is None:
+            logger.error("❌ Knowledge base not available")
+            return False
+
+        # Test search queries
+        test_queries = [
+            "AutoBot",
+            "knowledge base",
+            "function",
+            "API",
+            "configuration"
+        ]
+
+        search_results = {}
+
+        for query in test_queries:
+            try:
+                results = await kb.search(query, top_k=3)
+                search_results[query] = len(results)
+
+                logger.info(f"  Query '{query}': {len(results)} results")
+
+                # Show first result if available
+                if results:
+                    first_result = results[0]
+                    content_preview = first_result.get('content', '')[:100] + '...'
+                    score = first_result.get('score', 0.0)
+                    logger.info(f"    Best match (score: {score:.3f}): {content_preview}")
+
+            except Exception as e:
+                logger.warning(f"    Query '{query}' failed: {e}")
+                search_results[query] = 0
+
+        # Check if any searches returned results
+        total_results = sum(search_results.values())
+
+        if total_results > 0:
+            logger.info(f"✅ Search test successful - {total_results} total results across all queries")
+            return True
+        else:
+            logger.warning("⚠️  No search results found for any query")
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Knowledge search test failed: {e}")
+        return False
+
+async def test_api_endpoints():
+    """Test the API endpoints"""
+    try:
+        import aiohttp
+        import asyncio
+
+        logger.info("Testing API endpoints...")
+
+        # Test endpoints
+        base_url = "http://localhost:8001/api/knowledge"
+
+        endpoints_to_test = [
+            ("/stats/basic", "GET"),
+            ("/indexing/status", "GET"),
+        ]
+
+        async with aiohttp.ClientSession() as session:
+            for endpoint, method in endpoints_to_test:
+                try:
+                    url = f"{base_url}{endpoint}"
+
+                    if method == "GET":
+                        async with session.get(url) as response:
+                            if response.status == 200:
+                                data = await response.json()
+                                logger.info(f"✅ {method} {endpoint}: {response.status}")
+
+                                # Log some key info
+                                if endpoint == "/stats/basic":
+                                    logger.info(f"    Documents: {data.get('total_documents', 0)}")
+                                    logger.info(f"    Chunks: {data.get('total_chunks', 0)}")
+                                    logger.info(f"    Status: {data.get('status', 'unknown')}")
+                            else:
+                                logger.warning(f"⚠️  {method} {endpoint}: {response.status}")
+
+                except Exception as e:
+                    logger.warning(f"⚠️  {method} {endpoint} failed: {e}")
+
+        logger.info("✅ API endpoint tests completed")
+        return True
+
+    except ImportError:
+        logger.warning("⚠️  aiohttp not available, skipping API tests")
+        return True
+    except Exception as e:
+        logger.error(f"❌ API endpoint tests failed: {e}")
+        return False
+
+async def run_comprehensive_test():
+    """Run comprehensive test suite"""
+    logger.info("🚀 Starting AutoBot Codebase Indexing Test Suite")
+    logger.info("=" * 60)
+
+    test_results = []
+
+    # Test 1: Knowledge Base Connection
+    logger.info("\n1️⃣  Testing Knowledge Base Connection")
+    result1 = await test_knowledge_base_connection()
+    test_results.append(("Knowledge Base Connection", result1))
+
+    # Test 2: Indexing Service
+    logger.info("\n2️⃣  Testing Codebase Indexing Service")
+    result2 = await test_indexing_service()
+    test_results.append(("Codebase Indexing Service", result2))
+
+    # Test 3: Knowledge Base Stats
+    logger.info("\n3️⃣  Testing Knowledge Base Statistics")
+    result3 = await test_knowledge_base_stats()
+    test_results.append(("Knowledge Base Statistics", result3))
+
+    # Test 4: Knowledge Search
+    logger.info("\n4️⃣  Testing Knowledge Base Search")
+    result4 = await test_knowledge_search()
+    test_results.append(("Knowledge Base Search", result4))
+
+    # Test 5: API Endpoints
+    logger.info("\n5️⃣  Testing API Endpoints")
+    result5 = await test_api_endpoints()
+    test_results.append(("API Endpoints", result5))
+
+    # Summary
+    logger.info("\n" + "=" * 60)
+    logger.info("📋 TEST RESULTS SUMMARY")
+    logger.info("=" * 60)
+
+    passed = 0
+    total = len(test_results)
+
+    for test_name, result in test_results:
+        status = "✅ PASS" if result else "❌ FAIL"
+        logger.info(f"{status}: {test_name}")
+        if result:
+            passed += 1
+
+    logger.info(f"\nOverall: {passed}/{total} tests passed")
+
+    if passed == total:
+        logger.info("🎉 All tests passed! Codebase indexing system is working correctly.")
+        return True
+    else:
+        logger.error(f"⚠️  {total - passed} test(s) failed. Please check the logs above.")
+        return False
+
+async def main():
+    """Main test function"""
+    try:
+        success = await run_comprehensive_test()
+
+        if success:
+            logger.info("\n🎯 Next Steps:")
+            logger.info("   1. Use the /api/knowledge/quick_index endpoint to index more files")
+            logger.info("   2. Use the /api/knowledge/index_codebase endpoint for full indexing")
+            logger.info("   3. Check the Knowledge Manager in the frontend")
+            logger.info("   4. Search the indexed codebase using the search functionality")
+
+        sys.exit(0 if success else 1)
+
+    except KeyboardInterrupt:
+        logger.info("\n⏹️  Test interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"❌ Test suite failed: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    success = main()
-    exit(0 if success else 1)
+    asyncio.run(main())

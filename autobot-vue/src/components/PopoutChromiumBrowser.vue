@@ -325,7 +325,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import type { AutomationResults, SearchData, TestData, MessageData } from '@/types/browser'
-import { API_CONFIG } from '@/config/environment.js'
+import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient.ts'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 
@@ -383,10 +383,10 @@ export default {
     })
 
     // Browser modes - VNC for actual browser display and takeover
-    const browserMode = ref('vnc') // 'vnc', 'api', 'native', 'remote'  
-    const vncUrl = ref(`${API_CONFIG.PLAYWRIGHT_VNC_URL}?autoconnect=true&resize=remote&reconnect=true&quality=9&compression=9`)
+    const browserMode = ref('vnc') // 'vnc', 'api', 'native', 'remote'
+    const vncUrl = ref('') // Will be loaded async
     const playwrightApiUrl = ref('/api/playwright') // Use relative path to avoid double base URL
-    const remoteDebugUrl = ref(API_CONFIG.CHROME_DEBUG_URL)
+    const remoteDebugUrl = ref('') // Will be loaded async if needed
 
     // Resize observer
     const resizeObserver: Ref<ResizeObserver | null> = ref(null)
@@ -710,7 +710,22 @@ export default {
     }
 
     // Lifecycle
-    onMounted(() => {
+    onMounted(async () => {
+      // Load VNC URL dynamically
+      try {
+        const dynamicVncUrl = await appConfig.getVncUrl('playwright', {
+          autoconnect: true,
+          resize: 'remote',
+          reconnect: true,
+          quality: 9,
+          compression: 9
+        });
+        vncUrl.value = dynamicVncUrl;
+      } catch (error) {
+        console.warn('Failed to load dynamic VNC URL, using fallback');
+        vncUrl.value = 'http://172.16.168.25:6081/vnc.html?autoconnect=true&resize=remote&reconnect=true&quality=9&compression=9&password=playwright';
+      }
+
       // Initialize browser when component mounts
       initializeBrowser()
 

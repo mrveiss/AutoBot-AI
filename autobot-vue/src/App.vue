@@ -442,6 +442,7 @@ import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
+import apiEndpointMapper from '@/utils/ApiEndpointMapper.js';
 
 export default {
   name: 'App',
@@ -560,63 +561,97 @@ export default {
     };
 
     const refreshSystemStatus = async () => {
+      console.log('[App] Starting graceful system status refresh...');
+      
       try {
-        // Get VM status from dedicated backend endpoint (fast)
-        const vmResponse = await fetch('/api/vms/status');
         const updatedServices = [];
+        let hasApiErrors = false;
 
-        if (vmResponse.ok) {
-          const vmData = await vmResponse.json();
+        // CRITICAL FIX: Use graceful API calls that won't block Vue mounting
+        try {
+          console.log('[App] Testing basic connectivity...');
+          const healthResponse = await apiEndpointMapper.fetchWithFallback('/api/health', { timeout: 3000 });
+          const healthData = await healthResponse.json();
 
-          // Add VM status from backend aggregation
-          if (vmData.vms) {
-            vmData.vms.forEach(vm => {
-              updatedServices.push({
-                name: vm.name,
-                status: vm.status === 'online' ? 'healthy' :
-                        vm.status === 'warning' ? 'warning' : 'error',
-                statusText: vm.message || vm.status
-              });
+          if (healthResponse.fallback) {
+            console.log('[App] Using fallback for basic health check');
+            hasApiErrors = true;
+          }
+
+          if (healthResponse.ok || healthData.status) {
+            console.log('[App] Backend connectivity confirmed');
+            updatedServices.push({
+              name: 'Backend API',
+              status: healthResponse.fallback ? 'warning' : 'healthy',
+              statusText: healthResponse.fallback ? 'Limited Connectivity' : 'Connected'
+            });
+          } else {
+            updatedServices.push({
+              name: 'Backend API',
+              status: 'error',
+              statusText: 'Connection Failed'
             });
           }
+        } catch (healthError) {
+          console.warn('[App] Basic health check failed:', healthError.message);
+          hasApiErrors = true;
+          updatedServices.push({
+            name: 'Backend API',
+            status: 'error',
+            statusText: 'Connection Failed'
+          });
         }
 
-        // Get basic services from lightweight endpoint
-        try {
-          const servicesResponse = await fetch('/api/services', { timeout: 5000 });
-          if (servicesResponse.ok) {
-            const servicesData = await servicesResponse.json();
-
-            // Map backend services to frontend display
-            const serviceMap = {
-              'backend': 'Backend API',
-              'redis': 'Redis',
-              'ollama': 'Ollama'
-            };
-
-            if (servicesData.services) {
-              Object.entries(servicesData.services).forEach(([key, service]) => {
-                const displayName = serviceMap[key] || key;
-                updatedServices.push({
-                  name: displayName,
-                  status: service.status === 'online' ? 'healthy' :
-                          service.status === 'warning' ? 'warning' : 'error',
-                  statusText: service.health || service.status
-                });
-              });
-            }
-          }
-        } catch (_error) {
-          console.warn('Services endpoint failed, using fallback data');
-        }
-
-        // Add frontend and websocket status (local)
+        // Always add frontend and websocket status (local)
         updatedServices.push(
           { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
           { name: 'WebSocket', status: 'healthy', statusText: 'Connected' }
         );
 
-        // Update systemServices with real data
+        // Try to get additional service info with graceful fallback
+        try {
+          console.log('[App] Fetching additional service status...');
+          const monitoringResponse = await apiEndpointMapper.fetchWithFallback('/api/monitoring/status', { timeout: 3000 });
+          const monitoringData = await monitoringResponse.json();
+
+          if (monitoringResponse.fallback) {
+            console.log('[App] Using fallback for monitoring data');
+            hasApiErrors = true;
+          }
+
+          // Add monitoring data to services if available
+          if (monitoringData.services) {
+            Object.entries(monitoringData.services).forEach(([key, service]) => {
+              updatedServices.push({
+                name: service.name || key,
+                status: service.status === 'online' ? 'healthy' :
+                        service.status === 'warning' ? 'warning' : 'error',
+                statusText: service.message || service.status
+              });
+            });
+          } else {
+            // Add default service status when monitoring is not available
+            updatedServices.push(
+              { name: 'Redis', status: 'warning', statusText: 'Status Unknown' },
+              { name: 'Ollama', status: 'warning', statusText: 'Status Unknown' },
+              { name: 'NPU Worker', status: 'warning', statusText: 'Status Unknown' },
+              { name: 'Browser Service', status: 'warning', statusText: 'Status Unknown' }
+            );
+          }
+        } catch (monitoringError) {
+          console.log('[App] Additional monitoring not available:', monitoringError.message);
+          hasApiErrors = true;
+          
+          // Add fallback service statuses
+          updatedServices.push(
+            { name: 'Redis', status: 'warning', statusText: 'Status Unknown' },
+            { name: 'Ollama', status: 'warning', statusText: 'Status Unknown' },
+            { name: 'NPU Worker', status: 'warning', statusText: 'Status Unknown' },
+            { name: 'Browser Service', status: 'warning', statusText: 'Status Unknown' }
+          );
+        }
+
+        // Update systemServices with processed data
         systemServices.value = updatedServices;
 
         // Update system status based on real data
@@ -626,11 +661,31 @@ export default {
         systemStatus.value = {
           isHealthy: !hasErrors && !hasWarnings,
           hasIssues: hasErrors,
-          lastChecked: new Date()
+          lastChecked: new Date(),
+          apiErrors: hasApiErrors // Track if we used fallbacks
         };
-      } catch (error) {
-        console.warn('Failed to refresh system status:', error);
-        // Keep existing values on error
+
+        console.log(`[App] ✅ System status refresh complete. Services: ${updatedServices.length}, Errors: ${hasErrors}, API Fallbacks: ${hasApiErrors}`);
+        
+      } catch (criticalError) {
+        console.error('[App] CRITICAL: System status refresh failed completely:', criticalError);
+
+        // CRITICAL: Ensure Vue app can still mount - provide minimal working state
+        systemServices.value = [
+          { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
+          { name: 'Backend API', status: 'error', statusText: 'Connection Failed' },
+          { name: 'System Status', status: 'error', statusText: 'Refresh Failed' }
+        ];
+
+        systemStatus.value = {
+          isHealthy: false,
+          hasIssues: true,
+          lastChecked: new Date(),
+          criticalError: true
+        };
+        
+        // Don't throw the error - let Vue app continue mounting
+        console.log('[App] ⚠️ Using emergency fallback state to prevent Vue mounting failure');
       }
     };
 
@@ -782,9 +837,15 @@ export default {
         // OPTIMIZED: Start optimized health monitoring
         startOptimizedHealthCheck();
 
-        // Initialize system status from backend
-        await refreshSystemStatus();
-        updateSystemStatus();
+        // CRITICAL FIX: Use graceful system status initialization that won't block Vue mounting
+        console.log('[App] Initializing system status with graceful error handling...');
+        try {
+          await refreshSystemStatus();
+          updateSystemStatus();
+        } catch (statusError) {
+          console.warn('[App] System status initialization failed, but Vue app will continue:', statusError);
+          // Don't throw - let Vue app mount successfully
+        }
 
         // OPTIMIZED: Setup router monitoring (event-driven)
         setupRouterMonitoring();
@@ -793,6 +854,7 @@ export default {
 
       } catch (error) {
         console.error('[App] Error initializing optimized systems:', error);
+        // Don't let initialization errors prevent app mounting
       }
 
       // OPTIMIZED: Start adaptive notification cleanup

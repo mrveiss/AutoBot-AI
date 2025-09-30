@@ -1,9 +1,29 @@
 /**
  * Playwright Configuration for AutoBot Testing
  *
- * Global configuration to ensure consistent browser behavior
- * across all Playwright tests and scripts.
+ * Global configuration with dynamic resolution detection
+ * for optimal browser behavior across different environments.
  */
+
+const { execSync } = require('child_process');
+
+// Dynamic resolution detection
+function getOptimalViewport() {
+  try {
+    // Try to get resolution from Python display utils
+    const result = execSync('python3 -c "from src.utils.display_utils import get_playwright_config; import json; print(json.dumps(get_playwright_config()))"',
+      { encoding: 'utf8', timeout: 5000 });
+    const config = JSON.parse(result.trim());
+    console.log(`🖥️  Detected resolution: ${config.detected_resolution.width}x${config.detected_resolution.height}`);
+    console.log(`📐 Using viewport: ${config.viewport.width}x${config.viewport.height}`);
+    return config.viewport;
+  } catch (error) {
+    console.log('⚠️  Could not detect resolution, using fallback 1920x1080');
+    return { width: 1920, height: 1080 };
+  }
+}
+
+const viewport = getOptimalViewport();
 
 module.exports = {
   // Global test settings
@@ -15,8 +35,8 @@ module.exports = {
 
   // Global browser settings
   use: {
-    // Browser viewport
-    viewport: { width: 1920, height: 1080 },
+    // Dynamic browser viewport based on current monitor
+    viewport: viewport,
 
     // Browser context options
     ignoreHTTPSErrors: true,

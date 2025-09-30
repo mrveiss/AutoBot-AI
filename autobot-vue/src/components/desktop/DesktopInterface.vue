@@ -68,7 +68,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { API_CONFIG } from '@/config/environment.js'
+// MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 
@@ -78,8 +78,8 @@ const error = ref(null)
 const isFullscreen = ref(false)
 const connectionStatus = ref('Connecting...')
 
-// VNC connection URL - will be loaded asynchronously
-const vncUrl = ref(API_CONFIG.DESKTOP_VNC_URL) // Fallback until async load
+// VNC connection URL - will be loaded asynchronously from AppConfig
+const vncUrl = ref('') // Will be loaded on mount
 
 // Load dynamic VNC URL on component mount
 const loadVncUrl = async () => {
@@ -92,36 +92,29 @@ const loadVncUrl = async () => {
     loading.value = false;
     connectionStatus.value = 'Connected';
   } catch (err) {
-    console.warn('[DesktopInterface] Failed to load dynamic VNC URL, using fallback:', err);
-    
-    // Handle different error types gracefully
+    console.error('[DesktopInterface] Failed to load VNC URL from config:', err);
+
+    // CRITICAL: No fallbacks - config failure is real failure
+    // Desktop cannot function without proper configuration
     if (err.message && err.message.includes('Failed to fetch')) {
-      error.value = 'Backend configuration unavailable. Using default desktop settings. Desktop may still work.';
-      connectionStatus.value = 'Using Defaults';
+      error.value = 'Backend configuration service unavailable. Desktop requires configuration to function.';
+      connectionStatus.value = 'Configuration Error';
     } else if (err.message && err.message.includes('Network Error')) {
-      error.value = 'Network connectivity issues. Desktop service may be temporarily unavailable.';
+      error.value = 'Network connectivity issues. Cannot retrieve desktop configuration.';
       connectionStatus.value = 'Network Error';
     } else if (err.message && err.message.includes('timeout')) {
-      error.value = 'Configuration service timeout. Using default settings.';
+      error.value = 'Configuration service timeout. Desktop configuration unavailable.';
       connectionStatus.value = 'Timeout';
     } else {
-      error.value = `Configuration error: ${err.message}. Desktop service may not be available.`;
-      connectionStatus.value = 'Configuration Error';  
+      error.value = `Configuration error: ${err.message}. Desktop requires valid configuration.`;
+      connectionStatus.value = 'Configuration Error';
     }
-    
-    // Don't show loading anymore, but allow fallback URL to be used
+
     loading.value = false;
-    
-    // Use fallback URL if available
-    if (API_CONFIG.DESKTOP_VNC_URL) {
-      vncUrl.value = API_CONFIG.DESKTOP_VNC_URL;
-      console.log('[DesktopInterface] Using fallback VNC URL:', API_CONFIG.DESKTOP_VNC_URL);
-    } else {
-      // Last resort - construct a default VNC URL
-      const defaultVncUrl = 'http://172.16.168.20:6080/vnc.html?autoconnect=true&password=autobot';
-      vncUrl.value = defaultVncUrl;
-      console.log('[DesktopInterface] Using last resort VNC URL:', defaultVncUrl);
-    }
+
+    // CRITICAL: No hardcoded fallbacks - config file is the only source of truth
+    // Desktop cannot function without configuration - this is a real error state
+    console.error('[DesktopInterface] Desktop unavailable - no configuration loaded');
   }
 }
 
@@ -133,14 +126,12 @@ const connectionStatusClass = computed(() => {
       return 'text-red-600 dark:text-red-400'
     case 'Connecting...':
       return 'text-yellow-600 dark:text-yellow-400'
-    case 'Using Defaults':
-      return 'text-blue-600 dark:text-blue-400'
     case 'Configuration Error':
-      return 'text-orange-600 dark:text-orange-400'
+      return 'text-red-600 dark:text-red-400'
     case 'Network Error':
-      return 'text-red-500 dark:text-red-400'
+      return 'text-red-600 dark:text-red-400'
     case 'Timeout':
-      return 'text-orange-500 dark:text-orange-400'
+      return 'text-orange-600 dark:text-orange-400'
     default:
       return 'text-gray-600 dark:text-gray-400'
   }

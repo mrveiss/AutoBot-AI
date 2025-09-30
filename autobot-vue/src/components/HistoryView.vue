@@ -23,8 +23,7 @@
 </template>
 
 <script>
-import { ref } from 'vue';
-import { API_CONFIG } from '@/config/environment.js';
+import { ref, onMounted } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 
 export default {
@@ -125,30 +124,17 @@ export default {
       }
     };
 
-    // Settings structure using central config
-    const settings = ref({
-      backend: {
-        api_endpoint: API_CONFIG.BASE_URL
-      }
+    // Load history on mount
+    onMounted(() => {
+      refreshHistory();
     });
-
-    // Load settings from local storage if available
-    const savedSettings = localStorage.getItem('chat_settings');
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      settings.value.backend.api_endpoint = parsed.backend?.api_endpoint || API_CONFIG.BASE_URL;
-    }
-
-    // Initial load of history after settings are initialized
-    refreshHistory();
 
     return {
       history,
       refreshHistory,
       clearHistory,
       viewHistoryEntry,
-      deleteHistoryEntry,
-      settings
+      deleteHistoryEntry
     };
   }
 };
