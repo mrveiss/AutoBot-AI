@@ -21,7 +21,7 @@ from src.models.atomic_fact import (
     FactType,
     TemporalType,
 )
-from src.utils.config_manager import config_manager
+from src.unified_config_manager import config_manager
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("knowledge_extraction")

@@ -1,0 +1,768 @@
+"""
+AutoBot Codebase Indexing Service
+
+This service provides comprehensive codebase indexing capabilities for the AutoBot Knowledge Manager.
+It scans the entire AutoBot project, processes different file types, creates intelligent chunks,
+and stores them in the knowledge base with proper metadata and categorization.
+
+Features:
+- Multi-file type support (Python, Vue, Markdown, Config, etc.)
+- Intelligent code-aware chunking
+- Automatic categorization and metadata enrichment
+- Progress tracking and batch processing
+- Integration with existing knowledge base infrastructure
+- Configurable scanning and filtering
+"""
+
+import asyncio
+import json
+import logging
+import mimetypes
+import os
+import re
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple, Any, Generator
+from dataclasses import dataclass, asdict
+
+from src.knowledge_base_factory import get_knowledge_base
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class IndexingProgress:
+    """Track indexing progress and statistics"""
+    total_files: int = 0
+    processed_files: int = 0
+    successful_files: int = 0
+    failed_files: int = 0
+    total_chunks: int = 0
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    current_file: str = ""
+    current_category: str = ""
+    errors: List[str] = None
+
+    def __post_init__(self):
+        if self.errors is None:
+            self.errors = []
+
+    @property
+    def progress_percentage(self) -> float:
+        if self.total_files == 0:
+            return 0.0
+        return (self.processed_files / self.total_files) * 100
+
+    @property
+    def is_complete(self) -> bool:
+        return self.processed_files >= self.total_files and self.total_files > 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            **asdict(self),
+            'progress_percentage': self.progress_percentage,
+            'is_complete': self.is_complete,
+            'start_time': self.start_time.isoformat() if self.start_time else None,
+            'end_time': self.end_time.isoformat() if self.end_time else None
+        }
+
+
+@dataclass
+class FileInfo:
+    """Information about a file to be indexed"""
+    path: Path
+    relative_path: str
+    file_type: str
+    category: str
+    language: str
+    size: int
+    modified_time: datetime
+
+
+class CodeChunker:
+    """Intelligent code-aware chunking for different file types"""
+
+    def __init__(self, max_chunk_size: int = 2000, overlap_size: int = 200):
+        self.max_chunk_size = max_chunk_size
+        self.overlap_size = overlap_size
+
+    def chunk_python_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
+        """Chunk Python files by functions, classes, and logical blocks"""
+        chunks = []
+        lines = content.split('\n')
+        current_chunk = []
+        current_chunk_type = "general"
+        current_indent = 0
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped_line = line.strip()
+
+            # Detect function or class definitions
+            if stripped_line.startswith(('def ', 'class ', 'async def ')):
+                # Save previous chunk if it exists
+                if current_chunk:
+                    chunk_content = '\n'.join(current_chunk)
+                    if chunk_content.strip():
+                        chunks.append({
+                            'content': chunk_content,
+                            'type': current_chunk_type,
+                            'start_line': i - len(current_chunk) + 1,
+                            'end_line': i
+                        })
+
+                # Start new chunk
+                current_chunk = [line]
+                current_chunk_type = "function" if "def " in stripped_line else "class"
+                current_indent = len(line) - len(line.lstrip())
+
+                # Include the complete function/class
+                i += 1
+                while i < len(lines):
+                    next_line = lines[i]
+                    next_indent = len(next_line) - len(next_line.lstrip()) if next_line.strip() else current_indent + 1
+
+                    # Continue if we're still inside the function/class or if it's a blank line
+                    if not next_line.strip() or next_indent > current_indent:
+                        current_chunk.append(next_line)
+                        i += 1
+                    else:
+                        break
+
+                # Save the function/class chunk
+                chunk_content = '\n'.join(current_chunk)
+                if chunk_content.strip():
+                    chunks.append({
+                        'content': chunk_content,
+                        'type': current_chunk_type,
+                        'start_line': i - len(current_chunk),
+                        'end_line': i - 1
+                    })
+
+                current_chunk = []
+                current_chunk_type = "general"
+                continue
+
+            # Regular line processing
+            current_chunk.append(line)
+            i += 1
+
+            # Check if chunk is getting too large
+            if len('\n'.join(current_chunk)) > self.max_chunk_size:
+                chunk_content = '\n'.join(current_chunk)
+                if chunk_content.strip():
+                    chunks.append({
+                        'content': chunk_content,
+                        'type': current_chunk_type,
+                        'start_line': i - len(current_chunk) + 1,
+                        'end_line': i
+                    })
+                current_chunk = []
+
+        # Save final chunk
+        if current_chunk:
+            chunk_content = '\n'.join(current_chunk)
+            if chunk_content.strip():
+                chunks.append({
+                    'content': chunk_content,
+                    'type': current_chunk_type,
+                    'start_line': len(lines) - len(current_chunk) + 1,
+                    'end_line': len(lines)
+                })
+
+        return chunks
+
+    def chunk_vue_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
+        """Chunk Vue files by template, script, and style sections"""
+        chunks = []
+
+        # Split Vue file into sections
+        template_match = re.search(r'<template[^>]*>(.*?)</template>', content, re.DOTALL)
+        script_match = re.search(r'<script[^>]*>(.*?)</script>', content, re.DOTALL)
+        style_match = re.search(r'<style[^>]*>(.*?)</style>', content, re.DOTALL)
+
+        if template_match:
+            template_content = template_match.group(1).strip()
+            if template_content:
+                chunks.append({
+                    'content': f"<template>\n{template_content}\n</template>",
+                    'type': 'template',
+                    'section': 'template'
+                })
+
+        if script_match:
+            script_content = script_match.group(1).strip()
+            if script_content:
+                # Further chunk the script section if it's large
+                if len(script_content) > self.max_chunk_size:
+                    script_chunks = self.chunk_javascript_content(script_content)
+                    for i, chunk in enumerate(script_chunks):
+                        chunks.append({
+                            'content': f"<script>\n{chunk['content']}\n</script>",
+                            'type': 'script',
+                            'section': f'script_part_{i+1}',
+                            'script_type': chunk.get('type', 'general')
+                        })
+                else:
+                    chunks.append({
+                        'content': f"<script>\n{script_content}\n</script>",
+                        'type': 'script',
+                        'section': 'script'
+                    })
+
+        if style_match:
+            style_content = style_match.group(1).strip()
+            if style_content:
+                chunks.append({
+                    'content': f"<style>\n{style_content}\n</style>",
+                    'type': 'style',
+                    'section': 'style'
+                })
+
+        return chunks if chunks else [{'content': content, 'type': 'vue_file', 'section': 'complete'}]
+
+    def chunk_javascript_content(self, content: str) -> List[Dict[str, Any]]:
+        """Chunk JavaScript content by functions and logical blocks"""
+        chunks = []
+        lines = content.split('\n')
+        current_chunk = []
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            current_chunk.append(line)
+
+            # Check for function definitions
+            if re.match(r'^\s*(function|const|let|var|export|async)', line):
+                # Look for the complete function
+                brace_count = line.count('{') - line.count('}')
+                i += 1
+
+                while i < len(lines) and brace_count > 0:
+                    next_line = lines[i]
+                    current_chunk.append(next_line)
+                    brace_count += next_line.count('{') - next_line.count('}')
+                    i += 1
+
+                # Save the function chunk
+                chunk_content = '\n'.join(current_chunk)
+                if chunk_content.strip():
+                    chunks.append({
+                        'content': chunk_content,
+                        'type': 'function'
+                    })
+                current_chunk = []
+                continue
+
+            # Check if chunk is getting too large
+            if len('\n'.join(current_chunk)) > self.max_chunk_size:
+                chunk_content = '\n'.join(current_chunk)
+                if chunk_content.strip():
+                    chunks.append({
+                        'content': chunk_content,
+                        'type': 'general'
+                    })
+                current_chunk = []
+
+            i += 1
+
+        # Save final chunk
+        if current_chunk:
+            chunk_content = '\n'.join(current_chunk)
+            if chunk_content.strip():
+                chunks.append({
+                    'content': chunk_content,
+                    'type': 'general'
+                })
+
+        return chunks if chunks else [{'content': content, 'type': 'general'}]
+
+    def chunk_markdown_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
+        """Chunk Markdown files by headings and sections"""
+        chunks = []
+        lines = content.split('\n')
+        current_chunk = []
+        current_heading = ""
+        current_level = 0
+
+        for line in lines:
+            heading_match = re.match(r'^(#{1,6})\s+(.+)', line)
+
+            if heading_match:
+                # Save previous chunk
+                if current_chunk:
+                    chunk_content = '\n'.join(current_chunk)
+                    if chunk_content.strip():
+                        chunks.append({
+                            'content': chunk_content,
+                            'type': 'section',
+                            'heading': current_heading,
+                            'level': current_level
+                        })
+
+                # Start new chunk
+                current_level = len(heading_match.group(1))
+                current_heading = heading_match.group(2)
+                current_chunk = [line]
+            else:
+                current_chunk.append(line)
+
+                # Check if chunk is getting too large
+                if len('\n'.join(current_chunk)) > self.max_chunk_size:
+                    chunk_content = '\n'.join(current_chunk)
+                    if chunk_content.strip():
+                        chunks.append({
+                            'content': chunk_content,
+                            'type': 'section',
+                            'heading': current_heading,
+                            'level': current_level
+                        })
+                    current_chunk = []
+
+        # Save final chunk
+        if current_chunk:
+            chunk_content = '\n'.join(current_chunk)
+            if chunk_content.strip():
+                chunks.append({
+                    'content': chunk_content,
+                    'type': 'section',
+                    'heading': current_heading,
+                    'level': current_level
+                })
+
+        return chunks if chunks else [{'content': content, 'type': 'document'}]
+
+    def chunk_generic_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
+        """Generic chunking for other file types"""
+        if len(content) <= self.max_chunk_size:
+            return [{'content': content, 'type': 'complete_file'}]
+
+        chunks = []
+        lines = content.split('\n')
+        current_chunk = []
+
+        for line in lines:
+            current_chunk.append(line)
+
+            if len('\n'.join(current_chunk)) > self.max_chunk_size:
+                # Try to find a good break point
+                chunk_content = '\n'.join(current_chunk[:-1])  # Exclude the last line
+                if chunk_content.strip():
+                    chunks.append({
+                        'content': chunk_content,
+                        'type': 'text_chunk'
+                    })
+                current_chunk = [line]  # Start new chunk with the current line
+
+        # Save final chunk
+        if current_chunk:
+            chunk_content = '\n'.join(current_chunk)
+            if chunk_content.strip():
+                chunks.append({
+                    'content': chunk_content,
+                    'type': 'text_chunk'
+                })
+
+        return chunks if chunks else [{'content': content, 'type': 'text_chunk'}]
+
+
+class CodebaseIndexingService:
+    """Main service for comprehensive codebase indexing"""
+
+    def __init__(self, root_path: str = "/home/kali/Desktop/AutoBot"):
+        self.root_path = Path(root_path)
+        self.chunker = CodeChunker()
+        self.progress = IndexingProgress()
+
+        # File patterns to include/exclude
+        self.include_patterns = {
+            '*.py', '*.vue', '*.js', '*.ts', '*.md', '*.yaml', '*.yml',
+            '*.json', '*.txt', '*.rst', '*.css', '*.scss', '*.html',
+            '*.sh', '*.bash', '*.dockerfile', 'Dockerfile*', '*.env*'
+        }
+
+        self.exclude_patterns = {
+            '__pycache__', '*.pyc', '*.pyo', '.git', '.gitignore',
+            'node_modules', '.npm', '.vscode', '.idea', '*.log',
+            'dist', 'build', '.next', '.nuxt', 'coverage',
+            '*.min.js', '*.min.css', '*.map'
+        }
+
+        self.exclude_dirs = {
+            '.git', 'node_modules', '__pycache__', '.pytest_cache',
+            'venv', '.venv', 'env', '.env', 'dist', 'build',
+            '.next', '.nuxt', 'coverage', 'logs', '.logs'
+        }
+
+        # Category mapping
+        self.category_mapping = {
+            'backend': ['backend/', 'src/', 'api/', 'services/', 'models/', 'utils/'],
+            'frontend': ['autobot-vue/', 'frontend/', 'static/', 'public/'],
+            'docs': ['docs/', 'documentation/', 'README', 'CHANGELOG', '.md'],
+            'config': ['config/', 'settings/', '.env', '.yaml', '.yml', '.json'],
+            'scripts': ['scripts/', 'bin/', '.sh', '.bash'],
+            'tests': ['tests/', 'test_', '_test.py', 'spec/', '__tests__/'],
+            'docker': ['docker/', 'Dockerfile', 'docker-compose', '.dockerfile'],
+            'infrastructure': ['ansible/', 'terraform/', 'k8s/', 'kubernetes/']
+        }
+
+    def _should_include_file(self, file_path: Path) -> bool:
+        """Check if a file should be included in indexing"""
+        file_name = file_path.name
+
+        # Check exclude patterns
+        for pattern in self.exclude_patterns:
+            if file_path.match(pattern):
+                return False
+
+        # Check if in excluded directory
+        for part in file_path.parts:
+            if part in self.exclude_dirs:
+                return False
+
+        # Check include patterns
+        for pattern in self.include_patterns:
+            if file_path.match(pattern):
+                return True
+
+        return False
+
+    def _get_file_category(self, relative_path: str) -> str:
+        """Determine the category of a file based on its path"""
+        path_lower = relative_path.lower()
+
+        for category, patterns in self.category_mapping.items():
+            for pattern in patterns:
+                if pattern in path_lower:
+                    return category
+
+        return 'general'
+
+    def _get_file_language(self, file_path: Path) -> str:
+        """Determine the programming language of a file"""
+        extension = file_path.suffix.lower()
+
+        language_map = {
+            '.py': 'python',
+            '.vue': 'vue',
+            '.js': 'javascript',
+            '.ts': 'typescript',
+            '.md': 'markdown',
+            '.yaml': 'yaml',
+            '.yml': 'yaml',
+            '.json': 'json',
+            '.css': 'css',
+            '.scss': 'scss',
+            '.html': 'html',
+            '.sh': 'bash',
+            '.bash': 'bash',
+            '.dockerfile': 'dockerfile',
+            '.txt': 'text',
+            '.rst': 'restructuredtext'
+        }
+
+        return language_map.get(extension, 'text')
+
+    def _scan_files(self) -> List[FileInfo]:
+        """Scan the codebase and collect file information"""
+        files = []
+
+        for file_path in self.root_path.rglob('*'):
+            if file_path.is_file() and self._should_include_file(file_path):
+                try:
+                    relative_path = str(file_path.relative_to(self.root_path))
+                    file_info = FileInfo(
+                        path=file_path,
+                        relative_path=relative_path,
+                        file_type=file_path.suffix.lower() or 'unknown',
+                        category=self._get_file_category(relative_path),
+                        language=self._get_file_language(file_path),
+                        size=file_path.stat().st_size,
+                        modified_time=datetime.fromtimestamp(file_path.stat().st_mtime)
+                    )
+                    files.append(file_info)
+                except (OSError, ValueError) as e:
+                    logger.warning(f"Could not process file {file_path}: {e}")
+                    continue
+
+        return files
+
+    async def _read_file_content(self, file_path: Path) -> Optional[str]:
+        """Read file content with error handling"""
+        try:
+            # Try UTF-8 first
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except UnicodeDecodeError:
+            try:
+                # Try with latin-1 as fallback
+                with open(file_path, 'r', encoding='latin-1') as f:
+                    return f.read()
+            except Exception as e:
+                logger.warning(f"Could not read file {file_path}: {e}")
+                return None
+        except Exception as e:
+            logger.warning(f"Error reading file {file_path}: {e}")
+            return None
+
+    def _chunk_file_content(self, content: str, file_info: FileInfo) -> List[Dict[str, Any]]:
+        """Chunk file content based on file type"""
+        if file_info.language == 'python':
+            return self.chunker.chunk_python_file(content, str(file_info.path))
+        elif file_info.language == 'vue':
+            return self.chunker.chunk_vue_file(content, str(file_info.path))
+        elif file_info.language == 'markdown':
+            return self.chunker.chunk_markdown_file(content, str(file_info.path))
+        elif file_info.language in ['javascript', 'typescript']:
+            return self.chunker.chunk_javascript_content(content)
+        else:
+            return self.chunker.chunk_generic_file(content, str(file_info.path))
+
+    async def _store_chunks(self, chunks: List[Dict[str, Any]], file_info: FileInfo, knowledge_base) -> int:
+        """Store file chunks in the knowledge base"""
+        stored_count = 0
+
+        for i, chunk in enumerate(chunks):
+            try:
+                # Create comprehensive metadata
+                metadata = {
+                    'source': file_info.relative_path,
+                    'file_path': str(file_info.path),
+                    'file_type': file_info.file_type,
+                    'category': file_info.category,
+                    'language': file_info.language,
+                    'file_size': file_info.size,
+                    'modified_time': file_info.modified_time.isoformat(),
+                    'chunk_index': i,
+                    'total_chunks': len(chunks),
+                    'chunk_type': chunk.get('type', 'general'),
+                    'indexed_at': datetime.now().isoformat(),
+                    'indexer_version': '1.0.0'
+                }
+
+                # Add chunk-specific metadata
+                for key, value in chunk.items():
+                    if key not in ['content']:
+                        metadata[f'chunk_{key}'] = value
+
+                # Store in knowledge base
+                if hasattr(knowledge_base, 'store_fact'):
+                    result = await knowledge_base.store_fact(chunk['content'], metadata)
+                    if result and result.get('status') == 'success':
+                        stored_count += 1
+                        logger.debug(f"Stored chunk {i+1}/{len(chunks)} for {file_info.relative_path}")
+                    else:
+                        logger.warning(f"Failed to store chunk {i+1} for {file_info.relative_path}: {result}")
+                else:
+                    logger.warning("Knowledge base does not support store_fact method")
+
+            except Exception as e:
+                logger.error(f"Error storing chunk {i+1} for {file_info.relative_path}: {e}")
+                self.progress.errors.append(f"Chunk storage error in {file_info.relative_path}[{i+1}]: {str(e)}")
+
+        return stored_count
+
+    async def index_single_file(self, file_info: FileInfo, knowledge_base) -> bool:
+        """Index a single file"""
+        try:
+            self.progress.current_file = file_info.relative_path
+            self.progress.current_category = file_info.category
+
+            # Read file content
+            content = await self._read_file_content(file_info.path)
+            if content is None:
+                self.progress.failed_files += 1
+                self.progress.errors.append(f"Could not read file: {file_info.relative_path}")
+                return False
+
+            # Skip empty files
+            if not content.strip():
+                logger.debug(f"Skipping empty file: {file_info.relative_path}")
+                self.progress.processed_files += 1
+                return True
+
+            # Chunk the content
+            chunks = self._chunk_file_content(content, file_info)
+            if not chunks:
+                logger.warning(f"No chunks generated for: {file_info.relative_path}")
+                self.progress.processed_files += 1
+                return True
+
+            # Store chunks
+            stored_count = await self._store_chunks(chunks, file_info, knowledge_base)
+            self.progress.total_chunks += stored_count
+
+            if stored_count > 0:
+                self.progress.successful_files += 1
+                logger.info(f"Indexed {file_info.relative_path}: {stored_count} chunks")
+            else:
+                self.progress.failed_files += 1
+                self.progress.errors.append(f"No chunks stored for: {file_info.relative_path}")
+
+            self.progress.processed_files += 1
+            return stored_count > 0
+
+        except Exception as e:
+            logger.error(f"Error indexing file {file_info.relative_path}: {e}")
+            self.progress.failed_files += 1
+            self.progress.processed_files += 1
+            self.progress.errors.append(f"Indexing error in {file_info.relative_path}: {str(e)}")
+            return False
+
+    async def index_codebase(self, batch_size: int = 10, max_files: Optional[int] = None) -> IndexingProgress:
+        """Index the entire codebase with progress tracking"""
+        logger.info(f"Starting codebase indexing for: {self.root_path}")
+
+        # Reset progress
+        self.progress = IndexingProgress()
+        self.progress.start_time = datetime.now()
+
+        try:
+            # Get knowledge base
+            knowledge_base = await get_knowledge_base()
+            if knowledge_base is None:
+                raise RuntimeError("Could not initialize knowledge base")
+
+            # Scan files
+            logger.info("Scanning codebase for files...")
+            files = self._scan_files()
+
+            # Limit files if specified
+            if max_files:
+                files = files[:max_files]
+
+            self.progress.total_files = len(files)
+            logger.info(f"Found {len(files)} files to index")
+
+            # Group files by category for organized processing
+            files_by_category = {}
+            for file_info in files:
+                category = file_info.category
+                if category not in files_by_category:
+                    files_by_category[category] = []
+                files_by_category[category].append(file_info)
+
+            # Process files in batches by category
+            for category, category_files in files_by_category.items():
+                logger.info(f"Processing {len(category_files)} files in category: {category}")
+
+                # Process in batches to avoid overwhelming the system
+                for i in range(0, len(category_files), batch_size):
+                    batch = category_files[i:i + batch_size]
+
+                    # Process batch concurrently
+                    tasks = [self.index_single_file(file_info, knowledge_base) for file_info in batch]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                    # Log batch progress
+                    successful_in_batch = sum(1 for r in results if r is True)
+                    logger.info(f"Batch {i//batch_size + 1}: {successful_in_batch}/{len(batch)} files indexed successfully")
+
+                    # Small delay to prevent overwhelming the system
+                    await asyncio.sleep(0.1)
+
+            self.progress.end_time = datetime.now()
+
+            logger.info(f"Codebase indexing completed!")
+            logger.info(f"Results: {self.progress.successful_files} successful, {self.progress.failed_files} failed")
+            logger.info(f"Total chunks created: {self.progress.total_chunks}")
+
+            if self.progress.errors:
+                logger.warning(f"Errors encountered: {len(self.progress.errors)}")
+                for error in self.progress.errors[:10]:  # Log first 10 errors
+                    logger.warning(f"  - {error}")
+
+            return self.progress
+
+        except Exception as e:
+            logger.error(f"Codebase indexing failed: {e}")
+            self.progress.end_time = datetime.now()
+            self.progress.errors.append(f"Indexing failed: {str(e)}")
+            return self.progress
+
+    def get_indexing_stats(self) -> Dict[str, Any]:
+        """Get current indexing statistics"""
+        return self.progress.to_dict()
+
+    async def reindex_category(self, category: str, batch_size: int = 10) -> IndexingProgress:
+        """Reindex files in a specific category"""
+        logger.info(f"Starting category reindexing for: {category}")
+
+        # Reset progress
+        self.progress = IndexingProgress()
+        self.progress.start_time = datetime.now()
+
+        try:
+            # Get knowledge base
+            knowledge_base = await get_knowledge_base()
+            if knowledge_base is None:
+                raise RuntimeError("Could not initialize knowledge base")
+
+            # Scan files and filter by category
+            files = self._scan_files()
+            category_files = [f for f in files if f.category == category]
+
+            self.progress.total_files = len(category_files)
+            logger.info(f"Found {len(category_files)} files in category: {category}")
+
+            if not category_files:
+                logger.warning(f"No files found for category: {category}")
+                return self.progress
+
+            # Process files in batches
+            for i in range(0, len(category_files), batch_size):
+                batch = category_files[i:i + batch_size]
+
+                # Process batch concurrently
+                tasks = [self.index_single_file(file_info, knowledge_base) for file_info in batch]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Log batch progress
+                successful_in_batch = sum(1 for r in results if r is True)
+                logger.info(f"Category {category} batch {i//batch_size + 1}: {successful_in_batch}/{len(batch)} files indexed")
+
+                await asyncio.sleep(0.1)
+
+            self.progress.end_time = datetime.now()
+            logger.info(f"Category {category} reindexing completed: {self.progress.successful_files} successful")
+
+            return self.progress
+
+        except Exception as e:
+            logger.error(f"Category reindexing failed for {category}: {e}")
+            self.progress.end_time = datetime.now()
+            self.progress.errors.append(f"Category reindexing failed: {str(e)}")
+            return self.progress
+
+
+# Global service instance
+_indexing_service: Optional[CodebaseIndexingService] = None
+
+
+def get_indexing_service() -> CodebaseIndexingService:
+    """Get the global indexing service instance"""
+    global _indexing_service
+    if _indexing_service is None:
+        _indexing_service = CodebaseIndexingService()
+    return _indexing_service
+
+
+# Convenience functions
+async def index_autobot_codebase(max_files: Optional[int] = None, batch_size: int = 10) -> IndexingProgress:
+    """Index the AutoBot codebase"""
+    service = get_indexing_service()
+    return await service.index_codebase(batch_size=batch_size, max_files=max_files)
+
+
+async def reindex_category(category: str, batch_size: int = 10) -> IndexingProgress:
+    """Reindex a specific category"""
+    service = get_indexing_service()
+    return await service.reindex_category(category, batch_size=batch_size)
+
+
+def get_indexing_progress() -> Dict[str, Any]:
+    """Get current indexing progress"""
+    service = get_indexing_service()
+    return service.get_indexing_stats()

@@ -18,7 +18,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from src.utils.config_manager import config_manager
+from src.unified_config_manager import config_manager
 from src.memory_manager import MemoryManager
 from src.retry_mechanism import RetryStrategy, retry_network_operation
 from src.circuit_breaker import circuit_breaker_async

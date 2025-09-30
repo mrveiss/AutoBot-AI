@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 import aiosqlite
 
 # Import the centralized ConfigManager
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.config_helper import cfg
 
 # Import shared path utilities

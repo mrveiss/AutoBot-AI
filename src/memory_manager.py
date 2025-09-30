@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 import aiosqlite
 
 # Import the centralized ConfigManager
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 
 # Import database pooling for performance
 from src.utils.database_pool import get_connection_pool

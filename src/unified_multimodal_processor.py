@@ -19,7 +19,7 @@ from src.enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,
 )
-from src.utils.config_manager import get_config_section
+from src.unified_config_manager import get_config_section
 from src.utils.multimodal_performance_monitor import performance_monitor
 
 # Import transformers models for vision processing

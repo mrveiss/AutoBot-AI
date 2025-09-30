@@ -11,7 +11,7 @@ import re
 import shlex
 from typing import Any, Dict, List, Optional
 
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.llm_interface import LLMInterface
 
 from .base_agent import AgentRequest

@@ -67,10 +67,10 @@ class LLMFailsafeAgent:
 
         # Configuration
         self.primary_models = [
-            "llama3.2:1b-instruct-q4_K_M",
-            "llama3.2:3b-instruct-q4_K_M",
+            "gemma3:270m",  # Ultra lightweight - 291MB
+            "llama3.2:1b-instruct-q4_K_M",  # Backup lightweight - 807MB
         ]
-        self.secondary_models = ["llama3.2:1b", "llama3.2:3b"]
+        self.secondary_models = ["gemma3:270m", "llama3.2:1b"]
 
         # Timeout settings (in seconds)
         self.timeouts = {

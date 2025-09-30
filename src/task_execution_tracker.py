@@ -162,7 +162,7 @@ class TaskExecutionTracker:
         status: Optional[TaskStatus] = None,
         limit: int = 100,
         days_back: int = 30,
-    ) -> List[TaskExecutionRecord]:
+    ) -> List[ExecutionRecord]:
         """Get task execution history"""
         return self.memory_manager.get_task_history(
             agent_type=agent_type, status=status, limit=limit, days_back=days_back

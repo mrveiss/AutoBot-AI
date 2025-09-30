@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.llm_interface import LLMInterface
 
 # Import communication protocol
@@ -50,7 +50,7 @@ except ImportError:
 # Import distributed agents
 try:
     from .classification_agent import ClassificationAgent
-    from .npu_code_search_agent import NPUCodeSearchAgent
+    from .npu_code_search_agent import get_npu_code_search
 
     DISTRIBUTED_AGENTS_AVAILABLE = True
 except ImportError:
@@ -139,7 +139,7 @@ class AgentOrchestrator:
         if DISTRIBUTED_AGENTS_AVAILABLE:
             self.builtin_distributed_agents = {
                 "classification": ClassificationAgent,
-                "npu_code_search": NPUCodeSearchAgent,
+                "npu_code_search": get_npu_code_search,
             }
 
         logger.info(f"Enhanced Agent Orchestrator initialized: {self.orchestrator_id}")

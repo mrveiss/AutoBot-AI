@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.models.atomic_fact import AtomicFact, FactType, TemporalType
 from src.services.fact_extraction_service import FactExtractionService
-from src.utils.config_manager import config_manager
+from src.unified_config_manager import config_manager
 from src.utils.logging_manager import get_llm_logger
 from src.utils.redis_client import get_redis_client
 

@@ -1,0 +1,547 @@
+#!/usr/bin/env python3
+"""
+Claude API Usage Monitoring and Tracking System
+Provides comprehensive monitoring of Claude API usage patterns to predict 
+and prevent rate limit issues during development conversations.
+"""
+
+import logging
+import time
+import json
+import asyncio
+from collections import deque, defaultdict
+from dataclasses import dataclass, asdict
+from typing import Dict, List, Optional, Any, Callable
+from pathlib import Path
+from datetime import datetime, timedelta
+import statistics
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class APICallRecord:
+    """Record of a single API call"""
+    timestamp: float
+    payload_size: int
+    response_size: int
+    response_time: float
+    success: bool
+    error_type: Optional[str] = None
+    tool_name: Optional[str] = None
+    context: Optional[str] = None
+
+
+@dataclass
+class UsageAlert:
+    """Alert for API usage concerns"""
+    timestamp: float
+    level: str  # warning, critical, info
+    message: str
+    metrics: Dict[str, Any]
+    recommendation: str
+
+
+class UsageTracker:
+    """Tracks API usage patterns and calculates metrics"""
+
+    def __init__(self, history_limit: int = 1000):
+        self.history_limit = history_limit
+        self.call_history = deque(maxlen=history_limit)
+        self.tool_usage = defaultdict(list)
+        self.error_patterns = defaultdict(int)
+        
+        # Performance metrics
+        self.total_calls = 0
+        self.total_payload_size = 0
+        self.total_response_size = 0
+        self.total_response_time = 0.0
+
+    def add_call(self, record: APICallRecord):
+        """Add a new API call record"""
+        self.call_history.append(record)
+        self.total_calls += 1
+        self.total_payload_size += record.payload_size
+        self.total_response_size += record.response_size
+        self.total_response_time += record.response_time
+        
+        # Track tool usage
+        if record.tool_name:
+            self.tool_usage[record.tool_name].append(record)
+        
+        # Track error patterns
+        if not record.success and record.error_type:
+            self.error_patterns[record.error_type] += 1
+
+    def get_recent_calls(self, minutes: int = 60) -> List[APICallRecord]:
+        """Get calls from the last N minutes"""
+        cutoff = time.time() - (minutes * 60)
+        return [call for call in self.call_history if call.timestamp > cutoff]
+
+    def calculate_usage_rate(self, window_minutes: int = 60) -> float:
+        """Calculate calls per minute in the given window"""
+        recent_calls = self.get_recent_calls(window_minutes)
+        if not recent_calls:
+            return 0.0
+        
+        if window_minutes == 0:
+            return len(recent_calls)
+        
+        return len(recent_calls) / window_minutes
+
+    def calculate_payload_trend(self, window_minutes: int = 30) -> Dict[str, float]:
+        """Calculate payload size trends"""
+        recent_calls = self.get_recent_calls(window_minutes)
+        if not recent_calls:
+            return {"average": 0, "max": 0, "trend": 0}
+        
+        payload_sizes = [call.payload_size for call in recent_calls]
+        
+        # Calculate trend (simple linear regression slope)
+        if len(payload_sizes) > 1:
+            x_values = list(range(len(payload_sizes)))
+            n = len(payload_sizes)
+            sum_x = sum(x_values)
+            sum_y = sum(payload_sizes)
+            sum_xy = sum(x * y for x, y in zip(x_values, payload_sizes))
+            sum_x2 = sum(x * x for x in x_values)
+            
+            trend = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x)
+        else:
+            trend = 0
+        
+        return {
+            "average": statistics.mean(payload_sizes),
+            "max": max(payload_sizes),
+            "min": min(payload_sizes),
+            "trend": trend
+        }
+
+    def get_tool_usage_stats(self) -> Dict[str, Dict[str, Any]]:
+        """Get usage statistics per tool"""
+        stats = {}
+        
+        for tool_name, calls in self.tool_usage.items():
+            recent_calls = [call for call in calls 
+                          if time.time() - call.timestamp <= 3600]  # Last hour
+            
+            if recent_calls:
+                payload_sizes = [call.payload_size for call in recent_calls]
+                response_times = [call.response_time for call in recent_calls]
+                success_rate = sum(1 for call in recent_calls if call.success) / len(recent_calls)
+                
+                stats[tool_name] = {
+                    "call_count": len(recent_calls),
+                    "avg_payload_size": statistics.mean(payload_sizes),
+                    "avg_response_time": statistics.mean(response_times),
+                    "success_rate": success_rate * 100,
+                    "total_data": sum(payload_sizes)
+                }
+        
+        return stats
+
+
+class AlertManager:
+    """Manages alerts and warnings for API usage"""
+
+    def __init__(self, alert_cooldown: int = 300):  # 5 minutes
+        self.alert_cooldown = alert_cooldown
+        self.last_alerts = {}
+        self.alert_history = deque(maxlen=100)
+        self.alert_callbacks: List[Callable] = []
+
+    def add_alert_callback(self, callback: Callable[[UsageAlert], None]):
+        """Add a callback function for alerts"""
+        self.alert_callbacks.append(callback)
+
+    def check_usage_alerts(self, tracker: UsageTracker) -> List[UsageAlert]:
+        """Check current usage and generate alerts if needed"""
+        alerts = []
+        current_time = time.time()
+        
+        # Check rate limits
+        rate_1min = tracker.calculate_usage_rate(1)
+        rate_60min = tracker.calculate_usage_rate(60)
+        
+        if rate_1min > 50:  # More than 50 calls per minute
+            alert = self._create_alert(
+                "critical",
+                f"High API usage rate: {rate_1min:.1f} calls/minute",
+                {"rate_1min": rate_1min, "rate_60min": rate_60min},
+                "Reduce request frequency to avoid rate limits"
+            )
+            alerts.append(alert)
+        elif rate_1min > 30:
+            alert = self._create_alert(
+                "warning",
+                f"Elevated API usage rate: {rate_1min:.1f} calls/minute",
+                {"rate_1min": rate_1min, "rate_60min": rate_60min},
+                "Consider batching requests or adding delays"
+            )
+            alerts.append(alert)
+        
+        # Check payload sizes
+        payload_trend = tracker.calculate_payload_trend(30)
+        if payload_trend["max"] > 25000:
+            alert = self._create_alert(
+                "warning",
+                f"Large payload detected: {payload_trend['max']} bytes",
+                payload_trend,
+                "Consider breaking large requests into smaller chunks"
+            )
+            alerts.append(alert)
+        
+        # Check error patterns
+        recent_calls = tracker.get_recent_calls(60)
+        if recent_calls:
+            error_rate = sum(1 for call in recent_calls if not call.success) / len(recent_calls)
+            if error_rate > 0.1:  # More than 10% errors
+                alert = self._create_alert(
+                    "critical",
+                    f"High error rate: {error_rate*100:.1f}%",
+                    {"error_rate": error_rate, "recent_calls": len(recent_calls)},
+                    "Check for API issues or adjust request patterns"
+                )
+                alerts.append(alert)
+        
+        # Process and store alerts
+        filtered_alerts = []
+        for alert in alerts:
+            if self._should_send_alert(alert, current_time):
+                filtered_alerts.append(alert)
+                self.alert_history.append(alert)
+                self.last_alerts[alert.level] = current_time
+                
+                # Send to callbacks
+                for callback in self.alert_callbacks:
+                    try:
+                        callback(alert)
+                    except Exception as e:
+                        logger.error(f"Alert callback failed: {e}")
+        
+        return filtered_alerts
+
+    def _create_alert(self, level: str, message: str, 
+                     metrics: Dict[str, Any], recommendation: str) -> UsageAlert:
+        """Create a new usage alert"""
+        return UsageAlert(
+            timestamp=time.time(),
+            level=level,
+            message=message,
+            metrics=metrics,
+            recommendation=recommendation
+        )
+
+    def _should_send_alert(self, alert: UsageAlert, current_time: float) -> bool:
+        """Check if alert should be sent based on cooldown"""
+        last_alert_time = self.last_alerts.get(alert.level, 0)
+        return current_time - last_alert_time >= self.alert_cooldown
+
+
+class ClaudeAPIMonitor:
+    """
+    Main Claude API monitoring system.
+    
+    Provides comprehensive monitoring, alerting, and analytics
+    for Claude API usage to prevent conversation crashes.
+    """
+
+    def __init__(self, 
+                 rate_limit_rpm: int = 50,
+                 rate_limit_rph: int = 2000,
+                 payload_warning_size: int = 20000,
+                 payload_max_size: int = 30000):
+        
+        self.rate_limit_rpm = rate_limit_rpm
+        self.rate_limit_rph = rate_limit_rph
+        self.payload_warning_size = payload_warning_size
+        self.payload_max_size = payload_max_size
+        
+        # Core components
+        self.usage_tracker = UsageTracker()
+        self.alert_manager = AlertManager()
+        
+        # Monitoring state
+        self.monitoring_active = True
+        self.start_time = time.time()
+        
+        # Analytics
+        self.prediction_window = 300  # 5 minutes for predictions
+        
+        # Setup default alert callback
+        self.alert_manager.add_alert_callback(self._log_alert)
+        
+        logger.info("ClaudeAPIMonitor initialized")
+
+    def record_api_call(self, 
+                       payload_size: int,
+                       response_size: int = 0,
+                       response_time: float = 0.0,
+                       success: bool = True,
+                       error_type: Optional[str] = None,
+                       tool_name: Optional[str] = None,
+                       context: Optional[str] = None):
+        """Record a completed API call"""
+        
+        if not self.monitoring_active:
+            return
+        
+        record = APICallRecord(
+            timestamp=time.time(),
+            payload_size=payload_size,
+            response_size=response_size,
+            response_time=response_time,
+            success=success,
+            error_type=error_type,
+            tool_name=tool_name,
+            context=context
+        )
+        
+        self.usage_tracker.add_call(record)
+        
+        # Check for immediate alerts
+        alerts = self.alert_manager.check_usage_alerts(self.usage_tracker)
+        if alerts:
+            logger.info(f"Generated {len(alerts)} usage alerts")
+
+    def predict_rate_limit_risk(self) -> Dict[str, Any]:
+        """Predict the risk of hitting rate limits"""
+        current_rpm = self.usage_tracker.calculate_usage_rate(1)
+        current_rph = self.usage_tracker.calculate_usage_rate(60)
+        
+        # Calculate risk scores (0-100)
+        rpm_risk = min(100, (current_rpm / self.rate_limit_rpm) * 100)
+        rph_risk = min(100, (current_rph / self.rate_limit_rph) * 100)
+        
+        # Predict future usage based on trend
+        recent_calls = self.usage_tracker.get_recent_calls(5)  # Last 5 minutes
+        if len(recent_calls) >= 3:
+            # Simple trend calculation
+            times = [call.timestamp for call in recent_calls]
+            rates = []
+            for i in range(1, len(times)):
+                window_size = times[i] - times[i-1]
+                if window_size > 0:
+                    rate = 60 / window_size  # Convert to per-minute rate
+                    rates.append(rate)
+            
+            if rates:
+                trend = statistics.mean(rates)
+                predicted_rpm = max(0, current_rpm + (trend * 5))  # 5-minute prediction
+            else:
+                predicted_rpm = current_rpm
+        else:
+            predicted_rpm = current_rpm
+        
+        # Overall risk assessment
+        max_risk = max(rpm_risk, rph_risk)
+        if max_risk > 90:
+            risk_level = "critical"
+        elif max_risk > 70:
+            risk_level = "high"
+        elif max_risk > 50:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+        
+        return {
+            "risk_level": risk_level,
+            "risk_score": max_risk,
+            "current_rpm": current_rpm,
+            "current_rph": current_rph,
+            "predicted_rpm": predicted_rpm,
+            "rpm_utilization": rpm_risk,
+            "rph_utilization": rph_risk,
+            "recommendation": self._get_risk_recommendation(risk_level, max_risk)
+        }
+
+    def get_comprehensive_stats(self) -> Dict[str, Any]:
+        """Get comprehensive API usage statistics"""
+        uptime = time.time() - self.start_time
+        
+        # Basic stats
+        basic_stats = {
+            "monitoring_uptime": uptime,
+            "total_calls": self.usage_tracker.total_calls,
+            "calls_per_hour": (self.usage_tracker.total_calls / max(uptime / 3600, 1)),
+            "average_payload_size": (
+                self.usage_tracker.total_payload_size / max(self.usage_tracker.total_calls, 1)
+            ),
+            "average_response_time": (
+                self.usage_tracker.total_response_time / max(self.usage_tracker.total_calls, 1)
+            )
+        }
+        
+        # Current usage
+        current_usage = {
+            "rpm_current": self.usage_tracker.calculate_usage_rate(1),
+            "rpm_limit": self.rate_limit_rpm,
+            "rph_current": self.usage_tracker.calculate_usage_rate(60),
+            "rph_limit": self.rate_limit_rph
+        }
+        
+        # Tool usage
+        tool_stats = self.usage_tracker.get_tool_usage_stats()
+        
+        # Payload analysis
+        payload_trend = self.usage_tracker.calculate_payload_trend(30)
+        
+        # Risk prediction
+        risk_prediction = self.predict_rate_limit_risk()
+        
+        # Recent alerts
+        recent_alerts = [
+            asdict(alert) for alert in 
+            list(self.alert_manager.alert_history)[-10:]  # Last 10 alerts
+        ]
+        
+        return {
+            "basic_stats": basic_stats,
+            "current_usage": current_usage,
+            "tool_usage": tool_stats,
+            "payload_analysis": payload_trend,
+            "risk_prediction": risk_prediction,
+            "recent_alerts": recent_alerts,
+            "error_patterns": dict(self.usage_tracker.error_patterns)
+        }
+
+    def get_optimization_recommendations(self) -> List[Dict[str, str]]:
+        """Get recommendations for optimizing API usage"""
+        recommendations = []
+        stats = self.get_comprehensive_stats()
+        
+        # Rate limit recommendations
+        if stats["risk_prediction"]["risk_score"] > 70:
+            recommendations.append({
+                "type": "rate_limit",
+                "priority": "high",
+                "message": "API usage approaching limits",
+                "action": "Implement request batching or increase delays between calls"
+            })
+        
+        # Payload size recommendations
+        if stats["payload_analysis"]["average"] > self.payload_warning_size:
+            recommendations.append({
+                "type": "payload_size",
+                "priority": "medium",
+                "message": "Large average payload size detected",
+                "action": "Use payload optimization to reduce request sizes"
+            })
+        
+        # Tool usage recommendations
+        for tool_name, tool_stats in stats["tool_usage"].items():
+            if tool_stats["avg_payload_size"] > self.payload_warning_size:
+                recommendations.append({
+                    "type": "tool_optimization",
+                    "priority": "medium",
+                    "message": f"Tool '{tool_name}' using large payloads",
+                    "action": f"Optimize {tool_name} usage patterns"
+                })
+        
+        # Error rate recommendations
+        recent_calls = self.usage_tracker.get_recent_calls(60)
+        if recent_calls:
+            error_rate = sum(1 for call in recent_calls if not call.success) / len(recent_calls)
+            if error_rate > 0.05:  # More than 5% errors
+                recommendations.append({
+                    "type": "error_rate",
+                    "priority": "high",
+                    "message": f"High error rate: {error_rate*100:.1f}%",
+                    "action": "Investigate and fix recurring API errors"
+                })
+        
+        return recommendations
+
+    def _get_risk_recommendation(self, risk_level: str, risk_score: float) -> str:
+        """Get recommendation based on risk level"""
+        if risk_level == "critical":
+            return "Immediate action required: Stop non-essential API calls"
+        elif risk_level == "high":
+            return "Reduce API call frequency and optimize payload sizes"
+        elif risk_level == "medium":
+            return "Consider implementing request batching"
+        else:
+            return "API usage is within safe limits"
+
+    def _log_alert(self, alert: UsageAlert):
+        """Default alert logging callback"""
+        level_map = {"info": logging.INFO, "warning": logging.WARNING, "critical": logging.ERROR}
+        log_level = level_map.get(alert.level, logging.INFO)
+        
+        logger.log(log_level, f"Claude API Alert [{alert.level.upper()}]: {alert.message}")
+        logger.log(log_level, f"Recommendation: {alert.recommendation}")
+
+    def enable_monitoring(self):
+        """Enable API monitoring"""
+        self.monitoring_active = True
+        logger.info("Claude API monitoring enabled")
+
+    def disable_monitoring(self):
+        """Disable API monitoring"""
+        self.monitoring_active = False
+        logger.info("Claude API monitoring disabled")
+
+    def reset_statistics(self):
+        """Reset all monitoring statistics"""
+        self.usage_tracker = UsageTracker()
+        self.alert_manager = AlertManager()
+        self.start_time = time.time()
+        logger.info("Claude API monitoring statistics reset")
+
+
+# Global monitor instance
+_global_monitor: Optional[ClaudeAPIMonitor] = None
+
+
+def get_api_monitor() -> ClaudeAPIMonitor:
+    """Get the global API monitor instance"""
+    global _global_monitor
+    if _global_monitor is None:
+        _global_monitor = ClaudeAPIMonitor()
+    return _global_monitor
+
+
+def record_api_call(payload_size: int, **kwargs):
+    """Convenience function to record an API call"""
+    monitor = get_api_monitor()
+    monitor.record_api_call(payload_size, **kwargs)
+
+
+def get_usage_stats() -> Dict[str, Any]:
+    """Convenience function to get usage statistics"""
+    monitor = get_api_monitor()
+    return monitor.get_comprehensive_stats()
+
+
+def check_rate_limit_risk() -> Dict[str, Any]:
+    """Convenience function to check rate limit risk"""
+    monitor = get_api_monitor()
+    return monitor.predict_rate_limit_risk()
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    # Example usage
+    monitor = ClaudeAPIMonitor()
+    
+    # Simulate some API calls
+    for i in range(10):
+        monitor.record_api_call(
+            payload_size=1000 + i * 500,
+            response_size=2000,
+            response_time=0.5,
+            success=True,
+            tool_name="TodoWrite" if i % 3 == 0 else "Read",
+            context="test_simulation"
+        )
+        time.sleep(0.1)
+    
+    # Get statistics
+    stats = monitor.get_comprehensive_stats()
+    print(f"Total calls: {stats['basic_stats']['total_calls']}")
+    print(f"Risk level: {stats['risk_prediction']['risk_level']}")
+    
+    # Get recommendations
+    recommendations = monitor.get_optimization_recommendations()
+    for rec in recommendations:
+        print(f"Recommendation: {rec['message']} - {rec['action']}")

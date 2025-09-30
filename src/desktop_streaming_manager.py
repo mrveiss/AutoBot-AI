@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional
 import websockets
 
 from src.task_execution_tracker import task_tracker
-from src.utils.config_manager import config_manager
+from src.unified_config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 

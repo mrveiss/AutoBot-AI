@@ -16,6 +16,7 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from src.config_helper import cfg
 from src.source_attribution import SourceType, track_source
+from src.utils.display_utils import get_playwright_config
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,14 @@ class ResearchBrowserSession:
         try:
             self.playwright = await async_playwright().start()
 
+            # Get optimal configuration for current display
+            config = get_playwright_config()
+            viewport = config['viewport']
+            browser_args = config['browser_args']
+
+            logger.info(f"Using dynamic resolution: {viewport['width']}x{viewport['height']} "
+                       f"(detected: {config['detected_resolution']['width']}x{config['detected_resolution']['height']})")
+
             # Use existing browser if available (Docker container)
             # Note: The Playwright container runs an Express API server on port 3000,
             # not a CDP endpoint. We'll use local browser instead.
@@ -58,24 +67,15 @@ class ResearchBrowserSession:
                     f"{self.session_id}"
                 )
             except Exception:
-                # Fall back to launching new browser
+                # Fall back to launching new browser with dynamic configuration
                 self.browser = await self.playwright.chromium.launch(
                     headless=headless,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-background-timer-throttling",
-                        "--disable-backgrounding-occluded-windows",
-                        "--disable-renderer-backgrounding",
-                        "--window-size=1920,1080",
-                        "--force-device-scale-factor=1",
-                    ],
+                    args=browser_args,
                 )
                 logger.info(f"Launched new browser for session {self.session_id}")
 
             self.context = await self.browser.new_context(
-                viewport={"width": 1920, "height": 1080},
+                viewport=viewport,
                 user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             )
 

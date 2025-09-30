@@ -48,7 +48,7 @@ class WorkflowMessage:
         """Convert to dictionary for API response"""
         return {
             "type": self.type,
-            "text": self.content,
+            "content": self.content,  # Changed from 'text' to 'content' for frontend compatibility
             "sender": "assistant",
             "timestamp": time.strftime("%H:%M:%S", time.localtime(self.timestamp)),
             "metadata": self.metadata

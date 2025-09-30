@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 

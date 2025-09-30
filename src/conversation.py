@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from src.agents import get_kb_librarian
 from src.agents.classification_agent import ClassificationAgent, ClassificationResult
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
 from src.source_attribution import (

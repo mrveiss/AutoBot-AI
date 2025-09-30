@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 
 # Import host IP addresses from main config
-from src.config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT, REDIS_HOST_IP
+from src.unified_config_manager import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT, REDIS_HOST_IP
 
 logger = logging.getLogger(__name__)
 

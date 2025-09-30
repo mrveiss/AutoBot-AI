@@ -103,7 +103,17 @@ class UnifiedConfigManager:
         return self._sync_lock
 
     def _load_configuration(self) -> None:
-        """Load and merge all configuration sources (synchronous)"""
+        """Load and merge all configuration sources (synchronous)
+
+        IMPORTANT: Configuration precedence order:
+        1. config.yaml (base configuration)
+        2. settings.json (user settings override base config)
+        3. Environment variables (override both)
+
+        WARNING: settings.json completely overrides matching sections from config.yaml.
+        For example, if config.yaml has 10 CORS origins and settings.json has 4,
+        only the 4 from settings.json will be used.
+        """
         try:
             # Load base configuration from YAML
             base_config = self._load_yaml_config()
@@ -182,7 +192,7 @@ class UnifiedConfigManager:
                                 "endpoint": f"http://{ollama_host}:{ollama_port}/api/generate",
                                 "host": f"http://{ollama_host}:{ollama_port}",
                                 "models": [],
-                                "selected_model": os.getenv("AUTOBOT_OLLAMA_MODEL", "llama3.2:3b"),
+                                "selected_model": os.getenv("AUTOBOT_OLLAMA_MODEL", "gemma3:270m"),
                             }
                         },
                     },
@@ -439,7 +449,7 @@ class UnifiedConfigManager:
             return env_model
 
         # Final fallback
-        fallback_model = "llama3.2:3b"
+        fallback_model = "gemma3:270m"
         logger.warning(f"UNIFIED CONFIG: No model configured, using fallback: {fallback_model}")
         return fallback_model
 
@@ -838,5 +848,25 @@ async def set_config_value_async(config_type: str, key: str, value: Any) -> None
     """Set configuration value asynchronously"""
     await unified_config_manager.set_config_value_async(config_type, key, value)
 
+
+# Export host and service constants for backward compatibility
+HTTP_PROTOCOL = "http"
+OLLAMA_HOST_IP = cfg.get_host('ollama')
+OLLAMA_PORT = cfg.get_port('ollama')
+REDIS_HOST_IP = cfg.get_host('redis')
+OLLAMA_URL = cfg.get_service_url('ollama')
+
+# Playwright/Browser service constants
+PLAYWRIGHT_HOST_IP = cfg.get_host('browser_service')
+PLAYWRIGHT_VNC_PORT = cfg.get_port('vnc')
+PLAYWRIGHT_VNC_URL = f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
+
+# VNC Direct URL function
+def get_vnc_direct_url():
+    """Get the direct VNC connection URL with appropriate port"""
+    return f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
+
+# Export cfg for compatibility
+# This is already imported at the top, now we export it
 
 logger.info("Unified Configuration Manager initialized successfully")
