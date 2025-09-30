@@ -2,8 +2,8 @@
  * Network Constants for AutoBot Frontend
  * =====================================
  *
- * Centralized network configuration constants to eliminate hardcoded URLs and IP addresses
- * throughout the frontend codebase. This mirrors the Python constants in src/constants/network_constants.py
+ * Centralized network configuration constants that read from .env via defaults.js
+ * NO HARDCODED VALUES - all values come from DEFAULT_CONFIG which reads from environment
  *
  * Usage:
  *     import { NetworkConstants, ServiceURLs } from '@/constants/network-constants.js'
@@ -15,71 +15,76 @@
  *     const backendUrl = ServiceURLs.BACKEND_API
  */
 
+import { DEFAULT_CONFIG } from '../config/defaults.js';
+
 /**
  * Core network constants for AutoBot distributed infrastructure
+ * CRITICAL: All values read from DEFAULT_CONFIG (which reads from .env)
  */
 export const NetworkConstants = Object.freeze({
-  // Main machine (WSL)
-  MAIN_MACHINE_IP: "172.16.168.20",
+  // Main machine (WSL) - reads from VITE_BACKEND_HOST
+  MAIN_MACHINE_IP: DEFAULT_CONFIG.network.backend.host,
 
-  // VM Infrastructure IPs
-  FRONTEND_VM_IP: "172.16.168.21",
-  NPU_WORKER_VM_IP: "172.16.168.22",
-  REDIS_VM_IP: "172.16.168.23",
-  AI_STACK_VM_IP: "172.16.168.24",
-  BROWSER_VM_IP: "172.16.168.25",
+  // VM Infrastructure IPs - read from VITE_*_HOST environment variables
+  FRONTEND_VM_IP: DEFAULT_CONFIG.network.frontend.host,
+  NPU_WORKER_VM_IP: DEFAULT_CONFIG.network.npu_worker.host,
+  REDIS_VM_IP: DEFAULT_CONFIG.network.redis.host,
+  AI_STACK_VM_IP: DEFAULT_CONFIG.network.ai_stack.host,
+  BROWSER_VM_IP: DEFAULT_CONFIG.network.browser.host,
 
-  // Local/Localhost addresses
+  // Local/Localhost addresses - these are standard and don't need env vars
   LOCALHOST_IP: "127.0.0.1",
   LOCALHOST_NAME: "localhost",
 
-  // Standard ports
-  BACKEND_PORT: 8001,
-  FRONTEND_PORT: 5173,
-  REDIS_PORT: 6379,
-  OLLAMA_PORT: 11434,
-  VNC_PORT: 6080,
-  BROWSER_SERVICE_PORT: 3000,
-  AI_STACK_PORT: 8080,
-  NPU_WORKER_PORT: 8081,
+  // Standard ports - read from VITE_*_PORT environment variables
+  BACKEND_PORT: parseInt(DEFAULT_CONFIG.network.backend.port),
+  FRONTEND_PORT: parseInt(DEFAULT_CONFIG.network.frontend.port),
+  REDIS_PORT: parseInt(DEFAULT_CONFIG.network.redis.port),
+  OLLAMA_PORT: parseInt(DEFAULT_CONFIG.network.ollama.port),
+  VNC_PORT: parseInt(DEFAULT_CONFIG.vnc.desktop.port),
+  BROWSER_SERVICE_PORT: parseInt(DEFAULT_CONFIG.network.browser.port),
+  AI_STACK_PORT: parseInt(DEFAULT_CONFIG.network.ai_stack.port),
+  NPU_WORKER_PORT: parseInt(DEFAULT_CONFIG.network.npu_worker.port),
 
-  // Development ports
-  DEV_FRONTEND_PORT: 5173,
-  DEV_BACKEND_PORT: 8001
+  // Development ports - same as standard ports in current config
+  DEV_FRONTEND_PORT: parseInt(DEFAULT_CONFIG.network.frontend.port),
+  DEV_BACKEND_PORT: parseInt(DEFAULT_CONFIG.network.backend.port)
 });
 
 /**
  * Pre-built service URLs for common AutoBot services
+ * CRITICAL: Built from NetworkConstants which reads from DEFAULT_CONFIG
+ * Protocol (http/https) comes from DEFAULT_CONFIG.network.*.protocol
  */
 export const ServiceURLs = Object.freeze({
   // Backend API URLs
-  BACKEND_API: `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`,
-  BACKEND_LOCAL: `http://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.BACKEND_PORT}`,
+  BACKEND_API: `${DEFAULT_CONFIG.network.backend.protocol}://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`,
+  BACKEND_LOCAL: `${DEFAULT_CONFIG.network.backend.protocol}://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.BACKEND_PORT}`,
 
   // Frontend URLs
-  FRONTEND_VM: `http://${NetworkConstants.FRONTEND_VM_IP}:${NetworkConstants.FRONTEND_PORT}`,
-  FRONTEND_LOCAL: `http://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.FRONTEND_PORT}`,
+  FRONTEND_VM: `${DEFAULT_CONFIG.network.frontend.protocol}://${NetworkConstants.FRONTEND_VM_IP}:${NetworkConstants.FRONTEND_PORT}`,
+  FRONTEND_LOCAL: `${DEFAULT_CONFIG.network.frontend.protocol}://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.FRONTEND_PORT}`,
 
   // Redis URLs
   REDIS_VM: `redis://${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}`,
   REDIS_LOCAL: `redis://${NetworkConstants.LOCALHOST_IP}:${NetworkConstants.REDIS_PORT}`,
 
   // Ollama LLM URLs
-  OLLAMA_LOCAL: `http://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.OLLAMA_PORT}`,
-  OLLAMA_MAIN: `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.OLLAMA_PORT}`,
+  OLLAMA_LOCAL: `${DEFAULT_CONFIG.network.ollama.protocol}://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.OLLAMA_PORT}`,
+  OLLAMA_MAIN: `${DEFAULT_CONFIG.network.ollama.protocol}://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.OLLAMA_PORT}`,
 
   // VNC Desktop URLs
-  VNC_DESKTOP: `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_PORT}/vnc.html`,
-  VNC_LOCAL: `http://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.VNC_PORT}/vnc.html`,
+  VNC_DESKTOP: `${DEFAULT_CONFIG.vnc.desktop.protocol}://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_PORT}/vnc.html`,
+  VNC_LOCAL: `${DEFAULT_CONFIG.vnc.desktop.protocol}://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.VNC_PORT}/vnc.html`,
 
   // Browser automation service
-  BROWSER_SERVICE: `http://${NetworkConstants.BROWSER_VM_IP}:${NetworkConstants.BROWSER_SERVICE_PORT}`,
+  BROWSER_SERVICE: `${DEFAULT_CONFIG.network.browser.protocol}://${NetworkConstants.BROWSER_VM_IP}:${NetworkConstants.BROWSER_SERVICE_PORT}`,
 
   // AI Stack service
-  AI_STACK_SERVICE: `http://${NetworkConstants.AI_STACK_VM_IP}:${NetworkConstants.AI_STACK_PORT}`,
+  AI_STACK_SERVICE: `${DEFAULT_CONFIG.network.ai_stack.protocol}://${NetworkConstants.AI_STACK_VM_IP}:${NetworkConstants.AI_STACK_PORT}`,
 
   // NPU Worker service
-  NPU_WORKER_SERVICE: `http://${NetworkConstants.NPU_WORKER_VM_IP}:${NetworkConstants.NPU_WORKER_PORT}`
+  NPU_WORKER_SERVICE: `${DEFAULT_CONFIG.network.npu_worker.protocol}://${NetworkConstants.NPU_WORKER_VM_IP}:${NetworkConstants.NPU_WORKER_PORT}`
 });
 
 /**

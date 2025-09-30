@@ -50,6 +50,13 @@ export const DEFAULT_CONFIG = {
       host: import.meta.env.VITE_BROWSER_HOST || '172.16.168.25',
       port: import.meta.env.VITE_BROWSER_PORT || '3000',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+    },
+
+    // Ollama LLM service
+    ollama: {
+      host: import.meta.env.VITE_OLLAMA_HOST || '127.0.0.1',
+      port: import.meta.env.VITE_OLLAMA_PORT || '11434',
+      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
     }
   },
 

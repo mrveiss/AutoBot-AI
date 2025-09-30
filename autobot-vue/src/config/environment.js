@@ -1,50 +1,50 @@
-// DEPRECATED: This file is being replaced by AppConfig.js
-// Centralized Environment Configuration using new AppConfigService
-//
-// MIGRATION: All components should now use AppConfig.js instead of this file
-// This file is maintained for backward compatibility during migration
-//
-// NOTE: To avoid circular dependencies, this file no longer imports AppConfig.js
-// Use AppConfig.js directly for new code
+// COMPATIBILITY SHIM: This file provides backward compatibility during migration to AppConfig.js
+// NEW COMPONENTS: Use AppConfig.js directly for better functionality
+// EXISTING COMPONENTS: This shim redirects to AppConfig for seamless migration
 
+import appConfig from './AppConfig.js';
 import { buildDefaultServiceUrl } from './defaults.js';
 
-// Legacy API_CONFIG for backward compatibility
+// Legacy API_CONFIG with AppConfig.js integration
 export const API_CONFIG = {
-  // Dynamic URLs - these now use AppConfig service
+  // Dynamic URLs - now redirect to AppConfig service
   get BASE_URL() {
-    // Components should use appConfig.getServiceUrl('backend') instead
+    // CRITICAL FIX: Detect proxy mode properly
     const backendHost = import.meta.env.VITE_BACKEND_HOST;
     const backendPort = import.meta.env.VITE_BACKEND_PORT;
     const protocol = import.meta.env.VITE_HTTP_PROTOCOL;
 
-    // PROXY MODE: When VITE_BACKEND_HOST is empty, use relative URLs for Vite proxy
-    if (!backendHost) {
+    // PROXY MODE: When running on Vite dev server (port 5173), use empty baseUrl for proxy
+    const isViteDevServer = window.location.port === '5173';
+
+    if (isViteDevServer && import.meta.env.DEV) {
+      console.log('[AutoBot Legacy] PROXY MODE: Using Vite proxy (empty baseUrl)');
       return ''; // Empty string forces relative URLs which go through Vite proxy
     }
 
+    // DIRECT MODE: Use actual backend IP for production or non-proxy environments
     if (backendHost && backendPort && protocol) {
-      return `${protocol}://${backendHost}:${backendPort}`;
+      const directUrl = `${protocol}://${backendHost}:${backendPort}`;
+      console.log('[AutoBot Legacy] DIRECT MODE: Using backend URL:', directUrl);
+      return directUrl;
     }
 
-    // Use centralized configuration service
+    // Fallback to centralized configuration service
     return buildDefaultServiceUrl('backend');
   },
-  
+
   get WS_BASE_URL() {
-    // Components should use appConfig.getWebSocketUrl() instead
     const backendHost = import.meta.env.VITE_BACKEND_HOST;
     const backendPort = import.meta.env.VITE_BACKEND_PORT;
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-    // If backend host and port are set, use them
+    // Direct WebSocket connection to backend
     if (backendHost && backendPort) {
       return `${wsProtocol}//${backendHost}:${backendPort}/ws`;
     }
 
     // Development proxy mode: use current host with /ws endpoint
-    // This leverages Vite's proxy configuration
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && window.location.port === '5173') {
       return `${wsProtocol}//${window.location.host}/ws`;
     }
 
@@ -58,27 +58,45 @@ export const API_CONFIG = {
     return buildDefaultServiceUrl('backend').replace('http', 'ws') + '/ws';
   },
 
+  // VNC URLs - delegate to AppConfig for consistency
   get DESKTOP_VNC_URL() {
-    // Synchronous fallback - components should use appConfig.getVncUrl('desktop') instead
-    const envUrl = import.meta.env.VITE_DESKTOP_VNC_URL;
-    if (envUrl) return envUrl;
-    
-    const vncHost = import.meta.env.VITE_DESKTOP_VNC_HOST;
-    const vncPort = import.meta.env.VITE_DESKTOP_VNC_PORT;
-    const vncPassword = import.meta.env.VITE_DESKTOP_VNC_PASSWORD;
+    // Try to use AppConfig if available, fallback to direct construction
+    try {
+      return appConfig.getVncUrl('desktop').catch(() => {
+        const envUrl = import.meta.env.VITE_DESKTOP_VNC_URL;
+        if (envUrl) return envUrl;
 
-    if (!vncHost || !vncPort || !vncPassword) {
-      throw new Error('Desktop VNC configuration missing: VITE_DESKTOP_VNC_HOST, VITE_DESKTOP_VNC_PORT, and VITE_DESKTOP_VNC_PASSWORD must be set');
+        const vncHost = import.meta.env.VITE_DESKTOP_VNC_HOST;
+        const vncPort = import.meta.env.VITE_DESKTOP_VNC_PORT;
+        const vncPassword = import.meta.env.VITE_DESKTOP_VNC_PASSWORD;
+
+        if (!vncHost || !vncPort || !vncPassword) {
+          throw new Error('Desktop VNC configuration missing: VITE_DESKTOP_VNC_HOST, VITE_DESKTOP_VNC_PORT, and VITE_DESKTOP_VNC_PASSWORD must be set');
+        }
+
+        return `http://${vncHost}:${vncPort}/vnc.html?autoconnect=true&password=${vncPassword}&resize=remote&reconnect=true&quality=9&compression=9`;
+      });
+    } catch (error) {
+      // Synchronous fallback for legacy compatibility
+      const envUrl = import.meta.env.VITE_DESKTOP_VNC_URL;
+      if (envUrl) return envUrl;
+
+      const vncHost = import.meta.env.VITE_DESKTOP_VNC_HOST;
+      const vncPort = import.meta.env.VITE_DESKTOP_VNC_PORT;
+      const vncPassword = import.meta.env.VITE_DESKTOP_VNC_PASSWORD;
+
+      if (!vncHost || !vncPort || !vncPassword) {
+        throw new Error('Desktop VNC configuration missing: VITE_DESKTOP_VNC_HOST, VITE_DESKTOP_VNC_PORT, and VITE_DESKTOP_VNC_PASSWORD must be set');
+      }
+
+      return `http://${vncHost}:${vncPort}/vnc.html?autoconnect=true&password=${vncPassword}&resize=remote&reconnect=true&quality=9&compression=9`;
     }
-
-    return `http://${vncHost}:${vncPort}/vnc.html?autoconnect=true&password=${vncPassword}&resize=remote&reconnect=true&quality=9&compression=9`;
   },
 
   get TERMINAL_VNC_URL() {
-    // Synchronous fallback - components should use appConfig.getVncUrl('terminal') instead
     const envUrl = import.meta.env.VITE_TERMINAL_VNC_URL;
     if (envUrl) return envUrl;
-    
+
     const vncHost = import.meta.env.VITE_TERMINAL_VNC_HOST;
     const vncPort = import.meta.env.VITE_TERMINAL_VNC_PORT;
     const vncPassword = import.meta.env.VITE_TERMINAL_VNC_PASSWORD;
@@ -91,10 +109,9 @@ export const API_CONFIG = {
   },
 
   get PLAYWRIGHT_VNC_URL() {
-    // Synchronous fallback - components should use appConfig.getVncUrl('playwright') instead
     const envUrl = import.meta.env.VITE_PLAYWRIGHT_VNC_URL;
     if (envUrl) return envUrl;
-    
+
     const vncHost = import.meta.env.VITE_PLAYWRIGHT_VNC_HOST;
     const vncPort = import.meta.env.VITE_PLAYWRIGHT_VNC_PORT;
     const vncPassword = import.meta.env.VITE_PLAYWRIGHT_VNC_PASSWORD;
@@ -166,10 +183,20 @@ export const ENDPOINTS = {
   WS_MONITORING: '/ws/monitoring',
 };
 
-// Helper function to get full URL with cache-busting
+// Enhanced helper function to get full URL with cache-busting and proper proxy detection
 export function getApiUrl(endpoint = '', options = {}) {
-  let fullUrl = `${API_CONFIG.BASE_URL}${endpoint}`;
-  
+  const baseUrl = API_CONFIG.BASE_URL;
+  let fullUrl;
+
+  // CRITICAL FIX: Handle proxy mode properly
+  if (!baseUrl) {
+    // Proxy mode - use relative URL
+    fullUrl = endpoint;
+  } else {
+    // Direct mode - construct full URL
+    fullUrl = `${baseUrl}${endpoint}`;
+  }
+
   // Add cache-busting parameters if not disabled
   if (!API_CONFIG.DISABLE_CACHE && (options.cacheBust !== false)) {
     const separator = fullUrl.includes('?') ? '&' : '?';
@@ -177,22 +204,23 @@ export function getApiUrl(endpoint = '', options = {}) {
     const timestampParam = `_t=${Date.now()}`;
     fullUrl = `${fullUrl}${separator}${cacheBustParam}&${timestampParam}`;
   }
-  
-  // Log API URL construction for debugging
+
+  // Enhanced logging for debugging
   if (API_CONFIG.ENABLE_DEBUG || window.location.port === '5173') {
-    console.log('[AutoBot] getApiUrl:', {
-      baseUrl: API_CONFIG.BASE_URL,
+    console.log('[AutoBot Legacy] getApiUrl:', {
+      baseUrl: baseUrl,
       endpoint: endpoint,
       fullUrl: fullUrl,
-      isRelative: !API_CONFIG.BASE_URL,
-      cacheBusted: !API_CONFIG.DISABLE_CACHE && (options.cacheBust !== false)
+      isProxyMode: !baseUrl,
+      cacheBusted: !API_CONFIG.DISABLE_CACHE && (options.cacheBust !== false),
+      viteDevServer: window.location.port === '5173'
     });
   }
-  
+
   return fullUrl;
 }
 
-// Helper function to get WebSocket URL
+// Helper function to get WebSocket URL with proxy detection
 export function getWsUrl(endpoint = '') {
   const baseUrl = API_CONFIG.WS_BASE_URL;
   // If base URL already includes /ws or is empty (proxy case), don't add endpoint
@@ -202,53 +230,61 @@ export function getWsUrl(endpoint = '') {
   return `${baseUrl}${endpoint}`;
 }
 
-// Enhanced API fetch with cache-busting headers
+// Enhanced API fetch with AppConfig integration
 export async function fetchApi(endpoint, options = {}) {
-  const url = getApiUrl(endpoint, options);
-  
-  const defaultHeaders = {
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'X-Cache-Bust': API_CONFIG.CACHE_BUST_VERSION,
-    'X-Request-Time': Date.now().toString(),
-  };
-  
-  // Merge headers
-  const headers = {
-    ...defaultHeaders,
-    ...options.headers
-  };
-  
-  const fetchOptions = {
-    ...options,
-    headers,
-    cache: 'no-store' // Force no caching at fetch level
-  };
-  
-  // Add timeout handling
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
-  fetchOptions.signal = controller.signal;
-  
+  // Try to use AppConfig if available for better functionality
   try {
-    const response = await fetch(url, fetchOptions);
-    clearTimeout(timeoutId);
-    
-    // Log response for debugging
-    if (API_CONFIG.ENABLE_DEBUG) {
-      console.log('[AutoBot] API Response:', {
-        url,
-        status: response.status,
-        headers: Object.fromEntries(response.headers.entries())
-      });
+    return await appConfig.fetchApi(endpoint, options);
+  } catch (appConfigError) {
+    console.warn('[AutoBot Legacy] AppConfig.fetchApi failed, using legacy implementation:', appConfigError.message);
+
+    // Fallback to legacy implementation
+    const url = getApiUrl(endpoint, options);
+
+    const defaultHeaders = {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Cache-Bust': API_CONFIG.CACHE_BUST_VERSION,
+      'X-Request-Time': Date.now().toString(),
+    };
+
+    // Merge headers
+    const headers = {
+      ...defaultHeaders,
+      ...options.headers
+    };
+
+    const fetchOptions = {
+      ...options,
+      headers,
+      cache: 'no-store' // Force no caching at fetch level
+    };
+
+    // Add timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+    fetchOptions.signal = controller.signal;
+
+    try {
+      const response = await fetch(url, fetchOptions);
+      clearTimeout(timeoutId);
+
+      // Log response for debugging
+      if (API_CONFIG.ENABLE_DEBUG) {
+        console.log('[AutoBot Legacy] API Response:', {
+          url,
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+      }
+
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('[AutoBot Legacy] API fetch failed:', error);
+      throw error;
     }
-    
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    console.error('[AutoBot] API fetch failed:', error);
-    throw error;
   }
 }
 
@@ -266,13 +302,20 @@ export async function validateApiConnection() {
   }
 }
 
-// Cache invalidation function
+// Cache invalidation function - delegate to AppConfig if available
 export function invalidateApiCache() {
-  console.log('[AutoBot] Invalidating API cache...');
-  
+  console.log('[AutoBot Legacy] Invalidating API cache...');
+
+  // Try to use AppConfig invalidation first
+  try {
+    appConfig.invalidateCache();
+  } catch (error) {
+    console.warn('[AutoBot Legacy] AppConfig cache invalidation failed, using legacy:', error.message);
+  }
+
   // Update cache bust version
   API_CONFIG.CACHE_BUST_VERSION = Date.now().toString();
-  
+
   // Clear localStorage API caches
   const keys = Object.keys(localStorage);
   keys.forEach(key => {
@@ -280,7 +323,7 @@ export function invalidateApiCache() {
       localStorage.removeItem(key);
     }
   });
-  
+
   // Clear sessionStorage API caches
   const sessionKeys = Object.keys(sessionStorage);
   sessionKeys.forEach(key => {
@@ -288,8 +331,8 @@ export function invalidateApiCache() {
       sessionStorage.removeItem(key);
     }
   });
-  
-  console.log('[AutoBot] API cache invalidated');
+
+  console.log('[AutoBot Legacy] API cache invalidated');
 }
 
 export default {

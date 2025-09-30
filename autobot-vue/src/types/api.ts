@@ -39,6 +39,15 @@ export interface FileAttachment {
   url: string;
 }
 
+// File Upload Response
+export interface FileUploadResponse {
+  path: string;
+  filename: string;
+  size: number;
+  success: boolean;
+  message?: string;
+}
+
 // WebSocket Types
 export interface WebSocketMessage {
   type: string;
@@ -130,6 +139,16 @@ export interface KnowledgeBaseStats {
   categories: number;
   documentCount: number;
   categoryCount: number;
+}
+
+export interface KnowledgeBaseStatus {
+  status: 'loading' | 'ready' | 'error' | 'empty';
+  message: string;
+  progress: number;
+  current_operation: string | null;
+  documents_processed: number;
+  documents_total: number;
+  last_updated: string | null;
 }
 
 // Terminal Types

@@ -132,6 +132,15 @@ const routes: RouteRecordRaw[] = [
           title: 'Man Pages',
           parent: 'knowledge'
         }
+      },
+      {
+        path: 'system-knowledge',
+        name: 'knowledge-system',
+        component: () => import('@/components/SystemKnowledgeManager.vue'),
+        meta: {
+          title: 'System Knowledge',
+          parent: 'knowledge'
+        }
       }
     ]
   },

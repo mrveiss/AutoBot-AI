@@ -7,7 +7,7 @@
 
 import apiClient from '@/utils/ApiClient.js';
 import { reactive } from 'vue';
-import { API_CONFIG } from '@/config/environment.js';
+import appConfig from '@/config/AppConfig.js';
 import cacheService from './CacheService.js';
 
 export class SettingsService {
@@ -29,8 +29,8 @@ export class SettingsService {
       },
       backend: {
         use_phi2: false,
-        api_endpoint: API_CONFIG.BASE_URL,
-        ollama_endpoint: API_CONFIG.OLLAMA_URL,
+        api_endpoint: '', // Will be loaded async
+        ollama_endpoint: '', // Will be loaded async
         ollama_model: 'deepseek-r1:14b',
         streaming: false
       },
@@ -50,6 +50,18 @@ export class SettingsService {
    */
   async loadSettings() {
     try {
+      // Load dynamic URLs from AppConfig
+      try {
+        const backendUrl = await appConfig.getApiUrl('');
+        const ollamaUrl = await appConfig.getServiceUrl('ollama');
+        this.defaultSettings.backend.api_endpoint = backendUrl.replace(/\/$/, '');
+        this.defaultSettings.backend.ollama_endpoint = ollamaUrl;
+      } catch (configError) {
+        console.warn('Using fallback configuration URLs');
+        this.defaultSettings.backend.api_endpoint = 'http://172.16.168.20:8001';
+        this.defaultSettings.backend.ollama_endpoint = 'http://172.16.168.24:11434';
+      }
+
       // First, try to load from localStorage for immediate UI update
       const savedSettings = localStorage.getItem('chat_settings');
       if (savedSettings) {
