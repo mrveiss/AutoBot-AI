@@ -32,12 +32,18 @@ def get_current_user():
     return {"user_id": "default"}
 
 def get_chat_history_manager(request):
-    """Get chat history manager from app state"""
-    return getattr(request.app.state, "chat_history_manager", None)
-
-def get_llm_service(request):
-    """Get LLM service from app state"""
-    return getattr(request.app.state, "llm_service", None)
+    """Get chat history manager from app state, with lazy initialization"""
+    manager = getattr(request.app.state, "chat_history_manager", None)
+    if manager is None:
+        # Lazy initialize if not yet available
+        try:
+            from src.chat_history_manager import ChatHistoryManager
+            manager = ChatHistoryManager()
+            request.app.state.chat_history_manager = manager
+            logger.info("✅ Lazy-initialized chat_history_manager")
+        except Exception as e:
+            logger.error(f"Failed to lazy-initialize chat_history_manager: {e}")
+    return manager
 
 def get_system_state(request):
     """Get system state from app state"""
@@ -416,8 +422,8 @@ async def list_chats(request: Request):
             )
 
         try:
-            # CRITICAL FIX: Add await for async method
-            sessions = await chat_history_manager.list_sessions_fast()
+            # CRITICAL FIX: Remove await - list_sessions_fast is synchronous
+            sessions = chat_history_manager.list_sessions_fast()
             return JSONResponse(status_code=200, content=sessions)
         except AttributeError as e:
             AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
@@ -871,6 +877,218 @@ async def chat_statistics(
 
     except Exception as e:
         logger.error(f"[{request_id}] chat_statistics error: {e}")
+        return create_error_response(
+            error_code="INTERNAL_ERROR",
+            message=str(e),
+            request_id=request_id,
+            status_code=500
+        )
+
+
+# MISSING ENDPOINTS FOR FRONTEND COMPATIBILITY
+
+@router.post("/chats/{chat_id}/message")
+async def send_chat_message_by_id(
+    chat_id: str,
+    request_data: dict,
+    request: Request
+):
+    """Send message to specific chat by ID (frontend compatibility endpoint)"""
+    request_id = generate_request_id()
+
+    try:
+        log_request_context(request, "send_chat_message_by_id", request_id)
+
+        # Extract message from request data
+        message = request_data.get("message", "")
+        if not message:
+            return create_error_response(
+                error_code="MISSING_MESSAGE",
+                message="Message content is required",
+                request_id=request_id,
+                status_code=400
+            )
+
+        # Get dependencies from request state with lazy initialization
+        chat_history_manager = get_chat_history_manager(request)
+
+        # Lazy initialize chat_workflow_manager if needed
+        chat_workflow_manager = getattr(request.app.state, "chat_workflow_manager", None)
+        if chat_workflow_manager is None:
+            try:
+                from src.chat_workflow_manager import ChatWorkflowManager
+                chat_workflow_manager = ChatWorkflowManager()
+                request.app.state.chat_workflow_manager = chat_workflow_manager
+                logger.info("✅ Lazy-initialized chat_workflow_manager")
+            except Exception as e:
+                logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
+
+        if not chat_history_manager or not chat_workflow_manager:
+            return create_error_response(
+                error_code="SERVICE_UNAVAILABLE",
+                message="Chat services not available",
+                request_id=request_id,
+                status_code=503
+            )
+
+        # Process the message using ChatWorkflowManager and stream response
+        async def generate_stream():
+            try:
+                print(f"[STREAM {request_id}] Starting stream generation for chat_id={chat_id}", flush=True)
+                logger.debug(f"[{request_id}] Starting stream generation for chat_id={chat_id}")
+
+                # Send initial acknowledgment
+                yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
+                print(f"[STREAM {request_id}] Sent start event", flush=True)
+                logger.debug(f"[{request_id}] Sent start event")
+
+                # Process message and get workflow messages
+                print(f"[STREAM {request_id}] Calling chat_workflow_manager.process_message() with message: {message[:50]}...", flush=True)
+                logger.debug(f"[{request_id}] Calling chat_workflow_manager.process_message()")
+                messages = await chat_workflow_manager.process_message(
+                    session_id=chat_id,
+                    message=message,
+                    context=request_data.get("context", {})
+                )
+                print(f"[STREAM {request_id}] Got {len(messages)} messages from workflow manager", flush=True)
+                logger.debug(f"[{request_id}] Got {len(messages)} messages from workflow manager")
+
+                # Stream each workflow message
+                for i, msg in enumerate(messages):
+                    print(f"[STREAM {request_id}] Processing message {i+1}/{len(messages)}: type={type(msg)}", flush=True)
+                    logger.debug(f"[{request_id}] Processing message {i+1}/{len(messages)}: type={type(msg)}")
+                    msg_data = msg.to_dict() if hasattr(msg, 'to_dict') else msg
+                    print(f"[STREAM {request_id}] Message data: {str(msg_data)[:200]}...", flush=True)
+                    logger.debug(f"[{request_id}] Message data: {msg_data}")
+                    yield f"data: {json.dumps(msg_data)}\n\n"
+                    print(f"[STREAM {request_id}] Sent message {i+1}", flush=True)
+                    logger.debug(f"[{request_id}] Sent message {i+1}")
+
+                # Send completion signal
+                print(f"[STREAM {request_id}] Sending end event", flush=True)
+                logger.debug(f"[{request_id}] Sending end event")
+                yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
+                print(f"[STREAM {request_id}] Stream generation completed", flush=True)
+                logger.debug(f"[{request_id}] Stream generation completed")
+
+            except Exception as e:
+                print(f"[STREAM {request_id}] ERROR: {e}", flush=True)
+                logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)
+                error_data = {
+                    "type": "error",
+                    "content": f"Error processing message: {str(e)}",
+                    "request_id": request_id
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"[{request_id}] send_chat_message_by_id error: {e}")
+        return create_error_response(
+            error_code="INTERNAL_ERROR",
+            message=str(e),
+            request_id=request_id,
+            status_code=500
+        )
+
+
+@router.post("/chats/{chat_id}/save")
+async def save_chat_by_id(
+    chat_id: str,
+    request_data: dict,
+    request: Request
+):
+    """Save chat session by ID (frontend compatibility endpoint)"""
+    request_id = generate_request_id()
+
+    try:
+        log_request_context(request, "save_chat_by_id", request_id)
+
+        # Get dependencies from request state
+        chat_history_manager = get_chat_history_manager(request)
+
+        if not chat_history_manager:
+            return create_error_response(
+                error_code="SERVICE_UNAVAILABLE",
+                message="Chat history service not available",
+                request_id=request_id,
+                status_code=503
+            )
+
+        # Save the chat session
+        save_data = request_data.get("data", {})
+        result = await chat_history_manager.save_session(
+            session_id=chat_id,
+            messages=save_data.get("messages"),
+            name=save_data.get("name", "")
+        )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": result,
+                "message": "Chat saved successfully",
+                "request_id": request_id
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"[{request_id}] save_chat_by_id error: {e}")
+        return create_error_response(
+            error_code="INTERNAL_ERROR",
+            message=str(e),
+            request_id=request_id,
+            status_code=500
+        )
+
+
+@router.delete("/chats/{chat_id}")
+async def delete_chat_by_id(
+    chat_id: str,
+    request: Request
+):
+    """Delete chat session by ID (frontend compatibility endpoint)"""
+    request_id = generate_request_id()
+
+    try:
+        log_request_context(request, "delete_chat_by_id", request_id)
+
+        # Get dependencies from request state
+        chat_history_manager = get_chat_history_manager(request)
+
+        if not chat_history_manager:
+            return create_error_response(
+                error_code="SERVICE_UNAVAILABLE",
+                message="Chat history service not available",
+                request_id=request_id,
+                status_code=503
+            )
+
+        # Delete the chat session
+        result = chat_history_manager.delete_session(session_id=chat_id)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": {"session_id": chat_id, "deleted": result},
+                "message": "Chat deleted successfully",
+                "request_id": request_id
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"[{request_id}] delete_chat_by_id error: {e}")
         return create_error_response(
             error_code="INTERNAL_ERROR",
             message=str(e),

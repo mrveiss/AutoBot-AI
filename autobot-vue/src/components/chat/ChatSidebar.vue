@@ -12,31 +12,66 @@
       <i :class="store.sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
     </button>
 
-    <!-- Sidebar Content -->
-    <div v-if="!store.sidebarCollapsed" class="flex-1 overflow-y-auto p-4">
+    <!-- Sidebar Content - FIXED: Better scroll behavior -->
+    <div v-if="!store.sidebarCollapsed" class="flex-1 flex flex-col min-h-0 overflow-hidden">
 
-      <!-- Chat History Section -->
-      <section class="mb-6">
-        <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Chat History</h3>
+      <!-- Chat History Section - FIXED: Scrollable area with multi-select -->
+      <section class="flex-1 flex flex-col min-h-0 overflow-hidden p-4 pb-0">
+        <div class="flex items-center justify-between mb-3 flex-shrink-0">
+          <h3 class="text-base font-semibold text-blueGray-700">Chat History</h3>
+          <button
+            v-if="!selectionMode"
+            @click="enableSelectionMode"
+            class="text-xs text-blueGray-600 hover:text-indigo-600 transition-colors"
+            title="Select multiple"
+          >
+            <i class="fas fa-check-square mr-1"></i>Select
+          </button>
+          <div v-else class="flex items-center gap-2">
+            <span class="text-xs text-blueGray-600">{{ selectedSessions.size }} selected</span>
+            <button
+              @click="cancelSelection"
+              class="text-xs text-blueGray-600 hover:text-blueGray-800"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
 
-        <div class="space-y-2 mb-4">
+        <!-- FIXED: Scrollable chat history container -->
+        <div class="flex-1 overflow-y-auto space-y-1.5 pr-1 mb-3" style="scrollbar-width: thin;">
           <div
             v-for="session in store.sessions"
             :key="session.id"
-            class="p-3 rounded-lg cursor-pointer transition-all duration-150 group"
-            :class="store.currentSessionId === session.id
-              ? 'bg-indigo-100 border border-indigo-200'
-              : 'bg-white hover:bg-blueGray-50 border border-blueGray-200'"
-            @click="controller.switchToSession(session.id)"
+            class="p-2.5 rounded-lg transition-all duration-150 group relative"
+            :class="[
+              selectionMode ? 'cursor-default' : 'cursor-pointer',
+              store.currentSessionId === session.id && !selectionMode
+                ? 'bg-indigo-100 border border-indigo-200'
+                : selectedSessions.has(session.id)
+                ? 'bg-red-50 border border-red-200'
+                : 'bg-white hover:bg-blueGray-50 border border-blueGray-200'
+            ]"
+            @click="selectionMode ? toggleSelection(session.id) : controller.switchToSession(session.id)"
             tabindex="0"
-            @keyup.enter="controller.switchToSession(session.id)"
-            @keyup.space="controller.switchToSession(session.id)"
+            @keyup.enter="selectionMode ? toggleSelection(session.id) : controller.switchToSession(session.id)"
+            @keyup.space="selectionMode ? toggleSelection(session.id) : controller.switchToSession(session.id)"
           >
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-blueGray-700 truncate flex-1 mr-2">
+            <!-- Selection checkbox -->
+            <div v-if="selectionMode" class="absolute left-1 top-1">
+              <input
+                type="checkbox"
+                :checked="selectedSessions.has(session.id)"
+                @click.stop="toggleSelection(session.id)"
+                class="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+            </div>
+
+            <div class="flex items-start justify-between gap-2" :class="{ 'ml-6': selectionMode }">
+              <span class="text-sm text-blueGray-700 truncate flex-1 leading-tight">
                 {{ session.title || getSessionPreview(session) }}
               </span>
-              <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div v-if="!selectionMode" class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button
                   class="text-blueGray-400 hover:text-blueGray-600 p-1 rounded"
                   @click.stop="editSessionName(session)"
@@ -56,24 +91,24 @@
               </div>
             </div>
 
-            <!-- Session metadata -->
-            <div class="text-xs text-blueGray-500 mt-1 flex justify-between">
-              <span>{{ session.messages.length }} messages</span>
+            <!-- Session metadata - FIXED: Smaller, more compact -->
+            <div class="text-xs text-blueGray-500 mt-1 flex justify-between leading-tight" :class="{ 'ml-6': selectionMode }">
+              <span>{{ session.messages.length }} msgs</span>
               <span>{{ formatDate(session.updatedAt) }}</span>
             </div>
           </div>
 
           <!-- Empty state -->
-          <div v-if="store.sessions.length === 0" class="text-center py-4 text-blueGray-500">
-            <i class="fas fa-comments text-2xl mb-2 opacity-50"></i>
-            <p class="text-sm">No chat sessions yet</p>
+          <div v-if="store.sessions.length === 0" class="text-center py-3 text-blueGray-500">
+            <i class="fas fa-comments text-xl mb-1 opacity-50"></i>
+            <p class="text-xs">No chat sessions yet</p>
           </div>
         </div>
 
-        <!-- Chat Actions -->
-        <div class="grid grid-cols-2 gap-2 pt-4 border-t border-blueGray-200">
+        <!-- Chat Actions - FIXED: More compact, stays at bottom of scrollable area -->
+        <div v-if="!selectionMode" class="grid grid-cols-2 gap-1.5 pt-2 border-t border-blueGray-200 flex-shrink-0">
           <button
-            class="btn btn-primary text-xs"
+            class="btn btn-primary text-xs py-1.5 px-2"
             @click="controller.createNewSession()"
             aria-label="Create new chat"
           >
@@ -81,7 +116,7 @@
             New
           </button>
           <button
-            class="btn btn-secondary text-xs"
+            class="btn btn-secondary text-xs py-1.5 px-2"
             @click="controller.resetCurrentChat()"
             :disabled="!store.currentSessionId"
             aria-label="Reset current chat"
@@ -90,7 +125,7 @@
             Reset
           </button>
           <button
-            class="btn btn-danger text-xs"
+            class="btn btn-danger text-xs py-1.5 px-2"
             @click="deleteCurrentSession()"
             :disabled="!store.currentSessionId"
             aria-label="Delete current chat"
@@ -99,7 +134,7 @@
             Delete
           </button>
           <button
-            class="btn btn-outline text-xs"
+            class="btn btn-outline text-xs py-1.5 px-2"
             @click="controller.loadChatSessions()"
             aria-label="Refresh chat list"
           >
@@ -107,12 +142,25 @@
             Refresh
           </button>
         </div>
+
+        <!-- Selection Mode Actions -->
+        <div v-else class="pt-2 border-t border-blueGray-200 flex-shrink-0">
+          <button
+            class="btn btn-danger w-full text-xs py-2"
+            @click="deleteSelectedSessions()"
+            :disabled="selectedSessions.size === 0"
+            aria-label="Delete selected conversations"
+          >
+            <i class="fas fa-trash mr-1.5"></i>
+            Delete {{ selectedSessions.size }} Selected
+          </button>
+        </div>
       </section>
 
-      <!-- Display Settings Section -->
-      <section class="mb-6">
-        <h3 class="text-lg font-semibold text-blueGray-700 mb-4">Message Display</h3>
-        <div class="space-y-3">
+      <!-- Display Settings Section - FIXED: More compact -->
+      <section class="border-t border-blueGray-200 p-4 pb-3 flex-shrink-0">
+        <h3 class="text-base font-semibold text-blueGray-700 mb-2">Message Display</h3>
+        <div class="space-y-2">
           <label v-for="setting in displaySettings" :key="setting.key" class="flex items-center">
             <input
               type="checkbox"
@@ -120,27 +168,27 @@
               @change="toggleSetting(setting.key, $event.target.checked)"
               class="mr-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
-            <span class="text-sm text-blueGray-600">{{ setting.label }}</span>
+            <span class="text-xs text-blueGray-600">{{ setting.label }}</span>
           </label>
         </div>
       </section>
 
-      <!-- System Control Section -->
-      <section>
-        <h3 class="text-lg font-semibold text-blueGray-700 mb-4">System Control</h3>
-        <div class="space-y-2">
+      <!-- System Control Section - FIXED: More compact -->
+      <section class="border-t border-blueGray-200 p-4 pb-4 flex-shrink-0">
+        <h3 class="text-base font-semibold text-blueGray-700 mb-2">System Control</h3>
+        <div class="space-y-1.5">
           <button
-            class="btn btn-primary w-full text-sm"
+            class="btn btn-primary w-full text-xs py-1.5"
             @click="reloadSystem"
             :disabled="isSystemReloading"
             aria-label="Reload system"
           >
-            <i class="fas fa-sync mr-2" :class="{ 'fa-spin': isSystemReloading }"></i>
+            <i class="fas fa-sync mr-1.5" :class="{ 'fa-spin': isSystemReloading }"></i>
             {{ isSystemReloading ? 'Reloading...' : 'Reload System' }}
           </button>
 
           <!-- System Status -->
-          <div class="text-xs text-center text-blueGray-500 mt-2">
+          <div class="text-xs text-center text-blueGray-500 mt-1">
             System: {{ systemStatus }}
           </div>
         </div>
@@ -195,6 +243,10 @@ const editingSession = ref<ChatSession | null>(null)
 const editInput = ref<HTMLInputElement>()
 const isSystemReloading = ref(false)
 const systemStatus = ref('Ready')
+
+// Multi-select state
+const selectionMode = ref(false)
+const selectedSessions = ref(new Set<string>())
 
 // Display settings configuration
 const displaySettings = [
@@ -294,6 +346,42 @@ const reloadSystem = async () => {
 const formatDate = (date: Date | string): string => {
   const d = typeof date === 'string' ? new Date(date) : date
   return d.toLocaleDateString()
+}
+
+// Multi-select functions
+const enableSelectionMode = () => {
+  selectionMode.value = true
+  selectedSessions.value = new Set()
+}
+
+const cancelSelection = () => {
+  selectionMode.value = false
+  selectedSessions.value = new Set()
+}
+
+const toggleSelection = (sessionId: string) => {
+  if (selectedSessions.value.has(sessionId)) {
+    selectedSessions.value.delete(sessionId)
+  } else {
+    selectedSessions.value.add(sessionId)
+  }
+  // Force reactivity update
+  selectedSessions.value = new Set(selectedSessions.value)
+}
+
+const deleteSelectedSessions = async () => {
+  if (selectedSessions.value.size === 0) return
+
+  const confirmed = confirm(`Delete ${selectedSessions.value.size} conversation(s)? This action cannot be undone.`)
+  if (!confirmed) return
+
+  // Delete all selected sessions
+  for (const sessionId of selectedSessions.value) {
+    await controller.deleteChatSession(sessionId)
+  }
+
+  // Clear selection mode
+  cancelSelection()
 }
 </script>
 

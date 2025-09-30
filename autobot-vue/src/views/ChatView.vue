@@ -10,7 +10,11 @@
 </script>
 
 <style scoped>
+/* CRITICAL FIX: Remove conflicting height calculation */
+/* App.vue already handles header height in its flex layout */
+/* Using h-full class to inherit full height from parent flex container */
 .chat-view {
-  height: calc(100vh - 64px); /* Fixed: Match actual header height (h-16 = 64px) */
+  /* REMOVED: height: calc(100vh - 64px); - This conflicted with App.vue flex layout */
+  /* Now relies on parent flex container for proper height calculation */
 }
 </style>

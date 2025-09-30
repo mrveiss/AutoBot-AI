@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-input-container bg-white border-t border-gray-200 p-4">
+  <div class="chat-input-container">
     <!-- File Upload Progress -->
     <div v-if="uploadProgress.length > 0" class="upload-progress mb-4">
       <div
@@ -246,7 +246,7 @@ const uploadProgress = ref<Array<{
   total: number
   eta?: number
   error?: string
-}>>([])  
+}>>([])
 const messageQueueLength = ref(0)
 const isTypingStartTime = ref<number | null>(null)
 const typingDebounceTimer = ref<number | null>(null)
@@ -332,7 +332,7 @@ const handleInput = (event: Event) => {
   // Auto-resize
   target.style.height = 'auto'
   target.style.height = Math.min(target.scrollHeight, 150) + 'px'
-  
+
   // Update typing indicator
   updateTypingIndicator()
 }
@@ -400,9 +400,9 @@ const handleFileSelect = async (event: Event) => {
       current: 0,
       total: file.size
     }
-    
+
     uploadProgress.value.push(upload)
-    
+
     try {
       // Simulate upload progress (replace with actual upload logic)
       await simulateUpload(upload, file)
@@ -528,28 +528,28 @@ const simulateUpload = async (upload: any, file: File): Promise<void> => {
   const chunkSize = Math.max(file.size / 10, 1024) // 10 chunks minimum
   let uploaded = 0
   const startTime = Date.now()
-  
+
   upload.status = 'Uploading...'
-  
+
   while (uploaded < file.size) {
     await new Promise(resolve => setTimeout(resolve, 100)) // Simulate network delay
-    
+
     uploaded = Math.min(uploaded + chunkSize, file.size)
     upload.current = uploaded
     upload.progress = (uploaded / file.size) * 100
-    
+
     // Calculate ETA
     const elapsed = Date.now() - startTime
     const rate = uploaded / elapsed
     const remaining = (file.size - uploaded) / rate / 1000
     upload.eta = remaining > 1 ? remaining : undefined
-    
+
     // Update status
     if (upload.progress >= 100) {
       upload.status = 'Processing...'
       await new Promise(resolve => setTimeout(resolve, 500))
       upload.status = 'Complete'
-      
+
       // Remove from progress after delay
       setTimeout(() => {
         const index = uploadProgress.value.findIndex(u => u.id === upload.id)
@@ -562,18 +562,18 @@ const simulateUpload = async (upload: any, file: File): Promise<void> => {
 const retryUpload = async (uploadId: string) => {
   const upload = uploadProgress.value.find(u => u.id === uploadId)
   if (!upload) return
-  
+
   upload.error = undefined
   upload.progress = 0
   upload.current = 0
   upload.status = 'Retrying...'
-  
+
   // Find corresponding file and retry upload
   // This is a simplified retry - in production, you'd need to track the original file
   await new Promise(resolve => setTimeout(resolve, 1000))
   upload.status = 'Complete'
   upload.progress = 100
-  
+
   setTimeout(() => {
     const index = uploadProgress.value.findIndex(u => u.id === uploadId)
     if (index !== -1) uploadProgress.value.splice(index, 1)
@@ -584,11 +584,11 @@ const updateTypingIndicator = () => {
   if (typingDebounceTimer.value) {
     clearTimeout(typingDebounceTimer.value)
   }
-  
+
   if (!isTypingStartTime.value && messageText.value.length > 0) {
     isTypingStartTime.value = Date.now()
   }
-  
+
   typingDebounceTimer.value = setTimeout(() => {
     isTypingStartTime.value = null
   }, 1000) as unknown as number
@@ -616,8 +616,14 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* CRITICAL FIX: Enforce sticky positioning with !important and solid background */
 .chat-input-container {
-  @apply relative;
+  @apply relative bg-white border-t border-gray-200 p-4;
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 10 !important;
+  background-color: white !important;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 }
 
 /* Upload Progress */
@@ -693,6 +699,8 @@ onUnmounted(() => {
 
 .message-input-wrapper {
   @apply flex-1 border border-gray-300 rounded-lg overflow-hidden transition-all duration-200;
+  position: relative;
+  z-index: 1;
 }
 
 .message-input-wrapper.focused {

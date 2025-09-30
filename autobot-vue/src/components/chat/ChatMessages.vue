@@ -1,5 +1,9 @@
 <template>
-  <div class="flex-1 overflow-y-auto p-4" ref="messagesContainer">
+  <div
+    class="flex-1 overflow-y-auto p-4 min-h-0"
+    ref="messagesContainer"
+    v-bind="$attrs"
+  >
     <div v-if="store.currentMessages.length === 0" class="empty-state">
       <div class="text-center py-12">
         <i class="fas fa-comments text-4xl text-gray-400 mb-4"></i>
@@ -8,7 +12,7 @@
       </div>
     </div>
 
-    <div v-else class="space-y-4">
+    <div v-else class="space-y-2">
       <div
         v-for="message in filteredMessages"
         :key="message.id"
@@ -17,7 +21,7 @@
       >
         <!-- Message Header -->
         <div class="message-header">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5">
             <div class="message-avatar" :class="getAvatarClass(message.sender)">
               <i :class="getSenderIcon(message.sender)"></i>
             </div>
@@ -129,7 +133,7 @@
       <!-- Enhanced AI typing indicator -->
       <div v-if="store.isTyping" class="message-wrapper assistant-message typing-message">
         <div class="message-header">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5">
             <div class="message-avatar assistant">
               <LoadingSpinner variant="pulse" size="sm" color="#3b82f6" />
             </div>
@@ -212,6 +216,11 @@ import type { ChatMessage } from '@/stores/useChatStore'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
+
+// Disable automatic attribute inheritance
+defineOptions({
+  inheritAttrs: false
+})
 
 const store = useChatStore()
 const controller = useChatController()
@@ -504,7 +513,7 @@ onMounted(() => {
 }
 
 .message-wrapper {
-  @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4 transition-all duration-200;
+  @apply bg-white rounded-lg shadow-sm border border-gray-200 p-2 transition-all duration-200;
 }
 
 .message-wrapper:hover {
@@ -512,15 +521,15 @@ onMounted(() => {
 }
 
 .message-wrapper.user-message {
-  @apply bg-indigo-50 border-indigo-200 ml-12;
+  @apply bg-indigo-50 border-indigo-200 ml-2 mr-1;
 }
 
 .message-wrapper.assistant-message {
-  @apply bg-blue-50 border-blue-200 mr-12;
+  @apply bg-blue-50 border-blue-200 mr-2 ml-1;
 }
 
 .message-wrapper.system-message {
-  @apply bg-gray-50 border-gray-200 mx-8;
+  @apply bg-gray-50 border-gray-200 mx-2;
 }
 
 .message-wrapper.error {
@@ -532,11 +541,11 @@ onMounted(() => {
 }
 
 .message-header {
-  @apply flex items-start justify-between mb-2;
+  @apply flex items-start justify-between mb-1.5;
 }
 
 .message-avatar {
-  @apply w-8 h-8 rounded-full flex items-center justify-center text-white text-sm;
+  @apply w-6 h-6 rounded-full flex items-center justify-center text-white text-xs;
 }
 
 .message-avatar.user {
@@ -552,23 +561,23 @@ onMounted(() => {
 }
 
 .message-info {
-  @apply flex flex-col ml-2;
+  @apply flex flex-col ml-1.5;
 }
 
 .sender-name {
-  @apply font-semibold text-gray-900 text-sm;
+  @apply font-semibold text-gray-900 text-xs;
 }
 
 .message-time {
-  @apply text-xs text-gray-500;
+  @apply text-xs text-gray-500 leading-tight;
 }
 
 .message-actions {
-  @apply flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity;
+  @apply flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity;
 }
 
 .action-btn {
-  @apply w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded transition-colors;
+  @apply w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded transition-colors text-xs;
 }
 
 .action-btn.danger:hover {
@@ -576,11 +585,11 @@ onMounted(() => {
 }
 
 .message-status {
-  @apply flex items-center gap-2 mb-2 text-sm;
+  @apply flex items-center gap-1.5 mb-1.5 text-xs;
 }
 
 .message-content {
-  @apply text-gray-800 leading-relaxed;
+  @apply text-gray-800 leading-relaxed text-sm;
 }
 
 .message-text {
@@ -588,11 +597,11 @@ onMounted(() => {
 }
 
 .message-text :deep(code) {
-  @apply bg-gray-100 px-1 py-0.5 rounded text-sm font-mono;
+  @apply bg-gray-100 px-1 py-0.5 rounded text-xs font-mono;
 }
 
 .message-text :deep(pre) {
-  @apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto my-2;
+  @apply bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto my-1.5;
 }
 
 .message-text :deep(a) {
@@ -600,11 +609,11 @@ onMounted(() => {
 }
 
 .message-metadata {
-  @apply mt-3 pt-2 border-t border-gray-200;
+  @apply mt-2 pt-1.5 border-t border-gray-200;
 }
 
 .metadata-items {
-  @apply flex flex-wrap gap-3 text-xs text-gray-500;
+  @apply flex flex-wrap gap-2 text-xs text-gray-500;
 }
 
 .metadata-item {
@@ -612,11 +621,11 @@ onMounted(() => {
 }
 
 .message-attachments {
-  @apply mt-3 pt-2 border-t border-gray-200;
+  @apply mt-2 pt-1.5 border-t border-gray-200;
 }
 
 .attachment-header {
-  @apply flex items-center gap-2 text-sm text-gray-600 mb-2;
+  @apply flex items-center gap-1.5 text-xs text-gray-600 mb-1.5;
 }
 
 .attachment-list {
@@ -624,11 +633,11 @@ onMounted(() => {
 }
 
 .attachment-item {
-  @apply flex items-center gap-2 p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100 transition-colors;
+  @apply flex items-center gap-1.5 p-1.5 bg-gray-50 rounded cursor-pointer hover:bg-gray-100 transition-colors;
 }
 
 .attachment-name {
-  @apply flex-1 text-sm text-gray-700 truncate;
+  @apply flex-1 text-xs text-gray-700 truncate;
 }
 
 .attachment-size {
@@ -636,11 +645,11 @@ onMounted(() => {
 }
 
 .typing-indicator {
-  @apply flex items-center gap-2;
+  @apply flex items-center gap-1.5;
 }
 
 .typing-indicator.large {
-  @apply py-4;
+  @apply py-3;
 }
 
 .typing-dots {
@@ -648,7 +657,7 @@ onMounted(() => {
 }
 
 .typing-dots span {
-  @apply w-2 h-2 bg-gray-400 rounded-full animate-pulse;
+  @apply w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse;
   animation-delay: calc(var(--index) * 0.2s);
 }
 
@@ -657,11 +666,11 @@ onMounted(() => {
 .typing-dots span:nth-child(3) { --index: 2; }
 
 .typing-text {
-  @apply text-sm text-gray-500;
+  @apply text-xs text-gray-500;
 }
 
 .streaming-content {
-  @apply space-y-2;
+  @apply space-y-1.5;
 }
 
 /* Enhanced Typing Indicator */
@@ -670,7 +679,7 @@ onMounted(() => {
 }
 
 .enhanced-typing-indicator {
-  @apply flex flex-col gap-3 p-4;
+  @apply flex flex-col gap-2 p-3;
 }
 
 .typing-animation {
@@ -678,11 +687,11 @@ onMounted(() => {
 }
 
 .typing-dots-enhanced {
-  @apply flex gap-2;
+  @apply flex gap-1.5;
 }
 
 .typing-dots-enhanced span {
-  @apply w-3 h-3 bg-blue-500 rounded-full;
+  @apply w-2.5 h-2.5 bg-blue-500 rounded-full;
   animation: typingBounce 1.4s ease-in-out infinite both;
 }
 
@@ -692,11 +701,11 @@ onMounted(() => {
 .typing-dots-enhanced span:nth-child(4) { animation-delay: 0.16s; }
 
 @keyframes typingBounce {
-  0%, 80%, 100% { 
+  0%, 80%, 100% {
     transform: scale(0.8);
     opacity: 0.5;
-  } 
-  40% { 
+  }
+  40% {
     transform: scale(1.2);
     opacity: 1;
   }
@@ -713,7 +722,7 @@ onMounted(() => {
 }
 
 .typing-status {
-  @apply flex justify-between items-center text-sm;
+  @apply flex justify-between items-center text-xs;
 }
 
 .typing-eta {
@@ -722,17 +731,17 @@ onMounted(() => {
 
 /* Message Status Container */
 .message-status-container {
-  @apply mt-2 flex justify-end;
+  @apply mt-1.5 flex justify-end;
 }
 
 /* Message Skeleton */
 .message-skeleton {
-  @apply mt-4;
+  @apply mt-3;
 }
 
 /* Scrollbar styling */
 .overflow-y-auto::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
@@ -741,7 +750,7 @@ onMounted(() => {
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
@@ -752,7 +761,7 @@ onMounted(() => {
 @keyframes slideInFromBottom {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(15px);
   }
   to {
     opacity: 1;
@@ -761,21 +770,37 @@ onMounted(() => {
 }
 
 .message-wrapper {
-  animation: slideInFromBottom 0.3s ease-out;
+  animation: slideInFromBottom 0.25s ease-out;
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .message-wrapper.user-message {
-    @apply ml-4;
+    @apply ml-1 mr-0.5;
   }
 
   .message-wrapper.assistant-message {
-    @apply mr-4;
+    @apply mr-1 ml-0.5;
   }
 
   .message-wrapper.system-message {
-    @apply mx-2;
+    @apply mx-0.5;
+  }
+
+  .message-avatar {
+    @apply w-5 h-5 text-xs;
+  }
+
+  .sender-name {
+    @apply text-xs;
+  }
+
+  .message-time {
+    @apply text-xs;
+  }
+
+  .action-btn {
+    @apply w-5 h-5 text-xs;
   }
 }
 </style>

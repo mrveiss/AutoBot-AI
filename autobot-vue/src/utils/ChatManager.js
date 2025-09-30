@@ -1,17 +1,31 @@
 // ChatManager.js - Centralized chat management utility
-import { API_CONFIG } from '@/config/environment.js';
+import appConfig from '@/config/AppConfig.js';
 import apiClient from '@/utils/ApiClient.js';
 
 class ChatManager {
-  constructor(apiEndpoint = API_CONFIG.BASE_URL) {
+  constructor() {
     this.apiClient = apiClient;
     this.currentChatId = null;
+    this.apiEndpoint = ''; // Will be loaded async
     this.settings = {
       backend: {
-        api_endpoint: apiEndpoint
+        api_endpoint: '' // Will be loaded async
       }
     };
+    this.initializeEndpoint();
     this.loadSettings();
+  }
+
+  // Initialize API endpoint async
+  async initializeEndpoint() {
+    try {
+      this.apiEndpoint = await appConfig.getApiUrl('');
+      this.settings.backend.api_endpoint = this.apiEndpoint;
+    } catch (error) {
+      console.warn('Using fallback API endpoint');
+      this.apiEndpoint = 'http://172.16.168.20:8001';
+      this.settings.backend.api_endpoint = this.apiEndpoint;
+    }
   }
 
   // Load settings from localStorage

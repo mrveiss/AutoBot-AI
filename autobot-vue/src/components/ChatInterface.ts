@@ -6,7 +6,9 @@ import type {
   WebSocketMessage,
   LLMResponse,
   AppSettings,
-  ApiResponse
+  ApiResponse,
+  KnowledgeBaseStatus,
+  FileUploadResponse
 } from '@/types/api'
 import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket.js'
 import { generateChatId } from '@/utils/ChatIdGenerator.js'
@@ -36,15 +38,15 @@ export function useChatInterface() {
   const reloadNeeded = ref(false)
   const chatMessages = ref<HTMLElement | null>(null)
 
-  // Knowledge base state
-  const kbStatus = ref({
-    status: 'loading' as 'loading' | 'ready' | 'error' | 'empty',
+  // Knowledge base state with proper typing
+  const kbStatus = ref<KnowledgeBaseStatus>({
+    status: 'loading',
     message: 'Loading knowledge base status...',
     progress: 0,
-    current_operation: null as string | null,
+    current_operation: null,
     documents_processed: 0,
     documents_total: 0,
-    last_updated: null as string | null
+    last_updated: null
   })
 
   // Chat settings with proper typing
@@ -255,9 +257,10 @@ export function useChatInterface() {
       const uploadedFilePaths: string[] = []
       for (const file of filesToUpload) {
         try {
-          const result = await apiClient.uploadFile(file)
-          uploadedFilePaths.push(result.path || file.name)
-          await associateFileWithChat(result.path || file.name, file.name)
+          const result = (await apiClient.uploadFile(file)) as unknown as FileUploadResponse
+          const filePath = result.path || result.filename || file.name
+          uploadedFilePaths.push(filePath)
+          await associateFileWithChat(filePath, file.name)
         } catch (uploadError) {
           console.error('File upload failed:', uploadError)
           messages.value.push({
