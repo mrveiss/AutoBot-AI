@@ -5,7 +5,7 @@
  * a single source of truth for all configuration parameters.
  */
 
-import { API_CONFIG } from '@/config/environment.js';
+import appConfig from '@/config/AppConfig.js';
 import { ApiClient } from '@/utils/ApiClient.js';
 
 // Create ApiClient instance for config operations
@@ -31,10 +31,10 @@ export class ConfigService {
     // Built-in fallback defaults (only used if no other source provides values)
     const fallbackDefaults = {
       api: {
-        backend_url: API_CONFIG.BASE_URL,
-        ollama_url: API_CONFIG.OLLAMA_URL,
-        timeout: API_CONFIG.TIMEOUT,
-        retry_attempts: API_CONFIG.RETRY_ATTEMPTS
+        backend_url: '', // Will be loaded from AppConfig
+        ollama_url: '', // Will be loaded from AppConfig
+        timeout: appConfig.getConfig().api.timeout,
+        retry_attempts: appConfig.getConfig().api.retryAttempts
       },
       paths: {
         data_directory: 'data',
@@ -61,6 +61,16 @@ export class ConfigService {
         knowledge_base_enabled: true
       }
     };
+
+    // Load dynamic URLs from AppConfig first
+    try {
+      fallbackDefaults.api.backend_url = await appConfig.getApiUrl('');
+      fallbackDefaults.api.ollama_url = await appConfig.getServiceUrl('ollama');
+    } catch (error) {
+      console.warn('Using hardcoded fallback URLs');
+      fallbackDefaults.api.backend_url = 'http://172.16.168.20:8001';
+      fallbackDefaults.api.ollama_url = 'http://172.16.168.24:11434';
+    }
 
     // Start with fallback defaults
     this.config = { ...fallbackDefaults };

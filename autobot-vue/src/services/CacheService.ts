@@ -3,27 +3,51 @@
  * Provides intelligent caching for API responses with TTL and invalidation
  */
 
+interface CacheEntry {
+  data: any;
+  createdAt: number;
+  lastAccessed: number;
+  expiresAt: number;
+}
+
+interface CacheStats {
+  totalEntries: number;
+  validEntries: number;
+  expiredEntries: number;
+  estimatedSizeBytes: number;
+  strategies: number;
+}
+
+interface CacheStrategies {
+  [key: string]: number;
+}
+
 class CacheService {
+  private cache: Map<string, CacheEntry>;
+  private defaultTTL: number;
+  private strategies: CacheStrategies;
+  private cleanupInterval: NodeJS.Timeout;
+
   constructor() {
-    this.cache = new Map();
+    this.cache = new Map<string, CacheEntry>();
     this.defaultTTL = 5 * 60 * 1000; // 5 minutes
     this.strategies = {
       // Settings rarely change - cache for longer
       '/api/settings': 10 * 60 * 1000, // 10 minutes
       '/api/settings/': 10 * 60 * 1000,
-      
+
       // System health can be cached briefly
       '/api/system/health': 30 * 1000, // 30 seconds
-      
+
       // Knowledge base stats change infrequently
       '/api/knowledge_base/stats': 2 * 60 * 1000, // 2 minutes
-      
+
       // Chat list changes often but can be cached briefly
       '/api/chats': 1 * 60 * 1000, // 1 minute
-      
+
       // Prompts rarely change
       '/api/prompts/': 5 * 60 * 1000, // 5 minutes
-      
+
       // User profile data
       '/api/user/profile': 5 * 60 * 1000
     };
@@ -36,12 +60,12 @@ class CacheService {
 
   /**
    * Get cached data for a key
-   * @param {string} key - Cache key
-   * @returns {any|null} Cached data or null if expired/not found
+   * @param key - Cache key
+   * @returns Cached data or null if expired/not found
    */
-  get(key) {
+  get(key: string): any | null {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return null;
     }
@@ -58,13 +82,13 @@ class CacheService {
 
   /**
    * Set data in cache with TTL
-   * @param {string} key - Cache key
-   * @param {any} data - Data to cache
-   * @param {number} ttl - Time to live in milliseconds (optional)
+   * @param key - Cache key
+   * @param data - Data to cache
+   * @param ttl - Time to live in milliseconds (optional)
    */
-  set(key, data, ttl = null) {
+  set(key: string, data: any, ttl: number | null = null): void {
     const useTTL = ttl || this.getTTLForEndpoint(key) || this.defaultTTL;
-    
+
     this.cache.set(key, {
       data,
       createdAt: Date.now(),
@@ -75,10 +99,10 @@ class CacheService {
 
   /**
    * Get TTL for specific endpoint
-   * @param {string} endpoint - API endpoint
-   * @returns {number|null} TTL in milliseconds
+   * @param endpoint - API endpoint
+   * @returns TTL in milliseconds or null
    */
-  getTTLForEndpoint(endpoint) {
+  getTTLForEndpoint(endpoint: string): number | null {
     // Find matching strategy
     for (const [pattern, ttl] of Object.entries(this.strategies)) {
       if (endpoint.includes(pattern)) {
@@ -90,9 +114,9 @@ class CacheService {
 
   /**
    * Invalidate cache for specific key or pattern
-   * @param {string} keyOrPattern - Exact key or pattern to match
+   * @param keyOrPattern - Exact key or pattern to match
    */
-  invalidate(keyOrPattern) {
+  invalidate(keyOrPattern: string): void {
     if (this.cache.has(keyOrPattern)) {
       this.cache.delete(keyOrPattern);
       return;
@@ -108,9 +132,9 @@ class CacheService {
 
   /**
    * Invalidate all cache entries for an endpoint category
-   * @param {string} category - Category like 'chats', 'settings', etc.
+   * @param category - Category like 'chats', 'settings', etc.
    */
-  invalidateCategory(category) {
+  invalidateCategory(category: string): void {
     const pattern = `/api/${category}`;
     this.invalidate(pattern);
   }
@@ -118,15 +142,15 @@ class CacheService {
   /**
    * Clear all cache
    */
-  clear() {
+  clear(): void {
     this.cache.clear();
   }
 
   /**
    * Get cache statistics
-   * @returns {object} Cache stats
+   * @returns Cache stats
    */
-  getStats() {
+  getStats(): CacheStats {
     const now = Date.now();
     let totalSize = 0;
     let expiredCount = 0;
@@ -134,7 +158,7 @@ class CacheService {
 
     for (const [key, entry] of this.cache) {
       totalSize += JSON.stringify(entry.data).length;
-      
+
       if (now > entry.expiresAt) {
         expiredCount++;
       } else {
@@ -154,9 +178,9 @@ class CacheService {
   /**
    * Cleanup expired entries
    */
-  cleanup() {
+  cleanup(): void {
     const now = Date.now();
-    const toDelete = [];
+    const toDelete: string[] = [];
 
     for (const [key, entry] of this.cache) {
       if (now > entry.expiresAt) {
@@ -165,7 +189,7 @@ class CacheService {
     }
 
     toDelete.forEach(key => this.cache.delete(key));
-    
+
     if (toDelete.length > 0) {
       console.debug(`🧹 Cache cleanup: removed ${toDelete.length} expired entries`);
     }
@@ -174,7 +198,7 @@ class CacheService {
   /**
    * Warm up cache with commonly accessed endpoints
    */
-  async warmup() {
+  async warmup(): Promise<void> {
     const commonEndpoints = [
       '/api/system/health',
       '/api/settings/',
@@ -182,7 +206,7 @@ class CacheService {
     ];
 
     console.log('🔥 Warming up cache...');
-    
+
     for (const endpoint of commonEndpoints) {
       try {
         // Use a short TTL for warmup to avoid stale data
@@ -200,27 +224,27 @@ class CacheService {
 
   /**
    * Create a cache key for API requests
-   * @param {string} endpoint - API endpoint
-   * @param {object} params - Request parameters
-   * @returns {string} Cache key
+   * @param endpoint - API endpoint
+   * @param params - Request parameters
+   * @returns Cache key
    */
-  createKey(endpoint, params = {}) {
+  createKey(endpoint: string, params: Record<string, any> = {}): string {
     if (Object.keys(params).length === 0) {
       return endpoint;
     }
-    
+
     const sortedParams = Object.keys(params)
       .sort()
       .map(key => `${key}=${params[key]}`)
       .join('&');
-    
+
     return `${endpoint}?${sortedParams}`;
   }
 
   /**
    * Destroy cache service and cleanup
    */
-  destroy() {
+  destroy(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
     }
@@ -233,7 +257,7 @@ export const cacheService = new CacheService();
 
 // Make available globally for debugging
 if (typeof window !== 'undefined') {
-  window.cacheService = cacheService;
+  (window as any).cacheService = cacheService;
 }
 
 export default cacheService;

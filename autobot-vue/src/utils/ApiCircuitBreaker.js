@@ -386,6 +386,14 @@ class EnhancedFetch {
   resetCircuit() {
     this.circuitBreaker.reset();
   }
+
+  /**
+   * Update base URL for requests
+   */
+  updateBaseUrl(newBaseUrl) {
+    console.log(`[EnhancedFetch] Updating base URL from ${this.baseUrl} to ${newBaseUrl}`);
+    this.baseUrl = newBaseUrl || '';
+  }
 }
 
 export { ApiCircuitBreaker, EnhancedFetch };

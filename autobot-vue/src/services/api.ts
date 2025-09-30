@@ -6,6 +6,7 @@ import type {
   WorkflowApproval 
 } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
+import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 
 /**
  * API Service - provides typed methods for interacting with AutoBot backend
@@ -40,9 +41,9 @@ class ApiService {
 
   // Chat API - Updated to match backend specs
   async sendMessage(message: string, options: Record<string, any> = {}): Promise<ApiResponse> {
-    return this.post('/api/async_chat/chats/' + (options.chatId || 'default') + '/message', { 
-      message, 
-      ...options 
+    return this.post('/api/chats/' + (options.chatId || 'default') + '/message', {
+      message,
+      ...options
     })
   }
 
@@ -195,9 +196,28 @@ class ApiService {
     return this.post('/api/knowledge_base/document/content', { document_id: documentId })
   }
 
-  // Monitoring & Health - Updated to working endpoints
+  // Monitoring & Health - Updated to working endpoints with graceful fallbacks
   async getServiceHealth(): Promise<ApiResponse> {
-    return this.get('/api/services/health')
+    // FIXED: Use correct endpoint with graceful fallback
+    // Old: '/api/services/health' -> New: '/api/monitoring/services/health'
+    try {
+      const response = await apiEndpointMapper.fetchWithFallback('/api/services/health', { timeout: 10000 });
+      return await response.json();
+    } catch (error) {
+      console.warn('[ApiService] Service health check failed, using fallback:', error);
+      return {
+        success: false,
+        error: error.message,
+        fallback: true,
+        data: {
+          services: {
+            backend: { status: 'warning', health: 'Status Unknown' },
+            redis: { status: 'warning', health: 'Status Unknown' },
+            ollama: { status: 'warning', health: 'Status Unknown' }
+          }
+        }
+      };
+    }
   }
 
   async getSystemMetrics(): Promise<ApiResponse> {

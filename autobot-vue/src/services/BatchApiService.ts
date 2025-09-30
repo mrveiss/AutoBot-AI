@@ -1,185 +1,296 @@
 /**
- * Batch API Service for optimized loading
- * Combines multiple API calls into single requests to reduce round trips
+ * Batch API Service - Optimized service for batching multiple API calls
+ * Updated to use correct ApiClient singleton with proper error handling
  */
 
-import { ApiClient } from '@/utils/ApiClient'
+import apiClient from '@/utils/ApiClient.ts';
+import type { ApiClient } from '@/utils/ApiClient.ts';
 
-// TypeScript interfaces
-export interface BatchRequest {
-  url: string;
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  data?: any;
-  headers?: Record<string, string>;
-}
-
-export interface BatchResponse {
-  success: boolean;
-  data: any;
-  error?: string;
-}
-
-export interface BatchEndpoint {
-  url: string;
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  params?: Record<string, any>;
-}
-
-export interface ChatInitData {
+// Type definitions
+interface ChatInitData {
   messages: any[];
-  sessionInfo: any;
-  knowledgeStats: any;
-  systemStatus: any;
+  session_info: any;
+  user_preferences: any;
 }
 
-export interface FallbackResults {
+interface FallbackResults {
   chat_sessions: any;
   system_health: any;
   service_health: any;
-  kb_stats: {
-    total_documents: number;
-    total_chunks: number;
-    categories: any[];
-    total_facts: number;
-  };
+  settings: any;
 }
 
-class BatchApiService {
+interface BatchRequest {
+  endpoint: string;
+  method: string;
+  data?: any;
+  priority?: number;
+}
+
+export class BatchApiService {
   private apiClient: ApiClient;
+  private requestQueue: BatchRequest[] = [];
+  private processing = false;
 
-  constructor() {
-    this.apiClient = new ApiClient();
+  constructor(client?: ApiClient) {
+    // Use provided client or the singleton instance
+    this.apiClient = client || apiClient;
   }
 
   /**
-   * Execute multiple API requests in parallel via batch endpoint
-   */
-  async batchLoad(requests: BatchRequest[]): Promise<BatchResponse[]> {
-    try {
-      console.log('🚀 Executing batch load with', requests.length, 'requests');
-
-      const response = await this.apiClient.post('/api/batch/load', {
-        requests
-      });
-
-      console.log('✅ Batch load completed:', response);
-      return response;
-
-    } catch (error) {
-      console.error('❌ Batch load failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Optimized chat initialization that loads everything needed for chat interface
+   * DEPRECATED: Backend doesn't have /api/batch/chat-init endpoint
+   * Using fallback method to load chat interface data
    */
   async initializeChatInterface(): Promise<any> {
-    try {
-      console.log('🚀 Initializing chat interface via batch API');
-
-      const response = await this.apiClient.post('/api/batch/chat-init');
-
-      console.log('✅ Chat interface initialization completed:', response);
-      return response;
-
-    } catch (error) {
-      console.error('❌ Chat initialization failed:', error);
-      // Fallback to individual API calls if batch fails
-      return await this.fallbackChatInitialization();
-    }
+    console.warn('Batch chat initialization endpoint does not exist. Using fallback individual API calls.');
+    return await this.fallbackChatInitialization();
   }
 
   /**
-   * Load chat initialization data for a specific session
+   * DEPRECATED: Backend doesn't have /api/batch/chat-init/{sessionId} endpoint
+   * Load chat initialization data for a specific session using individual calls
    */
   async loadChatInitData(sessionId: string): Promise<ChatInitData> {
+    console.warn('Batch chat init data endpoint does not exist. Using individual API calls.');
+
     try {
-      const response = await this.apiClient.get(`/api/batch/chat-init/${sessionId}`);
-      return response;
+      // Get session messages
+      const messages = await this.apiClient.getChatMessages(sessionId);
+
+      // Get basic session info (this would need to be implemented if needed)
+      const session_info = { id: sessionId };
+
+      // Get user preferences from settings
+      let user_preferences = {};
+      try {
+        const settings = await this.apiClient.getSettings();
+        user_preferences = settings.user_preferences || {};
+      } catch (error) {
+        console.warn('Could not load user preferences:', error);
+      }
+
+      return {
+        messages: messages.messages || [],
+        session_info,
+        user_preferences
+      };
     } catch (error) {
       console.error('Failed to load chat init data:', error);
       // Return default structure
       return {
         messages: [],
-        sessionInfo: { id: sessionId, created: Date.now() },
-        knowledgeStats: { total_documents: 0, total_chunks: 0 },
-        systemStatus: { status: 'unknown' }
+        session_info: { id: sessionId },
+        user_preferences: {}
       };
     }
   }
 
   /**
-   * Fallback initialization using individual API calls
+   * Fallback chat initialization using individual API calls with graceful error handling
    */
   async fallbackChatInitialization(): Promise<FallbackResults> {
-    console.log('🔄 Using fallback chat initialization');
+    console.log('🔄 Using fallback chat initialization with individual API calls');
 
-    const results: Partial<FallbackResults> = {};
+    const results: FallbackResults = {
+      chat_sessions: { sessions: [] },
+      system_health: { status: 'unknown' },
+      service_health: { services: [] },
+      settings: {}
+    };
 
+    // Load chat sessions using correct endpoint with error handling
     try {
-      // Load chat sessions
-      try {
-        results.chat_sessions = await this.apiClient.get('/api/chats');
-      } catch (error: any) {
-        console.warn('Failed to load chat sessions:', error);
-        results.chat_sessions = { error: error.message };
-      }
-
-      // Load system health
-      try {
-        results.system_health = await this.apiClient.get('/api/health');
-      } catch (error: any) {
-        console.warn('Failed to load system health:', error);
-        results.system_health = { error: error.message };
-      }
-
-      // Load service health
-      try {
-        results.service_health = await this.apiClient.get('/api/services/health');
-      } catch (error: any) {
-        console.warn('Failed to load service health:', error);
-        results.service_health = { error: error.message };
-      }
-
-      // Mock KB stats since it's simplified in batch
-      results.kb_stats = {
-        total_documents: 0,
-        total_chunks: 0,
-        categories: [],
-        total_facts: 0
-      };
-
-    } catch (error) {
-      console.error('Fallback initialization failed:', error);
-      throw error;
+      results.chat_sessions = await this.apiClient.getChatList();
+    } catch (error: any) {
+      console.warn('Failed to load chat sessions:', error.message);
+      results.chat_sessions = { error: error.message, sessions: [] };
     }
 
-    return results as FallbackResults;
+    // Load system health with error handling
+    try {
+      results.system_health = await this.apiClient.getSystemHealth();
+    } catch (error: any) {
+      console.warn('Failed to load system health:', error.message);
+      results.system_health = { error: error.message, status: 'unknown' };
+    }
+
+    // Load service health with error handling
+    try {
+      results.service_health = await this.apiClient.getServiceHealth();
+    } catch (error: any) {
+      console.warn('Failed to load service health:', error.message);
+      results.service_health = { error: error.message, services: [] };
+    }
+
+    // Load settings with error handling
+    try {
+      results.settings = await this.apiClient.getSettings();
+    } catch (error: any) {
+      console.warn('Failed to load settings:', error.message);
+      results.settings = { error: error.message };
+    }
+
+    console.log('✅ Fallback chat initialization completed');
+    return results;
   }
 
   /**
-   * Build batch request configuration
+   * Batch multiple API requests using Promise.allSettled
+   * This replaces the non-existent batch endpoints with parallel individual calls
    */
-  buildBatchRequest(endpoints: BatchEndpoint[]): BatchRequest[] {
-    return endpoints.map(endpoint => ({
-      url: endpoint.url,
-      method: endpoint.method || 'GET',
-      data: endpoint.params || {}
-    }));
+  async batchRequests(requests: BatchRequest[]): Promise<any[]> {
+    console.log(`🚀 Processing ${requests.length} requests in parallel`);
+
+    const promises = requests.map(async (request) => {
+      try {
+        let response;
+        const { endpoint, method, data } = request;
+
+        switch (method.toUpperCase()) {
+          case 'GET':
+            response = await this.apiClient.get(endpoint);
+            break;
+          case 'POST':
+            response = await this.apiClient.post(endpoint, data);
+            break;
+          case 'PUT':
+            response = await this.apiClient.put(endpoint, data);
+            break;
+          case 'DELETE':
+            response = await this.apiClient.delete(endpoint);
+            break;
+          default:
+            throw new Error(`Unsupported method: ${method}`);
+        }
+
+        return {
+          endpoint,
+          method,
+          success: true,
+          data: response
+        };
+      } catch (error: any) {
+        console.warn(`Failed request ${method} ${endpoint}:`, error.message);
+        return {
+          endpoint,
+          method,
+          success: false,
+          error: error.message
+        };
+      }
+    });
+
+    const results = await Promise.allSettled(promises);
+
+    return results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        return {
+          endpoint: requests[index].endpoint,
+          method: requests[index].method,
+          success: false,
+          error: result.reason?.message || String(result.reason)
+        };
+      }
+    });
   }
 
   /**
-   * Load initial page data for any component
+   * Add request to queue for batch processing
    */
-  async loadInitialPageData(endpoints: BatchEndpoint[]): Promise<BatchResponse[]> {
-    const requests = this.buildBatchRequest(endpoints);
-    return await this.batchLoad(requests);
+  queueRequest(endpoint: string, method: string, data?: any, priority: number = 0): void {
+    this.requestQueue.push({ endpoint, method, data, priority });
+
+    // Sort by priority (higher priority first)
+    this.requestQueue.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  }
+
+  /**
+   * Process queued requests in batch
+   */
+  async processQueue(): Promise<any[]> {
+    if (this.processing || this.requestQueue.length === 0) {
+      return [];
+    }
+
+    this.processing = true;
+    const requests = [...this.requestQueue];
+    this.requestQueue = [];
+
+    try {
+      const results = await this.batchRequests(requests);
+      return results;
+    } finally {
+      this.processing = false;
+    }
+  }
+
+  /**
+   * Clear the request queue
+   */
+  clearQueue(): void {
+    this.requestQueue = [];
+  }
+
+  /**
+   * Get queue status
+   */
+  getQueueStatus(): { length: number; processing: boolean } {
+    return {
+      length: this.requestQueue.length,
+      processing: this.processing
+    };
+  }
+
+  /**
+   * Optimized method to load essential chat data with graceful degradation
+   */
+  async loadEssentialChatData(): Promise<any> {
+    const essentialRequests: BatchRequest[] = [
+      { endpoint: '/api/chats', method: 'GET', priority: 3 },
+      { endpoint: '/api/chat/health', method: 'GET', priority: 2 },
+      { endpoint: '/api/health', method: 'GET', priority: 1 }
+    ];
+
+    const results = await this.batchRequests(essentialRequests);
+
+    return {
+      chat_sessions: results.find(r => r.endpoint === '/api/chats' && r.success)?.data || { sessions: [] },
+      chat_health: results.find(r => r.endpoint === '/api/chat/health' && r.success)?.data || { status: 'unknown' },
+      system_health: results.find(r => r.endpoint === '/api/health' && r.success)?.data || { status: 'unknown' }
+    };
+  }
+
+  /**
+   * Load chat interface with health checks and graceful degradation
+   */
+  async loadChatWithHealthChecks(): Promise<any> {
+    try {
+      // First, check if the system is healthy
+      const healthCheck = await this.apiClient.checkHealth();
+
+      if (!healthCheck || healthCheck.status !== 'healthy') {
+        console.warn('System health check failed, loading minimal data');
+        return {
+          chat_sessions: { sessions: [] },
+          health_status: healthCheck || { status: 'unknown' },
+          error: 'System health check failed'
+        };
+      }
+
+      // If healthy, load full chat data
+      return await this.loadEssentialChatData();
+    } catch (error) {
+      console.error('Failed to load chat with health checks:', error);
+      return {
+        chat_sessions: { sessions: [] },
+        error: (error as Error).message
+      };
+    }
   }
 }
 
-// Create singleton instance
-const batchApiService = new BatchApiService();
-
+// Export singleton instance using the correct ApiClient singleton
+export const batchApiService = new BatchApiService(apiClient);
 export default batchApiService;
-export { BatchApiService };
