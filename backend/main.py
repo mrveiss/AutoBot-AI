@@ -18,7 +18,7 @@ from backend.app_factory import create_app
 
 # Configure logging for main entry point
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)

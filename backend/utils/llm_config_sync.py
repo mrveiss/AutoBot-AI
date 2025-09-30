@@ -33,7 +33,7 @@ class LLMConfigurationSynchronizer:
             Dict containing the synchronization result
         """
         try:
-            from src.config import config as global_config_manager
+            from src.unified_config_manager import config as global_config_manager
             from backend.api.agent_config import DEFAULT_AGENT_CONFIGS
             
             logger.info("Starting LLM configuration synchronization...")
@@ -155,7 +155,7 @@ class LLMConfigurationSynchronizer:
         """
         try:
             from backend.utils.connection_utils import ModelManager
-            from src.config import config as global_config_manager
+            from src.unified_config_manager import config as global_config_manager
             
             logger.info("Ensuring models list is populated...")
             

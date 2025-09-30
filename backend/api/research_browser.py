@@ -287,7 +287,7 @@ async def get_browser_info(session_id: str):
         try:
             # Try to detect Playwright container
             # Import centralized configuration with intelligent port detection
-            from src.config import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
+            from src.unified_config_manager import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
 
             # This would integrate with your existing browser setup
             docker_browser_info = {

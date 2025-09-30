@@ -1,706 +1,657 @@
-"""
-Consolidated Application Factory for AutoBot FastAPI Backend
-
-This module implements the Application Factory Pattern to create and configure
-the FastAPI application instance with all the best features from previous iterations:
-- Complete FastAPI setup with all routers (from original app_factory.py)
-- Redis timeout fixes and fast startup (from fast_app_factory_fix.py)
-- Modern dependency injection support (from async_app_factory.py)
-- Background initialization for performance (from fast_app_factory.py)
-"""
-
-import asyncio
-import logging
 import os
-import signal
-import socket
-import sys
-import time
+import logging
+import inspect
+from typing import Optional, List, Dict, Any, Union
+from datetime import datetime, timezone
+from pathlib import Path
+import json
 from contextlib import asynccontextmanager
-from datetime import datetime
-from enum import Enum
-from typing import Dict, List, Optional, Union, Any
-
 import redis
-from fastapi import APIRouter, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+import asyncio
+import sys
+
+# Add the project root to Python path for absolute imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from contextlib import asynccontextmanager
+import uvicorn
 
-# Import host IP addresses from main config
-from src.config import (
-    BACKEND_HOST_IP,
-    BACKEND_PORT,
-    FRONTEND_HOST_IP,
-    FRONTEND_PORT,
-    HTTP_PROTOCOL,
-    REDIS_HOST_IP,
+from backend.dependencies import (
+    get_config,
+    get_knowledge_base
 )
 
-# Import constants
-from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.unified_config_manager import UnifiedConfigManager
+from backend.knowledge_factory import get_or_create_knowledge_base
+from src.chat_workflow_manager import ChatWorkflowManager
+from src.chat_history_manager import ChatHistoryManager
+from src.utils.background_llm_sync import BackgroundLLMSync
 
-# Import API routers with proper error handling
-from backend.api.agent import router as agent_router
-from backend.api.agent_config import router as agent_config_router
+# Import API routers
 from backend.api.chat import router as chat_router
-from backend.api.developer import (
-    api_registry,
-    enhanced_404_handler,
-    enhanced_405_handler,
-)
-from backend.api.developer import router as developer_router
-from backend.api.embeddings import router as embeddings_router
-from backend.api.error_monitoring import router as error_monitoring_router
-from backend.api.files import router as files_router
-from backend.api.intelligent_agent import router as intelligent_agent_router
-from backend.api.kb_librarian import router as kb_librarian_router
+from backend.api.system import router as system_router
+from backend.api.settings import router as settings_router
+from backend.api.prompts import router as prompts_router
 from backend.api.knowledge import router as knowledge_router
 from backend.api.llm import router as llm_router
-from backend.api.metrics import router as metrics_router
-from backend.api.monitoring import router as monitoring_router
-from backend.api.prompts import router as prompts_router
 from backend.api.redis import router as redis_router
-from backend.api.research_browser import router as research_browser_router
-from backend.api.scheduler import router as scheduler_router
-from backend.api.secrets import router as secrets_router
-from backend.api.security import router as security_router
-from backend.api.settings import router as settings_router
-from backend.api.system import router as system_router
-from backend.api.templates import router as templates_router
-from backend.api.terminal import router as terminal_router
 from backend.api.voice import router as voice_router
-from backend.api.websockets import router as websocket_router
-from backend.api.workflow import router as workflow_router
+from backend.api.agent import router as agent_router
+from backend.api.agent_config import router as agent_config_router
+from backend.api.intelligent_agent import router as intelligent_agent_router
+from backend.api.files import router as files_router
+from backend.api.developer import router as developer_router
+from backend.api.frontend_config import router as frontend_config_router
 
-# Import core components
-from src.chat_history_manager import ChatHistoryManager
-from src.config import config as global_config_manager
-from src.diagnostics import PerformanceOptimizedDiagnostics
-from src.enhanced_security_layer import EnhancedSecurityLayer
-from src.knowledge_base import KnowledgeBase
-from src.security_layer import SecurityLayer
-from src.utils.redis_client import get_redis_client
-from src.voice_interface import VoiceInterface
+# Enhanced routers with optional imports
+optional_routers = []
 
+# Try importing optional/enhanced routers
+try:
+    from backend.api.monitoring import router as monitoring_router
+    optional_routers.append((monitoring_router, "/monitoring", ["monitoring"], "monitoring"))
+    logging.info("✅ Optional router loaded: monitoring")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: monitoring - {e}")
+
+try:
+    from backend.api.terminal import router as terminal_router
+    optional_routers.append((terminal_router, "/terminal", ["terminal"], "terminal"))
+    logging.info("✅ Optional router loaded: terminal")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: terminal - {e}")
+
+try:
+    from backend.api.websockets import router as websockets_router
+    # FIXED: No prefix needed - websocket route is already @router.websocket("/ws")
+    optional_routers.append((websockets_router, "", ["websockets"], "websockets"))
+    logging.info("✅ Optional router loaded: websockets")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: websockets - {e}")
+
+try:
+    from backend.api.analytics import router as analytics_router
+    optional_routers.append((analytics_router, "/analytics", ["analytics"], "analytics"))
+    logging.info("✅ Optional router loaded: analytics")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: analytics - {e}")
+
+try:
+    from backend.api.workflow import router as workflow_router
+    optional_routers.append((workflow_router, "/workflow", ["workflow"], "workflow"))
+    logging.info("✅ Optional router loaded: workflow")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: workflow - {e}")
+
+try:
+    from backend.api.batch import router as batch_router
+    optional_routers.append((batch_router, "/batch", ["batch"], "batch"))
+    logging.info("✅ Optional router loaded: batch")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: batch - {e}")
+
+try:
+    from backend.api.advanced_workflow_orchestrator import router as orchestrator_router
+    optional_routers.append((orchestrator_router, "/orchestrator", ["orchestrator"], "orchestrator"))
+    logging.info("✅ Optional router loaded: orchestrator")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: orchestrator - {e}")
+
+try:
+    from backend.api.logs import router as logs_router
+    optional_routers.append((logs_router, "/logs", ["logs"], "logs"))
+    logging.info("✅ Optional router loaded: logs")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: logs - {e}")
+
+try:
+    from backend.api.rum import router as rum_router
+    optional_routers.append((rum_router, "/rum", ["rum"], "rum"))
+    logging.info("✅ Optional router loaded: rum")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: rum - {e}")
+
+try:
+    from backend.api.secrets import router as secrets_router
+    optional_routers.append((secrets_router, "/secrets", ["secrets"], "secrets"))
+    logging.info("✅ Optional router loaded: secrets")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: secrets - {e}")
+
+try:
+    from backend.api.cache import router as cache_router
+    optional_routers.append((cache_router, "/cache", ["cache"], "cache"))
+    logging.info("✅ Optional router loaded: cache")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: cache - {e}")
+
+try:
+    from backend.api.registry import router as registry_router
+    optional_routers.append((registry_router, "/registry", ["registry"], "registry"))
+    logging.info("✅ Optional router loaded: registry")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: registry - {e}")
+
+try:
+    from backend.api.embeddings import router as embeddings_router
+    optional_routers.append((embeddings_router, "/embeddings", ["embeddings"], "embeddings"))
+    logging.info("✅ Optional router loaded: embeddings")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: embeddings - {e}")
+
+try:
+    from backend.api.workflow_automation import router as workflow_automation_router
+    optional_routers.append((workflow_automation_router, "/workflow-automation", ["workflow-automation"], "workflow_automation"))
+    logging.info("✅ Optional router loaded: workflow_automation")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: workflow_automation - {e}")
+
+try:
+    from backend.api.research_browser import router as research_browser_router
+    optional_routers.append((research_browser_router, "/research-browser", ["research-browser"], "research_browser"))
+    logging.info("✅ Optional router loaded: research_browser")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: research_browser - {e}")
+
+try:
+    from backend.api.web_research_settings import router as web_research_settings_router
+    optional_routers.append((web_research_settings_router, "/web-research-settings", ["web-research-settings"], "web_research_settings"))
+    logging.info("✅ Optional router loaded: web_research_settings")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: web_research_settings - {e}")
+
+try:
+    from backend.api.state_tracking import router as state_tracking_router
+    optional_routers.append((state_tracking_router, "/state-tracking", ["state-tracking"], "state_tracking"))
+    logging.info("✅ Optional router loaded: state_tracking")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: state_tracking - {e}")
+
+try:
+    from backend.api.services import router as services_router
+    optional_routers.append((services_router, "/services", ["services"], "services"))
+    logging.info("✅ Optional router loaded: services")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: services - {e}")
+
+try:
+    from backend.api.elevation import router as elevation_router
+    optional_routers.append((elevation_router, "/elevation", ["elevation"], "elevation"))
+    logging.info("✅ Optional router loaded: elevation")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: elevation - {e}")
+
+try:
+    from backend.api.auth import router as auth_router
+    optional_routers.append((auth_router, "/auth", ["auth"], "auth"))
+    logging.info("✅ Optional router loaded: auth")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: auth - {e}")
+
+try:
+    from backend.api.error_monitoring import router as error_monitoring_router
+    optional_routers.append((error_monitoring_router, "/errors", ["errors"], "error_monitoring"))
+    logging.info("✅ Optional router loaded: error_monitoring")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: error_monitoring - {e}")
+
+try:
+    from backend.api.multimodal import router as multimodal_router
+    optional_routers.append((multimodal_router, "/multimodal", ["multimodal"], "multimodal"))
+    logging.info("✅ Optional router loaded: multimodal")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: multimodal - {e}")
+
+try:
+    from backend.api.hot_reload import router as hot_reload_router
+    optional_routers.append((hot_reload_router, "/hot-reload", ["hot-reload"], "hot_reload"))
+    logging.info("✅ Optional router loaded: hot_reload")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: hot_reload - {e}")
+
+try:
+    from backend.api.enterprise_features import router as enterprise_router
+    optional_routers.append((enterprise_router, "/enterprise", ["enterprise"], "enterprise"))
+    logging.info("✅ Optional router loaded: enterprise")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: enterprise - {e}")
+
+try:
+    from backend.api.infrastructure_monitor import router as infrastructure_monitor_router
+    optional_routers.append((infrastructure_monitor_router, "/infrastructure", ["infrastructure"], "infrastructure_monitor"))
+    logging.info("✅ Optional router loaded: infrastructure_monitor")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: infrastructure_monitor - {e}")
+
+try:
+    from backend.api.scheduler import router as scheduler_router
+    optional_routers.append((scheduler_router, "/scheduler", ["scheduler"], "scheduler"))
+    logging.info("✅ Optional router loaded: scheduler")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: scheduler - {e}")
+
+try:
+    from backend.api.templates import router as templates_router
+    optional_routers.append((templates_router, "/templates", ["templates"], "templates"))
+    logging.info("✅ Optional router loaded: templates")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: templates - {e}")
+
+try:
+    from backend.api.sandbox import router as sandbox_router
+    optional_routers.append((sandbox_router, "/sandbox", ["sandbox"], "sandbox"))
+    logging.info("✅ Optional router loaded: sandbox")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: sandbox - {e}")
+
+try:
+    from backend.api.security import router as security_router
+    optional_routers.append((security_router, "/security", ["security"], "security"))
+    logging.info("✅ Optional router loaded: security")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: security - {e}")
+
+try:
+    from backend.api.code_search import router as code_search_router
+    optional_routers.append((code_search_router, "/code-search", ["code-search"], "code_search"))
+    logging.info("✅ Optional router loaded: code_search")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: code_search - {e}")
+
+try:
+    from backend.api.orchestration import router as orchestration_router
+    optional_routers.append((orchestration_router, "/orchestration", ["orchestration"], "orchestration"))
+    logging.info("✅ Optional router loaded: orchestration")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: orchestration - {e}")
+
+try:
+    from backend.api.cache_management import router as cache_management_router
+    optional_routers.append((cache_management_router, "/cache-management", ["cache-management"], "cache_management"))
+    logging.info("✅ Optional router loaded: cache_management")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: cache_management - {e}")
+
+try:
+    from backend.api.llm_optimization import router as llm_optimization_router
+    optional_routers.append((llm_optimization_router, "/llm-optimization", ["llm-optimization"], "llm_optimization"))
+    logging.info("✅ Optional router loaded: llm_optimization")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: llm_optimization - {e}")
+
+try:
+    from backend.api.enhanced_search import router as enhanced_search_router
+    optional_routers.append((enhanced_search_router, "/enhanced-search", ["enhanced-search"], "enhanced_search"))
+    logging.info("✅ Optional router loaded: enhanced_search")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: enhanced_search - {e}")
+
+try:
+    from backend.api.enhanced_memory import router as enhanced_memory_router
+    optional_routers.append((enhanced_memory_router, "/enhanced-memory", ["enhanced-memory"], "enhanced_memory"))
+    logging.info("✅ Optional router loaded: enhanced_memory")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: enhanced_memory - {e}")
+
+try:
+    from backend.api.development_speedup import router as development_speedup_router
+    optional_routers.append((development_speedup_router, "/dev-speedup", ["dev-speedup"], "development_speedup"))
+    logging.info("✅ Optional router loaded: development_speedup")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: development_speedup - {e}")
+
+try:
+    from backend.api.advanced_control import router as advanced_control_router
+    optional_routers.append((advanced_control_router, "/advanced-control", ["advanced-control"], "advanced_control"))
+    logging.info("✅ Optional router loaded: advanced_control")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: advanced_control - {e}")
+
+try:
+    from backend.api.codebase_analytics import router as codebase_analytics_router
+    optional_routers.append((codebase_analytics_router, "/codebase-analytics", ["codebase-analytics"], "codebase_analytics"))
+    logging.info("✅ Optional router loaded: codebase_analytics")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: codebase_analytics - {e}")
+
+try:
+    from backend.api.long_running_operations import router as long_running_operations_router
+    optional_routers.append((long_running_operations_router, "/long-running", ["long-running"], "long_running_operations"))
+    logging.info("✅ Optional router loaded: long_running_operations")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: long_running_operations - {e}")
+
+try:
+    from backend.api.system_validation import router as system_validation_router
+    optional_routers.append((system_validation_router, "/system-validation", ["system-validation"], "system_validation"))
+    logging.info("✅ Optional router loaded: system_validation")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: system_validation - {e}")
+
+try:
+    from backend.api.validation_dashboard import router as validation_dashboard_router
+    optional_routers.append((validation_dashboard_router, "/validation-dashboard", ["validation-dashboard"], "validation_dashboard"))
+    logging.info("✅ Optional router loaded: validation_dashboard")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: validation_dashboard - {e}")
+
+try:
+    from backend.api.llm_awareness import router as llm_awareness_router
+    optional_routers.append((llm_awareness_router, "/llm-awareness", ["llm-awareness"], "llm_awareness"))
+    logging.info("✅ Optional router loaded: llm_awareness")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: llm_awareness - {e}")
+
+try:
+    from backend.api.project_state import router as project_state_router
+    optional_routers.append((project_state_router, "/project-state", ["project-state"], "project_state"))
+    logging.info("✅ Optional router loaded: project_state")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: project_state - {e}")
+
+try:
+    from backend.api.metrics import router as metrics_router
+    optional_routers.append((metrics_router, "/metrics", ["metrics"], "metrics"))
+    logging.info("✅ Optional router loaded: metrics")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: metrics - {e}")
+
+try:
+    from backend.api.startup import router as startup_router
+    optional_routers.append((startup_router, "/startup", ["startup"], "startup"))
+    logging.info("✅ Optional router loaded: startup")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: startup - {e}")
+
+try:
+    from backend.api.phase_management import router as phase_management_router
+    optional_routers.append((phase_management_router, "/phases", ["phases"], "phase_management"))
+    logging.info("✅ Optional router loaded: phase_management")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: phase_management - {e}")
+
+try:
+    from backend.api.monitoring_alerts import router as monitoring_alerts_router
+    optional_routers.append((monitoring_alerts_router, "/alerts", ["alerts"], "monitoring_alerts"))
+    logging.info("✅ Optional router loaded: monitoring_alerts")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: monitoring_alerts - {e}")
+
+try:
+    from backend.api.knowledge_test import router as knowledge_test_router
+    optional_routers.append((knowledge_test_router, "/knowledge-test", ["knowledge-test"], "knowledge_test"))
+    logging.info("✅ Optional router loaded: knowledge_test")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: knowledge_test - {e}")
+
+try:
+    from backend.api.service_monitor import router as service_monitor_router
+    optional_routers.append((service_monitor_router, "/service-monitor", ["service-monitor"], "service_monitor"))
+    logging.info("✅ Optional router loaded: service_monitor")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: service_monitor - {e}")
+
+try:
+    from backend.api.base_terminal import router as base_terminal_router
+    optional_routers.append((base_terminal_router, "/base-terminal", ["base-terminal"], "base_terminal"))
+    logging.info("✅ Optional router loaded: base_terminal")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: base_terminal - {e}")
+
+# Store logger for app usage
 logger = logging.getLogger(__name__)
 
-# Track actual startup time for real uptime reporting
-APP_START_TIME = time.time()
-
-# Global background initialization status
-background_init_status = {
-    "knowledge_base": "pending",
-    "orchestrator": "pending",
-    "chat_history": "pending",
-    "redis_client": "pending",
-    "components_ready": False,
-    "initialization_start": None,
-    "initialization_complete": None,
-    "errors": [],
+# Global variables for background services
+app_state = {
+    "knowledge_base": None,
+    "chat_workflow_manager": None,
+    "chat_history_manager": None,
+    "background_llm_sync": None,
+    "config": None
 }
 
-class MinimalChatHistoryManager:
-    """Minimal chat history manager to prevent None errors during startup"""
 
-    async def save_session_fast(self, chat_id: str, session_data: dict):
-        """Fast session save without full processing"""
-        logger.info(f"Chat session save operation for {chat_id} (minimal implementation)")
-        return {"status": "success", "method": "minimal"}
+class AppFactory:
+    """Application factory for creating FastAPI instances with comprehensive configuration"""
 
-    async def save_session(self, chat_id: str, session_data: dict = None, messages: list = None, name: str = None):
-        """Fast session save operation - compatible with both old and new API calls"""
-        logger.info(f"Chat session save operation for {chat_id} (minimal implementation)")
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
 
-        if messages is not None:
-            logger.info(f"Saving {len(messages)} messages for chat {chat_id}")
-        if session_data is not None:
-            logger.info(f"Saving session data for chat {chat_id}")
-        if name is not None:
-            logger.info(f"Chat name: {name}")
+    @staticmethod
+    def create_fastapi_app(
+        title: str = "AutoBot - Distributed Autonomous Agent",
+        description: str = "Advanced AI-powered autonomous Linux administration platform with distributed VM architecture",
+        version: str = "1.5.0",
+        allow_origins: Optional[List[str]] = None
+    ) -> FastAPI:
+        """Create and configure FastAPI application with optimal performance settings"""
 
-        return {"status": "success", "method": "minimal", "chat_id": chat_id}
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            """Application lifespan manager with background initialization"""
+            logger.info("🚀 AutoBot Backend starting up...")
 
-    async def list_sessions_fast(self):
-        """Fast session listing without full chat loading"""
-        logger.info("Chat sessions list operation (minimal implementation)")
-        return []
+            # Start background initialization
+            logger.info("✅ [  0%] Background Init: Starting background initialization...")
 
-    def _get_chats_directory(self):
-        """Get chats directory path"""
-        chats_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "chats")
-        os.makedirs(chats_dir, exist_ok=True)
-        return chats_dir
-
-
-def report_startup_progress(stage: str, message: str, percentage: int, icon: str = "📋"):
-    """Report startup progress"""
-    logger.info(f"{icon} [{percentage:3d}%] {stage}: {message}")
-
-
-async def _check_redis_modules(redis_host: str, redis_port: int) -> bool:
-    """Checks if RediSearch module is loaded in Redis with timeout protection."""
-    try:
-        resolved_host = redis_host
-        # Docker Desktop specific networking with timeout protection
-        if redis_host == "host.docker.internal":
-            try:
-                socket.setdefaulttimeout(2.0)  # 2 second timeout
-                resolved_host = socket.gethostbyname(redis_host)
-                logger.info(f"Resolved host.docker.internal to IP: {resolved_host}")
-                socket.setdefaulttimeout(None)  # Reset to default
-            except (socket.gaierror, socket.timeout) as e:
-                logger.error(f"Failed to resolve host.docker.internal: {e}")
-                resolved_host = redis_host
-                socket.setdefaulttimeout(None)  # Reset to default
-
-        r = get_redis_client()
-        if r is None:
-            logger.error("Could not get Redis client from centralized utility")
-            return False
-
-        try:
-            # Add timeout to prevent blocking
-            r.ping()
-            logger.info(f"Successfully connected to Redis at {resolved_host}:{redis_port}")
-
-            try:
-                r.client_list()
-                logger.info("Redis client info retrieved successfully")
-            except Exception as e:
-                logger.warning(f"Could not get client info from Redis: {e}")
-        except Exception as e:
-            logger.warning(f"Could not connect to Redis: {e}")
-            return False
-
-        try:
-            # Try to get module list - this may fail on some Redis configurations
-            modules = r.module_list()
-            if isinstance(modules, list):
-                module_names = [m.get("name", "") for m in modules] if modules else []
-                logger.info(f"Redis modules loaded: {module_names}")
-                if "search" in module_names:
-                    logger.info("✅ RediSearch module 'search' is detected in Redis.")
-                    return True
-                else:
-                    logger.warning("❌ RediSearch module 'search' is NOT detected in Redis.")
-                    return False
-            else:
-                logger.warning("Could not retrieve module list - Redis modules check skipped")
-                return True
-        except Exception as e:
-            logger.warning(f"Could not check Redis modules: {e}")
-            return True
-
-    except redis.ConnectionError as e:
-        logger.error(f"Failed to connect to Redis at {redis_host}:{redis_port} for module check: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"Error checking Redis modules: {e}")
-        return False
-
-
-async def initialize_components_background(app: FastAPI):
-    """Initialize heavy components in the background with comprehensive error handling"""
-    global background_init_status
-
-    background_init_status["initialization_start"] = datetime.now().isoformat()
-    logger.info("🚀 Starting background component initialization...")
-
-    try:
-        # Initialize orchestrator (CRITICAL for chat functionality)
-        logger.info("🤖 Initializing orchestrator...")
-        background_init_status["orchestrator"] = "initializing"
-
-        try:
-            from src.lightweight_orchestrator import lightweight_orchestrator
-            await lightweight_orchestrator.startup()
-            app.state.lightweight_orchestrator = lightweight_orchestrator
-            app.state.orchestrator = lightweight_orchestrator  # For compatibility
-            background_init_status["orchestrator"] = "ready"
-            logger.info("✅ Orchestrator initialized successfully")
-            report_startup_progress("orchestrator", "Orchestrator ready", 25, "🤖")
-        except Exception as e:
-            background_init_status["orchestrator"] = "failed"
-            background_init_status["errors"].append(f"Orchestrator: {str(e)}")
-            logger.error(f"❌ Orchestrator initialization failed: {e}")
-
-        # Initialize knowledge base
-        logger.info("🧠 Initializing knowledge base...")
-        background_init_status["knowledge_base"] = "initializing"
-
-        try:
-            from src.knowledge_base import KnowledgeBase
-            app.state.knowledge_base = KnowledgeBase()
-            background_init_status["knowledge_base"] = "ready"
-            logger.info("✅ Knowledge base initialized")
-            report_startup_progress("knowledge_base", "Knowledge base ready", 50, "🧠")
-        except Exception as e:
-            background_init_status["knowledge_base"] = "failed"
-            background_init_status["errors"].append(f"Knowledge base: {str(e)}")
-            logger.error(f"❌ Knowledge base initialization failed: {e}")
-
-        # Initialize chat history manager
-        logger.info("💬 Initializing chat history manager...")
-        background_init_status["chat_history"] = "initializing"
-
-        try:
-            redis_config = global_config_manager.get_redis_config()
-            app.state.chat_history_manager = ChatHistoryManager(
-                history_file=global_config_manager.get_nested(
-                    "data.chat_history_file", "data/chat_history.json"
-                ),
-                use_redis=redis_config.get("enabled", False),
-                redis_host=redis_config.get("host", REDIS_HOST_IP),
-                redis_port=redis_config.get("port", 6379),
-            )
-            background_init_status["chat_history"] = "ready"
-            logger.info("✅ Chat history manager initialized")
-            report_startup_progress("chat_history", "Chat history ready", 75, "💬")
-        except Exception as e:
-            background_init_status["chat_history"] = "failed"
-            background_init_status["errors"].append(f"Chat history: {str(e)}")
-            logger.error(f"❌ Chat history initialization failed: {e}")
-
-        # Initialize Redis client
-        logger.info("🔄 Initializing Redis client...")
-        background_init_status["redis_client"] = "initializing"
-
-        try:
-            app.state.main_redis_client = get_redis_client()
-            if app.state.main_redis_client:
-                app.state.main_redis_client.ping()
-                background_init_status["redis_client"] = "ready"
-                logger.info("✅ Redis client initialized")
-            else:
-                background_init_status["redis_client"] = "failed"
-                background_init_status["errors"].append("Redis client: Could not connect")
-        except Exception as e:
-            background_init_status["redis_client"] = "failed"
-            background_init_status["errors"].append(f"Redis client: {str(e)}")
-            logger.error(f"❌ Redis client initialization failed: {e}")
-
-        # Initialize remaining core components
-        try:
-            app.state.diagnostics = PerformanceOptimizedDiagnostics()
-            app.state.voice_interface = VoiceInterface()
-            app.state.security_layer = SecurityLayer()
-            app.state.enhanced_security_layer = EnhancedSecurityLayer()
-            logger.info("✅ Core components initialized")
-        except Exception as e:
-            background_init_status["errors"].append(f"Core components: {str(e)}")
-            logger.error(f"❌ Core components initialization failed: {e}")
-
-        # Check Redis modules
-        try:
-            redis_config = global_config_manager.get_redis_config()
-            await _check_redis_modules(
-                redis_config.get("host", REDIS_HOST_IP),
-                redis_config.get("port", 6379)
-            )
-        except Exception as e:
-            logger.warning(f"Redis modules check failed: {e}")
-
-        # Start system monitoring
-        try:
-            from src.metrics.system_monitor import system_monitor
-            await system_monitor.start_monitoring()
-            logger.info("✅ System monitoring started")
-        except Exception as e:
-            logger.error(f"Failed to start system monitoring: {e}")
-
-        # Start workflow scheduler
-        try:
-            from src.workflow_scheduler import workflow_scheduler
-
-            async def execute_scheduled_workflow(scheduled_workflow):
-                """Execute a scheduled workflow using the workflow API"""
+            # Background task for heavy initialization
+            async def background_init():
                 try:
-                    from fastapi import BackgroundTasks
-                    from backend.api.workflow import (
-                        WorkflowExecutionRequest,
-                        execute_workflow,
-                    )
+                    # Initialize configuration
+                    logger.info("✅ [ 10%] Config: Loading unified configuration...")
+                    config = UnifiedConfigManager()
+                    app.state.config = config
+                    app_state["config"] = config
 
-                    execution_request = WorkflowExecutionRequest(
-                        user_message=scheduled_workflow.user_message,
-                        workflow_id=scheduled_workflow.id,
-                        auto_approve=scheduled_workflow.auto_approve,
-                    )
+                    # Initialize Redis (with timeout handling)
+                    logger.info("✅ [ 20%] Redis: Initializing Redis connection...")
+                    try:
+                        from src.redis_pool_manager import RedisPoolManager
+                        redis_manager = RedisPoolManager()
+                        # Pools initialize automatically on first use
+                        app.state.redis_manager = redis_manager
+                        logger.info("✅ Redis Pool Manager initialized successfully")
+                    except Exception as redis_error:
+                        logger.error(f"Redis initialization failed: {redis_error}")
+                        # Continue without Redis - some features may be limited
 
-                    background_tasks = BackgroundTasks()
-                    result = await execute_workflow(execution_request, background_tasks)
-                    return result
+                    # Initialize Knowledge Base in background
+                    logger.info("✅ [ 30%] Knowledge Base: Initializing knowledge base...")
+                    try:
+                        knowledge_base = await get_or_create_knowledge_base(app)
+                        app.state.knowledge_base = knowledge_base
+                        app_state["knowledge_base"] = knowledge_base
+                        logger.info("✅ [ 90%] Knowledge Base: Knowledge base ready")
+                    except Exception as kb_error:
+                        logger.error(f"Knowledge base initialization failed: {kb_error}")
+                        app.state.knowledge_base = None
+
+                    # Initialize Chat History Manager
+                    logger.info("✅ [ 85%] Chat History: Initializing chat history manager...")
+                    try:
+                        chat_history_manager = ChatHistoryManager()
+                        app.state.chat_history_manager = chat_history_manager
+                        app_state["chat_history_manager"] = chat_history_manager
+                        logger.info("✅ [ 85%] Chat History: Chat history manager initialized")
+                    except Exception as chat_history_error:
+                        logger.error(f"Chat history manager initialization failed: {chat_history_error}")
+                        app.state.chat_history_manager = None
+
+                    # Initialize Chat Workflow Manager
+                    logger.info("✅ [ 90%] Chat Workflow: Initializing chat workflow manager...")
+                    try:
+                        chat_workflow_manager = ChatWorkflowManager()
+                        app.state.chat_workflow_manager = chat_workflow_manager
+                        app_state["chat_workflow_manager"] = chat_workflow_manager
+                        logger.info("✅ [ 90%] Chat Workflow: Chat workflow manager initialized")
+                    except Exception as chat_error:
+                        logger.error(f"Chat workflow manager initialization failed: {chat_error}")
+
+                    # Initialize Background LLM Sync
+                    try:
+                        from backend.services.ai_stack_client import AIStackClient
+                        ai_stack_client = AIStackClient()
+                        app.state.ai_stack_client = ai_stack_client
+
+                        background_llm_sync = BackgroundLLMSync()
+                        await background_llm_sync.start()
+                        app.state.background_llm_sync = background_llm_sync
+                        app_state["background_llm_sync"] = background_llm_sync
+
+                        # Test AI Stack availability
+                        try:
+                            ai_stack_health = await ai_stack_client.health_check()
+                            if ai_stack_health.get('status') == 'healthy':
+                                logger.info("✅ [ 90%] AI Stack: AI Stack fully available")
+                            else:
+                                logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
+                        except Exception as ai_error:
+                            logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
+
+                    except Exception as sync_error:
+                        logger.error(f"Background LLM sync initialization failed: {sync_error}")
 
                 except Exception as e:
-                    logger.error(f"Scheduled workflow execution failed: {e}")
-                    return {"success": False, "error": str(e)}
+                    logger.error(f"Background initialization failed: {e}")
+                    # App can still start without background services
 
-            workflow_scheduler.set_workflow_executor(execute_scheduled_workflow)
-            await workflow_scheduler.start()
-            logger.info("✅ Workflow scheduler started")
-        except Exception as e:
-            logger.error(f"Failed to start workflow scheduler: {e}")
+            # Start background initialization task
+            asyncio.create_task(background_init())
 
-        # Mark as complete
-        ready_components = sum(
-            1 for key, status in background_init_status.items()
-            if isinstance(status, str) and status == "ready"
+            yield  # Application runs here
+
+            # Cleanup on shutdown
+            logger.info("🛑 AutoBot Backend shutting down...")
+            try:
+                if hasattr(app.state, 'background_llm_sync') and app.state.background_llm_sync:
+                    await app.state.background_llm_sync.stop()
+                if hasattr(app.state, 'redis_manager') and app.state.redis_manager:
+                    await app.state.redis_manager.close_all_pools()
+            except Exception as e:
+                logger.error(f"Error during shutdown: {e}")
+
+        app = FastAPI(
+            title=title,
+            description=description,
+            version=version,
+            lifespan=lifespan,
+            redoc_url=None  # Disable ReDoc to save resources
         )
-        total_components = 4  # orchestrator, knowledge_base, chat_history, redis_client
 
-        background_init_status["components_ready"] = (ready_components >= 3)  # Allow for some failures
-        background_init_status["initialization_complete"] = datetime.now().isoformat()
+        # Configure CORS with specific origins for security
+        if allow_origins is None:
+            allow_origins = [
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://172.16.168.20:5173",
+                "http://172.16.168.21:5173",
+                "http://172.16.168.20:3000",
+                "http://172.16.168.21:3000",
+                "http://172.16.168.25:3000",
+            ]
 
-        report_startup_progress("complete", "Background initialization complete", 100, "🎉")
-        logger.info(f"🎉 Background initialization complete: {ready_components}/{total_components} components ready")
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allow_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
-    except Exception as e:
-        background_init_status["errors"].append(f"Initialization error: {str(e)}")
-        logger.error(f"❌ Background initialization failed: {e}")
+        # Add GZip compression for better performance
+        app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-
-@asynccontextmanager
-async def create_lifespan_manager(app: FastAPI):
-    """
-    Consolidated lifespan manager with fast startup and background initialization
-    """
-    logger.info("🚀 Application lifespan startup initiated")
-
-    try:
-        # Fast startup: Set minimal chat history manager immediately
-        app.state.chat_history_manager = MinimalChatHistoryManager()
-        report_startup_progress("state", "App state initialized", 10, "📦")
-
-        # Start background initialization without waiting
-        asyncio.create_task(initialize_components_background(app))
-
-        logger.info("✅ Fast application startup completed - API ready immediately")
-
-    except Exception as e:
-        logger.error(f"Failed to initialize application: {e}", exc_info=True)
-        raise
-
-    yield
-
-    # Shutdown events
-    logger.info("🛑 Application lifespan shutdown initiated")
-
-    try:
-        from src.metrics.system_monitor import system_monitor
-        await system_monitor.stop_monitoring()
-        logger.info("System monitoring stopped")
-    except Exception as e:
-        logger.error(f"Failed to stop system monitoring: {e}")
-
-    try:
-        from src.workflow_scheduler import workflow_scheduler
-        await workflow_scheduler.stop()
-        logger.info("Workflow scheduler stopped")
-    except Exception as e:
-        logger.error(f"Failed to stop workflow scheduler: {e}")
-
-    logger.info("Application lifespan shutdown completed")
-
-
-def add_middleware(app: FastAPI) -> None:
-    """Add comprehensive middleware to the FastAPI application."""
-    # Build CORS origins dynamically from configuration
-    try:
-        backend_config = global_config_manager.get_config_section("backend")
-        cors_origins = backend_config.get("cors_origins", [])
-    except Exception as e:
-        logger.warning(f"Could not load backend config: {e}, using defaults")
-        backend_config = {}
-        cors_origins = []
-
-    if not cors_origins:
-        cors_origins = [
-            f"{HTTP_PROTOCOL}://{FRONTEND_HOST_IP}:{FRONTEND_PORT}",
-            f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
+        # Configure core routers - these should always be available
+        core_routers = [
+            (chat_router, "", ["chat"], "chat"),
+            (system_router, "/system", ["system"], "system"),
+            (settings_router, "/settings", ["settings"], "settings"),
+            (prompts_router, "/prompts", ["prompts"], "prompts"),
+            (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
+            (llm_router, "/llm", ["llm"], "llm"),
+            (redis_router, "/redis", ["redis"], "redis"),
+            (voice_router, "/voice", ["voice"], "voice"),
+            (agent_router, "/agent", ["agent"], "agent"),
+            (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
+            (intelligent_agent_router, "/intelligent_agent", ["intelligent_agent"], "intelligent_agent"),
+            (files_router, "/files", ["files"], "files"),
+            (developer_router, "/developer", ["developer"], "developer"),
+            (frontend_config_router, "", ["frontend-config"], "frontend_config"),
         ]
 
-        # Add development server origins
-        dev_origins = backend_config.get(
-            "dev_origins",
-            [
-                "http://127.0.0.1:5173",  # Vite dev server
-                ServiceURLs.FRONTEND_LOCAL,  # Alternative localhost
-                "http://127.0.0.1:3000",  # Alternative dev port
-                "http://localhost:3000",  # Alternative localhost dev port
-            ],
-        )
-        cors_origins.extend(dev_origins)
+        # Add root-level endpoints that frontend expects directly under /api
+        @app.get("/api/health")
+        async def root_health_check():
+            """Root health endpoint that frontend expects"""
+            return {
+                "status": "healthy",
+                "timestamp": datetime.now().isoformat(),
+                "service": "autobot-backend"
+            }
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-        allow_headers=[
-            "Content-Type",
-            "Authorization",
-            "X-Requested-With",
-            "Accept",
-            "Origin",
-            "Access-Control-Request-Method",
-            "Access-Control-Request-Headers",
-        ],
-        expose_headers=[
-            "Content-Type",
-            "X-Total-Count",
-            "X-Request-ID",
-        ],
-    )
-    logger.info(f"CORS middleware added with origins: {cors_origins}")
+        @app.get("/api/version")
+        async def root_version():
+            """Root version endpoint that frontend expects"""
+            return {
+                "version": "0.0.1",
+                "build": "dev",
+                "timestamp": datetime.now().isoformat()
+            }
 
-    @app.middleware("http")
-    async def add_security_headers(request, call_next):
-        response = await call_next(request)
+        # Register core routers
+        for router, prefix, tags, name in core_routers:
+            try:
+                app.include_router(router, prefix=f"/api{prefix}", tags=tags)
+                logger.info(f"✅ Registered core router: {name} at /api{prefix}")
+            except Exception as e:
+                logger.error(f"❌ Failed to register core router {name}: {e}")
 
-        # Remove potentially problematic headers
-        headers_to_remove = [
-            "content-security-policy",
-            "x-xss-protection",
-            "X-Frame-Options",
-            "Expires",
-        ]
-        for header in headers_to_remove:
-            if header in response.headers:
-                del response.headers[header]
+        # Register optional routers
+        for router, prefix, tags, name in optional_routers:
+            try:
+                app.include_router(router, prefix=f"/api{prefix}", tags=tags)
+                logger.info(f"✅ Successfully registered optional router: {name} at /api{prefix}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to register optional router {name}: {e}")
 
-        # Add security headers
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        logger.info("✅ API routes configured with optional AI Stack integration")
 
-        return response
+        # Add root-level health endpoint that many clients expect
+        @app.get("/api/health")
+        async def root_health_check():
+            """Root-level health check endpoint"""
+            return {"status": "healthy", "timestamp": datetime.now(), "service": "autobot-backend"}
 
-
-def add_api_routes(app: FastAPI) -> None:
-    """Add all API routes to the FastAPI application with comprehensive router loading."""
-    api_router = APIRouter()
-
-    # Essential routes that work immediately
-    @api_router.get("/health")
-    async def ultra_fast_health():
-        """Ultra-fast health check - responds immediately"""
-        current_time = time.time()
-        uptime_seconds = current_time - APP_START_TIME
-        return {
-            "status": "healthy",
-            "backend": "connected",
-            "timestamp": datetime.now().isoformat(),
-            "fast_startup": True,
-            "uptime": uptime_seconds,
-            "uptime_human": f"{uptime_seconds:.1f} seconds",
-            "response_time": "< 10ms",
-        }
-
-    @api_router.get("/status")
-    async def system_status():
-        """System status including background component initialization"""
-        return {
-            "api_ready": True,
-            "background_initialization": background_init_status,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    @api_router.get("/hello")
-    async def hello_world():
-        return {"message": "Hello from AutoBot backend!"}
-
-    @api_router.get("/version")
-    async def get_version():
-        import hashlib
-        build_identifier = f"consolidated_1.0.0_{int(APP_START_TIME)}"
-        build_hash = hashlib.md5(build_identifier.encode()).hexdigest()[:12]
-
-        return {
-            "version": "1.0.0",
-            "backend": "consolidated_factory",
-            "api_version": "v1",
-            "buildHash": build_hash,
-            "timestamp": datetime.now().isoformat(),
-            "version_no": "1.0.0",
-            "version_time": "2025-09-28 UTC"
-        }
-
-    # Manual OPTIONS handler for debugging CORS issues
-    @api_router.options("/{path:path}")
-    async def handle_options(path: str):
-        return {"message": "OPTIONS request handled"}
-
-    # Core routers configuration
-    routers_config = [
-        (chat_router, "", ["chat"], "chat"),
-        (system_router, "/system", ["system"], "system"),
-        (settings_router, "/settings", ["settings"], "settings"),
-        (prompts_router, "/prompts", ["prompts"], "prompts"),
-        (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
-        (llm_router, "/llm", ["llm"], "llm"),
-        (redis_router, "/redis", ["redis"], "redis"),
-        (voice_router, "/voice", ["voice"], "voice"),
-        (agent_router, "/agent", ["agent"], "agent"),
-        (agent_config_router, "/agent-config", ["agent-config"], "agent_config"),
-        (intelligent_agent_router, "/intelligent-agent", ["intelligent-agent"], "intelligent_agent"),
-        (files_router, "/files", ["files"], "files"),
-        (developer_router, "/developer", ["developer"], "developer"),
-        (embeddings_router, "/embeddings", ["embeddings"], "embeddings"),
-        (kb_librarian_router, "/kb-librarian", ["kb-librarian"], "kb_librarian"),
-        (terminal_router, "/terminal", ["terminal"], "terminal"),
-        (workflow_router, "/workflow", ["workflow"], "workflow"),
-        (metrics_router, "/metrics", ["metrics"], "metrics"),
-        (monitoring_router, "/monitoring", ["monitoring"], "monitoring"),
-        (templates_router, "/templates", ["templates"], "templates"),
-        (scheduler_router, "/scheduler", ["scheduler"], "scheduler"),
-        (secrets_router, "/secrets", ["secrets"], "secrets"),
-        (research_browser_router, "/research", ["research"], "research_browser"),
-        (security_router, "/security", ["security"], "security"),
-        (error_monitoring_router, "/errors", ["error-monitoring"], "error_monitoring"),
-    ]
-
-    # Add optional routers with error handling
-    optional_routers = [
-        ("backend.api.workflow_automation", "/workflow_automation", ["workflow_automation"], "workflow_automation"),
-        ("backend.api.advanced_workflow_orchestrator", "/advanced_workflow", ["advanced_workflow"], "advanced_workflow"),
-        ("backend.api.project_state", "", ["project_state"], "project_state"),
-        ("backend.api.orchestration", "/orchestration", ["orchestration"], "orchestration"),
-        ("backend.api.code_search", "/code_search", ["code_search"], "code_search"),
-        ("backend.api.development_speedup", "/development_speedup", ["development_speedup"], "development_speedup"),
-        ("backend.api.sandbox", "/sandbox", ["sandbox"], "sandbox"),
-        ("backend.api.elevation", "/system/elevation", ["elevation"], "elevation"),
-        ("backend.api.enhanced_memory", "/memory", ["enhanced_memory"], "enhanced_memory"),
-        ("backend.api.advanced_control", "/control", ["advanced_control"], "advanced_control"),
-        ("backend.api.phase_management", "/phases", ["phase_management"], "phase_management"),
-        ("backend.api.state_tracking", "/state-tracking", ["state_tracking"], "state_tracking"),
-        ("backend.api.llm_awareness", "/llm-awareness", ["llm_awareness"], "llm_awareness"),
-        ("backend.api.validation_dashboard", "/validation-dashboard", ["validation_dashboard"], "validation_dashboard"),
-    ]
-
-    # Register core routers
-    for router, prefix, tags, name in routers_config:
+        # Mount static files for serving frontend assets
         try:
-            router_tags: List[Union[str, Enum]] = list(tags) if tags else []
-            api_router.include_router(router, prefix=prefix, tags=router_tags)
-            api_registry.register_router(name, router, f"/api{prefix}")
-            logger.info(f"✅ Successfully registered router: {name} at /api{prefix}")
+            static_dir = Path("static")
+            if static_dir.exists():
+                app.mount("/static", StaticFiles(directory="static"), name="static")
+                logger.info("Static files mounted from static")
+            else:
+                logger.info("No static directory found, skipping static file mounting")
         except Exception as e:
-            logger.error(f"❌ Failed to register router {name}: {e}")
+            logger.warning(f"Could not mount static files: {e}")
 
-    # Register optional routers
-    for module_path, prefix, tags, name in optional_routers:
-        try:
-            module = __import__(module_path, fromlist=["router"])
-            router = getattr(module, "router")
-            router_tags: List[Union[str, Enum]] = list(tags) if tags else []
-            api_router.include_router(router, prefix=prefix, tags=router_tags)
-            api_registry.register_router(name, router, f"/api{prefix}")
-            logger.info(f"✅ Successfully registered optional router: {name} at /api{prefix}")
-        except ImportError:
-            logger.info(f"⏭️ Optional router not available - skipping: {name}")
-        except Exception as e:
-            logger.error(f"❌ Failed to register optional router {name}: {e}")
-
-    # Register utility endpoints
-    api_registry.register_router("utility", api_router, "/api")
-
-    # Include the API router in the main app
-    app.include_router(api_router, prefix="/api")
-
-    # Include WebSocket router
-    app.include_router(websocket_router)
-
-    logger.info("✅ API routes configured with comprehensive router loading")
+        logger.info("✅ FastAPI application configured successfully")
+        return app
 
 
-def add_static_files(app: FastAPI) -> None:
-    """Mount static file serving."""
-    static_dir = "static"
-    if os.path.exists(static_dir):
-        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-        logger.info(f"Static files mounted from {static_dir}")
-    else:
-        logger.warning(f"Static directory {static_dir} not found - skipping static file mounting")
+def create_app(**kwargs) -> FastAPI:
+    """Factory function to create the FastAPI application"""
+    factory = AppFactory()
+    return factory.create_fastapi_app(**kwargs)
 
 
-def add_utility_routes(app: FastAPI) -> None:
-    """Add utility routes that don't fit in the API structure."""
-
-    @app.get("/.well-known/appspecific/com.chrome.devtools.json")
-    async def chrome_devtools_json():
-        """
-        Handles the request for /.well-known/appspecific/com.chrome.devtools.json
-        to prevent 404 errors in Chrome/Edge developer console.
-        """
-        return JSONResponse(status_code=200, content={})
-
-
-def add_error_handlers(app: FastAPI) -> None:
-    """Add comprehensive error handlers."""
-
-    @app.exception_handler(404)
-    async def not_found_handler(request, exc):
-        return await enhanced_404_handler(request, exc)
-
-    @app.exception_handler(405)
-    async def method_not_allowed_handler(request, exc):
-        return await enhanced_405_handler(request, exc)
-
-    @app.exception_handler(500)
-    async def internal_error_handler(request, exc):
-        """Handle 500 errors gracefully"""
-        logger.error(f"Internal server error on {request.url.path}: {exc}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error occurred"}
-        )
-
-
-def setup_signal_handlers():
-    """Setup graceful shutdown signal handlers"""
-    def signal_handler(signum, frame):
-        """Handle shutdown signals"""
-        logger.info(f"Received signal {signum}, shutting down gracefully...")
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-
-def create_app() -> FastAPI:
-    """
-    Consolidated application factory function that creates and configures the FastAPI application
-    with the best features from all previous implementations.
-
-    Returns:
-        FastAPI: Configured FastAPI application instance
-    """
-    logger.info("🚀 Creating consolidated AutoBot FastAPI application...")
-
-    # Create FastAPI app with lifespan manager
-    app = FastAPI(
-        title="AutoBot API",
-        description="Consolidated AutoBot Backend API with timeout fixes and comprehensive features",
-        version="1.0.0-consolidated",
-        lifespan=lambda app: create_lifespan_manager(app)
-    )
-
-    # Configure the application
-    add_middleware(app)
-    add_api_routes(app)
-    add_static_files(app)
-    add_utility_routes(app)
-    add_error_handlers(app)
-
-    # Setup signal handlers
-    setup_signal_handlers()
-
-    # Report startup progress
-    report_startup_progress("initialization", "FastAPI application created", 100, "🎉")
-    logger.info("✅ Consolidated FastAPI application created and configured")
-
-    return app
-
-
-# Create the app instance for uvicorn
-app = create_app()
+# For direct usage in main.py or testing
+if __name__ == "__main__":
+    app = create_app()
+    logger.info("✅ AutoBot Backend application ready")

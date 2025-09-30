@@ -42,7 +42,7 @@ except ImportError as e:
     operation_integration_manager = None
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/operations", tags=["long-running-operations"])
+router = APIRouter(tags=["long-running-operations"])
 
 
 # Additional models specific to AutoBot integration

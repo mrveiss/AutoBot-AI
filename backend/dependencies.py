@@ -7,10 +7,11 @@ removing the need for components to directly import and use global_config_manage
 
 from fastapi import Depends
 
-from src.config import ConfigManager, global_config_manager
+from src.unified_config_manager import UnifiedConfigManager
+global_config_manager = UnifiedConfigManager()
 
 
-def get_config() -> ConfigManager:
+def get_config() -> UnifiedConfigManager:
     """
     Dependency injection provider for configuration.
 
@@ -23,7 +24,7 @@ def get_config() -> ConfigManager:
     return global_config_manager
 
 
-def get_diagnostics(config: ConfigManager = Depends(get_config)):
+def get_diagnostics(config: UnifiedConfigManager = Depends(get_config)):
     """
     Dependency injection provider for diagnostics.
 
@@ -38,7 +39,7 @@ def get_diagnostics(config: ConfigManager = Depends(get_config)):
     return Diagnostics(config_manager=config)
 
 
-def get_knowledge_base(config: ConfigManager = Depends(get_config)):
+def get_knowledge_base(config: UnifiedConfigManager = Depends(get_config)):
     """
     Dependency injection provider for knowledge base.
 
@@ -48,12 +49,12 @@ def get_knowledge_base(config: ConfigManager = Depends(get_config)):
     Returns:
         KnowledgeBase: Knowledge base instance configured with the provided config
     """
-    from src.knowledge_base import KnowledgeBase
+    from src.knowledge_base_v2 import KnowledgeBase
 
     return KnowledgeBase()
 
 
-def get_llm_interface(config: ConfigManager = Depends(get_config)):
+def get_llm_interface(config: UnifiedConfigManager = Depends(get_config)):
     """
     Dependency injection provider for LLM interface.
 
@@ -69,7 +70,7 @@ def get_llm_interface(config: ConfigManager = Depends(get_config)):
 
 
 def get_orchestrator(
-    config: ConfigManager = Depends(get_config),
+    config: UnifiedConfigManager = Depends(get_config),
     llm_interface=Depends(get_llm_interface),
     knowledge_base=Depends(get_knowledge_base),
     diagnostics=Depends(get_diagnostics),
@@ -97,7 +98,7 @@ def get_orchestrator(
     )
 
 
-def get_security_layer(config: ConfigManager = Depends(get_config)):
+def get_security_layer(config: UnifiedConfigManager = Depends(get_config)):
     """
     Dependency injection provider for security layer.
 
@@ -143,7 +144,7 @@ class DependencyCache:
 dependency_cache = DependencyCache()
 
 
-def get_cached_knowledge_base(config: ConfigManager = Depends(get_config)):
+def get_cached_knowledge_base(config: UnifiedConfigManager = Depends(get_config)):
     """
     Cached version of knowledge base dependency.
 
@@ -156,14 +157,14 @@ def get_cached_knowledge_base(config: ConfigManager = Depends(get_config)):
     Returns:
         KnowledgeBase: Cached knowledge base instance
     """
-    from src.knowledge_base import KnowledgeBase
+    from src.knowledge_base_v2 import KnowledgeBase
 
     return dependency_cache.get_or_create(
-        "knowledge_base", lambda: KnowledgeBase(config_manager=config)
+        "knowledge_base", lambda: KnowledgeBase()
     )
 
 
-def get_cached_orchestrator(config: ConfigManager = Depends(get_config)):
+def get_cached_orchestrator(config: UnifiedConfigManager = Depends(get_config)):
     """
     Cached version of orchestrator dependency with lazy loading.
 

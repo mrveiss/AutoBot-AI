@@ -39,7 +39,7 @@ def get_service_address(service_name: str, port: int, protocol: str = "http") ->
     return f"{protocol}://{host}:{port}"
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/analytics", tags=["analytics"])
+router = APIRouter(tags=["analytics"])
 
 # Global analytics state management
 analytics_state = {

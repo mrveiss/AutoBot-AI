@@ -12,7 +12,7 @@ from typing import Any, Dict
 
 import requests
 
-from src.config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT, global_config_manager
+from src.unified_config_manager import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT, config as global_config_manager
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ class ConnectionTester:
 
             # Default fallbacks with environment variable support
             if not ollama_endpoint:
-                from src.config import OLLAMA_URL
+                from src.unified_config_manager import OLLAMA_URL
 
                 ollama_endpoint = f"{OLLAMA_URL}/api/generate"
             if not ollama_model:
@@ -308,7 +308,7 @@ class ConnectionTester:
 
             if provider == "ollama":
                 # Test Ollama embedding model
-                from src.config import OLLAMA_URL
+                from src.unified_config_manager import OLLAMA_URL
 
                 ollama_host = provider_config.get("host", OLLAMA_URL)
 
@@ -451,7 +451,7 @@ class ModelManager:
         """Get models from Ollama service"""
         try:
             ollama_config = global_config_manager.get_nested("llm_config.ollama", {})
-            from src.config import OLLAMA_URL
+            from src.unified_config_manager import OLLAMA_URL
 
             ollama_host = ollama_config.get("host", OLLAMA_URL)
             ollama_url = f"{ollama_host}/api/tags"

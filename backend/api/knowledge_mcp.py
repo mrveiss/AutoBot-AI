@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from src.knowledge_base import KnowledgeBase
 from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
 from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])

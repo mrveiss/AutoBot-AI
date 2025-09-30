@@ -15,7 +15,7 @@ from uuid import uuid4
 import aiofiles
 from cryptography.fernet import Fernet
 
-from src.utils.config_manager import config_manager
+from src.unified_config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
