@@ -33,6 +33,7 @@ class WorkflowSession:
     last_activity: float = field(default_factory=time.time)
     message_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
+    conversation_history: List[Dict[str, str]] = field(default_factory=list)  # Track conversation context
 
 
 class ChatWorkflowManager:
@@ -103,21 +104,59 @@ class ChatWorkflowManager:
             session.message_count += 1
             logger.debug(f"[ChatWorkflowManager] Session message_count: {session.message_count}")
 
-            # DIRECT LLM CALL - Bypass complex workflow temporarily
-            # TODO: Fix AsyncChatWorkflow dependencies to use full workflow
-            logger.debug(f"[ChatWorkflowManager] Using direct Ollama call for real LLM response")
+            # ENHANCED LLM CALL with system prompt and context
+            logger.debug(f"[ChatWorkflowManager] Using enhanced Ollama call with system prompt")
 
             try:
                 import httpx
                 ollama_url = "http://localhost:11434/api/generate"
+
+                # AutoBot system prompt - defines personality and capabilities
+                system_prompt = """You are AutoBot, an advanced AI assistant with the following capabilities:
+
+1. **Multi-Agent System**: You can orchestrate specialized agents for different tasks
+2. **Knowledge Base**: You have access to a comprehensive knowledge system
+3. **Terminal Control**: You can execute system commands and automation
+4. **Desktop Control**: You can interact with the desktop environment
+5. **Research**: You can browse the web and gather information
+6. **NPU Acceleration**: You leverage hardware AI acceleration for performance
+
+**Your Personality**:
+- Professional yet approachable
+- Technical but clear in explanations
+- Proactive in suggesting solutions
+- Transparent about your capabilities and limitations
+
+**Response Guidelines**:
+- Be concise but complete
+- Provide actionable information
+- Offer next steps when appropriate
+- Ask clarifying questions when needed
+
+"""
+
+                # Add conversation history for context (last 5 messages)
+                conversation_context = ""
+                if session.conversation_history:
+                    conversation_context = "\n**Recent Conversation:**\n"
+                    for msg in session.conversation_history[-5:]:  # Last 5 exchanges
+                        conversation_context += f"User: {msg['user']}\nAssistant: {msg['assistant']}\n\n"
+
+                # Build complete prompt with system context and history
+                full_prompt = system_prompt + conversation_context + f"**Current user message:** {message}\n\nAssistant:"
 
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.post(
                         ollama_url,
                         json={
                             "model": "llama3.2:3b-instruct-q4_K_M",
-                            "prompt": message,
-                            "stream": False
+                            "prompt": full_prompt,
+                            "stream": False,
+                            "options": {
+                                "temperature": 0.7,
+                                "top_p": 0.9,
+                                "num_ctx": 4096
+                            }
                         }
                     )
 
@@ -126,11 +165,25 @@ class ChatWorkflowManager:
                         llm_response = result_data.get("response", "No response from LLM")
                         logger.debug(f"[ChatWorkflowManager] Got LLM response: {llm_response[:100]}...")
 
+                        # Store this exchange in conversation history
+                        session.conversation_history.append({
+                            "user": message,
+                            "assistant": llm_response
+                        })
+
+                        # Keep history manageable (max 10 exchanges = 20 messages)
+                        if len(session.conversation_history) > 10:
+                            session.conversation_history = session.conversation_history[-10:]
+
                         from src.async_chat_workflow import WorkflowMessage
                         messages = [WorkflowMessage(
                             type="response",
                             content=llm_response,
-                            metadata={"message_type": "llm_response", "model": "llama3.2:3b-instruct-q4_K_M"}
+                            metadata={
+                                "message_type": "llm_response",
+                                "model": "llama3.2:3b-instruct-q4_K_M",
+                                "history_length": len(session.conversation_history)
+                            }
                         )]
                     else:
                         logger.error(f"[ChatWorkflowManager] Ollama request failed: {response.status_code}")

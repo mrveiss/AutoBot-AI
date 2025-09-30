@@ -34,7 +34,7 @@
     <!-- Chat Settings -->
     <ChatSettings
       v-if="activeTab === 'chat'"
-      :chatSettings="settings.chat || null"
+      :chatSettings="settings.chat"
       :isSettingsLoaded="isSettingsLoaded"
       @setting-changed="updateChatSetting"
     />
@@ -42,7 +42,7 @@
     <!-- Backend Settings -->
     <BackendSettings
       v-if="activeTab === 'backend'"
-      :backendSettings="settings.backend || null"
+      :backendSettings="settings.backend"
       :isSettingsLoaded="isSettingsLoaded"
       :activeBackendSubTab="activeBackendSubTab"
       :healthStatus="healthStatus"
@@ -55,7 +55,7 @@
     <!-- UI Settings -->
     <UISettings
       v-if="activeTab === 'ui'"
-      :uiSettings="settings.ui || null"
+      :uiSettings="settings.ui"
       :isSettingsLoaded="isSettingsLoaded"
       @setting-changed="updateUISetting"
     />
@@ -63,7 +63,7 @@
     <!-- Logging Settings -->
     <LoggingSettings
       v-if="activeTab === 'logging'"
-      :loggingSettings="settings.logging || null"
+      :loggingSettings="settings.logging"
       :isSettingsLoaded="isSettingsLoaded"
       @setting-changed="updateLoggingSetting"
     />
@@ -91,7 +91,7 @@
     <!-- Prompts Settings -->
     <PromptsSettings
       v-if="activeTab === 'prompts'"
-      :promptsSettings="settings.prompts || null"
+      :promptsSettings="settings.prompts"
       :isSettingsLoaded="isSettingsLoaded"
       @prompt-selected="selectPrompt"
       @edited-content-changed="updatePromptEditedContent"
@@ -104,7 +104,7 @@
     <!-- Developer Settings -->
     <DeveloperSettings
       v-if="activeTab === 'developer'"
-      :developerSettings="settings.developer || null"
+      :developerSettings="settings.developer"
       :isSettingsLoaded="isSettingsLoaded"
       @setting-changed="updateDeveloperSetting"
       @rum-setting-changed="updateRUMSetting"
@@ -142,48 +142,31 @@ import CacheSettings from './settings/CacheSettings.vue'
 import PromptsSettings from './settings/PromptsSettings.vue'
 import DeveloperSettings from './settings/DeveloperSettings.vue'
 
-// Import services
-import cacheService from '../services/CacheService.js'
-
-// Type definitions
-interface SettingsStructure {
-  chat: Record<string, any> | null
-  backend: Record<string, any> | null
-  ui: Record<string, any> | null
-  logging: Record<string, any> | null
-  prompts: Record<string, any> | null
-  developer: Record<string, any> | null
-}
-
-interface CacheActivityItem {
-  timestamp: string
-  operation: string
-  key: string
-  result: string
-  duration_ms: number
-}
-
-interface HealthStatus {
-  status?: string
-  message?: string
-  basic_health?: any
-  detailed_available?: boolean
-}
-
-interface CacheStats {
-  status?: string
-  message?: string
-}
+// Import services and types
+import cacheService from '../services/CacheService'
+import {
+  createDefaultSettings,
+  createDefaultCacheConfig,
+  createCacheActivityItem
+} from '../types/settings'
+import type {
+  SettingsStructure,
+  SettingsTab,
+  ChatSettings as ChatSettingsType,
+  UISettings as UISettingsType,
+  LoggingSettings as LoggingSettingsType,
+  PromptsSettings as PromptsSettingsType,
+  DeveloperSettings as DeveloperSettingsType,
+  BackendSettings as BackendSettingsType,
+  HealthStatus,
+  CacheActivityItem,
+  CacheStats,
+  CacheConfig,
+  Prompt
+} from '../types/settings'
 
 // Initialize settings with proper structure to prevent undefined props
-const getDefaultSettings = (): SettingsStructure => ({
-  chat: null,
-  backend: null,
-  ui: null,
-  logging: null,
-  prompts: null,
-  developer: null
-})
+const getDefaultSettings = (): SettingsStructure => createDefaultSettings()
 
 // Reactive state
 const settings = ref<SettingsStructure>(getDefaultSettings())
@@ -195,7 +178,7 @@ const isClearing = ref<boolean>(false)
 const healthStatus = ref<HealthStatus | null>(null)
 const cacheApiAvailable = ref<boolean>(false)
 
-const tabs = ref([
+const tabs = ref<SettingsTab[]>([
   { id: 'user', label: 'User Management' },
   { id: 'chat', label: 'Chat' },
   { id: 'backend', label: 'Backend' },
@@ -209,11 +192,7 @@ const activeTab = ref('backend')
 const activeBackendSubTab = ref('agents')
 
 // Cache state
-const cacheConfig = reactive({
-  enabled: true,
-  defaultTTL: 300,
-  maxCacheSizeMB: 100
-})
+const cacheConfig = reactive<CacheConfig>(createDefaultCacheConfig())
 const cacheActivity = ref<CacheActivityItem[]>([])
 const cacheStats = ref<CacheStats | null>(null)
 
@@ -224,9 +203,13 @@ const markAsChanged = () => {
 
 const updateChatSetting = (key: string, value: any) => {
   if (!settings.value.chat) {
-    settings.value.chat = {}
+    settings.value.chat = {
+      auto_scroll: true,
+      max_messages: 100,
+      message_retention_days: 30
+    } as ChatSettingsType
   }
-  settings.value.chat![key] = value
+  (settings.value.chat as ChatSettingsType)[key as keyof ChatSettingsType] = value
   markAsChanged()
 }
 
@@ -238,7 +221,7 @@ const updateUserSetting = (key: string, value: any) => {
 
 const updateBackendSetting = (key: string, value: any) => {
   if (!settings.value.backend) {
-    settings.value.backend = {}
+    settings.value.backend = {} as BackendSettingsType
   }
   // Handle nested settings for memory and agents
   if (key.includes('.')) {
@@ -250,20 +233,20 @@ const updateBackendSetting = (key: string, value: any) => {
     }
     obj![keys[keys.length - 1]] = value
   } else {
-    settings.value.backend![key] = value
+    (settings.value.backend as any)[key] = value
   }
   markAsChanged()
 }
 
 const updateLLMSetting = (key: string, value: any) => {
   if (!settings.value.backend) {
-    settings.value.backend = {}
+    settings.value.backend = {} as BackendSettingsType
   }
-  if (!(settings.value.backend as any).llm) {
-    (settings.value.backend as any).llm = {}
+  if (!settings.value.backend.llm) {
+    settings.value.backend.llm = {}
   }
   const keys = key.split('.')
-  let obj: any = (settings.value.backend as any).llm
+  let obj: any = settings.value.backend.llm
   for (let i = 0; i < keys.length - 1; i++) {
     if (!obj![keys[i]]) obj![keys[i]] = {}
     obj = obj![keys[i]]
@@ -274,36 +257,86 @@ const updateLLMSetting = (key: string, value: any) => {
 
 const updateUISetting = (key: string, value: any) => {
   if (!settings.value.ui) {
-    settings.value.ui = {}
+    settings.value.ui = {
+      theme: 'auto',
+      language: 'en',
+      show_timestamps: true,
+      show_status_bar: true,
+      auto_refresh_interval: 30
+    } as UISettingsType
   }
-  settings.value.ui![key] = value
+  (settings.value.ui as UISettingsType)[key as keyof UISettingsType] = value
   markAsChanged()
 }
 
 const updateLoggingSetting = (key: string, value: any) => {
   if (!settings.value.logging) {
-    settings.value.logging = {}
+    settings.value.logging = {
+      level: 'info',
+      log_levels: ['debug', 'info', 'warn', 'error'],
+      console: true,
+      file: false,
+      max_file_size: 10,
+      log_requests: false,
+      log_sql: false
+    } as LoggingSettingsType
   }
-  settings.value.logging![key] = value
+  (settings.value.logging as LoggingSettingsType)[key as keyof LoggingSettingsType] = value
   markAsChanged()
 }
 
 const updateDeveloperSetting = (key: string, value: any) => {
   if (!settings.value.developer) {
-    settings.value.developer = {}
+    settings.value.developer = {
+      enabled: false,
+      enhanced_errors: true,
+      endpoint_suggestions: true,
+      debug_logging: false,
+      rum: {
+        enabled: false,
+        error_tracking: true,
+        performance_monitoring: true,
+        interaction_tracking: false,
+        session_recording: false,
+        sample_rate: 100,
+        max_events_per_session: 1000
+      }
+    } as DeveloperSettingsType
   }
-  settings.value.developer![key] = value
+  (settings.value.developer as DeveloperSettingsType)[key as keyof DeveloperSettingsType] = value
   markAsChanged()
 }
 
 const updateRUMSetting = (key: string, value: any) => {
   if (!settings.value.developer) {
-    settings.value.developer = {}
+    settings.value.developer = {
+      enabled: false,
+      enhanced_errors: true,
+      endpoint_suggestions: true,
+      debug_logging: false,
+      rum: {
+        enabled: false,
+        error_tracking: true,
+        performance_monitoring: true,
+        interaction_tracking: false,
+        session_recording: false,
+        sample_rate: 100,
+        max_events_per_session: 1000
+      }
+    } as DeveloperSettingsType
   }
-  if (!(settings.value.developer as any).rum) {
-    (settings.value.developer as any).rum = {}
+  if (!settings.value.developer.rum) {
+    settings.value.developer.rum = {
+      enabled: false,
+      error_tracking: true,
+      performance_monitoring: true,
+      interaction_tracking: false,
+      session_recording: false,
+      sample_rate: 100,
+      max_events_per_session: 1000
+    }
   }
-  (settings.value.developer as any).rum[key] = value
+  (settings.value.developer.rum as any)[key] = value
   markAsChanged()
 }
 
@@ -313,7 +346,7 @@ const updateCacheConfig = (key: string, value: any) => {
 }
 
 const getCurrentLLMDisplay = (): string => {
-  const llmConfig = (settings.value.backend as any)?.llm
+  const llmConfig = settings.value.backend?.llm
   if (!llmConfig) return 'Not configured'
 
   const providerType = llmConfig.provider_type || 'local'
@@ -431,13 +464,13 @@ const refreshCacheActivity = async () => {
     // Note: There's no /api/cache/activity endpoint, creating fallback data
     console.log('Cache activity endpoint not available, using fallback data')
     cacheActivity.value = [
-      {
+      createCacheActivityItem({
         timestamp: new Date().toISOString(),
         operation: 'cache_check',
         key: 'settings',
         result: 'hit',
         duration_ms: 1.2
-      } as CacheActivityItem
+      })
     ]
   } catch (error) {
     console.error('Failed to refresh cache activity:', error)
@@ -539,36 +572,52 @@ const warmupCaches = async () => {
 }
 
 // Prompt management functions
-const selectPrompt = (prompt: any) => {
+const selectPrompt = (prompt: Prompt) => {
   if (!settings.value.prompts) {
-    settings.value.prompts = {}
+    settings.value.prompts = {
+      list: [],
+      selectedPrompt: null,
+      editedContent: ''
+    } as PromptsSettingsType
   }
-  (settings.value.prompts as any).selectedPrompt = prompt
-  ;(settings.value.prompts as any).editedContent = prompt.content || ''
+  settings.value.prompts.selectedPrompt = prompt
+  settings.value.prompts.editedContent = prompt.content || ''
 }
 
 const updatePromptEditedContent = (content: string) => {
   if (!settings.value.prompts) {
-    settings.value.prompts = {}
+    settings.value.prompts = {
+      list: [],
+      selectedPrompt: null,
+      editedContent: ''
+    } as PromptsSettingsType
   }
-  (settings.value.prompts as any).editedContent = content
+  settings.value.prompts.editedContent = content
 }
 
 const clearSelectedPrompt = () => {
   if (!settings.value.prompts) {
-    settings.value.prompts = {}
+    settings.value.prompts = {
+      list: [],
+      selectedPrompt: null,
+      editedContent: ''
+    } as PromptsSettingsType
   }
-  ;(settings.value.prompts as any).selectedPrompt = null
-  ;(settings.value.prompts as any).editedContent = ''
+  settings.value.prompts.selectedPrompt = null
+  settings.value.prompts.editedContent = ''
 }
 
 const loadPrompts = async () => {
   try {
     const response = await axios.get('/api/prompts')
     if (!settings.value.prompts) {
-      settings.value.prompts = {}
+      settings.value.prompts = {
+        list: [],
+        selectedPrompt: null,
+        editedContent: ''
+      } as PromptsSettingsType
     }
-    (settings.value.prompts as any).list = response.data
+    settings.value.prompts.list = response.data
   } catch (error) {
     console.error('Failed to load prompts:', error)
   }
@@ -576,10 +625,10 @@ const loadPrompts = async () => {
 
 const savePrompt = async () => {
   try {
-    const prompt = (settings.value.prompts as any)?.selectedPrompt
-    if (prompt) {
+    const prompt = settings.value.prompts?.selectedPrompt
+    if (prompt && settings.value.prompts) {
       await axios.put(`/api/prompts/${prompt.id}`, {
-        content: (settings.value.prompts as any).editedContent
+        content: settings.value.prompts.editedContent
       })
       clearSelectedPrompt()
       await loadPrompts()
