@@ -1,9 +1,11 @@
 /**
  * System Status Management Composable
  * Extracted from App.vue for better maintainability
+ * Enhanced with API endpoint mapping and graceful fallbacks
  */
 
 import { ref, computed } from 'vue'
+import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 
 export function useSystemStatus() {
   // System status state
@@ -65,15 +67,25 @@ export function useSystemStatus() {
   }
 
   const refreshSystemStatus = async () => {
+    console.log('[useSystemStatus] Starting graceful system status refresh...')
+    
     try {
-      // Get VM status from dedicated backend endpoint (fast)
-      const vmResponse = await fetch('/api/vms/status')
       const updatedServices = []
+      let hasApiErrors = false
 
-      if (vmResponse.ok) {
+      // FIXED: Use correct endpoint with graceful fallback
+      // Old: '/api/vms/status' -> New: '/api/enterprise/infrastructure'
+      try {
+        console.log('[useSystemStatus] Fetching infrastructure status...')
+        const vmResponse = await apiEndpointMapper.fetchWithFallback('/api/vms/status', { timeout: 5000 })
         const vmData = await vmResponse.json()
 
-        // Add VM status from backend aggregation
+        if (vmResponse.fallback) {
+          console.log('[useSystemStatus] Using fallback data for infrastructure')
+          hasApiErrors = true
+        }
+
+        // Add VM status from backend aggregation or fallback
         if (vmData.vms) {
           vmData.vms.forEach(vm => {
             updatedServices.push({
@@ -84,45 +96,79 @@ export function useSystemStatus() {
             })
           })
         }
+      } catch (vmError) {
+        console.warn('[useSystemStatus] Infrastructure endpoint failed:', vmError.message)
+        hasApiErrors = true
+        // Add fallback infrastructure services
+        updatedServices.push(
+          { name: 'Backend API', status: 'warning', statusText: 'Status Unknown' },
+          { name: 'NPU Worker', status: 'warning', statusText: 'Status Unknown' },
+          { name: 'Redis', status: 'warning', statusText: 'Status Unknown' }
+        )
       }
 
-      // Get basic services from lightweight endpoint
+      // FIXED: Use correct services endpoint with graceful fallback
+      // Old: '/api/services' -> New: '/api/monitoring/services/health'
       try {
-        const servicesResponse = await fetch('/api/services', { timeout: 5000 })
-        if (servicesResponse.ok) {
-          const servicesData = await servicesResponse.json()
+        console.log('[useSystemStatus] Fetching service health status...')
+        const servicesResponse = await apiEndpointMapper.fetchWithFallback('/api/services', { timeout: 5000 })
+        const servicesData = await servicesResponse.json()
 
-          // Map backend services to frontend display
-          const serviceMap = {
-            'backend': 'Backend API',
-            'redis': 'Redis',
-            'ollama': 'Ollama'
-          }
-
-          if (servicesData.services) {
-            Object.entries(servicesData.services).forEach(([key, service]) => {
-              const displayName = serviceMap[key] || key
-              updatedServices.push({
-                name: displayName,
-                status: service.status === 'online' ? 'healthy' :
-                        service.status === 'warning' ? 'warning' : 'error',
-                statusText: service.health || service.status
-              })
-            })
-          }
+        if (servicesResponse.fallback) {
+          console.log('[useSystemStatus] Using fallback data for services')
+          hasApiErrors = true
         }
-      } catch (e) {
-        console.warn('Services endpoint failed, using fallback data')
+
+        // Map backend services to frontend display
+        const serviceMap = {
+          'backend': 'Backend API',
+          'redis': 'Redis',
+          'ollama': 'Ollama',
+          'npu_worker': 'NPU Worker',
+          'browser': 'Browser Service'
+        }
+
+        if (servicesData.services) {
+          Object.entries(servicesData.services).forEach(([key, service]) => {
+            const displayName = serviceMap[key] || key
+            updatedServices.push({
+              name: displayName,
+              status: service.status === 'online' ? 'healthy' :
+                      service.status === 'warning' ? 'warning' : 'error',
+              statusText: service.health || service.status
+            })
+          })
+        }
+      } catch (servicesError) {
+        console.warn('[useSystemStatus] Services endpoint failed:', servicesError.message)
+        hasApiErrors = true
+        // Add fallback service statuses
+        updatedServices.push(
+          { name: 'Ollama', status: 'warning', statusText: 'Status Unknown' },
+          { name: 'Browser Service', status: 'warning', statusText: 'Status Unknown' }
+        )
       }
 
-      // Add frontend and websocket status (local)
+      // Always add frontend and websocket status (local)
       updatedServices.push(
         { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
         { name: 'WebSocket', status: 'healthy', statusText: 'Connected' }
       )
 
-      // Update systemServices with real data
-      systemServices.value = updatedServices
+      // Remove duplicates (in case both endpoints returned same services)
+      const uniqueServices = updatedServices.reduce((acc, service) => {
+        const existing = acc.find(s => s.name === service.name)
+        if (!existing) {
+          acc.push(service)
+        } else if (service.status === 'healthy' && existing.status !== 'healthy') {
+          // Prefer healthy status over warning/error when we have conflicting data
+          Object.assign(existing, service)
+        }
+        return acc
+      }, [])
+
+      // Update systemServices with processed data
+      systemServices.value = uniqueServices
 
       // Update system status based on real data
       const hasErrors = systemServices.value.some(s => s.status === 'error')
@@ -131,11 +177,28 @@ export function useSystemStatus() {
       systemStatus.value = {
         isHealthy: !hasErrors && !hasWarnings,
         hasIssues: hasErrors,
-        lastChecked: new Date()
+        lastChecked: new Date(),
+        apiErrors: hasApiErrors // Track if we had to use fallbacks
       }
+
+      console.log(`[useSystemStatus] Status refresh complete. Services: ${uniqueServices.length}, Errors: ${hasErrors}, Warnings: ${hasWarnings}, API Errors: ${hasApiErrors}`)
+      
     } catch (error) {
-      console.warn('Failed to refresh system status:', error)
-      // Keep existing values on error
+      console.error('[useSystemStatus] Critical error during status refresh:', error)
+      
+      // CRITICAL: Ensure app doesn't break - provide minimal working state
+      systemServices.value = [
+        { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
+        { name: 'Backend API', status: 'error', statusText: 'Connection Failed' },
+        { name: 'Other Services', status: 'warning', statusText: 'Status Unknown' }
+      ]
+
+      systemStatus.value = {
+        isHealthy: false,
+        hasIssues: true,
+        lastChecked: new Date(),
+        criticalError: true
+      }
     }
   }
 
@@ -155,6 +218,9 @@ export function useSystemStatus() {
     systemStatus,
     systemServices,
     showSystemStatus,
+    
+    // API utilities
+    clearStatusCache: () => apiEndpointMapper.clearCache(),
 
     // Computed
     getSystemStatusTooltip,
