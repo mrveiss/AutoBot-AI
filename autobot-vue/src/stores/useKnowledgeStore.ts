@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import ApiClient from '@/utils/ApiClient'
 
 export interface KnowledgeDocument {
   id: string
@@ -34,6 +35,36 @@ export interface SearchResult {
   highlights: string[]
 }
 
+export interface RagSearchResult {
+  synthesized_response: string
+  results: SearchResult[]
+  query: string
+  reformulated_query?: string
+  rag_analysis?: {
+    relevance_score: number
+    confidence: number
+    sources_used: number
+    synthesis_quality: string
+  }
+  status: string
+  message?: string
+}
+
+export interface KnowledgeStats {
+  total_documents: number
+  total_chunks: number
+  total_facts: number
+  total_vectors: number
+  categories: string[]
+  db_size: number
+  status: string
+  last_updated: string | null
+  redis_db: string | null
+  index_name: string | null
+  initialized: boolean
+  rag_available: boolean
+}
+
 export interface SearchFilters {
   categories: string[]
   tags: string[]
@@ -50,8 +81,9 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const categories = ref<KnowledgeCategory[]>([])
   const searchQuery = ref('')
   const searchResults = ref<SearchResult[]>([])
+  const ragSearchResult = ref<RagSearchResult | null>(null)
   const selectedDocument = ref<KnowledgeDocument | null>(null)
-  const activeTab = ref<'search' | 'manage' | 'upload' | 'categories' | 'entries'>('search')
+  const activeTab = ref<'search' | 'manage' | 'upload' | 'categories' | 'entries' | 'stats' | 'advanced'>('search')
   const isLoading = ref(false)
   const filters = ref<SearchFilters>({
     categories: [],
@@ -59,11 +91,38 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     types: []
   })
 
+  // Stats state
+  const stats = ref<KnowledgeStats>({
+    total_documents: 0,
+    total_chunks: 0,
+    total_facts: 0,
+    total_vectors: 0,
+    categories: [],
+    db_size: 0,
+    status: 'offline',
+    last_updated: null,
+    redis_db: null,
+    index_name: null,
+    initialized: false,
+    rag_available: false
+  })
+
   // Search and UI state
   const showAdvancedSearch = ref(false)
   const searchSuggestions = ref<string[]>([])
   const showSuggestions = ref(false)
   const searching = ref(false)
+  const useRagSearch = ref(false)
+  const ragOptions = ref({
+    reformulateQuery: true,
+    limit: 10,
+    top_k: 10
+  })
+
+  // RAG-specific state
+  const ragAvailable = ref(true)
+  const ragError = ref<string | null>(null)
+  const lastRagQuery = ref('')
 
   // Computed
   const documentCount = computed(() => documents.value.length)
@@ -90,6 +149,8 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   })
 
   const hasSearchResults = computed(() => searchResults.value.length > 0)
+
+  const hasRagResults = computed(() => ragSearchResult.value !== null)
 
   const filteredDocuments = computed(() => {
     let filtered = documents.value
@@ -119,7 +180,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   })
 
   // Actions
-  function setActiveTab(tab: 'search' | 'manage' | 'upload' | 'categories' | 'entries') {
+  function setActiveTab(tab: 'search' | 'manage' | 'upload' | 'categories' | 'entries' | 'stats' | 'advanced') {
     activeTab.value = tab
   }
 
@@ -134,7 +195,71 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   function clearSearch() {
     searchQuery.value = ''
     searchResults.value = []
+    ragSearchResult.value = null
+    ragError.value = null
     showSuggestions.value = false
+  }
+
+  function setRagMode(enabled: boolean) {
+    useRagSearch.value = enabled
+    if (!enabled) {
+      ragSearchResult.value = null
+      ragError.value = null
+    }
+  }
+
+  function updateRagOptions(options: Partial<typeof ragOptions.value>) {
+    ragOptions.value = { ...ragOptions.value, ...options }
+  }
+
+  function setRagAvailable(available: boolean) {
+    ragAvailable.value = available
+  }
+
+  function setRagError(error: string | null) {
+    ragError.value = error
+  }
+
+  function updateRagSearchResult(result: RagSearchResult | null) {
+    ragSearchResult.value = result
+    if (result) {
+      lastRagQuery.value = result.query
+      if (result.results) {
+        searchResults.value = result.results
+      }
+    }
+  }
+
+  // Stats actions
+  async function refreshStats() {
+    try {
+      isLoading.value = true
+      const response = await ApiClient.get('/api/knowledge_base/stats')
+      stats.value = response
+    } catch (error) {
+      console.error('Failed to refresh stats:', error)
+      // Set default stats on error
+      stats.value = {
+        total_documents: 0,
+        total_chunks: 0,
+        total_facts: 0,
+        total_vectors: 0,
+        categories: [],
+        db_size: 0,
+        status: 'error',
+        last_updated: null,
+        redis_db: null,
+        index_name: null,
+        initialized: false,
+        rag_available: false
+      }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  function updateStats(newStats: Partial<KnowledgeStats>) {
+    stats.value = { ...stats.value, ...newStats }
   }
 
   function addDocument(document: Omit<KnowledgeDocument, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -299,14 +424,23 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     categories,
     searchQuery,
     searchResults,
+    ragSearchResult,
     selectedDocument,
     activeTab,
     isLoading,
     filters,
+    stats,
+
+    // Search and UI state
     showAdvancedSearch,
     searchSuggestions,
     showSuggestions,
     searching,
+    useRagSearch,
+    ragOptions,
+    ragAvailable,
+    ragError,
+    lastRagQuery,
 
     // Computed
     documentCount,
@@ -314,6 +448,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     allTags,
     documentsByCategory,
     hasSearchResults,
+    hasRagResults,
     filteredDocuments,
 
     // Actions
@@ -321,6 +456,13 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     updateSearchQuery,
     toggleAdvancedSearch,
     clearSearch,
+    setRagMode,
+    updateRagOptions,
+    setRagAvailable,
+    setRagError,
+    updateRagSearchResult,
+    refreshStats,
+    updateStats,
     addDocument,
     updateDocument,
     deleteDocument,

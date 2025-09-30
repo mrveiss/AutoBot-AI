@@ -1,106 +1,213 @@
-import json
+"""Knowledge Base API endpoints for content management and search with RAG integration."""
 import logging
-import os
-import tempfile
-from datetime import datetime
-from typing import Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File
-from fastapi.responses import JSONResponse, StreamingResponse
+import asyncio
+import json
+import subprocess
+import sys
+from typing import Dict, Any, List, Optional
+from pathlib import Path
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+from backend.knowledge_factory import get_or_create_knowledge_base
 
-from pydantic import BaseModel
+# Import RAG Agent for enhanced search capabilities
+try:
+    from src.agents.rag_agent import get_rag_agent
+    from src.agents.agent_orchestrator import get_agent_orchestrator
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+    logging.warning("RAG Agent not available - enhanced search features disabled")
 
+# Set up logging
 logger = logging.getLogger(__name__)
 
-# Initialize the router
 router = APIRouter()
 
-# Global instances to be initialized later
-knowledge_base = None
-system_knowledge_manager = None
-fact_extraction_service = None
-
-
-async def init_knowledge_base():
-    """Initialize knowledge base if not already done using async factory pattern"""
-    global knowledge_base, system_knowledge_manager, fact_extraction_service
-
-    if knowledge_base is None:
-        try:
-            from src.knowledge_base_factory import get_knowledge_base
-            knowledge_base = await get_knowledge_base()
-            if knowledge_base:
-                logger.info("Knowledge base initialized successfully via factory")
-            else:
-                logger.warning("Knowledge base factory returned None")
-        except Exception as e:
-            logger.error(f"Failed to initialize knowledge base: {str(e)}")
-            knowledge_base = None
-
-    if system_knowledge_manager is None and knowledge_base is not None:
-        try:
-            from src.agents.system_knowledge_manager import SystemKnowledgeManager
-            system_knowledge_manager = SystemKnowledgeManager(knowledge_base)
-            logger.info("System knowledge manager initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize system knowledge manager: {str(e)}")
-            system_knowledge_manager = None
-
-    if fact_extraction_service is None and knowledge_base is not None:
-        try:
-            from src.agents.fact_extraction_service import FactExtractionService
-            fact_extraction_service = FactExtractionService(knowledge_base)
-            logger.info("Fact extraction service initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize fact extraction service: {str(e)}")
-            fact_extraction_service = None
-
-
-@router.post("/get_fact")
-async def get_fact_api(fact_id: Optional[int] = None, query: Optional[str] = None):
-    """API to retrieve facts from the knowledge base."""
+@router.get("/stats")
+async def get_knowledge_stats(req: Request):
+    """Get knowledge base statistics - FIXED to use proper instance"""
     try:
-        if knowledge_base is None:
-            await init_knowledge_base()
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if knowledge_base is None:
-            return {"facts": [], "message": "Knowledge base not available"}
+        if kb_to_use is None:
+            return {
+                "total_documents": 0,
+                "total_chunks": 0,
+                "total_facts": 0,
+                "total_vectors": 0,
+                "categories": [],
+                "db_size": 0,
+                "status": "offline",
+                "last_updated": None,
+                "redis_db": None,
+                "index_name": None,
+                "initialized": False,
+                "rag_available": RAG_AVAILABLE
+            }
 
-        facts = knowledge_base.get_fact(fact_id=fact_id, query=query)
-        return {"facts": facts}
+        stats = await kb_to_use.get_stats()
+        stats["rag_available"] = RAG_AVAILABLE
+        return stats
+
     except Exception as e:
-        logger.error(f"Error getting fact: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get fact: {str(e)}")
+        logger.error(f"Error getting knowledge stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Stats failed: {str(e)}")
+
+
+@router.get("/stats/basic")
+async def get_knowledge_stats_basic(req: Request):
+    """Get basic knowledge base statistics for quick display"""
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb_to_use is None:
+            return {
+                "total_facts": 0,
+                "total_vectors": 0,
+                "status": "offline"
+            }
+
+        stats = await kb_to_use.get_stats()
+
+        # Return lightweight basic stats
+        return {
+            "total_facts": stats.get("total_facts", 0),
+            "total_vectors": stats.get("total_vectors", 0),
+            "categories": stats.get("categories", []),
+            "status": "online" if stats.get("initialized", False) else "offline"
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting basic knowledge stats: {str(e)}")
+        return {
+            "total_facts": 0,
+            "total_vectors": 0,
+            "status": "error"
+        }
+
+
+@router.get("/categories")
+async def get_knowledge_categories(req: Request):
+    """Get all knowledge base categories with fact counts"""
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb_to_use is None:
+            return {
+                "categories": [],
+                "total": 0
+            }
+
+        # Get stats - call sync method directly (no await)
+        stats = kb_to_use.get_stats() if hasattr(kb_to_use, 'get_stats') else {}
+        categories_list = stats.get("categories", [])
+
+        # Get all facts to count by category - sync redis operation
+        try:
+            all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
+        except Exception as redis_err:
+            logger.debug(f"Redis error getting facts: {redis_err}")
+            all_facts_data = {}
+
+        category_counts = {}
+        for fact_json in all_facts_data.values():
+            try:
+                fact = json.loads(fact_json)
+                category = fact.get("metadata", {}).get("category", "uncategorized")
+                category_counts[category] = category_counts.get(category, 0) + 1
+            except:
+                continue
+
+        # Format for frontend with counts
+        categories = [
+            {
+                "name": cat,
+                "count": category_counts.get(cat, 0),
+                "id": cat
+            }
+            for cat in categories_list
+        ]
+
+        return {
+            "categories": categories,
+            "total": len(categories)
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting categories: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "categories": [],
+            "total": 0
+        }
+
+
+@router.post("/add_text")
+async def add_text_to_knowledge(request: dict, req: Request):
+    """Add text to knowledge base - FIXED to use proper instance"""
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb_to_use is None:
+            return {
+                "status": "error",
+                "message": "Knowledge base not initialized - please check logs for errors"
+            }
+
+        text = request.get("text", "")
+        title = request.get("title", "")
+        source = request.get("source", "manual")
+        category = request.get("category", "general")
+
+        if not text:
+            raise HTTPException(status_code=400, detail="Text content is required")
+
+        logger.info(f"Adding text to knowledge: title='{title}', source='{source}', length={len(text)}")
+
+        # Use the store_fact method for KnowledgeBaseV2 or add_fact for compatibility
+        if hasattr(kb_to_use, 'store_fact'):
+            # KnowledgeBaseV2
+            result = await kb_to_use.store_fact(
+                content=text,
+                metadata={
+                    "title": title,
+                    "source": source,
+                    "category": category
+                }
+            )
+            fact_id = result.get("fact_id")
+        else:
+            # Original KnowledgeBase
+            result = await kb_to_use.store_fact(
+                text=text,
+                metadata={
+                    "title": title,
+                    "source": source,
+                    "category": category
+                }
+            )
+            fact_id = result.get("fact_id")
+
+        return {
+            "status": "success",
+            "message": "Fact stored successfully",
+            "fact_id": fact_id,
+            "text_length": len(text),
+            "title": title,
+            "source": source
+        }
+
+    except Exception as e:
+        logger.error(f"Error adding text to knowledge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Add text failed: {str(e)}")
 
 
 @router.post("/search")
-async def search_knowledge(request: dict, req: Request = None):
-    """Search knowledge base"""
+async def search_knowledge(request: dict, req: Request):
+    """Search knowledge base with optional RAG enhancement - FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2"""
     try:
-        # Always try to get knowledge base via the factory (handles initialization properly)
-        kb_to_use = None
-
-        if req is not None:
-            try:
-                from backend.fast_app_factory_fix import get_or_create_knowledge_base
-                kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-                logger.info("🔄 Using knowledge base from app state")
-            except ImportError:
-                kb_to_use = await get_knowledge_base_instance(req)
-
-        # If we still don't have a knowledge base, try the factory pattern
-        if kb_to_use is None:
-            try:
-                from src.knowledge_base_factory import get_knowledge_base
-                kb_to_use = await get_knowledge_base(force_reinit=False)
-                logger.info("🔄 Using knowledge base from factory")
-            except Exception as factory_error:
-                logger.warning(f"Factory initialization failed: {factory_error}")
-
-        # Final fallback to global instance
-        if kb_to_use is None:
-            if knowledge_base is None:
-                await init_knowledge_base()
-            kb_to_use = knowledge_base
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
         if kb_to_use is None:
             return {
@@ -111,20 +218,56 @@ async def search_knowledge(request: dict, req: Request = None):
 
         query = request.get("query", "")
         top_k = request.get("top_k", 10)
+        limit = request.get("limit", 10)  # Also accept 'limit' for compatibility
         mode = request.get("mode", "auto")
+        use_rag = request.get("use_rag", False)  # New parameter for RAG enhancement
 
-        logger.info(f"Knowledge search request: '{query}' (top_k={top_k}, mode={mode})")
+        # Use limit if provided, otherwise use top_k
+        search_limit = limit if request.get("limit") is not None else top_k
 
-        results = await kb_to_use.search(
-            query=query,
-            top_k=top_k
-        )
+        logger.info(f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, use_rag={use_rag})")
+
+        # FIXED: Check which knowledge base implementation we're using and call with correct parameters
+        kb_class_name = kb_to_use.__class__.__name__
+
+        if kb_class_name == "KnowledgeBaseV2":
+            # KnowledgeBaseV2 uses 'top_k' parameter
+            results = await kb_to_use.search(
+                query=query,
+                top_k=search_limit
+            )
+        else:
+            # Original KnowledgeBase uses 'similarity_top_k' parameter
+            results = await kb_to_use.search(
+                query=query,
+                similarity_top_k=search_limit,
+                mode=mode
+            )
+
+        # Enhanced search with RAG if requested and available
+        if use_rag and RAG_AVAILABLE and results:
+            try:
+                rag_enhancement = await _enhance_search_with_rag(query, results)
+                return {
+                    "results": results,
+                    "total_results": len(results),
+                    "query": query,
+                    "mode": mode,
+                    "kb_implementation": kb_class_name,
+                    "rag_enhanced": True,
+                    "rag_analysis": rag_enhancement
+                }
+            except Exception as e:
+                logger.error(f"RAG enhancement failed: {e}")
+                # Continue with regular results if RAG fails
 
         return {
             "results": results,
             "total_results": len(results),
             "query": query,
-            "mode": mode
+            "mode": mode,
+            "kb_implementation": kb_class_name,
+            "rag_enhanced": False
         }
 
     except Exception as e:
@@ -132,1032 +275,1035 @@ async def search_knowledge(request: dict, req: Request = None):
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
-async def get_knowledge_base_instance(request: Request = None):
-    """Get knowledge base instance, with optional fresh creation"""
+@router.post("/rag_search")
+async def rag_enhanced_search(request: dict, req: Request):
+    """RAG-enhanced knowledge search for comprehensive document synthesis"""
     try:
-        if request and hasattr(request, 'app') and hasattr(request.app, 'state'):
-            # Try to get from app state first
-            if hasattr(request.app.state, 'knowledge_base') and request.app.state.knowledge_base:
-                return request.app.state.knowledge_base
+        if not RAG_AVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="RAG functionality not available - AI Stack may not be running"
+            )
 
-        # Fall back to global instance
-        if knowledge_base is None:
-            await init_knowledge_base()
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        return knowledge_base
-
-    except Exception as e:
-        logger.error(f"Error getting knowledge base instance: {e}")
-        return None
-
-
-@router.get("/categories")
-async def get_knowledge_categories(request: Request):
-    """Get knowledge base category structure"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
-        if kb_to_use is None or system_knowledge_manager is None:
-            # Return basic fallback structure
-            return {
-                "success": True,
-                "categories": {
-                    "Documentation Root": {
-                        "description": "Root documentation directory",
-                        "children": {
-                            "system": {"description": "System documentation"},
-                            "configuration": {"description": "Configuration files"},
-                            "api": {"description": "API documentation"},
-                        }
-                    }
-                },
-                "total_categories": 4,
-                "source": "fallback_structure"
-            }
-
-        # Get categories from system knowledge manager
-        response = system_knowledge_manager.get_knowledge_categories()
-        return response
-
-    except Exception as e:
-        logger.error(f"Error getting knowledge categories: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e),
-            "categories": {},
-            "total_categories": 0
-        }
-
-
-@router.get("/category/{category_path:path}/documents")
-async def get_category_documents(category_path: str, request: Request):
-    """Get documents in a specific category"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
         if kb_to_use is None:
-            return {"documents": [], "total": 0, "category": category_path}
-
-        logger.info(f"Getting documents for category: {category_path}")
-
-        # Get documents using Redis scan for LlamaIndex vectors
-        category_documents = []
-
-        try:
-            import redis
-
-            # Connect to Redis knowledge database
-            binary_redis = redis.Redis(
-                host="172.16.168.23",
-                port=6379,
-                db=1,  # Knowledge base database
-                decode_responses=False,
-                socket_timeout=5
-            )
-
-            # Scan for LlamaIndex vector documents
-            vector_keys = []
-            for key in binary_redis.scan_iter(match="llama_index/vector_*", count=100):
-                vector_keys.append(key)
-
-            processed = 0
-            for doc_key in vector_keys[:50]:  # Limit to 50 documents for performance
-                try:
-                    # Get document data
-                    doc_data = binary_redis.hgetall(doc_key)
-                    if doc_data:
-                        # Extract basic document info
-                        doc_text = doc_data.get(b'text', b'').decode('utf-8', errors='ignore')
-
-                        # Try to parse metadata
-                        doc_metadata = doc_data.get(b'metadata', b'{}')
-                        if isinstance(doc_metadata, bytes):
-                            doc_metadata = doc_metadata.decode('utf-8', errors='ignore')
-
-                        try:
-                            metadata = json.loads(doc_metadata)
-                            source_metadata = metadata.get('_node_content', {})
-                            if isinstance(source_metadata, str):
-                                source_metadata = json.loads(source_metadata)
-
-                            doc_source = source_metadata.get('metadata', {}).get('source', '')
-                            doc_type = source_metadata.get('metadata', {}).get('type', 'document')
-                            doc_category = source_metadata.get('metadata', {}).get('category', 'general')
-
-                            # Simple category filtering (basic text matching)
-                            if category_path.lower() in doc_source.lower() or category_path.lower() in doc_category.lower() or category_path == "Documentation Root":
-                                # Process the document
-                                if doc_text:
-                                    # Get document ID
-                                    doc_id_raw = doc_data.get(b'id', b'')
-                                    if isinstance(doc_id_raw, bytes):
-                                        doc_id = doc_id_raw.decode('utf-8', errors='ignore')
-                                    else:
-                                        doc_id = str(doc_id_raw)
-
-                                    # Extract title from source path
-                                    title = doc_source.split('/')[-1] if doc_source else f"Document {doc_id[:8]}"
-
-                                    category_documents.append({
-                                        "id": doc_id,
-                                        "title": title,
-                                        "source": doc_source,
-                                        "content_preview": doc_text[:300] + '...' if len(doc_text) > 300 else doc_text,
-                                        "content_length": len(doc_text),
-                                        "type": doc_type,
-                                        "category": doc_category,
-                                        "timestamp": source_metadata.get('timestamp', ''),
-                                        "score": 1.0,
-                                        "metadata": source_metadata
-                                    })
-                                    processed += 1
-
-                        except (UnicodeDecodeError, json.JSONDecodeError) as e:
-                            logger.warning(f"Could not parse metadata for {doc_key}: {e}")
-                            continue
-
-                except Exception as e:
-                    logger.warning(f"Error processing document {doc_key}: {e}")
-                    continue
-
-            # Close binary Redis connection
-            binary_redis.close()
-
-            if category_documents:
-                logger.info(f"Found {len(category_documents)} documents for category {category_path} from LlamaIndex")
-                return {
-                    "documents": category_documents,
-                    "total": len(category_documents),
-                    "category": category_path,
-                    "source": "llama_index_vectors",
-                    "processed": processed
-                }
-
-        except Exception as redis_error:
-            logger.warning(f"Redis document search failed: {redis_error}")
-
-        # Fallback: search using knowledge base search
-        try:
-            search_results = await kb_to_use.search(
-                query=category_path,
-                top_k=20
-            )
-
-            fallback_documents = []
-            for result in search_results:
-                fallback_documents.append({
-                    "id": result.get("doc_id", "unknown"),
-                    "title": f"Search Result: {result.get('content', '')[:50]}...",
-                    "source": "knowledge_base_search",
-                    "content_preview": result.get("content", "")[:300],
-                    "content_length": len(result.get("content", "")),
-                    "type": "search_result",
-                    "category": category_path,
-                    "score": result.get("score", 0.0),
-                    "metadata": result.get("metadata", {})
-                })
-
-            logger.info(f"Fallback search found {len(fallback_documents)} documents for category {category_path}")
             return {
-                "documents": fallback_documents,
-                "total": len(fallback_documents),
-                "category": category_path,
-                "source": "fallback_search"
+                "status": "error",
+                "synthesized_response": "",
+                "results": [],
+                "message": "Knowledge base not initialized - please check logs for errors"
             }
 
-        except Exception as search_error:
-            logger.warning(f"Fallback search failed: {search_error}")
+        query = request.get("query", "")
+        top_k = request.get("top_k", 10)
+        limit = request.get("limit", 10)
+        reformulate_query = request.get("reformulate_query", True)
 
-        # Final fallback: empty result
-        return {
-            "documents": [],
-            "total": 0,
-            "category": category_path,
-            "source": "no_results"
-        }
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
 
-    except Exception as e:
-        logger.error(f"Error getting category documents: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get category documents: {str(e)}")
+        # Use limit if provided, otherwise use top_k
+        search_limit = limit if request.get("limit") is not None else top_k
 
+        logger.info(f"RAG-enhanced search request: '{query}' (top_k={search_limit}, reformulate={reformulate_query})")
 
-@router.post("/document/content")
-async def get_document_content(request: dict):
-    """Get full content of a specific document"""
-    try:
-        doc_id = request.get("document_id", "")
-        if not doc_id:
-            raise HTTPException(status_code=400, detail="document_id is required")
+        # Step 1: Query reformulation if requested
+        original_query = query
+        reformulated_queries = [query]
 
-        logger.info(f"Getting content for document: {doc_id}")
-
-        # Try to get document from Redis directly
-        try:
-            import redis
-
-            binary_redis = redis.Redis(
-                host="172.16.168.23",
-                port=6379,
-                db=1,  # Knowledge base database
-                decode_responses=False,
-                socket_timeout=5
-            )
-
-            # Try to find the document by ID
-            doc_key = f"llama_index/vector_{doc_id}"
-            doc_data = binary_redis.hgetall(doc_key)
-
-            if doc_data:
-                # Extract document content
-                doc_text = doc_data.get(b'text', b'').decode('utf-8', errors='ignore')
-                doc_metadata = doc_data.get(b'metadata', b'{}')
-
-                if isinstance(doc_metadata, bytes):
-                    doc_metadata = doc_metadata.decode('utf-8', errors='ignore')
-
-                try:
-                    metadata = json.loads(doc_metadata)
-                except:
-                    metadata = {}
-
-                binary_redis.close()
-
-                return {
-                    "success": True,
-                    "document_id": doc_id,
-                    "content": doc_text,
-                    "metadata": metadata,
-                    "content_length": len(doc_text),
-                    "source": "redis_direct"
-                }
-
-            binary_redis.close()
-
-        except Exception as redis_error:
-            logger.warning(f"Redis document retrieval failed: {redis_error}")
-
-        # Fallback: return error
-        return {
-            "success": False,
-            "document_id": doc_id,
-            "error": "Document not found",
-            "content": "",
-            "metadata": {}
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting document content: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get document content: {str(e)}")
-
-
-@router.post("/add_text")
-async def add_text_to_knowledge(request: dict):
-    """Add text to knowledge base"""
-    try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
-            raise HTTPException(status_code=503, detail="Knowledge base not available")
-
-        text = request.get("text", "")
-        title = request.get("title", "")
-        source = request.get("source", "Manual Entry")
-
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="Text content is required")
-
-        logger.info(f"Knowledge add text request: {title} ({len(text)} chars)")
-
-        metadata = {
-            "title": title,
-            "source": source,
-            "type": "text",
-            "content_type": "manual_entry",
-        }
-
-        result = await knowledge_base.store_fact(text, metadata)
-
-        return {
-            "status": result.get("status"),
-            "message": result.get(
-                "message", "Text added to knowledge base successfully"
-            ),
-            "fact_id": result.get("fact_id"),
-            "text_length": len(text),
-            "title": title,
-            "source": source,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error adding text to knowledge: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error adding text to knowledge: {str(e)}"
-        )
-
-
-@router.post("/add_text_semantic")
-async def add_text_with_semantic_chunking(request: dict):
-    """Add text to knowledge base using semantic chunking for enhanced processing"""
-    try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
-            raise HTTPException(status_code=503, detail="Knowledge base not available")
-
-        text = request.get("text", "")
-        title = request.get("title", "")
-        source = request.get("source", "Manual Entry")
-
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="Text content is required")
-
-        logger.info(f"Knowledge add text with semantic chunking: {title} ({len(text)} chars)")
-
-        metadata = {
-            "title": title,
-            "source": source,
-            "type": "text",
-            "content_type": "semantic_chunking",
-        }
-
-        # Use semantic chunking for longer texts
-        if len(text) > 1000:
+        if reformulate_query:
             try:
-                from src.utils.semantic_chunker import SemanticChunker
-                chunker = SemanticChunker()
-                chunks = await chunker.chunk_text_async(text)
+                rag_agent = get_rag_agent()
+                reformulation_result = await rag_agent.reformulate_query(query)
 
-                results = []
-                for i, chunk in enumerate(chunks):
-                    chunk_metadata = {
-                        **metadata,
-                        "chunk_index": i,
-                        "total_chunks": len(chunks),
-                        "chunk_size": len(chunk)
-                    }
-                    result = await knowledge_base.store_fact(chunk, chunk_metadata)
-                    results.append(result)
+                if reformulation_result.get("status") == "success":
+                    additional_queries = reformulation_result.get("reformulated_queries", [])
+                    reformulated_queries.extend(additional_queries[:3])  # Limit to avoid too many queries
+
+            except Exception as e:
+                logger.warning(f"Query reformulation failed: {e}")
+
+        # Step 2: Search with all queries
+        all_results = []
+        seen_content = set()
+
+        for search_query in reformulated_queries:
+            try:
+                # Get search results
+                kb_class_name = kb_to_use.__class__.__name__
+
+                if kb_class_name == "KnowledgeBaseV2":
+                    query_results = await kb_to_use.search(
+                        query=search_query,
+                        top_k=search_limit
+                    )
+                else:
+                    query_results = await kb_to_use.search(
+                        query=search_query,
+                        similarity_top_k=search_limit
+                    )
+
+                # Deduplicate results
+                for result in query_results:
+                    content = result.get("content", "")
+                    if content and content not in seen_content:
+                        seen_content.add(content)
+                        result["source_query"] = search_query
+                        all_results.append(result)
+
+            except Exception as e:
+                logger.error(f"Search failed for query '{search_query}': {e}")
+
+        # Step 3: Limit total results
+        all_results = all_results[:search_limit]
+
+        # Step 4: RAG processing for synthesis
+        if all_results:
+            try:
+                rag_agent = get_rag_agent()
+
+                # Convert results to RAG-compatible format
+                documents = []
+                for result in all_results:
+                    documents.append({
+                        "content": result.get("content", ""),
+                        "metadata": {
+                            "filename": result.get("metadata", {}).get("title", "Unknown"),
+                            "source": result.get("metadata", {}).get("source", "knowledge_base"),
+                            "category": result.get("metadata", {}).get("category", "general"),
+                            "score": result.get("score", 0.0),
+                            "source_query": result.get("source_query", original_query)
+                        }
+                    })
+
+                # Process with RAG agent
+                rag_result = await rag_agent.process_document_query(
+                    query=original_query,
+                    documents=documents,
+                    context={"reformulated_queries": reformulated_queries}
+                )
 
                 return {
                     "status": "success",
-                    "message": f"Text processed into {len(chunks)} semantic chunks",
-                    "chunks_created": len(chunks),
-                    "total_length": len(text),
-                    "title": title,
-                    "source": source,
-                    "results": results
+                    "synthesized_response": rag_result.get("synthesized_response", ""),
+                    "confidence_score": rag_result.get("confidence_score", 0.0),
+                    "document_analysis": rag_result.get("document_analysis", {}),
+                    "sources_used": rag_result.get("sources_used", []),
+                    "results": all_results,
+                    "total_results": len(all_results),
+                    "original_query": original_query,
+                    "reformulated_queries": reformulated_queries[1:] if len(reformulated_queries) > 1 else [],
+                    "kb_implementation": kb_to_use.__class__.__name__,
+                    "agent_metadata": rag_result.get("metadata", {}),
+                    "rag_enhanced": True
                 }
-            except Exception as semantic_error:
-                logger.warning(f"Semantic chunking failed, falling back to single fact: {semantic_error}")
-                # Fall back to single fact storage
 
-        # Standard single fact storage
-        result = await knowledge_base.store_fact(text, metadata)
-
-        return {
-            "status": result.get("status"),
-            "message": result.get("message", "Text added to knowledge base successfully"),
-            "fact_id": result.get("fact_id"),
-            "text_length": len(text),
-            "title": title,
-            "source": source,
-            "chunks_created": 1
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error adding text with semantic chunking: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error adding text with semantic chunking: {str(e)}"
-        )
-
-
-@router.post("/add_url")
-async def add_url_to_knowledge(request: dict):
-    """Add URL to knowledge base"""
-    try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
-            raise HTTPException(status_code=503, detail="Knowledge base not available")
-
-        url = request.get("url", "")
-        method = request.get("method", "fetch")
-
-        if not url.strip():
-            raise HTTPException(status_code=400, detail="URL is required")
-
-        logger.info(f"Knowledge add URL request: {url} (method: {method})")
-
-        if method == "fetch":
-            # For now, store as reference - actual fetching would require
-            # additional implementation
-            metadata = {
-                "url": url,
-                "source": "URL",
-                "type": "url_reference",
-                "method": method,
-                "content_type": "url",
-            }
-
-            content = f"URL Reference: {url}"
-            result = await knowledge_base.store_fact(content, metadata)
-
-            return {
-                "status": result.get("status"),
-                "message": result.get(
-                    "message", "URL reference added to knowledge base"
-                ),
-                "fact_id": result.get("fact_id"),
-                "url": url,
-                "method": method,
-            }
-        else:
-            # Store as reference only
-            metadata = {
-                "url": url,
-                "source": "URL Reference",
-                "type": "url_reference",
-                "method": method,
-                "content_type": "url",
-            }
-
-            content = f"URL Reference: {url}"
-            result = await knowledge_base.store_fact(content, metadata)
-
-            return {
-                "status": result.get("status"),
-                "message": result.get("message", "URL reference stored successfully"),
-                "fact_id": result.get("fact_id"),
-                "url": url,
-                "method": method,
-            }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error adding URL to knowledge: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error adding URL to knowledge: {str(e)}"
-        )
-
-
-@router.post("/add_file")
-async def add_file_to_knowledge(file: UploadFile = File(...)):
-    """Add file to knowledge base"""
-    try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
-            raise HTTPException(status_code=503, detail="Knowledge base not available")
-
-        logger.info(f"Knowledge add file request: {file.filename}")
-
-        # Read file content
-        content = await file.read()
-
-        # Create temporary file for processing
-        temp_file_path = None
-        try:
-            # Create temporary file
-            with tempfile.NamedTemporaryFile(
-                delete=False, suffix=f".{file.filename.split('.')[-1]}"
-            ) as temp_file:
-                temp_file.write(content)
-                temp_file_path = temp_file.name
-
-            # Determine file type
-            file_type = "text"
-            if file.filename.lower().endswith((".pdf", ".doc", ".docx")):
-                file_type = "document"
-            elif file.filename.lower().endswith((".txt", ".md", ".py", ".js", ".html")):
-                file_type = "text"
-
-            # Process the file using knowledge base
-            metadata = {
-                "filename": file.filename,
-                "file_type": file_type,
-                "file_size": len(content),
-                "source": f"File Upload: {file.filename}",
-                "content_type": "file_upload",
-            }
-
-            # For now, store file reference - actual content extraction would need enhancement
-            result = await knowledge_base.store_fact(
-                f"File uploaded: {file.filename} ({len(content)} bytes)", metadata
-            )
-
-            return {
-                "status": result.get("status"),
-                "message": result.get(
-                    "message", "File added to knowledge base successfully"
-                ),
-                "filename": file.filename,
-                "file_type": file_type,
-                "file_size": len(content),
-            }
-        finally:
-            # Clean up temporary file
-            try:
-                os.unlink(temp_file_path)
-            except Exception as cleanup_error:
-                logger.warning(
-                    f"Failed to clean up temporary file {temp_file_path}: "
-                    f"{cleanup_error}"
-                )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error adding file to knowledge: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error adding file to knowledge: {str(e)}"
-        )
-
-
-@router.get("/export")
-async def export_knowledge(request: Request = None):
-    """Export knowledge base"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
-        if kb_to_use is None:
-            return JSONResponse(
-                content={"message": "Knowledge base not available"},
-                media_type="application/json",
-            )
-
-        logger.info("Knowledge export request")
-
-        # Get all facts and data
-        export_data = await kb_to_use.export_all_data()
-
-        # Create export object with metadata
-        export_object = {
-            "export_timestamp": datetime.now().isoformat(),
-            "total_entries": len(export_data),
-            "version": "1.0",
-            "data": export_data,
-        }
-
-        # Convert to JSON
-        json_content = json.dumps(export_object, indent=2, ensure_ascii=False)
-
-        # Return as downloadable file
-        return StreamingResponse(
-            iter([json_content.encode()]),
-            media_type="application/json",
-            headers={"Content-Disposition": "attachment; filename=knowledge_export.json"},
-        )
-
-    except Exception as e:
-        logger.error(f"Error exporting knowledge: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error exporting knowledge: {str(e)}"
-        )
-
-
-@router.get("/suggestions")
-async def get_knowledge_suggestions(query: str = ""):
-    """Get knowledge suggestions based on query"""
-    try:
-        if knowledge_base is None:
-            await init_knowledge_base()
-
-        if knowledge_base is None:
-            return {"suggestions": []}
-
-        # Return basic suggestions for now
-        suggestions = [
-            "Search documentation",
-            "Add new text content",
-            "Upload file",
-            "Add URL reference",
-        ]
-
-        if query:
-            # Filter suggestions based on query
-            filtered = [s for s in suggestions if query.lower() in s.lower()]
-            return {"suggestions": filtered}
-
-        return {"suggestions": suggestions}
-
-    except Exception as e:
-        logger.error(f"Error getting knowledge suggestions: {str(e)}")
-        return {"suggestions": []}
-
-@router.get("/stats")
-async def get_knowledge_stats(request: Request):
-    """Get knowledge base statistics"""
-    try:
-        # Try to get actual stats from knowledge base
-        try:
-            kb_to_use = await get_knowledge_base_instance(request)
-            if kb_to_use is not None:
-                stats = await kb_to_use.get_stats()
-                return stats
-        except Exception as kb_error:
-            logger.warning(f"Could not get live knowledge base stats: {kb_error}")
-
-        # Fallback to static stats if knowledge base unavailable
-        logger.info("Returning fallback static stats - knowledge base unavailable")
-        return {
-            "total_facts": 150,
-            "total_documents": 3278,
-            "total_chunks": 13383,
-            "total_vectors": 13383,
-            "categories": ["documentation", "configuration", "codebase"],
-            "db_size": 45000000,  # ~45MB
-            "status": "fallback_static",
-            "message": "Using fallback values - knowledge base temporarily unavailable",
-        }
-    except Exception as e:
-        logger.error(f"Error getting knowledge stats: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting knowledge stats: {str(e)}"
-        )
-
-
-@router.get("/stats/basic")
-async def get_basic_knowledge_stats(request: Request):
-    """Get basic knowledge base statistics (lightweight) - FORCE FRESH INSTANCE"""
-    try:
-        logger.info("🔄 CREATING COMPLETELY FRESH KNOWLEDGE BASE INSTANCE FOR STATS")
-
-        # **FORCE FRESH INSTANCE EVERY TIME**
-        # Import here to ensure fresh module loading
-        import importlib
-        import sys
-        import asyncio
-
-        # Force reload the knowledge base module
-        if 'src.knowledge_base' in sys.modules:
-            importlib.reload(sys.modules['src.knowledge_base'])
-
-        from src.knowledge_base import KnowledgeBase
-
-        # Create completely fresh instance
-        kb_fresh = KnowledgeBase()
-
-        # Wait for async initialization
-        logger.info("Waiting for fresh knowledge base initialization...")
-        await asyncio.sleep(3)
-
-        logger.info("Basic knowledge stats request with fresh instance")
-
-        # Get basic stats from fresh knowledge base + check for existing facts
-        try:
-            # First check Redis directly for facts
-            facts_count = 0
-            try:
-                import redis
-                redis_client = redis.Redis(host='172.16.168.23', port=6379, db=1, decode_responses=True)
-                fact_keys = redis_client.keys("fact:*")
-                facts_count = len(fact_keys)
-                logger.info(f"Found {facts_count} facts in Redis")
             except Exception as e:
-                logger.warning(f"Could not count facts from Redis: {e}")
-            stats = await kb_fresh.get_stats()
-
-            logger.info(f"Fresh stats received: {stats}")
-            logger.info("DEBUG: About to process stats mapping")
-
-            # Map the stats to frontend expected format
-            # Fix for vector indexing issues - show facts as documents when no vectors
-            total_docs = stats.get("total_documents", 0)
-            total_facts = max(stats.get("total_facts", 0), facts_count)  # Use Redis count if higher
-            total_chunks = stats.get("total_chunks", 0)
-
-            # Calculate display values
-            display_docs = total_docs if total_docs > 0 else total_facts
-            display_chunks = total_chunks if total_chunks > 0 else total_facts
-
-            logger.info(f"Stats calculation: docs={total_docs}, facts={total_facts}, chunks={total_chunks}")
-            logger.info(f"Display values: docs={display_docs}, chunks={display_chunks}")
-
-            return {
-                "total_documents": display_docs,
-                "total_chunks": display_chunks,
-                "total_facts": stats.get("total_facts", stats.get("total_entries", 0)),
-                "categories": stats.get("categories", []),
-                "status": "online",
-                "message": "Knowledge base statistics retrieved successfully (fresh instance)",
-                "last_updated": stats.get("last_updated"),
-                "source": "fresh_instance",
-                "indexed_documents": stats.get("indexed_documents", 0),
-                "vector_index_sync": stats.get("vector_index_sync", False),
-                "debug_info": {
-                    "vector_count": stats.get("total_documents", 0),
-                    "indexed_count": stats.get("indexed_documents", 0),
-                    "redis_status": stats.get("status", "unknown")
+                logger.error(f"RAG processing failed: {e}")
+                # Return search results without synthesis
+                return {
+                    "status": "partial_success",
+                    "synthesized_response": f"Found {len(all_results)} relevant documents but synthesis failed: {str(e)}",
+                    "results": all_results,
+                    "total_results": len(all_results),
+                    "original_query": original_query,
+                    "reformulated_queries": reformulated_queries[1:] if len(reformulated_queries) > 1 else [],
+                    "error": str(e),
+                    "rag_enhanced": False
                 }
-            }
-        except Exception as e:
-            logger.warning(f"Could not get fresh stats, returning error info: {e}")
-            # Return error information
-            return {
-                "total_documents": 0,
-                "total_chunks": 0,
-                "total_facts": 0,
-                "categories": [],
-                "status": "error",
-                "message": f"Fresh instance failed: {str(e)}",
-                "source": "fresh_instance_failed",
-                "error": str(e)
-            }
-
-    except Exception as e:
-        logger.error(f"Error getting basic knowledge stats: {str(e)}")
-        return {
-            "total_documents": 0,
-            "total_chunks": 0,
-            "total_facts": 0,
-            "categories": [],
-            "status": "error",
-            "message": f"Error getting stats: {str(e)}"
-        }
-
-
-@router.get("/detailed_stats")
-async def get_detailed_knowledge_stats(request: Request):
-    """Get detailed knowledge base statistics"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
-        if kb_to_use is None:
-            return {
-                "message": "Knowledge base not available",
-                "implementation_status": "unavailable",
-            }
-
-        logger.info("Detailed knowledge stats request")
-        detailed_stats = await kb_to_use.get_detailed_stats()
-        return detailed_stats
-    except Exception as e:
-        logger.error(f"Error getting detailed knowledge stats: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting detailed knowledge stats: {str(e)}"
-        )
-
-
-# Add alias route for frontend compatibility
-@router.get("/knowledge_base/stats")
-async def get_knowledge_base_stats_alias(request: Request):
-    """Alias for /stats endpoint for frontend compatibility"""
-    return await get_knowledge_stats(request)
-
-
-@router.get("/knowledge_base/stats/basic")
-async def get_knowledge_base_stats_basic_alias(request: Request):
-    """Alias for /stats/basic endpoint for frontend compatibility"""
-    return await get_basic_knowledge_stats(request)
-
-
-@router.get("/ingestion/status")
-async def get_ingestion_status(request: Request):
-    """Get knowledge base ingestion status and progress"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
-        if kb_to_use is None:
-            return {
-                "status": "not_available",
-                "message": "Knowledge base not available",
-                "progress": 0,
-                "current_operation": None,
-                "documents_processed": 0,
-                "documents_total": 0,
-                "last_updated": None
-            }
-
-        # Check if knowledge base has ingestion status tracking
-        ingestion_status = {
-            "status": "ready",
-            "message": "Knowledge base is ready for operations",
-            "progress": 100,
-            "current_operation": None,
-            "documents_processed": 0,
-            "documents_total": 0,
-            "last_updated": datetime.now().isoformat()
-        }
-
-        # Try to get actual stats to determine if ingestion is happening
-        try:
-            stats = await kb_to_use.get_stats()
-            ingestion_status.update({
-                "documents_processed": stats.get("total_documents", 0),
-                "total_facts": stats.get("total_facts", 0),
-                "total_vectors": stats.get("total_vectors", 0),
-                "db_size_mb": round(stats.get("db_size", 0) / (1024 * 1024), 2) if stats.get("db_size", 0) > 0 else 0
-            })
-        except Exception as e:
-            logger.warning(f"Could not get stats for ingestion status: {e}")
-
-        return ingestion_status
-
-    except Exception as e:
-        logger.error(f"Error getting ingestion status: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting ingestion status: {str(e)}"
-        )
-
-
-@router.get("/reindex")
-async def reindex_knowledge_base():
-    """Reindex knowledge base"""
-    try:
-        logger.info("Knowledge base reindex request")
-
-        # For now, return a success message
-        # In the future, this could trigger actual reindexing
-        result = {
-            "success": True,
-            "message": "Knowledge base reindex completed",
-            "timestamp": datetime.now().isoformat()
-        }
-
-        return result
-
-    except Exception as e:
-        logger.error(f"Error reindexing knowledge base: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error reindexing knowledge base: {str(e)}"
-        )
-
-
-class KnowledgeQuery(BaseModel):
-    query: str
-    collection: Optional[str] = None
-
-
-class KnowledgeEntry(BaseModel):
-    content: str
-    metadata: Optional[Dict] = None
-    collection: Optional[str] = None
-
-
-# Enhanced endpoints with collection support
-@router.get("/collections")
-async def list_knowledge_collections(request: Request):
-    """List all knowledge collections"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
-        if kb_to_use is None:
-            return {"success": True, "collections": []}
-
-        # For now, return basic collections
-        # This could be enhanced to actually query the knowledge base
-        collections = [
-            {"name": "default", "description": "Default knowledge collection"},
-            {"name": "documentation", "description": "Documentation and guides"},
-            {"name": "system", "description": "System information and configurations"},
-        ]
-
-        return {"success": True, "collections": collections}
-    except Exception as e:
-        logger.error(f"Error listing collections: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/entries")
-async def get_all_entries(request: Request, collection: Optional[str] = None):
-    """Get all knowledge entries, optionally filtered by collection"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
-        if kb_to_use is None:
-            return {"success": True, "entries": []}
-
-        if collection:
-            entries = await kb_to_use.get_all_facts(collection)
         else:
-            entries = await kb_to_use.get_all_facts("all")
+            return {
+                "status": "success",
+                "synthesized_response": f"No relevant documents found for query: '{original_query}'",
+                "results": [],
+                "total_results": 0,
+                "original_query": original_query,
+                "reformulated_queries": reformulated_queries[1:] if len(reformulated_queries) > 1 else [],
+                "rag_enhanced": True
+            }
 
-        return {"success": True, "entries": entries}
     except Exception as e:
-        logger.error(f"Error getting entries: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error in RAG-enhanced search: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"RAG search failed: {str(e)}")
 
 
-@router.post("/entries")
-async def create_knowledge_entry(entry: dict, request: Request = None):
-    """Create a new knowledge entry"""
+@router.post("/similarity_search")
+async def similarity_search(request: dict, req: Request):
+    """Perform similarity search with optional RAG enhancement - FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2"""
     try:
-        kb_to_use = await get_knowledge_base_instance(request)
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
         if kb_to_use is None:
-            raise HTTPException(status_code=503, detail="Knowledge base not available")
+            return {
+                "results": [],
+                "total_results": 0,
+                "message": "Knowledge base not initialized - please check logs for errors"
+            }
 
-        content = entry.get("content", "")
-        metadata = entry.get("metadata", {})
-        collection = entry.get("collection", "default")
+        query = request.get("query", "")
+        top_k = request.get("top_k", 10)
+        threshold = request.get("threshold", 0.7)
+        use_rag = request.get("use_rag", False)
 
-        if not content.strip():
-            raise HTTPException(status_code=400, detail="Content is required")
+        logger.info(f"Similarity search request: '{query}' (top_k={top_k}, threshold={threshold}, use_rag={use_rag})")
 
-        # Add collection to metadata
-        metadata["collection"] = collection
+        # FIXED: Check which knowledge base implementation we're using and call with correct parameters
+        kb_class_name = kb_to_use.__class__.__name__
 
-        result = await kb_to_use.store_fact(content, metadata)
+        if kb_class_name == "KnowledgeBaseV2":
+            # KnowledgeBaseV2 uses 'top_k' parameter
+            results = await kb_to_use.search(
+                query=query,
+                top_k=top_k
+            )
+        else:
+            # Original KnowledgeBase uses 'similarity_top_k' parameter
+            results = await kb_to_use.search(
+                query=query,
+                similarity_top_k=top_k
+            )
 
-        return {
-            "success": True,
-            "entry_id": result.get("fact_id"),
-            "message": result.get("message", "Entry created successfully"),
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating entry: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/query")
-async def query_knowledge(query_data: dict, request: Request = None):
-    """Query knowledge base with enhanced search capabilities"""
-    try:
-        kb_to_use = await get_knowledge_base_instance(request)
-        if kb_to_use is None:
-            return {"success": True, "results": [], "message": "Knowledge base not available"}
-
-        query = query_data.get("query", "")
-        collection = query_data.get("collection")
-        top_k = query_data.get("top_k", 10)
-
-        if not query.strip():
-            raise HTTPException(status_code=400, detail="Query is required")
-
-        # Use the knowledge base search
-        results = await kb_to_use.search(
-            query=query,
-            top_k=top_k
-        )
-
-        # Filter by collection if specified
-        if collection:
+        # Filter by threshold if specified
+        if threshold > 0:
             filtered_results = []
             for result in results:
-                result_collection = result.get("metadata", {}).get("collection", "default")
-                if result_collection == collection:
+                if result.get("score", 0) >= threshold:
                     filtered_results.append(result)
             results = filtered_results
 
+        # Enhanced search with RAG if requested and available
+        if use_rag and RAG_AVAILABLE and results:
+            try:
+                rag_enhancement = await _enhance_search_with_rag(query, results)
+                return {
+                    "results": results,
+                    "total_results": len(results),
+                    "query": query,
+                    "threshold": threshold,
+                    "kb_implementation": kb_class_name,
+                    "rag_enhanced": True,
+                    "rag_analysis": rag_enhancement
+                }
+            except Exception as e:
+                logger.error(f"RAG enhancement failed: {e}")
+                # Continue with regular results if RAG fails
+
         return {
-            "success": True,
             "results": results,
-            "total": len(results),
+            "total_results": len(results),
             "query": query,
-            "collection": collection,
+            "threshold": threshold,
+            "kb_implementation": kb_class_name,
+            "rag_enhanced": False
         }
-    except HTTPException:
-        raise
+
     except Exception as e:
-        logger.error(f"Error querying knowledge: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error in similarity search: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Similarity search failed: {str(e)}")
 
 
-@router.post("/populate_documentation")
-async def populate_documentation(request_data: dict, request: Request = None):
-    """Populate knowledge base with documentation for a specific category"""
+@router.get("/health")
+async def get_knowledge_health(req: Request):
+    """Get knowledge base health status with RAG capability status - FIXED to use proper instance"""
     try:
-        category = request_data.get("category", "")
-        if not category.strip():
-            raise HTTPException(status_code=400, detail="Category is required")
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        logger.info(f"Knowledge base documentation population request for category: {category}")
-
-        # Initialize knowledge base if needed
-        kb_to_use = await get_knowledge_base_instance(request)
         if kb_to_use is None:
-            raise HTTPException(status_code=503, detail="Knowledge base not available")
+            return {
+                "status": "unhealthy",
+                "initialized": False,
+                "redis_connected": False,
+                "vector_store_available": False,
+                "rag_available": RAG_AVAILABLE,
+                "rag_status": "disabled" if not RAG_AVAILABLE else "unknown",
+                "message": "Knowledge base not initialized"
+            }
 
-        # For now, return a simulated successful population
-        # In a real implementation, this would:
-        # 1. Identify documentation sources for the category
-        # 2. Process and add documents to the knowledge base
-        # 3. Return actual counts
+        # Try to get stats to verify health
+        stats = await kb_to_use.get_stats()
 
-        # Simulate processing different categories
-        simulated_counts = {
-            "system": 15,
-            "documentation": 25,
-            "configuration": 10,
-            "troubleshooting": 20,
-            "api": 30,
-            "commands": 12,
-            "development": 18
-        }
-
-        added_count = simulated_counts.get(category.lower(), 5)
+        # Check RAG Agent health if available
+        rag_status = "disabled"
+        if RAG_AVAILABLE:
+            try:
+                rag_agent = get_rag_agent()
+                # Simple test to verify RAG agent works
+                rag_status = "healthy"
+            except Exception as e:
+                rag_status = f"error: {str(e)}"
 
         return {
-            "success": True,
-            "added_count": added_count,
-            "category": category,
-            "message": f"Successfully populated {added_count} documents for {category} category"
+            "status": "healthy",
+            "initialized": stats.get("initialized", False),
+            "redis_connected": True,
+            "vector_store_available": stats.get("index_available", False),
+            "total_facts": stats.get("total_facts", 0),
+            "db_size": stats.get("db_size", 0),
+            "kb_implementation": kb_to_use.__class__.__name__,
+            "rag_available": RAG_AVAILABLE,
+            "rag_status": rag_status
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error populating documentation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error checking knowledge health: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "initialized": False,
+            "redis_connected": False,
+            "vector_store_available": False,
+            "rag_available": RAG_AVAILABLE,
+            "rag_status": "disabled" if not RAG_AVAILABLE else f"error: {str(e)}",
+            "error": str(e)
+        }
+
+
+# === NEW REPOPULATE ENDPOINTS ===
+
+@router.post("/populate_system_commands")
+async def populate_system_commands(request: dict, req: Request):
+    """Populate knowledge base with common system commands and usage examples"""
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb_to_use is None:
+            return {
+                "status": "error",
+                "message": "Knowledge base not initialized - please check logs for errors",
+                "items_added": 0
+            }
+
+        logger.info("Starting system commands population...")
+
+        # Define common system commands with descriptions and examples
+        system_commands = [
+            {
+                "command": "curl",
+                "description": "Command line tool for transferring data with URLs",
+                "usage": "curl [options] <url>",
+                "examples": [
+                    "curl https://api.example.com/data",
+                    "curl -X POST -d 'data' https://api.example.com",
+                    "curl -H 'Authorization: Bearer token' https://api.example.com",
+                    "curl -o output.html https://example.com"
+                ],
+                "options": [
+                    "-X: HTTP method (GET, POST, PUT, DELETE)",
+                    "-H: Add header",
+                    "-d: Data to send",
+                    "-o: Output to file",
+                    "-v: Verbose output",
+                    "--json: Send JSON data"
+                ]
+            },
+            {
+                "command": "grep",
+                "description": "Search text patterns in files",
+                "usage": "grep [options] pattern [file...]",
+                "examples": [
+                    "grep 'error' /var/log/syslog",
+                    "grep -r 'function' /path/to/code/",
+                    "grep -i 'warning' *.log",
+                    "ps aux | grep python"
+                ],
+                "options": [
+                    "-r: Recursive search",
+                    "-i: Case insensitive",
+                    "-n: Line numbers",
+                    "-v: Invert match",
+                    "-l: Files with matches only"
+                ]
+            },
+            {
+                "command": "ssh",
+                "description": "Secure Shell for remote login and command execution",
+                "usage": "ssh [options] [user@]hostname [command]",
+                "examples": [
+                    "ssh user@remote-server",
+                    "ssh -i ~/.ssh/key user@server",
+                    "ssh -p 2222 user@server",
+                    "ssh user@server 'ls -la'"
+                ],
+                "options": [
+                    "-i: Identity file (private key)",
+                    "-p: Port number",
+                    "-v: Verbose output",
+                    "-X: Enable X11 forwarding",
+                    "-L: Local port forwarding"
+                ]
+            },
+            {
+                "command": "docker",
+                "description": "Container platform for building, running and managing applications",
+                "usage": "docker [options] COMMAND",
+                "examples": [
+                    "docker run -it ubuntu bash",
+                    "docker build -t myapp .",
+                    "docker ps -a",
+                    "docker exec -it container_name bash"
+                ],
+                "options": [
+                    "run: Create and run container",
+                    "build: Build image from Dockerfile",
+                    "ps: List containers",
+                    "exec: Execute command in container",
+                    "logs: View container logs"
+                ]
+            },
+            {
+                "command": "git",
+                "description": "Distributed version control system",
+                "usage": "git [options] COMMAND [args]",
+                "examples": [
+                    "git clone https://github.com/user/repo.git",
+                    "git add .",
+                    "git commit -m 'message'",
+                    "git push origin main"
+                ],
+                "options": [
+                    "clone: Clone repository",
+                    "add: Stage changes",
+                    "commit: Create commit",
+                    "push: Upload changes",
+                    "pull: Download changes"
+                ]
+            },
+            {
+                "command": "find",
+                "description": "Search for files and directories",
+                "usage": "find [path] [expression]",
+                "examples": [
+                    "find /path -name '*.py'",
+                    "find . -type f -mtime -7",
+                    "find /var -size +100M",
+                    "find . -perm 755"
+                ],
+                "options": [
+                    "-name: File name pattern",
+                    "-type: File type (f=file, d=directory)",
+                    "-size: File size",
+                    "-mtime: Modification time",
+                    "-exec: Execute command on results"
+                ]
+            },
+            {
+                "command": "tar",
+                "description": "Archive files and directories",
+                "usage": "tar [options] archive-file files...",
+                "examples": [
+                    "tar -czf archive.tar.gz folder/",
+                    "tar -xzf archive.tar.gz",
+                    "tar -tzf archive.tar.gz",
+                    "tar -xzf archive.tar.gz -C /destination/"
+                ],
+                "options": [
+                    "-c: Create archive",
+                    "-x: Extract archive",
+                    "-z: Gzip compression",
+                    "-f: Archive filename",
+                    "-t: List contents"
+                ]
+            },
+            {
+                "command": "systemctl",
+                "description": "Control systemd services",
+                "usage": "systemctl [options] COMMAND [service]",
+                "examples": [
+                    "systemctl status nginx",
+                    "systemctl start redis-server",
+                    "systemctl enable docker",
+                    "systemctl restart apache2"
+                ],
+                "options": [
+                    "start: Start service",
+                    "stop: Stop service",
+                    "restart: Restart service",
+                    "status: Check status",
+                    "enable: Auto-start on boot"
+                ]
+            },
+            {
+                "command": "ps",
+                "description": "Display running processes",
+                "usage": "ps [options]",
+                "examples": [
+                    "ps aux",
+                    "ps -ef",
+                    "ps aux | grep python",
+                    "ps -u username"
+                ],
+                "options": [
+                    "aux: All processes with details",
+                    "-ef: Full format listing",
+                    "-u: Processes by user",
+                    "-C: Processes by command"
+                ]
+            },
+            {
+                "command": "chmod",
+                "description": "Change file permissions",
+                "usage": "chmod [options] mode file...",
+                "examples": [
+                    "chmod 755 script.sh",
+                    "chmod +x program",
+                    "chmod -R 644 /path/to/files/",
+                    "chmod u+w,g-w file.txt"
+                ],
+                "options": [
+                    "755: rwxr-xr-x (executable)",
+                    "644: rw-r--r-- (readable)",
+                    "+x: Add execute permission",
+                    "-R: Recursive",
+                    "u/g/o: user/group/others"
+                ]
+            }
+        ]
+
+        items_added = 0
+
+        # Process commands in batches to avoid timeouts
+        batch_size = 5
+        for i in range(0, len(system_commands), batch_size):
+            batch = system_commands[i:i+batch_size]
+
+            for cmd_info in batch:
+                try:
+                    # Create comprehensive content for each command
+                    content = f"""Command: {cmd_info['command']}
+
+Description: {cmd_info['description']}
+
+Usage: {cmd_info['usage']}
+
+Examples:
+{chr(10).join(f"  {example}" for example in cmd_info['examples'])}
+
+Common Options:
+{chr(10).join(f"  {option}" for option in cmd_info['options'])}
+
+Category: System Command
+Type: Command Reference
+"""
+
+                    # Store in knowledge base
+                    if hasattr(kb_to_use, 'store_fact'):
+                        result = await kb_to_use.store_fact(
+                            content=content,
+                            metadata={
+                                "title": f"{cmd_info['command']} command",
+                                "source": "system_commands_population",
+                                "category": "commands",
+                                "command": cmd_info['command'],
+                                "type": "system_command"
+                            }
+                        )
+                    else:
+                        result = await kb_to_use.store_fact(
+                            text=content,
+                            metadata={
+                                "title": f"{cmd_info['command']} command",
+                                "source": "system_commands_population",
+                                "category": "commands",
+                                "command": cmd_info['command'],
+                                "type": "system_command"
+                            }
+                        )
+
+                    if result and result.get("fact_id"):
+                        items_added += 1
+                        logger.info(f"Added command: {cmd_info['command']}")
+                    else:
+                        logger.warning(f"Failed to add command: {cmd_info['command']}")
+
+                except Exception as e:
+                    logger.error(f"Error adding command {cmd_info['command']}: {e}")
+
+            # Small delay between batches to prevent overload
+            await asyncio.sleep(0.1)
+
+        logger.info(f"System commands population completed. Added {items_added} commands.")
+
+        return {
+            "status": "success",
+            "message": f"Successfully populated {items_added} system commands",
+            "items_added": items_added,
+            "total_commands": len(system_commands)
+        }
+
+    except Exception as e:
+        logger.error(f"Error populating system commands: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"System commands population failed: {str(e)}")
+
+
+async def _populate_man_pages_background(kb_to_use):
+    """Background task to populate man pages"""
+    try:
+        logger.info("Starting manual pages population in background...")
+
+        # Common commands to get man pages for
+        common_commands = [
+            'ls', 'cd', 'cp', 'mv', 'rm', 'mkdir', 'rmdir', 'chmod', 'chown', 'find',
+            'grep', 'sed', 'awk', 'sort', 'uniq', 'head', 'tail', 'cat', 'less', 'more',
+            'ps', 'top', 'kill', 'jobs', 'nohup', 'crontab', 'systemctl', 'service',
+            'curl', 'wget', 'ssh', 'scp', 'rsync', 'tar', 'zip', 'unzip', 'gzip', 'gunzip',
+            'git', 'docker', 'npm', 'pip', 'python', 'node', 'java', 'gcc', 'make'
+        ]
+
+        items_added = 0
+
+        # Process man pages in batches
+        batch_size = 5
+        for i in range(0, len(common_commands), batch_size):
+            batch = common_commands[i:i+batch_size]
+
+            for command in batch:
+                try:
+                    # Try to get the man page with reduced timeout
+                    result = subprocess.run(
+                        ['man', command],
+                        capture_output=True,
+                        text=True,
+                        timeout=3  # Reduced from 10 to 3 seconds
+                    )
+
+                    if result.returncode == 0 and result.stdout.strip():
+                        # Clean up the man page output
+                        man_content = result.stdout.strip()
+
+                        # Remove ANSI escape sequences if present
+                        import re
+                        man_content = re.sub(r'\x1b\[[0-9;]*m', '', man_content)
+
+                        # Create structured content
+                        content = f"""Manual Page: {command}
+
+{man_content}
+
+Source: System Manual Pages
+Category: Manual Page
+Command: {command}
+"""
+
+                        # Store in knowledge base
+                        if hasattr(kb_to_use, 'store_fact'):
+                            store_result = await kb_to_use.store_fact(
+                                content=content,
+                                metadata={
+                                    "title": f"man {command}",
+                                    "source": "manual_pages_population",
+                                    "category": "manpages",
+                                    "command": command,
+                                    "type": "manual_page"
+                                }
+                            )
+                        else:
+                            store_result = await kb_to_use.store_fact(
+                                text=content,
+                                metadata={
+                                    "title": f"man {command}",
+                                    "source": "manual_pages_population",
+                                    "category": "manpages",
+                                    "command": command,
+                                    "type": "manual_page"
+                                }
+                            )
+
+                        if store_result and store_result.get("fact_id"):
+                            items_added += 1
+                            logger.info(f"Added man page: {command}")
+                        else:
+                            logger.warning(f"Failed to store man page: {command}")
+
+                    else:
+                        logger.warning(f"No man page found for command: {command}")
+
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"Timeout getting man page for: {command}")
+                except Exception as e:
+                    logger.error(f"Error processing man page for {command}: {e}")
+
+            # Small delay between batches (reduced for faster completion)
+            await asyncio.sleep(0.1)
+
+        logger.info(f"Manual pages population completed. Added {items_added} man pages.")
+        return items_added
+
+    except Exception as e:
+        logger.error(f"Error populating manual pages in background: {str(e)}")
+        return 0
+
+
+@router.post("/populate_man_pages")
+async def populate_man_pages(request: dict, req: Request, background_tasks: BackgroundTasks):
+    """Populate knowledge base with common manual pages (runs in background)"""
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb_to_use is None:
+            return {
+                "status": "error",
+                "message": "Knowledge base not initialized - please check logs for errors",
+                "items_added": 0
+            }
+
+        # Start background task
+        background_tasks.add_task(_populate_man_pages_background, kb_to_use)
+
+        return {
+            "status": "success",
+            "message": "Man pages population started in background",
+            "items_added": 0,  # Will be updated as background task runs
+            "background": True
+        }
+
+    except Exception as e:
+        logger.error(f"Error starting man pages population: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start man pages population: {str(e)}")
+
+
+@router.post("/refresh_system_knowledge")
+async def refresh_system_knowledge(request: dict, req: Request):
+    """
+    Refresh ALL system knowledge (man pages + AutoBot docs)
+    Use this after system updates, package installations, or documentation changes
+    """
+    try:
+        logger.info("Starting comprehensive system knowledge refresh...")
+
+        # Run the comprehensive indexing script
+        result = subprocess.run(
+            [sys.executable, 'scripts/utilities/index_all_man_pages.py'],
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 minute timeout for comprehensive indexing
+        )
+
+        if result.returncode == 0:
+            # Parse output for statistics
+            output_lines = result.stdout.split('\n')
+            indexed_count = 0
+            total_facts = 0
+
+            for line in output_lines:
+                if 'Successfully indexed:' in line:
+                    indexed_count = int(line.split(':')[1].strip())
+                elif 'Total facts in KB:' in line:
+                    total_facts = int(line.split(':')[1].strip())
+
+            logger.info(f"System knowledge refresh complete: {indexed_count} commands indexed")
+
+            return {
+                "status": "success",
+                "message": f"System knowledge refreshed successfully",
+                "commands_indexed": indexed_count,
+                "total_facts": total_facts
+            }
+        else:
+            logger.error(f"System knowledge refresh failed: {result.stderr}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Knowledge refresh failed: {result.stderr[:500]}"
+            )
+
+    except subprocess.TimeoutExpired:
+        logger.error("System knowledge refresh timed out")
+        raise HTTPException(
+            status_code=504,
+            detail="Knowledge refresh timed out (>10 minutes)"
+        )
+    except Exception as e:
+        logger.error(f"Error refreshing system knowledge: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Knowledge refresh failed: {str(e)}"
+        )
+
+
+@router.post("/populate_autobot_docs")
+async def populate_autobot_docs(request: dict, req: Request):
+    """Populate knowledge base with AutoBot-specific documentation"""
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb_to_use is None:
+            return {
+                "status": "error",
+                "message": "Knowledge base not initialized - please check logs for errors",
+                "items_added": 0
+            }
+
+        logger.info("Starting AutoBot documentation population...")
+
+        # Define AutoBot documentation files to process
+        autobot_base_path = Path("/home/kali/Desktop/AutoBot")
+
+        doc_files = [
+            "CLAUDE.md",
+            "README.md",
+            "setup.sh",
+            "run_autobot.sh",
+            "docs/system-state.md",
+            "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
+            "docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md",
+            "docs/developer/PHASE_5_DEVELOPER_SETUP.md",
+            "docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md",
+            "config/config.yaml",
+            ".env.example",
+            "compose.yml"
+        ]
+
+        items_added = 0
+
+        for doc_file in doc_files:
+            try:
+                file_path = autobot_base_path / doc_file
+
+                if file_path.exists() and file_path.is_file():
+                    # Read file content
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+
+                    if content.strip():
+                        # Create structured content
+                        structured_content = f"""AutoBot Documentation: {doc_file}
+
+File Path: {file_path}
+
+Content:
+{content}
+
+Source: AutoBot Documentation
+Category: AutoBot
+Type: Documentation
+"""
+
+                        # Store in knowledge base
+                        if hasattr(kb_to_use, 'store_fact'):
+                            result = await kb_to_use.store_fact(
+                                content=structured_content,
+                                metadata={
+                                    "title": f"AutoBot: {doc_file}",
+                                    "source": "autobot_docs_population",
+                                    "category": "autobot",
+                                    "filename": doc_file,
+                                    "type": "autobot_documentation",
+                                    "file_path": str(file_path)
+                                }
+                            )
+                        else:
+                            result = await kb_to_use.store_fact(
+                                text=structured_content,
+                                metadata={
+                                    "title": f"AutoBot: {doc_file}",
+                                    "source": "autobot_docs_population",
+                                    "category": "autobot",
+                                    "filename": doc_file,
+                                    "type": "autobot_documentation",
+                                    "file_path": str(file_path)
+                                }
+                            )
+
+                        if result and result.get("fact_id"):
+                            items_added += 1
+                            logger.info(f"Added AutoBot doc: {doc_file}")
+                        else:
+                            logger.warning(f"Failed to store AutoBot doc: {doc_file}")
+                    else:
+                        logger.warning(f"Empty file: {doc_file}")
+                else:
+                    logger.warning(f"File not found: {doc_file}")
+
+            except Exception as e:
+                logger.error(f"Error processing AutoBot doc {doc_file}: {e}")
+
+            # Small delay between files
+            await asyncio.sleep(0.1)
+
+        # Add AutoBot configuration information
+        try:
+            config_info = """AutoBot System Configuration
+
+Network Layout:
+- Main Machine (WSL): 172.16.168.20 - Backend API (port 8001) + Desktop/Terminal VNC (port 6080)
+- VM1 Frontend: 172.16.168.21:5173 - Web interface (SINGLE FRONTEND SERVER)
+- VM2 NPU Worker: 172.16.168.22:8081 - Hardware AI acceleration
+- VM3 Redis: 172.16.168.23:6379 - Data layer
+- VM4 AI Stack: 172.16.168.24:8080 - AI processing
+- VM5 Browser: 172.16.168.25:3000 - Web automation (Playwright)
+
+Key Commands:
+- Setup: bash setup.sh [--full|--minimal|--distributed]
+- Run: bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+
+Critical Rules:
+- NEVER edit code directly on remote VMs (172.16.168.21-25)
+- ALL code edits MUST be made locally in /home/kali/Desktop/AutoBot/
+- Use ./sync-frontend.sh or sync scripts to deploy changes
+- Frontend ONLY runs on VM1 (172.16.168.21:5173)
+- NO temporary fixes or workarounds allowed
+
+Source: AutoBot System Configuration
+Category: AutoBot
+Type: System Configuration
+"""
+
+            if hasattr(kb_to_use, 'store_fact'):
+                result = await kb_to_use.store_fact(
+                    content=config_info,
+                    metadata={
+                        "title": "AutoBot System Configuration",
+                        "source": "autobot_docs_population",
+                        "category": "autobot",
+                        "type": "system_configuration"
+                    }
+                )
+            else:
+                result = await kb_to_use.store_fact(
+                    text=config_info,
+                    metadata={
+                        "title": "AutoBot System Configuration",
+                        "source": "autobot_docs_population",
+                        "category": "autobot",
+                        "type": "system_configuration"
+                    }
+                )
+
+            if result and result.get("fact_id"):
+                items_added += 1
+                logger.info("Added AutoBot system configuration")
+
+        except Exception as e:
+            logger.error(f"Error adding AutoBot configuration: {e}")
+
+        logger.info(f"AutoBot documentation population completed. Added {items_added} documents.")
+
+        return {
+            "status": "success",
+            "message": f"Successfully populated {items_added} AutoBot documents",
+            "items_added": items_added,
+            "total_files": len(doc_files) + 1  # +1 for config info
+        }
+
+    except Exception as e:
+        logger.error(f"Error populating AutoBot docs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AutoBot docs population failed: {str(e)}")
+
+
+@router.post("/clear_all")
+async def clear_all_knowledge(request: dict, req: Request):
+    """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION"""
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb_to_use is None:
+            return {
+                "status": "error",
+                "message": "Knowledge base not initialized - please check logs for errors",
+                "items_removed": 0
+            }
+
+        logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
+
+        # Get current stats before clearing
+        try:
+            stats_before = await kb_to_use.get_stats()
+            items_before = stats_before.get("total_facts", 0)
+        except Exception:
+            items_before = 0
+
+        # Clear the knowledge base
+        if hasattr(kb_to_use, 'clear_all'):
+            # Use specific clear_all method if available
+            result = await kb_to_use.clear_all()
+            items_removed = result.get("items_removed", items_before)
+        else:
+            # Fallback: try to clear via Redis if that's the implementation
+            try:
+                if hasattr(kb_to_use, 'redis') and kb_to_use.redis:
+                    # For Redis-based implementations
+                    keys = await kb_to_use.redis.keys("fact:*")
+                    if keys:
+                        await kb_to_use.redis.delete(*keys)
+
+                    # Clear any indexes
+                    index_keys = await kb_to_use.redis.keys("index:*")
+                    if index_keys:
+                        await kb_to_use.redis.delete(*index_keys)
+
+                    items_removed = len(keys)
+                else:
+                    logger.error("No clear method available for knowledge base implementation")
+                    raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
+
+            except Exception as e:
+                logger.error(f"Error during knowledge base clearing: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to clear knowledge base: {str(e)}")
+
+        logger.warning(f"Knowledge base cleared. Removed {items_removed} entries.")
+
+        return {
+            "status": "success",
+            "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
+            "items_removed": items_removed,
+            "items_before": items_before
+        }
+
+    except Exception as e:
+        logger.error(f"Error clearing knowledge base: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Knowledge base clearing failed: {str(e)}")
+
+
+# Legacy endpoints for backward compatibility
+@router.post("/add_document")
+async def add_document_to_knowledge(request: dict, req: Request):
+    """Legacy endpoint - redirects to add_text"""
+    return await add_text_to_knowledge(request, req)
+
+
+@router.post("/query")
+async def query_knowledge(request: dict, req: Request):
+    """Legacy endpoint - redirects to search"""
+    return await search_knowledge(request, req)
+
+
+# Helper function for RAG enhancement
+async def _enhance_search_with_rag(query: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Enhance search results with RAG analysis"""
+    try:
+        rag_agent = get_rag_agent()
+
+        # Convert results to documents for RAG processing
+        documents = []
+        for result in results:
+            documents.append({
+                "content": result.get("content", ""),
+                "metadata": {
+                    "filename": result.get("metadata", {}).get("title", "Unknown"),
+                    "source": result.get("metadata", {}).get("source", "knowledge_base"),
+                    "score": result.get("score", 0.0)
+                }
+            })
+
+        # Analyze document relevance
+        document_analysis = rag_agent._analyze_document_relevance(query, documents)
+
+        # Rank documents
+        ranked_documents = await rag_agent.rank_documents(query, documents)
+
+        return {
+            "document_analysis": document_analysis,
+            "ranked_documents": ranked_documents[:5],  # Top 5 ranked documents
+            "analysis_summary": {
+                "total_analyzed": len(documents),
+                "high_relevance_count": document_analysis.get("high_relevance", 0),
+                "medium_relevance_count": document_analysis.get("medium_relevance", 0),
+                "low_relevance_count": document_analysis.get("low_relevance", 0)
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"RAG enhancement error: {e}")
+        return {
+            "error": str(e),
+            "analysis_summary": {"total_analyzed": len(results), "error": "RAG analysis failed"}
+        }
