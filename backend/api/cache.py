@@ -10,7 +10,7 @@ from typing import Dict, Any
 import redis
 from fastapi import APIRouter, HTTPException
 
-from src.config import config as global_config_manager
+from src.unified_config_manager import config as global_config_manager
 from src.config_helper import cfg
 
 router = APIRouter()

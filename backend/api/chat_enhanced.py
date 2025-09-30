@@ -1,0 +1,598 @@
+"""
+Enhanced Chat API with AI Stack Integration.
+
+This module provides enhanced chat capabilities by integrating with the AI Stack VM,
+while maintaining backward compatibility with existing chat endpoints.
+"""
+
+import asyncio
+import json
+import logging
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+from backend.dependencies import get_config, get_knowledge_base
+from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
+
+logger = logging.getLogger(__name__)
+
+# ====================================================================
+# Router Configuration
+# ====================================================================
+
+router = APIRouter(tags=["chat-enhanced"])
+
+# ====================================================================
+# Request/Response Models
+# ====================================================================
+
+class EnhancedChatMessage(BaseModel):
+    """Enhanced chat message model with AI Stack integration."""
+    content: str = Field(..., min_length=1, max_length=50000, description="Message content")
+    role: str = Field(default="user", pattern="^(user|assistant|system)$", description="Message role")
+    session_id: Optional[str] = Field(None, description="Chat session ID")
+    message_type: Optional[str] = Field("text", description="Message type")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
+
+    # AI Stack specific fields
+    use_ai_stack: bool = Field(True, description="Whether to use AI Stack for enhanced responses")
+    use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
+    response_style: str = Field("conversational", description="Response style preference")
+    include_sources: bool = Field(True, description="Whether to include source citations")
+
+class ChatPreferences(BaseModel):
+    """Chat preferences for customizing AI behavior."""
+    response_length: str = Field("medium", description="Preferred response length (short, medium, long)")
+    technical_level: str = Field("adaptive", description="Technical complexity level")
+    include_reasoning: bool = Field(False, description="Include reasoning steps in responses")
+    fact_checking: bool = Field(True, description="Enable fact checking against knowledge base")
+
+# ====================================================================
+# Utility Functions
+# ====================================================================
+
+def generate_request_id() -> str:
+    """Generate a unique request ID."""
+    return str(uuid4())
+
+def generate_chat_session_id() -> str:
+    """Generate a new chat session ID."""
+    return str(uuid4())
+
+def validate_chat_session_id(session_id: str) -> bool:
+    """Validate chat session ID format."""
+    if not session_id:
+        return False
+    try:
+        uuid.UUID(session_id)
+        return True
+    except ValueError:
+        return False
+
+async def log_chat_event(event_type: str, session_id: str = None, details: Dict[str, Any] = None):
+    """Log chat-related events for monitoring and debugging."""
+    try:
+        event_data = {
+            "event_type": event_type,
+            "timestamp": datetime.utcnow().isoformat(),
+            "session_id": session_id,
+            "details": details or {}
+        }
+        logger.info(f"Enhanced Chat Event: {event_type}", extra=event_data)
+    except Exception as e:
+        logger.error(f"Failed to log chat event: {e}")
+
+def get_chat_history_manager(request):
+    """Get chat history manager from app state."""
+    return getattr(request.app.state, "chat_history_manager", None)
+
+def create_success_response(data: Any, message: str = "Success", request_id: str = None) -> Dict[str, Any]:
+    """Create standardized success response."""
+    response = {
+        "success": True,
+        "data": data,
+        "message": message,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    if request_id:
+        response["request_id"] = request_id
+    return response
+
+def create_error_response(
+    error_code: str = "INTERNAL_ERROR",
+    message: str = "An error occurred",
+    request_id: str = "unknown",
+    status_code: int = 500
+) -> JSONResponse:
+    """Create standardized error response."""
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": False,
+            "error": {
+                "code": error_code,
+                "message": message,
+                "request_id": request_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+    )
+
+# ====================================================================
+# Core Enhanced Chat Functions
+# ====================================================================
+
+async def process_enhanced_chat_message(
+    message: EnhancedChatMessage,
+    chat_history_manager,
+    knowledge_base,
+    config: Dict[str, Any],
+    request_id: str,
+    preferences: Optional[ChatPreferences] = None
+) -> Dict[str, Any]:
+    """
+    Process a chat message with AI Stack enhanced capabilities.
+
+    This function combines local knowledge base search with AI Stack's
+    intelligent chat agents for superior conversational experience.
+    """
+    try:
+        # Validate session ID
+        if message.session_id and not validate_chat_session_id(message.session_id):
+            raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+        # Get or create session
+        session_id = message.session_id or generate_chat_session_id()
+
+        # Store user message
+        user_message_id = str(uuid4())
+        user_message_data = {
+            "id": user_message_id,
+            "content": message.content,
+            "role": message.role,
+            "timestamp": datetime.utcnow().isoformat(),
+            "metadata": {**message.metadata, "ai_stack_enabled": message.use_ai_stack},
+            "session_id": session_id
+        }
+
+        # Add to session history
+        if hasattr(chat_history_manager, 'add_message'):
+            await chat_history_manager.add_message(session_id, user_message_data)
+
+        # Log chat event
+        await log_chat_event("enhanced_message_received", session_id, {
+            "message_id": user_message_id,
+            "content_length": len(message.content),
+            "ai_stack_enabled": message.use_ai_stack,
+            "use_knowledge_base": message.use_knowledge_base
+        })
+
+        # Get chat context from history
+        chat_context = []
+        if hasattr(chat_history_manager, 'get_session_messages'):
+            try:
+                recent_messages = await chat_history_manager.get_session_messages(session_id, limit=10)
+                chat_context = recent_messages or []
+            except Exception as e:
+                logger.warning(f"Could not retrieve chat context: {e}")
+
+        # Prepare enhanced context
+        enhanced_context = None
+        knowledge_sources = []
+
+        if message.use_knowledge_base and knowledge_base:
+            try:
+                # Search knowledge base for relevant context
+                kb_results = await knowledge_base.search(
+                    query=message.content,
+                    top_k=5
+                )
+                if kb_results:
+                    knowledge_sources = kb_results
+                    kb_summary = "\n".join([
+                        f"- {item.get('content', '')[:300]}..."
+                        for item in kb_results[:3]
+                    ])
+                    enhanced_context = f"Relevant knowledge context:\n{kb_summary}"
+                    logger.info(f"Enhanced context with {len(kb_results)} KB results")
+            except Exception as e:
+                logger.warning(f"Knowledge base context enhancement failed: {e}")
+
+        # Generate AI response
+        ai_response = {}
+
+        if message.use_ai_stack:
+            try:
+                # Use AI Stack enhanced chat capabilities
+                ai_client = await get_ai_stack_client()
+
+                # Prepare chat history for AI Stack
+                formatted_history = []
+                for msg in chat_context[-5:]:  # Last 5 messages for context
+                    formatted_history.append({
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", "")
+                    })
+
+                ai_stack_response = await ai_client.chat_message(
+                    message=message.content,
+                    context=enhanced_context,
+                    chat_history=formatted_history
+                )
+
+                ai_response = {
+                    "content": ai_stack_response.get("response", ai_stack_response.get("content", "")),
+                    "role": "assistant",
+                    "metadata": {
+                        "source": "ai_stack",
+                        "agent_used": ai_stack_response.get("agent", "chat"),
+                        "confidence": ai_stack_response.get("confidence", 0.8),
+                        "reasoning": ai_stack_response.get("reasoning") if preferences and preferences.include_reasoning else None
+                    }
+                }
+
+                logger.info(f"AI Stack response generated successfully")
+
+            except AIStackError as e:
+                logger.error(f"AI Stack chat failed: {e}")
+                # Fallback to basic response
+                ai_response = {
+                    "content": "I apologize, but I'm experiencing technical difficulties with my enhanced AI capabilities. Please try again in a moment.",
+                    "role": "assistant",
+                    "metadata": {
+                        "source": "fallback",
+                        "error": "ai_stack_unavailable"
+                    }
+                }
+
+        else:
+            # Basic chat without AI Stack (backward compatibility)
+            ai_response = {
+                "content": "Thank you for your message. I'm currently running in basic mode without enhanced AI capabilities.",
+                "role": "assistant",
+                "metadata": {
+                    "source": "basic_chat"
+                }
+            }
+
+        # Enhance response with knowledge sources if requested
+        if message.include_sources and knowledge_sources:
+            sources_info = []
+            for source in knowledge_sources[:3]:
+                sources_info.append({
+                    "title": source.get("title", "Unknown"),
+                    "snippet": source.get("content", "")[:150] + "...",
+                    "score": source.get("score", 0.0)
+                })
+            ai_response["metadata"]["sources"] = sources_info
+
+        # Store AI response
+        ai_message_id = str(uuid4())
+        ai_message_data = {
+            "id": ai_message_id,
+            "content": ai_response.get("content", ""),
+            "role": "assistant",
+            "timestamp": datetime.utcnow().isoformat(),
+            "metadata": ai_response.get("metadata", {}),
+            "session_id": session_id
+        }
+
+        # Add AI response to session history
+        if hasattr(chat_history_manager, 'add_message'):
+            await chat_history_manager.add_message(session_id, ai_message_data)
+
+        # Log response event
+        await log_chat_event("enhanced_response_generated", session_id, {
+            "message_id": ai_message_id,
+            "content_length": len(ai_response.get("content", "")),
+            "source": ai_response.get("metadata", {}).get("source", "unknown"),
+            "request_id": request_id
+        })
+
+        return {
+            "content": ai_response.get("content", ""),
+            "role": "assistant",
+            "session_id": session_id,
+            "message_id": ai_message_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "metadata": ai_response.get("metadata", {}),
+            "knowledge_sources": knowledge_sources if message.include_sources else None
+        }
+
+    except Exception as e:
+        logger.error(f"Error processing enhanced chat message: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process enhanced chat message: {str(e)}"
+        )
+
+# ====================================================================
+# Enhanced Chat API Endpoints
+# ====================================================================
+
+@router.post("/enhanced")
+async def enhanced_chat(
+    message: EnhancedChatMessage,
+    request: Request,
+    preferences: Optional[ChatPreferences] = None,
+    config=Depends(get_config),
+    knowledge_base=Depends(get_knowledge_base)
+):
+    """
+    Enhanced chat endpoint with AI Stack integration.
+
+    This endpoint provides intelligent conversation with:
+    - AI Stack enhanced reasoning capabilities
+    - Knowledge base integration
+    - Source citations
+    - Customizable response preferences
+    """
+    request_id = generate_request_id()
+
+    try:
+        # Validate message content
+        if not message.content or not message.content.strip():
+            return create_error_response(
+                error_code="VALIDATION_ERROR",
+                message="Message content cannot be empty",
+                request_id=request_id,
+                status_code=400
+            )
+
+        # Get dependencies from request state
+        chat_history_manager = get_chat_history_manager(request)
+
+        # Process the enhanced chat message
+        response_data = await process_enhanced_chat_message(
+            message,
+            chat_history_manager,
+            knowledge_base,
+            config,
+            request_id,
+            preferences
+        )
+
+        return JSONResponse(
+            status_code=200,
+            content=create_success_response(
+                response_data,
+                "Enhanced chat message processed successfully",
+                request_id
+            )
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[{request_id}] Enhanced chat error: {e}")
+        return create_error_response(
+            error_code="INTERNAL_ERROR",
+            message=str(e),
+            request_id=request_id,
+            status_code=500
+        )
+
+@router.post("/stream-enhanced")
+async def stream_enhanced_chat(
+    message: EnhancedChatMessage,
+    request: Request,
+    preferences: Optional[ChatPreferences] = None
+):
+    """
+    Stream enhanced chat response for real-time communication.
+
+    Provides real-time streaming of AI Stack enhanced responses
+    with knowledge base integration.
+    """
+    request_id = generate_request_id()
+
+    async def generate_enhanced_stream():
+        try:
+            # Initial setup
+            session_id = message.session_id or generate_chat_session_id()
+
+            # Send initial message acknowledgment
+            yield f"data: {json.dumps({'type': 'start', 'session_id': session_id, 'enhanced': True})}\n\n"
+
+            # Get chat history manager
+            chat_history_manager = get_chat_history_manager(request)
+
+            if message.use_ai_stack:
+                try:
+                    # Get AI Stack client
+                    ai_client = await get_ai_stack_client()
+
+                    # For streaming, we'll process and send response in chunks
+                    # This is a simplified streaming implementation
+                    response_data = await process_enhanced_chat_message(
+                        message, chat_history_manager, None, {}, request_id, preferences
+                    )
+
+                    # Stream the response content in chunks
+                    content = response_data.get("content", "")
+                    chunk_size = 50  # Characters per chunk
+
+                    for i in range(0, len(content), chunk_size):
+                        chunk = content[i:i + chunk_size]
+                        chunk_data = {
+                            "type": "chunk",
+                            "content": chunk,
+                            "session_id": session_id,
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
+                        await asyncio.sleep(0.05)  # Small delay for streaming effect
+
+                    # Send metadata and sources at the end
+                    metadata_data = {
+                        "type": "metadata",
+                        "metadata": response_data.get("metadata", {}),
+                        "sources": response_data.get("knowledge_sources"),
+                        "session_id": session_id
+                    }
+                    yield f"data: {json.dumps(metadata_data)}\n\n"
+
+                except Exception as e:
+                    logger.error(f"Enhanced streaming error: {e}")
+                    error_data = {
+                        "type": "error",
+                        "message": "Error generating enhanced response",
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
+            else:
+                # Basic streaming fallback
+                fallback_response = "Thank you for your message. Enhanced streaming requires AI Stack integration."
+                chunk_data = {
+                    "type": "chunk",
+                    "content": fallback_response,
+                    "session_id": session_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+
+            # Send completion signal
+            yield f"data: {json.dumps({'type': 'end'})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            error_data = {
+                "type": "error",
+                "message": "Error in enhanced streaming",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+
+    return StreamingResponse(
+        generate_enhanced_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control"
+        }
+    )
+
+@router.get("/health-enhanced")
+async def enhanced_chat_health_check():
+    """Health check for enhanced chat service including AI Stack connectivity."""
+    try:
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "components": {}
+        }
+
+        # Check AI Stack connectivity
+        try:
+            ai_client = await get_ai_stack_client()
+            ai_stack_health = await ai_client.health_check()
+            health_status["components"]["ai_stack"] = ai_stack_health["status"]
+        except Exception as e:
+            logger.warning(f"AI Stack health check failed: {e}")
+            health_status["components"]["ai_stack"] = "unavailable"
+
+        # Overall health assessment
+        overall_healthy = health_status["components"]["ai_stack"] == "healthy"
+        if not overall_healthy:
+            health_status["status"] = "degraded"
+
+        return JSONResponse(
+            status_code=200 if overall_healthy else 503,
+            content=health_status
+        )
+
+    except Exception as e:
+        logger.error(f"Enhanced chat health check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+@router.get("/capabilities")
+async def get_enhanced_chat_capabilities():
+    """Get enhanced chat capabilities and available features."""
+    try:
+        ai_client = await get_ai_stack_client()
+        agents_info = await ai_client.list_available_agents()
+
+        capabilities = {
+            "enhanced_chat": True,
+            "ai_stack_integration": True,
+            "knowledge_base_integration": True,
+            "source_citations": True,
+            "streaming_responses": True,
+            "multi_agent_coordination": True,
+            "available_agents": agents_info.get("agents", []),
+            "response_styles": ["conversational", "technical", "creative", "analytical"],
+            "supported_languages": ["en"],  # Add more as needed
+            "max_message_length": 50000,
+            "context_window": 10  # messages
+        }
+
+        return create_success_response(
+            capabilities,
+            "Enhanced chat capabilities retrieved successfully"
+        )
+
+    except Exception as e:
+        logger.warning(f"Failed to get full capabilities: {e}")
+        # Return basic capabilities as fallback
+        return create_success_response({
+            "enhanced_chat": True,
+            "ai_stack_integration": False,
+            "knowledge_base_integration": True,
+            "error": "Partial capabilities due to AI Stack unavailability"
+        })
+
+# ====================================================================
+# Backward Compatibility Wrapper
+# ====================================================================
+
+@router.post("/compat/message")
+async def compatible_chat_message(
+    content: str,
+    session_id: Optional[str] = None,
+    request: Request = None,
+    config=Depends(get_config),
+    knowledge_base=Depends(get_knowledge_base)
+):
+    """
+    Backward compatibility endpoint that wraps enhanced chat functionality
+    with the original simple interface.
+    """
+    # Convert simple request to enhanced format
+    enhanced_message = EnhancedChatMessage(
+        content=content,
+        session_id=session_id,
+        use_ai_stack=True,
+        use_knowledge_base=True,
+        include_sources=False  # Keep simple for compatibility
+    )
+
+    # Process through enhanced chat
+    response = await enhanced_chat(enhanced_message, request, None, config, knowledge_base)
+
+    # Extract just the essential fields for backward compatibility
+    if isinstance(response, JSONResponse):
+        response_data = json.loads(response.body) if hasattr(response, 'body') else {}
+        if response_data.get("success") and response_data.get("data"):
+            data = response_data["data"]
+            return {
+                "message": data.get("content", ""),
+                "session_id": data.get("session_id"),
+                "timestamp": data.get("timestamp")
+            }
+
+    return {"message": "Response processing failed", "session_id": session_id}

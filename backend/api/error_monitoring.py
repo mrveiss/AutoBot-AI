@@ -27,7 +27,7 @@ from src.utils.error_boundaries import get_error_boundary_manager, get_error_sta
 logger = logging.getLogger(__name__)
 
 # Create FastAPI router
-router = APIRouter(prefix="/errors", tags=["Error Monitoring"])
+router = APIRouter(tags=["Error Monitoring"])
 
 
 @router.get("/statistics")

@@ -32,7 +32,7 @@ from src.npu_semantic_search import get_npu_search_engine
 logger = logging.getLogger(__name__)
 
 # Initialize router
-router = APIRouter(prefix="/api/multimodal", tags=["multimodal"])
+router = APIRouter(tags=["multimodal"])
 
 # Pydantic models for request/response
 class CrossModalSearchRequest(BaseModel):

@@ -27,7 +27,7 @@ from src.llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/advanced_workflow", tags=["advanced_workflow"])
+router = APIRouter(tags=["advanced_workflow"])
 
 
 async def get_advanced_orchestrator_instance(request: Request = None):

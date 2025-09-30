@@ -29,7 +29,7 @@ from src.utils.performance_monitor import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/monitoring", tags=["AutoBot Monitoring"])
+router = APIRouter(tags=["AutoBot Monitoring"])
 
 
 class MonitoringStatus(BaseModel):
