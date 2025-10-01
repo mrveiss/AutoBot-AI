@@ -27,12 +27,8 @@
 
     <!-- Advanced Tab Content -->
     <div v-if="manageTab === 'advanced'" class="advanced-content">
+      <!-- System Knowledge Management: Initialize, Reindex, Repopulate -->
       <SystemKnowledgeManager />
-
-      <!-- Man Pages Manager -->
-      <div class="man-pages-section">
-        <ManPageManager />
-      </div>
     </div>
 
     <!-- Manage Tab Content -->
@@ -348,7 +344,6 @@ import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
 import SystemKnowledgeManager from '@/components/SystemKnowledgeManager.vue'
-import ManPageManager from '@/components/ManPageManager.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
