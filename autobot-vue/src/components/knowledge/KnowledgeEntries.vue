@@ -3,41 +3,35 @@
     <!-- Sub-tabs for Manage section -->
     <div class="manage-tabs">
       <button
-        @click="manageTab = 'entries'"
-        :class="['manage-tab-btn', { active: manageTab === 'entries' }]"
-      >
-        <i class="fas fa-list mr-2"></i>Manage Entries
-      </button>
-      <button
         @click="manageTab = 'upload'"
         :class="['manage-tab-btn', { active: manageTab === 'upload' }]"
       >
         <i class="fas fa-upload mr-2"></i>Upload
       </button>
       <button
-        @click="manageTab = 'system'"
-        :class="['manage-tab-btn', { active: manageTab === 'system' }]"
+        @click="manageTab = 'manage'"
+        :class="['manage-tab-btn', { active: manageTab === 'manage' }]"
       >
-        <i class="fas fa-cog mr-2"></i>System Knowledge
+        <i class="fas fa-edit mr-2"></i>Manage
+      </button>
+      <button
+        @click="manageTab = 'advanced'"
+        :class="['manage-tab-btn', { active: manageTab === 'advanced' }]"
+      >
+        <i class="fas fa-cog mr-2"></i>Advanced
       </button>
     </div>
 
     <!-- Upload Tab Content -->
     <KnowledgeUpload v-if="manageTab === 'upload'" />
 
-    <!-- System Knowledge Tab Content -->
-    <div v-if="manageTab === 'system'" class="system-knowledge-content">
-      <!-- System Knowledge Stats -->
+    <!-- Advanced Tab Content -->
+    <div v-if="manageTab === 'advanced'" class="advanced-content">
       <SystemKnowledgeManager />
-
-      <!-- Man Pages Integration -->
-      <div class="man-pages-section">
-        <ManPageManager />
-      </div>
     </div>
 
-    <!-- Entries Management Tab Content -->
-    <div v-if="manageTab === 'entries'" class="entries-content">
+    <!-- Manage Tab Content -->
+    <div v-if="manageTab === 'manage'" class="entries-content">
     <div class="entries-header">
       <h3>Knowledge Entries</h3>
       <div class="header-actions">
@@ -349,13 +343,12 @@ import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
 import SystemKnowledgeManager from '@/components/SystemKnowledgeManager.vue'
-import ManPageManager from '@/components/ManPageManager.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 
 // Manage tab state
-const manageTab = ref<'entries' | 'upload' | 'system'>('entries')
+const manageTab = ref<'upload' | 'manage' | 'advanced'>('upload')
 
 // Search and filter state
 const searchQuery = ref('')
