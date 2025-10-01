@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex-1 overflow-y-auto p-4 min-h-0"
+    class="p-4"
     ref="messagesContainer"
     v-bind="$attrs"
   >
@@ -12,7 +12,7 @@
       </div>
     </div>
 
-    <div v-else class="space-y-2">
+    <div v-else class="space-y-1">
       <div
         v-for="message in filteredMessages"
         :key="message.id"
@@ -169,9 +169,6 @@
         <SkeletonLoader variant="chat-message" :animated="true" />
       </div>
     </div>
-
-    <!-- Auto-scroll anchor -->
-    <div ref="scrollAnchor"></div>
   </div>
 
   <!-- Edit Message Modal -->
@@ -212,6 +209,7 @@
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
+import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import type { ChatMessage } from '@/stores/useChatStore'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
@@ -224,27 +222,16 @@ defineOptions({
 
 const store = useChatStore()
 const controller = useChatController()
+const { displaySettings } = useDisplaySettings()
 
 // Refs
 const messagesContainer = ref<HTMLElement>()
-const scrollAnchor = ref<HTMLElement>()
 const editTextarea = ref<HTMLTextAreaElement>()
 
 // Edit modal state
 const showEditModal = ref(false)
 const editingContent = ref('')
 const editingMessage = ref<ChatMessage | null>(null)
-
-// Display settings (would come from user preferences)
-const displaySettings = ref({
-  showThoughts: true,
-  showJson: false,
-  showUtility: true,
-  showPlanning: true,
-  showDebug: false,
-  showSources: true,
-  showMetadata: true
-})
 
 // Enhanced typing indicator state
 const typingStartTime = ref<number | null>(null)
@@ -253,12 +240,23 @@ const estimatedResponseTime = ref<number | null>(null)
 // Computed
 const filteredMessages = computed(() => {
   return store.currentMessages.filter(message => {
-    // Filter messages based on display settings
-    if (message.sender === 'system' && !displaySettings.value.showUtility) return false
-    if (message.content.startsWith('[THOUGHT]') && !displaySettings.value.showThoughts) return false
-    if (message.content.startsWith('[DEBUG]') && !displaySettings.value.showDebug) return false
-    if (message.content.startsWith('[PLANNING]') && !displaySettings.value.showPlanning) return false
+    // Filter messages based on display settings and message type
+    // Show Utility Messages - controls tool usage messages
+    if (message.type === 'utility' && !displaySettings.value.showUtility) return false
 
+    // Show Thoughts - controls LLM thought messages
+    if (message.type === 'thought' && !displaySettings.value.showThoughts) return false
+
+    // Show Planning Messages - controls LLM planning process messages
+    if (message.type === 'planning' && !displaySettings.value.showPlanning) return false
+
+    // Show Debug Messages - controls debug output
+    if (message.type === 'debug' && !displaySettings.value.showDebug) return false
+
+    // Show Sources - controls source reference messages
+    if (message.type === 'sources' && !displaySettings.value.showSources) return false
+
+    // Always show regular messages and responses
     return true
   })
 })
@@ -383,7 +381,7 @@ const isLastMessage = (message: ChatMessage): boolean => {
 }
 
 const shouldShowMetadata = (message: ChatMessage): boolean => {
-  return displaySettings.value.showMetadata &&
+  return displaySettings.value.showJson &&
          message.sender === 'assistant' &&
          message.metadata &&
          Object.keys(message.metadata).length > 0
@@ -470,8 +468,12 @@ const retryMessage = async (messageId: string) => {
 }
 
 const scrollToBottom = () => {
-  if (store.settings.autoSave && scrollAnchor.value) { // Using autoSave as proxy for auto-scroll
-    scrollAnchor.value.scrollIntoView({ behavior: 'smooth' })
+  if (store.settings.autoSave && messagesContainer.value) { // Using autoSave as proxy for auto-scroll
+    // Scroll the parent container (UnifiedLoadingView handles scrolling now)
+    const scrollableParent = messagesContainer.value.closest('.overflow-y-auto')
+    if (scrollableParent) {
+      scrollableParent.scrollTop = scrollableParent.scrollHeight
+    }
   }
 }
 
@@ -513,27 +515,57 @@ onMounted(() => {
 }
 
 .message-wrapper {
-  @apply bg-white rounded-lg shadow-sm border border-gray-200 p-2 transition-all duration-200;
+  @apply rounded-lg shadow-sm border transition-all duration-200;
+  max-width: 85%;
+  padding: 6px 10px;
 }
 
 .message-wrapper:hover {
   @apply shadow-md;
 }
 
+/* USER MESSAGES - Right side, blue theme */
 .message-wrapper.user-message {
-  @apply bg-indigo-50 border-indigo-200 ml-2 mr-1;
+  @apply bg-blue-600 text-white border-blue-700 ml-auto mr-0;
+  border-radius: 18px 18px 4px 18px;
 }
 
+.message-wrapper.user-message .sender-name,
+.message-wrapper.user-message .message-time {
+  @apply text-blue-100;
+}
+
+.message-wrapper.user-message .message-content {
+  @apply text-white;
+}
+
+/* ASSISTANT MESSAGES - Left side, gray theme */
 .message-wrapper.assistant-message {
-  @apply bg-blue-50 border-blue-200 mr-2 ml-1;
+  @apply bg-gray-100 text-gray-900 border-gray-300 mr-auto ml-0;
+  border-radius: 18px 18px 18px 4px;
 }
 
+.message-wrapper.assistant-message .sender-name {
+  @apply text-gray-900;
+}
+
+.message-wrapper.assistant-message .message-time {
+  @apply text-gray-600;
+}
+
+.message-wrapper.assistant-message .message-content {
+  @apply text-gray-900;
+}
+
+/* SYSTEM MESSAGES - Centered, subtle */
 .message-wrapper.system-message {
-  @apply bg-gray-50 border-gray-200 mx-2;
+  @apply bg-gray-50 border-gray-200 mx-auto text-gray-700;
+  max-width: 70%;
+  border-radius: 12px;
 }
 
 .message-wrapper.error {
-  @apply bg-red-50 border-red-200;
+  @apply bg-red-50 border-red-300 text-red-900;
 }
 
 .message-wrapper.sending {
@@ -541,23 +573,23 @@ onMounted(() => {
 }
 
 .message-header {
-  @apply flex items-start justify-between mb-1.5;
+  @apply flex items-start justify-between mb-1;
 }
 
 .message-avatar {
-  @apply w-6 h-6 rounded-full flex items-center justify-center text-white text-xs;
+  @apply w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold;
 }
 
 .message-avatar.user {
-  @apply bg-indigo-600;
+  @apply bg-blue-700;
 }
 
 .message-avatar.assistant {
-  @apply bg-blue-600;
+  @apply bg-gray-600;
 }
 
 .message-avatar.system {
-  @apply bg-gray-600;
+  @apply bg-gray-500;
 }
 
 .message-info {
@@ -565,11 +597,11 @@ onMounted(() => {
 }
 
 .sender-name {
-  @apply font-semibold text-gray-900 text-xs;
+  @apply font-semibold text-xs;
 }
 
 .message-time {
-  @apply text-xs text-gray-500 leading-tight;
+  @apply text-xs leading-tight;
 }
 
 .message-actions {
@@ -577,11 +609,21 @@ onMounted(() => {
 }
 
 .action-btn {
-  @apply w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded transition-colors text-xs;
+  @apply w-6 h-6 flex items-center justify-center rounded transition-colors text-xs;
+}
+
+/* User message actions - light colored for visibility on blue background */
+.user-message .action-btn {
+  @apply text-blue-200 hover:text-white;
+}
+
+/* Assistant message actions - darker for visibility on light background */
+.assistant-message .action-btn {
+  @apply text-gray-400 hover:text-gray-600;
 }
 
 .action-btn.danger:hover {
-  @apply text-red-600;
+  @apply text-red-500;
 }
 
 .message-status {
@@ -589,31 +631,56 @@ onMounted(() => {
 }
 
 .message-content {
-  @apply text-gray-800 leading-relaxed text-sm;
+  @apply leading-snug text-sm;
 }
 
 .message-text {
   @apply break-words;
+  line-height: 1.4;
 }
 
-.message-text :deep(code) {
-  @apply bg-gray-100 px-1 py-0.5 rounded text-xs font-mono;
+/* User message code styling - lighter for blue background */
+.user-message .message-text :deep(code) {
+  @apply bg-blue-500 text-blue-50 px-1.5 py-0.5 rounded text-xs font-mono;
 }
 
-.message-text :deep(pre) {
-  @apply bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto my-1.5;
+.user-message .message-text :deep(pre) {
+  @apply bg-blue-800 text-blue-50 p-3 rounded-lg overflow-x-auto my-1.5;
 }
 
-.message-text :deep(a) {
-  @apply text-indigo-600 hover:text-indigo-800 underline;
+.user-message .message-text :deep(a) {
+  @apply text-blue-100 hover:text-white underline;
 }
 
-.message-metadata {
-  @apply mt-2 pt-1.5 border-t border-gray-200;
+/* Assistant message code styling - standard colors for light background */
+.assistant-message .message-text :deep(code) {
+  @apply bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded text-xs font-mono;
 }
 
-.metadata-items {
-  @apply flex flex-wrap gap-2 text-xs text-gray-500;
+.assistant-message .message-text :deep(pre) {
+  @apply bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-1.5;
+}
+
+.assistant-message .message-text :deep(a) {
+  @apply text-blue-600 hover:text-blue-800 underline;
+}
+
+/* User message metadata - lighter border for blue background */
+.user-message .message-metadata {
+  @apply mt-1.5 pt-1 border-t border-blue-400;
+}
+
+.user-message .metadata-items {
+  @apply flex flex-wrap gap-1.5 text-xs text-blue-100;
+}
+
+/* Assistant message metadata - standard styling */
+.assistant-message .message-metadata {
+  @apply mt-1.5 pt-1 border-t border-gray-300;
+}
+
+.assistant-message .metadata-items {
+  @apply flex flex-wrap gap-1.5 text-xs text-gray-600;
 }
 
 .metadata-item {
