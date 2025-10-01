@@ -75,6 +75,11 @@ data/reports_backend/*
 data/file_manager_root_backend/*
 data/file_manager_root_frontend/*
 
+# Conversation files - track structure, ignore content
+data/conversation_files/*
+!data/conversation_files/.gitkeep
+data/conversation_files.db
+
 # === SECURITY & AUTHENTICATION ===
 # SSH keys and certificates
 *.pem
