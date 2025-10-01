@@ -157,6 +157,10 @@
             : 'Try using different keywords or check your filters.'
           }}
         </p>
+        <div class="initialization-help">
+          <p><strong>Need to index your knowledge base?</strong></p>
+          <p>Go to <router-link to="/knowledge/manage" class="help-link">Manage → System Knowledge</router-link> and click "Initialize Machine Knowledge" to create search indexes.</p>
+        </div>
       </div>
 
       <!-- RAG Error Handling -->
@@ -491,6 +495,22 @@ const getConfidenceBadgeClass = (confidence: number) => {
 
 .no-results-hint {
   @apply text-sm text-gray-500 mt-2;
+}
+
+.initialization-help {
+  @apply mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg;
+}
+
+.initialization-help p {
+  @apply text-sm text-blue-800 mb-1;
+}
+
+.initialization-help strong {
+  @apply font-semibold;
+}
+
+.help-link {
+  @apply text-blue-600 hover:text-blue-800 underline font-medium;
 }
 
 /* RAG Error */

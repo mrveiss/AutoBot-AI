@@ -32,5 +32,27 @@
 <style scoped>
 .secrets-view {
   min-height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar styling for better UX */
+.secrets-view::-webkit-scrollbar {
+  width: 8px;
+}
+
+.secrets-view::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.secrets-view::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.secrets-view::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 </style>
