@@ -203,8 +203,8 @@ const loadKnowledgeTree = async () => {
   error.value = null
 
   try {
-    const response = await apiClient.get('/api/knowledge_base/stats/basic')
-    const data = await response.json()
+    // apiClient.get() already returns parsed JSON, not a Response object
+    const data = await apiClient.get('/api/knowledge_base/stats/basic')
 
     // Build tree structure from API data
     if (props.mode === 'autobot') {
@@ -232,8 +232,8 @@ const loadKnowledgeTree = async () => {
 
 const loadUserKnowledge = async () => {
   try {
-    const response = await apiClient.get('/api/knowledge_base/entries')
-    const data = await response.json()
+    // apiClient.get() already returns parsed JSON, not a Response object
+    const data = await apiClient.get('/api/knowledge_base/entries')
 
     // Build tree from entries (group by category)
     const categoryMap = new Map<string, TreeNode[]>()

@@ -43,12 +43,32 @@
     <!-- Action Buttons -->
     <div class="actions">
       <button
-        @click="refreshSystemKnowledge"
-        :disabled="isRefreshing"
+        @click="initializeMachineKnowledge"
+        :disabled="isInitializing"
         class="btn btn-primary"
+        title="Create vector embeddings for search functionality"
+      >
+        <span class="icon">🚀</span>
+        {{ isInitializing ? 'Initializing...' : 'Initialize Machine Knowledge' }}
+      </button>
+
+      <button
+        @click="reindexDocuments"
+        :disabled="isReindexing"
+        class="btn btn-primary"
+        title="Reindex all documents in the knowledge base"
       >
         <span class="icon">🔄</span>
-        {{ isRefreshing ? 'Refreshing...' : 'Refresh All Man Pages' }}
+        {{ isReindexing ? 'Reindexing...' : 'Reindex Documents' }}
+      </button>
+
+      <button
+        @click="refreshSystemKnowledge"
+        :disabled="isRefreshing"
+        class="btn btn-secondary"
+      >
+        <span class="icon">📋</span>
+        {{ isRefreshing ? 'Refreshing...' : 'Refresh Man Pages' }}
       </button>
 
       <button
@@ -56,7 +76,7 @@
         :disabled="isPopulating"
         class="btn btn-secondary"
       >
-        <span class="icon">📋</span>
+        <span class="icon">⚙️</span>
         {{ isPopulating ? 'Populating...' : 'Populate Common Commands' }}
       </button>
 
@@ -111,16 +131,28 @@
       <h3>ℹ️ About System Knowledge</h3>
       <div class="info-content">
         <p>
-          <strong>Man Pages:</strong> Linux manual pages for all CLI commands available on this machine.
+          <strong>Initialize Machine Knowledge:</strong> Creates vector embeddings for all documents in the knowledge base.
+          Required for search functionality to work. Run this first if search returns no results.
+        </p>
+        <p>
+          <strong>Reindex Documents:</strong> Rebuilds the entire knowledge base from scratch, repopulating with:
+          text entries, uploaded files, and indexed websites. Use when documents seem outdated or corrupted.
+        </p>
+        <p>
+          <strong>Refresh Man Pages:</strong> Scans and indexes ALL Linux manual pages available on this machine.
           Enables the chat agent to understand and help with command-line tools.
         </p>
         <p>
-          <strong>AutoBot Documentation:</strong> Project guidelines, API references, architecture docs,
+          <strong>Populate Common Commands:</strong> Quick index of frequently-used commands (ls, cd, grep, etc).
+          Faster alternative to full man page refresh.
+        </p>
+        <p>
+          <strong>Index AutoBot Docs:</strong> Indexes project guidelines, API references, architecture docs,
           and troubleshooting guides. Enables the chat agent to be self-aware of its capabilities.
         </p>
         <p>
-          <strong>When to Refresh:</strong> After installing new packages, updating the system,
-          or making changes to AutoBot documentation.
+          <strong>When to Use:</strong> Initialize after first install, Reindex when documents are outdated,
+          Refresh after installing packages or updating docs.
         </p>
       </div>
     </div>
@@ -150,6 +182,7 @@ export default {
     // Use the shared composable
     const {
       fetchStats: fetchStatsAPI,
+      initializeMachineKnowledge: initializeMachineKnowledgeAPI,
       refreshSystemKnowledge: refreshSystemKnowledgeAPI,
       populateManPages: populateManPagesAPI,
       populateAutoBotDocs: populateAutoBotDocsAPI,
@@ -160,6 +193,8 @@ export default {
     const commandsIndexed = ref(0);
     const docsIndexed = ref(0);
     const isLoading = ref(false);
+    const isInitializing = ref(false);
+    const isReindexing = ref(false);
     const isRefreshing = ref(false);
     const isPopulating = ref(false);
     const isDocPopulating = ref(false);
@@ -196,6 +231,109 @@ export default {
         addLogEntry('Failed to fetch stats', 'error');
       } finally {
         isLoading.value = false;
+      }
+    };
+
+    const initializeMachineKnowledge = async () => {
+      if (isInitializing.value) return;
+
+      if (!confirm('Initialize machine knowledge? This creates vector embeddings for search. Continue?')) {
+        return;
+      }
+
+      isInitializing.value = true;
+      progressMessage.value = 'Initializing machine knowledge...';
+      progressPercent.value = 0;
+      lastResult.value = null;
+
+      try {
+        addLogEntry('Initializing machine knowledge', 'info');
+
+        const progressInterval = setInterval(() => {
+          if (progressPercent.value < 90) {
+            progressPercent.value += 10;
+          }
+        }, 2000);
+
+        const response = await initializeMachineKnowledgeAPI(false);
+
+        clearInterval(progressInterval);
+        progressPercent.value = 100;
+        progressMessage.value = 'Initialization complete!';
+
+        lastResult.value = {
+          status: 'success',
+          message: 'Machine knowledge initialized successfully',
+          details: response.data || {}
+        };
+
+        addLogEntry('Machine knowledge initialized', 'success');
+        await fetchStats();
+
+      } catch (error) {
+        lastResult.value = {
+          status: 'error',
+          message: error.response?.data?.detail || 'Failed to initialize machine knowledge'
+        };
+        addLogEntry('Machine knowledge initialization failed', 'error');
+      } finally {
+        isInitializing.value = false;
+        setTimeout(() => {
+          progressMessage.value = '';
+          progressPercent.value = 0;
+        }, 3000);
+      }
+    };
+
+    const reindexDocuments = async () => {
+      if (isReindexing.value) return;
+
+      if (!confirm('Reindex all documents? This will rebuild the knowledge base. Continue?')) {
+        return;
+      }
+
+      isReindexing.value = true;
+      progressMessage.value = 'Reindexing documents...';
+      progressPercent.value = 0;
+      lastResult.value = null;
+
+      try {
+        addLogEntry('Starting document reindexing', 'info');
+
+        const progressInterval = setInterval(() => {
+          if (progressPercent.value < 90) {
+            progressPercent.value += 5;
+          }
+        }, 1500);
+
+        // Use the initialize function with force=true to reindex
+        const response = await initializeMachineKnowledgeAPI(true);
+
+        clearInterval(progressInterval);
+        progressPercent.value = 100;
+        progressMessage.value = 'Reindexing complete!';
+
+        lastResult.value = {
+          status: 'success',
+          message: 'Documents reindexed successfully',
+          details: response.data || {}
+        };
+
+        addLogEntry('Documents reindexed', 'success');
+        await fetchStats();
+
+      } catch (error) {
+        lastResult.value = {
+          status: 'error',
+          message: error.response?.data?.detail || 'Failed to reindex documents'
+        };
+        addLogEntry('Document reindexing failed', 'error');
+      } finally {
+        isReindexing.value = false;
+        setTimeout(() => {
+          progressMessage.value = '';
+          progressPercent.value = 0;
+        }, 3000);
       }
     };
 
@@ -345,6 +483,8 @@ export default {
       commandsIndexed,
       docsIndexed,
       isLoading,
+      isInitializing,
+      isReindexing,
       isRefreshing,
       isPopulating,
       isDocPopulating,
@@ -353,6 +493,8 @@ export default {
       lastResult,
       activityLog,
       fetchStats,
+      initializeMachineKnowledge,
+      reindexDocuments,
       refreshSystemKnowledge,
       populateManPages,
       populateAutoBotDocs,
