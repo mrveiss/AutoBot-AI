@@ -134,7 +134,7 @@
         <p>{{ lastResult.message }}</p>
         <div v-if="lastResult.details" class="result-details">
           <p v-for="(value, key) in lastResult.details" :key="key">
-            <strong>{{ formatKey(key) }}:</strong> {{ value }}
+            <strong>{{ formatKey(key) }}:</strong> {{ typeof value === 'object' ? JSON.stringify(value) : value }}
           </p>
         </div>
       </div>
@@ -279,7 +279,7 @@ export default {
         lastResult.value = {
           status: 'success',
           message: 'Machine knowledge initialized successfully',
-          details: response.data || {}
+          details: response || {}
         };
 
         addLogEntry('Machine knowledge initialized', 'success');
@@ -331,7 +331,7 @@ export default {
         lastResult.value = {
           status: 'success',
           message: 'Documents reindexed successfully',
-          details: response.data || {}
+          details: response || {}
         };
 
         addLogEntry('Documents reindexed', 'success');
@@ -389,14 +389,14 @@ export default {
 
         lastResult.value = {
           status: 'success',
-          message: response.data.message || 'System knowledge refreshed successfully',
+          message: response.message || 'System knowledge refreshed successfully',
           details: {
-            'Commands Indexed': response.data.commands_indexed || 0,
-            'Total Facts': response.data.total_facts || 0
+            'Commands Indexed': response.commands_indexed || 0,
+            'Total Facts': response.total_facts || 0
           }
         };
 
-        commandsIndexed.value = response.data.commands_indexed || 0;
+        commandsIndexed.value = response.commands_indexed || 0;
         addLogEntry(`Indexed ${commandsIndexed.value} commands`, 'success');
 
         // Refresh stats
@@ -431,14 +431,14 @@ export default {
 
         lastResult.value = {
           status: 'success',
-          message: response.data.message || 'Man pages populated successfully',
+          message: response.message || 'Man pages populated successfully',
           details: {
-            'Items Added': response.data.items_added || 0,
-            'Total Commands': response.data.total_commands || 0
+            'Items Added': response.items_added || 0,
+            'Total Commands': response.total_commands || 0
           }
         };
 
-        addLogEntry(`Populated ${response.data.items_added} man pages`, 'success');
+        addLogEntry(`Populated ${response.items_added || 0} man pages`, 'success');
         await fetchStats();
 
       } catch (error) {
@@ -467,13 +467,13 @@ export default {
 
         lastResult.value = {
           status: 'success',
-          message: response.data.message || 'Documentation indexed successfully',
+          message: response.message || 'Documentation indexed successfully',
           details: {
-            'Items Added': response.data.items_added || 0
+            'Items Added': response.items_added || 0
           }
         };
 
-        docsIndexed.value = response.data.items_added || 0;
+        docsIndexed.value = response.items_added || 0;
         addLogEntry(`Indexed ${docsIndexed.value} documentation files`, 'success');
         await fetchStats();
 
