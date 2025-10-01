@@ -161,7 +161,7 @@
       <section class="border-t border-blueGray-200 p-4 pb-3 flex-shrink-0">
         <h3 class="text-base font-semibold text-blueGray-700 mb-2">Message Display</h3>
         <div class="space-y-2">
-          <label v-for="setting in displaySettings" :key="setting.key" class="flex items-center">
+          <label v-for="setting in displaySettingsConfig" :key="setting.key" class="flex items-center">
             <input
               type="checkbox"
               :checked="getSetting(setting.key)"
@@ -195,6 +195,16 @@
       </section>
     </div>
   </div>
+
+  <!-- Delete Conversation Dialog -->
+  <DeleteConversationDialog
+    :visible="showDeleteDialog"
+    :session-id="deleteTargetSessionId || ''"
+    :session-name="store.sessions.find(s => s.id === deleteTargetSessionId)?.title"
+    :file-stats="deleteFileStats"
+    @confirm="handleDeleteConfirm"
+    @cancel="handleDeleteCancel"
+  />
 
   <!-- Edit Session Name Modal -->
   <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -231,10 +241,15 @@
 import { ref, computed, nextTick } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
+import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import type { ChatSession } from '@/stores/useChatStore'
+import DeleteConversationDialog from './DeleteConversationDialog.vue'
+import type { FileStats } from '@/composables/useConversationFiles'
+import axios from 'axios'
 
 const store = useChatStore()
 const controller = useChatController()
+const { getSetting, setSetting } = useDisplaySettings()
 
 // Local state
 const showEditModal = ref(false)
@@ -248,8 +263,13 @@ const systemStatus = ref('Ready')
 const selectionMode = ref(false)
 const selectedSessions = ref(new Set<string>())
 
-// Display settings configuration
-const displaySettings = [
+// Delete dialog state
+const showDeleteDialog = ref(false)
+const deleteTargetSessionId = ref<string | null>(null)
+const deleteFileStats = ref<FileStats | null>(null)
+
+// Display settings configuration (UI labels)
+const displaySettingsConfig = [
   { key: 'showThoughts', label: 'Show Thoughts' },
   { key: 'showJson', label: 'Show JSON Output' },
   { key: 'showUtility', label: 'Show Utility Messages' },
@@ -296,12 +316,19 @@ const cancelEdit = () => {
 }
 
 const deleteSession = async (sessionId: string) => {
-  const session = store.sessions.find(s => s.id === sessionId)
-  const sessionName = session?.title || `Chat ${sessionId.slice(-8)}...`
-
-  if (confirm(`Delete "${sessionName}"? This action cannot be undone.`)) {
-    await controller.deleteChatSession(sessionId)
+  // Fetch file stats for the session
+  deleteTargetSessionId.value = sessionId
+  
+  try {
+    const response = await axios.get(`/api/files/conversation/${sessionId}/list`)
+    deleteFileStats.value = response.data?.stats || null
+  } catch (error) {
+    console.warn('Failed to fetch file stats, proceeding without file info:', error)
+    deleteFileStats.value = null
   }
+  
+  // Show delete dialog
+  showDeleteDialog.value = true
 }
 
 const deleteCurrentSession = () => {
@@ -310,21 +337,34 @@ const deleteCurrentSession = () => {
   }
 }
 
-const getSetting = (key: string): boolean => {
-  // This would need to be connected to actual settings
-  // For now, return from store settings
-  const settingMap: Record<string, keyof typeof store.settings> = {
-    showThoughts: 'persistHistory', // Placeholder mappings
-    showJson: 'persistHistory',
-    autoScroll: 'autoSave'
+const handleDeleteConfirm = async (fileAction: string, fileOptions: any) => {
+  if (!deleteTargetSessionId.value) return
+  
+  try {
+    await controller.deleteChatSession(deleteTargetSessionId.value, fileAction as any, fileOptions)
+    showDeleteDialog.value = false
+    deleteTargetSessionId.value = null
+    deleteFileStats.value = null
+  } catch (error) {
+    console.error('Failed to delete session:', error)
   }
-
-  return store.settings[settingMap[key]] ?? false
 }
 
+const handleDeleteCancel = () => {
+  showDeleteDialog.value = false
+  deleteTargetSessionId.value = null
+  deleteFileStats.value = null
+}
+
+
+// Toggle setting handler
 const toggleSetting = (key: string, value: boolean) => {
-  // This would update the actual display settings
-  controller.updateChatSettings({ [key]: value })
+  setSetting(key as any, value)
+
+  // Also update chat store settings for autoScroll
+  if (key === 'autoScroll') {
+    controller.updateChatSettings({ autoSave: value })
+  }
 }
 
 const reloadSystem = async () => {
