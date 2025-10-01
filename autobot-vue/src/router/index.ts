@@ -99,19 +99,14 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'upload',
-        name: 'knowledge-upload',
-        component: () => import('@/components/knowledge/KnowledgeUpload.vue'),
-        meta: {
-          title: 'Upload Content',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/manage'
       },
       {
         path: 'manage',
         name: 'knowledge-manage',
-        component: () => import('@/components/knowledge/KnowledgeEntries.vue'),
+        component: () => import('@/components/knowledge/KnowledgeManager.vue'),
         meta: {
-          title: 'Manage Entries',
+          title: 'Manage Knowledge',
           parent: 'knowledge'
         }
       },
@@ -126,19 +121,32 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'manpages',
-        name: 'knowledge-manpages',
-        component: () => import('@/components/ManPageManager.vue'),
-        meta: {
-          title: 'Man Pages',
-          parent: 'knowledge'
-        }
+        redirect: () => ({
+          path: '/knowledge/categories',
+          query: { view: 'system' }
+        })
       },
       {
         path: 'system-knowledge',
-        name: 'knowledge-system',
-        component: () => import('@/components/SystemKnowledgeManager.vue'),
+        redirect: () => ({
+          path: '/knowledge/categories',
+          query: { view: 'system' }
+        })
+      },
+      {
+        path: 'browser/user',
+        redirect: '/knowledge/categories'
+      },
+      {
+        path: 'browser/autobot',
+        redirect: '/knowledge/categories'
+      },
+      {
+        path: 'review',
+        name: 'knowledge-review',
+        component: () => import('@/views/KnowledgeComponentReview.vue'),
         meta: {
-          title: 'System Knowledge',
+          title: 'Component Review',
           parent: 'knowledge'
         }
       }

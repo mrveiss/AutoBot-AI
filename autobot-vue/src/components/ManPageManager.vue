@@ -326,10 +326,24 @@
 <script>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import ApiClient from '../utils/ApiClient'
+import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 
 export default {
   name: 'ManPageManager',
   setup() {
+    // Use the shared composable
+    const {
+      fetchMachineProfile: fetchMachineProfileAPI,
+      fetchManPagesSummary: fetchManPagesSummaryAPI,
+      initializeMachineKnowledge: initializeMachineKnowledgeAPI,
+      integrateManPages: integrateManPagesAPI,
+      searchManPages: searchManPagesAPI,
+      formatDate,
+      getOSBadgeClass,
+      getMessageIcon,
+      formatTime
+    } = useKnowledgeBase()
+
     // Reactive data
     const machineProfile = ref(null)
     const integrationStatus = ref(null)
@@ -398,32 +412,18 @@ export default {
       }
     }
 
-    const getOSBadgeClass = (osType) => {
-      switch (osType) {
-        case 'linux': return 'badge-success'
-        case 'windows': return 'badge-info'
-        case 'macos': return 'badge-warning'
-        default: return 'badge-secondary'
-      }
-    }
-
-    const formatDate = (dateString) => {
-      try {
-        return new Date(dateString).toLocaleString()
-      } catch {
-        return dateString
-      }
-    }
+    // Removed: getOSBadgeClass - now using composable
+    // Removed: formatDate - now using composable
 
     const refreshMachineProfile = async () => {
       if (loading.value.profile) return // Prevent concurrent calls
 
       loading.value.profile = true
       try {
-        const response = await ApiClient.get('/api/knowledge_base/machine_profile')
-        
-        if (response && response.status === 'success') {
-          machineProfile.value = response.machine_profile
+        const profile = await fetchMachineProfileAPI()
+
+        if (profile) {
+          machineProfile.value = profile
           setProgressMessage('Machine profile refreshed successfully', 'success')
         } else {
           // Handle API errors gracefully
@@ -446,10 +446,10 @@ export default {
 
       loading.value.status = true
       try {
-        const response = await ApiClient.get('/api/knowledge_base/man_pages/summary')
-        
-        if (response && response.status === 'success') {
-          integrationStatus.value = response.man_pages_summary
+        const summary = await fetchManPagesSummaryAPI()
+
+        if (summary) {
+          integrationStatus.value = summary
           setProgressMessage('Integration status refreshed', 'success')
         } else {
           // Handle API errors gracefully
@@ -471,15 +471,13 @@ export default {
       if (loading.value.initialize) return // Prevent concurrent calls
       loading.value.initialize = true
       setProgressMessage('Initializing machine-aware knowledge...', 'info', 0)
-      
+
       try {
-        const response = await ApiClient.post('/knowledge_base/machine_knowledge/initialize', {
-          force: false
-        })
-        
+        const response = await initializeMachineKnowledgeAPI(false)
+
         if (response.status === 'success') {
           setProgressMessage('Machine knowledge initialized successfully!', 'success')
-          
+
           // Refresh both profile and status
           await Promise.all([
             refreshMachineProfile(),
@@ -505,10 +503,10 @@ export default {
       if (loading.value.integrate) return // Prevent concurrent calls
       loading.value.integrate = true
       setProgressMessage('Integrating man pages... This may take a minute.', 'info', 0)
-      
+
       try {
-        const response = await ApiClient.post('/api/knowledge_base/man_pages/integrate')
-        
+        const response = await integrateManPagesAPI()
+
         if (response.status === 'success') {
           setProgressMessage('Man pages integrated successfully!', 'success')
           await refreshIntegrationStatus()
@@ -534,12 +532,10 @@ export default {
       if (loading.value.search) return // Prevent concurrent calls
       loading.value.search = true
       lastSearchQuery.value = searchQuery.value.trim()
-      
+
       try {
-        const response = await ApiClient.get('/api/knowledge_base/man_pages/search', {
-          params: { query: lastSearchQuery.value }
-        })
-        
+        const response = await searchManPagesAPI(lastSearchQuery.value)
+
         if (response.status === 'success') {
           searchResults.value = response.results
           showSearch.value = true
@@ -596,36 +592,22 @@ export default {
       }
     }
 
-    const getMessageIcon = (type) => {
-      const icons = {
-        'info': 'fas fa-info-circle text-blue-500',
-        'success': 'fas fa-check-circle text-green-500',
-        'warning': 'fas fa-exclamation-triangle text-yellow-500',
-        'error': 'fas fa-times-circle text-red-500'
-      }
-      return icons[type] || icons.info
-    }
-
-    const formatTime = (timestamp) => {
-      const date = new Date(timestamp)
-      return date.toLocaleTimeString()
-    }
+    // Removed: getMessageIcon - now using composable
+    // Removed: formatTime - now using composable
 
     // Enhanced action methods with progress tracking
     const initializeMachineKnowledgeWithProgress = async () => {
       showProgressTracking.value = true
       resetProgress()
-      
+
       try {
         loading.value.initialize = true
         setProgressMessage('Initializing machine knowledge...', 'info', 0)
-        
+
         updateProgress('Initializing Machine Knowledge', 10, 'Starting initialization...')
         addProgressMessage('Starting machine knowledge initialization', 'info')
 
-        const response = await ApiClient.post('/knowledge_base/machine_knowledge/initialize', {
-          force: false
-        })
+        const response = await initializeMachineKnowledgeAPI(false)
 
         if (response.status !== 'success') {
           throw new Error(response.message || 'Initialization failed')
@@ -634,10 +616,10 @@ export default {
         updateProgress('Machine Knowledge Initialized', 100, 'Initialization complete', 100, 'success')
         addProgressMessage('Machine knowledge initialization completed', 'success')
         setProgressMessage('Machine knowledge initialized successfully!', 'success')
-        
+
         await refreshMachineProfile()
         await refreshIntegrationStatus()
-        
+
       } catch (error) {
         console.error('Failed to initialize machine knowledge:', error)
         updateProgress('Initialization Failed', 0, error.message, 0, 'error')
@@ -651,15 +633,15 @@ export default {
     const integrateManPagesWithProgress = async () => {
       showProgressTracking.value = true
       resetProgress()
-      
+
       try {
         loading.value.integrate = true
         setProgressMessage('Integrating man pages...', 'info', 0)
-        
+
         updateProgress('Integrating Man Pages', 10, 'Starting man page extraction...')
         addProgressMessage('Starting man page integration', 'info')
 
-        const response = await ApiClient.post('/api/knowledge_base/man_pages/integrate')
+        const response = await integrateManPagesAPI()
 
         if (response.status !== 'success') {
           throw new Error(response.message || 'Integration failed')
@@ -668,9 +650,9 @@ export default {
         updateProgress('Man Pages Integrated', 100, 'Integration complete', 100, 'success')
         addProgressMessage('Man page integration completed', 'success')
         setProgressMessage('Man pages integrated successfully!', 'success')
-        
+
         await refreshIntegrationStatus()
-        
+
       } catch (error) {
         console.error('Failed to integrate man pages:', error)
         updateProgress('Integration Failed', 0, error.message, 0, 'error')
@@ -741,6 +723,10 @@ export default {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
 }
 
 .header {
@@ -1164,10 +1150,6 @@ export default {
   .info-grid {
     grid-template-columns: 1fr;
   }
-  
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 /* Progress Tracking Styles */
@@ -1279,6 +1261,26 @@ export default {
   font-size: 0.9em;
 }
 
+.text-green-500 { color: #10b981; }
+.text-green-600 { color: #059669; }
+
+/* Custom scrollbar styling for better UX */
+.man-page-manager::-webkit-scrollbar {
+  width: 8px;
+}
+
+.man-page-manager::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.man-page-manager::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.man-page-manager::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
 .text-green-500 { color: #10b981; }
 .text-green-600 { color: #059669; }
 .text-red-500 { color: #ef4444; }

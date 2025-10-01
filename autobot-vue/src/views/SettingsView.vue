@@ -20,5 +20,27 @@ import SettingsPanel from '@/components/SettingsPanel.vue'
 <style scoped>
 .settings-view {
   min-height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar styling for better UX */
+.settings-view::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings-view::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.settings-view::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.settings-view::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 </style>

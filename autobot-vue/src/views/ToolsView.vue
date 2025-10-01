@@ -60,5 +60,27 @@
 <style scoped>
 .tools-view {
   min-height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar styling for better UX */
+.tools-view::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tools-view::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.tools-view::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.tools-view::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 </style>

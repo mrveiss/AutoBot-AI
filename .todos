@@ -1,0 +1,27 @@
+# Knowledge Base Navigation Consolidation
+
+## Phase 1: Router Updates (Simple) ✅
+- [ ] Add redirect routes for backward compatibility
+- [ ] Update route handling for query parameters
+
+## Phase 2: KnowledgeSearch Enhancement (Medium)
+- [ ] Add expandable AutoBot File Browser section
+- [ ] Preserve all search functionality
+- [ ] Add toggle for browser visibility
+
+## Phase 3: Create KnowledgeManage Component (Medium)
+- [ ] Create new KnowledgeManage.vue with sub-tabs
+- [ ] Integrate KnowledgeUpload component
+- [ ] Integrate KnowledgeEntries component
+- [ ] Integrate KnowledgeFileBrowser (user mode)
+
+## Phase 4: Update KnowledgeCategories (Complex)
+- [ ] Convert to 3 expandable sections
+- [ ] Section 1: User Knowledge (preserve existing)
+- [ ] Section 2: System Knowledge (embed SystemKnowledgeManager)
+- [ ] Section 3: Man Pages (embed ManPageManager)
+
+## Phase 5: Testing & Sync
+- [ ] Test all routes and redirects
+- [ ] Verify all functionality preserved
+- [ ] Sync to Frontend VM using sync script

@@ -141,12 +141,21 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import apiClient from '@/utils/ApiClient';
+import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
 
 export default {
   name: 'SystemKnowledgeManager',
 
   setup() {
+    // Use the shared composable
+    const {
+      fetchStats: fetchStatsAPI,
+      refreshSystemKnowledge: refreshSystemKnowledgeAPI,
+      populateManPages: populateManPagesAPI,
+      populateAutoBotDocs: populateAutoBotDocsAPI,
+      formatKey
+    } = useKnowledgeBase();
+
     const stats = ref({});
     const commandsIndexed = ref(0);
     const docsIndexed = ref(0);
@@ -170,16 +179,18 @@ export default {
     const fetchStats = async () => {
       isLoading.value = true;
       try {
-        const response = await apiClient.get('/api/knowledge_base/stats');
-        stats.value = response.data;
+        const response = await fetchStatsAPI();
+        if (response) {
+          stats.value = response;
 
-        // Extract command and doc counts from categories if available
-        if (stats.value.categories) {
-          commandsIndexed.value = stats.value.categories.system_commands || 0;
-          docsIndexed.value = stats.value.categories.autobot_documentation || 0;
+          // Extract command and doc counts from categories if available
+          if (stats.value.categories) {
+            commandsIndexed.value = stats.value.categories.system_commands || 0;
+            docsIndexed.value = stats.value.categories.autobot_documentation || 0;
+          }
+
+          addLogEntry('Stats refreshed successfully', 'success');
         }
-
-        addLogEntry('Stats refreshed successfully', 'success');
       } catch (error) {
         console.error('Failed to fetch stats:', error);
         addLogEntry('Failed to fetch stats', 'error');
@@ -217,7 +228,7 @@ export default {
           }
         }, 3000);
 
-        const response = await apiClient.post('/knowledge_base/refresh_system_knowledge', {});
+        const response = await refreshSystemKnowledgeAPI();
 
         clearInterval(progressInterval);
         progressPercent.value = 100;
@@ -263,7 +274,7 @@ export default {
       try {
         addLogEntry('Populating common man pages', 'info');
 
-        const response = await apiClient.post('/knowledge_base/populate_man_pages', {});
+        const response = await populateManPagesAPI();
 
         lastResult.value = {
           status: 'success',
@@ -299,7 +310,7 @@ export default {
       try {
         addLogEntry('Indexing AutoBot documentation', 'info');
 
-        const response = await apiClient.post('/knowledge_base/populate_autobot_docs', {});
+        const response = await populateAutoBotDocsAPI();
 
         lastResult.value = {
           status: 'success',
@@ -323,10 +334,6 @@ export default {
         isDocPopulating.value = false;
         progressMessage.value = '';
       }
-    };
-
-    const formatKey = (key) => {
-      return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     };
 
     onMounted(() => {
@@ -360,8 +367,10 @@ export default {
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 80px);
   overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
 }
 
 .header {
@@ -624,5 +633,23 @@ export default {
 .log-status.info {
   background: #d6eaf8;
   color: #2980b9;
+}
+
+/* Custom scrollbar styling for better UX */
+.system-knowledge-manager::-webkit-scrollbar {
+  width: 8px;
+}
+
+.system-knowledge-manager::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.system-knowledge-manager::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.system-knowledge-manager::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 </style>

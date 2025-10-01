@@ -6,90 +6,39 @@
       <p class="subtitle">Browse organized knowledge by category</p>
     </div>
 
-    <!-- Tab Selection for the 3 main categories -->
+    <!-- Tab Selection for the 3 browsers -->
     <div class="category-tabs">
       <button
-        @click="activeView = 'system'"
-        :class="['tab-btn', { active: activeView === 'system' }]"
+        @click="activeTab = 'user'"
+        :class="['tab-btn', { active: activeTab === 'user' }]"
       >
-        <i class="fas fa-server"></i> System Knowledge (Man Pages)
+        <i class="fas fa-user"></i> User Browser
       </button>
       <button
-        @click="activeView = 'user'"
-        :class="['tab-btn', { active: activeView === 'user' }]"
+        @click="activeTab = 'autobot'"
+        :class="['tab-btn', { active: activeTab === 'autobot' }]"
       >
-        <i class="fas fa-user-plus"></i> User Knowledge
+        <i class="fas fa-robot"></i> AutoBot Browser
+      </button>
+      <button
+        @click="activeTab = 'manpages'"
+        :class="['tab-btn', { active: activeTab === 'manpages' }]"
+      >
+        <i class="fas fa-book"></i> Man Pages
       </button>
     </div>
 
-    <!-- System Knowledge View (Man Pages) -->
-    <div v-if="activeView === 'system'" class="system-categories">
-      <div class="view-header">
-        <div>
-          <h3><i class="fas fa-book"></i> System Knowledge (Man Pages)</h3>
-          <p class="view-description">Linux manual pages for all CLI commands available on this machine</p>
-        </div>
-        <router-link to="/knowledge/system-knowledge" class="manage-btn">
-          <i class="fas fa-cog"></i> Manage System Knowledge
-        </router-link>
-      </div>
+    <!-- User Browser -->
+    <KnowledgeFileBrowser v-if="activeTab === 'user'" mode="user" />
 
-      <!-- Stats Overview -->
-      <div v-if="kbStats" class="stats-overview">
-        <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-file-alt"></i></div>
-          <div class="stat-content">
-            <div class="stat-value">{{ kbStats.total_facts || 0 }}</div>
-            <div class="stat-label">Total Facts</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-database"></i></div>
-          <div class="stat-content">
-            <div class="stat-value">{{ kbStats.total_vectors || 0 }}</div>
-            <div class="stat-label">Indexed Vectors</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-folder"></i></div>
-          <div class="stat-content">
-            <div class="stat-value">{{ systemCategories.length }}</div>
-            <div class="stat-label">Categories</div>
-          </div>
-        </div>
-      </div>
+    <!-- AutoBot Browser (docs folder) -->
+    <KnowledgeFileBrowser v-if="activeTab === 'autobot'" mode="autobot" />
 
-      <!-- Category Browse Grid -->
-      <div class="category-browse-grid">
-        <div
-          v-for="category in systemCategories"
-          :key="category"
-          class="category-browse-card"
-          @click="browseCategory(category)"
-        >
-          <div class="category-icon">
-            <i :class="getCategoryIcon(category)"></i>
-          </div>
-          <div class="category-info">
-            <h4>{{ formatCategoryName(category) }}</h4>
-            <p>Browse {{ category }} documentation</p>
-          </div>
-          <div class="browse-arrow">
-            <i class="fas fa-arrow-right"></i>
-          </div>
-        </div>
-      </div>
+    <!-- Man Pages -->
+    <ManPageManager v-if="activeTab === 'manpages'" />
 
-      <!-- Empty State -->
-      <div v-if="!kbStats || systemCategories.length === 0" class="empty-state">
-        <i class="fas fa-inbox"></i>
-        <h4>No System Knowledge Indexed</h4>
-        <p>Go to <router-link to="/knowledge/system-knowledge">System Knowledge Manager</router-link> to index man pages</p>
-      </div>
-    </div>
-
-    <!-- User Knowledge View -->
-    <div v-if="activeView === 'user'" class="user-categories">
+    <!-- Legacy User Categories (keeping for possible future use) -->
+    <div v-if="false" class="user-categories">
       <div class="categories-header">
         <h3>User Categories</h3>
         <button @click="showCreateDialog = true" class="create-category-btn">
@@ -214,7 +163,7 @@
       </div>
     </div>
 
-    <!-- Documents View Panel -->
+    <!-- Documents View Panel (User Categories) -->
     <div v-if="showDocumentsPanel" class="documents-panel">
       <div class="panel-header">
         <h3>{{ selectedCategory?.name }} - Documents</h3>
@@ -246,6 +195,82 @@
         </div>
       </div>
     </div>
+
+    <!-- System Category Documents Panel -->
+    <div v-if="showCategoryDocuments" class="dialog-overlay" @click="closeCategoryDocuments">
+      <div class="dialog large-dialog" @click.stop>
+        <div class="dialog-header">
+          <h3>{{ formatCategoryName(selectedCategoryPath) }} - Documents</h3>
+          <button @click="closeCategoryDocuments" class="close-btn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <div class="dialog-content">
+          <div v-if="isLoadingCategoryDocs" class="loading-state">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Loading documents...</p>
+          </div>
+
+          <div v-else-if="categoryDocuments.length === 0" class="empty-state">
+            <i class="fas fa-file-alt empty-icon"></i>
+            <p>No documents in this category</p>
+          </div>
+
+          <div v-else class="documents-grid">
+            <div
+              v-for="doc in categoryDocuments"
+              :key="doc.path"
+              class="document-card"
+              @click="viewDocumentDetails(doc)"
+            >
+              <div class="doc-icon-large">
+                <i :class="getTypeIcon(doc.type || 'document')"></i>
+              </div>
+              <div class="doc-details">
+                <h4>{{ doc.title || doc.filename }}</h4>
+                <p class="doc-path">{{ doc.path }}</p>
+                <div class="doc-meta">
+                  <span><i class="fas fa-file"></i> {{ doc.type || 'document' }}</span>
+                  <span v-if="doc.size"><i class="fas fa-database"></i> {{ formatFileSize(doc.size) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Document Details Modal -->
+    <div v-if="showDocumentModal && currentDocument" class="dialog-overlay" @click="closeDocumentModal">
+      <div class="dialog large-dialog" @click.stop>
+        <div class="dialog-header">
+          <h3>{{ currentDocument.title || currentDocument.filename }}</h3>
+          <button @click="closeDocumentModal" class="close-btn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <div class="dialog-content">
+          <div class="document-metadata">
+            <div class="meta-item">
+              <strong>Path:</strong> {{ currentDocument.path }}
+            </div>
+            <div class="meta-item" v-if="currentDocument.type">
+              <strong>Type:</strong> {{ currentDocument.type }}
+            </div>
+            <div class="meta-item" v-if="currentDocument.size">
+              <strong>Size:</strong> {{ formatFileSize(currentDocument.size) }}
+            </div>
+          </div>
+
+          <div v-if="currentDocument.content" class="document-content">
+            <h4>Content Preview:</h4>
+            <pre>{{ currentDocument.content.substring(0, 2000) }}{{ currentDocument.content.length > 2000 ? '...' : '' }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
     </div>
 
   </div>
@@ -253,23 +278,37 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import apiClient from '@/utils/ApiClient'
 import type { KnowledgeCategory, KnowledgeDocument } from '@/stores/useKnowledgeStore'
+import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import KnowledgeFileBrowser from './KnowledgeFileBrowser.vue'
+import ManPageManager from '@/components/ManPageManager.vue'
+
+// Use the shared composable
+const {
+  fetchBasicStats,
+  formatDateOnly: formatDate,
+  formatCategoryName,
+  getCategoryIcon,
+  getTypeIcon,
+  formatFileSize
+} = useKnowledgeBase()
 
 // Router
 const router = useRouter()
+const route = useRoute()
 
 // Stores and controller
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 const appStore = useAppStore()
 
-// UI state
-const activeView = ref<'system' | 'user'>('system')
+// UI state - Active tab (user, autobot, manpages)
+const activeTab = ref<'user' | 'autobot' | 'manpages'>('user')
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showDocumentsPanel = ref(false)
@@ -382,40 +421,17 @@ const closeDocumentsPanel = () => {
   categoryDocuments.value = []
 }
 
-// Utility functions
-const formatDate = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString()
-}
-
-const getTypeIcon = (type: string): string => {
-  const icons: Record<string, string> = {
-    document: 'fas fa-file-alt',
-    webpage: 'fas fa-globe',
-    api: 'fas fa-code',
-    upload: 'fas fa-upload'
-  }
-  return icons[type] || 'fas fa-file'
-}
-
-const getCategoryIcon = (category: string): string => {
-  const icons: Record<string, string> = {
-    'system_commands': 'fas fa-terminal',
-    'commands': 'fas fa-terminal',
-    'troubleshooting': 'fas fa-wrench',
-    'network': 'fas fa-network-wired',
-    'file_system': 'fas fa-folder',
-    'process': 'fas fa-cogs',
-    'security': 'fas fa-shield-alt'
-  }
-  return icons[category] || 'fas fa-book'
-}
+// Utility functions (now using composable)
+// Removed: formatDate - now using composable
+// Removed: getTypeIcon - now using composable
+// Removed: getCategoryIcon - now using composable
+// Removed: formatCategoryName - now using composable
 
 const getKBStats = async () => {
   isLoadingKBStats.value = true
 
   try {
-    const response = await apiClient.get('/api/knowledge_base/stats/basic')
+    const response = await fetchBasicStats()
     kbStats.value = response
   } catch (error) {
     console.error('Error fetching KB stats:', error)
@@ -424,18 +440,44 @@ const getKBStats = async () => {
   }
 }
 
-const formatCategoryName = (category: string) => {
-  return category.split('_').map(word =>
-    word && word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word
-  ).join(' ')
-}
-
 const browseCategory = async (category: string) => {
   // Navigate to search with category filter
   router.push({
     path: '/knowledge/search',
     query: { category }
   })
+}
+
+const viewCategoryDocuments = async (category: any) => {
+  isLoadingCategoryDocs.value = true
+  selectedCategoryPath.value = category.path
+
+  try {
+    const response = await apiClient.get(`/api/knowledge_base/categories/${encodeURIComponent(category.path)}`)
+    categoryDocuments.value = response.data?.documents || []
+    showCategoryDocuments.value = true
+  } catch (error) {
+    console.error('Error loading category documents:', error)
+    categoryDocuments.value = []
+  } finally {
+    isLoadingCategoryDocs.value = false
+  }
+}
+
+const closeCategoryDocuments = () => {
+  showCategoryDocuments.value = false
+  categoryDocuments.value = []
+  selectedCategoryPath.value = ''
+}
+
+const viewDocumentDetails = (doc: any) => {
+  currentDocument.value = doc
+  showDocumentModal.value = true
+}
+
+const closeDocumentModal = () => {
+  showDocumentModal.value = false
+  currentDocument.value = null
 }
 
 // Load data on mount
@@ -1488,5 +1530,177 @@ onUnmounted(() => {
 .close-btn:hover {
   background: #e5e7eb;
   color: #374151;
+}
+
+/* System Tabs */
+.system-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.system-tab-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.375rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.system-tab-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.system-tab-btn.active {
+  background: #3b82f6;
+  color: white;
+}
+
+/* AutoBot Categories */
+.autobot-categories {
+  padding: 1.5rem;
+}
+
+.subtitle {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+/* Documents Grid */
+.documents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.document-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  gap: 1rem;
+}
+
+.document-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+.doc-icon-large {
+  width: 3rem;
+  height: 3rem;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  color: #3b82f6;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.doc-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-details h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-path {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.doc-meta span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Large Dialog */
+.large-dialog {
+  max-width: 900px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* Document Metadata */
+.document-metadata {
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.meta-item {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.meta-item:last-child {
+  margin-bottom: 0;
+}
+
+.meta-item strong {
+  color: #374151;
+  margin-right: 0.5rem;
+}
+
+/* Document Content */
+.document-content {
+  margin-top: 1rem;
+}
+
+.document-content h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.75rem;
+}
+
+.document-content pre {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  font-size: 0.875rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 400px;
+  overflow-y: auto;
 }
 </style>

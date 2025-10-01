@@ -1,5 +1,43 @@
 <template>
   <div class="knowledge-entries">
+    <!-- Sub-tabs for Manage section -->
+    <div class="manage-tabs">
+      <button
+        @click="manageTab = 'entries'"
+        :class="['manage-tab-btn', { active: manageTab === 'entries' }]"
+      >
+        <i class="fas fa-list mr-2"></i>Manage Entries
+      </button>
+      <button
+        @click="manageTab = 'upload'"
+        :class="['manage-tab-btn', { active: manageTab === 'upload' }]"
+      >
+        <i class="fas fa-upload mr-2"></i>Upload
+      </button>
+      <button
+        @click="manageTab = 'system'"
+        :class="['manage-tab-btn', { active: manageTab === 'system' }]"
+      >
+        <i class="fas fa-cog mr-2"></i>System Knowledge
+      </button>
+    </div>
+
+    <!-- Upload Tab Content -->
+    <KnowledgeUpload v-if="manageTab === 'upload'" />
+
+    <!-- System Knowledge Tab Content -->
+    <div v-if="manageTab === 'system'" class="system-knowledge-content">
+      <!-- System Knowledge Stats -->
+      <SystemKnowledgeManager />
+
+      <!-- Man Pages Integration -->
+      <div class="man-pages-section">
+        <ManPageManager />
+      </div>
+    </div>
+
+    <!-- Entries Management Tab Content -->
+    <div v-if="manageTab === 'entries'" class="entries-content">
     <div class="entries-header">
       <h3>Knowledge Entries</h3>
       <div class="header-actions">
@@ -300,6 +338,7 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
@@ -308,9 +347,15 @@ import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
+import KnowledgeUpload from './KnowledgeUpload.vue'
+import SystemKnowledgeManager from '@/components/SystemKnowledgeManager.vue'
+import ManPageManager from '@/components/ManPageManager.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
+
+// Manage tab state
+const manageTab = ref<'entries' | 'upload' | 'system'>('entries')
 
 // Search and filter state
 const searchQuery = ref('')
@@ -1123,5 +1168,57 @@ tr.selected {
   table {
     min-width: 800px;
   }
+}
+
+/* Manage Tabs */
+.manage-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  padding: 1rem 1rem 0.5rem;
+  background: white;
+}
+
+.manage-tab-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.375rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.manage-tab-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.manage-tab-btn.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.entries-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* System Knowledge Content */
+.system-knowledge-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.man-pages-section {
+  margin-top: 2rem;
+  border-top: 2px solid #e5e7eb;
+  padding-top: 2rem;
 }
 </style>
