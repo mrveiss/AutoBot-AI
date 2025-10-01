@@ -129,6 +129,22 @@
             >
               <i class="fas fa-smile"></i>
             </button>
+
+            <!-- Vertical Divider -->
+            <div class="action-divider"></div>
+
+            <!-- Quick Actions -->
+            <button
+              v-for="action in quickActions"
+              :key="action.id"
+              @click="useQuickAction(action)"
+              class="action-btn quick-action-btn"
+              :title="action.description"
+              :disabled="isDisabled"
+            >
+              <i :class="action.icon"></i>
+              <span class="action-label">{{ action.label }}</span>
+            </button>
           </div>
         </div>
 
@@ -174,20 +190,6 @@
           <span class="keyboard-hint">Enter to send • Shift+Enter for new line</span>
         </div>
       </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div v-if="showQuickActions" class="quick-actions">
-      <button
-        v-for="action in quickActions"
-        :key="action.id"
-        @click="useQuickAction(action)"
-        class="quick-action-btn"
-        :title="action.description"
-      >
-        <i :class="action.icon"></i>
-        {{ action.label }}
-      </button>
     </div>
 
     <!-- Emoji Picker -->
@@ -721,7 +723,13 @@ onUnmounted(() => {
 }
 
 .action-btn {
-  @apply w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 rounded transition-colors;
+  @apply flex items-center justify-center text-gray-500 hover:text-gray-700 rounded transition-colors;
+  min-width: 2rem;
+  min-height: 2rem;
+}
+
+.action-btn:not(.quick-action-btn) {
+  @apply w-8 h-8;
 }
 
 .action-btn.active {
@@ -730,6 +738,20 @@ onUnmounted(() => {
 
 .action-btn:disabled {
   @apply opacity-50 cursor-not-allowed;
+}
+
+.action-divider {
+  @apply w-px h-6 bg-gray-300 mx-2;
+  flex-shrink: 0;
+}
+
+.quick-action-btn {
+  @apply gap-1.5 px-2 py-1 text-sm;
+  white-space: nowrap;
+}
+
+.action-label {
+  @apply hidden sm:inline text-xs;
 }
 
 .send-button {

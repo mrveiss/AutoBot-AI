@@ -16,6 +16,9 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <!-- Custom Actions Slot -->
+        <slot name="actions"></slot>
+
         <!-- Session Actions -->
         <button
           v-if="currentSessionId"
@@ -80,33 +83,14 @@ const connectionStatusIcon = computed(() => {
 
 <style scoped>
 .chat-header {
-  flex-shrink: 0;
+  @apply flex-shrink-0;
 }
 
 .header-btn {
-  @apply w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 rounded transition-colors;
-}
-
-.header-btn:hover {
-  @apply bg-gray-100;
+  @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-gray-600 hover:bg-gray-100;
 }
 
 .connection-status {
-  @apply flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .chat-header {
-    @apply px-4 py-3;
-  }
-
-  .chat-header h1 {
-    @apply text-base;
-  }
-
-  .connection-status span {
-    @apply hidden;
-  }
+  @apply flex items-center gap-2 px-3 py-1.5 rounded-md bg-gray-100;
 }
 </style>

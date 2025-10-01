@@ -188,13 +188,10 @@ class ApiService {
     return this.get('/api/knowledge_base/stats/basic')
   }
 
-  async getCategoryDocuments(categoryPath: string): Promise<ApiResponse> {
-    return this.get(`/api/knowledge_base/category/${categoryPath}/documents`)
-  }
-
-  async getDocumentContent(documentId: string): Promise<ApiResponse> {
-    return this.post('/api/knowledge_base/document/content', { document_id: documentId })
-  }
+  // NOTE: The following methods are not implemented in backend and have been removed:
+  // - getCategoryDocuments() - endpoint /api/knowledge_base/category/{path}/documents does not exist
+  // - getDocumentContent() - endpoint /api/knowledge_base/document/content does not exist
+  // Use /api/knowledge_base/search with category filters instead
 
   // Monitoring & Health - Updated to working endpoints with graceful fallbacks
   async getServiceHealth(): Promise<ApiResponse> {

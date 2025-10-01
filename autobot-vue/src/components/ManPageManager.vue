@@ -420,7 +420,7 @@ export default {
 
       loading.value.profile = true
       try {
-        const response = await ApiClient.get('/knowledge_base/machine_profile')
+        const response = await ApiClient.get('/api/knowledge_base/machine_profile')
         
         if (response && response.status === 'success') {
           machineProfile.value = response.machine_profile
@@ -446,7 +446,7 @@ export default {
 
       loading.value.status = true
       try {
-        const response = await ApiClient.get('/knowledge_base/man_pages/summary')
+        const response = await ApiClient.get('/api/knowledge_base/man_pages/summary')
         
         if (response && response.status === 'success') {
           integrationStatus.value = response.man_pages_summary
@@ -507,7 +507,7 @@ export default {
       setProgressMessage('Integrating man pages... This may take a minute.', 'info', 0)
       
       try {
-        const response = await ApiClient.post('/knowledge_base/man_pages/integrate')
+        const response = await ApiClient.post('/api/knowledge_base/man_pages/integrate')
         
         if (response.status === 'success') {
           setProgressMessage('Man pages integrated successfully!', 'success')
@@ -536,7 +536,7 @@ export default {
       lastSearchQuery.value = searchQuery.value.trim()
       
       try {
-        const response = await ApiClient.get('/knowledge_base/man_pages/search', {
+        const response = await ApiClient.get('/api/knowledge_base/man_pages/search', {
           params: { query: lastSearchQuery.value }
         })
         
@@ -659,7 +659,7 @@ export default {
         updateProgress('Integrating Man Pages', 10, 'Starting man page extraction...')
         addProgressMessage('Starting man page integration', 'info')
 
-        const response = await ApiClient.post('/knowledge_base/man_pages/integrate')
+        const response = await ApiClient.post('/api/knowledge_base/man_pages/integrate')
 
         if (response.status !== 'success') {
           throw new Error(response.message || 'Integration failed')

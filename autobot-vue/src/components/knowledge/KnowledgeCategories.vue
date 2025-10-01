@@ -415,7 +415,7 @@ const getKBStats = async () => {
   isLoadingKBStats.value = true
 
   try {
-    const response = await apiClient.get('/knowledge_base/stats/basic')
+    const response = await apiClient.get('/api/knowledge_base/stats/basic')
     kbStats.value = response
   } catch (error) {
     console.error('Error fetching KB stats:', error)
