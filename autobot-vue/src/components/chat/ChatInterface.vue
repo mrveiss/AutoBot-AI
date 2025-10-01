@@ -16,9 +16,9 @@
       </UnifiedLoadingView>
 
       <!-- Main Chat Area -->
-      <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div class="flex-1 flex flex-col min-w-0 relative">
 
-        <!-- Chat Header -->
+        <!-- Chat Header (Sticky at top) -->
         <ChatHeader
           :current-session-id="store.currentSessionId"
           :current-session-title="currentSessionTitle"
@@ -27,15 +27,23 @@
           :is-connected="isConnected"
           @export-session="exportSession"
           @clear-session="clearSession"
-        />
+          class="flex-shrink-0"
+        >
+          <!-- File Panel Toggle Button (injected into header) -->
+          <template #actions>
+            <button
+              v-if="store.currentSessionId"
+              @click="toggleFilePanel"
+              class="header-btn"
+              :class="{ 'bg-indigo-100 text-indigo-600': showFilePanel }"
+              title="Toggle file panel"
+            >
+              <i class="fas fa-paperclip"></i>
+            </button>
+          </template>
+        </ChatHeader>
 
-        <!-- Chat/Tools Tabs -->
-        <ChatTabs
-          :active-tab="activeTab"
-          @tab-change="handleTabChange"
-        />
-
-        <!-- Chat Content with Unified Loading - FIXED: Removed overflow-hidden to allow sticky positioning -->
+        <!-- Scrollable Content Area (Header scrolls away, input stays) -->
         <UnifiedLoadingView
           loading-key="chat-content"
           :has-content="store.currentMessages.length > 0"
@@ -43,8 +51,15 @@
           @loading-complete="handleContentLoadingComplete"
           @loading-error="handleContentLoadingError"
           @loading-timeout="handleContentLoadingTimeout"
-          class="flex-1 min-h-0 flex flex-col"
+          class="flex-1 min-h-0 flex flex-col overflow-y-auto"
         >
+          <!-- Chat/Tools Tabs (scrolls with content) -->
+          <ChatTabs
+            :active-tab="activeTab"
+            @tab-change="handleTabChange"
+            class="flex-shrink-0"
+          />
+
           <ChatTabContent
             :active-tab="activeTab"
             :current-session-id="store.currentSessionId"
@@ -52,6 +67,15 @@
           />
         </UnifiedLoadingView>
       </div>
+
+      <!-- File Panel (Right Sidebar) -->
+      <Transition name="slide-left">
+        <ChatFilePanel
+          v-if="showFilePanel && store.currentSessionId"
+          :session-id="store.currentSessionId"
+          @close="showFilePanel = false"
+        />
+      </Transition>
 
       <!-- REMOVED: Terminal Sidebar (line 57-61) - causes duplicate terminals -->
       <!-- The Terminal component is now ONLY shown in ChatTabContent when activeTab === 'terminal' -->
@@ -109,6 +133,7 @@ import ChatSidebar from './ChatSidebar.vue'
 import ChatHeader from './ChatHeader.vue'
 import ChatTabs from './ChatTabs.vue'
 import ChatTabContent from './ChatTabContent.vue'
+import ChatFilePanel from './ChatFilePanel.vue'
 import KnowledgePersistenceDialog from '@/components/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/WorkflowProgressWidget.vue'
@@ -122,6 +147,7 @@ const appStore = useAppStore()
 const showKnowledgeDialog = ref(false)
 const showCommandDialog = ref(false)
 const showWorkflowProgress = ref(false)
+const showFilePanel = ref(false)
 
 // Dialog data
 const currentChatContext = ref<any>(null)
@@ -211,6 +237,10 @@ const sessionInfo = computed(() => {
 
 
 // Methods
+const toggleFilePanel = () => {
+  showFilePanel.value = !showFilePanel.value
+}
+
 const exportSession = async () => {
   if (!store.currentSessionId) return
 
@@ -393,6 +423,12 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
           exportSession()
         }
         break
+      case 'f':
+        if (store.currentSessionId) {
+          event.preventDefault()
+          toggleFilePanel()
+        }
+        break
     }
   }
 }
@@ -484,6 +520,9 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     // Session changed, reload NoVNC URL
     console.log('[ChatInterface] Session changed:', newSessionId)
     loadNovncUrl()
+
+    // Close file panel when switching sessions
+    showFilePanel.value = false
   }
 })
 </script>
@@ -494,10 +533,11 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
   /* Removed height: 100vh - now relies on parent container */
 }
 
-/* CRITICAL FIX: Enhanced sidebar width constraint */
+/* CRITICAL FIX: Enhanced sidebar dimensions constraint */
 .sidebar-loading-view {
-  /* Force sidebar width and prevent UnifiedLoadingView override */
+  /* Force sidebar width and height - prevent UnifiedLoadingView override */
   width: 320px !important; /* Force w-80 equivalent (320px) */
+  height: 100% !important; /* Force full height */
   flex-shrink: 0 !important;
   max-width: 320px !important;
   min-width: 320px !important;
@@ -510,6 +550,22 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
 /* Focus trap for dialogs */
 .dialog-overlay {
   @apply fixed inset-0 z-50;
+}
+
+/* File Panel Transitions */
+.slide-left-enter-active,
+.slide-left-leave-active {
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.slide-left-enter-from {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.slide-left-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
 }
 
 /* Animations */
@@ -526,5 +582,10 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
 
 .workflow-progress-widget {
   animation: slideInFromRight 0.3s ease-out;
+}
+
+/* Header button styling for file panel toggle */
+.header-btn {
+  @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-gray-600 hover:bg-gray-100;
 }
 </style>
