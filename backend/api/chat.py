@@ -257,11 +257,13 @@ async def process_chat_message(
             "role": message.role
         })
 
-        # Get chat context from history
+        # Get chat context from history (Redis-backed, efficient retrieval)
         chat_context = []
         if hasattr(chat_history_manager, 'get_session_messages'):
             try:
-                recent_messages = await chat_history_manager.get_session_messages(session_id, limit=20)
+                # Redis can efficiently handle large context windows - retrieve 500 messages
+                # This provides full conversation history for context-aware responses
+                recent_messages = await chat_history_manager.get_session_messages(session_id, limit=500)
                 chat_context = recent_messages or []
             except Exception as e:
                 logger.warning(f"Could not retrieve chat context: {e}")
@@ -269,8 +271,9 @@ async def process_chat_message(
         # Generate AI response
         try:
             # Prepare context for LLM
+            # Use last 200 messages for LLM context (balances context depth with token limits)
             llm_context = []
-            for msg in chat_context[-10:]:  # Last 10 messages for context
+            for msg in chat_context[-200:]:  # Last 200 messages for extensive context
                 llm_context.append({
                     "role": msg.get("role", "user"),
                     "content": msg.get("content", "")
@@ -706,9 +709,21 @@ async def update_session(
 @router.delete("/chat/sessions/{session_id}")
 async def delete_session(
     session_id: str,
-    request: Request
+    request: Request,
+    file_action: str = "delete",
+    file_options: Optional[str] = None
 ):
-    """Delete a chat session"""
+    """
+    Delete a chat session with optional file handling
+
+    Args:
+        session_id: Chat session ID to delete
+        file_action: How to handle conversation files ("delete", "transfer_kb", "transfer_shared")
+        file_options: JSON string with transfer options (e.g., '{"target_path": "archive/", "tags": ["archived"]}')
+
+    Returns:
+        Success response with deletion details
+    """
     request_id = generate_request_id()
 
     try:
@@ -719,10 +734,85 @@ async def delete_session(
             AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
             raise ValidationError("Invalid session ID format")
 
+        # Validate file_action
+        valid_file_actions = ["delete", "transfer_kb", "transfer_shared"]
+        if file_action not in valid_file_actions:
+            AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
+            raise ValidationError(f"Invalid file_action. Must be one of: {valid_file_actions}")
+
+        # Parse file_options if provided
+        parsed_file_options = {}
+        if file_options:
+            try:
+                import json
+                parsed_file_options = json.loads(file_options)
+            except json.JSONDecodeError:
+                AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
+                raise ValidationError("Invalid file_options JSON format")
+
         # Get dependencies from request state
         chat_history_manager = get_chat_history_manager(request)
 
-        # Delete session
+        # Handle conversation files if file manager is available
+        file_deletion_result = {"files_handled": False, "action_taken": file_action}
+        conversation_file_manager = getattr(request.app.state, 'conversation_file_manager', None)
+
+        if conversation_file_manager:
+            try:
+                if file_action == "delete":
+                    # Delete all files in conversation
+                    deleted_count = await conversation_file_manager.delete_session_files(session_id)
+                    file_deletion_result = {
+                        "files_handled": True,
+                        "action_taken": "delete",
+                        "files_deleted": deleted_count
+                    }
+                    logger.info(f"Deleted {deleted_count} files for session {session_id}")
+
+                elif file_action == "transfer_kb":
+                    # Transfer files to knowledge base
+                    transfer_result = await conversation_file_manager.transfer_session_files(
+                        session_id=session_id,
+                        destination="kb",
+                        target_path=parsed_file_options.get("target_path"),
+                        tags=parsed_file_options.get("tags", ["conversation_archive"]),
+                        copy=False  # Move, not copy
+                    )
+                    file_deletion_result = {
+                        "files_handled": True,
+                        "action_taken": "transfer_kb",
+                        "files_transferred": transfer_result.get("total_transferred", 0),
+                        "files_failed": transfer_result.get("total_failed", 0)
+                    }
+                    logger.info(f"Transferred {transfer_result.get('total_transferred', 0)} files to KB for session {session_id}")
+
+                elif file_action == "transfer_shared":
+                    # Transfer files to shared storage
+                    transfer_result = await conversation_file_manager.transfer_session_files(
+                        session_id=session_id,
+                        destination="shared",
+                        target_path=parsed_file_options.get("target_path"),
+                        copy=False  # Move, not copy
+                    )
+                    file_deletion_result = {
+                        "files_handled": True,
+                        "action_taken": "transfer_shared",
+                        "files_transferred": transfer_result.get("total_transferred", 0),
+                        "files_failed": transfer_result.get("total_failed", 0)
+                    }
+                    logger.info(f"Transferred {transfer_result.get('total_transferred', 0)} files to shared storage for session {session_id}")
+
+            except Exception as file_error:
+                logger.error(f"Error handling files for session {session_id}: {file_error}")
+                file_deletion_result = {
+                    "files_handled": False,
+                    "action_taken": file_action,
+                    "error": str(file_error)
+                }
+        else:
+            logger.warning(f"ConversationFileManager not available, skipping file handling for session {session_id}")
+
+        # Delete session from chat history
         deleted = await chat_history_manager.delete_session(session_id)
 
         if not deleted:
@@ -730,11 +820,17 @@ async def delete_session(
             raise ResourceNotFoundError(f"Session {session_id} not found")
 
         await log_chat_event("session_deleted", session_id, {
-            "request_id": request_id
+            "request_id": request_id,
+            "file_action": file_action,
+            "file_deletion_result": file_deletion_result
         })
 
         return create_success_response(
-            data={"session_id": session_id, "deleted": True},
+            data={
+                "session_id": session_id,
+                "deleted": True,
+                "file_handling": file_deletion_result
+            },
             message="Session deleted successfully",
             request_id=request_id
         )
@@ -942,27 +1038,28 @@ async def send_chat_message_by_id(
                 print(f"[STREAM {request_id}] Sent start event", flush=True)
                 logger.debug(f"[{request_id}] Sent start event")
 
-                # Process message and get workflow messages
-                print(f"[STREAM {request_id}] Calling chat_workflow_manager.process_message() with message: {message[:50]}...", flush=True)
-                logger.debug(f"[{request_id}] Calling chat_workflow_manager.process_message()")
-                messages = await chat_workflow_manager.process_message(
+                # Process message and stream workflow messages as they arrive
+                print(f"[STREAM {request_id}] Calling chat_workflow_manager.process_message_stream() with message: {message[:50]}...", flush=True)
+                logger.debug(f"[{request_id}] Calling chat_workflow_manager.process_message_stream()")
+
+                message_count = 0
+                async for msg in chat_workflow_manager.process_message_stream(
                     session_id=chat_id,
                     message=message,
                     context=request_data.get("context", {})
-                )
-                print(f"[STREAM {request_id}] Got {len(messages)} messages from workflow manager", flush=True)
-                logger.debug(f"[{request_id}] Got {len(messages)} messages from workflow manager")
-
-                # Stream each workflow message
-                for i, msg in enumerate(messages):
-                    print(f"[STREAM {request_id}] Processing message {i+1}/{len(messages)}: type={type(msg)}", flush=True)
-                    logger.debug(f"[{request_id}] Processing message {i+1}/{len(messages)}: type={type(msg)}")
+                ):
+                    message_count += 1
+                    print(f"[STREAM {request_id}] Processing message {message_count}: type={type(msg)}", flush=True)
+                    logger.debug(f"[{request_id}] Processing message {message_count}: type={type(msg)}")
                     msg_data = msg.to_dict() if hasattr(msg, 'to_dict') else msg
                     print(f"[STREAM {request_id}] Message data: {str(msg_data)[:200]}...", flush=True)
                     logger.debug(f"[{request_id}] Message data: {msg_data}")
                     yield f"data: {json.dumps(msg_data)}\n\n"
-                    print(f"[STREAM {request_id}] Sent message {i+1}", flush=True)
-                    logger.debug(f"[{request_id}] Sent message {i+1}")
+                    print(f"[STREAM {request_id}] Sent message {message_count}", flush=True)
+                    logger.debug(f"[{request_id}] Sent message {message_count}")
+
+                print(f"[STREAM {request_id}] Got {message_count} messages from workflow manager", flush=True)
+                logger.debug(f"[{request_id}] Got {message_count} messages from workflow manager")
 
                 # Send completion signal
                 print(f"[STREAM {request_id}] Sending end event", flush=True)
