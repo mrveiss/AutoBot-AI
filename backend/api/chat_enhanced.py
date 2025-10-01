@@ -173,11 +173,13 @@ async def process_enhanced_chat_message(
             "use_knowledge_base": message.use_knowledge_base
         })
 
-        # Get chat context from history
+        # Get chat context from history (Redis-backed, efficient retrieval)
         chat_context = []
         if hasattr(chat_history_manager, 'get_session_messages'):
             try:
-                recent_messages = await chat_history_manager.get_session_messages(session_id, limit=10)
+                # Redis can efficiently handle large context windows - retrieve 500 messages
+                # This provides full conversation history for context-aware responses
+                recent_messages = await chat_history_manager.get_session_messages(session_id, limit=500)
                 chat_context = recent_messages or []
             except Exception as e:
                 logger.warning(f"Could not retrieve chat context: {e}")
@@ -213,8 +215,9 @@ async def process_enhanced_chat_message(
                 ai_client = await get_ai_stack_client()
 
                 # Prepare chat history for AI Stack
+                # Use last 200 messages for LLM context (balances context depth with token limits)
                 formatted_history = []
-                for msg in chat_context[-5:]:  # Last 5 messages for context
+                for msg in chat_context[-200:]:  # Last 200 messages for extensive context
                     formatted_history.append({
                         "role": msg.get("role", "user"),
                         "content": msg.get("content", "")

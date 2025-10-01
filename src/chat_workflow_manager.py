@@ -227,9 +227,21 @@ class ChatWorkflowManager:
         message: str,
         context: Optional[Dict[str, Any]] = None
     ) -> List[WorkflowMessage]:
-        """Process a message through the workflow system."""
+        """Process a message through the workflow system and return all messages."""
+        messages = []
+        async for msg in self.process_message_stream(session_id, message, context):
+            messages.append(msg)
+        return messages
+
+    async def process_message_stream(
+        self,
+        session_id: str,
+        message: str,
+        context: Optional[Dict[str, Any]] = None
+    ):
+        """Process a message through the workflow system as an async generator (for streaming)."""
         try:
-            logger.debug(f"[ChatWorkflowManager] Starting process_message for session={session_id}")
+            logger.debug(f"[ChatWorkflowManager] Starting process_message_stream for session={session_id}")
             logger.debug(f"[ChatWorkflowManager] Message: {message[:100]}...")
 
             session = await self.get_or_create_session(session_id)
@@ -295,9 +307,8 @@ class ChatWorkflowManager:
                     ) as response:
                         if response.status_code == 200:
                             llm_response = ""
-                            messages = []
 
-                            # Stream response chunks
+                            # Stream response chunks as they arrive
                             async for line in response.aiter_lines():
                                 if line:
                                     try:
@@ -308,9 +319,9 @@ class ChatWorkflowManager:
                                         if chunk_text:
                                             llm_response += chunk_text
 
-                                            # Yield streaming chunks
+                                            # Yield streaming chunks in real-time
                                             from src.async_chat_workflow import WorkflowMessage
-                                            messages.append(WorkflowMessage(
+                                            yield WorkflowMessage(
                                                 type="response",
                                                 content=chunk_text,
                                                 metadata={
@@ -318,7 +329,7 @@ class ChatWorkflowManager:
                                                     "model": "llama3.2:3b-instruct-q4_K_M",
                                                     "streaming": True
                                                 }
-                                            ))
+                                            )
 
                                         # Check if this is the final chunk
                                         if chunk_data.get("done", False):
@@ -346,32 +357,30 @@ class ChatWorkflowManager:
                         else:
                             logger.error(f"[ChatWorkflowManager] Ollama request failed: {response.status_code}")
                             from src.async_chat_workflow import WorkflowMessage
-                            messages = [WorkflowMessage(
+                            yield WorkflowMessage(
                                 type="error",
                                 content=f"LLM service error: {response.status_code}",
                                 metadata={"error": True}
-                            )]
+                            )
 
             except Exception as llm_error:
                 logger.error(f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}")
                 from src.async_chat_workflow import WorkflowMessage
-                messages = [WorkflowMessage(
+                yield WorkflowMessage(
                     type="error",
                     content=f"Failed to connect to LLM: {str(llm_error)}",
                     metadata={"error": True}
-                )]
-
-            logger.info(f"Processed message for session {session_id}, got {len(messages)} response messages")
-            return messages
+                )
 
         except Exception as e:
             logger.error(f"❌ Error processing message for session {session_id}: {e}", exc_info=True)
-            # Return error message
-            return [WorkflowMessage(
+            # Yield error message
+            from src.async_chat_workflow import WorkflowMessage
+            yield WorkflowMessage(
                 type="error",
                 content=f"Error processing message: {str(e)}",
                 metadata={"error": True, "session_id": session_id}
-            )]
+            )
 
     async def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a session."""
