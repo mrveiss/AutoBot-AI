@@ -2,7 +2,21 @@
   <div class="system-knowledge-manager">
     <div class="header">
       <h2>🧠 System Knowledge Management</h2>
-      <p class="subtitle">Manage man pages and documentation indexing</p>
+      <p class="subtitle">Initialize, reindex, and repopulate knowledge base</p>
+    </div>
+
+    <!-- Host Selection for Man Pages -->
+    <div class="host-selection">
+      <label for="host-select">Target Host for Man Pages:</label>
+      <select id="host-select" v-model="selectedHost" class="host-select">
+        <option value="all">All Hosts</option>
+        <option value="172.16.168.20">Main (172.16.168.20)</option>
+        <option value="172.16.168.21">Frontend (172.16.168.21)</option>
+        <option value="172.16.168.22">NPU Worker (172.16.168.22)</option>
+        <option value="172.16.168.23">Redis (172.16.168.23)</option>
+        <option value="172.16.168.24">AI Stack (172.16.168.24)</option>
+        <option value="172.16.168.25">Browser (172.16.168.25)</option>
+      </select>
     </div>
 
     <!-- Status Cards -->
@@ -192,6 +206,7 @@ export default {
     const stats = ref({});
     const commandsIndexed = ref(0);
     const docsIndexed = ref(0);
+    const selectedHost = ref('all');
     const isLoading = ref(false);
     const isInitializing = ref(false);
     const isReindexing = ref(false);
@@ -482,6 +497,7 @@ export default {
       stats,
       commandsIndexed,
       docsIndexed,
+      selectedHost,
       isLoading,
       isInitializing,
       isReindexing,
@@ -528,6 +544,39 @@ export default {
   margin: 0;
   color: #7f8c8d;
   font-size: 14px;
+}
+
+.host-selection {
+  margin-bottom: 25px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.host-selection label {
+  font-weight: 600;
+  color: #2c3e50;
+  white-space: nowrap;
+}
+
+.host-select {
+  flex: 1;
+  max-width: 400px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.host-select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
 }
 
 .status-cards {
