@@ -817,6 +817,75 @@ async def create_directory(
         )
 
 
+@router.get("/tree")
+async def get_directory_tree(request: Request, path: str = ""):
+    """Get directory tree structure for file browser"""
+    # SECURITY FIX: Enable proper authentication and authorization
+    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient permissions for viewing directory tree"
+        )
+
+    # Store user data in request state for audit logging
+    request.state.user = user_data
+
+    try:
+        target_path = validate_and_resolve_path(path)
+
+        if not target_path.exists():
+            raise HTTPException(status_code=404, detail="Directory not found")
+
+        if not target_path.is_dir():
+            raise HTTPException(status_code=400, detail="Path is not a directory")
+
+        def build_tree(directory: Path, relative_base: Path) -> dict:
+            """Recursively build directory tree structure"""
+            try:
+                items = []
+                for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+                    try:
+                        relative_path = str(item.relative_to(SANDBOXED_ROOT))
+                        item_info = {
+                            "name": item.name,
+                            "path": relative_path,
+                            "type": "directory" if item.is_dir() else "file"
+                        }
+
+                        if item.is_file():
+                            item_info["size"] = item.stat().st_size
+                            item_info["extension"] = item.suffix.lower() if item.suffix else None
+                        else:
+                            # Recursively add children for directories
+                            item_info["children"] = build_tree(item, SANDBOXED_ROOT)
+
+                        items.append(item_info)
+                    except (OSError, PermissionError) as e:
+                        logger.warning(f"Skipping inaccessible item {item}: {e}")
+                        continue
+
+                return items
+            except Exception as e:
+                logger.error(f"Error building tree for {directory}: {e}")
+                return []
+
+        tree_data = build_tree(target_path, SANDBOXED_ROOT)
+
+        return {
+            "path": path,
+            "tree": tree_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting directory tree: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting directory tree: {str(e)}"
+        )
+
+
 @router.get("/stats")
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
@@ -824,10 +893,10 @@ async def get_file_stats(request: Request):
     has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Insufficient permissions for file statistics"
         )
-    
+
     # Store user data in request state for audit logging
     request.state.user = user_data
 
