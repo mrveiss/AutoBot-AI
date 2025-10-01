@@ -170,7 +170,7 @@ export default {
     const fetchStats = async () => {
       isLoading.value = true;
       try {
-        const response = await apiClient.get('/knowledge_base/stats');
+        const response = await apiClient.get('/api/knowledge_base/stats');
         stats.value = response.data;
 
         // Extract command and doc counts from categories if available
@@ -360,6 +360,8 @@ export default {
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
 }
 
 .header {

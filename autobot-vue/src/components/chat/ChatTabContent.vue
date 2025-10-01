@@ -1,8 +1,10 @@
 <template>
-  <div class="flex-1 flex flex-col min-h-0 h-full">
-    <!-- Chat Tab Content - FIXED: Enhanced layout for sticky input -->
-    <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col h-full overflow-hidden">
-      <ChatMessages class="flex-1 overflow-y-auto min-h-0" />
+  <div class="flex-1 flex flex-col">
+    <!-- Chat Tab Content - Content scrolls, input stays sticky -->
+    <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col relative">
+      <div class="flex-1">
+        <ChatMessages />
+      </div>
       <ChatInput class="flex-shrink-0" />
     </div>
 

@@ -111,8 +111,9 @@ const cancelLoading = () => {
 
 <style scoped>
 .unified-loading-view {
-  @apply relative h-full min-h-[200px];
+  @apply relative h-full;
   /* CRITICAL FIX: Remove w-full to prevent width override issues */
+  /* CRITICAL FIX: Remove min-h-[200px] to prevent extra empty space in chat */
   /* Width is now controlled by parent component/class */
 }
 
@@ -176,8 +177,9 @@ const cancelLoading = () => {
 
 /* Content Container */
 .content-container {
-  @apply relative h-full;
+  @apply relative h-full flex flex-col;
   /* CRITICAL FIX: Remove w-full to allow parent to control width */
+  /* CRITICAL FIX: Add flex flex-col to ensure children fill height */
   transition: opacity 0.2s ease;
 }
 

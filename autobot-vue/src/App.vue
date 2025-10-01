@@ -1,5 +1,5 @@
 <template>
-  <div id="app" class="min-h-screen bg-gray-100 flex flex-col">
+  <div id="app" class="h-screen bg-gray-100 flex flex-col overflow-hidden">
     <!-- Header -->
     <header class="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-sm relative z-30">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
