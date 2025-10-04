@@ -232,7 +232,8 @@ export class AppConfigService {
     }
 
     // Add cache-busting parameters if enabled
-    if (!this.config.api.disableCache && options.cacheBust !== false) {
+    // ONLY add cache-busting if we have an actual endpoint (not empty or just base URL)
+    if (!this.config.api.disableCache && options.cacheBust !== false && endpoint && endpoint.length > 0) {
       const separator = fullUrl.includes('?') ? '&' : '?';
       const cacheBustParam = `_cb=${this.config.api.cacheBustVersion}`;
       const timestampParam = `_t=${Date.now()}`;

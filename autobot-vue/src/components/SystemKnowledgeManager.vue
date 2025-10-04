@@ -1,7 +1,6 @@
 <template>
   <div class="system-knowledge-manager">
     <div class="header">
-      <h2>🧠 System Knowledge Management</h2>
       <p class="subtitle">Initialize, reindex, and repopulate knowledge base</p>
     </div>
 
@@ -56,6 +55,16 @@
 
     <!-- Action Buttons -->
     <div class="actions">
+      <button
+        @click="generateVectorEmbeddings"
+        :disabled="isVectorizing"
+        class="btn btn-primary btn-highlight"
+        title="Batched vector generation: Processes 50 facts per batch with 0.5s delay. Skips already vectorized facts. Safe to run periodically to vectorize new facts."
+      >
+        <span class="icon">🧬</span>
+        {{ isVectorizing ? 'Vectorizing...' : `Vectorize Facts (${stats.total_facts - (stats.total_vectors || 0)} pending)` }}
+      </button>
+
       <button
         @click="initializeMachineKnowledge"
         :disabled="isInitializing"
@@ -200,6 +209,7 @@ export default {
       refreshSystemKnowledge: refreshSystemKnowledgeAPI,
       populateManPages: populateManPagesAPI,
       populateAutoBotDocs: populateAutoBotDocsAPI,
+      vectorizeFacts: vectorizeFactsAPI,
       formatKey
     } = useKnowledgeBase();
 
@@ -213,6 +223,7 @@ export default {
     const isRefreshing = ref(false);
     const isPopulating = ref(false);
     const isDocPopulating = ref(false);
+    const isVectorizing = ref(false);
     const progressMessage = ref('');
     const progressPercent = ref(0);
     const lastResult = ref(null);
@@ -230,8 +241,17 @@ export default {
       isLoading.value = true;
       try {
         const response = await fetchStatsAPI();
+        console.log('[SystemKnowledgeManager] fetchStats response:', response);
+
         if (response) {
-          stats.value = response;
+          // Ensure we're not storing a Promise
+          if (response instanceof Promise) {
+            console.error('[SystemKnowledgeManager] Response is a Promise!', response);
+            const resolved = await response;
+            stats.value = resolved;
+          } else {
+            stats.value = response;
+          }
 
           // Extract command and doc counts from categories if available
           if (stats.value.categories) {
@@ -456,25 +476,31 @@ export default {
     const populateAutoBotDocs = async () => {
       if (isDocPopulating.value) return;
 
+      // Ask if user wants to force reindex all files
+      const forceReindex = confirm('Index AutoBot documentation?\n\nChoose:\n- OK: Force reindex ALL 182 docs files (ignores cache)\n- Cancel: Quick update (only new/changed files)');
+
       isDocPopulating.value = true;
-      progressMessage.value = 'Indexing AutoBot documentation...';
+      progressMessage.value = forceReindex ? 'Force reindexing ALL AutoBot documentation...' : 'Indexing AutoBot documentation...';
       lastResult.value = null;
 
       try {
-        addLogEntry('Indexing AutoBot documentation', 'info');
+        addLogEntry(forceReindex ? 'Force reindexing AutoBot documentation' : 'Indexing AutoBot documentation', 'info');
 
-        const response = await populateAutoBotDocsAPI();
+        const response = await populateAutoBotDocsAPI(forceReindex);
 
         lastResult.value = {
           status: 'success',
           message: response.message || 'Documentation indexed successfully',
           details: {
-            'Items Added': response.items_added || 0
+            'Items Added': response.items_added || 0,
+            'Items Skipped': response.items_skipped || 0,
+            'Items Failed': response.items_failed || 0,
+            'Total Files': response.total_files || 0
           }
         };
 
         docsIndexed.value = response.items_added || 0;
-        addLogEntry(`Indexed ${docsIndexed.value} documentation files`, 'success');
+        addLogEntry(`Indexed ${response.items_added || 0} documentation files (${response.items_skipped || 0} skipped)`, 'success');
         await fetchStats();
 
       } catch (error) {
@@ -486,6 +512,86 @@ export default {
       } finally {
         isDocPopulating.value = false;
         progressMessage.value = '';
+      }
+    };
+
+    const generateVectorEmbeddings = async () => {
+      if (isVectorizing.value) return;
+
+      const totalFacts = stats.value.total_facts || 0;
+      const totalVectors = stats.value.total_vectors || 0;
+      const needsVectorization = totalFacts - totalVectors;
+
+      if (!confirm(
+        `Generate vector embeddings using batched processing?\n\n` +
+        `Total Facts: ${totalFacts}\n` +
+        `Already Vectorized: ${totalVectors}\n` +
+        `Needs Vectorization: ${needsVectorization}\n\n` +
+        `Process: 50 facts per batch, 0.5s delay between batches\n` +
+        `This prevents resource lockup and can be run periodically.\n\n` +
+        `Continue?`
+      )) {
+        return;
+      }
+
+      isVectorizing.value = true;
+      progressMessage.value = 'Starting batched vectorization...';
+      progressPercent.value = 0;
+      lastResult.value = null;
+
+      try {
+        addLogEntry('Starting batched vector embeddings generation', 'info');
+
+        const progressInterval = setInterval(() => {
+          if (progressPercent.value < 90) {
+            progressPercent.value += 5;
+            if (progressPercent.value < 30) {
+              progressMessage.value = 'Processing batch 1... (Loading facts from Redis)';
+            } else if (progressPercent.value < 60) {
+              progressMessage.value = 'Processing batches... (Generating embeddings)';
+            } else {
+              progressMessage.value = 'Final batch... (Building search index)';
+            }
+          }
+        }, 2000);
+
+        // Call with batched parameters: 50 facts per batch, 0.5s delay, skip existing vectors
+        const response = await vectorizeFactsAPI(50, 0.5, true);
+
+        clearInterval(progressInterval);
+        progressPercent.value = 100;
+        progressMessage.value = 'Batched vectorization complete!';
+
+        lastResult.value = {
+          status: 'success',
+          message: response.message || 'Vector embeddings generated successfully',
+          details: {
+            'Total Facts': response.processed || 0,
+            'Successfully Vectorized': response.success || 0,
+            'Skipped (Already Vectorized)': response.skipped || 0,
+            'Failed': response.failed || 0,
+            'Batches Processed': response.batches || 0
+          }
+        };
+
+        addLogEntry(
+          `Batched vectorization: ${response.success || 0} created, ${response.skipped || 0} skipped, ${response.batches || 0} batches`,
+          'success'
+        );
+        await fetchStats();
+
+      } catch (error) {
+        lastResult.value = {
+          status: 'error',
+          message: error.response?.data?.detail || 'Failed to generate vector embeddings'
+        };
+        addLogEntry('Batched vectorization failed', 'error');
+      } finally {
+        isVectorizing.value = false;
+        setTimeout(() => {
+          progressMessage.value = '';
+          progressPercent.value = 0;
+        }, 3000);
       }
     };
 
@@ -504,6 +610,7 @@ export default {
       isRefreshing,
       isPopulating,
       isDocPopulating,
+      isVectorizing,
       progressMessage,
       progressPercent,
       lastResult,
@@ -514,6 +621,7 @@ export default {
       refreshSystemKnowledge,
       populateManPages,
       populateAutoBotDocs,
+      generateVectorEmbeddings,
       formatKey
     };
   }
@@ -523,12 +631,8 @@ export default {
 <style scoped>
 .system-knowledge-manager {
   padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-  max-height: calc(100vh - 80px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scroll-behavior: smooth;
+  width: 100%;
+  flex: 1;
 }
 
 .header {
@@ -664,6 +768,20 @@ export default {
 .btn-outline:hover:not(:disabled) {
   background: #3498db;
   color: white;
+}
+
+.btn-highlight {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  font-weight: 600;
+}
+
+.btn-highlight:hover:not(:disabled) {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+  transform: translateY(-2px);
 }
 
 .progress-display {
@@ -824,23 +942,5 @@ export default {
 .log-status.info {
   background: #d6eaf8;
   color: #2980b9;
-}
-
-/* Custom scrollbar styling for better UX */
-.system-knowledge-manager::-webkit-scrollbar {
-  width: 8px;
-}
-
-.system-knowledge-manager::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.system-knowledge-manager::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.system-knowledge-manager::-webkit-scrollbar-thumb:hover {
-  background: #555;
 }
 </style>

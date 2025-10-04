@@ -50,6 +50,19 @@ export interface ProgressMessage {
 }
 
 export function useKnowledgeBase() {
+  // ==================== HELPER FUNCTIONS ====================
+
+  /**
+   * Safely parse JSON from response - handles both Response objects and already-parsed data
+   */
+  const parseResponse = async (response: any): Promise<any> => {
+    if (typeof response.json === 'function') {
+      return await response.json()
+    }
+    // Already parsed or direct data
+    return response
+  }
+
   // ==================== API CALLS ====================
 
   /**
@@ -58,7 +71,8 @@ export function useKnowledgeBase() {
   const fetchStats = async (): Promise<KnowledgeStats | null> => {
     try {
       const response = await apiClient.get('/api/knowledge_base/stats')
-      return response.data || response
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Failed to fetch KB stats:', error)
       return null
@@ -71,7 +85,8 @@ export function useKnowledgeBase() {
   const fetchBasicStats = async (): Promise<KnowledgeStats | null> => {
     try {
       const response = await apiClient.get('/api/knowledge_base/stats/basic')
-      return response
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Failed to fetch basic KB stats:', error)
       return null
@@ -84,9 +99,10 @@ export function useKnowledgeBase() {
   const fetchMachineProfile = async (): Promise<MachineProfile | null> => {
     try {
       const response = await apiClient.get('/api/knowledge_base/machine_profile')
+      const data = await parseResponse(response)
 
-      if (response && response.status === 'success') {
-        return response.machine_profile
+      if (data && data.status === 'success') {
+        return data.machine_profile
       }
       return null
     } catch (error) {
@@ -101,9 +117,10 @@ export function useKnowledgeBase() {
   const fetchManPagesSummary = async (): Promise<ManPagesSummary | null> => {
     try {
       const response = await apiClient.get('/api/knowledge_base/man_pages/summary')
+      const data = await parseResponse(response)
 
-      if (response && response.status === 'success') {
-        return response.man_pages_summary
+      if (data && data.status === 'success') {
+        return data.man_pages_summary
       }
       return { status: 'not_integrated', message: 'Backend restart required' }
     } catch (error) {
@@ -113,14 +130,32 @@ export function useKnowledgeBase() {
   }
 
   /**
+   * Get facts by category from knowledge base
+   */
+  const getFactsByCategory = async (category?: string) => {
+    try {
+      const url = category
+        ? `/api/knowledge_base/facts/by_category?category=${category}`
+        : '/api/knowledge_base/facts/by_category'
+      const response = await apiClient.get(url)
+      const data = await parseResponse(response)
+      return data
+    } catch (error) {
+      console.error('Error fetching facts by category:', error)
+      throw error
+    }
+  }
+
+  /**
    * Initialize machine knowledge
    */
   const initializeMachineKnowledge = async (force: boolean = false) => {
     try {
-      const response = await apiClient.post('/knowledge_base/machine_knowledge/initialize', {
+      const response = await apiClient.post('/api/knowledge_base/machine_knowledge/initialize', {
         force
       })
-      return response
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Error initializing machine knowledge:', error)
       throw error
@@ -133,7 +168,8 @@ export function useKnowledgeBase() {
   const integrateManPages = async () => {
     try {
       const response = await apiClient.post('/api/knowledge_base/man_pages/integrate')
-      return response
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Error integrating man pages:', error)
       throw error
@@ -148,7 +184,8 @@ export function useKnowledgeBase() {
       const response = await apiClient.get('/api/knowledge_base/man_pages/search', {
         params: { query }
       })
-      return response
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Error searching man pages:', error)
       throw error
@@ -160,8 +197,9 @@ export function useKnowledgeBase() {
    */
   const refreshSystemKnowledge = async () => {
     try {
-      const response = await apiClient.post('/knowledge_base/refresh_system_knowledge', {})
-      return response
+      const response = await apiClient.post('/api/knowledge_base/refresh_system_knowledge', {})
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Error refreshing system knowledge:', error)
       throw error
@@ -173,8 +211,9 @@ export function useKnowledgeBase() {
    */
   const populateManPages = async () => {
     try {
-      const response = await apiClient.post('/knowledge_base/populate_man_pages', {})
-      return response
+      const response = await apiClient.post('/api/knowledge_base/populate_man_pages', {})
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Error populating man pages:', error)
       throw error
@@ -184,12 +223,66 @@ export function useKnowledgeBase() {
   /**
    * Populate AutoBot documentation
    */
-  const populateAutoBotDocs = async () => {
+  const populateAutoBotDocs = async (force: boolean = false) => {
     try {
-      const response = await apiClient.post('/knowledge_base/populate_autobot_docs', {})
-      return response
+      const response = await apiClient.post('/api/knowledge_base/populate_autobot_docs', { force })
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Error populating AutoBot docs:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Start background vectorization (non-blocking)
+   */
+  const startBackgroundVectorization = async () => {
+    try {
+      const response = await apiClient.post('/api/knowledge_base/vectorize_facts/background')
+      const data = await parseResponse(response)
+      return data
+    } catch (error) {
+      console.error('Error starting background vectorization:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get background vectorization status
+   */
+  const getVectorizationStatus = async () => {
+    try {
+      const response = await apiClient.get('/api/knowledge_base/vectorize_facts/status')
+      const data = await parseResponse(response)
+      return data
+    } catch (error) {
+      console.error('Error getting vectorization status:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Generate vector embeddings for all existing facts using batched processing (legacy/manual)
+   * @param batchSize - Number of facts to process per batch (default: 50)
+   * @param batchDelay - Delay in seconds between batches (default: 0.5)
+   * @param skipExisting - Skip facts that already have vectors (default: true)
+   */
+  const vectorizeFacts = async (
+    batchSize: number = 50,
+    batchDelay: number = 0.5,
+    skipExisting: boolean = true
+  ) => {
+    try {
+      const response = await apiClient.post('/api/knowledge_base/vectorize_facts', {
+        batch_size: batchSize,
+        batch_delay: batchDelay,
+        skip_existing: skipExisting
+      })
+      const data = await parseResponse(response)
+      return data
+    } catch (error) {
+      console.error('Error vectorizing facts:', error)
       throw error
     }
   }
@@ -428,12 +521,16 @@ export function useKnowledgeBase() {
     fetchBasicStats,
     fetchMachineProfile,
     fetchManPagesSummary,
+    getFactsByCategory,
     initializeMachineKnowledge,
     integrateManPages,
     searchManPages,
     refreshSystemKnowledge,
     populateManPages,
     populateAutoBotDocs,
+    startBackgroundVectorization,
+    getVectorizationStatus,
+    vectorizeFacts,
 
     // Formatting functions
     formatDate,

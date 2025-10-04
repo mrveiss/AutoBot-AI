@@ -1,41 +1,53 @@
 <template>
   <div class="knowledge-categories">
-    <!-- Header -->
-    <div class="page-header">
-      <h2><i class="fas fa-folder-tree"></i> Knowledge Categories</h2>
-      <p class="subtitle">Browse organized knowledge by category</p>
+
+    <!-- Category Selection View -->
+    <div v-if="!selectedMainCategory" class="category-selection">
+      <div class="selection-header">
+        <h2>Knowledge Base Categories</h2>
+        <p class="subtitle">Browse AutoBot's knowledge organized by purpose and source</p>
+      </div>
+
+      <div class="main-categories-grid">
+        <div
+          v-for="category in mainCategories"
+          :key="category.id"
+          class="main-category-card"
+          :style="{ borderColor: category.color }"
+          @click="selectMainCategory(category.id)"
+        >
+          <div class="category-icon-large" :style="{ backgroundColor: category.color }">
+            <i :class="category.icon"></i>
+          </div>
+          <div class="category-content">
+            <h3>{{ category.name }}</h3>
+            <p class="category-description">{{ category.description }}</p>
+            <p class="category-examples">{{ category.examples }}</p>
+            <div class="category-stats">
+              <div class="stat">
+                <i class="fas fa-file-alt"></i>
+                <span>{{ category.count }} facts</span>
+              </div>
+            </div>
+          </div>
+          <div class="browse-arrow">
+            <i class="fas fa-arrow-right"></i>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Tab Selection for the 3 browsers -->
-    <div class="category-tabs">
-      <button
-        @click="activeTab = 'user'"
-        :class="['tab-btn', { active: activeTab === 'user' }]"
-      >
-        <i class="fas fa-user"></i> User Browser
-      </button>
-      <button
-        @click="activeTab = 'autobot'"
-        :class="['tab-btn', { active: activeTab === 'autobot' }]"
-      >
-        <i class="fas fa-robot"></i> AutoBot Browser
-      </button>
-      <button
-        @click="activeTab = 'manpages'"
-        :class="['tab-btn', { active: activeTab === 'manpages' }]"
-      >
-        <i class="fas fa-book"></i> Man Pages
-      </button>
+    <!-- Browser View (when category selected) -->
+    <div v-else class="browser-view">
+      <div class="browser-header-bar">
+        <button @click="backToCategories" class="back-btn">
+          <i class="fas fa-arrow-left"></i>
+          Back to Categories
+        </button>
+        <h3>{{ getSelectedCategoryName() }}</h3>
+      </div>
+      <KnowledgeBrowser :mode="selectedMainCategory" :preselected-category="selectedMainCategory" />
     </div>
-
-    <!-- User Browser -->
-    <KnowledgeFileBrowser v-if="activeTab === 'user'" mode="user" />
-
-    <!-- AutoBot Browser (docs folder) -->
-    <KnowledgeFileBrowser v-if="activeTab === 'autobot'" mode="autobot" />
-
-    <!-- Man Pages -->
-    <ManPageManager v-if="activeTab === 'manpages'" />
 
     <!-- Legacy User Categories (keeping for possible future use) -->
     <div v-if="false" class="user-categories">
@@ -285,7 +297,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import apiClient from '@/utils/ApiClient'
 import type { KnowledgeCategory, KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
-import KnowledgeFileBrowser from './KnowledgeFileBrowser.vue'
+import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import ManPageManager from '@/components/ManPageManager.vue'
 
 // Use the shared composable
@@ -307,16 +319,17 @@ const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 const appStore = useAppStore()
 
-// UI state - Active tab (user, autobot, manpages)
-const activeTab = ref<'user' | 'autobot' | 'manpages'>('user')
+// UI state
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showDocumentsPanel = ref(false)
 const selectedCategory = ref<KnowledgeCategory | null>(null)
+const selectedMainCategory = ref<string | null>(null)
 
 // Shared state
 const isLoadingKBStats = ref(false)
 const kbStats = ref<any>(null)
+const mainCategories = ref<any[]>([])
 
 // Category documents state
 const isLoadingCategoryDocs = ref(false)
@@ -454,7 +467,9 @@ const viewCategoryDocuments = async (category: any) => {
 
   try {
     const response = await apiClient.get(`/api/knowledge_base/categories/${encodeURIComponent(category.path)}`)
-    categoryDocuments.value = response.data?.documents || []
+    // Handle both Response object and already-parsed JSON
+    const data = typeof response.json === 'function' ? await response.json() : response
+    categoryDocuments.value = data?.documents || []
     showCategoryDocuments.value = true
   } catch (error) {
     console.error('Error loading category documents:', error)
@@ -480,10 +495,36 @@ const closeDocumentModal = () => {
   currentDocument.value = null
 }
 
+// Main category methods
+const loadMainCategories = async () => {
+  try {
+    const response = await apiClient.get('/api/knowledge_base/categories/main')
+    const data = typeof response.json === 'function' ? await response.json() : response
+    mainCategories.value = data?.categories || []
+  } catch (error) {
+    console.error('Failed to load main categories:', error)
+    mainCategories.value = []
+  }
+}
+
+const selectMainCategory = (categoryId: string) => {
+  selectedMainCategory.value = categoryId
+}
+
+const backToCategories = () => {
+  selectedMainCategory.value = null
+}
+
+const getSelectedCategoryName = () => {
+  const category = mainCategories.value.find(c => c.id === selectedMainCategory.value)
+  return category?.name || 'Knowledge Browser'
+}
+
 // Load data on mount
 onMounted(() => {
   controller.loadCategories()
   getKBStats()
+  loadMainCategories()
 })
 
 // Cleanup on unmount to prevent teleport accumulation
@@ -508,6 +549,204 @@ onUnmounted(() => {
   padding: 1.5rem;
   max-width: 1400px;
   margin: 0 auto;
+  min-height: calc(100vh - 200px);
+}
+
+/* Category Selection View */
+.category-selection {
+  padding: 2rem 0;
+}
+
+.selection-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.selection-header h2 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.75rem;
+}
+
+.selection-header .subtitle {
+  color: #6b7280;
+  font-size: 1.125rem;
+}
+
+/* Main Categories Grid */
+.main-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.main-category-card {
+  background: white;
+  border: 3px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 2rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.main-category-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--card-color, #e5e7eb), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.main-category-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.main-category-card:hover::before {
+  opacity: 1;
+}
+
+.category-icon-large {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  transition: all 0.3s;
+}
+
+.main-category-card:hover .category-icon-large {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.category-content {
+  flex: 1;
+  width: 100%;
+}
+
+.category-content h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.75rem;
+}
+
+.category-description {
+  color: #4b5563;
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+
+.category-examples {
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-style: italic;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+}
+
+.category-stats {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.category-stats .stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.category-stats .stat i {
+  color: #3b82f6;
+}
+
+.browse-arrow {
+  margin-top: 1.5rem;
+  color: #3b82f6;
+  font-size: 1.5rem;
+  transition: transform 0.3s;
+}
+
+.main-category-card:hover .browse-arrow {
+  transform: translateX(8px);
+}
+
+/* Browser View */
+.browser-view {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.browser-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 0.5rem;
+  color: #374151;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background: #e5e7eb;
+  transform: translateX(-2px);
+}
+
+.browser-header-bar h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
 }
 
 /* Page Header */

@@ -69,6 +69,8 @@ class KnowledgeBaseV2:
 
         # Configuration flags
         self.llama_index_configured = False
+        self.embedding_model_name: Optional[str] = None  # Store actual model being used
+        self.embedding_dimensions: Optional[int] = None  # Store vector dimensions
 
         logger.info("KnowledgeBaseV2 instance created (not yet initialized)")
 
@@ -130,6 +132,10 @@ class KnowledgeBaseV2:
             else:
                 embed_model_name = "all-MiniLM-L6-v2"
                 logger.info("Using all-MiniLM-L6-v2 for 384-dimensional vectors")
+
+            # Store model configuration in instance variables
+            self.embedding_model_name = embed_model_name
+            self.embedding_dimensions = detected_dim
 
             Settings.embed_model = LlamaIndexOllamaEmbedding(
                 model_name=embed_model_name,
@@ -670,6 +676,73 @@ class KnowledgeBaseV2:
                 "fact_id": None
             }
 
+    async def vectorize_existing_fact(self, fact_id: str, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Vectorize an existing fact without creating a duplicate.
+
+        Args:
+            fact_id: Existing fact ID to vectorize
+            content: Fact content to embed
+            metadata: Optional metadata for the fact
+
+        Returns:
+            Dict with status, vector_indexed, and message
+        """
+        self.ensure_initialized()
+
+        try:
+            if not self.vector_store or not self.llama_index_configured:
+                return {
+                    "status": "error",
+                    "message": "Vector store not initialized",
+                    "fact_id": fact_id,
+                    "vector_indexed": False
+                }
+
+            # Prepare metadata
+            fact_metadata = metadata or {}
+            if "fact_id" not in fact_metadata:
+                fact_metadata["fact_id"] = fact_id
+
+            # Create LlamaIndex document with existing fact_id
+            document = Document(
+                text=content,
+                metadata=fact_metadata,
+                doc_id=fact_id  # Use existing ID to prevent duplication
+            )
+
+            # Add to vector index
+            if not self.vector_index:
+                # Create initial index
+                storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+                self.vector_index = await asyncio.to_thread(
+                    VectorStoreIndex.from_documents,
+                    [document],
+                    storage_context
+                )
+                logger.info(f"Created vector index and vectorized fact {fact_id}")
+            else:
+                # Insert into existing index
+                await asyncio.to_thread(self.vector_index.insert, document)
+                logger.debug(f"Vectorized existing fact {fact_id}")
+
+            return {
+                "status": "success",
+                "message": "Fact vectorized successfully",
+                "fact_id": fact_id,
+                "vector_indexed": True
+            }
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Failed to vectorize fact {fact_id}: {error_msg}")
+            return {
+                "status": "error",
+                "message": f"Vectorization failed: {error_msg}",
+                "fact_id": fact_id,
+                "vector_indexed": False
+            }
+
     async def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive knowledge base statistics (async version)"""
         self.ensure_initialized()
@@ -687,7 +760,9 @@ class KnowledgeBaseV2:
                 "redis_db": self.redis_db,
                 "index_name": self.redis_index_name,
                 "initialized": self.initialized,
-                "llama_index_configured": self.llama_index_configured
+                "llama_index_configured": self.llama_index_configured,
+                "embedding_model": self.embedding_model_name,
+                "embedding_dimensions": self.embedding_dimensions
             }
 
             if self.aioredis_client:

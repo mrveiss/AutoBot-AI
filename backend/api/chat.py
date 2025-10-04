@@ -53,6 +53,20 @@ def get_memory_interface(request):
     """Get memory interface from app state"""
     return getattr(request.app.state, "memory_interface", None)
 
+def get_llm_service(request):
+    """Get LLM service from app state, with lazy initialization"""
+    llm_service = getattr(request.app.state, "llm_service", None)
+    if llm_service is None:
+        # Lazy initialize if not yet available
+        try:
+            from src.llm_service import LLMService
+            llm_service = LLMService()
+            request.app.state.llm_service = llm_service
+            logger.info("✅ Lazy-initialized llm_service")
+        except Exception as e:
+            logger.error(f"Failed to lazy-initialize llm_service: {e}")
+    return llm_service
+
 # Simple utility functions to replace missing imports
 def generate_request_id():
     """Generate a unique request ID"""
@@ -67,9 +81,12 @@ def log_exception(error, context="chat"):
     """Simple exception logger replacement"""
     logger.error(f"[{context}] Exception: {str(error)}")
 
-def create_success_response(data, message="Success"):
+def create_success_response(data, message="Success", request_id=None, status_code=200):
     """Create success response"""
-    return {"success": True, "data": data, "message": message}
+    response = {"success": True, "data": data, "message": message}
+    if request_id:
+        response["request_id"] = request_id
+    return JSONResponse(status_code=status_code, content=response)
 
 
 def validate_message_content(content):
@@ -185,10 +202,24 @@ def validate_chat_session_id(session_id: str) -> bool:
     """Validate chat session ID format"""
     if not session_id:
         return False
+
+    # Allow UUIDs with optional suffixes (e.g., "uuid-imported-timestamp")
+    # Check if it starts with a valid UUID pattern
     try:
+        # Try to parse as pure UUID first
         uuid.UUID(session_id)
         return True
     except ValueError:
+        # If that fails, check if it starts with a UUID followed by additional text
+        parts = session_id.split('-')
+        if len(parts) >= 5:  # UUID has 5 parts separated by hyphens
+            # Try to reconstruct and validate first 5 parts as UUID
+            try:
+                uuid_part = '-'.join(parts[:5])
+                uuid.UUID(uuid_part)
+                return True  # Valid UUID prefix with additional suffix
+            except ValueError:
+                pass
         return False
 
 def generate_chat_session_id() -> str:
@@ -609,6 +640,38 @@ async def get_session_messages(
             status_code=500
         )
 
+@router.get("/chat/sessions")
+async def list_sessions(request: Request):
+    """List all available chat sessions (REST-compliant endpoint)"""
+    request_id = generate_request_id()
+
+    try:
+        chat_history_manager = get_chat_history_manager(request)
+
+        if chat_history_manager is None:
+            AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()
+            raise InternalError(
+                "Chat history manager not initialized",
+                details={"component": "chat_history_manager"},
+            )
+
+        # Use fast mode for listing (no decryption)
+        sessions = chat_history_manager.list_sessions_fast()
+
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "sessions": sessions, "count": len(sessions)}
+        )
+
+    except Exception as e:
+        logger.error(f"[{request_id}] list_sessions error: {e}")
+        return create_error_response(
+            error_code="INTERNAL_ERROR",
+            message=str(e),
+            request_id=request_id,
+            status_code=500
+        )
+
 @router.post("/chat/sessions")
 async def create_session(
     session_data: SessionCreate,
@@ -812,8 +875,8 @@ async def delete_session(
         else:
             logger.warning(f"ConversationFileManager not available, skipping file handling for session {session_id}")
 
-        # Delete session from chat history
-        deleted = await chat_history_manager.delete_session(session_id)
+        # Delete session from chat history (synchronous method)
+        deleted = chat_history_manager.delete_session(session_id)
 
         if not deleted:
             AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = get_exceptions_lazy()

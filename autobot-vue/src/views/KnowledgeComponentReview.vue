@@ -6,31 +6,6 @@
     </div>
 
     <div class="components-list">
-      <!-- Component Card: KnowledgeInterface -->
-      <div class="component-card unused">
-        <div class="card-header">
-          <h3>
-            <i class="fas fa-times-circle text-red-500"></i>
-            KnowledgeInterface.vue
-          </h3>
-          <span class="status-badge unused">UNUSED</span>
-        </div>
-        <div class="card-body">
-          <p class="description">Legacy interface component - no longer referenced in codebase</p>
-          <div class="usage-info">
-            <strong>Used by:</strong> None
-          </div>
-          <div class="actions">
-            <button @click="viewComponent('KnowledgeInterface')" class="btn-view">
-              <i class="fas fa-eye"></i> View Component
-            </button>
-            <button @click="deleteComponent('KnowledgeInterface')" class="btn-delete">
-              <i class="fas fa-trash"></i> Delete
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Component Card: KnowledgeSearch -->
       <div class="component-card active">
         <div class="card-header">
@@ -63,7 +38,7 @@
           <span class="status-badge active">ACTIVE</span>
         </div>
         <div class="card-body">
-          <p class="description">Three browsers: User, AutoBot (docs), Man Pages</p>
+          <p class="description">Category selection view with 3 main category cards, opens KnowledgeBrowser when clicked</p>
           <div class="usage-info">
             <strong>Used by:</strong> /knowledge/categories route
           </div>
@@ -141,17 +116,17 @@
         </div>
       </div>
 
-      <!-- Component Card: KnowledgeFileBrowser -->
+      <!-- Component Card: KnowledgeBrowser -->
       <div class="component-card active">
         <div class="card-header">
           <h3>
             <i class="fas fa-check-circle text-green-500"></i>
-            KnowledgeFileBrowser.vue
+            KnowledgeBrowser.vue
           </h3>
           <span class="status-badge active">ACTIVE</span>
         </div>
         <div class="card-body">
-          <p class="description">File tree browser for user/autobot knowledge</p>
+          <p class="description">Knowledge browser for user/autobot knowledge base</p>
           <div class="usage-info">
             <strong>Used by:</strong> KnowledgeCategories (User & AutoBot browser tabs)
           </div>

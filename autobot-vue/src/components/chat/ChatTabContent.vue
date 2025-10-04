@@ -17,13 +17,13 @@
       />
     </div>
 
-    <!-- Terminal Tab Content -->
+    <!-- Terminal Tab Content - UPDATED to use ChatTerminal with agent control -->
     <div v-else-if="activeTab === 'terminal'" class="flex-1 flex flex-col min-h-0">
-      <Terminal
+      <ChatTerminal
         :key="`chat-terminal-${currentSessionId}`"
-        :sessionType="'main'"
-        :autoConnect="true"
-        :chatSessionId="currentSessionId"
+        :chat-session-id="currentSessionId"
+        :auto-connect="true"
+        :allow-user-takeover="true"
         class="flex-1"
       />
     </div>
@@ -74,7 +74,7 @@ import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
 import FileBrowser from '@/components/FileBrowser.vue'
 import PopoutChromiumBrowser from '@/components/PopoutChromiumBrowser.vue'
-import Terminal from '@/components/Terminal.vue'
+import ChatTerminal from '@/components/ChatTerminal.vue'
 
 interface Props {
   activeTab: string

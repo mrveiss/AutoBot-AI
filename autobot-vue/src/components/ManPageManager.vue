@@ -1,14 +1,5 @@
 <template>
   <div class="man-page-manager">
-    <div class="header">
-      <h2 class="title">
-        <i class="fas fa-book"></i>
-        Man Page Knowledge Integration
-      </h2>
-      <p class="subtitle">
-        Integrate Linux manual pages into AutoBot's machine-specific knowledge base
-      </p>
-    </div>
 
     <!-- Machine Profile Section -->
     <div class="machine-profile-section">
