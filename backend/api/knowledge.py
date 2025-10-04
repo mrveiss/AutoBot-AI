@@ -263,6 +263,13 @@ async def get_knowledge_stats(req: Request):
         raise HTTPException(status_code=500, detail=f"Stats failed: {str(e)}")
 
 
+@router.get("/test_categories_main")
+async def test_main_categories():
+    """Test endpoint to verify file is loaded"""
+    from backend.knowledge_categories import CATEGORY_METADATA
+    return {"status": "working", "categories": list(CATEGORY_METADATA.keys())}
+
+
 @router.get("/stats/basic")
 async def get_knowledge_stats_basic(req: Request):
     """Get basic knowledge base statistics for quick display"""
@@ -316,35 +323,49 @@ async def get_main_categories(req: Request):
         }
     """
     try:
-        from backend.knowledge_categories import CATEGORY_METADATA, KnowledgeCategory
+        from backend.knowledge_categories import CATEGORY_METADATA, KnowledgeCategory, get_category_for_source
 
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        # Get current stats to calculate counts per main category
+        # Initialize category counts
+        category_counts = {
+            KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
+            KnowledgeCategory.SYSTEM_KNOWLEDGE: 0,
+            KnowledgeCategory.USER_KNOWLEDGE: 0
+        }
+
+        # Count facts per main category by querying all facts
         if kb_to_use:
-            stats = await kb_to_use.get_stats()
-            all_categories = stats.get("categories", [])
-        else:
-            all_categories = []
+            try:
+                # Get all facts from knowledge base
+                all_facts = await kb_to_use.get_all_facts()
+
+                logger.info(f"Categorizing {len(all_facts)} facts into main categories")
+
+                # Categorize each fact based on its source/metadata
+                for fact in all_facts:
+                    # Get source from fact metadata
+                    source = fact.get("metadata", {}).get("source", "") or fact.get("source", "")
+                    if not source:
+                        # Try to get filename or title as fallback
+                        source = fact.get("metadata", {}).get("filename", "") or fact.get("title", "")
+
+                    # Map to main category
+                    main_category = get_category_for_source(source)
+                    if main_category in category_counts:
+                        category_counts[main_category] += 1
+
+                logger.info(f"Category counts: {category_counts}")
+
+            except Exception as e:
+                logger.error(f"Error categorizing facts: {e}")
+                # Fallback: just show 0 if we can't categorize
+                pass
 
         # Build main categories with counts
         main_categories = []
         for cat_id, meta in CATEGORY_METADATA.items():
-            # Count facts in this main category by matching subcategories
-            count = 0
-            for cat_data in all_categories:
-                cat_name = cat_data.get("name", "") if isinstance(cat_data, dict) else str(cat_data)
-
-                # Map subcategories to main categories
-                if cat_id == KnowledgeCategory.AUTOBOT_DOCUMENTATION:
-                    if any(keyword in cat_name.lower() for keyword in ['autobot', 'documentation', 'docs']):
-                        count += cat_data.get("count", 1) if isinstance(cat_data, dict) else 1
-                elif cat_id == KnowledgeCategory.SYSTEM_KNOWLEDGE:
-                    if any(keyword in cat_name.lower() for keyword in ['man', 'system', 'command', 'os', 'machine']):
-                        count += cat_data.get("count", 1) if isinstance(cat_data, dict) else 1
-                elif cat_id == KnowledgeCategory.USER_KNOWLEDGE:
-                    if not any(keyword in cat_name.lower() for keyword in ['autobot', 'documentation', 'docs', 'man', 'system', 'command', 'os', 'machine']):
-                        count += cat_data.get("count", 1) if isinstance(cat_data, dict) else 1
+            count = category_counts.get(cat_id, 0)
 
             main_categories.append({
                 "id": cat_id,
@@ -352,6 +373,7 @@ async def get_main_categories(req: Request):
                 "description": meta["description"],
                 "icon": meta["icon"],
                 "color": meta["color"],
+                "examples": meta["examples"],
                 "count": count
             })
 
@@ -626,6 +648,24 @@ async def search_knowledge(request: dict, req: Request):
 
         logger.info(f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, use_rag={use_rag})")
 
+        # Check if knowledge base is empty - fast check to avoid timeout
+        try:
+            stats = await kb_to_use.get_stats()
+            fact_count = stats.get("total_facts", 0)
+
+            if fact_count == 0:
+                logger.info("Knowledge base is empty - returning empty results immediately")
+                return {
+                    "results": [],
+                    "total_results": 0,
+                    "query": query,
+                    "mode": mode,
+                    "kb_implementation": kb_to_use.__class__.__name__,
+                    "message": "Knowledge base is empty - no documents to search. Add documents in the Manage tab."
+                }
+        except Exception as stats_err:
+            logger.warning(f"Could not check KB stats: {stats_err}")
+
         # FIXED: Check which knowledge base implementation we're using and call with correct parameters
         kb_class_name = kb_to_use.__class__.__name__
 
@@ -706,6 +746,30 @@ async def rag_enhanced_search(request: dict, req: Request):
         search_limit = limit if request.get("limit") is not None else top_k
 
         logger.info(f"RAG-enhanced search request: '{query}' (top_k={search_limit}, reformulate={reformulate_query})")
+
+        # Check if knowledge base is empty - fast check to avoid timeout
+        try:
+            stats = await kb_to_use.get_stats()
+            fact_count = stats.get("total_facts", 0)
+
+            if fact_count == 0:
+                logger.info("Knowledge base is empty - returning empty RAG results immediately")
+                return {
+                    "status": "success",
+                    "synthesized_response": "The knowledge base is currently empty. Please add documents in the Manage tab to enable search functionality.",
+                    "results": [],
+                    "query": query,
+                    "reformulated_query": query,
+                    "rag_analysis": {
+                        "relevance_score": 0.0,
+                        "confidence": 0.0,
+                        "sources_used": 0,
+                        "synthesis_quality": "empty_kb"
+                    },
+                    "message": "Knowledge base is empty"
+                }
+        except Exception as stats_err:
+            logger.warning(f"Could not check KB stats: {stats_err}")
 
         # Step 1: Query reformulation if requested
         original_query = query
