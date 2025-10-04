@@ -73,6 +73,22 @@ syslog-ident {{ redis.log.syslog_ident }}
 # PERFORMANCE OPTIMIZATION
 # ==========================================
 
+# Multi-threaded I/O for better CPU utilization (Redis 6.0+)
+# Enables parallel processing across multiple CPU cores
+{% if redis.performance.io_threads is defined and redis.performance.io_threads > 1 %}
+io-threads {{ redis.performance.io_threads }}
+io-threads-do-reads yes
+{% else %}
+# Default: single-threaded (set redis.performance.io_threads in inventory)
+io-threads 1
+{% endif %}
+
+# Lazy freeing for better performance
+lazyfree-lazy-eviction yes
+lazyfree-lazy-expire yes
+lazyfree-lazy-server-del yes
+replica-lazy-flush yes
+
 # Hash optimization
 hash-max-ziplist-entries {{ performance.redis_optimization.hash_max_ziplist_entries }}
 hash-max-ziplist-value {{ performance.redis_optimization.hash_max_ziplist_value }}

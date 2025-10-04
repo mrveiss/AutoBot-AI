@@ -69,7 +69,7 @@ export function useConversationFiles(sessionId: string) {
     error.value = null
 
     try {
-      const response = await api.get(`/api/files/conversation/${sessionId}/list`)
+      const response = await api.get(`/api/conversation-files/conversation/${sessionId}/list`)
 
       if (response.data) {
         files.value = response.data.files || []
@@ -117,7 +117,7 @@ export function useConversationFiles(sessionId: string) {
       })
 
       const response = await api.post(
-        `/api/files/conversation/${sessionId}/upload`,
+        `/api/conversation-files/conversation/${sessionId}/upload`,
         formData,
         {
           headers: {
@@ -169,7 +169,7 @@ export function useConversationFiles(sessionId: string) {
     error.value = null
 
     try {
-      await api.delete(`/api/files/conversation/${sessionId}/files/${fileId}`)
+      await api.delete(`/api/conversation-files/conversation/${sessionId}/files/${fileId}`)
 
       // Remove file from local state
       files.value = files.value.filter(f => f.file_id !== fileId)
@@ -202,7 +202,7 @@ export function useConversationFiles(sessionId: string) {
 
     try {
       const response = await api.get(
-        `/api/files/conversation/${sessionId}/download/${fileId}`,
+        `/api/conversation-files/conversation/${sessionId}/download/${fileId}`,
         { responseType: 'blob' }
       )
 
@@ -252,7 +252,7 @@ export function useConversationFiles(sessionId: string) {
 
       // For previewable types, open preview URL
       if (isPreviewable(file.mime_type)) {
-        const previewUrl = `/api/files/conversation/${sessionId}/preview/${fileId}`
+        const previewUrl = `/api/conversation-files/conversation/${sessionId}/preview/${fileId}`
         window.open(previewUrl, '_blank')
       } else {
         // For non-previewable types, download instead

@@ -19,8 +19,8 @@ export function useSystemStatus() {
     { name: 'Backend API', status: 'healthy', statusText: 'Running' },
     { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
     { name: 'WebSocket', status: 'healthy', statusText: 'Connected' },
-    { name: 'Redis', status: 'warning', statusText: 'Disk Issues' },
-    { name: 'Ollama', status: 'error', statusText: 'Disconnected' },
+    { name: 'Redis', status: 'healthy', statusText: 'Connected' },
+    { name: 'Ollama', status: 'healthy', statusText: 'Connected' },
     { name: 'NPU Worker', status: 'healthy', statusText: 'Running' },
     { name: 'Browser Service', status: 'healthy', statusText: 'Running' }
   ])
@@ -74,10 +74,10 @@ export function useSystemStatus() {
       let hasApiErrors = false
 
       // FIXED: Use correct endpoint with graceful fallback
-      // Old: '/api/vms/status' -> New: '/api/enterprise/infrastructure'
+      // Correct endpoint: '/api/service-monitor/vms/status'
       try {
         console.log('[useSystemStatus] Fetching infrastructure status...')
-        const vmResponse = await apiEndpointMapper.fetchWithFallback('/api/vms/status', { timeout: 5000 })
+        const vmResponse = await apiEndpointMapper.fetchWithFallback('/api/service-monitor/vms/status', { timeout: 5000 })
         const vmData = await vmResponse.json()
 
         if (vmResponse.fallback) {
@@ -108,10 +108,10 @@ export function useSystemStatus() {
       }
 
       // FIXED: Use correct services endpoint with graceful fallback
-      // Old: '/api/services' -> New: '/api/monitoring/services/health'
+      // Correct endpoint: '/api/service-monitor/services'
       try {
         console.log('[useSystemStatus] Fetching service health status...')
-        const servicesResponse = await apiEndpointMapper.fetchWithFallback('/api/services', { timeout: 5000 })
+        const servicesResponse = await apiEndpointMapper.fetchWithFallback('/api/service-monitor/services', { timeout: 5000 })
         const servicesData = await servicesResponse.json()
 
         if (servicesResponse.fallback) {

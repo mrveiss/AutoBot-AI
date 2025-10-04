@@ -104,7 +104,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'manage',
         name: 'knowledge-manage',
-        component: () => import('@/components/knowledge/KnowledgeManager.vue'),
+        component: () => import('@/components/knowledge/KnowledgeEntries.vue'),
         meta: {
           title: 'Manage Knowledge',
           parent: 'knowledge'

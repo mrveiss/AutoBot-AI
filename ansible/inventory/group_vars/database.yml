@@ -42,6 +42,10 @@ redis:
     timeout: 0
     tcp_backlog: 511
     databases: 16
+    # Multi-threaded I/O (Redis 6.0+) - utilizes multiple CPU cores
+    # Recommended: (total_cores - 2) for best performance
+    # Redis VM has 12 cores, so use 10 I/O threads
+    io_threads: 10  # Enable multi-threaded I/O for vector operations
 
   # Connection pooling configuration
   connection:

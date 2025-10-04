@@ -1,7 +1,7 @@
 ---
 name: code-skeptic
 description: Use this agent when you need a critical analysis of code to identify potential failures, edge cases, bugs, and architectural issues. This agent should be called after writing new functions, implementing features, or before deploying code to production. Examples:\n\n<example>\nContext: The user wants to review recently written code for potential issues.\nuser: "I just implemented a new authentication system"\nassistant: "I'll have the code-skeptic agent analyze this for potential bugs and failure points"\n<commentary>\nSince new authentication code was written, use the Task tool to launch the code-skeptic agent to identify bugs and edge cases.\n</commentary>\n</example>\n\n<example>\nContext: The user has just written a complex algorithm.\nuser: "Here's my implementation of the sorting algorithm"\nassistant: "Let me use the code-skeptic agent to identify potential failure cases"\n<commentary>\nAfter implementing an algorithm, use the Task tool to launch the code-skeptic agent to find edge cases and performance issues.\n</commentary>\n</example>\n\n<example>\nContext: The user is about to deploy code.\nuser: "I think this feature is ready for production"\nassistant: "Before deployment, I'll have the code-skeptic agent examine this for potential production issues"\n<commentary>\nBefore production deployment, use the Task tool to launch the code-skeptic agent to identify risks.\n</commentary>\n</example>
-model: sonnet
+model: opus
 color: red
 ---
 

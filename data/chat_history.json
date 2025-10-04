@@ -921,5 +921,89 @@
     "messageType": "default",
     "rawData": null,
     "timestamp": "2025-09-29 11:42:19"
+  },
+  {
+    "sender": "db4b7cba-d4bb-40b8-a7dc-3652aaba3427",
+    "text": {
+      "id": "0ab9731e-1637-4ea3-bc2d-742dad685266",
+      "content": "Hello, this is a test",
+      "role": "user",
+      "timestamp": "2025-10-01T17:38:24.986063",
+      "metadata": {},
+      "session_id": "db4b7cba-d4bb-40b8-a7dc-3652aaba3427"
+    },
+    "messageType": "default",
+    "rawData": null,
+    "timestamp": "2025-10-01 20:38:24"
+  },
+  {
+    "sender": "db4b7cba-d4bb-40b8-a7dc-3652aaba3427",
+    "text": {
+      "id": "a0b983cd-8be4-4451-aff8-f380c879eb92",
+      "content": "I'm currently unable to generate a response. Please try again.",
+      "role": "assistant",
+      "timestamp": "2025-10-01T17:38:24.991054",
+      "metadata": {},
+      "session_id": "db4b7cba-d4bb-40b8-a7dc-3652aaba3427"
+    },
+    "messageType": "default",
+    "rawData": null,
+    "timestamp": "2025-10-01 20:38:24"
+  },
+  {
+    "sender": "b15ea93a-5bea-43ea-b6d0-d5b748f45a65",
+    "text": {
+      "id": "78b823e7-8094-45b4-a22a-26ddd645138d",
+      "content": "test",
+      "role": "user",
+      "timestamp": "2025-10-01T18:41:43.189105",
+      "metadata": {},
+      "session_id": "b15ea93a-5bea-43ea-b6d0-d5b748f45a65"
+    },
+    "messageType": "default",
+    "rawData": null,
+    "timestamp": "2025-10-01 21:41:43"
+  },
+  {
+    "sender": "b15ea93a-5bea-43ea-b6d0-d5b748f45a65",
+    "text": {
+      "id": "ec9435ab-8f19-4c3e-8398-4a2cc1480fb2",
+      "content": "I'm currently unable to generate a response. Please try again.",
+      "role": "assistant",
+      "timestamp": "2025-10-01T18:41:43.197939",
+      "metadata": {},
+      "session_id": "b15ea93a-5bea-43ea-b6d0-d5b748f45a65"
+    },
+    "messageType": "default",
+    "rawData": null,
+    "timestamp": "2025-10-01 21:41:43"
+  },
+  {
+    "sender": "267ab75b-8c44-46bb-b038-e5ee72096de4",
+    "text": {
+      "id": "af901655-10cb-45d8-a6e2-49b2f80cfbaf",
+      "content": "hello",
+      "role": "user",
+      "timestamp": "2025-10-02T07:57:07.433428",
+      "metadata": {},
+      "session_id": "267ab75b-8c44-46bb-b038-e5ee72096de4"
+    },
+    "messageType": "default",
+    "rawData": null,
+    "timestamp": "2025-10-02 10:57:07"
+  },
+  {
+    "sender": "267ab75b-8c44-46bb-b038-e5ee72096de4",
+    "text": {
+      "id": "51b2f06b-07fd-44a4-9d99-f06dae98d71b",
+      "content": "I'm currently unable to generate a response. Please try again.",
+      "role": "assistant",
+      "timestamp": "2025-10-02T07:57:07.438519",
+      "metadata": {},
+      "session_id": "267ab75b-8c44-46bb-b038-e5ee72096de4"
+    },
+    "messageType": "default",
+    "rawData": null,
+    "timestamp": "2025-10-02 10:57:07"
   }
 ]

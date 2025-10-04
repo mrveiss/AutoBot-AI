@@ -177,22 +177,35 @@ class EnhancedSecurityLayer:
     ) -> bool:
         """
         Enhanced permission checking that includes command execution permissions
+        SECURITY FIX: Removed god mode bypass - all roles use granular RBAC
         """
         if not self.enable_auth:
             return True
 
-        # GOD MODE: Unrestricted access
+        # SECURITY FIX: Deprecated god/superuser/root roles - use admin with proper permissions
+        # ALL roles must go through RBAC, audit logging, and validation
         if user_role.lower() in ["god", "superuser", "root"]:
-            print(f"GOD MODE: Unrestricted access granted for role '{user_role}'")
-            return True
+            self.audit_log(
+                action="deprecated_role_usage",
+                user=user_role,
+                outcome="warning",
+                details={
+                    "deprecated_role": user_role,
+                    "action_attempted": action_type,
+                    "resource": resource,
+                    "message": "God/superuser/root roles deprecated. Update to admin role.",
+                },
+            )
+            # Downgrade to admin role with proper permissions and audit logging
+            user_role = "admin"
 
         # Special handling for command execution
         if action_type == "allow_shell_execute":
             # Check if role has shell execution permission
             role_permissions = self.roles.get(user_role, {}).get("permissions", [])
 
-            if "allow_all" in role_permissions:
-                return True
+            # SECURITY FIX: Removed "allow_all" bypass - granular permissions only
+            # All command execution must go through proper risk assessment
 
             if "allow_shell_execute" in role_permissions:
                 # Even with permission, command security still applies
@@ -208,8 +221,8 @@ class EnhancedSecurityLayer:
         # Regular permission checking
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])
 
-        if "allow_all" in role_permissions:
-            return True
+        # SECURITY FIX: Removed "allow_all" bypass - use granular permissions only
+        # This ensures all actions go through proper permission validation
 
         if action_type in role_permissions:
             return True
@@ -233,12 +246,30 @@ class EnhancedSecurityLayer:
         return False
 
     def _get_default_role_permissions(self, user_role: str) -> List[str]:
-        """Get default permissions for common user roles"""
+        """
+        Get default permissions for common user roles
+        SECURITY FIX: Removed god/superuser/root roles and granular admin permissions
+        """
         default_role_permissions = {
-            "god": ["allow_all"],
-            "superuser": ["allow_all"],
-            "root": ["allow_all"],
-            "admin": ["allow_all"],
+            # SECURITY FIX: Admin has elevated permissions but NOT unrestricted access
+            # Dangerous commands still require approval and validation for ALL users
+            "admin": [
+                "files.*",
+                "allow_goal_submission",
+                "allow_kb_read",
+                "allow_kb_write",
+                "allow_shell_execute",  # Can execute commands with proper validation
+                "allow_shell_high_risk",  # Can execute high-risk with approval
+                # NOTE: Dangerous commands ALWAYS require approval, even for admin
+            ],
+            "operator": [
+                "files.*",
+                "allow_goal_submission",
+                "allow_kb_read",
+                "allow_kb_write",
+                "allow_shell_execute",  # Standard shell execution
+                "allow_shell_moderate",  # Moderate risk commands with approval
+            ],
             "developer": [
                 "files.*",
                 "allow_goal_submission",

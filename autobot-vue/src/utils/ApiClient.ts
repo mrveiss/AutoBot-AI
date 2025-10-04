@@ -64,7 +64,7 @@ export class ApiClient {
       method = 'GET',
       headers = {},
       body,
-      timeout = appConfig.getConfig().api.timeout || 30000,
+      timeout = appConfig.get('api.timeout', 30000),
     } = options;
 
     // Ensure base URL is loaded

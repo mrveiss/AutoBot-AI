@@ -48,6 +48,7 @@ from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.files import router as files_router
 from backend.api.developer import router as developer_router
 from backend.api.frontend_config import router as frontend_config_router
+from backend.api.memory import router as memory_router
 
 # Enhanced routers with optional imports
 optional_routers = []
@@ -66,6 +67,13 @@ try:
     logging.info("✅ Optional router loaded: terminal")
 except ImportError as e:
     logging.warning(f"⚠️ Optional router not available: terminal - {e}")
+
+try:
+    from backend.api.agent_terminal import router as agent_terminal_router
+    optional_routers.append((agent_terminal_router, "", ["agent-terminal"], "agent_terminal"))
+    logging.info("✅ Optional router loaded: agent_terminal (includes prefix /api/agent-terminal)")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: agent_terminal - {e}")
 
 try:
     from backend.api.websockets import router as websockets_router
@@ -88,6 +96,13 @@ try:
     logging.info("✅ Optional router loaded: workflow")
 except ImportError as e:
     logging.warning(f"⚠️ Optional router not available: workflow - {e}")
+
+try:
+    from backend.api.remote_terminal import router as remote_terminal_router
+    optional_routers.append((remote_terminal_router, "", ["remote-terminal"], "remote_terminal"))
+    logging.info("✅ Optional router loaded: remote_terminal (includes prefix /api/remote-terminal)")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: remote_terminal - {e}")
 
 try:
     from backend.api.batch import router as batch_router
@@ -404,6 +419,20 @@ try:
 except ImportError as e:
     logging.warning(f"⚠️ Optional router not available: base_terminal - {e}")
 
+try:
+    from backend.api.conversation_files import router as conversation_files_router
+    optional_routers.append((conversation_files_router, "/conversation-files", ["conversation-files"], "conversation_files"))
+    logging.info("✅ Optional router loaded: conversation_files")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: conversation_files - {e}")
+
+try:
+    from backend.api.chat_knowledge import router as chat_knowledge_router
+    optional_routers.append((chat_knowledge_router, "/chat-knowledge", ["chat-knowledge"], "chat_knowledge"))
+    logging.info("✅ Optional router loaded: chat_knowledge")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: chat_knowledge - {e}")
+
 # Store logger for app usage
 logger = logging.getLogger(__name__)
 
@@ -493,6 +522,21 @@ class AppFactory:
                     except Exception as chat_error:
                         logger.error(f"Chat workflow manager initialization failed: {chat_error}")
 
+                    # Initialize Memory Graph
+                    logger.info("✅ [ 92%] Memory Graph: Initializing memory graph...")
+                    try:
+                        from src.autobot_memory_graph import AutoBotMemoryGraph
+                        memory_graph = AutoBotMemoryGraph(
+                            chat_history_manager=app.state.chat_history_manager
+                        )
+                        await memory_graph.initialize()
+                        app.state.memory_graph = memory_graph
+                        app_state["memory_graph"] = memory_graph
+                        logger.info("✅ [ 92%] Memory Graph: Memory graph initialized successfully")
+                    except Exception as memory_error:
+                        logger.error(f"Memory graph initialization failed: {memory_error}")
+                        app.state.memory_graph = None
+
                     # Initialize Background LLM Sync
                     try:
                         from backend.services.ai_stack_client import AIStackClient
@@ -531,6 +575,8 @@ class AppFactory:
             try:
                 if hasattr(app.state, 'background_llm_sync') and app.state.background_llm_sync:
                     await app.state.background_llm_sync.stop()
+                if hasattr(app.state, 'memory_graph') and app.state.memory_graph:
+                    await app.state.memory_graph.close()
                 if hasattr(app.state, 'redis_manager') and app.state.redis_manager:
                     await app.state.redis_manager.close_all_pools()
             except Exception as e:
@@ -585,6 +631,7 @@ class AppFactory:
             (files_router, "/files", ["files"], "files"),
             (developer_router, "/developer", ["developer"], "developer"),
             (frontend_config_router, "", ["frontend-config"], "frontend_config"),
+            (memory_router, "/memory", ["memory"], "memory"),
         ]
 
         # Add root-level endpoints that frontend expects directly under /api

@@ -50,11 +50,12 @@ export default {
       loading.value = true;
       try {
         const response = await apiClient.get('/api/knowledge_base/categories');
-        const data = await response.json();
-        
-        if (data.success) {
-          categories.value = data.categories;
-          emit('loaded', data.categories);
+        // Handle both Response object and already-parsed JSON
+        const data = typeof response.json === 'function' ? await response.json() : response;
+
+        if (data.success || data.categories) {
+          categories.value = data.categories || [];
+          emit('loaded', data.categories || []);
         }
       } catch (error) {
         console.error('Failed to load categories:', error);

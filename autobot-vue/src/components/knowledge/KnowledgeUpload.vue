@@ -1,7 +1,6 @@
 <template>
   <div class="knowledge-upload">
     <div class="upload-header">
-      <h3>Add Knowledge to Base</h3>
       <p class="upload-description">
         Upload documents, add web content, or create new knowledge entries
       </p>

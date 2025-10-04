@@ -29,12 +29,14 @@
     <div v-if="manageTab === 'advanced'" class="advanced-content">
       <!-- System Knowledge Management: Initialize, Reindex, Repopulate -->
       <SystemKnowledgeManager />
+
+      <!-- Man Page Management: Search, Browse, and Integrate Man Pages -->
+      <ManPageManager />
     </div>
 
     <!-- Manage Tab Content -->
     <div v-if="manageTab === 'manage'" class="entries-content">
     <div class="entries-header">
-      <h3>Knowledge Entries</h3>
       <div class="header-actions">
         <div class="search-box">
           <i class="fas fa-search search-icon"></i>
@@ -344,6 +346,7 @@ import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
 import SystemKnowledgeManager from '@/components/SystemKnowledgeManager.vue'
+import ManPageManager from '@/components/ManPageManager.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -1201,6 +1204,13 @@ tr.selected {
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+.advanced-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 /* System Knowledge Content */

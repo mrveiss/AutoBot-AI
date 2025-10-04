@@ -8,6 +8,170 @@
       </button>
     </div>
 
+    <!-- Vector Database Statistics Section -->
+    <div v-if="vectorStats" class="vector-stats-section">
+      <div class="section-header">
+        <h3><i class="fas fa-project-diagram"></i> Vector Database Statistics</h3>
+        <button @click="refreshVectorStats" :disabled="isRefreshingVectorStats" class="refresh-btn">
+          <i class="fas fa-sync" :class="{ 'fa-spin': isRefreshingVectorStats }"></i>
+          Refresh
+        </button>
+      </div>
+
+      <div class="vector-overview-grid">
+        <div class="vector-stat-card">
+          <div class="vector-stat-icon facts">
+            <i class="fas fa-lightbulb"></i>
+          </div>
+          <div class="vector-stat-content">
+            <h4>Total Facts</h4>
+            <p class="vector-stat-value">{{ vectorStats.total_facts || 0 }}</p>
+            <p class="vector-stat-label">Knowledge items stored</p>
+          </div>
+        </div>
+
+        <div class="vector-stat-card" :class="{ 'needs-attention': needsVectorization }">
+          <div class="vector-stat-icon vectors">
+            <i class="fas fa-cubes"></i>
+          </div>
+          <div class="vector-stat-content">
+            <h4>Total Vectors</h4>
+            <p class="vector-stat-value">{{ vectorStats.total_vectors || 0 }}</p>
+            <p v-if="needsVectorization" class="vector-stat-label warning">
+              <i class="fas fa-exclamation-triangle"></i> Not vectorized
+            </p>
+            <p v-else class="vector-stat-label">Embeddings generated</p>
+          </div>
+        </div>
+
+        <div class="vector-stat-card">
+          <div class="vector-stat-icon database">
+            <i class="fas fa-database"></i>
+          </div>
+          <div class="vector-stat-content">
+            <h4>Database Size</h4>
+            <p class="vector-stat-value">{{ formatFileSize(vectorStats.db_size || 0) }}</p>
+            <p class="vector-stat-label">Storage used</p>
+          </div>
+        </div>
+
+        <div class="vector-stat-card">
+          <div class="vector-stat-icon status">
+            <i class="fas fa-check-circle"></i>
+          </div>
+          <div class="vector-stat-content">
+            <h4>Status</h4>
+            <p class="vector-stat-value status-badge" :class="vectorStats.status">
+              {{ vectorStats.status || 'unknown' }}
+            </p>
+            <p class="vector-stat-label">RAG: {{ vectorStats.rag_available ? 'Available' : 'Unavailable' }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vectorization Notice -->
+      <div v-if="needsVectorization" class="vectorization-notice">
+        <div class="notice-icon">
+          <i class="fas fa-info-circle"></i>
+        </div>
+        <div class="notice-content">
+          <h4>Vector Embeddings Not Generated</h4>
+          <p>
+            You have <strong>{{ vectorStats.total_facts }} facts</strong> stored in the knowledge base,
+            but they haven't been vectorized yet. Vector embeddings enable semantic search and RAG capabilities.
+          </p>
+          <p class="notice-hint">
+            <i class="fas fa-lightbulb"></i>
+            Vectors are typically generated automatically when facts are added through the proper ingestion pipeline.
+            If you imported facts manually, they may need to be re-indexed to generate embeddings.
+          </p>
+        </div>
+      </div>
+
+      <!-- Vector Categories Distribution Chart -->
+      <div class="vector-chart-section">
+        <h4><i class="fas fa-chart-pie"></i> Vector Distribution by Category</h4>
+        <div class="vector-categories-chart">
+          <div
+            v-for="(category, idx) in vectorStats.categories"
+            :key="idx"
+            class="category-bar"
+          >
+            <div class="category-info">
+              <span class="category-name">{{ formatCategoryName(category) }}</span>
+              <span class="category-count">{{ getCategoryFactCount(category) }} facts</span>
+            </div>
+            <div class="category-progress">
+              <div
+                class="category-fill"
+                :style="{
+                  width: getCategoryPercentage(category) + '%',
+                  backgroundColor: getCategoryColor(idx)
+                }"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vector Index Health -->
+      <div class="vector-health-section">
+        <h4><i class="fas fa-heartbeat"></i> Vector Index Health</h4>
+        <div class="health-indicators">
+          <div class="health-item" :class="{ active: vectorStats.initialized }">
+            <i class="fas fa-check-circle"></i>
+            <span>Initialized</span>
+          </div>
+          <div class="health-item" :class="{ active: vectorStats.llama_index_configured }">
+            <i class="fas fa-cube"></i>
+            <span>LlamaIndex</span>
+          </div>
+          <div class="health-item" :class="{ active: vectorStats.llama_index_configured }">
+            <i class="fas fa-link"></i>
+            <span>LangChain</span>
+          </div>
+          <div class="health-item" :class="{ active: vectorStats.index_available }">
+            <i class="fas fa-layer-group"></i>
+            <span>Index Available</span>
+          </div>
+          <div class="health-item" :class="{ active: vectorStats.rag_available }">
+            <i class="fas fa-brain"></i>
+            <span>RAG Available</span>
+          </div>
+        </div>
+        <div class="health-details">
+          <div class="detail-item">
+            <label>Redis DB:</label>
+            <span class="mono">{{ vectorStats.redis_db }}</span>
+          </div>
+          <div class="detail-item">
+            <label>Index Name:</label>
+            <span class="mono">{{ vectorStats.index_name }}</span>
+          </div>
+          <div class="detail-item">
+            <label>Vector Framework:</label>
+            <span class="mono">LlamaIndex + LangChain</span>
+          </div>
+          <div class="detail-item">
+            <label>Embedding Model:</label>
+            <span class="mono">{{ getEmbeddingModelDisplay() }}</span>
+          </div>
+          <div class="detail-item">
+            <label>Text Splitter:</label>
+            <span class="mono">LangChain RecursiveCharacterTextSplitter</span>
+          </div>
+          <div class="detail-item">
+            <label>Last Updated:</label>
+            <span>{{ formatDateTime(vectorStats.last_updated) }}</span>
+          </div>
+          <div class="detail-item">
+            <label>Indexed Documents:</label>
+            <span>{{ vectorStats.indexed_documents || 0 }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Overview Cards -->
     <div class="stats-overview">
       <div class="stat-card">
@@ -141,6 +305,11 @@
       </div>
     </div>
 
+    <!-- Man Pages Section -->
+    <div class="manpages-section">
+      <ManPageManager />
+    </div>
+
     <!-- Actions -->
     <div class="stats-actions">
       <button @click="exportStats" class="action-btn">
@@ -164,6 +333,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
 import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
+import ManPageManager from '@/components/ManPageManager.vue'
+import apiClient from '@/utils/ApiClient'
 
 const store = useKnowledgeStore()
 
@@ -186,8 +357,18 @@ try {
 const isRefreshing = ref(false)
 const detailedStats = ref<any>(null)
 const recentActivities = ref<any[]>([])
+const vectorStats = ref<any>(null)
+const isRefreshingVectorStats = ref(false)
+const categoryFactCounts = ref<Record<string, number>>({})
 
 // Computed statistics
+const needsVectorization = computed(() => {
+  if (!vectorStats.value) return false
+  const totalFacts = vectorStats.value.total_facts || 0
+  const totalVectors = vectorStats.value.total_vectors || 0
+  return totalFacts > 0 && totalVectors === 0
+})
+
 const recentDocsCount = computed(() => {
   const oneWeekAgo = new Date()
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
@@ -455,9 +636,84 @@ const capitalize = (str: string): string => {
   return str && str.length > 0 ? str.charAt(0).toUpperCase() + str.slice(1) : str || ''
 }
 
+// Vector Stats Functions
+const refreshVectorStats = async () => {
+  isRefreshingVectorStats.value = true
+
+  try {
+    const statsResponse = await apiClient.get('/api/knowledge_base/stats')
+    const stats = await statsResponse.json()
+    vectorStats.value = stats
+
+    // Fetch category fact counts
+    const factsResponse = await apiClient.get('/api/knowledge_base/facts/by_category')
+    const factsData = await factsResponse.json()
+    if (factsData && factsData.categories) {
+      const counts: Record<string, number> = {}
+      Object.keys(factsData.categories).forEach(category => {
+        counts[category] = factsData.categories[category].length
+      })
+      categoryFactCounts.value = counts
+    }
+  } catch (error) {
+    console.error('Failed to refresh vector stats:', error)
+  } finally {
+    isRefreshingVectorStats.value = false
+  }
+}
+
+const formatCategoryName = (category: string): string => {
+  if (!category) return ''
+  return category
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+const getCategoryFactCount = (category: string): number => {
+  return categoryFactCounts.value[category] || 0
+}
+
+const getCategoryPercentage = (category: string): number => {
+  const total = vectorStats.value?.total_facts || 1
+  const count = getCategoryFactCount(category)
+  return Math.round((count / total) * 100)
+}
+
+const getCategoryColor = (index: number): string => {
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4']
+  return colors[index % colors.length]
+}
+
+const formatDateTime = (dateString: string): string => {
+  if (!dateString) return 'Never'
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleString()
+  } catch {
+    return 'Invalid date'
+  }
+}
+
+const getEmbeddingModelDisplay = (): string => {
+  if (!vectorStats.value) return 'Loading...'
+
+  const model = vectorStats.value.embedding_model
+  const dimensions = vectorStats.value.embedding_dimensions
+
+  if (model && dimensions) {
+    return `${model} (${dimensions}-dim)`
+  } else if (model) {
+    return model
+  } else {
+    return 'Not configured'
+  }
+}
+
 // Load stats on mount
 onMounted(() => {
   refreshStats()
+  refreshVectorStats()
 })
 </script>
 
@@ -783,6 +1039,368 @@ onMounted(() => {
 .tag-cloud-item:hover {
   color: #2563eb;
   transform: scale(1.1);
+}
+
+/* Vector Database Statistics Section */
+.vector-stats-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  color: white;
+  box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+}
+
+.vectorization-notice {
+  display: flex;
+  gap: 1rem;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(251, 191, 36, 0);
+  }
+}
+
+.notice-icon {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(251, 191, 36, 0.2);
+  border-radius: 50%;
+  color: #fbbf24;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.notice-content h4 {
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.notice-content p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin-bottom: 0.5rem;
+}
+
+.notice-content strong {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.notice-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.notice-hint i {
+  color: #fbbf24;
+}
+
+.vector-stats-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.vector-stats-section .section-header h3 {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vector-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.vector-stat-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.3s ease;
+}
+
+.vector-stat-card:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.vector-stat-card.needs-attention {
+  border-color: rgba(251, 191, 36, 0.5);
+  animation: pulse-card 2s ease-in-out infinite;
+}
+
+@keyframes pulse-card {
+  0%, 100% {
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+  50% {
+    border-color: rgba(251, 191, 36, 0.6);
+  }
+}
+
+.vector-stat-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  color: white;
+  flex-shrink: 0;
+}
+
+.vector-stat-icon.facts {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.vector-stat-icon.vectors {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.vector-stat-icon.database {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.vector-stat-icon.status {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.vector-stat-content h4 {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.vector-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 0.25rem;
+  line-height: 1;
+}
+
+.vector-stat-label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.vector-stat-label.warning {
+  color: #fbbf24;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.online {
+  background: rgba(16, 185, 129, 0.3);
+  border: 1px solid #10b981;
+}
+
+.status-badge.offline {
+  background: rgba(239, 68, 68, 0.3);
+  border: 1px solid #ef4444;
+}
+
+/* Vector Chart Section */
+.vector-chart-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.vector-chart-section h4 {
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vector-categories-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.category-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.category-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.category-name {
+  color: white;
+  font-weight: 500;
+}
+
+.category-count {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.75rem;
+}
+
+.category-progress {
+  height: 1.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.category-fill {
+  height: 100%;
+  border-radius: 0.75rem;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+/* Vector Health Section */
+.vector-health-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+
+.vector-health-section h4 {
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.health-indicators {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.health-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+}
+
+.health-item.active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  color: white;
+}
+
+.health-item.active i {
+  color: #10b981;
+}
+
+.health-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-item label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.detail-item span {
+  font-size: 0.875rem;
+  color: white;
+}
+
+.detail-item .mono {
+  font-family: 'Courier New', monospace;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+/* Man Pages Section */
+.manpages-section {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 /* Actions */

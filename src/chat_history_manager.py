@@ -2,6 +2,7 @@ import gc
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -17,6 +18,9 @@ from src.encryption_service import (
     is_encryption_enabled,
 )
 from src.utils.redis_client import get_redis_client
+
+# Import Memory Graph for entity tracking
+from src.autobot_memory_graph import AutoBotMemoryGraph
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +73,10 @@ class ChatHistoryManager:
         self.memory_check_counter = 0  # Counter for periodic memory checks
         self.memory_check_interval = 50  # Check memory every N operations
 
+        # MEMORY GRAPH INTEGRATION: Entity tracking for conversations
+        self.memory_graph: Optional[AutoBotMemoryGraph] = None
+        self.memory_graph_enabled = False  # Track initialization status
+
         logger.info(
             f"PERFORMANCE: ChatHistoryManager initialized with memory protection - "
             f"max_messages: {self.max_messages}, cleanup_threshold: {self.cleanup_threshold}"
@@ -106,11 +114,162 @@ class ChatHistoryManager:
         self._ensure_data_directory_exists()
         self._load_history()
 
+        # MEMORY GRAPH: Try to initialize asynchronously (non-blocking)
+        # Actual initialization happens in async context
+        logger.info("ChatHistoryManager ready (Memory Graph will initialize on first async operation)")
+
+    async def _init_memory_graph(self):
+        """
+        Initialize Memory Graph for conversation entity tracking.
+
+        This is called asynchronously during first session operation.
+        Non-blocking - failures are logged but don't prevent normal operation.
+        """
+        if self.memory_graph_enabled or self.memory_graph is not None:
+            return  # Already initialized
+
+        try:
+            logger.info("Initializing Memory Graph for conversation tracking...")
+
+            self.memory_graph = AutoBotMemoryGraph(chat_history_manager=self)
+
+            # Attempt async initialization
+            initialized = await self.memory_graph.initialize()
+
+            if initialized:
+                self.memory_graph_enabled = True
+                logger.info("✅ Memory Graph initialized successfully for conversation tracking")
+            else:
+                logger.warning("⚠️ Memory Graph initialization returned False - conversation entity tracking disabled")
+                self.memory_graph = None
+
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to initialize Memory Graph (continuing without entity tracking): {e}")
+            self.memory_graph = None
+            self.memory_graph_enabled = False
+
     def _ensure_data_directory_exists(self):
         """Ensures the directory for the history file exists."""
         data_dir = os.path.dirname(self.history_file)
         if data_dir and not os.path.exists(data_dir):
             os.makedirs(data_dir, exist_ok=True)
+
+    def _extract_conversation_metadata(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Extract metadata from conversation messages for Memory Graph entity.
+
+        Args:
+            messages: List of conversation messages
+
+        Returns:
+            Dictionary with extracted metadata (topics, entities, summary)
+        """
+        try:
+            if not messages:
+                return {"topics": [], "entity_mentions": [], "summary": "Empty conversation"}
+
+            # Extract text from all messages
+            all_text = []
+            user_messages = []
+            bot_messages = []
+
+            for msg in messages:
+                sender = msg.get("sender", "")
+                text = msg.get("text", "")
+
+                all_text.append(text)
+
+                if sender == "user":
+                    user_messages.append(text)
+                elif sender == "bot" or sender == "assistant":
+                    bot_messages.append(text)
+
+            # Topic extraction (simple keyword-based)
+            topics = self._extract_topics(all_text)
+
+            # Entity mention detection
+            entity_mentions = self._detect_entity_mentions(all_text)
+
+            # Generate summary
+            summary = self._generate_conversation_summary(user_messages, bot_messages)
+
+            return {
+                "topics": topics,
+                "entity_mentions": entity_mentions,
+                "summary": summary,
+                "message_count": len(messages),
+                "user_message_count": len(user_messages),
+                "bot_message_count": len(bot_messages)
+            }
+
+        except Exception as e:
+            logger.warning(f"Failed to extract conversation metadata: {e}")
+            return {"topics": [], "entity_mentions": [], "summary": "Metadata extraction failed"}
+
+    def _extract_topics(self, text_list: List[str]) -> List[str]:
+        """Extract topics from conversation text using keyword detection."""
+        topics = set()
+
+        # Combine all text
+        combined_text = " ".join(text_list).lower()
+
+        # Topic detection patterns
+        topic_patterns = {
+            "installation": ["install", "setup", "configure", "deployment"],
+            "troubleshooting": ["error", "issue", "problem", "fix", "debug"],
+            "architecture": ["architecture", "design", "vm", "distributed", "service"],
+            "api": ["api", "endpoint", "request", "integration"],
+            "knowledge_base": ["knowledge", "document", "upload", "vectorize"],
+            "chat": ["chat", "conversation", "message", "response"],
+            "redis": ["redis", "cache", "database"],
+            "frontend": ["frontend", "vue", "ui", "interface"],
+            "backend": ["backend", "fastapi", "python"],
+            "security": ["security", "authentication", "encryption"]
+        }
+
+        for topic, keywords in topic_patterns.items():
+            if any(keyword in combined_text for keyword in keywords):
+                topics.add(topic)
+
+        return list(topics)
+
+    def _detect_entity_mentions(self, text_list: List[str]) -> List[str]:
+        """Detect mentions of bugs, features, tasks in conversation."""
+        mentions = set()
+
+        combined_text = " ".join(text_list).lower()
+
+        # Bug mention patterns
+        if re.search(r'bug|issue|error|problem|fix', combined_text):
+            mentions.add("bug_mention")
+
+        # Feature mention patterns
+        if re.search(r'feature|implement|add|new|enhancement', combined_text):
+            mentions.add("feature_mention")
+
+        # Task mention patterns
+        if re.search(r'task|todo|need to|should|must', combined_text):
+            mentions.add("task_mention")
+
+        # Decision mention patterns
+        if re.search(r'decide|decision|choose|select|prefer', combined_text):
+            mentions.add("decision_mention")
+
+        return list(mentions)
+
+    def _generate_conversation_summary(self, user_messages: List[str], bot_messages: List[str]) -> str:
+        """Generate brief summary of conversation."""
+        if not user_messages:
+            return "No user messages"
+
+        # Get first and last user messages for context
+        first_msg = user_messages[0][:100] if user_messages else ""
+        last_msg = user_messages[-1][:100] if len(user_messages) > 1 else ""
+
+        if len(user_messages) == 1:
+            return f"Single exchange: {first_msg}..."
+        else:
+            return f"Conversation started with: {first_msg}... ({len(user_messages)} user messages)"
 
     def _cleanup_messages_if_needed(self):
         """PERFORMANCE OPTIMIZATION: Clean up messages to prevent memory leaks"""
@@ -315,16 +474,210 @@ class ChatHistoryManager:
             except Exception as e:
                 logging.error(f"Error saving chat history to Redis: {str(e)}")
 
+    async def create_session(
+        self,
+        session_id: Optional[str] = None,
+        title: Optional[str] = None,
+        session_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Creates a new chat session.
+
+        Args:
+            session_id (str): Optional session ID (auto-generated if not provided).
+            title (str): Optional title for the session.
+            session_name (str): Optional name for the session (backward compatibility).
+            metadata (Dict[str, Any]): Optional metadata for the session.
+
+        Returns:
+            Dict[str, Any]: Session data including session_id, title, etc.
+        """
+        import uuid
+
+        # Initialize Memory Graph if not already done
+        await self._init_memory_graph()
+
+        # Generate session ID if not provided
+        if not session_id:
+            session_id = f"chat-{int(time.time() * 1000)}-{str(uuid.uuid4())[:8]}"
+
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Use title, or session_name (for backward compatibility), or auto-generate
+        session_title = title or session_name or f"Chat {session_id[:13]}"
+
+        # Prepare session data
+        session_data = {
+            "id": session_id,
+            "chatId": session_id,  # Backward compatibility
+            "title": session_title,
+            "name": session_title,  # Backward compatibility
+            "messages": [],
+            "createdAt": current_time,
+            "createdTime": current_time,  # Backward compatibility
+            "updatedAt": current_time,
+            "lastModified": current_time,  # Backward compatibility
+            "isActive": True,
+            "metadata": metadata or {}
+        }
+
+        # Create session with initial metadata
+        await self.save_session(
+            session_id=session_id,
+            messages=[],
+            name=session_title
+        )
+
+        # MEMORY GRAPH: Create conversation entity (non-blocking)
+        if self.memory_graph_enabled and self.memory_graph:
+            try:
+                entity_metadata = {
+                    "session_id": session_id,
+                    "title": session_title,
+                    "created_at": current_time,
+                    "status": "active",
+                    "priority": "medium"
+                }
+
+                # Merge user-provided metadata
+                if metadata:
+                    entity_metadata.update(metadata)
+
+                # Create conversation entity
+                await self.memory_graph.create_conversation_entity(
+                    session_id=session_id,
+                    metadata=entity_metadata
+                )
+
+                logger.info(f"✅ Created Memory Graph entity for session: {session_id}")
+
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to create Memory Graph entity (continuing): {e}")
+
+        logging.info(f"Created new chat session: {session_id}")
+        return session_data
+
+    async def get_session_messages(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Gets all messages for a specific session.
+
+        Args:
+            session_id (str): The session identifier.
+            limit (Optional[int]): Maximum number of messages to return. If None, returns all messages.
+
+        Returns:
+            List[Dict[str, Any]]: List of messages in the session.
+        """
+        messages = await self.load_session(session_id)
+        if limit is not None and limit > 0:
+            return messages[-limit:]  # Return last N messages
+        return messages
+
+    async def get_session_message_count(self, session_id: str) -> int:
+        """
+        Gets the message count for a specific session.
+
+        Args:
+            session_id (str): The session identifier.
+
+        Returns:
+            int: Number of messages in the session.
+        """
+        messages = await self.load_session(session_id)
+        return len(messages)
+
+    async def update_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
+        """
+        Updates session metadata (name, etc).
+
+        Args:
+            session_id (str): The session identifier.
+            updates (Dict[str, Any]): Dictionary of fields to update.
+
+        Returns:
+            bool: True if update successful, False otherwise.
+        """
+        try:
+            chats_directory = self._get_chats_directory()
+            chat_file = f"{chats_directory}/chat_{session_id}.json"
+
+            if not os.path.exists(chat_file):
+                logging.warning(f"Session {session_id} not found for update")
+                return False
+
+            # Load existing data
+            async with aiofiles.open(chat_file, "r") as f:
+                file_content = await f.read()
+            chat_data = self._decrypt_data(file_content)
+
+            # Update fields
+            chat_data.update(updates)
+            chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Save updated data
+            encrypted_data = self._encrypt_data(chat_data)
+            async with aiofiles.open(chat_file, "w") as f:
+                await f.write(encrypted_data)
+
+            logging.info(f"Session {session_id} updated successfully")
+            return True
+
+        except Exception as e:
+            logging.error(f"Error updating session {session_id}: {e}")
+            return False
+
+    async def export_session(self, session_id: str, format: str = "json") -> Optional[str]:
+        """
+        Exports a session in the specified format.
+
+        Args:
+            session_id (str): The session identifier.
+            format (str): Export format ('json', 'txt', 'md').
+
+        Returns:
+            Optional[str]: Exported data as string, or None on error.
+        """
+        try:
+            messages = await self.load_session(session_id)
+
+            if format == "json":
+                return json.dumps(messages, indent=2)
+            elif format == "txt":
+                lines = []
+                for msg in messages:
+                    timestamp = msg.get("timestamp", "")
+                    sender = msg.get("sender", "unknown")
+                    text = msg.get("text", "")
+                    lines.append(f"[{timestamp}] {sender}: {text}")
+                return "\n".join(lines)
+            elif format == "md":
+                lines = [f"# Chat Session: {session_id}\n"]
+                for msg in messages:
+                    timestamp = msg.get("timestamp", "")
+                    sender = msg.get("sender", "unknown")
+                    text = msg.get("text", "")
+                    lines.append(f"**{sender}** ({timestamp}):\n{text}\n")
+                return "\n".join(lines)
+            else:
+                logging.error(f"Unsupported export format: {format}")
+                return None
+
+        except Exception as e:
+            logging.error(f"Error exporting session {session_id}: {e}")
+            return None
+
     async def add_message(
         self,
         sender: str,
         text: str,
         message_type: str = "default",
         raw_data: Any = None,
+        session_id: Optional[str] = None,
     ):
         """
         Adds a new message to the history and saves it to file.
-        
+
         PERFORMANCE OPTIMIZATION: Includes memory monitoring.
 
         Args:
@@ -332,6 +685,7 @@ class ChatHistoryManager:
             text (str): The content of the message.
             message_type (str): The type of message (default is 'default').
             raw_data (Any): Additional raw data associated with the message.
+            session_id (str): Optional session ID to add message to specific session.
         """
         message = {
             "sender": sender,
@@ -340,11 +694,25 @@ class ChatHistoryManager:
             "rawData": raw_data,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+        # If session_id provided, add to that session
+        if session_id:
+            try:
+                messages = await self.load_session(session_id)
+                messages.append(message)
+                await self.save_session(session_id, messages=messages)
+                logging.debug(f"Added message to session {session_id}")
+                return
+            except Exception as e:
+                logging.error(f"Error adding message to session {session_id}: {e}")
+                # Fall through to add to default history
+
+        # Otherwise add to default history
         self.history.append(message)
-        
+
         # PERFORMANCE: Periodic memory checks
         self._periodic_memory_check()
-        
+
         await self._save_history()
         logging.debug(f"Added message from {sender} with type {message_type}")
 
@@ -581,13 +949,71 @@ class ChatHistoryManager:
                 await f.write(encrypted_data)
 
             logging.info(f"Chat session '{session_id}' saved successfully")
-            
+
+            # MEMORY GRAPH: Update conversation entity with observations (non-blocking)
+            if self.memory_graph_enabled and self.memory_graph:
+                try:
+                    # Extract metadata from conversation
+                    metadata = self._extract_conversation_metadata(session_messages)
+
+                    # Find entity by session_id
+                    entity_name = f"Conversation {session_id[:8]}"
+
+                    # Create observations from metadata
+                    observations = [
+                        f"Summary: {metadata['summary']}",
+                        f"Topics: {', '.join(metadata['topics'])}",
+                        f"Message count: {metadata['message_count']}",
+                        f"Last updated: {current_time}"
+                    ]
+
+                    # Add entity mentions if any
+                    if metadata['entity_mentions']:
+                        observations.append(f"Mentions: {', '.join(metadata['entity_mentions'])}")
+
+                    # Update entity with new observations
+                    try:
+                        await self.memory_graph.add_observations(
+                            entity_name=entity_name,
+                            observations=observations
+                        )
+                        logger.debug(f"✅ Updated Memory Graph entity for session: {session_id}")
+
+                    except ValueError:
+                        # Entity doesn't exist yet - create it
+                        logger.debug(f"Entity not found, creating new entity for session: {session_id}")
+
+                        entity_metadata = {
+                            "session_id": session_id,
+                            "title": name or session_id,
+                            "status": "active",
+                            "priority": "medium",
+                            "topics": metadata['topics'],
+                            "entity_mentions": metadata['entity_mentions']
+                        }
+
+                        await self.memory_graph.create_conversation_entity(
+                            session_id=session_id,
+                            metadata=entity_metadata
+                        )
+
+                        # Add observations to newly created entity
+                        await self.memory_graph.add_observations(
+                            entity_name=entity_name,
+                            observations=observations
+                        )
+
+                        logger.info(f"✅ Created and updated Memory Graph entity for session: {session_id}")
+
+                except Exception as mg_error:
+                    logger.warning(f"⚠️ Failed to update Memory Graph entity (continuing): {mg_error}")
+
             # PERFORMANCE: Periodic cleanup of old session files
             if hasattr(self, '_session_save_counter'):
                 self._session_save_counter += 1
             else:
                 self._session_save_counter = 1
-                
+
             if self._session_save_counter % 10 == 0:  # Every 10th save
                 self._cleanup_old_session_files()
 

@@ -50,17 +50,25 @@ class SecurityLayer:
         # SECURITY: Removed god mode - all access must go through proper RBAC
         # Former god/superuser roles now use admin permissions with audit logging
         if user_role.lower() in ["god", "superuser", "root"]:
-            print(
-                f"DEPRECATED ROLE: '{user_role}' attempting '{action_type}' on "
-                f"'{resource}'. Using admin permissions instead. "
-                f"Update user role configuration."
+            # Log the deprecated role usage for security audit
+            self.audit_log(
+                action="deprecated_role_usage",
+                user=user_role,
+                outcome="warning",
+                details={
+                    "deprecated_role": user_role,
+                    "action_attempted": action_type,
+                    "resource": resource,
+                    "message": "God/superuser/root roles deprecated for security. "
+                    "Downgrading to admin with granular permissions.",
+                },
             )
             user_role = "admin"  # Downgrade to admin with proper permissions
 
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])
 
-        if "allow_all" in role_permissions:
-            return True
+        # SECURITY FIX: Removed "allow_all" bypass - use granular permissions only
+        # All roles must have explicit permissions for each action type
 
         if action_type in role_permissions:
             return True
@@ -99,8 +107,16 @@ class SecurityLayer:
             List of default permissions for the role
         """
         default_role_permissions = {
-            # SECURITY: Removed god/superuser/root roles - deprecated for security
-            "admin": ["allow_all"],  # Admin has all permissions with audit logging
+            # SECURITY: Admin has elevated permissions but NOT unrestricted access
+            # Removed "allow_all" - admin must go through validation like everyone else
+            "admin": [
+                "files.*",
+                "allow_goal_submission",
+                "allow_kb_read",
+                "allow_kb_write",
+                "allow_shell_execute",
+                # NOTE: Dangerous operations still require approval even for admin
+            ],
             "user": [
                 "files.view",
                 "files.download",
