@@ -43,6 +43,7 @@ from redis.retry import Retry
 from redis.backoff import ExponentialBackoff
 
 from src.unified_config import config
+from src.utils.distributed_service_discovery import get_redis_connection_params_sync
 
 logger = logging.getLogger(__name__)
 
@@ -80,11 +81,31 @@ class RedisPoolManager:
         self._clients: Dict[str, Union[redis.Redis, aioredis.Redis]] = {}
         self._metrics: Dict[str, ConnectionMetrics] = {}
         self._lock = Lock()
-        self._config = config.get_redis_config()
+
+        # Use service discovery for Redis configuration
+        try:
+            service_discovery_params = get_redis_connection_params_sync()
+            # Merge service discovery params with config params
+            config_redis = config.get_redis_config()
+            self._config = {
+                'host': service_discovery_params['host'],  # Direct IP from service discovery
+                'port': service_discovery_params['port'],
+                'password': config_redis.get('password'),
+                'connection': {
+                    'socket_connect_timeout': service_discovery_params.get('socket_connect_timeout', 0.5),
+                    'socket_timeout': service_discovery_params.get('socket_timeout', 1.0),
+                    'retry_on_timeout': service_discovery_params.get('retry_on_timeout', False),
+                    'max_connections': service_discovery_params.get('max_connections', 10),
+                }
+            }
+            logger.info(f"Redis Pool Manager initialized with service discovery: {self._config['host']}:{self._config['port']}")
+        except Exception as e:
+            logger.warning(f"Service discovery failed, falling back to config: {e}")
+            self._config = config.get_redis_config()
+            logger.info("Redis Pool Manager initialized with config fallback")
+
         self._pool_config = self._load_pool_config()
         self._health_check_task: Optional[asyncio.Task] = None
-
-        logger.info("Redis Pool Manager initialized")
 
     def _load_pool_config(self) -> PoolConfig:
         """Load pool configuration from unified config"""

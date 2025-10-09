@@ -20,6 +20,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.utils.distributed_service_discovery import get_redis_connection_params_sync
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])
 
@@ -63,33 +65,61 @@ class DeclarationItem(BaseModel):
     parameters: Optional[List[str]]
 
 async def get_redis_connection():
-    """Get Redis connection with multiple host fallbacks"""
-    redis_hosts = [
-        ("127.0.0.1", 6379),  # Local Redis
-        ("localhost", 6379),  # Local Redis alternative
-        ("172.16.168.23", 6379),  # VM Redis
-    ]
+    """
+    Get Redis connection using service discovery
 
-    for host, port in redis_hosts:
-        try:
-            redis_client = redis.Redis(
-                host=host,
-                port=port,
-                db=11,  # Dedicated DB for codebase analytics
-                decode_responses=True,
-                socket_timeout=3,
-                socket_connect_timeout=3
-            )
-            # Test connection
-            redis_client.ping()
-            logger.info(f"Connected to Redis at {host}:{port}")
-            return redis_client
-        except Exception as e:
-            logger.debug(f"Failed to connect to Redis at {host}:{port}: {e}")
-            continue
+    ELIMINATES DNS RESOLUTION DELAYS BY:
+    - Using service discovery cached endpoints
+    - Direct IP addressing (172.16.168.23)
+    - Fast connection timeouts (0.5s vs 3s)
+    """
+    try:
+        # Get Redis connection parameters from service discovery
+        params = get_redis_connection_params_sync()
 
-    logger.warning("No Redis connection available, using in-memory storage")
-    return None
+        redis_client = redis.Redis(
+            host=params['host'],  # Direct IP from service discovery
+            port=params['port'],
+            db=11,  # Dedicated DB for codebase analytics
+            decode_responses=params.get('decode_responses', True),
+            socket_timeout=params.get('socket_timeout', 1.0),
+            socket_connect_timeout=params.get('socket_connect_timeout', 0.5),
+            retry_on_timeout=params.get('retry_on_timeout', False)
+        )
+
+        # Test connection
+        redis_client.ping()
+        logger.info(f"Connected to Redis at {params['host']}:{params['port']} via service discovery")
+        return redis_client
+
+    except Exception as e:
+        logger.warning(f"Service discovery Redis connection failed: {e}")
+
+        # Fallback: Try direct connection to known Redis VM
+        fallback_hosts = [
+            ("172.16.168.23", 6379),  # Redis VM
+            ("127.0.0.1", 6379),      # Local Redis
+        ]
+
+        for host, port in fallback_hosts:
+            try:
+                redis_client = redis.Redis(
+                    host=host,
+                    port=port,
+                    db=11,
+                    decode_responses=True,
+                    socket_timeout=1.0,
+                    socket_connect_timeout=0.5
+                )
+                redis_client.ping()
+                logger.info(f"Connected to Redis at fallback {host}:{port}")
+                return redis_client
+            except Exception as fallback_error:
+                logger.debug(f"Fallback to {host}:{port} failed: {fallback_error}")
+                continue
+
+        logger.warning("No Redis connection available, using in-memory storage")
+        return None
 
 class InMemoryStorage:
     """In-memory storage fallback when Redis is unavailable"""

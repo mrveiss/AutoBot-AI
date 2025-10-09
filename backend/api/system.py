@@ -111,7 +111,7 @@ async def get_frontend_config():
 @router.get("/health")
 @router.get("/system/health")  # Frontend compatibility alias
 @cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
-async def get_system_health():
+async def get_system_health(request: Request = None):
     """Get system health status"""
     try:
         # Check various system components
@@ -132,6 +132,21 @@ async def get_system_health():
         except Exception as e:
             health_status["components"]["config"] = f"error: {str(e)}"
             health_status["status"] = "degraded"
+
+        # Check conversation files database if request is available
+        if request:
+            try:
+                if hasattr(request.app.state, 'conversation_file_manager'):
+                    conversation_file_manager = request.app.state.conversation_file_manager
+                    # Quick check - just verify we can access the database
+                    version = await conversation_file_manager._get_schema_version()
+                    health_status["components"]["conversation_files_db"] = "healthy"
+                else:
+                    health_status["components"]["conversation_files_db"] = "not_initialized"
+                    health_status["status"] = "degraded"
+            except Exception as e:
+                health_status["components"]["conversation_files_db"] = f"error: {str(e)}"
+                health_status["status"] = "degraded"
 
         return health_status
 
@@ -299,7 +314,7 @@ async def dynamic_import(request: Request, module_name: str = Form(...)):
 
 @router.get("/health/detailed")
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
-async def get_detailed_health():
+async def get_detailed_health(request: Request):
     """Get detailed system health status including all components"""
     try:
         # Get basic health status first
@@ -332,6 +347,19 @@ async def get_detailed_health():
             detailed_components["knowledge_base"] = "available"
         except Exception as e:
             detailed_components["knowledge_base"] = f"import_error: {str(e)}"
+
+        # Check Conversation Files Database
+        try:
+            if hasattr(request.app.state, 'conversation_file_manager'):
+                conversation_file_manager = request.app.state.conversation_file_manager
+                # Verify database is accessible
+                version = await conversation_file_manager._get_schema_version()
+                detailed_components["conversation_files_db"] = "healthy"
+                detailed_components["conversation_files_schema"] = version
+            else:
+                detailed_components["conversation_files_db"] = "not_configured"
+        except Exception as e:
+            detailed_components["conversation_files_db"] = f"error: {str(e)}"
 
         # Add system resource info
         try:

@@ -12,6 +12,7 @@ This module provides comprehensive file management for chat sessions with:
 
 import asyncio
 import hashlib
+import importlib
 import json
 import logging
 import sqlite3
@@ -77,10 +78,58 @@ class ConversationFileManager:
         # SQLite connection (will be created per-operation for thread safety)
         self._lock = asyncio.Lock()
 
+        # CRITICAL: Database initialization removed from __init__() (Bug Fix #1 and #5)
+        # Database creation must ONLY happen during initialize() via migration system
+        # This prevents:
+        #   1. Database creation before initialize() is called (wrong lifecycle phase)
+        #   2. Double schema application (once in __init__, once in initialize())
+        #   3. Race conditions during concurrent initialization
+        # Call initialize() explicitly to create database
+
         logger.info(
             f"ConversationFileManager initialized - "
-            f"storage: {self.storage_dir}, db: {self.db_path}"
+            f"storage: {self.storage_dir}, db: {self.db_path} "
+            f"(database will be created during initialize() call)"
         )
+
+    def _initialize_schema(self) -> None:
+        """
+        Initialize database schema from SQL file.
+
+        This method is idempotent - safe to run multiple times.
+        Uses CREATE TABLE IF NOT EXISTS statements from schema file.
+
+        Raises:
+            RuntimeError: If database schema initialization fails
+        """
+        project_root = Path(__file__).parent.parent
+        schema_path = project_root / "database/schemas/conversation_files_schema.sql"
+
+        if not schema_path.exists():
+            logger.warning(f"Schema file not found at {schema_path}")
+            return
+
+        # Ensure database directory exists
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        connection = self._get_db_connection()
+        try:
+            with open(schema_path, 'r') as f:
+                schema_sql = f.read()
+
+            # Validate SQL syntax before execution
+            if not schema_sql.strip():
+                raise ValueError("Schema SQL file is empty")
+
+            connection.executescript(schema_sql)
+            logger.info("✅ Database schema initialized successfully")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize schema: {e}")
+            raise RuntimeError(f"Database schema initialization failed: {e}")
+
+        finally:
+            connection.close()
 
     async def _get_redis_sessions(self) -> AsyncRedisDatabase:
         """
@@ -109,6 +158,9 @@ class ConversationFileManager:
 
         Returns:
             sqlite3.Connection: Database connection configured for async safety
+
+        Raises:
+            RuntimeError: If foreign keys cannot be enabled (data integrity requirement)
         """
         connection = sqlite3.connect(
             str(self.db_path),
@@ -118,6 +170,20 @@ class ConversationFileManager:
 
         # Enable foreign keys
         connection.execute("PRAGMA foreign_keys = ON")
+
+        # CRITICAL: Verify foreign keys are actually enabled (Bug Fix #4)
+        # Without this verification, referential integrity is NOT guaranteed
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA foreign_keys")
+        fk_status = cursor.fetchone()[0]
+        cursor.close()
+
+        if fk_status != 1:
+            connection.close()
+            raise RuntimeError(
+                "Failed to enable foreign keys - data integrity cannot be guaranteed. "
+                "This is a critical database configuration issue."
+            )
 
         # Performance optimizations
         connection.execute("PRAGMA journal_mode = WAL")
@@ -588,6 +654,95 @@ class ConversationFileManager:
             cursor.close()
             connection.close()
 
+    async def initialize(self) -> None:
+        """
+        Initialize the conversation file manager database.
+
+        This method runs the database migration to create the schema if needed.
+        Safe to run on already-initialized databases.
+
+        Raises:
+            RuntimeError: If database initialization fails
+        """
+        try:
+            logger.info("Initializing conversation files database...")
+
+            # Dynamic import to handle numeric module name
+            migration_module = importlib.import_module('database.migrations.001_create_conversation_files')
+            ConversationFilesMigration = getattr(migration_module, 'ConversationFilesMigration')
+
+            # Create migration instance with same paths (Bug Fix #6 - pass custom db_path for testing)
+            migration = ConversationFilesMigration(
+                data_dir=self.db_path.parent,
+                schema_dir=Path("/home/kali/Desktop/AutoBot/database/schemas"),
+                db_path=self.db_path  # Use the exact database path specified in constructor
+            )
+
+            # Execute migration (safe to run on existing database)
+            success = await migration.up()
+
+            if not success:
+                raise RuntimeError("Database migration failed")
+
+            # Verify schema version
+            version = await self._get_schema_version()
+            logger.info(f"✅ Conversation files database initialized (schema version: {version})")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize conversation files database: {e}")
+            raise RuntimeError(f"Database initialization failed: {e}")
+
+    async def _get_schema_version(self) -> str:
+        """
+        Get current database schema version.
+
+        Returns:
+            str: Current schema version or "unknown" if not found or table doesn't exist
+        """
+        try:
+            def _query_version():
+                """Thread-safe database query for schema version."""
+                connection = sqlite3.connect(
+                    str(self.db_path),
+                    timeout=30.0,
+                    check_same_thread=False
+                )
+                cursor = connection.cursor()
+
+                try:
+                    # CRITICAL: Check if schema_migrations table exists BEFORE querying (Bug Fix #3)
+                    # Prevents race condition where query runs before migration creates the table
+                    cursor.execute("""
+                        SELECT name FROM sqlite_master
+                        WHERE type='table' AND name='schema_migrations'
+                    """)
+
+                    if not cursor.fetchone():
+                        # Table doesn't exist yet - this is not an error during initialization
+                        return "unknown"
+
+                    # Table exists, safe to query version
+                    # Use migration_id for deterministic ordering (applied_at can have same timestamp)
+                    cursor.execute("""
+                        SELECT version FROM schema_migrations
+                        ORDER BY migration_id DESC LIMIT 1
+                    """)
+                    result = cursor.fetchone()
+
+                    return result[0] if result else "unknown"
+
+                finally:
+                    cursor.close()
+                    connection.close()
+
+            # Execute query in thread pool to avoid blocking event loop
+            version = await asyncio.to_thread(_query_version)
+            return version
+
+        except Exception as e:
+            logger.warning(f"Failed to get schema version: {e}")
+            return "unknown"
+
     async def get_storage_stats(self) -> Dict[str, Any]:
         """
         Get storage statistics.
@@ -631,7 +786,8 @@ class ConversationFileManager:
                 'deleted_files': deleted['deleted_files'] or 0,
                 'deleted_size_bytes': deleted['deleted_size'] or 0,
                 'storage_directory': str(self.storage_dir),
-                'database_path': str(self.db_path)
+                'database_path': str(self.db_path),
+                'schema_version': 'unknown'  # Will be updated by caller if needed
             }
 
         finally:

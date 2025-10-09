@@ -9,6 +9,7 @@ Features consolidated from:
 - base_terminal.py: Infrastructure + PTY management
 """
 
+import asyncio
 import json
 import logging
 import signal
@@ -167,29 +168,60 @@ class ConsolidatedTerminalWebSocket:
             self._init_pty_process()
 
     def _init_pty_process(self):
-        """Initialize PTY process using the base terminal infrastructure"""
+        """Initialize PTY process using SimplePTY"""
         try:
-            # Use the base terminal infrastructure if available
+            from backend.services.simple_pty import simple_pty_manager
 
-            # Create a terminal adapter for PTY management
-            class ConsolidatedTerminalAdapter:
-                def __init__(self, parent):
-                    self.parent = parent
-                    self.terminal_type = "consolidated"
+            # Create PTY session with SimplePTY manager
+            self.pty_process = simple_pty_manager.create_session(
+                self.session_id,
+                initial_cwd="/home/kali/Desktop/AutoBot"
+            )
 
-                async def send_message(self, message: dict):
-                    await self.parent.send_message(message)
-
-                @property
-                def terminal_type(self) -> str:
-                    return "consolidated"
-
-            self.terminal_adapter = ConsolidatedTerminalAdapter(self)
-            logger.info(f"PTY infrastructure initialized for session {self.session_id}")
+            if self.pty_process:
+                logger.info(f"PTY initialized successfully for session {self.session_id}")
+                # Output reader will be started when WebSocket is ready
+                self.pty_output_task = None
+            else:
+                logger.error(f"Failed to create PTY session {self.session_id}")
+                self.pty_process = None
 
         except Exception as e:
-            logger.warning(f"Could not initialize PTY process: {e}")
-            self.terminal_adapter = None
+            logger.error(f"Could not initialize PTY process: {e}")
+            self.pty_process = None
+
+    async def _read_pty_output(self):
+        """Async task to read PTY output and send to WebSocket"""
+        logger.info(f"Starting PTY output reader for session {self.session_id}")
+
+        while self.active and self.pty_process:
+            try:
+                # Get output from PTY (non-blocking)
+                output = self.pty_process.get_output()
+
+                if output:
+                    event_type, content = output
+
+                    if event_type == 'output':
+                        # Send output to WebSocket
+                        await self.send_output(content)
+                    elif event_type in ('eof', 'close'):
+                        # PTY closed
+                        logger.info(f"PTY closed for session {self.session_id}")
+                        await self.send_message({
+                            "type": "terminal_closed",
+                            "content": "Terminal session ended"
+                        })
+                        break
+                else:
+                    # No output available, small delay to prevent CPU spinning
+                    await asyncio.sleep(0.01)
+
+            except Exception as e:
+                logger.error(f"Error reading PTY output: {e}")
+                break
+
+        logger.info(f"PTY output reader stopped for session {self.session_id}")
 
     async def send_message(self, message: dict):
         """Send message to WebSocket client"""
@@ -200,52 +232,73 @@ class ConsolidatedTerminalWebSocket:
 
     async def send_to_terminal(self, text: str):
         """Send text input to terminal process"""
-        if self.pty_process:
-            # Send to actual PTY process if available
+        if self.pty_process and self.pty_process.is_alive():
+            # Send to actual PTY process
             try:
-                self.pty_process.write(text.encode("utf-8"))
+                success = self.pty_process.write_input(text)
+                if not success:
+                    await self.send_message({
+                        "type": "error",
+                        "content": "Failed to write to terminal"
+                    })
                 return
             except Exception as e:
                 logger.error(f"Error writing to PTY: {e}")
-
-        # Fallback: simulate command execution for testing
-        await self.send_output(f"$ {text}\n")
-
-        # Enhanced simulation for common commands
-        command = text.strip()
-        if command == "echo test":
-            await self.send_output("test\n")
-        elif command == "pwd":
-            await self.send_output("/home/kali\n")
-        elif command == "ls":
-            await self.send_output(
-                "autobot-vue/  backend/  src/  scripts/  docs/  README.md\n"
-            )
-        elif command.startswith("cd "):
-            directory = command[3:].strip() or "/home/kali"
-            await self.send_output(f"Changed directory to {directory}\n")
-        elif command == "whoami":
-            await self.send_output("kali\n")
-        elif command == "date":
-            from datetime import datetime
-
-            await self.send_output(
-                f"{datetime.now().strftime('%a %b %d %H:%M:%S %Z %Y')}\n"
-            )
-        elif command.startswith("echo "):
-            echo_text = command[5:]
-            await self.send_output(f"{echo_text}\n")
+                await self.send_message({
+                    "type": "error",
+                    "content": f"Terminal error: {str(e)}"
+                })
         else:
-            await self.send_output(f"Command executed: {command}\n")
+            # PTY not available
+            await self.send_message({
+                "type": "error",
+                "content": "Terminal not available"
+            })
+
+    async def start(self):
+        """Start the terminal session"""
+        self.active = True
+
+        # Start PTY output reader task if PTY is available
+        if self.pty_process and self.pty_process.is_alive():
+            self.pty_output_task = asyncio.create_task(self._read_pty_output())
+            logger.info(f"PTY output reader started for session {self.session_id}")
+
+            # Send initial shell prompt/output
+            await self.send_message({
+                "type": "connected",
+                "content": f"Connected to terminal session {self.session_id}"
+            })
+        else:
+            logger.warning(f"PTY not available for session {self.session_id}")
+            await self.send_message({
+                "type": "error",
+                "content": "Terminal initialization failed"
+            })
 
     async def cleanup(self):
         """Clean up terminal resources"""
         self.active = False
+
+        # Cancel output reader task if running
+        if hasattr(self, 'pty_output_task') and self.pty_output_task:
+            try:
+                self.pty_output_task.cancel()
+                await asyncio.wait_for(self.pty_output_task, timeout=1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            except Exception as e:
+                logger.error(f"Error cancelling output task: {e}")
+
+        # Close PTY session using manager
         if self.pty_process:
             try:
-                self.pty_process.terminate()
-            except Exception:
-                pass
+                from backend.services.simple_pty import simple_pty_manager
+                simple_pty_manager.close_session(self.session_id)
+                self.pty_process = None
+                logger.info(f"PTY session {self.session_id} closed")
+            except Exception as e:
+                logger.error(f"Error closing PTY session: {e}")
 
     async def handle_message(self, message: dict):
         """Enhanced message handling with security and workflow features"""
@@ -788,6 +841,9 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
 
         # Register with session manager
         session_manager.add_connection(session_id, terminal)
+
+        # Start terminal session (activates PTY output reader)
+        await terminal.start()
 
         logger.info(f"WebSocket connection established for session {session_id}")
 

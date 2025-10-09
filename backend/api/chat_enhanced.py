@@ -177,10 +177,15 @@ async def process_enhanced_chat_message(
         chat_context = []
         if hasattr(chat_history_manager, 'get_session_messages'):
             try:
-                # Redis can efficiently handle large context windows - retrieve 500 messages
-                # This provides full conversation history for context-aware responses
-                recent_messages = await chat_history_manager.get_session_messages(session_id, limit=500)
+                # Use model-aware message retrieval for optimal context window usage
+                # Context manager calculates efficient limits based on model capabilities
+                model_name = message.metadata.get("model") if message.metadata else None
+                recent_messages = await chat_history_manager.get_session_messages(
+                    session_id, 
+                    model_name=model_name
+                )
                 chat_context = recent_messages or []
+                logger.info(f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}")
             except Exception as e:
                 logger.warning(f"Could not retrieve chat context: {e}")
 
@@ -215,9 +220,19 @@ async def process_enhanced_chat_message(
                 ai_client = await get_ai_stack_client()
 
                 # Prepare chat history for AI Stack
-                # Use last 200 messages for LLM context (balances context depth with token limits)
+                # Use model-aware message limit for optimal context window usage
+                model_name = message.metadata.get("model") if message.metadata else None
+                context_manager = getattr(chat_history_manager, 'context_manager', None)
+                
+                if context_manager:
+                    message_limit = context_manager.get_message_limit(model_name)
+                    logger.info(f"Using {message_limit} messages for LLM context (model: {model_name or 'default'})")
+                else:
+                    message_limit = 20  # Fallback default
+                    logger.warning("Context manager not available, using default limit")
+                
                 formatted_history = []
-                for msg in chat_context[-200:]:  # Last 200 messages for extensive context
+                for msg in chat_context[-message_limit:]:  # Model-aware message limit
                     formatted_history.append({
                         "role": msg.get("role", "user"),
                         "content": msg.get("content", "")

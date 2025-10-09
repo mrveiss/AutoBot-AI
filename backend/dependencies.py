@@ -187,6 +187,18 @@ def get_cached_orchestrator(config: UnifiedConfigManager = Depends(get_config)):
     return dependency_cache.get_or_create("orchestrator", _create_orchestrator)
 
 
+def get_redis_client():
+    """
+    Dependency injection provider for Redis client.
+
+    Returns:
+        Redis client instance
+    """
+    from src.utils.redis_client import get_redis_client as _get_redis_client
+
+    return _get_redis_client()
+
+
 # Type aliases for cleaner dependency annotations
 ConfigDep = Depends(get_config)
 DiagnosticsDep = Depends(get_diagnostics)
@@ -194,6 +206,7 @@ KnowledgeBaseDep = Depends(get_knowledge_base)
 LLMInterfaceDep = Depends(get_llm_interface)
 OrchestratorDep = Depends(get_orchestrator)
 SecurityLayerDep = Depends(get_security_layer)
+RedisClientDep = Depends(get_redis_client)
 
 # Cached versions
 CachedKnowledgeBaseDep = Depends(get_cached_knowledge_base)

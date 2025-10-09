@@ -24,7 +24,15 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
                 logger.info("Using existing initialized knowledge base from app state")
                 return kb
             else:
-                logger.warning("Knowledge base exists but not initialized, will initialize now")
+                # Knowledge base exists but not initialized - initialize it instead of creating new one
+                logger.info("Knowledge base exists but not initialized, initializing existing instance...")
+                try:
+                    await kb.initialize()
+                    logger.info("✅ Successfully initialized existing knowledge base instance")
+                    return kb
+                except Exception as init_error:
+                    logger.warning(f"Failed to initialize existing instance: {init_error}, will create new instance")
+                    # Fall through to create new instance
 
         # Try using KnowledgeBaseV2 first (preferred async implementation)
         try:

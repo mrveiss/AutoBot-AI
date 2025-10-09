@@ -86,12 +86,13 @@ class ManagerStats:
 
 class AsyncRedisDatabase:
     """Async Redis database connection with circuit breaker and monitoring"""
-    
-    def __init__(self, name: str, config: DatabaseConfig, host: str = "localhost", port: int = 6379):
+
+    def __init__(self, name: str, config: DatabaseConfig, host: str = None, port: int = None):
         self.name = name
         self.config = config
-        self.host = host
-        self.port = port
+        # Default to environment variables if not provided
+        self.host = host if host is not None else os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
+        self.port = port if port is not None else int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
         
         # Connection state
         self._redis: Optional[aioredis.Redis] = None
@@ -381,11 +382,12 @@ class AsyncRedisManager:
     Provides access to multiple Redis databases with connection pooling,
     health monitoring, and automatic failover.
     """
-    
-    def __init__(self, config_file: str = "config/redis-databases.yaml", 
-                 host: str = "localhost", port: int = 6379):
-        self.host = host
-        self.port = port
+
+    def __init__(self, config_file: str = "config/redis-databases.yaml",
+                 host: str = None, port: int = None):
+        # Get host and port from environment variables if not provided
+        self.host = host if host is not None else os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
+        self.port = port if port is not None else int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
         self.config_file = config_file
         self._databases: Dict[str, AsyncRedisDatabase] = {}
         self._start_time = time.time()
@@ -546,9 +548,9 @@ class AsyncRedisManager:
         """Get testing database (DB 9)"""
         return await self._get_database('testing')
     
-    async def archive(self) -> AsyncRedisDatabase:
-        """Get archive database (DB 10)"""
-        return await self._get_database('archive')
+    async def audit(self) -> AsyncRedisDatabase:
+        """Get audit database (DB 10)"""
+        return await self._get_database('audit')
     
     async def _get_database(self, name: str) -> AsyncRedisDatabase:
         """Get database by name, initializing if needed"""
@@ -657,17 +659,29 @@ _redis_manager_instance: Optional[AsyncRedisManager] = None
 _manager_lock = asyncio.Lock()
 
 
-async def get_redis_manager(host: str = "localhost", port: int = 6379) -> AsyncRedisManager:
+async def get_redis_manager(host: str = None, port: int = None) -> AsyncRedisManager:
     """
     Get or create global Redis manager instance
-    
+
     This function ensures only one Redis manager instance exists across the application
     and handles proper initialization and connection management.
+
+    Args:
+        host: Redis host (defaults to AUTOBOT_REDIS_HOST env var or 172.16.168.23)
+        port: Redis port (defaults to AUTOBOT_REDIS_PORT env var or 6379)
     """
     global _redis_manager_instance
-    
+
     async with _manager_lock:
         if _redis_manager_instance is None:
+            # Get host and port from environment variables if not provided
+            if host is None:
+                host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
+            if port is None:
+                port = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+
+            logger.info(f"Initializing AsyncRedisManager with host={host}, port={port}")
+
             # Create new manager instance
             _redis_manager_instance = AsyncRedisManager(host=host, port=port)
             

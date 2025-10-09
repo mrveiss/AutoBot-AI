@@ -18,15 +18,19 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 
+import aiofiles
+
 from src.async_chat_workflow import AsyncChatWorkflow, WorkflowMessage, MessageType
-from src.utils.redis_client import get_redis_client
+from backend.utils.async_redis_manager import get_redis_manager
 from src.prompt_manager import get_prompt
+from backend.dependencies import global_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -221,11 +225,121 @@ class ChatWorkflowManager:
         self.default_workflow: Optional[AsyncChatWorkflow] = None
         self._initialized = False
         self._lock = asyncio.Lock()
-        self.redis_client = None
+        self.redis_manager = None  # Async Redis manager
+        self.redis_client = None  # Main database connection
         self.conversation_history_ttl = 86400  # 24 hours in seconds
         self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
 
+        # Terminal tool integration
+        self.terminal_tool = None
+        self._init_terminal_tool()
+
         logger.info("ChatWorkflowManager initialized")
+
+    def _init_terminal_tool(self):
+        """Initialize terminal tool for command execution."""
+        try:
+            from src.tools.terminal_tool import TerminalTool
+            from backend.services.agent_terminal_service import AgentTerminalService
+
+            # Import here to avoid circular dependency
+            agent_service = AgentTerminalService()
+            self.terminal_tool = TerminalTool(agent_terminal_service=agent_service)
+            logger.info("Terminal tool initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize terminal tool: {e}")
+            self.terminal_tool = None
+
+    def _parse_tool_calls(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Parse tool calls from LLM response using XML-style markers.
+
+        Args:
+            text: LLM response text
+
+        Returns:
+            List of tool call dictionaries
+        """
+        import re
+
+        logger.debug(f"[_parse_tool_calls] Searching for TOOL_CALL markers in text of length {len(text)}")
+        logger.debug(f"[_parse_tool_calls] Checking if '<TOOL_CALL' exists in text: {'<TOOL_CALL' in text}")
+
+        tool_calls = []
+        pattern = r'<TOOL_CALL\s+name="([^"]+)"\s+params=\'({[^}]+})\'>([^<]*)</TOOL_CALL>'
+
+        logger.debug(f"[_parse_tool_calls] Using regex pattern: {pattern}")
+
+        matches = re.finditer(pattern, text)
+        match_count = 0
+        for match in matches:
+            match_count += 1
+            tool_name = match.group(1)
+            params_str = match.group(2)
+            description = match.group(3)
+
+            try:
+                import json
+                params = json.loads(params_str)
+                tool_calls.append({
+                    "name": tool_name,
+                    "params": params,
+                    "description": description
+                })
+                logger.debug(f"[_parse_tool_calls] Found TOOL_CALL #{match_count}: name={tool_name}, params={params}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse tool call params: {e}")
+                continue
+
+        logger.info(f"[_parse_tool_calls] Total matches found: {match_count}, successfully parsed: {len(tool_calls)}")
+        return tool_calls
+
+    async def _execute_terminal_command(
+        self,
+        session_id: str,
+        command: str,
+        host: str = "main",
+        description: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Execute terminal command via terminal tool.
+
+        Args:
+            session_id: Chat session ID
+            command: Command to execute
+            host: Target host
+            description: Command description
+
+        Returns:
+            Execution result
+        """
+        if not self.terminal_tool:
+            return {
+                "status": "error",
+                "error": "Terminal tool not available"
+            }
+
+        # Ensure terminal session exists for this conversation
+        if not self.terminal_tool.active_sessions.get(session_id):
+            # Create session
+            session_result = await self.terminal_tool.create_session(
+                agent_id=f"chat_agent_{session_id}",
+                conversation_id=session_id,
+                agent_role="chat_agent",
+                host=host
+            )
+
+            if session_result.get("status") != "success":
+                return session_result
+
+        # Execute command
+        result = await self.terminal_tool.execute_command(
+            conversation_id=session_id,
+            command=command,
+            description=description
+        )
+
+        return result
 
     def _get_conversation_key(self, session_id: str) -> str:
         """Generate Redis key for conversation history."""
@@ -234,22 +348,30 @@ class ChatWorkflowManager:
     async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
         """Load conversation history from Redis (short-term) or file (long-term)."""
         try:
-            # Try Redis first (fast access for recent conversations)
+            # Try Redis first (fast access for recent conversations) with 2s timeout
             if self.redis_client is not None:
                 key = self._get_conversation_key(session_id)
-                history_json = self.redis_client.get(key)
+                try:
+                    history_json = await asyncio.wait_for(
+                        self.redis_client.get(key),
+                        timeout=2.0
+                    )
 
-                if history_json:
-                    logger.debug(f"Loaded conversation history from Redis for session {session_id}")
-                    return json.loads(history_json)
+                    if history_json:
+                        logger.debug(f"Loaded conversation history from Redis for session {session_id}")
+                        return json.loads(history_json)
+
+                except asyncio.TimeoutError:
+                    logger.warning(f"Redis get timeout after 2s for session {session_id}, falling back to file")
+                    # Fall through to file-based fallback
 
             # Fall back to file-based transcript (long-term storage)
             history = await self._load_transcript(session_id)
             if history:
                 logger.debug(f"Loaded conversation history from file for session {session_id}")
-                # Repopulate Redis cache
+                # Repopulate Redis cache (non-blocking, fire-and-forget)
                 if self.redis_client is not None:
-                    await self._save_conversation_history(session_id, history)
+                    asyncio.create_task(self._save_conversation_history(session_id, history))
 
             return history
 
@@ -266,9 +388,15 @@ class ChatWorkflowManager:
             key = self._get_conversation_key(session_id)
             history_json = json.dumps(history)
 
-            # Save with 24-hour expiration
-            self.redis_client.setex(key, self.conversation_history_ttl, history_json)
-            logger.debug(f"Saved conversation history for session {session_id} to Redis")
+            # Save with 24-hour expiration and 2s timeout
+            try:
+                await asyncio.wait_for(
+                    self.redis_client.set(key, history_json, ex=self.conversation_history_ttl),
+                    timeout=2.0
+                )
+                logger.debug(f"Saved conversation history for session {session_id} to Redis")
+            except asyncio.TimeoutError:
+                logger.warning(f"Redis set timeout after 2s for session {session_id} - data may not be cached")
 
         except Exception as e:
             logger.error(f"Failed to save conversation history to Redis: {e}")
@@ -278,7 +406,7 @@ class ChatWorkflowManager:
         return Path(self.transcript_dir) / f"{session_id}.json"
 
     async def _append_to_transcript(self, session_id: str, user_message: str, assistant_message: str):
-        """Append message exchange to long-term transcript file."""
+        """Append message exchange to long-term transcript file (async with aiofiles)."""
         try:
             # Ensure transcript directory exists
             transcript_dir = Path(self.transcript_dir)
@@ -286,10 +414,22 @@ class ChatWorkflowManager:
 
             transcript_path = self._get_transcript_path(session_id)
 
-            # Load existing transcript or create new
+            # Load existing transcript or create new (async read with timeout)
             if transcript_path.exists():
-                with open(transcript_path, 'r', encoding='utf-8') as f:
-                    transcript = json.load(f)
+                try:
+                    async with asyncio.wait_for(
+                        aiofiles.open(transcript_path, 'r', encoding='utf-8'),
+                        timeout=5.0
+                    ) as f:
+                        content = await asyncio.wait_for(f.read(), timeout=5.0)
+                        transcript = json.loads(content)
+                except asyncio.TimeoutError:
+                    logger.warning(f"File read timeout after 5s for {transcript_path}, creating new transcript")
+                    transcript = {
+                        "session_id": session_id,
+                        "created_at": datetime.now().isoformat(),
+                        "messages": []
+                    }
             else:
                 transcript = {
                     "session_id": session_id,
@@ -307,50 +447,76 @@ class ChatWorkflowManager:
             transcript["updated_at"] = datetime.now().isoformat()
             transcript["message_count"] = len(transcript["messages"])
 
-            # Save transcript
-            with open(transcript_path, 'w', encoding='utf-8') as f:
-                json.dump(transcript, f, indent=2, ensure_ascii=False)
+            # Atomic write pattern: write to temp file then rename (with timeout)
+            temp_path = transcript_path.with_suffix('.tmp')
+            try:
+                async with asyncio.wait_for(
+                    aiofiles.open(temp_path, 'w', encoding='utf-8'),
+                    timeout=5.0
+                ) as f:
+                    await asyncio.wait_for(
+                        f.write(json.dumps(transcript, indent=2, ensure_ascii=False)),
+                        timeout=5.0
+                    )
 
-            logger.debug(f"Appended to transcript for session {session_id} ({transcript['message_count']} total messages)")
+                # Atomic rename (sync operation, very fast)
+                await asyncio.to_thread(temp_path.rename, transcript_path)
+
+                logger.debug(f"Appended to transcript for session {session_id} ({transcript['message_count']} total messages)")
+
+            except asyncio.TimeoutError:
+                logger.warning(f"File write timeout after 5s for {transcript_path}")
+                # Clean up temp file if it exists
+                if temp_path.exists():
+                    temp_path.unlink()
 
         except Exception as e:
             logger.error(f"Failed to append to transcript file: {e}")
 
     async def _load_transcript(self, session_id: str) -> List[Dict[str, str]]:
-        """Load conversation history from transcript file."""
+        """Load conversation history from transcript file (async with aiofiles)."""
         try:
             transcript_path = self._get_transcript_path(session_id)
 
             if not transcript_path.exists():
                 return []
 
-            with open(transcript_path, 'r', encoding='utf-8') as f:
-                transcript = json.load(f)
+            # Async file read with timeout
+            try:
+                async with asyncio.wait_for(
+                    aiofiles.open(transcript_path, 'r', encoding='utf-8'),
+                    timeout=5.0
+                ) as f:
+                    content = await asyncio.wait_for(f.read(), timeout=5.0)
+                    transcript = json.loads(content)
 
-            # Convert to simple history format (last 10 messages)
-            messages = transcript.get("messages", [])[-10:]
-            return [{"user": msg["user"], "assistant": msg["assistant"]} for msg in messages]
+                # Convert to simple history format (last 10 messages)
+                messages = transcript.get("messages", [])[-10:]
+                return [{"user": msg["user"], "assistant": msg["assistant"]} for msg in messages]
+
+            except asyncio.TimeoutError:
+                logger.warning(f"File read timeout after 5s for {transcript_path}, returning empty history")
+                return []
 
         except Exception as e:
             logger.error(f"Failed to load transcript file: {e}")
             return []
 
     async def initialize(self) -> bool:
-        """Initialize the workflow manager with default workflow and Redis."""
+        """Initialize the workflow manager with default workflow and async Redis."""
         try:
             async with self._lock:
                 if self._initialized:
                     return True
 
-                # Initialize Redis client for conversation history
+                # Initialize AsyncRedisManager for conversation history
                 try:
-                    self.redis_client = get_redis_client(async_client=False, database="main")
-                    if self.redis_client:
-                        logger.info("✅ Redis client initialized for conversation history")
-                    else:
-                        logger.warning("⚠️ Redis not available - conversation history will not persist")
+                    self.redis_manager = await get_redis_manager()
+                    self.redis_client = await self.redis_manager.main()
+                    logger.info("✅ Async Redis manager initialized for conversation history")
                 except Exception as redis_error:
                     logger.warning(f"⚠️ Redis initialization failed: {redis_error} - continuing without persistence")
+                    self.redis_manager = None
                     self.redis_client = None
 
                 # Create default workflow instance
@@ -434,7 +600,19 @@ class ChatWorkflowManager:
 
             try:
                 import httpx
-                ollama_url = "http://localhost:11434/api/generate"
+
+                # Get Ollama endpoint from config
+                try:
+                    ollama_endpoint = global_config_manager.get_nested("backend.llm.ollama.endpoint", "http://localhost:11434/api/generate")
+
+                    # Validate endpoint format
+                    if not ollama_endpoint or not ollama_endpoint.startswith(("http://", "https://")):
+                        logger.error(f"Invalid endpoint URL: {ollama_endpoint}, using default")
+                        ollama_endpoint = "http://localhost:11434/api/generate"
+
+                except Exception as config_error:
+                    logger.error(f"Failed to load Ollama endpoint from config: {config_error}")
+                    ollama_endpoint = "http://localhost:11434/api/generate"
 
                 # Load AutoBot system prompt from prompt file (with conversation continuation rules)
                 try:
@@ -466,13 +644,45 @@ If a user gives short responses like "of autobot" or "yes", they are clarifying 
                 # Build complete prompt with system context and history
                 full_prompt = system_prompt + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
 
+                # Get selected model from config
+                try:
+                    selected_model = global_config_manager.get_nested("backend.llm.ollama.selected_model", "dolphin-phi:2.7b-v2.6-q4_K_M")
+
+                    # Validate model is non-empty string
+                    if not selected_model or not isinstance(selected_model, str):
+                        logger.error(f"Invalid model selection: {selected_model}, using default")
+                        selected_model = "dolphin-phi:2.7b-v2.6-q4_K_M"
+
+                    logger.info(f"Using LLM model from config: {selected_model}")
+
+                except Exception as config_error:
+                    logger.error(f"Failed to load model from config: {config_error}")
+                    selected_model = "dolphin-phi:2.7b-v2.6-q4_K_M"
+
+                # DEBUG: Log exact request details
+                logger.info(f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}")
+                logger.info(f"[ChatWorkflowManager] Using model: {selected_model}")
+                logger.info(f"[ChatWorkflowManager] Prompt length: {len(full_prompt)} characters")
+                logger.info(f"[ChatWorkflowManager] First 500 chars of prompt: {full_prompt[:500]}")
+                logger.info(f"[ChatWorkflowManager] Last 500 chars of prompt: {full_prompt[-500:]}")
+
+                # DEBUG: Print statements to bypass logging config
+                print("\n" + "="*80, flush=True)
+                print("=== OLLAMA REQUEST DEBUG ===", flush=True)
+                print(f"Endpoint: {ollama_endpoint}", flush=True)
+                print(f"Model: {selected_model}", flush=True)
+                print(f"Prompt length: {len(full_prompt)} characters", flush=True)
+                print(f"\nFirst 1000 chars of prompt:\n{full_prompt[:1000]}", flush=True)
+                print(f"\nLast 1000 chars of prompt:\n{full_prompt[-1000:]}", flush=True)
+                print("="*80 + "\n", flush=True)
+
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     # Stream the response from Ollama
                     async with client.stream(
                         "POST",
-                        ollama_url,
+                        ollama_endpoint,
                         json={
-                            "model": "llama3.2:3b-instruct-q4_K_M",
+                            "model": selected_model,
                             "prompt": full_prompt,
                             "stream": True,  # Enable streaming for real-time response
                             "options": {
@@ -482,6 +692,7 @@ If a user gives short responses like "of autobot" or "yes", they are clarifying 
                             }
                         }
                     ) as response:
+                        logger.info(f"[ChatWorkflowManager] Ollama response status: {response.status_code}")
                         if response.status_code == 200:
                             llm_response = ""
 
@@ -494,6 +705,10 @@ If a user gives short responses like "of autobot" or "yes", they are clarifying 
                                         chunk_text = chunk_data.get("response", "")
 
                                         if chunk_text:
+                                            # Normalize TOOL_CALL spacing (models may generate TOOL_ CALL with space)
+                                            chunk_text = re.sub(r'<TOOL_\s+CALL', '<TOOL_CALL', chunk_text)
+                                            chunk_text = re.sub(r'</TOOL_\s+CALL>', '</TOOL_CALL>', chunk_text)
+
                                             llm_response += chunk_text
 
                                             # Yield streaming chunks in real-time
@@ -503,7 +718,7 @@ If a user gives short responses like "of autobot" or "yes", they are clarifying 
                                                 content=chunk_text,
                                                 metadata={
                                                     "message_type": "llm_response_chunk",
-                                                    "model": "llama3.2:3b-instruct-q4_K_M",
+                                                    "model": selected_model,
                                                     "streaming": True
                                                 }
                                             )
@@ -517,6 +732,120 @@ If a user gives short responses like "of autobot" or "yes", they are clarifying 
                                         continue
 
                             logger.debug(f"[ChatWorkflowManager] Completed streaming response: {llm_response[:100]}...")
+                            logger.info(f"[ChatWorkflowManager] Full LLM response length: {len(llm_response)} characters")
+                            logger.info(f"[ChatWorkflowManager] Complete LLM response: {llm_response}")
+
+                            # DEBUG: Print statements to bypass logging config
+                            print("\n" + "="*80, flush=True)
+                            print("=== LLM RESPONSE DEBUG ===", flush=True)
+                            print(f"Response length: {len(llm_response)} characters", flush=True)
+                            print(f"Contains '<TOOL_CALL': {'<TOOL_CALL' in llm_response}", flush=True)
+                            print(f"\nFull LLM response:\n{llm_response}", flush=True)
+                            print("="*80 + "\n", flush=True)
+
+                            # Check for tool calls in response
+                            tool_calls = self._parse_tool_calls(llm_response)
+                            logger.info(f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls from response")
+
+                            if tool_calls:
+                                logger.info(f"[ChatWorkflowManager] Detected {len(tool_calls)} tool call(s) in LLM response")
+
+                                for tool_call in tool_calls:
+                                    if tool_call["name"] == "execute_command":
+                                        # Execute terminal command
+                                        command = tool_call["params"].get("command")
+                                        host = tool_call["params"].get("host", "main")
+                                        description = tool_call.get("description", "")
+
+                                        logger.info(f"[ChatWorkflowManager] Executing command: {command} on {host}")
+
+                                        # Execute command
+                                        result = await self._execute_terminal_command(
+                                            session_id=session_id,
+                                            command=command,
+                                            host=host,
+                                            description=description
+                                        )
+
+                                        # Handle result
+                                        if result.get("status") == "pending_approval":
+                                            # Command needs approval - send to frontend
+                                            yield WorkflowMessage(
+                                                type="command_approval_request",
+                                                content=result.get("approval_ui_message", "Command requires approval"),
+                                                metadata={
+                                                    "command": command,
+                                                    "risk_level": result.get("risk"),
+                                                    "reasons": result.get("reasons", []),
+                                                    "description": description,
+                                                    "requires_approval": True
+                                                }
+                                            )
+                                            # Note: Approval handled via WebSocket, command will execute when approved
+                                            # For now, inform user and continue
+                                            llm_response += f"\n\n⚠️ The command `{command}` requires your approval before execution (risk level: {result.get('risk')})."
+
+                                        elif result.get("status") == "success":
+                                            # Command executed successfully
+                                            stdout = result.get("stdout", "")
+                                            stderr = result.get("stderr", "")
+                                            return_code = result.get("return_code", 0)
+
+                                            # Feed result back to LLM for interpretation
+                                            interpretation_prompt = f"""The command `{command}` was executed successfully.
+
+Output:
+```
+{stdout}
+{stderr if stderr else ''}
+```
+Return code: {return_code}
+
+Please interpret this output for the user in a clear, helpful way. Explain what it means and answer their original question."""
+
+                                            # Get LLM interpretation of results
+                                            async with httpx.AsyncClient(timeout=30.0) as interp_client:
+                                                interp_response = await interp_client.post(
+                                                    ollama_endpoint,
+                                                    json={
+                                                        "model": selected_model,
+                                                        "prompt": interpretation_prompt,
+                                                        "stream": False,
+                                                        "options": {
+                                                            "temperature": 0.7,
+                                                            "top_p": 0.9,
+                                                            "num_ctx": 4096
+                                                        }
+                                                    }
+                                                )
+
+                                                if interp_response.status_code == 200:
+                                                    interp_data = interp_response.json()
+                                                    interpretation = interp_data.get("response", "")
+
+                                                    # Yield interpretation as final response
+                                                    yield WorkflowMessage(
+                                                        type="response",
+                                                        content=f"\n\n{interpretation}",
+                                                        metadata={
+                                                            "message_type": "command_result_interpretation",
+                                                            "command": command,
+                                                            "executed": True
+                                                        }
+                                                    )
+
+                                                    # Update llm_response with interpretation
+                                                    llm_response += f"\n\n{interpretation}"
+
+                                        elif result.get("status") == "error":
+                                            # Command failed
+                                            error = result.get("error", "Unknown error")
+                                            llm_response += f"\n\n❌ Command execution failed: {error}"
+                                            yield WorkflowMessage(
+                                                type="error",
+                                                content=f"Command failed: {error}",
+                                                metadata={"command": command, "error": True}
+                                            )
 
                             # Store complete exchange in conversation history
                             session.conversation_history.append({

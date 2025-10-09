@@ -73,8 +73,12 @@ class SimplePTY:
     
     def _read_loop(self):
         """Background thread to read from PTY"""
-        while self.running and self.master_fd:
+        while self.running and self.master_fd is not None:
             try:
+                # Check master_fd is still valid before select
+                if self.master_fd is None:
+                    break
+
                 # Check for data with select
                 ready, _, _ = select.select([self.master_fd], [], [], 0.1)
                 
@@ -102,7 +106,7 @@ class SimplePTY:
     
     def _write_loop(self):
         """Background thread to write to PTY"""
-        while self.running and self.master_fd:
+        while self.running and self.master_fd is not None:
             try:
                 # Wait for input without timeout
                 try:
@@ -112,7 +116,10 @@ class SimplePTY:
                         
                     # Write to PTY
                     data = text.encode('utf-8')
-                    os.write(self.master_fd, data)
+
+                    # Check master_fd is still valid
+                    if self.master_fd is not None:
+                        os.write(self.master_fd, data)
                     
                 except queue.Empty:
                     continue

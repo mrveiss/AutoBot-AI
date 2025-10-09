@@ -22,6 +22,9 @@ from src.utils.redis_client import get_redis_client
 # Import Memory Graph for entity tracking
 from src.autobot_memory_graph import AutoBotMemoryGraph
 
+# Import Context Window Manager for model-aware message limits
+from src.context_window_manager import ContextWindowManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,10 +80,14 @@ class ChatHistoryManager:
         self.memory_graph: Optional[AutoBotMemoryGraph] = None
         self.memory_graph_enabled = False  # Track initialization status
 
+        # CONTEXT WINDOW MANAGEMENT: Model-aware message limits
+        self.context_manager = ContextWindowManager()
+
         logger.info(
             f"PERFORMANCE: ChatHistoryManager initialized with memory protection - "
             f"max_messages: {self.max_messages}, cleanup_threshold: {self.cleanup_threshold}"
         )
+        logger.info(f"✅ Context window manager initialized with model-aware limits")
 
         # Log encryption status
         if self.encryption_enabled:
@@ -558,19 +565,26 @@ class ChatHistoryManager:
         logging.info(f"Created new chat session: {session_id}")
         return session_data
 
-    async def get_session_messages(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    async def get_session_messages(self, session_id: str, limit: Optional[int] = None, model_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Gets all messages for a specific session.
+        Gets messages for a specific session with model-aware limits.
 
         Args:
             session_id (str): The session identifier.
-            limit (Optional[int]): Maximum number of messages to return. If None, returns all messages.
+            limit (Optional[int]): Maximum number of messages to return. If None, uses model-aware default.
+            model_name (Optional[str]): LLM model name for context-aware limiting.
 
         Returns:
             List[Dict[str, Any]]: List of messages in the session.
         """
         messages = await self.load_session(session_id)
-        if limit is not None and limit > 0:
+        
+        # Use model-aware limit if not explicitly provided
+        if limit is None:
+            limit = self.context_manager.calculate_retrieval_limit(model_name)
+            logger.debug(f"Using model-aware limit: {limit} messages for model {model_name or 'default'}")
+        
+        if limit > 0:
             return messages[-limit:]  # Return last N messages
         return messages
 
@@ -816,27 +830,40 @@ class ChatHistoryManager:
                         ).isoformat()
                         file_size = stat.st_size
 
+                        # Read chat name and message count from file (lightweight, no full decryption)
+                        chat_name = None
+                        message_count = 0
+                        try:
+                            with open(chat_path, 'r', encoding='utf-8') as f:
+                                chat_data = json.load(f)
+                                chat_name = chat_data.get('name', '').strip()
+                                messages = chat_data.get('messages', [])
+                                message_count = len(messages) if isinstance(messages, list) else 0
+                        except Exception as read_err:
+                            logging.debug(f"Could not read chat file content for {filename}: {read_err}")
+
                         # Create unique chat names using timestamp or full UUID
-                        if chat_id.startswith("chat-") and len(chat_id) > 15:
-                            # For timestamp-based IDs, use the last 8 digits for uniqueness
-                            unique_part = chat_id[-8:]
-                            default_name = f"Chat {unique_part}"
-                        elif len(chat_id) >= 8:
-                            # For UUID-based IDs, use first 8 characters
-                            default_name = f"Chat {chat_id[:8]}"
-                        else:
-                            # Fallback for short IDs
-                            default_name = f"Chat {chat_id}"
+                        if not chat_name:  # Only generate default if no name in file
+                            if chat_id.startswith("chat-") and len(chat_id) > 15:
+                                # For timestamp-based IDs, use the last 8 digits for uniqueness
+                                unique_part = chat_id[-8:]
+                                chat_name = f"Chat {unique_part}"
+                            elif len(chat_id) >= 8:
+                                # For UUID-based IDs, use first 8 characters
+                                chat_name = f"Chat {chat_id[:8]}"
+                            else:
+                                # Fallback for short IDs
+                                chat_name = f"Chat {chat_id}"
 
                         sessions.append(
                             {
                                 # Frontend-compatible property names
                                 "id": chat_id,  # Frontend expects 'id'
                                 "chatId": chat_id,  # Keep for backward compatibility
-                                "title": default_name,  # Frontend expects 'title'
-                                "name": default_name,  # Keep for backward compatibility
+                                "title": chat_name,  # Frontend expects 'title' - use actual name from file
+                                "name": chat_name,  # Keep for backward compatibility
                                 "messages": [],  # Frontend expects messages array - empty in fast mode
-                                "messageCount": 0,  # Not available without decryption
+                                "messageCount": message_count,  # Actual count from file
                                 "createdAt": created_time,  # Frontend expects 'createdAt'
                                 "createdTime": created_time,  # Keep for backward compatibility
                                 "updatedAt": last_modified,  # Frontend expects 'updatedAt'
