@@ -5,15 +5,39 @@ Debug script to check what's happening with the stats endpoint
 
 import requests
 import json
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.unified_config_manager import unified_config_manager
 
 def test_stats_endpoint():
     """Test the stats endpoint and show detailed response"""
     print("=== Testing Knowledge Base Stats Endpoint ===")
 
+    # Get backend API endpoint from configuration
+    backend_config = unified_config_manager.get_backend_config()
+
+    # Build API endpoint from configuration without hardcoded fallback
+    host = backend_config.get("host")
+    port = backend_config.get("port")
+
+    if not host or not port:
+        # Try system defaults as last resort
+        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+        host = host or system_defaults.get("backend_host", "localhost")
+        port = port or system_defaults.get("backend_port", 8001)
+
+    api_endpoint = f"http://{host}:{port}"
+
+    print(f"Using API endpoint: {api_endpoint}")
+
     try:
         # Test the basic stats endpoint
         response = requests.get(
-            "http://127.0.0.1:8001/api/knowledge_base/stats/basic",
+            f"{api_endpoint}/api/knowledge_base/stats/basic",
             headers={"accept": "application/json"},
             timeout=10
         )
@@ -47,7 +71,7 @@ def test_stats_endpoint():
 
     try:
         response = requests.get(
-            "http://127.0.0.1:8001/api/knowledge_base/stats",
+            f"{api_endpoint}/api/knowledge_base/stats",
             headers={"accept": "application/json"},
             timeout=10
         )

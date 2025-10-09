@@ -5,29 +5,65 @@ Script to refactor hardcoded IP addresses and URLs to use shared constants
 
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-# Mapping of hardcoded values to constants
-REPLACEMENT_MAP = {
-    # IP addresses
-    '172.16.168.20': 'NetworkConstants.MAIN_MACHINE_IP',
-    '172.16.168.21': 'NetworkConstants.FRONTEND_VM_IP',
-    '172.16.168.22': 'NetworkConstants.NPU_WORKER_VM_IP',
-    '172.16.168.23': 'NetworkConstants.REDIS_VM_IP',
-    '172.16.168.24': 'NetworkConstants.AI_STACK_VM_IP',
-    '172.16.168.25': 'NetworkConstants.BROWSER_VM_IP',
-    '127.0.0.1': 'NetworkConstants.LOCALHOST_IP',
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-    # URLs (need to be more careful with these to avoid false positives)
-    'http://localhost:8001': 'ServiceURLs.BACKEND_LOCAL',
-    'http://172.16.168.20:8001': 'ServiceURLs.BACKEND_API',
-    'http://localhost:5173': 'ServiceURLs.FRONTEND_LOCAL',
-    'http://172.16.168.21:5173': 'ServiceURLs.FRONTEND_VM',
-    'http://localhost:11434': 'ServiceURLs.OLLAMA_LOCAL',
-    'redis://172.16.168.23:6379': 'ServiceURLs.REDIS_VM',
-    'redis://127.0.0.1:6379': 'ServiceURLs.REDIS_LOCAL',
-}
+from src.unified_config_manager import unified_config_manager
+
+def get_replacement_map() -> Dict[str, str]:
+    """Generate replacement map dynamically from configuration"""
+    # Get configuration values
+    redis_config = unified_config_manager.get_redis_config()
+    backend_config = unified_config_manager.get_backend_config()
+    services_config = unified_config_manager.get_distributed_services_config()
+    system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+
+    # Get values from configuration without hardcoded fallbacks
+    redis_host = redis_config.get("host") or system_defaults.get("redis_host", "localhost")
+    redis_port = redis_config.get("port") or system_defaults.get("redis_port", 6379)
+    backend_host = backend_config.get("host") or system_defaults.get("backend_host", "localhost")
+    backend_port = backend_config.get("port") or system_defaults.get("backend_port", 8001)
+    backend_api_endpoint = f"http://{backend_host}:{backend_port}"
+
+    # Get service-specific hosts from configuration
+    frontend_host = services_config.get("frontend", {}).get("host") or system_defaults.get("frontend_host", "localhost")
+    frontend_port = services_config.get("frontend", {}).get("port") or system_defaults.get("frontend_port", 5173)
+    npu_worker_host = services_config.get("npu_worker", {}).get("host") or system_defaults.get("npu_worker_host", "localhost")
+    ai_stack_host = services_config.get("ai_stack", {}).get("host") or system_defaults.get("ai_stack_host", "localhost")
+    browser_host = services_config.get("browser_service", {}).get("host") or system_defaults.get("browser_service_host", "localhost")
+    ollama_config = services_config.get("ollama", {})
+    ollama_host = ollama_config.get("host") or system_defaults.get("ollama_host", "localhost")
+    ollama_port = ollama_config.get("port") or system_defaults.get("ollama_port", 11434)
+
+    # Mapping of hardcoded values to constants (from configuration)
+    replacement_map = {
+        # IP addresses (from config)
+        redis_host: 'NetworkConstants.REDIS_VM_IP',
+        backend_host: 'NetworkConstants.MAIN_MACHINE_IP',
+        frontend_host: 'NetworkConstants.FRONTEND_VM_IP',
+        npu_worker_host: 'NetworkConstants.NPU_WORKER_VM_IP',
+        ai_stack_host: 'NetworkConstants.AI_STACK_VM_IP',
+        browser_host: 'NetworkConstants.BROWSER_VM_IP',
+        'localhost': 'NetworkConstants.LOCALHOST_IP',
+
+        # URLs (from config)
+        f'http://localhost:{backend_port}': 'ServiceURLs.BACKEND_LOCAL',
+        backend_api_endpoint: 'ServiceURLs.BACKEND_API',
+        f'http://localhost:{frontend_port}': 'ServiceURLs.FRONTEND_LOCAL',
+        f'http://{frontend_host}:{frontend_port}': 'ServiceURLs.FRONTEND_VM',
+        f'http://localhost:{ollama_port}': 'ServiceURLs.OLLAMA_LOCAL',
+        f'redis://{redis_host}:{redis_port}': 'ServiceURLs.REDIS_VM',
+        f'redis://localhost:{redis_port}': 'ServiceURLs.REDIS_LOCAL',
+    }
+
+    return replacement_map
+
+# Get replacement map from configuration
+REPLACEMENT_MAP = get_replacement_map()
 
 def should_refactor_file(file_path: Path) -> bool:
     """Check if file should be refactored"""
@@ -153,7 +189,8 @@ def refactor_file(file_path: Path) -> bool:
 
 def find_core_files() -> List[Path]:
     """Find core AutoBot files that should be refactored"""
-    root_path = Path('/home/kali/Desktop/AutoBot')
+    # Use project-relative path instead of hardcoded absolute path
+    root_path = Path(__file__).parent.parent.parent
     core_files = []
 
     # Focus on core directories
@@ -173,6 +210,9 @@ def main():
     print("🚀 Starting network constants refactoring...")
     print(f"📋 Will replace {len(REPLACEMENT_MAP)} hardcoded values with constants")
 
+    # Use project-relative path
+    root_path = Path(__file__).parent.parent.parent
+
     files = find_core_files()
     print(f"📁 Found {len(files)} files to analyze")
 
@@ -189,7 +229,7 @@ def main():
             if not has_hardcoded:
                 continue
 
-            print(f"🔧 Refactoring {file_path.relative_to(Path('/home/kali/Desktop/AutoBot'))}...")
+            print(f"🔧 Refactoring {file_path.relative_to(root_path)}...")
             if refactor_file(file_path):
                 total_files_changed += 1
 
