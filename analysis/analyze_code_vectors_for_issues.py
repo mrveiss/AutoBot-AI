@@ -20,10 +20,13 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Set
 from collections import defaultdict, Counter
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import redis
+from src.unified_config_manager import unified_config_manager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,9 +54,12 @@ class CodeIssueAnalyzer:
     async def initialize(self):
         """Initialize Redis connection"""
         try:
+            # Get Redis configuration from unified config manager
+            redis_config = unified_config_manager.get_redis_config()
+
             self.analytics_redis = redis.Redis(
-                host="172.16.168.23",
-                port=6379,
+                host=redis_config.get("host"),
+                port=redis_config.get("port"),
                 db=8,
                 decode_responses=False,
                 socket_timeout=10,
@@ -592,14 +598,15 @@ async def main():
         print("\n📝 Step 5: Generating summary report...")
         report = await analyzer.generate_summary_report()
 
-        # Save report
-        report_path = f"tests/results/code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-        os.makedirs(os.path.dirname(report_path), exist_ok=True)
+        # Save report - use project-relative path
+        project_root = Path(__file__).parent.parent
+        report_path = project_root / "tests" / "results" / f"code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(report_path, 'w', encoding='utf-8') as f:
+        with open(str(report_path), 'w', encoding='utf-8') as f:
             f.write(report)
 
-        print(f"✅ Report saved to: {report_path}")
+        print(f"✅ Report saved to: {str(report_path)}")
 
         # Summary
         print(f"\n🎉 Code Analysis Complete!")
@@ -608,7 +615,7 @@ async def main():
         print(f"  - Duplicate patterns: {len(duplicates)}")
         print(f"  - Hardcoded values: {total_hardcoded}")
         print(f"  - Architectural issues: {len(architectural)}")
-        print(f"  - Report saved: {report_path}")
+        print(f"  - Report saved: {str(report_path)}")
 
         print(f"\n💡 This analysis will help identify:")
         print(f"   - Code that can be deduplicated")

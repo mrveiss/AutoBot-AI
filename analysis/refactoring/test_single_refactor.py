@@ -4,11 +4,19 @@ Test refactoring on a single file to validate the approach
 """
 
 import re
+import sys
 from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from src.unified_config_manager import unified_config_manager
 
 def test_refactor_single_file():
     """Test refactoring on config_consolidated.py"""
-    file_path = Path('/home/kali/Desktop/AutoBot/src/config_consolidated.py')
+    # Use project-relative path instead of hardcoded absolute path
+    project_root = Path(__file__).parent.parent.parent
+    file_path = project_root / "src" / "config_consolidated.py"
 
     with open(file_path, 'r') as f:
         content = f.read()
@@ -19,11 +27,15 @@ def test_refactor_single_file():
         if '172.16.168' in line:
             print(f"  Line {i}: {line.strip()}")
 
-    # Test replacement patterns
+    # Get configuration values
+    redis_config = unified_config_manager.get_redis_config()
+    redis_host = redis_config.get("host", "172.16.168.23")
+
+    # Test replacement patterns (dynamically from config)
     replacements = {
         '"172.16.168.20"': 'NetworkConstants.MAIN_MACHINE_IP',
         '"172.16.168.21"': 'NetworkConstants.FRONTEND_VM_IP',
-        '"172.16.168.23"': 'NetworkConstants.REDIS_VM_IP',
+        f'"{redis_host}"': 'NetworkConstants.REDIS_VM_IP',
         '"172.16.168.24"': 'NetworkConstants.AI_STACK_VM_IP',
         '"172.16.168.25"': 'NetworkConstants.BROWSER_VM_IP',
     }

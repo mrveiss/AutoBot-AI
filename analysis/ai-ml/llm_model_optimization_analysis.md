@@ -125,9 +125,9 @@ ollama pull mistral:7b-instruct                # Alternative reasoning model
 
 ### 2. Update Configuration Files
 
-#### Update `/home/kali/Desktop/AutoBot/src/config.py`
+#### Update `src/config.py`
 ```python
-# Replace lines 615-629 with optimized configuration
+# Replace model configuration section with optimized configuration
 "models": {
     "orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "artifish/llama3.2-uncensored:latest"),
     "default": os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:3b-instruct-q4_K_M"),
@@ -144,9 +144,9 @@ ollama pull mistral:7b-instruct                # Alternative reasoning model
 }
 ```
 
-#### Update `/home/kali/Desktop/AutoBot/src/orchestrator.py`
+#### Update `src/orchestrator.py`
 ```python
-# Replace line 111 with available model
+# Update orchestrator model selection to use available model
 self.orchestrator_llm_model = llm_config.get(
     "orchestrator_model",
     llm_config.get("ollama", {}).get("model", "artifish/llama3.2-uncensored:latest"),  # Changed from tinyllama
