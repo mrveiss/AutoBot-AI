@@ -174,6 +174,81 @@ bash run_autobot.sh [--dev|--prod] [--desktop|--no-desktop] [--no-browser]
 - **Report generators MUST**: Output to `reports/` directory (gitignored)
 - **Monitoring systems MUST**: Log to `logs/` directory (gitignored)
 
+## 🎨 CODE QUALITY ENFORCEMENT
+
+**MANDATORY: Automated code quality enforcement via pre-commit hooks and CI/CD**
+
+### **Automated Quality System**
+
+**Status**: ✅ **ACTIVE** (as of 2025-10-09)
+**Replaces**: All manual code quality fix scripts (archived to `archive/scripts-code-quality-fixes-2025-10-09/`)
+
+AutoBot enforces code quality **automatically** through:
+
+1. **Pre-commit Hooks** - Run before every commit
+   - Black formatting (88 char line length)
+   - isort import sorting
+   - flake8 linting
+   - autoflake unused code removal
+   - bandit security scanning
+   - Trailing whitespace removal
+   - YAML/JSON validation
+
+2. **CI/CD Pipeline** - GitHub Actions on every push/PR
+   - Same checks as pre-commit
+   - Blocks merge if quality issues found
+   - Runs on main branches automatically
+
+### **Setup (One-Time)**
+
+```bash
+# Install pre-commit hooks
+bash scripts/install-pre-commit-hooks.sh
+```
+
+This installs all tools and configures automatic enforcement.
+
+### **Daily Usage**
+
+**Automatic (Recommended)**:
+- Hooks run automatically on `git commit`
+- Auto-fixable issues corrected automatically
+- Manual fixes required if complex issues found
+
+**Manual Execution** (optional):
+```bash
+# Run on all files
+pre-commit run --all-files
+
+# Run on specific files
+pre-commit run --files path/to/file.py
+
+# Skip hooks (NOT recommended)
+git commit --no-verify
+```
+
+### **Configuration Files**
+
+- `.pre-commit-config.yaml` - Pre-commit hooks configuration
+- `.bandit` - Security scanning configuration
+- `.github/workflows/code-quality.yml` - CI/CD pipeline
+
+### **Obsolete Scripts (DO NOT USE)**
+
+These manual fix scripts are **archived** and should **never be used**:
+- ~~`fix_critical_flake8.py`~~ → Use pre-commit flake8
+- ~~`fix_unused_imports.py`~~ → Use autoflake hook
+- ~~`fix_whitespace.py`~~ → Use trailing-whitespace hook
+- ~~`fix_long_lines.py`~~ → Use Black formatter
+- ~~`fix-files-formatting.sh`~~ → Use pre-commit hooks
+- ~~`fix_bare_excepts.py`~~ → Caught by flake8
+- ~~`fix_code_quality.py`~~ → Use combined hooks
+- ~~`fix_specific_issues.py`~~ → Caught by flake8 + bandit
+
+**Complete Documentation**: [`docs/developer/CODE_QUALITY_ENFORCEMENT.md`](docs/developer/CODE_QUALITY_ENFORCEMENT.md)
+
+---
+
 ## 📋 TASK MANAGEMENT STANDARDS
 
 **MANDATORY: Use Memory MCP for all task management**
