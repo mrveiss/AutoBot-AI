@@ -73,6 +73,13 @@ async def get_redis_connection():
     - Direct IP addressing (172.16.168.23)
     - Fast connection timeouts (0.5s vs 3s)
     """
+    # Get configuration for Redis database and fallback settings
+    from src.unified_config_manager import unified_config_manager
+    redis_config = unified_config_manager.get_redis_config()
+
+    # Get database number from config (default to 11 for codebase analytics)
+    codebase_db = redis_config.get("codebase_db", 11)
+
     try:
         # Get Redis connection parameters from service discovery
         params = get_redis_connection_params_sync()
@@ -80,7 +87,7 @@ async def get_redis_connection():
         redis_client = redis.Redis(
             host=params['host'],  # Direct IP from service discovery
             port=params['port'],
-            db=11,  # Dedicated DB for codebase analytics
+            db=codebase_db,  # DB from config (default 11 for codebase analytics)
             decode_responses=params.get('decode_responses', True),
             socket_timeout=params.get('socket_timeout', 1.0),
             socket_connect_timeout=params.get('socket_connect_timeout', 0.5),
@@ -95,10 +102,10 @@ async def get_redis_connection():
     except Exception as e:
         logger.warning(f"Service discovery Redis connection failed: {e}")
 
-        # Fallback: Try direct connection to known Redis VM
+        # Fallback: Try configured Redis hosts
         fallback_hosts = [
-            ("172.16.168.23", 6379),  # Redis VM
-            ("127.0.0.1", 6379),      # Local Redis
+            (redis_config.get("host"), redis_config.get("port")),  # Redis from config
+            (redis_config.get("fallback_host", "127.0.0.1"), redis_config.get("port")),  # Fallback host from config
         ]
 
         for host, port in fallback_hosts:
@@ -106,7 +113,7 @@ async def get_redis_connection():
                 redis_client = redis.Redis(
                     host=host,
                     port=port,
-                    db=11,
+                    db=codebase_db,
                     decode_responses=True,
                     socket_timeout=1.0,
                     socket_connect_timeout=0.5
@@ -354,8 +361,12 @@ def analyze_javascript_vue_file(file_path: str) -> Dict[str, Any]:
         logger.error(f"Error analyzing JS/Vue file {file_path}: {e}")
         return {'functions': [], 'classes': [], 'imports': [], 'hardcodes': [], 'problems': [], 'line_count': 0}
 
-async def scan_codebase(root_path: str = "/home/kali/Desktop/AutoBot") -> Dict[str, Any]:
+async def scan_codebase(root_path: Optional[str] = None) -> Dict[str, Any]:
     """Scan the entire codebase using MCP-like file operations"""
+    # Use project-relative path if not specified
+    if root_path is None:
+        project_root = Path(__file__).parent.parent.parent
+        root_path = str(project_root)
 
     # File extensions to analyze
     PYTHON_EXTENSIONS = {'.py'}
@@ -461,8 +472,12 @@ async def scan_codebase(root_path: str = "/home/kali/Desktop/AutoBot") -> Dict[s
         raise HTTPException(status_code=500, detail=f"Codebase scan failed: {str(e)}")
 
 @router.post("/index")
-async def index_codebase(root_path: str = "/home/kali/Desktop/AutoBot"):
+async def index_codebase(root_path: Optional[str] = None):
     """Index the AutoBot codebase and store results (Redis or in-memory)"""
+    # Use project-relative path if not specified
+    if root_path is None:
+        project_root = Path(__file__).parent.parent.parent
+        root_path = str(project_root)
     try:
         logger.info(f"Starting codebase indexing for: {root_path}")
 
@@ -507,9 +522,10 @@ async def index_codebase(root_path: str = "/home/kali/Desktop/AutoBot"):
             for hardcode_type, hardcodes in hardcodes_by_type.items():
                 redis_client.set(f"codebase:hardcodes:{hardcode_type}", json.dumps(hardcodes))
 
-            # Set expiration for cached data (24 hours)
+            # Set expiration for cached data (from config, default 24 hours)
+            cache_expiration = redis_config.get("codebase_cache_ttl", 86400)
             for key in redis_client.scan_iter(match="codebase:*"):
-                redis_client.expire(key, 86400)
+                redis_client.expire(key, cache_expiration)
         else:
             # Use in-memory storage
             storage_type = "memory"
