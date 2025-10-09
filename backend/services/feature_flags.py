@@ -1,0 +1,344 @@
+"""
+Feature Flags Service for AutoBot Access Control Rollout
+
+Provides Redis-backed feature flag management for gradual enforcement rollout
+across distributed 6-VM infrastructure.
+
+Features:
+- DISABLED, LOG_ONLY, ENFORCED enforcement modes
+- Real-time flag updates across all VMs
+- Per-feature granular control
+- Audit logging integration
+- Performance monitoring
+
+Usage:
+    flags = await get_feature_flags()
+    mode = await flags.get_enforcement_mode()
+
+    if mode == EnforcementMode.ENFORCED:
+        # Block unauthorized access
+        raise HTTPException(403)
+    elif mode == EnforcementMode.LOG_ONLY:
+        # Log but don't block
+        await audit_log("unauthorized_access", result="would_deny")
+"""
+
+import asyncio
+import json
+import logging
+from datetime import datetime
+from enum import Enum
+from typing import Dict, Any, Optional
+
+from backend.utils.async_redis_manager import get_redis_manager
+
+logger = logging.getLogger(__name__)
+
+
+class EnforcementMode(str, Enum):
+    """Access control enforcement modes for gradual rollout"""
+    DISABLED = "disabled"      # No enforcement, no logging
+    LOG_ONLY = "log_only"      # Log violations but don't block
+    ENFORCED = "enforced"      # Full enforcement, block violations
+
+
+class FeatureFlags:
+    """
+    Redis-backed feature flags for access control rollout
+
+    Uses Redis DB 5 (cache) for feature flag storage
+    Supports real-time updates across distributed VMs
+    """
+
+    def __init__(self):
+        """Initialize feature flags service"""
+        self.redis = None
+        self._cache = {}
+        self._cache_ttl = 5  # seconds
+        self._last_refresh = {}
+
+    async def _get_redis(self):
+        """Get Redis connection for feature flags (uses cache DB)"""
+        if not self.redis:
+            redis_manager = await get_redis_manager()
+            self.redis = await redis_manager.cache()
+        return self.redis
+
+    async def get_enforcement_mode(self) -> EnforcementMode:
+        """
+        Get current access control enforcement mode
+
+        Returns:
+            EnforcementMode enum value
+        """
+        try:
+            redis = await self._get_redis()
+            mode_str = await redis.get("feature_flag:access_control:enforcement_mode")
+
+            if mode_str:
+                # Handle bytes response
+                if isinstance(mode_str, bytes):
+                    mode_str = mode_str.decode()
+                return EnforcementMode(mode_str)
+
+            # Default to DISABLED if not set
+            logger.warning("Enforcement mode not set, defaulting to DISABLED")
+            return EnforcementMode.DISABLED
+
+        except Exception as e:
+            logger.error(f"Failed to get enforcement mode: {e}")
+            # Fail-safe: default to DISABLED on error
+            return EnforcementMode.DISABLED
+
+    async def set_enforcement_mode(self, mode: EnforcementMode) -> bool:
+        """
+        Set access control enforcement mode
+
+        Args:
+            mode: Enforcement mode to set
+
+        Returns:
+            True if successful
+        """
+        try:
+            redis = await self._get_redis()
+
+            # Set the mode
+            await redis.set("feature_flag:access_control:enforcement_mode", mode.value)
+
+            # Record change in history
+            history_key = "feature_flag:access_control:history"
+            history_entry = json.dumps({
+                "timestamp": datetime.now().isoformat(),
+                "mode": mode.value,
+                "changed_by": "system"
+            })
+            await redis._redis.lpush(history_key, history_entry)
+            await redis._redis.ltrim(history_key, 0, 99)  # Keep last 100 changes
+
+            logger.info(f"Enforcement mode set to: {mode.value}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to set enforcement mode: {e}")
+            return False
+
+    async def get_endpoint_enforcement(self, endpoint: str) -> Optional[EnforcementMode]:
+        """
+        Get enforcement mode for specific endpoint (allows per-endpoint control)
+
+        Args:
+            endpoint: API endpoint path
+
+        Returns:
+            EnforcementMode if set for endpoint, None to use global mode
+        """
+        try:
+            redis = await self._get_redis()
+            key = f"feature_flag:access_control:endpoint:{endpoint}"
+            mode_str = await redis.get(key)
+
+            if mode_str:
+                if isinstance(mode_str, bytes):
+                    mode_str = mode_str.decode()
+                return EnforcementMode(mode_str)
+
+            return None  # Use global mode
+
+        except Exception as e:
+            logger.error(f"Failed to get endpoint enforcement for {endpoint}: {e}")
+            return None
+
+    async def set_endpoint_enforcement(
+        self,
+        endpoint: str,
+        mode: Optional[EnforcementMode]
+    ) -> bool:
+        """
+        Set enforcement mode for specific endpoint
+
+        Args:
+            endpoint: API endpoint path
+            mode: Enforcement mode (None to remove override)
+
+        Returns:
+            True if successful
+        """
+        try:
+            redis = await self._get_redis()
+            key = f"feature_flag:access_control:endpoint:{endpoint}"
+
+            if mode is None:
+                # Remove endpoint override
+                await redis.delete(key)
+                logger.info(f"Removed enforcement override for {endpoint}")
+            else:
+                # Set endpoint override
+                await redis.set(key, mode.value)
+                logger.info(f"Set {endpoint} enforcement to: {mode.value}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to set endpoint enforcement: {e}")
+            return False
+
+    async def get_feature(self, feature_name: str, default: bool = False) -> bool:
+        """
+        Get boolean feature flag
+
+        Args:
+            feature_name: Feature flag name
+            default: Default value if not set
+
+        Returns:
+            Feature flag value
+        """
+        try:
+            redis = await self._get_redis()
+            key = f"feature_flag:{feature_name}"
+            value = await redis.get(key)
+
+            if value is None:
+                return default
+
+            if isinstance(value, bytes):
+                value = value.decode()
+
+            return value.lower() in ('true', '1', 'yes', 'on')
+
+        except Exception as e:
+            logger.error(f"Failed to get feature flag {feature_name}: {e}")
+            return default
+
+    async def set_feature(self, feature_name: str, enabled: bool) -> bool:
+        """
+        Set boolean feature flag
+
+        Args:
+            feature_name: Feature flag name
+            enabled: Enable or disable feature
+
+        Returns:
+            True if successful
+        """
+        try:
+            redis = await self._get_redis()
+            key = f"feature_flag:{feature_name}"
+            await redis.set(key, "true" if enabled else "false")
+
+            logger.info(f"Feature flag {feature_name} set to: {enabled}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to set feature flag {feature_name}: {e}")
+            return False
+
+    async def get_rollout_statistics(self) -> Dict[str, Any]:
+        """
+        Get rollout statistics and metrics
+
+        Returns:
+            Dictionary with rollout statistics
+        """
+        try:
+            redis = await self._get_redis()
+
+            # Get current mode
+            mode = await self.get_enforcement_mode()
+
+            # Get change history
+            history_raw = await redis._redis.lrange("feature_flag:access_control:history", 0, 9)
+            history = []
+            for entry in history_raw:
+                if isinstance(entry, bytes):
+                    entry = entry.decode()
+                try:
+                    history.append(json.loads(entry))
+                except:
+                    pass
+
+            # Get endpoint overrides
+            endpoint_keys = []
+            cursor = 0
+            while True:
+                cursor, keys = await redis._redis.scan(
+                    cursor,
+                    match="feature_flag:access_control:endpoint:*",
+                    count=100
+                )
+                endpoint_keys.extend(keys)
+                if cursor == 0:
+                    break
+
+            endpoint_overrides = {}
+            for key in endpoint_keys:
+                if isinstance(key, bytes):
+                    key = key.decode()
+                endpoint = key.replace("feature_flag:access_control:endpoint:", "")
+                mode_val = await redis.get(key)
+                if mode_val:
+                    if isinstance(mode_val, bytes):
+                        mode_val = mode_val.decode()
+                    endpoint_overrides[endpoint] = mode_val
+
+            return {
+                "current_mode": mode.value,
+                "history": history,
+                "endpoint_overrides": endpoint_overrides,
+                "total_endpoints_configured": len(endpoint_overrides)
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get rollout statistics: {e}")
+            return {
+                "error": str(e),
+                "current_mode": "unknown"
+            }
+
+    async def clear_all_flags(self) -> bool:
+        """
+        Clear all feature flags (emergency reset)
+
+        Returns:
+            True if successful
+        """
+        try:
+            redis = await self._get_redis()
+
+            # Get all feature flag keys
+            cursor = 0
+            deleted = 0
+            while True:
+                cursor, keys = await redis._redis.scan(
+                    cursor,
+                    match="feature_flag:*",
+                    count=100
+                )
+                if keys:
+                    deleted += await redis.delete(*keys)
+                if cursor == 0:
+                    break
+
+            logger.warning(f"Cleared {deleted} feature flags")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to clear feature flags: {e}")
+            return False
+
+
+# Global feature flags instance
+_feature_flags: Optional[FeatureFlags] = None
+_flags_lock = asyncio.Lock()
+
+
+async def get_feature_flags() -> FeatureFlags:
+    """Get or create global feature flags instance"""
+    global _feature_flags
+
+    async with _flags_lock:
+        if _feature_flags is None:
+            _feature_flags = FeatureFlags()
+            logger.info("Feature flags service initialized")
+        return _feature_flags
