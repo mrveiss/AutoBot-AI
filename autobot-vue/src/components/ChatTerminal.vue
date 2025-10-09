@@ -100,16 +100,24 @@ const terminal = ref<Terminal>()
 const mounted = ref(false)
 const isConnected = ref(false)
 
-// Session ID for terminal
-const sessionId = computed(() => {
-  return props.chatSessionId
+// Session ID for terminal - use ref to maintain stable ID
+const sessionId = ref(
+  props.chatSessionId
     ? `chat_terminal_${props.chatSessionId}_${Date.now()}`
     : `chat_terminal_${Date.now()}`
-})
+)
+
+// Backend session ID - the actual ID used for WebSocket communication
+const backendSessionId = ref<string | null>(null)
+
+// Terminal scrollback buffer persistence
+const SCROLLBACK_KEY = computed(() =>
+  props.chatSessionId ? `terminal_scrollback_${props.chatSessionId}` : null
+)
 
 // Get session from store
 const session = computed(() => {
-  return terminalStore.sessions.get(sessionId.value)
+  return terminalStore.getSession(sessionId.value)
 })
 
 // Control state
@@ -194,15 +202,68 @@ const takeoverButtonTitle = computed(() => {
     : 'Allow agent to control terminal'
 })
 
+// Terminal scrollback persistence methods
+const saveScrollback = (content: string) => {
+  if (SCROLLBACK_KEY.value) {
+    try {
+      const existing = localStorage.getItem(SCROLLBACK_KEY.value) || ''
+      const newContent = existing + content
+      localStorage.setItem(SCROLLBACK_KEY.value, newContent)
+      console.log('[ChatTerminal] Saved scrollback:', {
+        contentLength: content.length,
+        totalLength: newContent.length,
+        key: SCROLLBACK_KEY.value
+      })
+    } catch (error) {
+      console.error('[ChatTerminal] Failed to save scrollback:', error)
+    }
+  }
+}
+
+const loadScrollback = (): string | null => {
+  if (SCROLLBACK_KEY.value) {
+    try {
+      return localStorage.getItem(SCROLLBACK_KEY.value)
+    } catch (error) {
+      console.error('[ChatTerminal] Failed to load scrollback:', error)
+    }
+  }
+  return null
+}
+
+const clearScrollback = () => {
+  if (SCROLLBACK_KEY.value) {
+    try {
+      localStorage.removeItem(SCROLLBACK_KEY.value)
+    } catch (error) {
+      console.error('[ChatTerminal] Failed to clear scrollback:', error)
+    }
+  }
+}
+
 // Methods
 const handleTerminalReady = (term: Terminal) => {
   terminal.value = term
 
-  // Write initial message
-  term.writeln('\x1b[1;36mChat Terminal Initialized\x1b[0m')
-  term.writeln(`Session: ${props.chatSessionId?.slice(-8) || 'None'}`)
-  term.writeln(`Control: ${controlState.value.toUpperCase()}`)
-  term.writeln('')
+  // Restore previous scrollback if exists
+  const previousContent = loadScrollback()
+  console.log('[ChatTerminal] Scrollback restore:', {
+    hasContent: !!previousContent,
+    contentLength: previousContent?.length || 0,
+    firstChars: previousContent?.substring(0, 100) || 'none',
+    sessionId: props.chatSessionId
+  })
+
+  if (previousContent && previousContent.length > 0) {
+    term.write(previousContent)
+    term.writeln('\x1b[1;33m--- Session Restored ---\x1b[0m')
+  } else {
+    // Write initial message only for new sessions
+    term.writeln('\x1b[1;36mChat Terminal Initialized\x1b[0m')
+    term.writeln(`Session: ${props.chatSessionId?.slice(-8) || 'None'}`)
+    term.writeln(`Control: ${controlState.value.toUpperCase()}`)
+    term.writeln('')
+  }
 
   if (props.autoConnect) {
     connectTerminal()
@@ -210,14 +271,29 @@ const handleTerminalReady = (term: Terminal) => {
 }
 
 const handleTerminalData = (data: string) => {
-  if (isConnected.value && !isAgentControlled.value) {
-    terminalService.sendInput(sessionId.value, data)
+  console.log('[ChatTerminal] handleTerminalData:', {
+    data: data.replace(/\r/g, '\\r').replace(/\n/g, '\\n'),
+    isConnected: isConnected.value,
+    isAgentControlled: isAgentControlled.value,
+    controlState: controlState.value,
+    sessionId: sessionId.value,
+    backendSessionId: backendSessionId.value
+  })
+
+  if (isConnected.value && !isAgentControlled.value && backendSessionId.value) {
+    terminalService.sendInput(backendSessionId.value, data)
+  } else {
+    console.warn('[ChatTerminal] Input blocked:', {
+      isConnected: isConnected.value,
+      isAgentControlled: isAgentControlled.value,
+      backendSessionId: backendSessionId.value
+    })
   }
 }
 
 const handleTerminalResize = (cols: number, rows: number) => {
-  if (isConnected.value) {
-    terminalService.resize(sessionId.value, rows, cols)
+  if (isConnected.value && backendSessionId.value) {
+    terminalService.resize(backendSessionId.value, rows, cols)
   }
 }
 
@@ -230,13 +306,22 @@ const connectTerminal = async () => {
     terminalStore.createSession(sessionId.value, host)
 
     // Create backend session
-    const backendSessionId = await terminalService.createSession()
+    const backendSession = await terminalService.createSession()
+    backendSessionId.value = backendSession
+
+    console.log('[ChatTerminal] Session IDs:', {
+      frontend: sessionId.value,
+      backend: backendSessionId.value
+    })
 
     // Connect WebSocket
-    await terminalService.connect(backendSessionId, {
+    await terminalService.connect(backendSessionId.value, {
       onOutput: (output: any) => {
         if (terminal.value) {
-          terminal.value.write(output.content || output.data || '')
+          const content = output.content || output.data || ''
+          terminal.value.write(content)
+          // Save to scrollback buffer
+          saveScrollback(content)
         }
       },
       onPromptChange: (prompt: string) => {
@@ -272,8 +357,11 @@ const connectTerminal = async () => {
 const disconnectTerminal = () => {
   if (!isConnected.value) return
 
-  terminalService.disconnect(sessionId.value)
+  if (backendSessionId.value) {
+    terminalService.disconnect(backendSessionId.value)
+  }
   isConnected.value = false
+  backendSessionId.value = null
   terminalStore.updateSessionStatus(sessionId.value, 'disconnected')
 
   if (terminal.value) {
@@ -285,6 +373,8 @@ const clearTerminal = () => {
   if (baseTerminalRef.value) {
     baseTerminalRef.value.clear()
   }
+  // Also clear scrollback storage
+  clearScrollback()
 }
 
 const toggleControl = () => {
@@ -310,6 +400,14 @@ watch(() => props.chatSessionId, (newSessionId, oldSessionId) => {
     if (isConnected.value) {
       disconnectTerminal()
     }
+
+    // Generate new stable session ID
+    sessionId.value = newSessionId
+      ? `chat_terminal_${newSessionId}_${Date.now()}`
+      : `chat_terminal_${Date.now()}`
+
+    // Clear backend session ID
+    backendSessionId.value = null
 
     // Connect to new session if autoConnect
     if (newSessionId && props.autoConnect) {

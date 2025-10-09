@@ -143,7 +143,7 @@ const tabs = computed(() => terminalStore.terminalTabs)
 
 // Get current session from store
 const session = computed(() => {
-  return terminalStore.sessions.get(currentSessionId.value)
+  return terminalStore.getSession(currentSessionId.value)
 })
 
 // Connection status

@@ -1,9 +1,9 @@
 <template>
-  <div class="flex-1 flex flex-col">
+  <div class="flex-1 flex flex-col relative">
     <!-- Chat Tab Content - Content scrolls, input stays sticky -->
-    <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col relative">
+    <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col">
       <div class="flex-1">
-        <ChatMessages />
+        <ChatMessages @tool-call-detected="handleToolCallDetected" />
       </div>
       <ChatInput class="flex-shrink-0" />
     </div>
@@ -17,15 +17,9 @@
       />
     </div>
 
-    <!-- Terminal Tab Content - UPDATED to use ChatTerminal with agent control -->
+    <!-- Terminal Tab Placeholder - actual terminal rendered separately to persist -->
     <div v-else-if="activeTab === 'terminal'" class="flex-1 flex flex-col min-h-0">
-      <ChatTerminal
-        :key="`chat-terminal-${currentSessionId}`"
-        :chat-session-id="currentSessionId"
-        :auto-connect="true"
-        :allow-user-takeover="true"
-        class="flex-1"
-      />
+      <!-- Placeholder for terminal layout -->
     </div>
 
     <!-- Browser Tab Content -->
@@ -65,10 +59,26 @@
         ></iframe>
       </div>
     </div>
+
+    <!-- Persisted Terminal Component - rendered outside conditional chain to preserve state -->
+    <div
+      v-if="terminalMounted"
+      v-show="activeTab === 'terminal'"
+      class="absolute inset-0 flex flex-col min-h-0"
+    >
+      <ChatTerminal
+        :chat-session-id="currentSessionId"
+        :auto-connect="true"
+        :allow-user-takeover="true"
+        class="flex-1"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
+
 // Component imports
 import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
@@ -82,7 +92,33 @@ interface Props {
   novncUrl: string
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+// Terminal mounting state - only mount terminal when first accessed
+const terminalMounted = ref(false)
+
+// Watch for terminal tab activation
+watch(() => props.activeTab, (newTab) => {
+  if (newTab === 'terminal' && !terminalMounted.value) {
+    terminalMounted.value = true
+  }
+}, { immediate: true })
+
+// Define emits to propagate tool call events to parent
+const emit = defineEmits<{
+  'tool-call-detected': [toolCall: {
+    command: string
+    host: string
+    purpose: string
+    params: Record<string, any>
+  }]
+}>()
+
+// Handler for tool call detection from ChatMessages
+const handleToolCallDetected = (toolCall: any) => {
+  console.log('[ChatTabContent] Propagating TOOL_CALL to ChatInterface:', toolCall)
+  emit('tool-call-detected', toolCall)
+}
 </script>
 
 <style scoped>

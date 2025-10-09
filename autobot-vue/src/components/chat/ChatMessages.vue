@@ -220,6 +220,16 @@ defineOptions({
   inheritAttrs: false
 })
 
+// Define emits for parent component
+const emit = defineEmits<{
+  'tool-call-detected': [toolCall: {
+    command: string
+    host: string
+    purpose: string
+    params: Record<string, any>
+  }]
+}>()
+
 const store = useChatStore()
 const controller = useChatController()
 const { displaySettings } = useDisplaySettings()
@@ -467,6 +477,31 @@ const retryMessage = async (messageId: string) => {
   }
 }
 
+// TOOL_CALL Detection
+const detectToolCalls = (content: string) => {
+  const toolCallRegex = /<TOOL_CALL\s+name="execute_command"\s+params='({.*?})'>(.*?)<\/TOOL_CALL>/gs
+  const matches = [...content.matchAll(toolCallRegex)]
+
+  for (const match of matches) {
+    try {
+      const params = JSON.parse(match[1])
+      const description = match[2].trim()
+
+      console.log('🔧 TOOL_CALL detected:', { command: params.command, host: params.host, purpose: description })
+
+      // Emit event to parent to show approval dialog
+      emit('tool-call-detected', {
+        command: params.command,
+        host: params.host || 'main',
+        purpose: description,
+        params: params
+      })
+    } catch (error) {
+      console.error('Failed to parse TOOL_CALL:', error)
+    }
+  }
+}
+
 const scrollToBottom = () => {
   if (store.settings.autoSave && messagesContainer.value) { // Using autoSave as proxy for auto-scroll
     // Scroll the parent container (UnifiedLoadingView handles scrolling now)
@@ -499,6 +534,14 @@ watch(() => store.isTyping, (isTyping) => {
     estimatedResponseTime.value = null
   }
 })
+
+// Watch for TOOL_CALL markers in assistant messages
+watch(() => store.currentMessages, (messages) => {
+  const lastMessage = messages[messages.length - 1]
+  if (lastMessage?.sender === 'assistant' && lastMessage.content) {
+    detectToolCalls(lastMessage.content)
+  }
+}, { deep: true })
 
 // Scroll to bottom on mount
 onMounted(() => {

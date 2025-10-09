@@ -306,11 +306,17 @@ export default {
         await fetchStats();
 
       } catch (error) {
+        let errorMessage = 'Failed to initialize machine knowledge';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+        console.error('[SystemKnowledgeManager] Initialization error:', error);
+        
         lastResult.value = {
           status: 'error',
-          message: error.response?.data?.detail || 'Failed to initialize machine knowledge'
+          message: errorMessage
         };
-        addLogEntry('Machine knowledge initialization failed', 'error');
+        addLogEntry(`Machine knowledge initialization failed: ${errorMessage}`, 'error');
       } finally {
         isInitializing.value = false;
         setTimeout(() => {
@@ -358,11 +364,17 @@ export default {
         await fetchStats();
 
       } catch (error) {
+        let errorMessage = 'Failed to reindex documents';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+        console.error('[SystemKnowledgeManager] Reindexing error:', error);
+        
         lastResult.value = {
           status: 'error',
-          message: error.response?.data?.detail || 'Failed to reindex documents'
+          message: errorMessage
         };
-        addLogEntry('Document reindexing failed', 'error');
+        addLogEntry(`Document reindexing failed: ${errorMessage}`, 'error');
       } finally {
         isReindexing.value = false;
         setTimeout(() => {
@@ -423,11 +435,17 @@ export default {
         await fetchStats();
 
       } catch (error) {
+        let errorMessage = 'Failed to refresh system knowledge';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+        console.error('[SystemKnowledgeManager] Refresh error:', error);
+        
         lastResult.value = {
           status: 'error',
-          message: error.response?.data?.detail || 'Failed to refresh system knowledge'
+          message: errorMessage
         };
-        addLogEntry('System knowledge refresh failed', 'error');
+        addLogEntry(`System knowledge refresh failed: ${errorMessage}`, 'error');
       } finally {
         isRefreshing.value = false;
         setTimeout(() => {
@@ -462,11 +480,17 @@ export default {
         await fetchStats();
 
       } catch (error) {
+        let errorMessage = 'Failed to populate man pages';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+        console.error('[SystemKnowledgeManager] Man pages error:', error);
+        
         lastResult.value = {
           status: 'error',
-          message: error.response?.data?.detail || 'Failed to populate man pages'
+          message: errorMessage
         };
-        addLogEntry('Man pages population failed', 'error');
+        addLogEntry(`Man pages population failed: ${errorMessage}`, 'error');
       } finally {
         isPopulating.value = false;
         progressMessage.value = '';
@@ -504,11 +528,17 @@ export default {
         await fetchStats();
 
       } catch (error) {
+        let errorMessage = 'Failed to index documentation';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+        console.error('[SystemKnowledgeManager] Documentation indexing error:', error);
+        
         lastResult.value = {
           status: 'error',
-          message: error.response?.data?.detail || 'Failed to index documentation'
+          message: errorMessage
         };
-        addLogEntry('Documentation indexing failed', 'error');
+        addLogEntry(`Documentation indexing failed: ${errorMessage}`, 'error');
       } finally {
         isDocPopulating.value = false;
         progressMessage.value = '';
@@ -581,11 +611,22 @@ export default {
         await fetchStats();
 
       } catch (error) {
+        // Enhanced error handling for fetch-style errors (not axios)
+        let errorMessage = 'Failed to generate vector embeddings';
+        
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+        
+        console.error('[SystemKnowledgeManager] Vectorization error:', error);
+        
         lastResult.value = {
           status: 'error',
-          message: error.response?.data?.detail || 'Failed to generate vector embeddings'
+          message: errorMessage
         };
-        addLogEntry('Batched vectorization failed', 'error');
+        addLogEntry(`Batched vectorization failed: ${errorMessage}`, 'error');
       } finally {
         isVectorizing.value = false;
         setTimeout(() => {

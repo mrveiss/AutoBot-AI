@@ -169,9 +169,11 @@ const routes: RouteRecordRaw[] = [
         redirect: '/tools/terminal'
       },
       {
+        // Advanced multi-tab terminal with host switching
+        // Note: Terminal.vue still exists for chat integration (see ChatTabContent.vue)
         path: 'terminal',
         name: 'tools-terminal',
-        component: () => import('@/components/Terminal.vue'),
+        component: () => import('@/components/ToolsTerminal.vue'),
         meta: {
           title: 'Terminal',
           parent: 'tools'
@@ -180,7 +182,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'terminal/:sessionId',
         name: 'tools-terminal-session',
-        component: () => import('@/components/Terminal.vue'),
+        component: () => import('@/components/ToolsTerminal.vue'),
         props: true,
         meta: {
           title: 'Terminal Session',

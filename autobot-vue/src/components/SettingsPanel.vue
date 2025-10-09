@@ -60,6 +60,13 @@
       @setting-changed="updateUISetting"
     />
 
+    <!-- NPU Workers Settings -->
+    <NPUWorkersSettings
+      v-if="activeTab === 'npu-workers'"
+      :isSettingsLoaded="isSettingsLoaded"
+      @change="markAsChanged"
+    />
+
     <!-- Logging Settings -->
     <LoggingSettings
       v-if="activeTab === 'logging'"
@@ -137,6 +144,7 @@ import UserManagementSettings from './settings/UserManagementSettings.vue'
 import ChatSettings from './settings/ChatSettings.vue'
 import BackendSettings from './settings/BackendSettings.vue'
 import UISettings from './settings/UISettings.vue'
+import NPUWorkersSettings from './settings/NPUWorkersSettings.vue'
 import LoggingSettings from './settings/LoggingSettings.vue'
 import CacheSettings from './settings/CacheSettings.vue'
 import PromptsSettings from './settings/PromptsSettings.vue'
@@ -183,6 +191,7 @@ const tabs = ref<SettingsTab[]>([
   { id: 'chat', label: 'Chat' },
   { id: 'backend', label: 'Backend' },
   { id: 'ui', label: 'UI' },
+  { id: 'npu-workers', label: 'NPU Workers' },
   { id: 'logging', label: 'Logging' },
   { id: 'cache', label: 'Cache' },
   { id: 'prompts', label: 'Prompts' },

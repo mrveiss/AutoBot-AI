@@ -7,6 +7,7 @@
 
 import { ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
+import appConfig from '@/config/AppConfig.js'
 
 export interface KnowledgeStats {
   total_facts?: number
@@ -54,13 +55,42 @@ export function useKnowledgeBase() {
 
   /**
    * Safely parse JSON from response - handles both Response objects and already-parsed data
+   * Enhanced with better error handling and logging
    */
   const parseResponse = async (response: any): Promise<any> => {
-    if (typeof response.json === 'function') {
-      return await response.json()
+    try {
+      // Check if response is already parsed data
+      if (response && typeof response === 'object' && typeof response.json !== 'function') {
+        return response
+      }
+
+      // Check if response has json() method (fetch Response object)
+      if (typeof response.json === 'function') {
+        // Clone the response to avoid consuming the body if we need to debug
+        const clonedResponse = response.clone()
+
+        try {
+          const data = await response.json()
+          return data
+        } catch (jsonError) {
+          // If JSON parsing fails, try to get text for debugging
+          console.error('Failed to parse JSON response:', jsonError)
+          try {
+            const text = await clonedResponse.text()
+            console.error('Response text:', text)
+          } catch (textError) {
+            console.error('Failed to get response text:', textError)
+          }
+          throw new Error('Invalid JSON response from server')
+        }
+      }
+
+      // Fallback: return as-is
+      return response
+    } catch (error) {
+      console.error('Error in parseResponse:', error)
+      throw error
     }
-    // Already parsed or direct data
-    return response
   }
 
   // ==================== API CALLS ====================
@@ -71,103 +101,172 @@ export function useKnowledgeBase() {
   const fetchStats = async (): Promise<KnowledgeStats | null> => {
     try {
       const response = await apiClient.get('/api/knowledge_base/stats')
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Failed to fetch KB stats:', error)
-      return null
-    }
-  }
 
-  /**
-   * Fetch basic knowledge base statistics
-   */
-  const fetchBasicStats = async (): Promise<KnowledgeStats | null> => {
-    try {
-      const response = await apiClient.get('/api/knowledge_base/stats/basic')
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Failed to fetch basic KB stats:', error)
-      return null
-    }
-  }
-
-  /**
-   * Fetch machine profile information
-   */
-  const fetchMachineProfile = async (): Promise<MachineProfile | null> => {
-    try {
-      const response = await apiClient.get('/api/knowledge_base/machine_profile')
-      const data = await parseResponse(response)
-
-      if (data && data.status === 'success') {
-        return data.machine_profile
+      // Check response status
+      if (!response.ok) {
+        console.error('Stats fetch failed with status:', response.status)
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        throw new Error(`Failed to fetch stats: ${response.status} ${response.statusText}`)
       }
-      return null
+
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
-      console.error('Error fetching machine profile:', error)
-      return null
+      console.error('Error fetching stats:', error)
+      throw error
     }
   }
 
   /**
-   * Fetch man pages integration summary
+   * Fetch knowledge by category
+   */
+  const fetchCategory = async (category: string): Promise<any> => {
+    try {
+      const response = await apiClient.get(`/api/knowledge_base/category/${category}`)
+
+      if (!response.ok) {
+        console.error('Category fetch failed with status:', response.status)
+        throw new Error(`Failed to fetch category: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await parseResponse(response)
+      return data
+    } catch (error) {
+      console.error('Error fetching category:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Search knowledge base
+   */
+  const searchKnowledge = async (query: string): Promise<any> => {
+    try {
+      const response = await apiClient.get(`/api/knowledge_base/search?query=${encodeURIComponent(query)}`)
+
+      if (!response.ok) {
+        console.error('Search failed with status:', response.status)
+        throw new Error(`Search failed: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await parseResponse(response)
+      return data
+    } catch (error) {
+      console.error('Error searching knowledge:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Add new fact to knowledge base
+   */
+  const addFact = async (fact: {
+    content: string
+    category: string
+    metadata?: Record<string, any>
+  }): Promise<any> => {
+    try {
+      const response = await apiClient.post('/api/knowledge_base/facts', fact)
+
+      if (!response.ok) {
+        console.error('Add fact failed with status:', response.status)
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        throw new Error(`Failed to add fact: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await parseResponse(response)
+      return data
+    } catch (error) {
+      console.error('Error adding fact:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Upload knowledge base file
+   */
+  const uploadKnowledgeFile = async (formData: FormData): Promise<any> => {
+    try {
+      const url = await appConfig.getApiUrl('/api/knowledge_base/upload')
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        console.error('File upload failed with status:', response.status)
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await parseResponse(response)
+      return data
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Fetch machine profiles
+   */
+  const fetchMachineProfiles = async (): Promise<MachineProfile[]> => {
+    try {
+      const response = await apiClient.get('/api/knowledge_base/machine_profiles')
+
+      if (!response.ok) {
+        console.error('Machine profiles fetch failed with status:', response.status)
+        throw new Error(`Failed to fetch machine profiles: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await parseResponse(response)
+      return Array.isArray(data) ? data : []
+    } catch (error) {
+      console.error('Error fetching machine profiles:', error)
+      return []
+    }
+  }
+
+  /**
+   * Fetch man pages summary
    */
   const fetchManPagesSummary = async (): Promise<ManPagesSummary | null> => {
     try {
       const response = await apiClient.get('/api/knowledge_base/man_pages/summary')
-      const data = await parseResponse(response)
 
-      if (data && data.status === 'success') {
-        return data.man_pages_summary
+      if (!response.ok) {
+        console.error('Man pages summary fetch failed with status:', response.status)
+        throw new Error(`Failed to fetch man pages summary: ${response.status} ${response.statusText}`)
       }
-      return { status: 'not_integrated', message: 'Backend restart required' }
+
+      const data = await parseResponse(response)
+      return data
     } catch (error) {
       console.error('Error fetching man pages summary:', error)
-      return { status: 'error', message: 'Connection failed' }
+      return null
     }
   }
 
   /**
-   * Get facts by category from knowledge base
+   * Integrate man pages for a specific machine
    */
-  const getFactsByCategory = async (category?: string) => {
+  const integrateManPages = async (machineId: string): Promise<any> => {
     try {
-      const url = category
-        ? `/api/knowledge_base/facts/by_category?category=${category}`
-        : '/api/knowledge_base/facts/by_category'
-      const response = await apiClient.get(url)
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Error fetching facts by category:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Initialize machine knowledge
-   */
-  const initializeMachineKnowledge = async (force: boolean = false) => {
-    try {
-      const response = await apiClient.post('/api/knowledge_base/machine_knowledge/initialize', {
-        force
+      const response = await apiClient.post('/api/knowledge_base/man_pages/integrate', {
+        machine_id: machineId
       })
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Error initializing machine knowledge:', error)
-      throw error
-    }
-  }
 
-  /**
-   * Integrate man pages
-   */
-  const integrateManPages = async () => {
-    try {
-      const response = await apiClient.post('/api/knowledge_base/man_pages/integrate')
+      if (!response.ok) {
+        console.error('Man pages integration failed with status:', response.status)
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        throw new Error(`Integration failed: ${response.status} ${response.statusText}`)
+      }
+
       const data = await parseResponse(response)
       return data
     } catch (error) {
@@ -177,83 +276,17 @@ export function useKnowledgeBase() {
   }
 
   /**
-   * Search man pages
+   * Get vectorization status
    */
-  const searchManPages = async (query: string) => {
+  const getVectorizationStatus = async (): Promise<any> => {
     try {
-      const response = await apiClient.get('/api/knowledge_base/man_pages/search', {
-        params: { query }
-      })
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Error searching man pages:', error)
-      throw error
-    }
-  }
+      const response = await apiClient.get('/api/knowledge_base/vectorization/status')
 
-  /**
-   * Refresh system knowledge
-   */
-  const refreshSystemKnowledge = async () => {
-    try {
-      const response = await apiClient.post('/api/knowledge_base/refresh_system_knowledge', {})
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Error refreshing system knowledge:', error)
-      throw error
-    }
-  }
+      if (!response.ok) {
+        console.error('Vectorization status fetch failed with status:', response.status)
+        throw new Error(`Failed to get vectorization status: ${response.status} ${response.statusText}`)
+      }
 
-  /**
-   * Populate man pages
-   */
-  const populateManPages = async () => {
-    try {
-      const response = await apiClient.post('/api/knowledge_base/populate_man_pages', {})
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Error populating man pages:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Populate AutoBot documentation
-   */
-  const populateAutoBotDocs = async (force: boolean = false) => {
-    try {
-      const response = await apiClient.post('/api/knowledge_base/populate_autobot_docs', { force })
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Error populating AutoBot docs:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Start background vectorization (non-blocking)
-   */
-  const startBackgroundVectorization = async () => {
-    try {
-      const response = await apiClient.post('/api/knowledge_base/vectorize_facts/background')
-      const data = await parseResponse(response)
-      return data
-    } catch (error) {
-      console.error('Error starting background vectorization:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Get background vectorization status
-   */
-  const getVectorizationStatus = async () => {
-    try {
-      const response = await apiClient.get('/api/knowledge_base/vectorize_facts/status')
       const data = await parseResponse(response)
       return data
     } catch (error) {
@@ -264,6 +297,7 @@ export function useKnowledgeBase() {
 
   /**
    * Generate vector embeddings for all existing facts using batched processing (legacy/manual)
+   * Enhanced with comprehensive error handling and response validation
    * @param batchSize - Number of facts to process per batch (default: 50)
    * @param batchDelay - Delay in seconds between batches (default: 0.5)
    * @param skipExisting - Skip facts that already have vectors (default: true)
@@ -274,16 +308,360 @@ export function useKnowledgeBase() {
     skipExisting: boolean = true
   ) => {
     try {
+      console.log('[vectorizeFacts] Starting vectorization request...')
+      console.log('[vectorizeFacts] Parameters:', { batchSize, batchDelay, skipExisting })
+
       const response = await apiClient.post('/api/knowledge_base/vectorize_facts', {
         batch_size: batchSize,
         batch_delay: batchDelay,
         skip_existing: skipExisting
       })
+
+      console.log('[vectorizeFacts] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      })
+
+      // Check response status BEFORE parsing
+      if (!response.ok) {
+        console.error('[vectorizeFacts] Request failed with status:', response.status)
+
+        // Try to get error details from response
+        let errorMessage = `Vectorization failed: ${response.status} ${response.statusText}`
+        try {
+          const errorText = await response.text()
+          console.error('[vectorizeFacts] Error response text:', errorText)
+
+          // Try to parse error as JSON
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } catch {
+            // Not JSON, use text as-is
+            if (errorText) {
+              errorMessage = errorText
+            }
+          }
+        } catch (textError) {
+          console.error('[vectorizeFacts] Could not read error response:', textError)
+        }
+
+        throw new Error(errorMessage)
+      }
+
+      // Parse successful response
+      console.log('[vectorizeFacts] Parsing successful response...')
       const data = await parseResponse(response)
+      console.log('[vectorizeFacts] Parsed response data:', data)
+
       return data
     } catch (error) {
-      console.error('Error vectorizing facts:', error)
+      console.error('[vectorizeFacts] Error occurred:', error)
+
+      // Enhanced error with more context
+      if (error instanceof Error) {
+        throw error // Re-throw with original message
+      } else {
+        throw new Error(`Vectorization failed: ${String(error)}`)
+      }
+    }
+  }
+
+  /**
+   * Initialize machine knowledge for a specific host
+   * POST /api/knowledge_base/machine_knowledge/initialize
+   */
+  const initializeMachineKnowledge = async (machineId: string): Promise<any> => {
+    try {
+      console.log('[initializeMachineKnowledge] Starting initialization request...')
+      console.log('[initializeMachineKnowledge] Machine ID:', machineId)
+
+      const response = await apiClient.post('/api/knowledge_base/machine_knowledge/initialize', {
+        machine_id: machineId
+      })
+
+      console.log('[initializeMachineKnowledge] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      if (!response.ok) {
+        console.error('[initializeMachineKnowledge] Request failed with status:', response.status)
+
+        let errorMessage = `Machine knowledge initialization failed: ${response.status} ${response.statusText}`
+        try {
+          const errorText = await response.text()
+          console.error('[initializeMachineKnowledge] Error response text:', errorText)
+
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } catch {
+            if (errorText) {
+              errorMessage = errorText
+            }
+          }
+        } catch (textError) {
+          console.error('[initializeMachineKnowledge] Could not read error response:', textError)
+        }
+
+        throw new Error(errorMessage)
+      }
+
+      const data = await parseResponse(response)
+      console.log('[initializeMachineKnowledge] Success:', data)
+      return data
+    } catch (error) {
+      console.error('[initializeMachineKnowledge] Error:', error)
       throw error
+    }
+  }
+
+  /**
+   * Refresh system knowledge (rescan and update all system information)
+   * POST /api/knowledge_base/refresh_system_knowledge
+   */
+  const refreshSystemKnowledge = async (): Promise<any> => {
+    try {
+      console.log('[refreshSystemKnowledge] Starting refresh request...')
+
+      const response = await apiClient.post('/api/knowledge_base/refresh_system_knowledge', {})
+
+      console.log('[refreshSystemKnowledge] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      if (!response.ok) {
+        console.error('[refreshSystemKnowledge] Request failed with status:', response.status)
+
+        let errorMessage = `System knowledge refresh failed: ${response.status} ${response.statusText}`
+        try {
+          const errorText = await response.text()
+          console.error('[refreshSystemKnowledge] Error response text:', errorText)
+
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } catch {
+            if (errorText) {
+              errorMessage = errorText
+            }
+          }
+        } catch (textError) {
+          console.error('[refreshSystemKnowledge] Could not read error response:', textError)
+        }
+
+        throw new Error(errorMessage)
+      }
+
+      const data = await parseResponse(response)
+      console.log('[refreshSystemKnowledge] Success:', data)
+      return data
+    } catch (error) {
+      console.error('[refreshSystemKnowledge] Error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Populate man pages for a specific machine
+   * POST /api/knowledge_base/populate_man_pages
+   */
+  const populateManPages = async (machineId: string): Promise<any> => {
+    try {
+      console.log('[populateManPages] Starting population request...')
+      console.log('[populateManPages] Machine ID:', machineId)
+
+      const response = await apiClient.post('/api/knowledge_base/populate_man_pages', {
+        machine_id: machineId
+      })
+
+      console.log('[populateManPages] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      if (!response.ok) {
+        console.error('[populateManPages] Request failed with status:', response.status)
+
+        let errorMessage = `Man pages population failed: ${response.status} ${response.statusText}`
+        try {
+          const errorText = await response.text()
+          console.error('[populateManPages] Error response text:', errorText)
+
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } catch {
+            if (errorText) {
+              errorMessage = errorText
+            }
+          }
+        } catch (textError) {
+          console.error('[populateManPages] Could not read error response:', textError)
+        }
+
+        throw new Error(errorMessage)
+      }
+
+      const data = await parseResponse(response)
+      console.log('[populateManPages] Success:', data)
+      return data
+    } catch (error) {
+      console.error('[populateManPages] Error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Populate AutoBot documentation
+   * POST /api/knowledge_base/populate_autobot_docs
+   */
+  const populateAutoBotDocs = async (): Promise<any> => {
+    try {
+      console.log('[populateAutoBotDocs] Starting documentation population request...')
+
+      const response = await apiClient.post('/api/knowledge_base/populate_autobot_docs', {})
+
+      console.log('[populateAutoBotDocs] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      if (!response.ok) {
+        console.error('[populateAutoBotDocs] Request failed with status:', response.status)
+
+        let errorMessage = `AutoBot docs population failed: ${response.status} ${response.statusText}`
+        try {
+          const errorText = await response.text()
+          console.error('[populateAutoBotDocs] Error response text:', errorText)
+
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } catch {
+            if (errorText) {
+              errorMessage = errorText
+            }
+          }
+        } catch (textError) {
+          console.error('[populateAutoBotDocs] Could not read error response:', textError)
+        }
+
+        throw new Error(errorMessage)
+      }
+
+      const data = await parseResponse(response)
+      console.log('[populateAutoBotDocs] Success:', data)
+      return data
+    } catch (error) {
+      console.error('[populateAutoBotDocs] Error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Fetch machine profile for a specific machine
+   * GET /api/knowledge_base/machine_profile?machine_id=<id>
+   */
+  const fetchMachineProfile = async (machineId: string): Promise<MachineProfile | null> => {
+    try {
+      console.log('[fetchMachineProfile] Fetching profile for machine:', machineId)
+
+      const response = await apiClient.get(
+        `/api/knowledge_base/machine_profile?machine_id=${encodeURIComponent(machineId)}`
+      )
+
+      console.log('[fetchMachineProfile] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      if (!response.ok) {
+        console.error('[fetchMachineProfile] Request failed with status:', response.status)
+
+        let errorMessage = `Machine profile fetch failed: ${response.status} ${response.statusText}`
+        try {
+          const errorText = await response.text()
+          console.error('[fetchMachineProfile] Error response text:', errorText)
+
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } catch {
+            if (errorText) {
+              errorMessage = errorText
+            }
+          }
+        } catch (textError) {
+          console.error('[fetchMachineProfile] Could not read error response:', textError)
+        }
+
+        throw new Error(errorMessage)
+      }
+
+      const data = await parseResponse(response)
+      console.log('[fetchMachineProfile] Success:', data)
+      return data
+    } catch (error) {
+      console.error('[fetchMachineProfile] Error:', error)
+      return null
+    }
+  }
+
+  /**
+   * Fetch basic knowledge base statistics
+   * GET /api/knowledge_base/stats/basic
+   */
+  const fetchBasicStats = async (): Promise<KnowledgeStats | null> => {
+    try {
+      console.log('[fetchBasicStats] Fetching basic stats...')
+
+      const response = await apiClient.get('/api/knowledge_base/stats/basic')
+
+      console.log('[fetchBasicStats] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      if (!response.ok) {
+        console.error('[fetchBasicStats] Request failed with status:', response.status)
+
+        let errorMessage = `Basic stats fetch failed: ${response.status} ${response.statusText}`
+        try {
+          const errorText = await response.text()
+          console.error('[fetchBasicStats] Error response text:', errorText)
+
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } catch {
+            if (errorText) {
+              errorMessage = errorText
+            }
+          }
+        } catch (textError) {
+          console.error('[fetchBasicStats] Could not read error response:', textError)
+        }
+
+        throw new Error(errorMessage)
+      }
+
+      const data = await parseResponse(response)
+      console.log('[fetchBasicStats] Success:', data)
+      return data
+    } catch (error) {
+      console.error('[fetchBasicStats] Error:', error)
+      return null
     }
   }
 
@@ -297,262 +675,48 @@ export function useKnowledgeBase() {
 
     try {
       const date = typeof dateString === 'string' ? new Date(dateString) : dateString
-      return date.toLocaleString()
-    } catch {
-      return String(dateString)
-    }
-  }
-
-  /**
-   * Format date to locale date only (no time)
-   */
-  const formatDateOnly = (dateString: string | Date | undefined): string => {
-    if (!dateString) return ''
-
-    try {
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString
       return date.toLocaleDateString()
     } catch {
-      return String(dateString)
+      return ''
     }
   }
 
   /**
-   * Format category name from snake_case to Title Case
+   * Format category name for display
    */
-  const formatCategoryName = (category: string): string => {
-    if (!category) return ''
+  const formatCategory = (category: string): string => {
     return category
       .split('_')
-      .map(word => word && word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
   }
 
-  /**
-   * Format file size from bytes to human-readable format
-   */
-  const formatFileSize = (bytes: number | undefined): string => {
-    if (!bytes) return 'Unknown size'
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  /**
-   * Format file size (compact version)
-   */
-  const formatFileSizeCompact = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes}B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-  }
-
-  /**
-   * Format object key to Title Case (e.g., "total_facts" -> "Total Facts")
-   */
-  const formatKey = (key: string): string => {
-    return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-  }
-
-  /**
-   * Format timestamp to time string
-   */
-  const formatTime = (timestamp: number): string => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString()
-  }
-
-  // ==================== UTILITY FUNCTIONS ====================
-
-  /**
-   * Get CSS class for OS type badge
-   */
-  const getOSBadgeClass = (osType?: string): string => {
-    switch (osType) {
-      case 'linux': return 'badge-success'
-      case 'windows': return 'badge-info'
-      case 'macos': return 'badge-warning'
-      default: return 'badge-secondary'
-    }
-  }
-
-  /**
-   * Get icon class for category
-   */
-  const getCategoryIcon = (category: string): string => {
-    const icons: Record<string, string> = {
-      'system_commands': 'fas fa-terminal',
-      'commands': 'fas fa-terminal',
-      'troubleshooting': 'fas fa-wrench',
-      'network': 'fas fa-network-wired',
-      'file_system': 'fas fa-folder',
-      'process': 'fas fa-cogs',
-      'security': 'fas fa-shield-alt'
-    }
-    return icons[category] || 'fas fa-book'
-  }
-
-  /**
-   * Get icon class for file type
-   */
-  const getFileIcon = (fileName: string, isFolder: boolean = false): string => {
-    if (isFolder) return 'fas fa-folder'
-
-    const name = fileName.toLowerCase()
-    if (name.endsWith('.md') || name.endsWith('.markdown')) return 'fas fa-file-alt'
-    if (name.endsWith('.txt')) return 'fas fa-file-alt'
-    if (name.endsWith('.json')) return 'fas fa-file-code'
-    if (name.endsWith('.pdf')) return 'fas fa-file-pdf'
-    if (name.endsWith('.doc') || name.endsWith('.docx')) return 'fas fa-file-word'
-
-    return 'fas fa-file'
-  }
-
-  /**
-   * Get icon class for document type
-   */
-  const getTypeIcon = (type: string): string => {
-    const icons: Record<string, string> = {
-      'document': 'fas fa-file-alt',
-      'webpage': 'fas fa-globe',
-      'api': 'fas fa-code',
-      'upload': 'fas fa-upload'
-    }
-    return icons[type] || 'fas fa-file'
-  }
-
-  /**
-   * Get icon class for progress message type
-   */
-  const getMessageIcon = (type: string): string => {
-    const icons: Record<string, string> = {
-      'info': 'fas fa-info-circle text-blue-500',
-      'success': 'fas fa-check-circle text-green-500',
-      'warning': 'fas fa-exclamation-triangle text-yellow-500',
-      'error': 'fas fa-times-circle text-red-500'
-    }
-    return icons[type] || icons.info
-  }
-
-  /**
-   * Get icon class for progress status
-   */
-  const getProgressIcon = (status: string): string => {
-    switch (status) {
-      case 'success': return 'fa-check-circle'
-      case 'error': return 'fa-exclamation-circle'
-      case 'warning': return 'fa-exclamation-triangle'
-      default: return 'fa-info-circle'
-    }
-  }
-
-  // ==================== PROGRESS TRACKING ====================
-
-  /**
-   * Create a reactive progress state
-   */
-  const createProgressState = () => {
-    return ref<ProgressState>({
-      currentTask: '',
-      taskDetail: '',
-      overallProgress: 0,
-      taskProgress: 0,
-      status: 'waiting',
-      messages: []
-    })
-  }
-
-  /**
-   * Add a progress message to the state
-   */
-  const addProgressMessage = (
-    progressState: ProgressState,
-    text: string,
-    type: 'info' | 'success' | 'warning' | 'error' = 'info'
-  ) => {
-    const message: ProgressMessage = {
-      text,
-      type,
-      timestamp: Date.now()
-    }
-    progressState.messages.push(message)
-
-    // Keep only last 10 messages
-    if (progressState.messages.length > 10) {
-      progressState.messages = progressState.messages.slice(-10)
-    }
-  }
-
-  /**
-   * Update progress state
-   */
-  const updateProgress = (
-    progressState: ProgressState,
-    currentTask: string,
-    overallProgress: number,
-    taskDetail: string = '',
-    taskProgress: number = 0,
-    status: 'waiting' | 'running' | 'success' | 'error' = 'running'
-  ) => {
-    progressState.currentTask = currentTask
-    progressState.taskDetail = taskDetail
-    progressState.overallProgress = overallProgress
-    progressState.taskProgress = taskProgress
-    progressState.status = status
-  }
-
-  /**
-   * Reset progress state
-   */
-  const resetProgress = (progressState: ProgressState) => {
-    progressState.currentTask = ''
-    progressState.taskDetail = ''
-    progressState.overallProgress = 0
-    progressState.taskProgress = 0
-    progressState.status = 'waiting'
-    progressState.messages = []
-  }
-
-  // ==================== RETURN ALL FUNCTIONS ====================
+  // ==================== EXPORTS ====================
 
   return {
     // API calls
     fetchStats,
-    fetchBasicStats,
-    fetchMachineProfile,
+    fetchCategory,
+    searchKnowledge,
+    addFact,
+    uploadKnowledgeFile,
+    fetchMachineProfiles,
     fetchManPagesSummary,
-    getFactsByCategory,
-    initializeMachineKnowledge,
     integrateManPages,
-    searchManPages,
+    getVectorizationStatus,
+    vectorizeFacts,
+    // New API calls
+    initializeMachineKnowledge,
     refreshSystemKnowledge,
     populateManPages,
     populateAutoBotDocs,
-    startBackgroundVectorization,
-    getVectorizationStatus,
-    vectorizeFacts,
-
-    // Formatting functions
+    fetchMachineProfile,
+    fetchBasicStats,
+    // Formatting helpers
     formatDate,
-    formatDateOnly,
-    formatCategoryName,
-    formatFileSize,
-    formatFileSizeCompact,
-    formatKey,
-    formatTime,
-
-    // Utility functions
-    getOSBadgeClass,
-    getCategoryIcon,
-    getFileIcon,
-    getTypeIcon,
-    getMessageIcon,
-    getProgressIcon,
-
-    // Progress tracking
-    createProgressState,
-    addProgressMessage,
-    updateProgress,
-    resetProgress
+    formatCategory,
+    formatCategoryName: formatCategory, // Alias for backward compatibility
+    // Helper function
+    parseResponse
   }
 }

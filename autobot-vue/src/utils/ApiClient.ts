@@ -292,6 +292,58 @@ export class ApiClient {
     const response = await this.get('/api/chat/health');
     return response.json();
   }
+
+  // ==================================================================================
+  // TERMINAL API METHODS
+  // ==================================================================================
+
+  /**
+   * Create a new terminal session
+   * Backend endpoint: POST /api/agent-terminal/sessions
+   */
+  async createTerminalSession(options: any): Promise<any> {
+    const response = await this.post('/api/terminal/sessions', options);
+    return response.json();
+  }
+
+  /**
+   * Get all terminal sessions
+   * Backend endpoint: GET /api/agent-terminal/sessions
+   */
+  async getTerminalSessions(): Promise<any> {
+    const response = await this.get('/api/agent-terminal/sessions');
+    return response.json();
+  }
+
+  /**
+   * Get terminal session info
+   * Backend endpoint: GET /api/agent-terminal/sessions/{sessionId}
+   */
+  async getTerminalSessionInfo(sessionId: string): Promise<any> {
+    const response = await this.get(`/api/agent-terminal/sessions/${sessionId}`);
+    return response.json();
+  }
+
+  /**
+   * Delete terminal session
+   * Backend endpoint: DELETE /api/agent-terminal/sessions/{sessionId}
+   */
+  async deleteTerminalSession(sessionId: string): Promise<any> {
+    const response = await this.delete(`/api/agent-terminal/sessions/${sessionId}`);
+    return response.json();
+  }
+
+  /**
+   * Execute terminal command
+   * Backend endpoint: POST /api/agent-terminal/execute
+   */
+  async executeTerminalCommand(command: string, options: any = {}): Promise<any> {
+    const response = await this.post('/api/agent-terminal/execute', {
+      command,
+      ...options
+    });
+    return response.json();
+  }
 }
 
 // Export singleton instance
