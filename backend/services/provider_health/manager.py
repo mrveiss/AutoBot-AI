@@ -21,12 +21,15 @@ class ProviderHealthManager:
     - Parallel health checking for all providers
     - 30-second in-memory cache to avoid excessive checks
     - Automatic provider registry
-    - Thread-safe caching
+    - Thread-safe caching with asyncio.Lock
     """
 
     # Cache structure: {provider_name: {"result": ProviderHealthResult, "timestamp": float}}
     _cache: Dict[str, Dict] = {}
     _cache_ttl: float = 30.0  # 30 seconds
+
+    # Thread-safety lock for cache operations
+    _cache_lock: asyncio.Lock = None
 
     # Provider instances (singleton pattern)
     _providers: Dict[str, any] = None
@@ -42,6 +45,13 @@ class ProviderHealthManager:
                 "google": GoogleHealth(),
             }
         return cls._providers
+
+    @classmethod
+    def _initialize_cache_lock(cls):
+        """Initialize cache lock (singleton)"""
+        if cls._cache_lock is None:
+            cls._cache_lock = asyncio.Lock()
+        return cls._cache_lock
 
     @classmethod
     async def check_provider_health(
@@ -74,20 +84,25 @@ class ProviderHealthManager:
                 provider=provider,
             )
 
-        # Check cache if enabled
+        # Initialize cache lock
+        cls._initialize_cache_lock()
+
+        # Check cache if enabled (with lock for thread-safety)
         if use_cache:
-            cached = cls._get_from_cache(provider)
-            if cached:
-                logger.debug(f"Using cached health status for {provider}")
-                return cached
+            async with cls._cache_lock:
+                cached = cls._get_from_cache(provider)
+                if cached:
+                    logger.debug(f"Using cached health status for {provider}")
+                    return cached
 
         # Perform health check
         try:
             provider_checker = providers[provider]
             result = await provider_checker.check_health(timeout=timeout)
 
-            # Cache the result
-            cls._store_in_cache(provider, result)
+            # Cache the result (with lock for thread-safety)
+            async with cls._cache_lock:
+                cls._store_in_cache(provider, result)
 
             return result
 
@@ -187,20 +202,23 @@ class ProviderHealthManager:
         }
 
     @classmethod
-    def clear_cache(cls, provider: Optional[str] = None):
+    async def clear_cache(cls, provider: Optional[str] = None):
         """
-        Clear cached health results
+        Clear cached health results (thread-safe)
 
         Args:
             provider: Specific provider to clear, or None to clear all
         """
-        if provider:
-            if provider in cls._cache:
-                del cls._cache[provider]
-                logger.debug(f"Cleared cache for provider: {provider}")
-        else:
-            cls._cache.clear()
-            logger.debug("Cleared all provider health caches")
+        cls._initialize_cache_lock()
+
+        async with cls._cache_lock:
+            if provider:
+                if provider in cls._cache:
+                    del cls._cache[provider]
+                    logger.debug(f"Cleared cache for provider: {provider}")
+            else:
+                cls._cache.clear()
+                logger.debug("Cleared all provider health caches")
 
     @classmethod
     def get_cache_stats(cls) -> Dict[str, any]:
