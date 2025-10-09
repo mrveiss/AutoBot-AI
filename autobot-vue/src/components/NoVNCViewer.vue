@@ -196,10 +196,28 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
+import { ApiClient } from '@/utils/ApiClient'
 
-// Configuration
-const vncHost = ref('172.16.168.20')  // Main WSL machine
-const vncPort = ref(6080)
+// Configuration - Get from backend config
+const getVNCConfig = async () => {
+  try {
+    // Backend exposes VNC configuration through its config endpoint
+    const config = await ApiClient.getBackendConfig()
+    return {
+      host: config?.vnc?.host || '172.16.168.20',
+      port: config?.vnc?.port || 6080
+    }
+  } catch (error) {
+    console.warn('Failed to get VNC config from backend, using defaults:', error)
+    return {
+      host: '172.16.168.20',
+      port: 6080
+    }
+  }
+}
+
+const vncHost = ref('172.16.168.20')  // Will be updated from config
+const vncPort = ref(6080)  // Will be updated from config
 const novncUrl = computed(() => 
   `http://${vncHost.value}:${vncPort.value}/vnc.html?autoconnect=true&resize=scale&reconnect=true&password=''`
 )
@@ -454,8 +472,18 @@ const handleVNCTimeout = () => {
 }
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   lastConnectionAttempt.value = new Date()
+
+  // Load VNC configuration from backend
+  try {
+    const config = await getVNCConfig()
+    vncHost.value = config.host
+    vncPort.value = config.port
+    console.log(`VNC configuration loaded: ${config.host}:${config.port}`)
+  } catch (error) {
+    console.warn('Using default VNC configuration')
+  }
 
   // Set initial loading timeout
   loadingTimeout.value = setTimeout(() => {

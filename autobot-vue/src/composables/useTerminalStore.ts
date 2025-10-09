@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import appConfig from '@/config/AppConfig.js'
 
 // Host configuration interface
 export interface HostConfig {
@@ -29,8 +30,8 @@ export interface TerminalTab {
   isActive: boolean
 }
 
-// Available hosts configuration
-export const AVAILABLE_HOSTS: HostConfig[] = [
+// Default fallback hosts (used only if backend config fails)
+const DEFAULT_HOSTS: HostConfig[] = [
   {
     id: 'main',
     name: 'Main (WSL Backend)',
@@ -74,6 +75,29 @@ export const AVAILABLE_HOSTS: HostConfig[] = [
     description: 'Web automation browser server'
   }
 ]
+
+// Available hosts configuration - will be loaded from backend
+export let AVAILABLE_HOSTS: HostConfig[] = [...DEFAULT_HOSTS]
+
+// Load hosts configuration from backend
+async function loadHostsFromBackend(): Promise<void> {
+  try {
+    const config = await appConfig.getBackendConfig()
+
+    if (config?.hosts && Array.isArray(config.hosts)) {
+      // Backend provided host configuration
+      AVAILABLE_HOSTS = config.hosts
+      console.log('Loaded host configuration from backend:', AVAILABLE_HOSTS.length, 'hosts')
+    } else {
+      console.warn('Backend config does not contain hosts array, using defaults')
+    }
+  } catch (error) {
+    console.warn('Failed to load hosts from backend, using defaults:', error)
+  }
+}
+
+// Initialize hosts configuration
+loadHostsFromBackend()
 
 export const useTerminalStore = defineStore('terminal', () => {
   // State

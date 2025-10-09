@@ -467,6 +467,39 @@ export class AppConfigService {
 
     return urls;
   }
+
+  /**
+   * Get backend configuration (for components that need raw config data)
+   * This fetches the full configuration from backend including hosts, services, etc.
+   */
+  async getBackendConfig() {
+    try {
+      // First ensure we've loaded remote config
+      if (!this.configLoaded) {
+        await this.loadRemoteConfig();
+      }
+
+      // Try to fetch from backend API
+      const response = await this.fetchApi('/api/config', {
+        timeout: 5000,
+        cacheBust: false
+      });
+
+      if (response.ok) {
+        const backendConfig = await response.json();
+        this.log('Backend configuration retrieved:', Object.keys(backendConfig));
+        return backendConfig;
+      } else {
+        this.log('Backend config endpoint returned:', response.status);
+        // Return current local config as fallback
+        return this.config;
+      }
+    } catch (error) {
+      this.log('Failed to get backend config, using local config:', error.message);
+      // Return current local config as fallback
+      return this.config;
+    }
+  }
 }
 
 // Singleton instance
