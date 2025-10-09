@@ -738,6 +738,60 @@ check_vm_connectivity() {
     fi
 }
 
+verify_redis_permissions() {
+    log "Verifying Redis directory permissions..."
+
+    if [ ! -f "$SSH_KEY" ]; then
+        warning "SSH key not found - skipping permission verification"
+        return 0
+    fi
+
+    timeout 10 ssh -i "$SSH_KEY" "$SSH_USER@${VMS["redis"]}" << 'EOF'
+        # Check if directories exist before checking ownership
+        if [ ! -d /var/lib/redis-stack ]; then
+            echo "ℹ️  Redis data directory not yet created - will be created on first start"
+            exit 0
+        fi
+
+        if [ ! -d /var/log/redis-stack ]; then
+            echo "ℹ️  Redis log directory not yet created - will be created on first start"
+            exit 0
+        fi
+
+        # Check /var/lib/redis-stack ownership
+        REDIS_DATA_OWNER=$(stat -c '%U:%G' /var/lib/redis-stack 2>/dev/null)
+        REDIS_LOG_OWNER=$(stat -c '%U:%G' /var/log/redis-stack 2>/dev/null)
+
+        if [ "$REDIS_DATA_OWNER" != "autobot:autobot" ]; then
+            echo "⚠️  WARNING: Redis data directory ownership incorrect: $REDIS_DATA_OWNER"
+            echo "🔧 Correcting ownership to autobot:autobot..."
+            if ! sudo chown -R autobot:autobot /var/lib/redis-stack; then
+                echo "❌ ERROR: Failed to change ownership of Redis data directory"
+                exit 1
+            fi
+        else
+            echo "✅ Redis data directory ownership correct: $REDIS_DATA_OWNER"
+        fi
+
+        if [ "$REDIS_LOG_OWNER" != "autobot:autobot" ]; then
+            echo "⚠️  WARNING: Redis log directory ownership incorrect: $REDIS_LOG_OWNER"
+            echo "🔧 Correcting ownership to autobot:autobot..."
+            if ! sudo chown -R autobot:autobot /var/log/redis-stack; then
+                echo "❌ ERROR: Failed to change ownership of Redis log directory"
+                exit 1
+            fi
+        else
+            echo "✅ Redis log directory ownership correct: $REDIS_LOG_OWNER"
+        fi
+EOF
+
+    if [ $? -eq 0 ]; then
+        success "Redis permissions verified and corrected"
+    else
+        warning "Redis permission verification failed"
+    fi
+}
+
 start_frontend_dev() {
     if [ "$DEV_MODE" = true ]; then
         echo -e "${CYAN}🔧 Starting Frontend Development Mode...${NC}"
@@ -849,6 +903,9 @@ main() {
 
     # Check VM connectivity
     check_vm_connectivity
+
+    # Verify Redis permissions
+    verify_redis_permissions
 
     # Check if VM services are running
     check_vm_services

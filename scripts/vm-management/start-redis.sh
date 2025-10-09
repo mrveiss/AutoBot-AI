@@ -75,7 +75,7 @@ REDIS_CONFIG
         
         echo "Creating Redis data directory..."
         sudo mkdir -p /var/lib/redis-stack /var/log/redis-stack
-        sudo chown redis:redis /var/lib/redis-stack /var/log/redis-stack
+        sudo chown -R autobot:autobot /var/lib/redis-stack /var/log/redis-stack
         
         echo "Starting Redis Stack service..."
         sudo systemctl enable redis-stack-server

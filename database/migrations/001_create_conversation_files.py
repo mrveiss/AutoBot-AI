@@ -29,18 +29,24 @@ class ConversationFilesMigration:
     VERSION = "001"
     DESCRIPTION = "Create conversation_files database and schema"
 
-    def __init__(self, data_dir: Optional[Path] = None, schema_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Optional[Path] = None, schema_dir: Optional[Path] = None, db_path: Optional[Path] = None):
         """
         Initialize migration with configurable paths.
 
         Args:
             data_dir: Directory for database files (default: /home/kali/Desktop/AutoBot/data/)
             schema_dir: Directory containing schema files (default: /home/kali/Desktop/AutoBot/database/schemas/)
+            db_path: Full path to database file (optional, overrides data_dir/conversation_files.db)
         """
         self.data_dir = data_dir or Path("/home/kali/Desktop/AutoBot/data")
         self.schema_dir = schema_dir or Path("/home/kali/Desktop/AutoBot/database/schemas")
 
-        self.db_path = self.data_dir / "conversation_files.db"
+        # Allow custom database path OR use default in data_dir
+        if db_path:
+            self.db_path = db_path
+        else:
+            self.db_path = self.data_dir / "conversation_files.db"
+
         self.schema_path = self.schema_dir / "conversation_files_schema.sql"
 
         self.connection: Optional[sqlite3.Connection] = None
@@ -251,9 +257,10 @@ class ConversationFilesMigration:
                 )
             """)
 
-            # Record this migration
+            # Record this migration (INSERT OR IGNORE for idempotency - safe for concurrent initialization)
+            # If version already exists, silently skip (no error) - critical for multi-VM distributed environment
             cursor.execute("""
-                INSERT INTO schema_migrations (version, description, status)
+                INSERT OR IGNORE INTO schema_migrations (version, description, status)
                 VALUES (?, ?, 'completed')
             """, (self.VERSION, self.DESCRIPTION))
 
