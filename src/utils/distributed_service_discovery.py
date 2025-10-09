@@ -55,37 +55,114 @@ class DistributedServiceDiscovery:
         self._initialize_service_registry()
     
     def _initialize_service_registry(self):
-        """Initialize service registry with distributed VM endpoints"""
-        
-        # Primary service endpoints (distributed architecture)
+        """Initialize service registry from unified configuration"""
+
+        # Get configuration from unified config manager
+        from src.unified_config_manager import unified_config_manager
+
+        # Get service configurations
+        services_config = unified_config_manager.get_distributed_services_config()
+        backend_config = unified_config_manager.get_backend_config()
+        redis_config = unified_config_manager.get_redis_config()
+
+        # Get system defaults for ultimate fallbacks
+        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+
+        # Helper to safely get host/port from config
+        def get_config_value(service_name, key, default_key):
+            """Get configuration value with fallback to system defaults"""
+            if service_name == "backend":
+                value = backend_config.get(key)
+            elif service_name == "redis":
+                value = redis_config.get(key)
+            else:
+                service_config = services_config.get(service_name, {})
+                value = service_config.get(key)
+
+            # If not in config, try system defaults
+            if not value:
+                value = system_defaults.get(default_key, "localhost" if key == "host" else 8000)
+
+            return value
+
+        # Primary service endpoints (from configuration)
         primary_services = {
-            "redis": ServiceEndpoint(NetworkConstants.REDIS_VM_IP, NetworkConstants.REDIS_PORT, "redis"),
-            "backend": ServiceEndpoint(NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.BACKEND_PORT, "http"),
-            "frontend": ServiceEndpoint(NetworkConstants.FRONTEND_VM_IP, NetworkConstants.FRONTEND_PORT, "http"),
-            "npu_worker": ServiceEndpoint(NetworkConstants.NPU_WORKER_VM_IP, NetworkConstants.NPU_WORKER_PORT, "http"),
-            "ai_stack": ServiceEndpoint(NetworkConstants.AI_STACK_VM_IP, NetworkConstants.AI_STACK_PORT, "http"),
-            "browser": ServiceEndpoint(NetworkConstants.BROWSER_VM_IP, NetworkConstants.BROWSER_SERVICE_PORT, "http"),
-            "ollama": ServiceEndpoint(NetworkConstants.LOCALHOST_IP, NetworkConstants.OLLAMA_PORT, "http"),  # Local service
+            "redis": ServiceEndpoint(
+                get_config_value("redis", "host", "redis_host"),
+                get_config_value("redis", "port", "redis_port"),
+                "redis"
+            ),
+            "backend": ServiceEndpoint(
+                get_config_value("backend", "host", "backend_host"),
+                get_config_value("backend", "port", "backend_port"),
+                "http"
+            ),
+            "frontend": ServiceEndpoint(
+                get_config_value("frontend", "host", "frontend_host"),
+                get_config_value("frontend", "port", "frontend_port"),
+                "http"
+            ),
+            "npu_worker": ServiceEndpoint(
+                get_config_value("npu_worker", "host", "npu_worker_host"),
+                get_config_value("npu_worker", "port", "npu_worker_port"),
+                "http"
+            ),
+            "ai_stack": ServiceEndpoint(
+                get_config_value("ai_stack", "host", "ai_stack_host"),
+                get_config_value("ai_stack", "port", "ai_stack_port"),
+                "http"
+            ),
+            "browser": ServiceEndpoint(
+                get_config_value("browser_service", "host", "browser_service_host"),
+                get_config_value("browser_service", "port", "browser_service_port"),
+                "http"
+            ),
+            "ollama": ServiceEndpoint(
+                get_config_value("ollama", "host", "ollama_host"),
+                get_config_value("ollama", "port", "ollama_port"),
+                "http"
+            ),
         }
 
-        # Backup endpoints for failover
+        # Backup endpoints for failover (from configuration)
+        backup_configs = system_defaults.get("backup_endpoints", {})
         backup_endpoints = {
             "redis": [
-                ServiceEndpoint(NetworkConstants.LOCALHOST_IP, NetworkConstants.REDIS_PORT, "redis"),  # Local Redis fallback
-                ServiceEndpoint(NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.REDIS_PORT, "redis"),  # Backend host Redis
+                ServiceEndpoint(
+                    backup_configs.get("redis_backup_1_host", "localhost"),
+                    backup_configs.get("redis_backup_1_port", get_config_value("redis", "port", "redis_port")),
+                    "redis"
+                ),
+                ServiceEndpoint(
+                    backup_configs.get("redis_backup_2_host", get_config_value("backend", "host", "backend_host")),
+                    backup_configs.get("redis_backup_2_port", get_config_value("redis", "port", "redis_port")),
+                    "redis"
+                ),
             ],
             "backend": [
-                ServiceEndpoint(NetworkConstants.LOCALHOST_IP, NetworkConstants.BACKEND_PORT, "http"),  # Local backend
+                ServiceEndpoint(
+                    backup_configs.get("backend_backup_1_host", "localhost"),
+                    backup_configs.get("backend_backup_1_port", get_config_value("backend", "port", "backend_port")),
+                    "http"
+                ),
             ],
             "ollama": [
-                ServiceEndpoint(NetworkConstants.AI_STACK_VM_IP, NetworkConstants.OLLAMA_PORT, "http"),  # AI Stack host
-                ServiceEndpoint(NetworkConstants.NPU_WORKER_VM_IP, NetworkConstants.OLLAMA_PORT, "http"),  # NPU Worker host
+                ServiceEndpoint(
+                    backup_configs.get("ollama_backup_1_host", get_config_value("ai_stack", "host", "ai_stack_host")),
+                    backup_configs.get("ollama_backup_1_port", get_config_value("ollama", "port", "ollama_port")),
+                    "http"
+                ),
+                ServiceEndpoint(
+                    backup_configs.get("ollama_backup_2_host", get_config_value("npu_worker", "host", "npu_worker_host")),
+                    backup_configs.get("ollama_backup_2_port", get_config_value("ollama", "port", "ollama_port")),
+                    "http"
+                ),
             ]
         }
-        
+
         self.services.update(primary_services)
         self.backup_endpoints.update(backup_endpoints)
-        
+
         logger.info(f"🌐 Service registry initialized with {len(self.services)} services")
     
     async def get_service_endpoint(self, service_name: str) -> Optional[ServiceEndpoint]:
@@ -265,9 +342,19 @@ async def get_service_discovery() -> DistributedServiceDiscovery:
 
 async def get_service_url(service_name: str) -> str:
     """Quick service URL resolution without DNS delays"""
+    from src.unified_config_manager import unified_config_manager
+
     discovery = await get_service_discovery()
     endpoint = await discovery.get_service_endpoint(service_name)
-    return endpoint.url if endpoint else f"http://localhost:8000"  # Safe fallback
+
+    if endpoint:
+        return endpoint.url
+    else:
+        # Configuration-driven fallback
+        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+        fallback_host = system_defaults.get("fallback_host", "localhost")
+        fallback_port = system_defaults.get("fallback_port", 8000)
+        return f"http://{fallback_host}:{fallback_port}"
 
 # Synchronous helpers for backward compatibility with sync Redis clients
 def get_redis_connection_params_sync() -> Dict:
@@ -275,19 +362,26 @@ def get_redis_connection_params_sync() -> Dict:
     Get Redis connection parameters synchronously for sync contexts
 
     ELIMINATES DNS TIMEOUT BY:
-    - Using pre-configured IP addresses from NetworkConstants
+    - Using pre-configured values from unified configuration
     - Immediate parameter return without async overhead
-    - Built-in failover IP addresses
+    - Configuration-driven fallback addresses
 
     Returns same dict structure as config-based approach for backward compatibility
     """
-    from src.constants.network_constants import NetworkConstants
+    from src.unified_config_manager import unified_config_manager
+
+    # Get Redis configuration from unified config manager
+    redis_config = unified_config_manager.get_redis_config()
+    system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+
+    # Get host and port from configuration
+    host = redis_config.get("host") or system_defaults.get("redis_host", "localhost")
+    port = redis_config.get("port") or system_defaults.get("redis_port", 6379)
 
     # Return cached endpoint parameters immediately
-    # Uses NetworkConstants for instant IP resolution (no DNS)
     return {
-        'host': NetworkConstants.REDIS_VM_IP,  # Direct IP: 172.16.168.23
-        'port': NetworkConstants.REDIS_PORT,   # Port: 6379
+        'host': host,
+        'port': int(port),
         'decode_responses': True,
         'socket_connect_timeout': 0.5,  # Fast timeout for distributed setup
         'socket_timeout': 1.0,
@@ -301,45 +395,62 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
     Get service endpoint synchronously for sync contexts
 
     Returns endpoint information as a dict with host, port, protocol
-    Falls back to NetworkConstants if service not found
+    Gets values from unified configuration
     """
-    from src.constants.network_constants import NetworkConstants
+    from src.unified_config_manager import unified_config_manager
 
-    # Service endpoint mapping (cached, no DNS resolution)
+    # Get configurations
+    services_config = unified_config_manager.get_distributed_services_config()
+    backend_config = unified_config_manager.get_backend_config()
+    redis_config = unified_config_manager.get_redis_config()
+    system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+
+    # Helper to get config value
+    def get_value(svc_name, key, default_key, default_val):
+        if svc_name == "backend":
+            val = backend_config.get(key)
+        elif svc_name == "redis":
+            val = redis_config.get(key)
+        else:
+            svc_cfg = services_config.get(svc_name, {})
+            val = svc_cfg.get(key)
+        return val or system_defaults.get(default_key, default_val)
+
+    # Service endpoint mapping from configuration
     service_endpoints = {
         "redis": {
-            "host": NetworkConstants.REDIS_VM_IP,
-            "port": NetworkConstants.REDIS_PORT,
+            "host": get_value("redis", "host", "redis_host", "localhost"),
+            "port": int(get_value("redis", "port", "redis_port", 6379)),
             "protocol": "redis"
         },
         "backend": {
-            "host": NetworkConstants.MAIN_MACHINE_IP,
-            "port": NetworkConstants.BACKEND_PORT,
+            "host": get_value("backend", "host", "backend_host", "localhost"),
+            "port": int(get_value("backend", "port", "backend_port", 8001)),
             "protocol": "http"
         },
         "frontend": {
-            "host": NetworkConstants.FRONTEND_VM_IP,
-            "port": NetworkConstants.FRONTEND_PORT,
+            "host": get_value("frontend", "host", "frontend_host", "localhost"),
+            "port": int(get_value("frontend", "port", "frontend_port", 5173)),
             "protocol": "http"
         },
         "npu_worker": {
-            "host": NetworkConstants.NPU_WORKER_VM_IP,
-            "port": NetworkConstants.NPU_WORKER_PORT,
+            "host": get_value("npu_worker", "host", "npu_worker_host", "localhost"),
+            "port": int(get_value("npu_worker", "port", "npu_worker_port", 8081)),
             "protocol": "http"
         },
         "ai_stack": {
-            "host": NetworkConstants.AI_STACK_VM_IP,
-            "port": NetworkConstants.AI_STACK_PORT,
+            "host": get_value("ai_stack", "host", "ai_stack_host", "localhost"),
+            "port": int(get_value("ai_stack", "port", "ai_stack_port", 8080)),
             "protocol": "http"
         },
         "browser": {
-            "host": NetworkConstants.BROWSER_VM_IP,
-            "port": NetworkConstants.BROWSER_SERVICE_PORT,
+            "host": get_value("browser_service", "host", "browser_service_host", "localhost"),
+            "port": int(get_value("browser_service", "port", "browser_service_port", 3000)),
             "protocol": "http"
         },
         "ollama": {
-            "host": NetworkConstants.LOCALHOST_IP,
-            "port": NetworkConstants.OLLAMA_PORT,
+            "host": get_value("ollama", "host", "ollama_host", "localhost"),
+            "port": int(get_value("ollama", "port", "ollama_port", 11434)),
             "protocol": "http"
         }
     }

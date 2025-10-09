@@ -11,6 +11,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
 
@@ -75,26 +76,56 @@ class ServiceDiscovery:
     
     def __init__(self, config_file: Optional[str] = None):
         self.services: Dict[str, ServiceEndpoint] = {}
-        self.config_file = config_file or "/home/kali/Desktop/AutoBot/config/services.json"
+        # Use project-relative path for config file (this file is in src/utils/)
+        default_config = Path(__file__).parent.parent.parent / "config" / "services.json"
+        self.config_file = config_file or str(default_config)
         self.health_check_interval = 30  # seconds
         self.circuit_breaker_threshold = 5  # consecutive failures
         self._health_check_task: Optional[asyncio.Task] = None
         self._session: Optional[aiohttp.ClientSession] = None
-        
+
         # Service definitions for AutoBot's 6-VM architecture
         self._init_default_services()
     
     def _init_default_services(self):
-        """Initialize default service definitions for AutoBot infrastructure"""
-        
-        # Get environment-based configuration
-        import os
-        
+        """Initialize default service definitions from unified configuration"""
+
+        # Get configuration from unified config manager
+        from src.unified_config_manager import unified_config_manager
+
+        # Get service configurations
+        services_config = unified_config_manager.get_distributed_services_config()
+        backend_config = unified_config_manager.get_backend_config()
+        redis_config = unified_config_manager.get_redis_config()
+
+        # Get system defaults section for ultimate fallbacks
+        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+
+        # Helper to get service config from unified configuration
+        def get_service_config(service_name, config_dict=None):
+            """Get host and port from unified configuration"""
+            if config_dict is None:
+                config_dict = services_config.get(service_name, {})
+
+            # Get from config, with no hardcoded fallbacks
+            # Config must provide these values
+            host = config_dict.get("host")
+            port = config_dict.get("port")
+
+            if not host or not port:
+                logger.error(f"Service {service_name} missing required 'host' or 'port' in configuration")
+                # Use system defaults as absolute last resort
+                host = host or system_defaults.get(f"{service_name}_host", "localhost")
+                port = port or system_defaults.get(f"{service_name}_port", 8000)
+
+            return host, port
+
         # VM1: Frontend (Web Interface)
+        frontend_host, frontend_port = get_service_config("frontend")
         self.services["frontend"] = ServiceEndpoint(
             name="frontend",
-            host=os.getenv("AUTOBOT_FRONTEND_HOST", NetworkConstants.FRONTEND_VM_IP),
-            port=int(os.getenv("AUTOBOT_FRONTEND_PORT", NetworkConstants.FRONTEND_PORT)),
+            host=frontend_host,
+            port=frontend_port,
             protocol="http",
             health_endpoint="/",  # Vue.js app health check
             timeout=10.0,
@@ -102,10 +133,11 @@ class ServiceDiscovery:
         )
 
         # VM2: NPU Worker (AI Hardware Acceleration)
+        npu_host, npu_port = get_service_config("npu_worker")
         self.services["npu_worker"] = ServiceEndpoint(
             name="npu_worker",
-            host=os.getenv("AUTOBOT_NPU_WORKER_HOST", NetworkConstants.NPU_WORKER_VM_IP),
-            port=int(os.getenv("AUTOBOT_NPU_WORKER_PORT", NetworkConstants.NPU_WORKER_PORT)),
+            host=npu_host,
+            port=npu_port,
             protocol="http",
             health_endpoint="/health",
             timeout=15.0,
@@ -113,10 +145,17 @@ class ServiceDiscovery:
         )
 
         # VM3: Redis (Data Layer)
+        redis_host = redis_config.get("host")
+        redis_port = redis_config.get("port")
+        if not redis_host or not redis_port:
+            logger.error("Redis configuration missing required 'host' or 'port'")
+            redis_host = redis_host or system_defaults.get("redis_host", "localhost")
+            redis_port = redis_port or system_defaults.get("redis_port", 6379)
+
         self.services["redis"] = ServiceEndpoint(
             name="redis",
-            host=os.getenv("AUTOBOT_REDIS_HOST", NetworkConstants.REDIS_VM_IP),
-            port=int(os.getenv("AUTOBOT_REDIS_PORT", NetworkConstants.REDIS_PORT)),
+            host=redis_host,
+            port=int(redis_port),
             protocol="tcp",  # Redis uses TCP, not HTTP
             health_endpoint="",  # Redis PING command
             timeout=5.0,
@@ -124,10 +163,11 @@ class ServiceDiscovery:
         )
 
         # VM4: AI Stack (AI Processing)
+        ai_stack_host, ai_stack_port = get_service_config("ai_stack")
         self.services["ai_stack"] = ServiceEndpoint(
             name="ai_stack",
-            host=os.getenv("AUTOBOT_AI_STACK_HOST", NetworkConstants.AI_STACK_VM_IP),
-            port=int(os.getenv("AUTOBOT_AI_STACK_PORT", NetworkConstants.AI_STACK_PORT)),
+            host=ai_stack_host,
+            port=ai_stack_port,
             protocol="http",
             health_endpoint="/health",
             timeout=20.0,
@@ -135,10 +175,11 @@ class ServiceDiscovery:
         )
 
         # VM5: Browser Service (Playwright Automation)
+        browser_host, browser_port = get_service_config("browser_service")
         self.services["browser_service"] = ServiceEndpoint(
             name="browser_service",
-            host=os.getenv("AUTOBOT_BROWSER_SERVICE_HOST", NetworkConstants.BROWSER_VM_IP),
-            port=int(os.getenv("AUTOBOT_BROWSER_SERVICE_PORT", NetworkConstants.BROWSER_SERVICE_PORT)),
+            host=browser_host,
+            port=browser_port,
             protocol="http",
             health_endpoint="/health",
             timeout=10.0,
@@ -146,10 +187,17 @@ class ServiceDiscovery:
         )
 
         # Main Machine (WSL): Backend API
+        backend_host = backend_config.get("host")
+        backend_port = backend_config.get("port")
+        if not backend_host or not backend_port:
+            logger.error("Backend configuration missing required 'host' or 'port'")
+            backend_host = backend_host or system_defaults.get("backend_host", "localhost")
+            backend_port = backend_port or system_defaults.get("backend_port", 8001)
+
         self.services["backend"] = ServiceEndpoint(
             name="backend",
-            host=os.getenv("AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP),
-            port=int(os.getenv("AUTOBOT_BACKEND_PORT", NetworkConstants.BACKEND_PORT)),
+            host=backend_host,
+            port=int(backend_port),
             protocol="http",
             health_endpoint="/api/health",
             timeout=5.0,
@@ -157,10 +205,18 @@ class ServiceDiscovery:
         )
 
         # Main Machine (WSL): Ollama LLM
+        ollama_config = services_config.get("ollama", {})
+        ollama_host = ollama_config.get("host")
+        ollama_port = ollama_config.get("port")
+        if not ollama_host or not ollama_port:
+            logger.error("Ollama configuration missing required 'host' or 'port'")
+            ollama_host = ollama_host or system_defaults.get("ollama_host", "localhost")
+            ollama_port = ollama_port or system_defaults.get("ollama_port", 11434)
+
         self.services["ollama"] = ServiceEndpoint(
             name="ollama",
-            host=os.getenv("AUTOBOT_OLLAMA_HOST", NetworkConstants.LOCALHOST_IP),
-            port=int(os.getenv("AUTOBOT_OLLAMA_PORT", NetworkConstants.OLLAMA_PORT)),
+            host=ollama_host,
+            port=int(ollama_port),
             protocol="http",
             health_endpoint="/api/tags",  # Ollama health check
             timeout=10.0,

@@ -28,6 +28,10 @@ class NetworkDiscoveryAgent:
             "asset_inventory",
         ]
 
+        # Get default network from configuration or environment
+        import os
+        self.default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", "192.168.1.0/24")
+
     async def execute(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a network discovery task"""
         try:
@@ -58,7 +62,7 @@ class NetworkDiscoveryAgent:
     async def _network_scan(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Scan network for active hosts"""
         try:
-            network = context.get("network", "192.168.1.0/24")
+            network = context.get("network", self.default_network)
 
             # Validate network
             try:
@@ -95,7 +99,7 @@ class NetworkDiscoveryAgent:
     async def _host_discovery(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Discover hosts using multiple methods"""
         try:
-            network = context.get("network", "192.168.1.0/24")
+            network = context.get("network", self.default_network)
             methods = context.get("methods", ["ping", "arp"])
 
             discovered_hosts = {}
@@ -143,7 +147,7 @@ class NetworkDiscoveryAgent:
     async def _arp_scan(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Perform ARP scan on local network"""
         try:
-            network = context.get("network", "192.168.1.0/24")
+            network = context.get("network", self.default_network)
 
             # Use arp-scan if available, fallback to nmap
             cmd = ["arp-scan", "--local", network]
@@ -212,7 +216,7 @@ class NetworkDiscoveryAgent:
     async def _create_network_map(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Create a network map"""
         try:
-            network = context.get("network", "192.168.1.0/24")
+            network = context.get("network", self.default_network)
 
             # First discover hosts
             discovery_result = await self._host_discovery(
@@ -266,7 +270,7 @@ class NetworkDiscoveryAgent:
     async def _asset_inventory(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Create asset inventory"""
         try:
-            network = context.get("network", "192.168.1.0/24")
+            network = context.get("network", self.default_network)
 
             # Discover hosts
             discovery_result = await self._host_discovery(
