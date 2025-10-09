@@ -9,8 +9,8 @@
   serial: 1  # Deploy database nodes one at a time
   
   vars:
-    redis_user: "redis-stack"
-    redis_group: "redis-stack"
+    redis_user: "autobot"
+    redis_group: "autobot"
     redis_home: "/var/lib/redis-stack"
     redis_config_dir: "/etc/redis-stack"
     redis_log_dir: "/var/log/redis-stack"
@@ -61,21 +61,31 @@
     # USER AND DIRECTORY SETUP
     # ==========================================
     
-    - name: Create Redis Stack group
-      group:
-        name: "{{ redis_group }}"
-        system: true
-        state: present
+    # Note: Using existing autobot user instead of creating redis-stack user
+    # This aligns with AutoBot's standardized ownership architecture
+    # The autobot user is created during initial system setup
+    
+    # - name: Create Redis Stack group
+    #   group:
+    #     name: "{{ redis_group }}"
+    #     system: true
+    #     state: present
+    #
+    # - name: Create Redis Stack user
+    #   user:
+    #     name: "{{ redis_user }}"
+    #     group: "{{ redis_group }}"
+    #     system: true
+    #     home: "{{ redis_home }}"
+    #     create_home: true
+    #     shell: /bin/bash
+    #     state: present
 
-    - name: Create Redis Stack user
-      user:
-        name: "{{ redis_user }}"
-        group: "{{ redis_group }}"
-        system: true
-        home: "{{ redis_home }}"
-        create_home: true
-        shell: /bin/bash
-        state: present
+    - name: Verify autobot user exists
+      command: id {{ redis_user }}
+      register: user_check
+      failed_when: user_check.rc != 0
+      changed_when: false
 
     - name: Create Redis directories
       file:

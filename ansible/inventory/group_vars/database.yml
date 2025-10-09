@@ -240,8 +240,8 @@ systemd_services:
   - name: "redis-stack-server"
     description: "Redis Stack Server for AutoBot"
     type: "simple"
-    user: "redis-stack"
-    group: "redis-stack"
+    user: "autobot"
+    group: "autobot"
     exec_start: "/opt/redis-stack/bin/redis-stack-server /etc/redis-stack/redis-stack.conf"
     restart: "always"
     restart_sec: 5
@@ -397,8 +397,8 @@ security:
       
     # Redis data permissions
     redis_data_permissions:
-      owner: "redis-stack"
-      group: "redis-stack"
+      owner: "autobot"
+      group: "autobot"
       directories: "750" 
       files: "640"
 

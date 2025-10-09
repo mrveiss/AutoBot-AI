@@ -32,9 +32,11 @@ redis_databases:
   temp:
     db: 9
     description: "Temporary data and scratch space"
-  backup:
+  audit:
     db: 10
-    description: "Backup and recovery data"
+    description: "Security audit logging and compliance (OWASP/NIST compliant)"
+    max_connections: 15
+    timeout_seconds: 3.0
   codebase:
     db: 11
     description: "Codebase analytics and code analysis results"

@@ -3,6 +3,13 @@
 -- Database: data/conversation_files.db (SQLite)
 
 -- ============================================================================
+-- CRITICAL: Enable Foreign Keys Globally
+-- ============================================================================
+-- Must be set BEFORE any table creation to ensure referential integrity
+-- This setting persists for all future connections to this database
+PRAGMA foreign_keys = ON;
+
+-- ============================================================================
 -- CORE TABLES
 -- ============================================================================
 

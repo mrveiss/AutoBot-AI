@@ -220,8 +220,8 @@
       copy:
         src: "/tmp/autobot-migration/redis-dump.rdb"
         dest: "/var/lib/redis-stack/dump.rdb"
-        owner: redis-stack
-        group: redis-stack
+        owner: autobot
+        group: autobot
         mode: '0640'
         remote_src: true
       failed_when: false
@@ -230,8 +230,8 @@
       copy:
         src: "/tmp/autobot-migration/redis-appendonly.aof"
         dest: "/var/lib/redis-stack/appendonly.aof"
-        owner: redis-stack
-        group: redis-stack
+        owner: autobot
+        group: autobot
         mode: '0640'
         remote_src: true
       failed_when: false
