@@ -563,8 +563,9 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) == 1:
-        # Default to AutoBot frontend directory
-        project_root = "/home/kali/Desktop/AutoBot"
+        # Default to AutoBot frontend directory - use project-relative path
+        # This script is in tools/code-analysis-suite/fix-agents/, so project root is 3 levels up
+        project_root = str(Path(__file__).parent.parent.parent.parent)
         target_dir = "autobot-vue/src"
 
         print("🚀 AutoBot Development Logging Conversion Agent")

@@ -79,21 +79,28 @@ mkdir -p logs reports patches
 
 # Set up configuration
 echo "⚙️ Setting up configuration..."
+
+# Check for existing AutoBot configuration or use defaults
+REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
+REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
+REDIS_DB="${AUTOBOT_REDIS_DB:-0}"
+
 cat > .env << EOF
 # AutoBot Code Analysis Suite Configuration
-REDIS_URL=redis://localhost:6379/0
-LOG_LEVEL=INFO
-CACHE_TTL=3600
+# Values can be overridden via AUTOBOT_* environment variables
+REDIS_URL=redis://${REDIS_HOST}:${REDIS_PORT}/${REDIS_DB}
+LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
+CACHE_TTL=${AUTOBOT_CACHE_TTL:-3600}
 
 # Analysis Configuration
-SECURITY_ENABLED=true
-PERFORMANCE_ENABLED=true
-ML_ENABLED=true
+SECURITY_ENABLED=${AUTOBOT_SECURITY_ENABLED:-true}
+PERFORMANCE_ENABLED=${AUTOBOT_PERFORMANCE_ENABLED:-true}
+ML_ENABLED=${AUTOBOT_ML_ENABLED:-true}
 
 # Performance Tuning
-MAX_WORKERS=4
-TIMEOUT=300
-MAX_FILE_SIZE=10485760
+MAX_WORKERS=${AUTOBOT_MAX_WORKERS:-4}
+TIMEOUT=${AUTOBOT_TIMEOUT:-300}
+MAX_FILE_SIZE=${AUTOBOT_MAX_FILE_SIZE:-10485760}
 EOF
 
 # Make scripts executable
@@ -109,10 +116,14 @@ import sklearn
 print('✅ All dependencies installed successfully')
 "
 
-# Test Redis connection
+# Test Redis connection - use environment-configured values
 python3 -c "
 import redis
-r = redis.Redis(host='localhost', port=6379, db=0)
+import os
+redis_host = os.getenv('AUTOBOT_REDIS_HOST', 'localhost')
+redis_port = int(os.getenv('AUTOBOT_REDIS_PORT', '6379'))
+redis_db = int(os.getenv('AUTOBOT_REDIS_DB', '0'))
+r = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
 r.ping()
 print('✅ Redis connection successful')
 " 2>/dev/null || echo "⚠️  Redis connection failed. Please check Redis server."
