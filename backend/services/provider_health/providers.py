@@ -210,25 +210,25 @@ class AnthropicHealth(BaseProviderHealth):
             )
 
         try:
-            # Anthropic doesn't have a models endpoint, so we'll just verify the API key
-            # by making a minimal request to the messages endpoint
-            messages_url = f"{self.base_url}/messages"
+            # COST FIX: Use free validation approach instead of billable completions
+            # Check if API key is valid by making a HEAD request or using count_tokens endpoint
+            # which doesn't charge for usage
+            count_tokens_url = f"{self.base_url}/messages/count_tokens"
             headers = {
                 "x-api-key": self.api_key,
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
             }
 
-            # Minimal test payload
+            # Minimal validation payload (count_tokens is free)
             payload = {
-                "model": "claude-3-haiku-20240307",  # Smallest/fastest model
-                "max_tokens": 1,
+                "model": "claude-3-haiku-20240307",
                 "messages": [{"role": "user", "content": "test"}],
             }
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    messages_url,
+                    count_tokens_url,
                     headers=headers,
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=timeout)
@@ -241,7 +241,7 @@ class AnthropicHealth(BaseProviderHealth):
                             available=True,
                             message="Anthropic connected successfully",
                             response_time=response_time,
-                            details={"api_key_set": True},
+                            details={"api_key_set": True, "validation_method": "count_tokens"},
                         )
                     elif response.status == 401:
                         return self._create_result(
@@ -314,11 +314,17 @@ class GoogleHealth(BaseProviderHealth):
 
         try:
             # Check /v1/models endpoint
-            models_url = f"{self.base_url}/models?key={self.api_key}"
+            # SECURITY FIX: Use X-Goog-Api-Key header instead of URL parameter
+            # to prevent API key exposure in logs
+            models_url = f"{self.base_url}/models"
+            headers = {
+                "X-Goog-Api-Key": self.api_key,
+            }
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     models_url,
+                    headers=headers,
                     timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as response:
                     response_time = time.time() - start_time
