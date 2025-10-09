@@ -1,0 +1,22 @@
+# AutoBot NPU Worker GUI Dependencies
+# PySide6-based desktop application for Windows
+
+# Core GUI Framework
+PySide6>=6.6.0
+PySide6-Addons>=6.6.0
+PySide6-Essentials>=6.6.0
+
+# Configuration Management
+PyYAML>=6.0.1
+
+# HTTP Requests for API calls
+requests>=2.31.0
+
+# System Monitoring
+psutil>=5.9.0
+
+# Optional: Enhanced Logging
+colorlog>=6.8.0
+
+# Network Interface Detection
+netifaces>=0.11.0

@@ -1,0 +1,34 @@
+# AutoBot NPU Worker - Windows Deployment Requirements
+# Python 3.10+ required
+
+# Core Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+
+# Async HTTP Client
+aiohttp>=3.9.0
+
+# Redis Client
+redis>=5.0.0
+
+# OpenVINO NPU Acceleration
+openvino>=2023.2.0
+openvino-dev>=2023.2.0
+
+# Scientific Computing
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Structured Logging
+structlog>=23.2.0
+
+# Configuration Management
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# Additional Dependencies
+typing-extensions>=4.8.0
+
+# Network Interface Detection
+netifaces>=0.11.0
