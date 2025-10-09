@@ -43,7 +43,7 @@ class ProviderHealthResult:
             "status": self.status.value,
             "available": self.available,
             "message": self.message,
-            "response_time": response_time,
+            "response_time": self.response_time,
             "provider": self.provider,
             "details": self.details or {},
         }
