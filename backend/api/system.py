@@ -138,11 +138,20 @@ async def get_system_health(request: Request = None):
             try:
                 if hasattr(request.app.state, 'conversation_file_manager'):
                     conversation_file_manager = request.app.state.conversation_file_manager
-                    # Quick check - just verify we can access the database
-                    version = await conversation_file_manager._get_schema_version()
-                    health_status["components"]["conversation_files_db"] = "healthy"
+                    # Verify database connectivity and schema
+                    try:
+                        version = await conversation_file_manager.get_schema_version()
+                        if version == "unknown":
+                            health_status["components"]["conversation_files_db"] = "not_initialized"
+                            health_status["status"] = "degraded"
+                        else:
+                            health_status["components"]["conversation_files_db"] = "healthy"
+                    except Exception as db_e:
+                        logger.warning(f"Conversation files DB health check failed: {db_e}")
+                        health_status["components"]["conversation_files_db"] = "unhealthy"
+                        health_status["status"] = "degraded"
                 else:
-                    health_status["components"]["conversation_files_db"] = "not_initialized"
+                    health_status["components"]["conversation_files_db"] = "not_configured"
                     health_status["status"] = "degraded"
             except Exception as e:
                 health_status["components"]["conversation_files_db"] = f"error: {str(e)}"
@@ -352,10 +361,20 @@ async def get_detailed_health(request: Request):
         try:
             if hasattr(request.app.state, 'conversation_file_manager'):
                 conversation_file_manager = request.app.state.conversation_file_manager
-                # Verify database is accessible
-                version = await conversation_file_manager._get_schema_version()
-                detailed_components["conversation_files_db"] = "healthy"
-                detailed_components["conversation_files_schema"] = version
+                # Verify database connectivity and schema
+                try:
+                    version = await conversation_file_manager.get_schema_version()
+                    if version == "unknown":
+                        detailed_components["conversation_files_db"] = "not_initialized"
+                        detailed_components["conversation_files_schema"] = "none"
+                    else:
+                        detailed_components["conversation_files_db"] = "healthy"
+                        detailed_components["conversation_files_schema"] = version
+                except Exception as db_e:
+                    logger.warning(f"Conversation files DB health check failed: {db_e}")
+                    detailed_components["conversation_files_db"] = "unhealthy"
+                    detailed_components["conversation_files_schema"] = "error"
+                    detailed_components["conversation_files_error"] = str(db_e)
             else:
                 detailed_components["conversation_files_db"] = "not_configured"
         except Exception as e:
