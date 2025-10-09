@@ -6,6 +6,74 @@ This document contains development guidelines, project setup instructions, and a
 
 ---
 
+## ⚡ WORKFLOW ENFORCEMENT - READ THIS FIRST
+
+**🚨 BEFORE STARTING ANY TASK - MANDATORY PRE-FLIGHT CHECKLIST:**
+
+```
+⏱️ Estimated Time: 2-3 minutes | ⚠️ CANNOT SKIP - MANDATORY FOR ALL TASKS
+
+[ ] Step 1: Create TodoWrite with Research → Plan → Implement phases
+[ ] Step 2: Search Memory MCP for similar past work (mcp__memory__search_nodes)
+[ ] Step 3: Identify minimum 2 specialized agents to launch in parallel
+[ ] Step 4: Plan code-reviewer agent if ANY code will be modified
+[ ] Step 5: Check for RED FLAGS below - STOP if any detected
+
+🔴 SELF-AWARENESS CHECK: Am I feeling rushed or pressured?
+   → If YES: MORE rigor required, NOT less. Slow down intentionally.
+```
+
+**🚩 RED FLAGS - IMMEDIATE STOP POINTS:**
+
+```
+❌ User says "quick fix" or "just do X"
+   → STOP: Plan Research → Plan → Implement workflow instead
+
+❌ Thinking "I'll fix this properly later"
+   → STOP: Fix it properly RIGHT NOW, not later
+
+❌ Feeling rushed or under time pressure
+   → STOP: Pressure requires MORE rigor, not shortcuts
+
+❌ About to edit code directly without agents
+   → STOP: Launch specialized agents instead
+
+❌ System reminder about TodoWrite appears
+   → STOP: You're not tracking tasks - create TodoWrite immediately
+
+❌ Skipping Research phase because "it's simple"
+   → STOP: You don't understand the problem yet - Research first
+
+❌ Planning to work around a blocker
+   → STOP: Fix the blocker first, never work around it
+
+❌ About to disable functionality instead of fixing
+   → STOP: Violates NO TEMPORARY FIXES policy
+```
+
+**✅ CORRECT RESPONSE TO RED FLAGS:**
+
+1. **STOP current work immediately**
+2. **Create TodoWrite** with proper phase breakdown
+3. **Launch minimum 2 agents** in parallel for Research phase
+4. **Follow Research → Plan → Implement** systematically
+5. **Document decision** in Memory MCP
+
+**🎯 WORKFLOW VIOLATION SELF-TEST (Use Anytime):**
+
+Ask yourself these questions right now:
+
+- ❓ **Did I create TodoWrite before starting?** → If NO: Create it now
+- ❓ **Have I launched any agents yet?** → If NO: Launch 2+ agents now
+- ❓ **Am I in Research, Plan, or Implement phase?** → If UNSURE: Start Research
+- ❓ **Did I search Memory MCP for similar work?** → If NO: Search now
+- ❓ **Am I working alone or with agents?** → If ALONE: Delegate to agents
+- ❓ **Will I modify code without code review?** → If YES: Plan code-reviewer
+
+**If ANY answer reveals violation → STOP and correct immediately**
+
+---
+
 ## 🚨 STANDARDIZED PROCEDURES
 
 **ONLY PERMITTED SETUP AND RUN METHODS:**
@@ -19,7 +87,7 @@ bash setup.sh [--full|--minimal|--distributed]
 ### Startup (Daily Use)
 
 ```bash
-bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+bash run_autobot.sh [--dev|--prod] [--desktop|--no-desktop] [--no-browser]
 ```
 
 **❌ OBSOLETE METHODS (DO NOT USE):**
@@ -317,6 +385,28 @@ Every task, regardless of size or complexity, MUST progress through these three 
 
 **🚨 MANDATORY CHECKPOINT**: Cannot proceed to Plan phase without completing ALL Research steps
 
+**🚦 RESEARCH PHASE CHECKPOINT:**
+
+```
+⏱️ Expected Duration: 15-30 minutes for typical tasks
+
+✅ Minimum 2 agents launched in parallel?
+✅ Memory MCP searched for similar past work?
+✅ Root cause identified (not just symptoms)?
+✅ Multiple solution approaches evaluated (2-3 minimum)?
+✅ Research findings stored in Memory MCP?
+✅ All unknowns and uncertainties documented?
+
+❌ CANNOT PROCEED TO PLAN PHASE WITHOUT ALL CHECKBOXES
+
+🔴 If any checkbox fails:
+   → Launch additional agents to complete research
+   → Search Memory MCP more thoroughly
+   → Identify and document all unknowns before proceeding
+```
+
+---
+
 ### **📋 PHASE 2: PLAN (Mandatory - Requires Research Completion)**
 
 **Step P1: Solution Selection & Architecture Design**
@@ -344,6 +434,30 @@ Every task, regardless of size or complexity, MUST progress through these three 
 
 **🚨 MANDATORY CHECKPOINT**: Cannot proceed to Implement phase without plan approval
 
+**🚦 PLAN PHASE CHECKPOINT:**
+
+```
+⏱️ Expected Duration: 10-20 minutes for typical tasks
+
+✅ Solution selected based on research findings?
+✅ Systems-architect agent used for architecture design?
+✅ Code-reviewer agent planned if ANY code changes needed?
+✅ Agent assignments documented in TodoWrite?
+✅ Risk analysis completed (code-skeptic)?
+✅ Implementation approach validated and approved?
+✅ Complete plan stored in Memory MCP with relations?
+
+❌ CANNOT PROCEED TO IMPLEMENT PHASE WITHOUT ALL CHECKBOXES
+
+🔴 If any checkbox fails:
+   → Return to Research phase if solution unclear
+   → Launch code-skeptic to identify risks
+   → Document agent assignments in TodoWrite
+   → Store plan in Memory MCP before proceeding
+```
+
+---
+
 ### **⚙️ PHASE 3: IMPLEMENT (Mandatory - Requires Plan Approval)**
 
 **Step I1: Implementation Execution**
@@ -366,6 +480,32 @@ Every task, regardless of size or complexity, MUST progress through these three 
 - Update Memory MCP with implementation results and any design changes made during execution
 - Sync changes to remote VMs using proper sync procedures
 - **Exit Criteria**: Implementation complete, documented, knowledge captured, changes deployed
+
+**🚦 IMPLEMENT PHASE CHECKPOINT:**
+
+```
+⏱️ Expected Duration: 20-60 minutes depending on complexity
+
+✅ Specialized agents launched per plan assignments?
+✅ TodoWrite actively tracking implementation progress?
+✅ Code review completed (MANDATORY for all code changes)?
+✅ All tests passing (lint, typecheck, unit tests)?
+✅ Changes synced to remote VMs (if applicable)?
+✅ Documentation updated by documentation-engineer?
+✅ Knowledge captured in Memory MCP (lessons learned)?
+✅ No temporary fixes or workarounds introduced?
+
+❌ CANNOT MARK TASK COMPLETE WITHOUT ALL CHECKBOXES
+
+🔴 If any checkbox fails:
+   → Launch code-reviewer immediately if not done
+   → Fix all failing tests before proceeding
+   → Sync changes to remote VMs if skipped
+   → Document lessons learned in Memory MCP
+   → Remove any temporary fixes introduced
+```
+
+---
 
 ### **🎯 WORKFLOW ENFORCEMENT PRINCIPLES**
 
@@ -492,6 +632,214 @@ Use single message with multiple Task tool calls:
 4. **Validate agent completion** before phase transition
 5. **Synthesize agent results** into coherent phase output
 
+---
+
+## 🔔 SYSTEM REMINDERS ARE REQUIREMENTS
+
+**CRITICAL: System reminders are NOT suggestions - they are MANDATORY requirements**
+
+### **Understanding System Reminders**
+
+When you see these system reminders, they indicate **workflow violations in progress**:
+
+| System Reminder | What It Means | Required Action |
+|----------------|---------------|-----------------|
+| **"TodoWrite hasn't been used recently"** | You're not tracking task progress | **STOP** → Create TodoWrite immediately with Research/Plan/Implement phases |
+| **"Consider using agents"** | You're working alone instead of delegating | **STOP** → Launch minimum 2 agents in parallel right now |
+| **"Code review recommended"** | Code changes without mandatory review | **STOP** → Launch code-reviewer agent immediately |
+| **"Memory MCP could help"** | Not using persistent knowledge storage | **STOP** → Search and store findings in Memory MCP |
+
+### **System Reminder Response Protocol**
+
+```
+🚨 WHEN ANY SYSTEM REMINDER APPEARS:
+
+Step 1: STOP current work immediately
+Step 2: Acknowledge the violation publicly
+Step 3: Execute the required corrective action
+Step 4: Resume work only after correction complete
+
+Every system reminder = Active workflow violation
+```
+
+### **Proactive Violation Detection**
+
+**Before you proceed with ANY action, check for these patterns:**
+
+```
+⚠️ VIOLATION DETECTION CHECKLIST:
+
+[ ] Am I working alone without agents?
+    → Launch 2+ agents in parallel immediately
+
+[ ] Did I start without creating TodoWrite?
+    → Create TodoWrite with workflow phases now
+
+[ ] Am I about to modify code?
+    → Plan code-reviewer agent before changing ANY code
+
+[ ] Have I searched Memory MCP for similar work?
+    → Search mcp__memory__search_nodes before proceeding
+
+[ ] Am I considering a "quick fix" or workaround?
+    → STOP - Return to Research phase instead
+
+[ ] Did I skip Research phase because task seems simple?
+    → STOP - Simplicity is an illusion, Research first
+```
+
+### **Automatic Correction Procedures**
+
+**If system reminder appears OR violation detected:**
+
+1. **TodoWrite Missing:**
+   ```
+   Create TodoWrite immediately:
+   - [ ] Research: [Brief description]
+   - [ ] Plan: [Brief description]
+   - [ ] Implement: [Brief description]
+   ```
+
+2. **Agents Not Used:**
+   ```
+   Launch minimum 2 agents in parallel:
+   - Task(subagent_type="general-purpose", ...)
+   - Task(subagent_type="[domain-specific]", ...)
+   ```
+
+3. **Code Review Missing:**
+   ```
+   Launch code-reviewer immediately:
+   - Task(subagent_type="code-reviewer", description="Review recent changes", ...)
+   ```
+
+4. **Memory MCP Not Used:**
+   ```
+   Search and store in Memory MCP:
+   - mcp__memory__search_nodes --query "[relevant topic]"
+   - mcp__memory__create_entities (store findings)
+   ```
+
+---
+
+## 📊 WORKFLOW ACCOUNTABILITY & SELF-AUDIT
+
+**Mandatory self-check intervals: Every 30 minutes during active work**
+
+### **Session Start Checklist**
+
+**Before beginning ANY work session:**
+
+```
+✅ SESSION START VERIFICATION (Required):
+
+[ ] TodoWrite created with Research → Plan → Implement phases
+[ ] Memory MCP searched for related work (mcp__memory__search_nodes)
+[ ] Minimum 2 agents identified for parallel launch
+[ ] Code-reviewer planned if code changes expected
+[ ] No time pressure or rushing detected
+[ ] User request fully understood (not making assumptions)
+
+⚠️ Cannot start work until ALL boxes checked
+```
+
+### **Periodic Self-Check (Every 30 Minutes)**
+
+**Set a mental timer - check every 30 minutes:**
+
+```
+🔄 WORKFLOW ADHERENCE CHECK (Every 30 min):
+
+Current Phase: [ ] Research [ ] Plan [ ] Implement
+
+✅ TodoWrite actively maintained and current?
+✅ Agents launched and working in parallel?
+✅ Memory MCP updated with recent findings?
+✅ No temporary fixes or workarounds introduced?
+✅ Still following Research → Plan → Implement workflow?
+✅ Code review planned/completed for any code changes?
+
+❌ If ANY box unchecked → STOP and correct immediately
+```
+
+### **End-of-Session Validation**
+
+**Before marking task complete or ending work:**
+
+```
+✅ SESSION COMPLETION CHECKLIST:
+
+[ ] All workflow phases completed (Research → Plan → Implement)
+[ ] Code review performed on ALL code changes
+[ ] All tests passing (lint, typecheck, unit tests)
+[ ] Documentation updated (if applicable)
+[ ] Knowledge captured in Memory MCP (lessons learned)
+[ ] Changes synced to remote VMs (if applicable)
+[ ] TodoWrite marked complete and archived
+[ ] No temporary fixes or workarounds remain in code
+
+⚠️ Cannot mark task complete until ALL boxes checked
+```
+
+### **Audit Questions - Use Anytime**
+
+**Ask yourself these questions at any point:**
+
+1. **Task Tracking:**
+   - "Did I create TodoWrite before starting?" → If NO: Create it now
+   - "Is TodoWrite still current and accurate?" → If NO: Update it now
+
+2. **Agent Delegation:**
+   - "Am I working alone or with agents?" → If ALONE: Delegate to agents now
+   - "Did I launch minimum 2 agents in parallel?" → If NO: Launch them now
+
+3. **Workflow Adherence:**
+   - "What phase am I in: Research, Plan, or Implement?" → If UNSURE: Return to Research
+   - "Did I complete previous phase fully?" → If NO: Complete it before proceeding
+
+4. **Code Quality:**
+   - "Did I code review my changes?" → If NO: Launch code-reviewer now
+   - "Are all tests passing?" → If NO: Fix tests before proceeding
+
+5. **Knowledge Management:**
+   - "Did I search Memory MCP for similar work?" → If NO: Search now
+   - "Did I store findings in Memory MCP?" → If NO: Store them now
+
+### **Violation Recovery Procedure**
+
+**When workflow violations are discovered mid-task:**
+
+```
+🔴 VIOLATION RECOVERY PROTOCOL:
+
+1. STOP current work immediately
+2. Acknowledge violation publicly (in response to user)
+3. Assess violation severity:
+   - Minor: Missing TodoWrite, Memory MCP search
+   - Major: No agents used, no code review, temporary fixes
+4. Execute recovery:
+   - Minor: Create/update missing items, continue
+   - Major: Return to appropriate workflow phase, restart properly
+5. Document lesson learned in Memory MCP
+6. Resume work only after violation fully corrected
+```
+
+### **Evidence of Proper Workflow**
+
+**Every session should demonstrate:**
+
+- ✅ TodoWrite usage from start to finish
+- ✅ Multiple agents launched in parallel (minimum 2)
+- ✅ Memory MCP entities created for findings and decisions
+- ✅ Code review performed on all code changes (MANDATORY)
+- ✅ All three workflow phases completed systematically
+- ✅ No temporary fixes or workarounds in final code
+- ✅ Knowledge captured and lessons learned documented
+
+**If ANY item missing → Workflow violation occurred → Recovery required**
+
+---
+
 ## Development Guidelines
 
 **CRITICAL WORKFLOW INTEGRATION**:
@@ -601,11 +949,12 @@ bash run_autobot.sh [OPTIONS]
 OPTIONS:
   --dev              Development mode with auto-reload and debugging
   --prod             Production mode (default)
-  --no-build         Skip builds (fastest restart)
-  --build            Force build even if images exist
-  --rebuild          Force rebuild everything (clean slate)
+  --no-browser       Don't launch browser automatically
+  --desktop          Enable VNC desktop access
   --no-desktop       Disable VNC desktop access
-  --desktop          Enable VNC desktop access (default)
+  --status           Show current system status
+  --stop             Stop all AutoBot services (backend + VMs)
+  --restart          Fast, intelligent restart (< 1 minute)
   --help             Show this help message
 ```
 
@@ -613,19 +962,20 @@ OPTIONS:
 
 **Development Mode (Daily Use):**
 ```bash
-bash run_autobot.sh --dev --no-build
+bash run_autobot.sh --dev
 ```
-- Fastest startup for development
-- Uses existing services
+- Fast startup for development
 - Auto-reload and debugging enabled
+- Browser launches automatically
+- Desktop VNC enabled by default
 
-**Fresh Development Setup:**
+**Development Without Browser:**
 ```bash
-bash run_autobot.sh --dev --build
+bash run_autobot.sh --dev --no-browser
 ```
-- Builds/rebuilds all services
-- Development mode with debugging
-- VNC desktop enabled by default
+- Development mode without browser
+- Faster startup
+- Access frontend manually at http://172.16.168.21:5173
 
 ### Desktop Access (VNC)
 
@@ -694,3 +1044,76 @@ docs/
 - [`docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`](docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md) - Architecture overview
 - [`docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`](docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md) - Problem resolution
 - [`docs/system-state.md`](docs/system-state.md) - **System status and updates**
+
+---
+
+## 📋 WORKFLOW QUICK REFERENCE
+
+**🎯 Use this reference for every task - keep it visible**
+
+### **Every Task Starts With:**
+
+```bash
+# 1. TodoWrite (MANDATORY - No exceptions)
+TodoWrite:
+- [ ] Research: [Problem analysis, solution research, validation]
+- [ ] Plan: [Solution selection, task breakdown, validation]
+- [ ] Implement: [Execution, verification, documentation]
+
+# 2. Memory MCP Search (Check for similar past work)
+mcp__memory__search_nodes --query "related topic keywords"
+
+# 3. Launch Agents (Minimum 2 in parallel - MANDATORY)
+Task(subagent_type="general-purpose", description="...", prompt="...")
+Task(subagent_type="systems-architect", description="...", prompt="...")
+
+# 4. Code Review (MANDATORY after ANY code changes)
+Task(subagent_type="code-reviewer", description="Review all changes", prompt="...")
+```
+
+### **Phase Exit Criteria Quick Check:**
+
+| Phase | Exit Criteria | Time Est. |
+|-------|--------------|-----------|
+| **Research** | Findings in Memory MCP, root cause known, 2-3 solutions evaluated | 15-30 min |
+| **Plan** | Agent assignments made, risks identified, plan in Memory MCP | 10-20 min |
+| **Implement** | Code reviewed, tests passing, documented, synced to VMs | 20-60 min |
+
+### **Common Violation Patterns & Corrections:**
+
+| Violation Pattern | Immediate Correction |
+|------------------|---------------------|
+| ❌ Working alone without agents | Launch 2+ agents in parallel RIGHT NOW |
+| ❌ No TodoWrite created | Create TodoWrite with 3 phases immediately |
+| ❌ Skipped Research phase | STOP - Return to Research phase |
+| ❌ Code changes without review | Launch code-reviewer agent immediately |
+| ❌ "Quick fix" or workaround | STOP - Research root cause instead |
+| ❌ No Memory MCP search | Search mcp__memory__search_nodes now |
+
+### **Emergency Recovery:**
+
+```
+🚨 IF WORKFLOW VIOLATED:
+
+1. STOP work immediately
+2. Create/update TodoWrite with current phase
+3. Launch missing agents (minimum 2)
+4. Search Memory MCP if not done
+5. Complete missing workflow steps
+6. Document lesson learned
+7. Resume only after recovery complete
+```
+
+### **Remember:**
+
+**Workflow is FASTER and produces BETTER results than shortcuts**
+
+- ✅ Proper workflow prevents bugs before they happen
+- ✅ Agent delegation is faster than working alone
+- ✅ Code review catches issues immediately
+- ✅ Memory MCP prevents duplicate work
+- ✅ Research prevents wrong solutions
+
+**Every shortcut creates 10x more work fixing the problems it causes**
+
+---
