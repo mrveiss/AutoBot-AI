@@ -363,23 +363,31 @@ async def check_agent_health(agent_id: str):
             f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
         )
 
-        # Check provider availability using ConnectionTester
+        # Check provider availability using ProviderHealthManager
         provider_available = False
         start_time = datetime.now()
-        
+
         try:
+            from backend.services.provider_health import ProviderHealthManager
+
             provider_config = DEFAULT_AGENT_CONFIGS[agent_id].get("provider", "ollama")
-            
-            # Currently we only support Ollama provider checking
-            # In the future, this can be extended for other providers
-            if provider_config == "ollama":
-                ollama_result = await ConnectionTester.test_ollama_connection()
-                provider_available = ollama_result.get("status") == "connected"
-            else:
-                # For other providers, assume available for now
-                # TODO: Implement provider checks for OpenAI, Anthropic, etc.
-                provider_available = True
-                
+
+            # Check provider health using unified health manager
+            health_result = await ProviderHealthManager.check_provider_health(
+                provider=provider_config,
+                timeout=3.0,  # Quick check for agent status endpoint
+                use_cache=True,  # Use caching to avoid excessive checks
+            )
+
+            provider_available = health_result.available
+
+            # Log if provider is unavailable
+            if not provider_available:
+                logger.warning(
+                    f"Provider {provider_config} unavailable for agent {agent_id}: "
+                    f"{health_result.message}"
+                )
+
         except Exception as e:
             logger.warning(f"Provider availability check failed for agent {agent_id}: {str(e)}")
             provider_available = False
