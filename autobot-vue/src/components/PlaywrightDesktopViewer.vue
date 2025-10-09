@@ -125,16 +125,28 @@ export default {
     };
 
     onMounted(async () => {
-      // Load VNC URL dynamically
+      // Load VNC URL dynamically from backend configuration
       try {
         const dynamicVncUrl = await appConfig.getVncUrl('playwright', {
           autoconnect: true,
           resize: 'scale'
         });
         vncUrl.value = dynamicVncUrl;
+        console.log('Playwright VNC URL loaded from configuration:', dynamicVncUrl);
       } catch (error) {
-        console.warn('Failed to load dynamic VNC URL, using fallback');
-        vncUrl.value = 'http://172.16.168.25:6081/vnc.html?autoconnect=true&resize=scale&password=playwright';
+        console.warn('Failed to load dynamic VNC URL from config, attempting backend fallback:', error);
+
+        // Try to get configuration from backend as fallback
+        try {
+          const backendConfig = await appConfig.getBackendConfig();
+          const playwrightHost = backendConfig?.playwright?.host || '172.16.168.25';
+          const playwrightVncPort = backendConfig?.playwright?.vnc_port || 6081;
+          vncUrl.value = `http://${playwrightHost}:${playwrightVncPort}/vnc.html?autoconnect=true&resize=scale&password=playwright`;
+          console.log('Using backend fallback configuration for Playwright VNC');
+        } catch (backendError) {
+          console.warn('Backend config also failed, using hardcoded fallback');
+          vncUrl.value = 'http://172.16.168.25:6081/vnc.html?autoconnect=true&resize=scale&password=playwright';
+        }
       }
 
       // Auto-check health on mount
