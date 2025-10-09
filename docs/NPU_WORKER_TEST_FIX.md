@@ -18,9 +18,9 @@ The NPU Worker test (`tests/screenshots/test_npu_worker.py`) had several issues:
 
 ## Solution Implemented
 
-### 1. Created Simplified Test for Startup
+### 1. NPU Worker Tests Located at
 
-**File**: `test_npu_worker.py` (project root)
+**File**: `tests/performance/test_npu_worker.py`
 
 **Features**:
 - ✅ **No External Dependencies**: Uses built-in `urllib` and optional `requests`
@@ -91,7 +91,7 @@ except ImportError:
 ## Current System Status
 
 ### ✅ Startup Testing Fixed
-- **Location**: `test_npu_worker.py` in project root (correct location for run_agent.sh)
+- **Location**: `tests/performance/test_npu_worker.py`
 - **Dependencies**: None required (uses built-in libraries)
 - **Execution Time**: <2 seconds for quick health check
 - **Success Rate**: 100% when NPU Worker container is healthy
