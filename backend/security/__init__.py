@@ -1,0 +1,14 @@
+"""
+Security module for AutoBot
+Provides service-to-service authentication and authorization
+"""
+
+from backend.security.service_auth import (
+    ServiceAuthManager,
+    validate_service_auth
+)
+
+__all__ = [
+    'ServiceAuthManager',
+    'validate_service_auth'
+]

@@ -433,6 +433,13 @@ try:
 except ImportError as e:
     logging.warning(f"⚠️ Optional router not available: chat_knowledge - {e}")
 
+try:
+    from backend.api.npu_workers import router as npu_workers_router
+    optional_routers.append((npu_workers_router, "", ["npu-workers"], "npu_workers"))
+    logging.info("✅ Optional router loaded: npu_workers (includes prefix /api/npu)")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: npu_workers - {e}")
+
 # Store logger for app usage
 logger = logging.getLogger(__name__)
 
@@ -463,67 +470,107 @@ class AppFactory:
 
         @asynccontextmanager
         async def lifespan(app: FastAPI):
-            """Application lifespan manager with background initialization"""
+            """Application lifespan manager with critical and background initialization"""
             logger.info("🚀 AutoBot Backend starting up...")
 
-            # Start background initialization
-            logger.info("✅ [  0%] Background Init: Starting background initialization...")
+            # ================================================================
+            # PHASE 1: CRITICAL INITIALIZATION (BLOCKING - Must complete before serving requests)
+            # ================================================================
+            logger.info("=== PHASE 1: Critical Services Initialization ===")
 
-            # Background task for heavy initialization
-            async def background_init():
+            try:
+                # Initialize configuration - CRITICAL
+                logger.info("✅ [ 10%] Config: Loading unified configuration...")
+                config = UnifiedConfigManager()
+                app.state.config = config
+                app_state["config"] = config
+                logger.info("✅ [ 10%] Config: Configuration loaded successfully")
+
+                # Initialize Redis - CRITICAL (but with graceful degradation)
+                logger.info("✅ [ 20%] Redis: Initializing Redis connection...")
                 try:
-                    # Initialize configuration
-                    logger.info("✅ [ 10%] Config: Loading unified configuration...")
-                    config = UnifiedConfigManager()
-                    app.state.config = config
-                    app_state["config"] = config
+                    from src.redis_pool_manager import RedisPoolManager
+                    redis_manager = RedisPoolManager()
+                    app.state.redis_manager = redis_manager
+                    logger.info("✅ [ 20%] Redis: Pool Manager initialized successfully")
+                except Exception as redis_error:
+                    logger.error(f"Redis initialization failed: {redis_error}")
+                    logger.warning("⚠️ Continuing without Redis - some features may be limited")
 
-                    # Initialize Redis (with timeout handling)
-                    logger.info("✅ [ 20%] Redis: Initializing Redis connection...")
-                    try:
-                        from src.redis_pool_manager import RedisPoolManager
-                        redis_manager = RedisPoolManager()
-                        # Pools initialize automatically on first use
-                        app.state.redis_manager = redis_manager
-                        logger.info("✅ Redis Pool Manager initialized successfully")
-                    except Exception as redis_error:
-                        logger.error(f"Redis initialization failed: {redis_error}")
-                        # Continue without Redis - some features may be limited
+                # Initialize Chat History Manager - CRITICAL
+                logger.info("✅ [ 30%] Chat History: Initializing chat history manager...")
+                try:
+                    chat_history_manager = ChatHistoryManager()
+                    app.state.chat_history_manager = chat_history_manager
+                    app_state["chat_history_manager"] = chat_history_manager
+                    logger.info("✅ [ 30%] Chat History: Manager initialized successfully")
+                except Exception as chat_history_error:
+                    logger.error(f"❌ CRITICAL: Chat history manager initialization failed: {chat_history_error}")
+                    raise RuntimeError(f"Chat history manager initialization failed: {chat_history_error}")
 
-                    # Initialize Knowledge Base in background
-                    logger.info("✅ [ 30%] Knowledge Base: Initializing knowledge base...")
+                # Initialize Conversation File Manager Database - CRITICAL
+                logger.info("✅ [ 40%] Conversation Files DB: Initializing database schema...")
+                try:
+                    from src.conversation_file_manager import get_conversation_file_manager
+                    conversation_file_manager = await get_conversation_file_manager()
+                    await conversation_file_manager.initialize()
+                    app.state.conversation_file_manager = conversation_file_manager
+                    app_state["conversation_file_manager"] = conversation_file_manager
+                    logger.info("✅ [ 40%] Conversation Files DB: Database initialized and verified")
+                except Exception as conv_file_error:
+                    logger.error(f"❌ CRITICAL: Conversation files database initialization failed: {conv_file_error}")
+                    logger.error("Backend startup ABORTED - database must be operational")
+                    raise RuntimeError(f"Database initialization failed: {conv_file_error}")
+
+                # Initialize Chat Workflow Manager - CRITICAL
+                logger.info("✅ [ 50%] Chat Workflow: Initializing workflow manager...")
+                try:
+                    chat_workflow_manager = ChatWorkflowManager()
+                    await chat_workflow_manager.initialize()
+                    app.state.chat_workflow_manager = chat_workflow_manager
+                    app_state["chat_workflow_manager"] = chat_workflow_manager
+                    logger.info("✅ [ 50%] Chat Workflow: Manager initialized with async Redis")
+                except Exception as chat_error:
+                    logger.error(f"❌ CRITICAL: Chat workflow manager initialization failed: {chat_error}")
+                    raise RuntimeError(f"Chat workflow manager initialization failed: {chat_error}")
+
+                logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
+
+            except Exception as critical_error:
+                logger.error(f"❌ CRITICAL INITIALIZATION FAILED: {critical_error}")
+                logger.error("Backend startup ABORTED - critical services must be operational")
+                raise  # Re-raise to prevent app from starting
+
+            # ================================================================
+            # PHASE 2: BACKGROUND INITIALIZATION (NON-BLOCKING - Can complete while serving)
+            # ================================================================
+            async def background_init():
+                """Initialize non-critical services in background"""
+                try:
+                    logger.info("=== PHASE 2: Background Services Initialization ===")
+
+                    # Initialize Knowledge Base - NON-CRITICAL (slow, can fail gracefully)
+                    logger.info("✅ [ 70%] Knowledge Base: Initializing knowledge base...")
                     try:
                         knowledge_base = await get_or_create_knowledge_base(app)
                         app.state.knowledge_base = knowledge_base
                         app_state["knowledge_base"] = knowledge_base
-                        logger.info("✅ [ 90%] Knowledge Base: Knowledge base ready")
+                        logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
                     except Exception as kb_error:
-                        logger.error(f"Knowledge base initialization failed: {kb_error}")
+                        logger.warning(f"Knowledge base initialization failed: {kb_error}")
                         app.state.knowledge_base = None
 
-                    # Initialize Chat History Manager
-                    logger.info("✅ [ 85%] Chat History: Initializing chat history manager...")
+                    # Initialize NPU Worker WebSocket subscriptions - NON-CRITICAL
+                    logger.info("✅ [ 80%] NPU Workers: Initializing WebSocket event subscriptions...")
                     try:
-                        chat_history_manager = ChatHistoryManager()
-                        app.state.chat_history_manager = chat_history_manager
-                        app_state["chat_history_manager"] = chat_history_manager
-                        logger.info("✅ [ 85%] Chat History: Chat history manager initialized")
-                    except Exception as chat_history_error:
-                        logger.error(f"Chat history manager initialization failed: {chat_history_error}")
-                        app.state.chat_history_manager = None
+                        from backend.api.websockets import init_npu_worker_websocket
+                        init_npu_worker_websocket()
+                        logger.info("✅ [ 80%] NPU Workers: WebSocket subscriptions initialized")
+                    except Exception as npu_ws_error:
+                        logger.warning(f"NPU worker WebSocket initialization failed: {npu_ws_error}")
 
-                    # Initialize Chat Workflow Manager
-                    logger.info("✅ [ 90%] Chat Workflow: Initializing chat workflow manager...")
-                    try:
-                        chat_workflow_manager = ChatWorkflowManager()
-                        app.state.chat_workflow_manager = chat_workflow_manager
-                        app_state["chat_workflow_manager"] = chat_workflow_manager
-                        logger.info("✅ [ 90%] Chat Workflow: Chat workflow manager initialized")
-                    except Exception as chat_error:
-                        logger.error(f"Chat workflow manager initialization failed: {chat_error}")
-
-                    # Initialize Memory Graph
-                    logger.info("✅ [ 92%] Memory Graph: Initializing memory graph...")
+                    # Initialize Memory Graph - NON-CRITICAL
+                    logger.info("✅ [ 85%] Memory Graph: Initializing memory graph...")
                     try:
                         from src.autobot_memory_graph import AutoBotMemoryGraph
                         memory_graph = AutoBotMemoryGraph(
@@ -532,12 +579,13 @@ class AppFactory:
                         await memory_graph.initialize()
                         app.state.memory_graph = memory_graph
                         app_state["memory_graph"] = memory_graph
-                        logger.info("✅ [ 92%] Memory Graph: Memory graph initialized successfully")
+                        logger.info("✅ [ 85%] Memory Graph: Memory graph initialized successfully")
                     except Exception as memory_error:
-                        logger.error(f"Memory graph initialization failed: {memory_error}")
+                        logger.warning(f"Memory graph initialization failed: {memory_error}")
                         app.state.memory_graph = None
 
-                    # Initialize Background LLM Sync
+                    # Initialize Background LLM Sync - NON-CRITICAL
+                    logger.info("✅ [ 90%] Background LLM Sync: Initializing AI Stack integration...")
                     try:
                         from backend.services.ai_stack_client import AIStackClient
                         ai_stack_client = AIStackClient()
@@ -559,18 +607,23 @@ class AppFactory:
                             logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
 
                     except Exception as sync_error:
-                        logger.error(f"Background LLM sync initialization failed: {sync_error}")
+                        logger.warning(f"Background LLM sync initialization failed: {sync_error}")
+
+                    logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
 
                 except Exception as e:
-                    logger.error(f"Background initialization failed: {e}")
-                    # App can still start without background services
+                    logger.error(f"Background initialization encountered errors: {e}")
+                    logger.info("App remains operational with degraded background services")
 
-            # Start background initialization task
+            # Start background initialization (non-blocking)
+            logger.info("🔄 Starting background services initialization...")
             asyncio.create_task(background_init())
 
-            yield  # Application runs here
+            yield  # Application starts serving requests here
 
-            # Cleanup on shutdown
+            # ================================================================
+            # CLEANUP ON SHUTDOWN
+            # ================================================================
             logger.info("🛑 AutoBot Backend shutting down...")
             try:
                 if hasattr(app.state, 'background_llm_sync') and app.state.background_llm_sync:
@@ -579,6 +632,7 @@ class AppFactory:
                     await app.state.memory_graph.close()
                 if hasattr(app.state, 'redis_manager') and app.state.redis_manager:
                     await app.state.redis_manager.close_all_pools()
+                logger.info("✅ Cleanup completed successfully")
             except Exception as e:
                 logger.error(f"Error during shutdown: {e}")
 
@@ -614,6 +668,25 @@ class AppFactory:
 
         # Add GZip compression for better performance
         app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+        # BEGIN SERVICE AUTH MIDDLEWARE - ANSIBLE MANAGED
+        # Service authentication middleware - ENFORCEMENT MODE (Week 3 Phase 3)
+        try:
+            from starlette.middleware.base import BaseHTTPMiddleware
+            from backend.middleware.service_auth_enforcement import enforce_service_auth, log_enforcement_status
+            app.add_middleware(BaseHTTPMiddleware, dispatch=enforce_service_auth)
+            log_enforcement_status()
+            logger.info("✅ Service Authentication Middleware (ENFORCEMENT MODE) enabled")
+        except ImportError as e:
+            logger.warning(f"⚠️ Service auth enforcement middleware not available: {e}")
+            # Fallback to logging mode if enforcement not available
+            try:
+                from backend.middleware.service_auth_logging import ServiceAuthLoggingMiddleware
+                app.add_middleware(ServiceAuthLoggingMiddleware)
+                logger.info("✅ Service Authentication Middleware (LOGGING MODE - fallback) enabled")
+            except ImportError as e2:
+                logger.warning(f"⚠️ Service auth middleware not available: {e2}")
+        # END SERVICE AUTH MIDDLEWARE - ANSIBLE MANAGED
 
         # Configure core routers - these should always be available
         core_routers = [
@@ -698,7 +771,9 @@ def create_app(**kwargs) -> FastAPI:
     return factory.create_fastapi_app(**kwargs)
 
 
+# Create app instance for uvicorn
+app = create_app()
+
 # For direct usage in main.py or testing
 if __name__ == "__main__":
-    app = create_app()
     logger.info("✅ AutoBot Backend application ready")
