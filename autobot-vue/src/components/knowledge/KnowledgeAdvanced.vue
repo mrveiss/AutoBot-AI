@@ -16,6 +16,28 @@
         </div>
 
         <div class="action-grid">
+          <!-- 1. AutoBot Documentation (FIRST - Product docs, highest priority) -->
+          <div class="action-card">
+            <div class="action-content">
+              <div class="action-icon autobot-docs">
+                <i class="fas fa-cogs"></i>
+              </div>
+              <h5>AutoBot Documentation</h5>
+              <p>Add AutoBot-specific documentation, configs, and setup guides</p>
+              <small class="action-meta">~30 documents, ~3 minutes</small>
+            </div>
+            <button
+              @click="populateAutoBotDocs"
+              :disabled="isPopulating"
+              class="action-btn primary"
+            >
+              <i v-if="populateStatus.autobotDocs === 'loading'" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-plus"></i>
+              {{ getButtonText('autobotDocs') }}
+            </button>
+          </div>
+
+          <!-- 2. System Commands (SECOND - Common CLI commands) -->
           <div class="action-card">
             <div class="action-content">
               <div class="action-icon system-commands">
@@ -36,6 +58,7 @@
             </button>
           </div>
 
+          <!-- 3. Manual Pages (THIRD - Detailed reference docs) -->
           <div class="action-card">
             <div class="action-content">
               <div class="action-icon man-pages">
@@ -53,26 +76,6 @@
               <i v-if="populateStatus.manPages === 'loading'" class="fas fa-spinner fa-spin"></i>
               <i v-else class="fas fa-plus"></i>
               {{ getButtonText('manPages') }}
-            </button>
-          </div>
-
-          <div class="action-card">
-            <div class="action-content">
-              <div class="action-icon autobot-docs">
-                <i class="fas fa-cogs"></i>
-              </div>
-              <h5>AutoBot Documentation</h5>
-              <p>Add AutoBot-specific documentation, configs, and setup guides</p>
-              <small class="action-meta">~30 documents, ~3 minutes</small>
-            </div>
-            <button
-              @click="populateAutoBotDocs"
-              :disabled="isPopulating"
-              class="action-btn primary"
-            >
-              <i v-if="populateStatus.autobotDocs === 'loading'" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-plus"></i>
-              {{ getButtonText('autobotDocs') }}
             </button>
           </div>
         </div>

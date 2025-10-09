@@ -245,7 +245,7 @@ import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import type { ChatSession } from '@/stores/useChatStore'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
 import type { FileStats } from '@/composables/useConversationFiles'
-import axios from 'axios'
+import ApiClient from '@/utils/ApiClient.js'
 
 const store = useChatStore()
 const controller = useChatController()
@@ -318,15 +318,15 @@ const cancelEdit = () => {
 const deleteSession = async (sessionId: string) => {
   // Fetch file stats for the session
   deleteTargetSessionId.value = sessionId
-  
+
   try {
-    const response = await axios.get(`/api/files/conversation/${sessionId}/list`)
+    const response = await ApiClient.get(`/api/conversation-files/conversation/${sessionId}/list`)
     deleteFileStats.value = response.data?.stats || null
   } catch (error) {
     console.warn('Failed to fetch file stats, proceeding without file info:', error)
     deleteFileStats.value = null
   }
-  
+
   // Show delete dialog
   showDeleteDialog.value = true
 }

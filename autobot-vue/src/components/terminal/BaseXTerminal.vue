@@ -129,8 +129,16 @@ const initTerminal = async () => {
 
     // Handle terminal data input
     terminal.value.onData((data) => {
+      console.log('[BaseXTerminal] onData fired:', {
+        data: data.replace(/\r/g, '\\r').replace(/\n/g, '\\n'),
+        readOnly: props.readOnly,
+        disableStdin: terminal.value?.options.disableStdin
+      })
+
       if (!props.readOnly) {
         emit('data', data)
+      } else {
+        console.log('[BaseXTerminal] Data blocked - terminal is read-only')
       }
     })
 
@@ -234,7 +242,21 @@ watch(() => props.theme, (newTheme) => {
 // Watch for readOnly changes
 watch(() => props.readOnly, (readOnly) => {
   if (terminal.value) {
+    console.log('[BaseXTerminal] ReadOnly changed:', { readOnly, sessionId: props.sessionId })
+
+    // Update disableStdin option
     terminal.value.options.disableStdin = readOnly
+
+    // When becoming writable, ensure focus
+    if (!readOnly) {
+      nextTick(() => {
+        terminal.value?.focus()
+        console.log('[BaseXTerminal] Input enabled and focused')
+      })
+    } else {
+      terminal.value.blur()
+      console.log('[BaseXTerminal] Input disabled and blurred')
+    }
   }
 })
 

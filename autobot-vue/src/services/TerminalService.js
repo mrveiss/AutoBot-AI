@@ -5,10 +5,9 @@
 
 import { reactive, ref } from 'vue';
 import appConfig from '@/config/AppConfig.js';
-import { ApiClient } from '@/utils/ApiClient.js';
+import apiClient from '@/utils/ApiClient.js';
 
-// Create ApiClient instance for terminal operations
-const apiClient = new ApiClient();
+// Use singleton ApiClient instance for terminal operations
 
 // Connection states for state machine
 const CONNECTION_STATES = {
@@ -325,6 +324,18 @@ class TerminalService {
           }
           break;
 
+        case 'connected':
+          // Backend confirmation that terminal is connected
+          console.log('[TerminalService] Terminal connected:', message.content);
+          this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTED);
+          // Set to READY immediately since backend confirms it's ready
+          this.setConnectionState(sessionId, CONNECTION_STATES.READY);
+          this.triggerCallback(sessionId, 'onOutput', {
+            content: message.content || 'Terminal connected',
+            stream: 'system'
+          });
+          break;
+
         case 'pong':
           // Health check response - connection is healthy
           // Health check pong received
@@ -361,7 +372,7 @@ class TerminalService {
     try {
       const message = JSON.stringify({
         type: 'input',
-        text: input + '\n'  // Backend expects 'text' not 'content'
+        text: input  // Send raw input - don't add newline (Enter key sends \r itself)
       });
 
       connection.send(message);

@@ -230,10 +230,11 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function importSession(session: ChatSession) {
-    // Ensure unique ID
+    // Skip if session already exists (prevent duplicate imports)
     const existingSession = sessions.value.find(s => s.id === session.id)
     if (existingSession) {
-      session.id = `${session.id}-imported-${Date.now()}`
+      console.log(`Session ${session.id} already exists, skipping import`)
+      return
     }
 
     sessions.value.push(session)

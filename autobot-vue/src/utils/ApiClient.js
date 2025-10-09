@@ -482,6 +482,69 @@ class ApiClient {
     }
   }
 
+  // ========== Terminal API Methods ==========
+
+  /**
+   * Create a new terminal session
+   * @param {Object} config - Session configuration
+   * @returns {Promise<Object>} Session info with session_id
+   */
+  async createTerminalSession(config = {}) {
+    const payload = {
+      user_id: config.user_id || 'default',
+      security_level: config.security_level || 'standard',
+      enable_logging: config.enable_logging !== undefined ? config.enable_logging : false,
+      enable_workflow_control: config.enable_workflow_control !== undefined ? config.enable_workflow_control : true,
+      initial_directory: config.initial_directory || null
+    };
+
+    return await this.post('/api/terminal/sessions', payload);
+  }
+
+  /**
+   * Delete a terminal session
+   * @param {string} sessionId - Session ID to delete
+   * @returns {Promise<Object>} Deletion result
+   */
+  async deleteTerminalSession(sessionId) {
+    return await this.delete(`/api/terminal/sessions/${sessionId}`);
+  }
+
+  /**
+   * Get list of active terminal sessions
+   * @returns {Promise<Array>} List of sessions
+   */
+  async getTerminalSessions() {
+    const response = await this.get('/api/terminal/sessions');
+    return response.sessions || [];
+  }
+
+  /**
+   * Execute a terminal command
+   * @param {string} command - Command to execute
+   * @param {Object} options - Execution options
+   * @returns {Promise<Object>} Command result
+   */
+  async executeTerminalCommand(command, options = {}) {
+    const payload = {
+      command: command,
+      timeout: options.timeout || 30000,
+      cwd: options.cwd || null,
+      env: options.env || {}
+    };
+
+    return await this.post('/api/terminal/execute', payload);
+  }
+
+  /**
+   * Get terminal session information
+   * @param {string} sessionId - Session ID
+   * @returns {Promise<Object>} Session info
+   */
+  async getTerminalSessionInfo(sessionId) {
+    return await this.get(`/api/terminal/sessions/${sessionId}`);
+  }
+
   // Update base URL (useful for settings changes)
   updateBaseUrl(newBaseUrl) {
     console.log(`[ApiClient] Updating base URL from ${this.baseUrl} to ${newBaseUrl}`);

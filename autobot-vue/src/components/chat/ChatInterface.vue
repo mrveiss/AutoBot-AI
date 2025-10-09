@@ -64,6 +64,7 @@
             :active-tab="activeTab"
             :current-session-id="store.currentSessionId"
             :novnc-url="novncUrl"
+            @tool-call-detected="handleToolCallDetected"
           />
         </UnifiedLoadingView>
       </div>
@@ -340,10 +341,70 @@ const onChatCompiled = (compiledData: any) => {
   // Handle compiled chat data
 }
 
-const onCommandApproved = (commandData: any) => {
-  console.log('Command approved:', commandData)
-  showCommandDialog.value = false
-  // Execute the approved command
+// Handle TOOL_CALL detection from chat messages
+const handleToolCallDetected = async (toolCall: any) => {
+  console.log('[ChatInterface] TOOL_CALL detected, showing approval dialog:', toolCall)
+
+  // Assess risk level (simple heuristics for now)
+  let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' = 'MEDIUM'
+  const cmd = toolCall.command.toLowerCase()
+
+  if (cmd.includes('rm -rf') || cmd.includes('sudo') || cmd.includes('dd') || cmd.includes('mkfs')) {
+    riskLevel = 'HIGH'
+  } else if (cmd.includes('apt') || cmd.includes('systemctl') || cmd.includes('reboot')) {
+    riskLevel = 'MEDIUM'
+  } else {
+    riskLevel = 'LOW'
+  }
+
+  // Set pending command data
+  pendingCommand.value = {
+    command: toolCall.command,
+    purpose: toolCall.purpose,
+    riskLevel: riskLevel,
+    originalMessage: JSON.stringify(toolCall)
+  }
+
+  // Show approval dialog
+  showCommandDialog.value = true
+}
+
+const onCommandApproved = async (commandData: any) => {
+  console.log('[ChatInterface] Command approved:', commandData)
+
+  try {
+    // 1. Create agent terminal session
+    const sessionResponse = await ApiClient.post('/api/agent-terminal/sessions', {
+      agent_id: `chat-${store.currentSessionId}`,
+      agent_role: 'chat_agent',
+      conversation_id: store.currentSessionId,
+      host: pendingCommand.value.command.includes('host') ?
+            JSON.parse(pendingCommand.value.originalMessage).host : 'main'
+    })
+
+    const sessionId = sessionResponse.data.session_id
+    console.log('[ChatInterface] Agent terminal session created:', sessionId)
+
+    // 2. Execute the command
+    const execResponse = await ApiClient.post(`/api/agent-terminal/execute`, {
+      command: commandData.command,
+      description: commandData.purpose || pendingCommand.value.purpose
+    }, {
+      params: { session_id: sessionId }
+    })
+
+    console.log('[ChatInterface] Command executed:', execResponse.data)
+
+    // 3. Switch to terminal tab to show execution
+    activeTab.value = 'terminal'
+
+    // Close dialog
+    showCommandDialog.value = false
+  } catch (error: any) {
+    console.error('[ChatInterface] Failed to execute approved command:', error)
+    appStore.setGlobalError(`Failed to execute command: ${error.message}`)
+    showCommandDialog.value = false
+  }
 }
 
 const onCommandDenied = (reason: string) => {

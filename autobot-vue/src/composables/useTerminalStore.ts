@@ -86,7 +86,7 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   // Computed
   const activeSession = computed(() => {
-    return activeSessionId.value ? sessions.value.get(activeSessionId.value) : null
+    return activeSessionId.value ? getSession(activeSessionId.value) : null
   })
 
   const activeTabs = computed(() => {
@@ -118,7 +118,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     sessionId: string,
     status: TerminalSession['status']
   ): void => {
-    const session = sessions.value.get(sessionId)
+    const session = getSession(sessionId)
     if (session) {
       session.status = status
       session.lastActivityAt = new Date()
@@ -129,7 +129,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     sessionId: string,
     controlState: 'user' | 'agent'
   ): void => {
-    const session = sessions.value.get(sessionId)
+    const session = getSession(sessionId)
     if (session) {
       session.controlState = controlState
       session.lastActivityAt = new Date()
@@ -141,6 +141,12 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   const removeSession = (sessionId: string): void => {
+    // Ensure sessions.value is a Map (handles persistence/hydration issues)
+    if (!(sessions.value instanceof Map)) {
+      const entries = Object.entries(sessions.value as any)
+      sessions.value = new Map(entries as any)
+    }
+
     sessions.value.delete(sessionId)
     if (activeSessionId.value === sessionId) {
       activeSessionId.value = null
@@ -238,9 +244,23 @@ export const useTerminalStore = defineStore('terminal', () => {
     enableAgentControl()
   }
 
+  // Ensure sessions is a Map (handles persistence/hydration issues)
+  const ensureSessionsMap = (): Map<string, TerminalSession> => {
+    if (!(sessions.value instanceof Map)) {
+      const entries = Object.entries(sessions.value as any)
+      sessions.value = new Map(entries as any)
+    }
+    return sessions.value
+  }
+
+  // Get session by ID with Map safety
+  const getSession = (sessionId: string): TerminalSession | undefined => {
+    return ensureSessionsMap().get(sessionId)
+  }
+
   // Cleanup all sessions
   const cleanup = (): void => {
-    sessions.value.clear()
+    ensureSessionsMap().clear()
     terminalTabs.value = []
     activeSessionId.value = null
   }
@@ -265,6 +285,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     updateControlState,
     setActiveSession,
     removeSession,
+    getSession,
     setSelectedHost,
     addCommandToHistory,
     getCommandHistory,
@@ -285,6 +306,6 @@ export const useTerminalStore = defineStore('terminal', () => {
   persist: {
     key: 'autobot-terminal-store',
     storage: localStorage,
-    paths: ['selectedHost', 'commandHistory'] // Only persist these fields
+    paths: ['selectedHost'] // Only persist selectedHost (Map objects don't serialize to JSON correctly)
   }
 })
