@@ -32,15 +32,30 @@ class AIStackClient:
     Client for communicating with AI Stack VM agents.
 
     Provides centralized communication with all AI agents running on
-    the AI Stack VM (172.16.168.24:8080).
+    the AI Stack VM.
     """
 
-    def __init__(self, base_url: str = "http://172.16.168.24:8080"):
+    def __init__(self, base_url: Optional[str] = None):
+        # Get configuration
+        from src.unified_config_manager import unified_config_manager
+        services_config = unified_config_manager.get_distributed_services_config()
+        ai_stack_config = services_config.get("ai_stack", {})
+
+        # Get base_url from configuration if not provided
+        if base_url is None:
+            host = ai_stack_config.get("host")
+            port = ai_stack_config.get("port")
+            if not host or not port:
+                raise ValueError("AI Stack configuration missing 'host' or 'port' in unified_config_manager")
+            base_url = f"http://{host}:{port}"
         self.base_url = base_url.rstrip('/')
         self.session: Optional[aiohttp.ClientSession] = None
-        self.timeout = aiohttp.ClientTimeout(total=60)  # 60 second timeout
-        self.retry_attempts = 3
-        self.retry_delay = 1.0  # seconds
+
+        # Get timeout, retry, and connection configuration from config
+        timeout_seconds = ai_stack_config.get("timeout", 60)
+        self.timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+        self.retry_attempts = ai_stack_config.get("retry_attempts", 3)
+        self.retry_delay = ai_stack_config.get("retry_delay", 1.0)
 
         # Agent endpoint mappings
         self.agent_endpoints = {
@@ -70,9 +85,23 @@ class AIStackClient:
     async def connect(self):
         """Initialize HTTP session for AI Stack communication."""
         if self.session is None or self.session.closed:
+            # Get connector configuration
+            from src.unified_config_manager import unified_config_manager
+            services_config = unified_config_manager.get_distributed_services_config()
+            ai_stack_config = services_config.get("ai_stack", {})
+            system_config = unified_config_manager.get_config_section("system") or {}
+
+            # Get connection pool limits from config
+            connection_limit = ai_stack_config.get("connection_limit", 100)
+            connection_limit_per_host = ai_stack_config.get("connection_limit_per_host", 20)
+
+            # Get User-Agent from config
+            version = system_config.get("version", "1.0")
+            user_agent = f"AutoBot-Backend/{version}"
+
             connector = aiohttp.TCPConnector(
-                limit=100,
-                limit_per_host=20,
+                limit=connection_limit,
+                limit_per_host=connection_limit_per_host,
                 enable_cleanup_closed=True
             )
             self.session = aiohttp.ClientSession(
@@ -80,7 +109,7 @@ class AIStackClient:
                 timeout=self.timeout,
                 headers={
                     "Content-Type": "application/json",
-                    "User-Agent": "AutoBot-Backend/1.0"
+                    "User-Agent": user_agent
                 }
             )
             logger.info(f"AI Stack client connected to {self.base_url}")
