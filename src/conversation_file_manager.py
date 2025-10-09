@@ -15,6 +15,7 @@ import hashlib
 import importlib
 import json
 import logging
+import os
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
@@ -22,6 +23,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.utils.async_redis_manager import AsyncRedisDatabase, get_redis_manager
+from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError, RedisError
+from src.unified_config_manager import unified_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -50,28 +53,50 @@ class ConversationFileManager:
         self,
         storage_dir: Optional[Path] = None,
         db_path: Optional[Path] = None,
-        redis_host: str = "172.16.168.23",
-        redis_port: int = 6379
+        redis_host: str = None,
+        redis_port: int = None
     ):
         """
         Initialize ConversationFileManager.
 
         Args:
-            storage_dir: Directory for file storage (default: data/conversation_files/)
-            db_path: Path to SQLite database (default: data/conversation_files.db)
-            redis_host: Redis server host
-            redis_port: Redis server port
+            storage_dir: Directory for file storage (default: env var or data/conversation_files/)
+            db_path: Path to SQLite database (default: env var or data/conversation_files.db)
+            redis_host: Redis server host (default: from config.yaml or env var)
+            redis_port: Redis server port (default: from config.yaml or env var)
+
+        Environment Variables:
+            AUTOBOT_STORAGE_DIR: Override default storage directory
+            AUTOBOT_DB_PATH: Override default database path
+            AUTOBOT_SCHEMA_DIR: Override default schema directory (for migrations)
+            AUTOBOT_REDIS_HOST: Override Redis host from config.yaml
+            AUTOBOT_REDIS_PORT: Override Redis port from config.yaml
+
+        Configuration:
+            Redis configuration is read from config.yaml via unified_config_manager.
+            Default values are defined in config/config.yaml under memory.redis section.
         """
-        # Storage paths
-        self.storage_dir = storage_dir or Path("/home/kali/Desktop/AutoBot/data/conversation_files")
-        self.db_path = db_path or Path("/home/kali/Desktop/AutoBot/data/conversation_files.db")
+        # Storage paths with environment variable support (no hardcoded absolute paths)
+        project_root = Path(__file__).parent.parent
+        default_storage = Path(os.getenv(
+            "AUTOBOT_STORAGE_DIR",
+            str(project_root / "data" / "conversation_files")
+        ))
+        default_db = Path(os.getenv(
+            "AUTOBOT_DB_PATH",
+            str(project_root / "data" / "conversation_files.db")
+        ))
+
+        self.storage_dir = storage_dir or default_storage
+        self.db_path = db_path or default_db
 
         # Ensure storage directory exists
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        # Redis configuration
-        self.redis_host = redis_host
-        self.redis_port = redis_port
+        # Redis configuration from unified config system (no hardcoded defaults)
+        redis_config = unified_config_manager.get_redis_config()
+        self.redis_host = redis_host or redis_config.get("host")
+        self.redis_port = redis_port or redis_config.get("port")
         self._redis_manager = None
         self._redis_sessions: Optional[AsyncRedisDatabase] = None
 
@@ -251,8 +276,14 @@ class ConversationFileManager:
 
             logger.debug(f"Cached {len(file_list)} files for session {session_id}")
 
+        except (RedisConnectionError, RedisTimeoutError) as e:
+            logger.warning(f"Redis connection/timeout error caching session files: {e}")
+            # Non-critical failure, continue without cache
+        except RedisError as e:
+            logger.warning(f"Redis error caching session files: {e}")
+            # Non-critical failure, continue without cache
         except Exception as e:
-            logger.warning(f"Failed to cache session files: {e}")
+            logger.error(f"Unexpected error caching session files: {e}")
             # Non-critical failure, continue without cache
 
     async def _invalidate_session_cache(self, session_id: str) -> None:
@@ -269,8 +300,12 @@ class ConversationFileManager:
 
             logger.debug(f"Invalidated cache for session {session_id}")
 
+        except (RedisConnectionError, RedisTimeoutError) as e:
+            logger.warning(f"Redis connection/timeout error invalidating cache: {e}")
+        except RedisError as e:
+            logger.warning(f"Redis error invalidating cache: {e}")
         except Exception as e:
-            logger.warning(f"Failed to invalidate session cache: {e}")
+            logger.error(f"Unexpected error invalidating cache: {e}")
 
     async def add_file(
         self,
@@ -481,8 +516,12 @@ class ConversationFileManager:
                 logger.debug(f"Cache hit for session {session_id}")
                 return json.loads(cached_data)
 
+        except (RedisConnectionError, RedisTimeoutError) as e:
+            logger.warning(f"Redis connection/timeout error during cache lookup: {e}")
+        except RedisError as e:
+            logger.warning(f"Redis error during cache lookup: {e}")
         except Exception as e:
-            logger.warning(f"Cache lookup failed: {e}")
+            logger.error(f"Unexpected error during cache lookup: {e}")
 
         # Cache miss or error, query database
         connection = self._get_db_connection()
@@ -671,10 +710,15 @@ class ConversationFileManager:
             migration_module = importlib.import_module('database.migrations.001_create_conversation_files')
             ConversationFilesMigration = getattr(migration_module, 'ConversationFilesMigration')
 
+            # Resolve schema directory relative to project root (no hardcoded absolute paths)
+            project_root = Path(__file__).parent.parent
+            default_schema_dir = project_root / "database" / "schemas"
+            schema_dir = Path(os.getenv("AUTOBOT_SCHEMA_DIR", str(default_schema_dir)))
+
             # Create migration instance with same paths (Bug Fix #6 - pass custom db_path for testing)
             migration = ConversationFilesMigration(
                 data_dir=self.db_path.parent,
-                schema_dir=Path("/home/kali/Desktop/AutoBot/database/schemas"),
+                schema_dir=schema_dir,
                 db_path=self.db_path  # Use the exact database path specified in constructor
             )
 
@@ -685,16 +729,18 @@ class ConversationFileManager:
                 raise RuntimeError("Database migration failed")
 
             # Verify schema version
-            version = await self._get_schema_version()
+            version = await self.get_schema_version()
             logger.info(f"✅ Conversation files database initialized (schema version: {version})")
 
         except Exception as e:
             logger.error(f"❌ Failed to initialize conversation files database: {e}")
             raise RuntimeError(f"Database initialization failed: {e}")
 
-    async def _get_schema_version(self) -> str:
+    async def get_schema_version(self) -> str:
         """
         Get current database schema version.
+
+        This is a public method for use by health checks and monitoring systems.
 
         Returns:
             str: Current schema version or "unknown" if not found or table doesn't exist

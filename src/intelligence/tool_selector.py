@@ -257,8 +257,9 @@ class OSAwareToolSelector:
         """Format command with parameters."""
         formatted = command
 
-        # Default network for scanning if not specified
-        default_network = "192.168.1.0/24"
+        # Get default network from environment or use fallback
+        import os
+        default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", "192.168.1.0/24")
 
         # Replace common placeholders
         replacements = {
