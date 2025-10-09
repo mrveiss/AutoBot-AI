@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import aiofiles
 import uvicorn
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
@@ -26,10 +26,29 @@ from src.utils.redis_database_manager import get_redis_client
 from backend.dependencies import get_config, get_knowledge_base
 from fastapi import Depends
 
+# CRITICAL SECURITY FIX: Import session ownership validation
+from backend.security.session_ownership import validate_session_ownership
+
 # Create placeholder dependency functions for missing imports
 def get_current_user():
     """Placeholder for auth dependency"""
     return {"user_id": "default"}
+
+
+# Wrapper dependency to validate chat ownership using chat_id
+async def validate_chat_ownership(chat_id: str, request: Request) -> Dict:
+    """
+    Wrapper dependency that validates chat ownership by mapping chat_id to session_id.
+
+    Args:
+        chat_id: Chat ID from URL path parameter
+        request: FastAPI request object
+
+    Returns:
+        Dict with authorization status and user data
+    """
+    # chat_id IS the session_id - just pass it through with the correct name
+    return await validate_session_ownership(session_id=chat_id, request=request)
 
 def get_chat_history_manager(request):
     """Get chat history manager from app state, with lazy initialization"""
@@ -292,19 +311,34 @@ async def process_chat_message(
         chat_context = []
         if hasattr(chat_history_manager, 'get_session_messages'):
             try:
-                # Redis can efficiently handle large context windows - retrieve 500 messages
-                # This provides full conversation history for context-aware responses
-                recent_messages = await chat_history_manager.get_session_messages(session_id, limit=500)
+                # Use model-aware message retrieval for optimal context window usage
+                # Context manager calculates efficient limits based on model capabilities
+                model_name = message.metadata.get("model") if message.metadata else None
+                recent_messages = await chat_history_manager.get_session_messages(
+                    session_id,
+                    model_name=model_name
+                )
                 chat_context = recent_messages or []
+                logger.info(f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}")
             except Exception as e:
                 logger.warning(f"Could not retrieve chat context: {e}")
 
         # Generate AI response
         try:
             # Prepare context for LLM
-            # Use last 200 messages for LLM context (balances context depth with token limits)
+            # Use model-aware message limit for optimal context window usage
+            model_name = message.metadata.get("model") if message.metadata else None
+            context_manager = getattr(chat_history_manager, 'context_manager', None)
+            
+            if context_manager:
+                message_limit = context_manager.get_message_limit(model_name)
+                logger.info(f"Using {message_limit} messages for LLM context (model: {model_name or 'default'})")
+            else:
+                message_limit = 20  # Fallback default
+                logger.warning("Context manager not available, using default limit")
+            
             llm_context = []
-            for msg in chat_context[-200:]:  # Last 200 messages for extensive context
+            for msg in chat_context[-message_limit:]:  # Model-aware message limit
                 llm_context.append({
                     "role": msg.get("role", "user"),
                     "content": msg.get("content", "")
@@ -582,6 +616,7 @@ async def stream_message(
 async def get_session_messages(
     session_id: str,
     request: Request,
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
     page: int = 1,
     per_page: int = 50
 ):
@@ -722,7 +757,8 @@ async def create_session(
 async def update_session(
     session_id: str,
     session_data: SessionUpdate,
-    request: Request
+    request: Request,
+    ownership: Dict = Depends(validate_session_ownership)  # SECURITY: Validate ownership
 ):
     """Update a chat session"""
     request_id = generate_request_id()
@@ -773,6 +809,7 @@ async def update_session(
 async def delete_session(
     session_id: str,
     request: Request,
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
     file_action: str = "delete",
     file_options: Optional[str] = None
 ):
@@ -1050,7 +1087,8 @@ async def chat_statistics(
 async def send_chat_message_by_id(
     chat_id: str,
     request_data: dict,
-    request: Request
+    request: Request,
+    ownership: Dict = Depends(validate_chat_ownership)  # SECURITY: Validate ownership
 ):
     """Send message to specific chat by ID (frontend compatibility endpoint)"""
     request_id = generate_request_id()
@@ -1077,8 +1115,9 @@ async def send_chat_message_by_id(
             try:
                 from src.chat_workflow_manager import ChatWorkflowManager
                 chat_workflow_manager = ChatWorkflowManager()
+                await chat_workflow_manager.initialize()
                 request.app.state.chat_workflow_manager = chat_workflow_manager
-                logger.info("✅ Lazy-initialized chat_workflow_manager")
+                logger.info("✅ Lazy-initialized chat_workflow_manager with async Redis")
             except Exception as e:
                 logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
 
@@ -1215,7 +1254,8 @@ async def save_chat_by_id(
 @router.delete("/chats/{chat_id}")
 async def delete_chat_by_id(
     chat_id: str,
-    request: Request
+    request: Request,
+    ownership: Dict = Depends(validate_session_ownership)  # SECURITY: Validate ownership
 ):
     """Delete chat session by ID (frontend compatibility endpoint)"""
     request_id = generate_request_id()
@@ -1249,6 +1289,89 @@ async def delete_chat_by_id(
 
     except Exception as e:
         logger.error(f"[{request_id}] delete_chat_by_id error: {e}")
+        return create_error_response(
+            error_code="INTERNAL_ERROR",
+            message=str(e),
+            request_id=request_id,
+            status_code=500
+        )
+
+
+@router.post("/chat/direct")
+async def send_direct_chat_response(
+    request: Request,
+    message: str = Body(...),
+    chat_id: str = Body(...),
+    remember_choice: bool = Body(default=False)
+):
+    """
+    Send direct user response to chat (for command approvals, etc.)
+    This endpoint accepts 'yes' or 'no' responses to system prompts
+    """
+    request_id = generate_request_id()
+
+    try:
+        log_request_context(request, "send_direct_response", request_id)
+
+        # Get ChatWorkflowManager from app state
+        chat_workflow_manager = getattr(request.app.state, "chat_workflow_manager", None)
+
+        if chat_workflow_manager is None:
+            # Lazy initialize
+            try:
+                from src.chat_workflow_manager import ChatWorkflowManager
+                chat_workflow_manager = ChatWorkflowManager()
+                await chat_workflow_manager.initialize()
+                request.app.state.chat_workflow_manager = chat_workflow_manager
+                logger.info("✅ Lazy-initialized chat_workflow_manager for /chat/direct")
+            except Exception as e:
+                logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
+                return create_error_response(
+                    error_code="SERVICE_UNAVAILABLE",
+                    message="Workflow manager not available",
+                    request_id=request_id,
+                    status_code=503
+                )
+
+        # Stream the response (command approval/denial response)
+        async def generate_stream():
+            try:
+                # Send start event
+                yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
+
+                # Process the approval/denial message through workflow
+                async for msg in chat_workflow_manager.process_message_stream(
+                    session_id=chat_id,
+                    message=message,  # "yes" or "no"
+                    context={"remember_choice": remember_choice}
+                ):
+                    msg_data = msg.to_dict() if hasattr(msg, 'to_dict') else msg
+                    yield f"data: {json.dumps(msg_data)}\n\n"
+
+                # Send completion
+                yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
+
+            except Exception as e:
+                logger.error(f"[{request_id}] Direct response streaming error: {e}", exc_info=True)
+                error_data = {
+                    "type": "error",
+                    "content": f"Error processing command approval: {str(e)}",
+                    "request_id": request_id
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"[{request_id}] send_direct_response error: {e}")
         return create_error_response(
             error_code="INTERNAL_ERROR",
             message=str(e),

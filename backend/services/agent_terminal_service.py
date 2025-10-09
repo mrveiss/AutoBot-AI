@@ -104,7 +104,7 @@ class AgentTerminalService:
                 "allow_dangerous": False,
             },
             AgentRole.ADMIN_AGENT: {
-                "max_risk": CommandRisk.DANGEROUS,
+                "max_risk": CommandRisk.CRITICAL,
                 "auto_approve_safe": True,
                 "auto_approve_moderate": True,
                 "allow_high": True,  # Requires approval

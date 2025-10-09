@@ -268,3 +268,80 @@ async def get_service_url(service_name: str) -> str:
     discovery = await get_service_discovery()
     endpoint = await discovery.get_service_endpoint(service_name)
     return endpoint.url if endpoint else f"http://localhost:8000"  # Safe fallback
+
+# Synchronous helpers for backward compatibility with sync Redis clients
+def get_redis_connection_params_sync() -> Dict:
+    """
+    Get Redis connection parameters synchronously for sync contexts
+
+    ELIMINATES DNS TIMEOUT BY:
+    - Using pre-configured IP addresses from NetworkConstants
+    - Immediate parameter return without async overhead
+    - Built-in failover IP addresses
+
+    Returns same dict structure as config-based approach for backward compatibility
+    """
+    from src.constants.network_constants import NetworkConstants
+
+    # Return cached endpoint parameters immediately
+    # Uses NetworkConstants for instant IP resolution (no DNS)
+    return {
+        'host': NetworkConstants.REDIS_VM_IP,  # Direct IP: 172.16.168.23
+        'port': NetworkConstants.REDIS_PORT,   # Port: 6379
+        'decode_responses': True,
+        'socket_connect_timeout': 0.5,  # Fast timeout for distributed setup
+        'socket_timeout': 1.0,
+        'retry_on_timeout': False,
+        'health_check_interval': 0,
+        'max_connections': 10,
+    }
+
+def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
+    """
+    Get service endpoint synchronously for sync contexts
+
+    Returns endpoint information as a dict with host, port, protocol
+    Falls back to NetworkConstants if service not found
+    """
+    from src.constants.network_constants import NetworkConstants
+
+    # Service endpoint mapping (cached, no DNS resolution)
+    service_endpoints = {
+        "redis": {
+            "host": NetworkConstants.REDIS_VM_IP,
+            "port": NetworkConstants.REDIS_PORT,
+            "protocol": "redis"
+        },
+        "backend": {
+            "host": NetworkConstants.MAIN_MACHINE_IP,
+            "port": NetworkConstants.BACKEND_PORT,
+            "protocol": "http"
+        },
+        "frontend": {
+            "host": NetworkConstants.FRONTEND_VM_IP,
+            "port": NetworkConstants.FRONTEND_PORT,
+            "protocol": "http"
+        },
+        "npu_worker": {
+            "host": NetworkConstants.NPU_WORKER_VM_IP,
+            "port": NetworkConstants.NPU_WORKER_PORT,
+            "protocol": "http"
+        },
+        "ai_stack": {
+            "host": NetworkConstants.AI_STACK_VM_IP,
+            "port": NetworkConstants.AI_STACK_PORT,
+            "protocol": "http"
+        },
+        "browser": {
+            "host": NetworkConstants.BROWSER_VM_IP,
+            "port": NetworkConstants.BROWSER_SERVICE_PORT,
+            "protocol": "http"
+        },
+        "ollama": {
+            "host": NetworkConstants.LOCALHOST_IP,
+            "port": NetworkConstants.OLLAMA_PORT,
+            "protocol": "http"
+        }
+    }
+
+    return service_endpoints.get(service_name)

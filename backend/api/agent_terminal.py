@@ -28,7 +28,7 @@ from backend.services.agent_terminal_service import (
 logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/api/agent-terminal", tags=["agent-terminal"])
+router = APIRouter(prefix="/agent-terminal", tags=["agent-terminal"])
 
 
 # Request/Response Models

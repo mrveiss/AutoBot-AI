@@ -1482,6 +1482,22 @@ async def refresh_system_knowledge(request: dict, req: Request):
         )
 
 
+def extract_category_from_path(doc_file: str) -> str:
+    """Extract category from document file path
+
+    Examples:
+        docs/api/file.md -> "api"
+        docs/architecture/file.md -> "architecture"
+        CLAUDE.md -> "root"
+    """
+    path_parts = str(doc_file).split('/')
+    if len(path_parts) > 1 and path_parts[0] == 'docs':
+        # docs/api/file.md -> "api"
+        return path_parts[1] if len(path_parts) > 2 else "docs"
+    # Root files like CLAUDE.md
+    return "root"
+
+
 @router.post("/populate_autobot_docs")
 async def populate_autobot_docs(request: dict, req: Request):
     """Populate knowledge base with AutoBot-specific documentation"""
@@ -1508,6 +1524,11 @@ async def populate_autobot_docs(request: dict, req: Request):
         # Scan for all markdown files recursively in docs/
         doc_files = []
 
+        # Initialize counters before any loops
+        items_added = 0
+        items_skipped = 0
+        items_failed = 0
+
         # Key documentation files in root
         root_files = ["CLAUDE.md", "README.md"]
         for f in root_files:
@@ -1526,10 +1547,6 @@ async def populate_autobot_docs(request: dict, req: Request):
                     continue
                 doc_files.append(str(rel_path))
 
-        items_added = 0
-        items_skipped = 0
-        items_failed = 0
-
         for doc_file in doc_files:
             try:
                 file_path = autobot_base_path / doc_file
@@ -1540,6 +1557,9 @@ async def populate_autobot_docs(request: dict, req: Request):
                         content = f.read()
 
                     if content.strip():
+                        # Extract category from path
+                        category = extract_category_from_path(doc_file)
+
                         # Create structured content
                         structured_content = f"""AutoBot Documentation: {doc_file}
 
@@ -1549,7 +1569,7 @@ Content:
 {content}
 
 Source: AutoBot Documentation
-Category: AutoBot
+Category: {category}
 Type: Documentation
 """
 
@@ -1560,9 +1580,9 @@ Type: Documentation
                                 metadata={
                                     "title": f"AutoBot: {doc_file}",
                                     "source": "autobot_docs_population",
-                                    "category": "autobot",
+                                    "category": category,
                                     "filename": doc_file,
-                                    "type": "autobot_documentation",
+                                    "type": f"{category}_documentation",
                                     "file_path": str(file_path)
                                 }
                             )
@@ -1572,9 +1592,9 @@ Type: Documentation
                                 metadata={
                                     "title": f"AutoBot: {doc_file}",
                                     "source": "autobot_docs_population",
-                                    "category": "autobot",
+                                    "category": category,
                                     "filename": doc_file,
-                                    "type": "autobot_documentation",
+                                    "type": f"{category}_documentation",
                                     "file_path": str(file_path)
                                 }
                             )
@@ -1584,7 +1604,7 @@ Type: Documentation
                             # Mark as imported with tracker
                             tracker.mark_imported(
                                 file_path=str(file_path),
-                                category="autobot",
+                                category=category,
                                 facts_count=1,
                                 metadata={
                                     "fact_id": result.get("fact_id"),
@@ -1646,7 +1666,7 @@ Type: System Configuration
                     metadata={
                         "title": "AutoBot System Configuration",
                         "source": "autobot_docs_population",
-                        "category": "autobot",
+                        "category": "configuration",
                         "type": "system_configuration"
                     }
                 )
@@ -1656,7 +1676,7 @@ Type: System Configuration
                     metadata={
                         "title": "AutoBot System Configuration",
                         "source": "autobot_docs_population",
-                        "category": "autobot",
+                        "category": "configuration",
                         "type": "system_configuration"
                     }
                 )

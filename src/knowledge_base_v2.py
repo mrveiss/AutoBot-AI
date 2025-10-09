@@ -527,6 +527,30 @@ class KnowledgeBaseV2:
             logger.error(f"Error scanning Redis keys: {e}")
             return []
 
+    async def _scan_redis_keys_async(self, pattern: str) -> List[str]:
+        """Scan Redis keys with pattern using async client"""
+        if not self.aioredis_client:
+            logger.warning("Async Redis client not available for key scanning")
+            return []
+
+        try:
+            keys = []
+            async for key in self.aioredis_client.scan_iter(match=pattern):
+                if isinstance(key, bytes):
+                    keys.append(key.decode('utf-8'))
+                else:
+                    keys.append(str(key))
+
+            logger.debug(f"Scanned {len(keys)} keys matching pattern '{pattern}'")
+            return keys
+
+        except redis.RedisError as e:
+            logger.error(f"Redis error scanning keys with pattern '{pattern}': {e}")
+            return []
+        except Exception as e:
+            logger.exception(f"Unexpected error scanning Redis keys: {e}")
+            return []
+
     def _count_facts(self) -> int:
         """Count stored facts in Redis"""
         try:
@@ -766,19 +790,23 @@ class KnowledgeBaseV2:
             }
 
             if self.aioredis_client:
-                # Count facts
-                fact_keys = []
-                async for key in self.aioredis_client.scan_iter(match="fact:*"):
-                    fact_keys.append(key)
-                stats["total_facts"] = len(fact_keys)
+                # Count facts - use iterator count without loading all keys into memory
+                fact_count = 0
+                fact_keys_sample = []
+                async for key in self.aioredis_client.scan_iter(match="fact:*", count=100):
+                    fact_count += 1
+                    # Sample first 50 for category extraction
+                    if len(fact_keys_sample) < 50:
+                        fact_keys_sample.append(key)
+                stats["total_facts"] = fact_count
 
-                # Count vector documents (LlamaIndex uses llama_index/vector_* pattern)
-                vector_keys = []
-                async for key in self.aioredis_client.scan_iter(match="llama_index/vector_*"):
-                    vector_keys.append(key)
-                stats["total_documents"] = len(vector_keys)
-                stats["total_vectors"] = len(vector_keys)
-                stats["total_chunks"] = len(vector_keys)  # In Redis, each document is typically one chunk
+                # Count vector documents - use iterator count without loading all keys
+                vector_count = 0
+                async for key in self.aioredis_client.scan_iter(match="llama_index/vector_*", count=100):
+                    vector_count += 1
+                stats["total_documents"] = vector_count
+                stats["total_vectors"] = vector_count
+                stats["total_chunks"] = vector_count
 
                 # Get database size
                 try:
@@ -787,11 +815,10 @@ class KnowledgeBaseV2:
                 except Exception:
                     pass
 
-                # Extract categories from metadata
+                # Extract categories from sampled facts
                 categories = set()
                 try:
-                    # Sample some facts to get categories
-                    for key in fact_keys[:50]:  # Sample first 50 facts
+                    for key in fact_keys_sample:
                         fact_data = await self.aioredis_client.hget(key, "metadata")
                         if fact_data:
                             try:
@@ -856,6 +883,113 @@ class KnowledgeBaseV2:
             logger.debug(f"Could not detect stored embedding model: {e}")
 
         return None
+
+    async def get_all_facts(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        collection: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve facts from Redis with optional pagination and filtering.
+
+        Args:
+            limit: Maximum number of facts to retrieve (None = all)
+            offset: Number of facts to skip
+            collection: Filter by collection name (None = all collections)
+
+        Returns:
+            List of fact dictionaries with content and metadata
+        """
+        self.ensure_initialized()
+
+        try:
+            # Get all fact keys using async scanner
+            fact_keys = await self._scan_redis_keys_async("fact:*")
+
+            if not fact_keys:
+                logger.debug("No facts found in Redis")
+                return []
+
+            # Apply pagination
+            total_facts = len(fact_keys)
+            if offset > 0:
+                fact_keys = fact_keys[offset:]
+            if limit:
+                fact_keys = fact_keys[:limit]
+
+            logger.debug(f"Retrieving {len(fact_keys)} facts (total={total_facts}, offset={offset}, limit={limit})")
+
+            if not fact_keys:
+                return []
+
+            # Batch retrieve all facts using pipeline
+            facts = []
+            async with self.aioredis_client.pipeline() as pipe:
+                for fact_key in fact_keys:
+                    pipe.hgetall(fact_key)
+
+                # Execute all commands in single network roundtrip
+                results = await pipe.execute()
+
+            # Process results
+            for fact_key, fact_data in zip(fact_keys, results):
+                if not fact_data:
+                    logger.debug(f"Empty fact data for key {fact_key}")
+                    continue
+
+                try:
+                    # Parse metadata
+                    metadata_raw = fact_data.get(b'metadata', b'{}')
+                    try:
+                        metadata = json.loads(
+                            metadata_raw.decode('utf-8') if isinstance(metadata_raw, bytes) else metadata_raw
+                        )
+                    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                        logger.warning(f"Invalid metadata in {fact_key}: {e}")
+                        metadata = {}
+
+                    # Apply collection filter
+                    if collection and collection != "all":
+                        fact_collection = metadata.get("collection", "")
+                        if fact_collection != collection:
+                            continue  # Skip facts not in requested collection
+
+                    # Parse content
+                    content_raw = fact_data.get(b'content', b'')
+                    content = content_raw.decode('utf-8') if isinstance(content_raw, bytes) else str(content_raw)
+
+                    # Validate required fields
+                    if not content:
+                        logger.warning(f"Empty content in fact {fact_key}")
+                        continue
+
+                    # Build fact object
+                    fact = {
+                        "content": content,
+                        "metadata": metadata,
+                        "source": metadata.get("source", ""),
+                        "title": metadata.get("title", ""),
+                        "fact_id": metadata.get("fact_id", fact_key.replace("fact:", ""))
+                    }
+                    facts.append(fact)
+
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON decode error in fact {fact_key}: {e}")
+                    continue
+                except Exception as e:
+                    logger.exception(f"Error processing fact {fact_key}: {e}")
+                    continue
+
+            logger.info(f"Retrieved {len(facts)} facts from Redis (filtered from {len(results)} results)")
+            return facts
+
+        except redis.RedisError as e:
+            logger.error(f"Redis error in get_all_facts: {e}")
+            return []
+        except Exception as e:
+            logger.exception(f"Unexpected error in get_all_facts: {e}")
+            return []
 
     async def close(self):
         """Close all connections and cleanup resources"""

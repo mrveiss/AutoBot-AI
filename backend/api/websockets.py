@@ -15,6 +15,10 @@ from starlette.websockets import WebSocketState
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Connected WebSocket clients for NPU workers
+_npu_worker_ws_clients: list[WebSocket] = []
+_npu_events_subscribed = False
+
 
 @router.websocket("/ws-test")
 async def websocket_test_endpoint(websocket: WebSocket):
@@ -279,3 +283,196 @@ async def websocket_endpoint(websocket: WebSocket):
         except Exception as e:
             logger.error(f"Error during event manager cleanup: {e}")
         logger.info("WebSocket connection cleanup completed")
+
+
+@router.websocket("/ws/npu-workers")
+async def npu_workers_websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time NPU worker status updates.
+
+    Handles:
+    - Real-time worker status broadcasting
+    - Worker added/updated/removed events
+    - Worker metrics updates
+    - Initial worker list on connection
+    """
+    try:
+        await websocket.accept()
+        logger.info(f"NPU Worker WebSocket connected from client: {websocket.client}")
+
+        # Add to connected clients
+        _npu_worker_ws_clients.append(websocket)
+
+        # Send initial worker list
+        try:
+            from backend.services.npu_worker_manager import get_worker_manager
+
+            worker_manager = await get_worker_manager()
+            workers = await worker_manager.list_workers()
+
+            # Convert workers to frontend format
+            workers_data = [
+                {
+                    "id": w.config.id,
+                    "name": w.config.name,
+                    "platform": w.config.platform,
+                    "ip_address": w.config.url.split("//")[1].split(":")[0]
+                    if "://" in w.config.url
+                    else "",
+                    "port": int(w.config.url.split(":")[-1])
+                    if ":" in w.config.url
+                    else 0,
+                    "status": w.status.status.value,
+                    "current_load": w.status.current_load,
+                    "max_capacity": w.config.max_concurrent_tasks,
+                    "uptime": f"{int(w.status.uptime_seconds)}s",
+                    "performance_metrics": w.metrics.dict() if w.metrics else {},
+                    "priority": w.config.priority,
+                    "weight": w.config.weight,
+                    "last_heartbeat": w.status.last_heartbeat.isoformat() + "Z"
+                    if w.status.last_heartbeat
+                    else "",
+                    "created_at": "",  # Not tracked
+                }
+                for w in workers
+            ]
+
+            await websocket.send_json(
+                {"type": "initial_workers", "workers": workers_data}
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to send initial worker list: {e}", exc_info=True)
+
+        # Keep connection alive and handle incoming messages
+        while websocket.client_state == WebSocketState.CONNECTED:
+            try:
+                # No timeout - WebSocketDisconnect will be raised on disconnect
+                message = await websocket.receive_text()
+
+                # Handle ping/pong for connection keep-alive
+                try:
+                    data = json.loads(message)
+                    if data.get("type") == "ping":
+                        await websocket.send_json({"type": "pong"})
+                    else:
+                        logger.debug(
+                            f"Received NPU worker WebSocket message: {data}"
+                        )
+                except json.JSONDecodeError:
+                    logger.warning(
+                        f"Received invalid JSON via NPU worker WebSocket: {message}"
+                    )
+
+            except WebSocketDisconnect:
+                logger.info("NPU Worker WebSocket client disconnected")
+                break
+            except Exception as e:
+                logger.error(f"Error in NPU worker WebSocket: {e}")
+                if "connection" in str(e).lower() or "closed" in str(e).lower():
+                    logger.info("Connection-related error, ending WebSocket loop")
+                    break
+                else:
+                    continue
+
+    except Exception as e:
+        logger.error(f"NPU Worker WebSocket error: {e}", exc_info=True)
+    finally:
+        # Remove from connected clients
+        if websocket in _npu_worker_ws_clients:
+            _npu_worker_ws_clients.remove(websocket)
+        logger.info("NPU Worker WebSocket connection cleanup completed")
+
+
+async def broadcast_npu_worker_event(event_data: dict):
+    """
+    Broadcast NPU worker event to all connected WebSocket clients.
+
+    Args:
+        event_data: Event data containing type and payload
+    """
+    if not _npu_worker_ws_clients:
+        return
+
+    # Prepare message based on event type
+    event_type = event_data.get("event", "")
+    message = {}
+
+    if event_type == "worker.status.changed":
+        message = {
+            "type": "worker_update",
+            "worker": event_data.get("worker", {}),
+        }
+    elif event_type == "worker.added":
+        message = {
+            "type": "worker_added",
+            "worker": event_data.get("worker", {}),
+        }
+    elif event_type == "worker.updated":
+        message = {
+            "type": "worker_update",
+            "worker": event_data.get("worker", {}),
+        }
+    elif event_type == "worker.removed":
+        message = {
+            "type": "worker_removed",
+            "worker_id": event_data.get("worker_id", ""),
+        }
+    elif event_type == "worker.metrics.updated":
+        message = {
+            "type": "worker_metrics_update",
+            "worker_id": event_data.get("worker_id", ""),
+            "metrics": event_data.get("data", {}).get("metrics", {}),
+        }
+
+    if not message:
+        return
+
+    # Broadcast to all connected clients
+    disconnected_clients = []
+
+    for client in _npu_worker_ws_clients:
+        try:
+            if client.client_state == WebSocketState.CONNECTED:
+                await client.send_json(message)
+            else:
+                disconnected_clients.append(client)
+        except RuntimeError as e:
+            logger.debug(f"WebSocket send failed (client disconnected): {e}")
+            disconnected_clients.append(client)
+        except Exception as e:
+            logger.error(f"Error broadcasting NPU worker event: {e}")
+            disconnected_clients.append(client)
+
+    # Remove disconnected clients
+    for client in disconnected_clients:
+        if client in _npu_worker_ws_clients:
+            _npu_worker_ws_clients.remove(client)
+
+
+def init_npu_worker_websocket():
+    """
+    Initialize NPU worker WebSocket by subscribing to events.
+    Should be called during app startup.
+    """
+    global _npu_events_subscribed
+
+    if _npu_events_subscribed:
+        logger.debug("NPU worker WebSocket events already subscribed")
+        return
+
+    try:
+        from src.event_manager import event_manager
+
+        # Subscribe to all NPU worker events
+        event_manager.subscribe("npu.worker.status.changed", broadcast_npu_worker_event)
+        event_manager.subscribe("npu.worker.added", broadcast_npu_worker_event)
+        event_manager.subscribe("npu.worker.updated", broadcast_npu_worker_event)
+        event_manager.subscribe("npu.worker.removed", broadcast_npu_worker_event)
+        event_manager.subscribe("npu.worker.metrics.updated", broadcast_npu_worker_event)
+
+        _npu_events_subscribed = True
+        logger.info("NPU worker WebSocket event subscriptions initialized")
+
+    except Exception as e:
+        logger.error(f"Failed to subscribe to NPU worker events: {e}", exc_info=True)
