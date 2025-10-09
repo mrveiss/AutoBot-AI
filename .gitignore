@@ -44,41 +44,16 @@ autobot-vue/dist/
 autobot-vue/.vite/
 
 # === APPLICATION DATA ===
-# Data directories (user data, chats, messages)
-data/chats/
-data/messages/
-data/chromadb/
-data/knowledge_base.db
-data/audit.log
-data/chat_history.json
-data/reliability_stats.json
-
-# Generated runtime data
-data/*.json
-data/*.db
-data/*.log
-data/session_*
-data/workflow_*
-data/agent_*
-
-# Dynamic report data in data directory
-data/reports/
+# CRITICAL: Ignore ALL data directory contents (user data, runtime files, etc.)
+# Data files should NEVER be committed to git
+data/
+!data/.gitkeep
+!data/*/.gitkeep
 
 # Analysis outputs - large JSON files and results
 analysis/**/*.json
 analysis/**/results.txt
 analysis/**/output.txt
-
-# All data directory contents (moved to unified data/ directory)
-data/chats/*
-data/reports_backend/*
-data/file_manager_root_backend/*
-data/file_manager_root_frontend/*
-
-# Conversation files - track structure, ignore content
-data/conversation_files/*
-!data/conversation_files/.gitkeep
-data/conversation_files.db
 
 # === SECURITY & AUTHENTICATION ===
 # SSH keys and certificates

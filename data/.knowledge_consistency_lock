@@ -1,6 +1,0 @@
-{
-  "locked_at": "2025-08-24T20:27:54.207718",
-  "embedding_model": "nomic-embed-text:latest",
-  "vector_dimension": 768,
-  "lock_reason": "PREVENT_KNOWLEDGE_RETRIEVAL_INCONSISTENCIES"
-}
