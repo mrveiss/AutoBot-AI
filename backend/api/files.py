@@ -18,15 +18,15 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, field_validator
 
-from src.security_layer import SecurityLayer
+from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from src.auth_middleware import auth_middleware
+from src.security_layer import SecurityLayer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
 # Configure sandboxed directory for file operations using centralized paths
-from backend.utils.paths_manager import get_data_path, ensure_data_directory
 
 # Ensure data directory exists
 ensure_data_directory()
@@ -118,69 +118,6 @@ class FileOperation(BaseModel):
 def get_security_layer(request: Request) -> SecurityLayer:
     """Get security layer from app state"""
     return request.app.state.security_layer
-
-
-def check_file_permissions(request: Request, operation: str) -> bool:
-    """
-    Check if user has permission for file operations using SecurityLayer RBAC.
-
-    Args:
-        request: FastAPI request object containing user context
-        operation: File operation type (view, upload, delete, download)
-
-    Returns:
-        bool: True if permission granted, False otherwise
-    """
-    try:
-        security_layer = get_security_layer(request)
-
-        # Get user role from request headers (temporary auth mechanism)
-        # In production, replace with proper JWT/session authentication
-        user_role = request.headers.get("X-User-Role", "guest")
-
-        # Map file operations to specific permissions
-        permission_map = {
-            "view": "files.view",
-            "upload": "files.upload",
-            "delete": "files.delete",
-            "download": "files.download",
-            "create": "files.create",
-        }
-
-        required_permission = permission_map.get(operation)
-        if not required_permission:
-            logger.error(f"Unknown file operation: {operation}")
-            return False
-
-        # Check permission using SecurityLayer
-        has_permission = security_layer.check_permission(
-            user_role=user_role,
-            action_type=required_permission,
-            resource=f"file_operation:{operation}",
-        )
-
-        if not has_permission:
-            # Log unauthorized access attempt
-            security_layer.audit_log(
-                action="file_access_denied",
-                user=user_role,
-                outcome="denied",
-                details={
-                    "operation": operation,
-                    "permission_required": required_permission,
-                    "user_agent": request.headers.get("User-Agent"),
-                    "ip": request.client.host if request.client else "unknown",
-                },
-            )
-
-        return has_permission
-
-    except Exception as e:
-        logger.error(
-            f"Error checking file permissions for operation '{operation}': {e}"
-        )
-        # Fail secure - deny access on error
-        return False
 
 
 def validate_and_resolve_path(path: str) -> Path:
@@ -325,10 +262,10 @@ async def list_files(request: Request, path: str = ""):
     has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Insufficient permissions for file operations"
         )
-    
+
     # Store user data in request state for audit logging
     request.state.user = user_data
 
@@ -450,13 +387,15 @@ async def upload_file(
         overwrite: Whether to overwrite existing files
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "upload")
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, "upload"
+    )
     if not has_permission:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Insufficient permissions for file upload"
         )
-    
+
     # Store user data in request state for audit logging
     request.state.user = user_data
 
@@ -526,8 +465,8 @@ async def upload_file(
             user_data.get("username", "unknown"),
             "success",
             {
-                "filename": file.filename, 
-                "path": relative_path, 
+                "filename": file.filename,
+                "path": relative_path,
                 "size": len(content),
                 "user_role": user_data.get("role", "unknown"),
                 "ip": request.client.host if request.client else "unknown",
@@ -558,13 +497,15 @@ async def download_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "download")
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, "download"
+    )
     if not has_permission:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Insufficient permissions for file download"
         )
-    
+
     # Store user data in request state for audit logging
     request.state.user = user_data
 
@@ -584,7 +525,7 @@ async def download_file(request: Request, path: str):
             user_data.get("username", "unknown"),
             "success",
             {
-                "path": path, 
+                "path": path,
                 "size": target_file.stat().st_size,
                 "filename": target_file.name,
                 "user_role": user_data.get("role", "unknown"),
@@ -613,10 +554,15 @@ async def view_file(request: Request, path: str):
     Args:
         path: File path within the sandbox
     """
-    if not check_file_permissions(request, "view"):
+    # SECURITY FIX: Use modern auth_middleware instead of deprecated function
+    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    if not has_permission:
         raise HTTPException(
             status_code=403, detail="Insufficient permissions for file viewing"
         )
+
+    # Store user data in request state for audit logging
+    request.state.user = user_data
 
     try:
         target_file = validate_and_resolve_path(path)
@@ -664,13 +610,15 @@ async def delete_file(request: Request, file_operation: FileOperation):
         file_operation: Contains the path to delete
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "delete")
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, "delete"
+    )
     if not has_permission:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Insufficient permissions for file deletion"
         )
-    
+
     # Store user data in request state for audit logging
     request.state.user = user_data
 
@@ -691,8 +639,8 @@ async def delete_file(request: Request, file_operation: FileOperation):
                 user_data.get("username", "unknown"),
                 "success",
                 {
-                    "path": file_operation.path, 
-                    "type": "file", 
+                    "path": file_operation.path,
+                    "type": "file",
                     "size": file_size,
                     "filename": target_path.name,
                     "user_role": user_data.get("role", "unknown"),
@@ -709,7 +657,7 @@ async def delete_file(request: Request, file_operation: FileOperation):
                     user_data.get("username", "unknown"),
                     "success",
                     {
-                        "path": file_operation.path, 
+                        "path": file_operation.path,
                         "type": "directory",
                         "dirname": target_path.name,
                         "user_role": user_data.get("role", "unknown"),
@@ -727,7 +675,7 @@ async def delete_file(request: Request, file_operation: FileOperation):
                     user_data.get("username", "unknown"),
                     "success",
                     {
-                        "path": file_operation.path, 
+                        "path": file_operation.path,
                         "type": "directory_recursive",
                         "dirname": target_path.name,
                         "user_role": user_data.get("role", "unknown"),
@@ -761,13 +709,15 @@ async def create_directory(
         name: New directory name
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "upload")
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, "upload"
+    )
     if not has_permission:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Insufficient permissions for directory creation"
         )
-    
+
     # Store user data in request state for audit logging
     request.state.user = user_data
 
@@ -795,7 +745,7 @@ async def create_directory(
             user_data.get("username", "unknown"),
             "success",
             {
-                "path": relative_path, 
+                "path": relative_path,
                 "name": name,
                 "parent_path": path,
                 "user_role": user_data.get("role", "unknown"),
@@ -844,7 +794,10 @@ async def get_directory_tree(request: Request, path: str = ""):
             """Recursively build directory tree structure"""
             try:
                 items = []
-                for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+                for item in sorted(
+                    directory.iterdir(),
+                    key=lambda x: (not x.is_dir(), x.name.lower())
+                ):
                     try:
                         relative_path = str(item.relative_to(SANDBOXED_ROOT))
                         item_info = {
@@ -855,7 +808,9 @@ async def get_directory_tree(request: Request, path: str = ""):
 
                         if item.is_file():
                             item_info["size"] = item.stat().st_size
-                            item_info["extension"] = item.suffix.lower() if item.suffix else None
+                            item_info["extension"] = (
+                                item.suffix.lower() if item.suffix else None
+                            )
                         else:
                             # Recursively add children for directories
                             item_info["children"] = build_tree(item, SANDBOXED_ROOT)
