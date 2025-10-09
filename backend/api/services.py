@@ -84,12 +84,17 @@ async def get_services():
 
         # Add default/fallback services if monitoring data unavailable
         if not services:
+            # Get configuration for default response time
+            from src.unified_config_manager import unified_config_manager
+            monitoring_config = unified_config_manager.get_config_section("monitoring") or {}
+            default_response_time = monitoring_config.get("default_response_time_ms", 10.0)
+
             default_services = [
                 ServiceStatus(
                     name="Backend API",
                     status="healthy",
                     message="API server running",
-                    response_time_ms=10.0
+                    response_time_ms=default_response_time
                 ),
                 ServiceStatus(
                     name="Frontend",
@@ -189,44 +194,69 @@ async def get_services_health():
 async def get_vms_status():
     """Get VM status for distributed infrastructure"""
     try:
-        # Define VM infrastructure based on AutoBot architecture
-        vms = [
-            VMStatus(
+        # Get VM infrastructure from configuration
+        from src.unified_config_manager import unified_config_manager
+
+        # Get distributed services configuration
+        services_config = unified_config_manager.get_distributed_services_config()
+
+        # Build VM status from configuration
+        vms = []
+
+        # Frontend VM
+        frontend_config = services_config.get("frontend", {})
+        if frontend_config and frontend_config.get("host"):
+            vms.append(VMStatus(
                 name="Frontend VM",
-                ip="172.16.168.21",
+                ip=frontend_config.get("host"),
                 status="online",
                 services=["frontend", "web-interface"],
                 last_check=datetime.now()
-            ),
-            VMStatus(
+            ))
+
+        # NPU Worker VM
+        npu_config = services_config.get("npu_worker", {})
+        if npu_config and npu_config.get("host"):
+            vms.append(VMStatus(
                 name="NPU Worker VM",
-                ip="172.16.168.22",
+                ip=npu_config.get("host"),
                 status="online",
                 services=["npu-worker", "hardware-acceleration"],
                 last_check=datetime.now()
-            ),
-            VMStatus(
+            ))
+
+        # Redis VM
+        redis_config = unified_config_manager.get_redis_config()
+        if redis_config and redis_config.get("host"):
+            vms.append(VMStatus(
                 name="Redis VM",
-                ip="172.16.168.23",
+                ip=redis_config.get("host"),
                 status="online",
                 services=["redis", "database", "cache"],
                 last_check=datetime.now()
-            ),
-            VMStatus(
+            ))
+
+        # AI Stack VM
+        ai_stack_config = services_config.get("ai_stack", {})
+        if ai_stack_config and ai_stack_config.get("host"):
+            vms.append(VMStatus(
                 name="AI Stack VM",
-                ip="172.16.168.24",
+                ip=ai_stack_config.get("host"),
                 status="online",
                 services=["ai-processing", "llm", "inference"],
                 last_check=datetime.now()
-            ),
-            VMStatus(
+            ))
+
+        # Browser VM
+        browser_config = services_config.get("browser", {})
+        if browser_config and browser_config.get("host"):
+            vms.append(VMStatus(
                 name="Browser VM",
-                ip="172.16.168.25",
+                ip=browser_config.get("host"),
                 status="online",
                 services=["browser-automation", "playwright"],
                 last_check=datetime.now()
-            )
-        ]
+            ))
 
         # Count statuses
         online_count = sum(1 for vm in vms if vm.status == "online")
@@ -250,20 +280,26 @@ async def get_vms_status():
 async def get_version():
     """Get application version and system information"""
     try:
-        # Calculate uptime (placeholder - could be improved with actual start time)
-        uptime_seconds = 3600.0  # 1 hour placeholder
+        # Get configuration
+        from src.unified_config_manager import unified_config_manager
+        backend_config = unified_config_manager.get_backend_config()
+        system_config = unified_config_manager.get_config_section("system") or {}
+
+        # Get uptime from config or calculate (could be improved with actual start time)
+        uptime_seconds = system_config.get("uptime_placeholder", 3600.0)
 
         # Get services count
         try:
             services_data = await get_services()
             services_count = services_data.total_count
         except:
-            services_count = 6  # fallback count
+            # Get default service count from config
+            services_count = system_config.get("default_services_count", 6)
 
         return SystemInfo(
-            version="1.5.0",
-            build="distributed-vm",
-            environment="production",
+            version=system_config.get("version", "1.5.0"),
+            build=system_config.get("build", "distributed-vm"),
+            environment=backend_config.get("environment", "production"),
             uptime=uptime_seconds,
             services_count=services_count
         )
