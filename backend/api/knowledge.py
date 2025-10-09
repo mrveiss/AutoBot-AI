@@ -1519,7 +1519,8 @@ async def populate_autobot_docs(request: dict, req: Request):
         logger.info("Starting AutoBot documentation population with import tracking...")
 
         tracker = ImportTracker()
-        autobot_base_path = PathLib("/home/kali/Desktop/AutoBot")
+        # Use project-relative path instead of absolute path
+        autobot_base_path = PathLib(__file__).parent.parent.parent
 
         # Scan for all markdown files recursively in docs/
         doc_files = []
@@ -2791,7 +2792,8 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
         from backend.models.knowledge_import_tracking import ImportTracker
 
         tracker = ImportTracker()
-        base_path = PathLib("/home/kali/Desktop/AutoBot")
+        # Use project-relative path instead of absolute path
+        base_path = PathLib(__file__).parent.parent.parent
         scan_path = base_path / directory
         
         if not scan_path.exists():
