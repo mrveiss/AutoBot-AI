@@ -40,6 +40,7 @@ import signal
 import os
 
 # Import existing timeout framework
+from src.constants.network_constants import NetworkConstants
 from .performance_optimized_timeouts import (
     TimeoutCategory,
     OptimizedTimeoutConfig,

@@ -3,6 +3,7 @@ Shared type definitions for AutoBot
 """
 
 from enum import Enum
+from src.constants.network_constants import NetworkConstants
 
 
 class TaskComplexity(Enum):

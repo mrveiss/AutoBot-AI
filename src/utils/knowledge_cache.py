@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from src.config_helper import cfg
 from src.utils.redis_database_manager import get_redis_client
+from src.constants.network_constants import NetworkConstants
 
 
 class KnowledgeCache:

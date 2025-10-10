@@ -5,6 +5,7 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 import aiohttp  # Import aiohttp for async web fetching
+from src.constants.network_constants import NetworkConstants
 from markdownify import (
     markdownify as md,  # Import markdownify for HTML to Markdown conversion
 )

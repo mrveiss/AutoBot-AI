@@ -1,3 +1,5 @@
+
+from src.constants.network_constants import NetworkConstants
 try:
     import speech_recognition as sr
 

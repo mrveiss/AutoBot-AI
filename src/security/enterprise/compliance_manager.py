@@ -16,6 +16,7 @@ from uuid import uuid4
 
 import yaml
 from cryptography.fernet import Fernet
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

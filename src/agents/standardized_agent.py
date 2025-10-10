@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
+from src.constants.network_constants import NetworkConstants
 
 
 @dataclass

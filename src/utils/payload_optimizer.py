@@ -13,6 +13,7 @@ import base64
 from typing import Any, Dict, List, Tuple, Optional, Union
 from dataclasses import dataclass
 from pathlib import Path
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

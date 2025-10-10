@@ -9,6 +9,7 @@ from .domain_reputation import DomainReputationService
 from .security_policy_manager import SecurityPolicyManager
 from .sso_integration import SSOIntegrationFramework
 from .audit_logger import EnterpriseAuditLogger
+from src.constants.network_constants import NetworkConstants
 
 __all__ = [
     'ComplianceManager',

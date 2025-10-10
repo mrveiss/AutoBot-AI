@@ -7,6 +7,7 @@ import sys
 from typing import Any, Dict
 
 import psutil
+from src.constants.network_constants import NetworkConstants
 
 # Conditional torch import for environments without CUDA
 try:

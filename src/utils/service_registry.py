@@ -33,6 +33,7 @@ import yaml
 
 # Import unified configuration system - NO HARDCODED VALUES
 from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 
 
 class ServiceStatus(Enum):

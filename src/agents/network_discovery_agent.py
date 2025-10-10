@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.utils.command_utils import execute_shell_command
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

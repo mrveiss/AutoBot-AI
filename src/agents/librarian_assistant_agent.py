@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
+from src.constants.network_constants import NetworkConstants
 
 try:
     from playwright.async_api import Browser, Page, async_playwright

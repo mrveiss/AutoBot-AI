@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Set, Callable
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileModifiedEvent
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

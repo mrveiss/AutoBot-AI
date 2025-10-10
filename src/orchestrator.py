@@ -27,6 +27,7 @@ from src.conversation import ConversationManager
 from src.task_execution_tracker import task_tracker, Priority, TaskType
 from src.agents.agent_manager import AgentManager
 from src.utils.logging_manager import get_logger
+from src.constants.network_constants import NetworkConstants
 
 # Import task classification
 try:

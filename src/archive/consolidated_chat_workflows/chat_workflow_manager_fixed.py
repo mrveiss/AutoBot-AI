@@ -14,6 +14,7 @@ from src.agents import get_kb_librarian
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.conversation import Conversation
 from src.autobot_types import TaskComplexity
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

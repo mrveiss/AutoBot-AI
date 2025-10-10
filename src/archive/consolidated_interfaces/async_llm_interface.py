@@ -21,6 +21,7 @@ from pydantic_settings import BaseSettings
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from src.utils.async_redis_manager import async_redis_manager, redis_get, redis_set
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class LLMSettings(BaseSettings):
     
     # Ollama settings
     ollama_host: str = Field(default="127.0.0.1", env="OLLAMA_HOST")
-    ollama_port: int = Field(default=11434, env="OLLAMA_PORT")
+    ollama_port: int = Field(default = NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
     ollama_timeout: float = Field(default=30.0, env="OLLAMA_TIMEOUT")
     
     # Model settings

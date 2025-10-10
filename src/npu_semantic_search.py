@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import aiohttp
 
 # Import existing AutoBot components
+from src.constants.network_constants import NetworkConstants
 from src.ai_hardware_accelerator import (
     get_ai_accelerator,
     HardwareDevice,

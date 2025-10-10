@@ -22,6 +22,7 @@ import uuid
 from utils.optimized_stream_processor import get_optimized_llm_interface
 from utils.optimized_redis_manager import get_optimized_redis_manager
 from utils.optimized_memory_manager import get_optimized_memory_manager
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

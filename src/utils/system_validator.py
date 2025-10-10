@@ -15,6 +15,7 @@ import aiohttp
 import psutil
 
 from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 
 
 class ValidationSeverity(Enum):

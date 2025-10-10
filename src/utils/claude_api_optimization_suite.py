@@ -27,6 +27,7 @@ from .graceful_degradation import GracefulDegradationManager, FallbackResponse
 from .todowrite_optimizer import TodoWriteOptimizer, get_todowrite_optimizer
 from .tool_pattern_analyzer import ToolPatternAnalyzer, get_tool_pattern_analyzer
 from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

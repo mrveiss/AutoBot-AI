@@ -15,6 +15,7 @@ import yaml
 
 from src.config_helper import cfg
 from .service_registry import get_service_registry
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

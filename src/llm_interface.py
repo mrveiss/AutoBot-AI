@@ -37,6 +37,7 @@ from src.circuit_breaker import circuit_breaker_async
 from src.unified_config import config
 from src.redis_pool_manager import get_redis_async
 from src.retry_mechanism import retry_network_operation
+from src.constants.network_constants import NetworkConstants
 
 # Optional imports with proper error handling
 try:
@@ -100,7 +101,7 @@ class LLMSettings(BaseSettings):
     
     # Ollama settings
     ollama_host: str = Field(default="127.0.0.1", env="OLLAMA_HOST")
-    ollama_port: int = Field(default=11434, env="OLLAMA_PORT")
+    ollama_port: int = Field(default = NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
     # Removed timeout - using circuit breaker pattern instead
     
     # Model settings

@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Set, Tuple, Any, Generator
 from dataclasses import dataclass, asdict
 
 from src.knowledge_base_factory import get_knowledge_base
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

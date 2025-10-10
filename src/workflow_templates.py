@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from src.autobot_types import TaskComplexity
+from src.constants.network_constants import NetworkConstants
 
 
 class TemplateCategory(Enum):

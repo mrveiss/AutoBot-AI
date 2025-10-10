@@ -20,6 +20,7 @@ from src.worker_node import WorkerNode
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

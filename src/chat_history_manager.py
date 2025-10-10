@@ -11,6 +11,7 @@ import aiofiles
 
 # Import the centralized ConfigManager and Redis client utility
 from src.unified_config_manager import config as global_config_manager
+from src.constants.network_constants import NetworkConstants
 from src.encryption_service import (
     decrypt_data,
     encrypt_data,
@@ -62,7 +63,7 @@ class ChatHistoryManager:
             "host", os.getenv("REDIS_HOST", "172.16.168.23")
         )
         self.redis_port = redis_port or redis_config.get(
-            "port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+            "port", int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
         )
 
         self.history: List[Dict[str, Any]] = []

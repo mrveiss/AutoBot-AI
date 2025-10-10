@@ -6,6 +6,7 @@ and debugging across the AutoBot platform.
 """
 
 from typing import Any, Dict, Optional
+from src.constants.network_constants import NetworkConstants
 
 
 class AutoBotError(Exception):

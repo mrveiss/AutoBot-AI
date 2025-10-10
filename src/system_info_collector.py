@@ -2,6 +2,7 @@ import json
 import os
 import platform
 import subprocess
+from src.constants.network_constants import NetworkConstants
 
 
 def get_os_info():

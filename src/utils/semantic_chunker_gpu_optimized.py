@@ -11,6 +11,7 @@ Optimizations implemented:
 """
 
 import os
+from src.constants.network_constants import NetworkConstants
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
 os.environ['KERAS_BACKEND'] = 'tensorflow'

@@ -15,6 +15,7 @@ import numpy as np
 import torch
 from PIL import Image
 
+from src.constants.network_constants import NetworkConstants
 from src.enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,

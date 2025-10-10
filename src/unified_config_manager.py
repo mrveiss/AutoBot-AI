@@ -35,6 +35,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Import host configurations
 from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +210,7 @@ class UnifiedConfigManager:
                     },
                 },
                 "server_host": "0.0.0.0",
-                "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
+                "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
                 "timeout": 60,
                 "max_retries": 3,
                 "streaming": False,
@@ -513,8 +514,8 @@ class UnifiedConfigManager:
 
         defaults = {
             "server_host": "0.0.0.0",
-            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
-            "api_endpoint": f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', '8001')}",
+            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
+            "api_endpoint": f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}",
             "timeout": 60,
             "max_retries": 3,
             "streaming": False,

@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.agents.knowledge_extraction_agent import KnowledgeExtractionAgent
+from src.constants.network_constants import NetworkConstants
 from src.models.atomic_fact import (
     AtomicFact,
     FactExtractionResult,

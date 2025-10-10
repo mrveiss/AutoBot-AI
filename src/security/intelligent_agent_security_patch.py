@@ -19,6 +19,7 @@ INSTALLATION:
 import logging
 from typing import List, Dict, Optional
 
+from src.constants.network_constants import NetworkConstants
 from src.security.prompt_injection_detector import (
     get_prompt_injection_detector,
     InjectionRisk

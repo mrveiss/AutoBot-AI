@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Union
 import aiohttp
 
 from ..utils.service_registry import get_service_url
+from src.constants.network_constants import NetworkConstants
 from .base_agent import (
     AgentHealth,
     AgentRequest,

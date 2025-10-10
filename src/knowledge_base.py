@@ -27,6 +27,8 @@ from src.circuit_breaker import circuit_breaker_async
 
 # Import the centralized ConfigManager
 from src.unified_config import config
+from src.constants.network_constants import NetworkConstants
+from src.utils.knowledge_base_timeouts import kb_timeouts
 
 
 class KnowledgeBase:
@@ -52,7 +54,7 @@ class KnowledgeBase:
         try:
             Settings.llm = LlamaIndexOllamaLLM(
                 model="llama3.2:3b",
-                request_timeout=30.0,
+                request_timeout=kb_timeouts.llm_default,
                 base_url=config.get("ollama.base_url", "http://127.0.0.1:11434"),
             )
             Settings.embed_model = LlamaIndexOllamaEmbedding(
@@ -78,8 +80,8 @@ class KnowledgeBase:
                 "db": self.redis_db,
                 "password": self.redis_password,
                 "decode_responses": False,  # Needed for binary operations
-                "socket_timeout": 5,
-                "socket_connect_timeout": 5,
+                "socket_timeout": kb_timeouts.redis_socket_timeout,
+                "socket_connect_timeout": kb_timeouts.redis_socket_connect,
             }
 
             # Create Redis client for general operations
@@ -548,7 +550,7 @@ class KnowledgeBase:
             # Use asyncio.wait_for to prevent indefinite blocking
             return await asyncio.wait_for(
                 self._perform_search(query, similarity_top_k, filters, mode),
-                timeout=10.0  # 10 second timeout for search operations
+                timeout=kb_timeouts.llamaindex_search_query
             )
         except asyncio.TimeoutError:
             logging.warning(f"Search operation timed out for query: {query[:50]}...")
@@ -671,7 +673,7 @@ class KnowledgeBase:
             # **ASYNC TIMEOUT PROTECTION**
             return await asyncio.wait_for(
                 self._add_document_internal(content, metadata, doc_id),
-                timeout=30.0  # 30 second timeout for document addition
+                timeout=kb_timeouts.document_add
             )
         except asyncio.TimeoutError:
             logging.warning("Document addition timed out")

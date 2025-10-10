@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
 
 # Import our components
+from src.constants.network_constants import NetworkConstants
 from .request_batcher import (
     IntelligentRequestBatcher, BatchableRequest, RequestPriority,
     BatchingStrategy, create_batcher

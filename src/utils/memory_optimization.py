@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, TypeVar, Union
 
 import psutil
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

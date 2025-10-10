@@ -17,6 +17,7 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from src.config_helper import cfg
 from src.source_attribution import SourceType, track_source
 from src.utils.display_utils import get_playwright_config
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

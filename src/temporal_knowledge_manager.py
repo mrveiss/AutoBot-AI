@@ -22,6 +22,7 @@ import hashlib
 import math
 
 from src.utils.logging_manager import get_llm_logger
+from src.constants.network_constants import NetworkConstants
 
 logger = get_llm_logger("temporal_knowledge_manager")
 

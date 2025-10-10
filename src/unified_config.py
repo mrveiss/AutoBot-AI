@@ -336,7 +336,106 @@ class UnifiedConfig:
         if name:
             return self.get(f'paths.{category}.{name}', f'{category}/{name}')
         return self.get(f'paths.{category}.directory', category)
-    
+
+    def get_timeout_for_env(self, category: str, timeout_type: str,
+                            environment: str = None, default: float = 60.0) -> float:
+        """
+        Get environment-aware timeout value.
+
+        Args:
+            category: Category path (e.g., 'redis.operations')
+            timeout_type: Specific timeout type (e.g., 'get')
+            environment: Environment name ('development', 'production')
+            default: Fallback value if not found
+
+        Returns:
+            Timeout value in seconds
+        """
+        if environment is None:
+            environment = os.getenv('AUTOBOT_ENVIRONMENT', 'production')
+
+        # Try environment-specific override first
+        env_path = f'environments.{environment}.timeouts.{category}.{timeout_type}'
+        env_timeout = self.get(env_path)
+        if env_timeout is not None:
+            return float(env_timeout)
+
+        # Fall back to base configuration
+        base_path = f'timeouts.{category}.{timeout_type}'
+        base_timeout = self.get(base_path, default)
+        return float(base_timeout)
+
+    def get_timeout_group(self, category: str, environment: str = None) -> Dict[str, float]:
+        """
+        Get all timeouts for a category as a dictionary.
+
+        Args:
+            category: Category path (e.g., 'redis.operations')
+            environment: Environment name (optional)
+
+        Returns:
+            Dictionary of timeout names to values
+        """
+        base_path = f'timeouts.{category}'
+        base_config = self.get(base_path, {})
+
+        if not isinstance(base_config, dict):
+            return {}
+
+        # Apply environment overrides if specified
+        if environment:
+            env_path = f'environments.{environment}.timeouts.{category}'
+            env_overrides = self.get(env_path, {})
+            if isinstance(env_overrides, dict):
+                base_config = {**base_config, **env_overrides}
+
+        # Convert all values to float
+        result = {}
+        for k, v in base_config.items():
+            if isinstance(v, (int, float)):
+                result[k] = float(v)
+
+        return result
+
+    def validate_timeouts(self) -> Dict[str, Any]:
+        """
+        Validate all timeout configurations.
+
+        Returns:
+            Validation report with issues and warnings
+        """
+        issues = []
+        warnings = []
+
+        # Check required timeout categories
+        required_categories = ['redis', 'llamaindex', 'documents', 'http', 'llm']
+        for category in required_categories:
+            timeout_config = self.get(f'timeouts.{category}')
+            if timeout_config is None:
+                issues.append(f"Missing timeout configuration for '{category}'")
+
+        # Validate timeout ranges
+        all_timeouts = self.get('timeouts', {})
+
+        def check_timeout_values(config, path=''):
+            for key, value in config.items():
+                current_path = f'{path}.{key}' if path else key
+                if isinstance(value, dict):
+                    check_timeout_values(value, current_path)
+                elif isinstance(value, (int, float)):
+                    if value <= 0:
+                        issues.append(f"Invalid timeout '{current_path}': {value} (must be > 0)")
+                    elif value > 600:
+                        warnings.append(f"Very long timeout '{current_path}': {value}s (> 10 minutes)")
+
+        check_timeout_values(all_timeouts)
+
+        return {
+            'valid': len(issues) == 0,
+            'issues': issues,
+            'warnings': warnings
+        }
+
     def reload(self) -> None:
         """Reload configuration from file"""
         with self._lock:

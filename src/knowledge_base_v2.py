@@ -40,6 +40,7 @@ from redisvl.schema import IndexSchema
 
 from src.circuit_breaker import circuit_breaker_async
 from src.unified_config import config
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ class KnowledgeBaseV2:
         try:
             # Manually construct Ollama URL due to config interpolation issue
             ollama_host = config.get('infrastructure.hosts.ollama', '127.0.0.1')
-            ollama_port = config.get('infrastructure.ports.ollama', '11434')
+            ollama_port = config.get('infrastructure.ports.ollama', str(NetworkConstants.OLLAMA_PORT))
             ollama_url = f"http://{ollama_host}:{ollama_port}"
             llm_timeout = config.get_timeout('llm', 'default', 30.0)
 

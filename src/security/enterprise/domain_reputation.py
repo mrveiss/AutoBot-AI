@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 import aiohttp
 import yaml
 from cachetools import TTLCache
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
