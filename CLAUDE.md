@@ -74,6 +74,66 @@ Ask yourself these questions right now:
 
 ---
 
+## 🚫 ABSOLUTE PROHIBITION: NEVER WORK ALONE
+
+**⛔ YOU MUST NEVER DO WORK DIRECTLY - ALWAYS DELEGATE TO SPECIALIZED AGENTS ⛔**
+
+### **MANDATORY DELEGATION RULE**
+
+**You are a MANAGER and ORCHESTRATOR, NOT a direct implementer.**
+
+**❌ STRICTLY FORBIDDEN (ZERO TOLERANCE):**
+- Writing code yourself
+- Editing files directly
+- Implementing features alone
+- Analyzing code without agents
+- Making changes without agent assistance
+- "Just doing it quickly" without delegation
+- ANY direct implementation work
+
+**✅ REQUIRED BEHAVIOR (EVERY SINGLE TIME):**
+- **ALWAYS launch specialized agents** for every task
+- **NEVER use Read/Write/Edit tools** without launching agents first
+- **MINIMUM 2 agents in parallel** for any work
+- **Delegate 100% of implementation** to appropriate agents
+- **Your role**: Plan, coordinate, orchestrate, synthesize results
+
+### **Why This Rule Exists**
+
+**Working alone causes:**
+- ❌ No code review = bugs slip through
+- ❌ No parallel processing = slower work
+- ❌ No specialized expertise = suboptimal solutions
+- ❌ No knowledge capture = lessons lost
+- ❌ Workflow violations = technical debt
+
+**Agent delegation ensures:**
+- ✅ Parallel processing = faster completion
+- ✅ Specialized expertise = better quality
+- ✅ Automatic code review = fewer bugs
+- ✅ Knowledge capture = documented decisions
+- ✅ Proper workflow = maintainable code
+
+### **Enforcement Examples**
+
+❌ **WRONG** (Working alone):
+```
+User: "Add a new API endpoint for user profile"
+Claude: *Uses Write tool to create the endpoint directly*
+```
+
+✅ **CORRECT** (Agent delegation):
+```
+User: "Add a new API endpoint for user profile"
+Claude: *Launches agents*
+- Task(subagent_type="senior-backend-engineer", description="Implement user profile API", prompt="...")
+- Task(subagent_type="code-reviewer", description="Review API implementation", prompt="...")
+```
+
+**THIS RULE APPLIES TO ALL TASKS - NO EXCEPTIONS - EVER**
+
+---
+
 ## 🚨 STANDARDIZED PROCEDURES
 
 **ONLY PERMITTED SETUP AND RUN METHODS:**
@@ -176,76 +236,13 @@ bash run_autobot.sh [--dev|--prod] [--desktop|--no-desktop] [--no-browser]
 
 ## 🎨 CODE QUALITY ENFORCEMENT
 
-**MANDATORY: Automated code quality enforcement via pre-commit hooks and CI/CD**
+**Status**: ✅ Automated via pre-commit hooks + CI/CD (active since 2025-10-09)
 
-### **Automated Quality System**
+**Setup once**: `bash scripts/install-pre-commit-hooks.sh`
 
-**Status**: ✅ **ACTIVE** (as of 2025-10-09)
-**Replaces**: All manual code quality fix scripts (archived to `archive/scripts-code-quality-fixes-2025-10-09/`)
+**Auto-enforces**: Black, isort, flake8, autoflake, bandit, whitespace, YAML/JSON validation
 
-AutoBot enforces code quality **automatically** through:
-
-1. **Pre-commit Hooks** - Run before every commit
-   - Black formatting (88 char line length)
-   - isort import sorting
-   - flake8 linting
-   - autoflake unused code removal
-   - bandit security scanning
-   - Trailing whitespace removal
-   - YAML/JSON validation
-
-2. **CI/CD Pipeline** - GitHub Actions on every push/PR
-   - Same checks as pre-commit
-   - Blocks merge if quality issues found
-   - Runs on main branches automatically
-
-### **Setup (One-Time)**
-
-```bash
-# Install pre-commit hooks
-bash scripts/install-pre-commit-hooks.sh
-```
-
-This installs all tools and configures automatic enforcement.
-
-### **Daily Usage**
-
-**Automatic (Recommended)**:
-- Hooks run automatically on `git commit`
-- Auto-fixable issues corrected automatically
-- Manual fixes required if complex issues found
-
-**Manual Execution** (optional):
-```bash
-# Run on all files
-pre-commit run --all-files
-
-# Run on specific files
-pre-commit run --files path/to/file.py
-
-# Skip hooks (NOT recommended)
-git commit --no-verify
-```
-
-### **Configuration Files**
-
-- `.pre-commit-config.yaml` - Pre-commit hooks configuration
-- `.bandit` - Security scanning configuration
-- `.github/workflows/code-quality.yml` - CI/CD pipeline
-
-### **Obsolete Scripts (DO NOT USE)**
-
-These manual fix scripts are **archived** and should **never be used**:
-- ~~`fix_critical_flake8.py`~~ → Use pre-commit flake8
-- ~~`fix_unused_imports.py`~~ → Use autoflake hook
-- ~~`fix_whitespace.py`~~ → Use trailing-whitespace hook
-- ~~`fix_long_lines.py`~~ → Use Black formatter
-- ~~`fix-files-formatting.sh`~~ → Use pre-commit hooks
-- ~~`fix_bare_excepts.py`~~ → Caught by flake8
-- ~~`fix_code_quality.py`~~ → Use combined hooks
-- ~~`fix_specific_issues.py`~~ → Caught by flake8 + bandit
-
-**Complete Documentation**: [`docs/developer/CODE_QUALITY_ENFORCEMENT.md`](docs/developer/CODE_QUALITY_ENFORCEMENT.md)
+👉 **Full details**: [`docs/developer/CODE_QUALITY_ENFORCEMENT.md`](docs/developer/CODE_QUALITY_ENFORCEMENT.md)
 
 ---
 
@@ -324,82 +321,44 @@ mcp__memory__create_relations --relations '[{"from": "Task B", "to": "Task A", "
 
 ---
 
-## 🔐 CERTIFICATE-BASED SSH AUTHENTICATION
+## 🚀 INFRASTRUCTURE & DEPLOYMENT RULES
 
-**MANDATORY: Use SSH keys instead of passwords for all operations**
+### **SSH Authentication & File Sync**
 
-#### SSH Key Configuration:
+**SSH Keys**: `~/.ssh/autobot_key` (4096-bit RSA) configured for all 5 VMs: frontend(21), npu-worker(22), redis(23), ai-stack(24), browser(25)
 
-- **SSH Private Key**: `~/.ssh/autobot_key` (4096-bit RSA)
-- **SSH Public Key**: `~/.ssh/autobot_key.pub`
-- **All 5 VMs configured**: frontend(21), npu-worker(22), redis(23), ai-stack(24), browser(25)
-
-#### Sync Files to Remote VMs:
+**Sync files to VMs**:
 ```bash
-# Sync specific file to specific VM
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/App.vue /home/autobot/autobot-vue/src/components/
-
-# Sync directory to specific VM
+# Sync specific file/directory to specific VM
 ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
 
 # Sync to ALL VMs
 ./scripts/utilities/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
 ```
 
----
+### **🚨 MANDATORY: Local-Only Development**
 
-## 🚨 CRITICAL: Remote Host Development Rules
+**NEVER edit code directly on remote VMs (172.16.168.21-25) - ZERO TOLERANCE**
 
-**🚨 MANDATORY - NEVER EDIT CODE DIRECTLY ON REMOTE HOSTS 🚨**
+**Required workflow**:
+1. **Edit locally** in `/home/kali/Desktop/AutoBot/`
+2. **Sync immediately** using sync scripts
+3. **Never skip sync** - remote machines must stay synchronized
 
-**This rule MUST NEVER BE BROKEN under any circumstances:**
+**Why this is critical**:
+- ❌ **No version control** on remote VMs - changes completely untracked
+- ❌ **No backup system** - remote edits never saved or recorded
+- ❌ **VMs are ephemeral** - can be reinstalled anytime, **PERMANENT WORK LOSS**
+- ❌ **No recovery mechanism** - cannot track or recover remote changes
 
-- **You are manager and planner** you plan tasks and then delegate them to agents and subagents, you do not work on tasks on your own, you use specialised team members.
-- **Allways use installed mcp servers to fulfill the task faster**
-- **Allways launch multiple subagents to work on task so it is solved faster**
-- **ALL code edits MUST be made locally** and then synced to remote hosts
-- **NEVER use SSH to edit files directly** on remote VMs (172.16.168.21-25)
-- **NEVER use remote text editors** (vim, nano, etc.) on remote hosts
-- **Configuration changes MUST be made locally** and deployed via sync scripts
-- **ALWAYS use sync scripts to push changes** to remote machines after local edits
+### **Network Configuration**
 
-**🔄 MANDATORY WORKFLOW AFTER ANY CODE CHANGES:**
-1. **Edit locally** - Make ALL changes in `/home/kali/Desktop/AutoBot/`
-2. **Immediately sync** - Use appropriate sync script after each edit session
-3. **Never skip sync** - Remote machines must stay synchronized with local changes
+**Service binding**:
+- ✅ Bind services on `0.0.0.0:PORT` (accessible from network)
+- ❌ NEVER use `localhost` or `127.0.0.1` (not accessible from remote VMs)
+- ✅ Use actual IPs `172.16.168.x` for inter-VM communication
 
-**🎯 WHY THIS RULE MUST NEVER BE BROKEN:**
-
-**💥 CRITICAL ISSUE: NO CODE TRACKING ON REMOTE MACHINES**
-- **No version control** on remote VMs - changes are completely untracked
-- **No backup system** - edits made remotely are never saved or recorded
-- **No change history** - impossible to know what was modified, when, or by whom
-- **No rollback capability** - cannot undo or revert remote changes
-
-**⚠️ REMOTE MACHINES ARE EPHEMERAL:**
-- **Can be reinstalled at any moment** without warning
-- **All local changes will be PERMANENTLY LOST** during reinstallation
-- **No recovery mechanism** for work done directly on remote machines
-- **Complete work loss** is inevitable with direct remote editing
-
-**🚨 ZERO TOLERANCE POLICY:**
-Direct editing on remote machines (172.16.168.21-25) **GUARANTEES WORK LOSS** when machines are reinstalled. We cannot track remote changes and cannot recover lost work.
-
----
-
-## 🌐 CRITICAL NETWORKING RULES
-
-**🚨 MANDATORY: Remote Machine Accessibility**
-
-**❌ NEVER use `localhost` or `127.0.0.1` for services accessed by remote machines:**
-- **localhost/127.0.0.1 are NOT accessible from remote VMs**
-- **ALWAYS use `0.0.0.0` to bind services accessible from network**
-- **ALWAYS use actual IP addresses (172.16.168.x) for inter-VM communication**
-
-**✅ CORRECT Network Configuration:**
-- Backend binding: `0.0.0.0:8001` (accessible from all network interfaces)
-- Frontend URLs: `172.16.168.20:8001` (actual IP for remote access)
-- Inter-VM communication: Use specific VM IPs (172.16.168.21-25)
+**Example**: Backend binds `0.0.0.0:8001`, accessed via `172.16.168.20:8001`
 
 ---
 
@@ -460,26 +419,6 @@ Every task, regardless of size or complexity, MUST progress through these three 
 
 **🚨 MANDATORY CHECKPOINT**: Cannot proceed to Plan phase without completing ALL Research steps
 
-**🚦 RESEARCH PHASE CHECKPOINT:**
-
-```
-⏱️ Expected Duration: 15-30 minutes for typical tasks
-
-✅ Minimum 2 agents launched in parallel?
-✅ Memory MCP searched for similar past work?
-✅ Root cause identified (not just symptoms)?
-✅ Multiple solution approaches evaluated (2-3 minimum)?
-✅ Research findings stored in Memory MCP?
-✅ All unknowns and uncertainties documented?
-
-❌ CANNOT PROCEED TO PLAN PHASE WITHOUT ALL CHECKBOXES
-
-🔴 If any checkbox fails:
-   → Launch additional agents to complete research
-   → Search Memory MCP more thoroughly
-   → Identify and document all unknowns before proceeding
-```
-
 ---
 
 ### **📋 PHASE 2: PLAN (Mandatory - Requires Research Completion)**
@@ -509,28 +448,6 @@ Every task, regardless of size or complexity, MUST progress through these three 
 
 **🚨 MANDATORY CHECKPOINT**: Cannot proceed to Implement phase without plan approval
 
-**🚦 PLAN PHASE CHECKPOINT:**
-
-```
-⏱️ Expected Duration: 10-20 minutes for typical tasks
-
-✅ Solution selected based on research findings?
-✅ Systems-architect agent used for architecture design?
-✅ Code-reviewer agent planned if ANY code changes needed?
-✅ Agent assignments documented in TodoWrite?
-✅ Risk analysis completed (code-skeptic)?
-✅ Implementation approach validated and approved?
-✅ Complete plan stored in Memory MCP with relations?
-
-❌ CANNOT PROCEED TO IMPLEMENT PHASE WITHOUT ALL CHECKBOXES
-
-🔴 If any checkbox fails:
-   → Return to Research phase if solution unclear
-   → Launch code-skeptic to identify risks
-   → Document agent assignments in TodoWrite
-   → Store plan in Memory MCP before proceeding
-```
-
 ---
 
 ### **⚙️ PHASE 3: IMPLEMENT (Mandatory - Requires Plan Approval)**
@@ -556,29 +473,17 @@ Every task, regardless of size or complexity, MUST progress through these three 
 - Sync changes to remote VMs using proper sync procedures
 - **Exit Criteria**: Implementation complete, documented, knowledge captured, changes deployed
 
-**🚦 IMPLEMENT PHASE CHECKPOINT:**
+---
 
-```
-⏱️ Expected Duration: 20-60 minutes depending on complexity
+### **🚦 UNIFIED PHASE CHECKPOINTS**
 
-✅ Specialized agents launched per plan assignments?
-✅ TodoWrite actively tracking implementation progress?
-✅ Code review completed (MANDATORY for all code changes)?
-✅ All tests passing (lint, typecheck, unit tests)?
-✅ Changes synced to remote VMs (if applicable)?
-✅ Documentation updated by documentation-engineer?
-✅ Knowledge captured in Memory MCP (lessons learned)?
-✅ No temporary fixes or workarounds introduced?
+| Phase | Duration | Exit Criteria | Critical Actions if Failed |
+|-------|----------|---------------|---------------------------|
+| **Research** | 15-30 min | ✅ Min 2 agents launched<br>✅ Memory MCP searched<br>✅ Root cause identified<br>✅ 2-3 solutions evaluated<br>✅ Findings in Memory MCP<br>✅ Unknowns documented | Launch more agents<br>Search Memory MCP deeper<br>Document all unknowns |
+| **Plan** | 10-20 min | ✅ Solution selected<br>✅ Systems-architect used<br>✅ Code-reviewer planned<br>✅ Agents assigned (TodoWrite)<br>✅ Risks identified (code-skeptic)<br>✅ Plan in Memory MCP | Return to Research if unclear<br>Launch code-skeptic<br>Document assignments<br>Store plan in MCP |
+| **Implement** | 20-60 min | ✅ Agents launched per plan<br>✅ TodoWrite tracking progress<br>✅ Code reviewed (MANDATORY)<br>✅ All tests passing<br>✅ Changes synced to VMs<br>✅ Docs updated<br>✅ Knowledge in Memory MCP<br>✅ No temporary fixes | Launch code-reviewer NOW<br>Fix all tests<br>Sync to VMs<br>Capture lessons in MCP<br>Remove workarounds |
 
-❌ CANNOT MARK TASK COMPLETE WITHOUT ALL CHECKBOXES
-
-🔴 If any checkbox fails:
-   → Launch code-reviewer immediately if not done
-   → Fix all failing tests before proceeding
-   → Sync changes to remote VMs if skipped
-   → Document lessons learned in Memory MCP
-   → Remove any temporary fixes introduced
-```
+**❌ CANNOT PROCEED WITHOUT ALL PHASE CHECKBOXES COMPLETE**
 
 ---
 
@@ -942,33 +847,29 @@ Current Phase: [ ] Research [ ] Plan [ ] Implement
 - Always trace errors end-to-end - frontend to backend, backend to frontend
 - When installing dependencies, update install scripts for fresh deployments
 
-### **⚡ PARALLEL PROCESSING EXECUTION EXAMPLES**
+### **⚡ AGENT LAUNCH PATTERNS**
 
-**Example 1: Bug Investigation (Research Phase)**
+**Single message with multiple parallel agents** (use for all phases):
+
 ```bash
-# Single message with multiple parallel agent launches
-- Task(subagent_type="general-purpose", description="Analyze error logs", prompt="Investigate the specific error patterns in logs/backend.log and related components")
-- Task(subagent_type="systems-architect", description="Architecture analysis", prompt="Analyze system architecture for potential root causes of the reported issue")
-- Task(subagent_type="security-auditor", description="Security implications", prompt="Assess if this error has any security implications or vulnerabilities")
+# Research Phase Pattern
+Task(subagent_type="general-purpose", description="[Analysis task]", prompt="[Details]")
+Task(subagent_type="systems-architect", description="[Architecture review]", prompt="[Details]")
+Task(subagent_type="[domain-expert]", description="[Specialized analysis]", prompt="[Details]")
+
+# Plan Phase Pattern
+Task(subagent_type="project-task-planner", description="[Task breakdown]", prompt="[Details]")
+Task(subagent_type="systems-architect", description="[Architecture design]", prompt="[Details]")
+Task(subagent_type="code-skeptic", description="[Risk analysis]", prompt="[Details]")
+
+# Implement Phase Pattern
+Task(subagent_type="senior-backend-engineer", description="[Backend work]", prompt="[Details]")
+Task(subagent_type="frontend-engineer", description="[Frontend work]", prompt="[Details]")
+Task(subagent_type="testing-engineer", description="[Test coverage]", prompt="[Details]")
+Task(subagent_type="code-reviewer", description="[Review changes]", prompt="[Details]")
 ```
 
-**Example 2: Feature Implementation (Planning Phase)**
-```bash
-# Parallel planning coordination
-- Task(subagent_type="project-task-planner", description="Task breakdown", prompt="Break down the user authentication feature into detailed implementation tasks")
-- Task(subagent_type="systems-architect", description="Architecture design", prompt="Design the technical architecture for user authentication integration")
-- Task(subagent_type="code-skeptic", description="Risk analysis", prompt="Identify potential failure points and risks in user authentication implementation")
-```
-
-**Example 3: Full Implementation (Implementation Phase)**
-```bash
-# Complete parallel implementation
-- Task(subagent_type="senior-backend-engineer", description="Backend API", prompt="Implement authentication API endpoints based on approved plan")
-- Task(subagent_type="frontend-engineer", description="Frontend UI", prompt="Implement authentication UI components and forms")
-- Task(subagent_type="database-engineer", description="Database schema", prompt="Create and optimize user authentication database schema")
-- Task(subagent_type="testing-engineer", description="Test coverage", prompt="Create comprehensive tests for authentication system")
-- Task(subagent_type="security-auditor", description="Security review", prompt="Conduct security audit of authentication implementation")
-```
+**See Agent Selection Matrix above for complete agent types per phase**
 
 ### **🔄 Memory MCP Integration Requirements**
 
@@ -1011,114 +912,32 @@ This includes:
 
 ## How to Run AutoBot
 
-### Standard Startup (Recommended)
+**Daily startup**: `bash run_autobot.sh --dev`
 
-```bash
-bash run_autobot.sh --dev
-```
+**Other modes**: `bash run_autobot.sh [--prod|--dev] [--no-browser] [--desktop|--no-desktop] [--status|--stop|--restart]`
 
-**Available Options:**
-```bash
-bash run_autobot.sh [OPTIONS]
+**VNC Desktop**: `http://127.0.0.1:6080/vnc.html` (enabled by default)
 
-OPTIONS:
-  --dev              Development mode with auto-reload and debugging
-  --prod             Production mode (default)
-  --no-browser       Don't launch browser automatically
-  --desktop          Enable VNC desktop access
-  --no-desktop       Disable VNC desktop access
-  --status           Show current system status
-  --stop             Stop all AutoBot services (backend + VMs)
-  --restart          Fast, intelligent restart (< 1 minute)
-  --help             Show this help message
-```
-
-### Common Usage Examples
-
-**Development Mode (Daily Use):**
-```bash
-bash run_autobot.sh --dev
-```
-- Fast startup for development
-- Auto-reload and debugging enabled
-- Browser launches automatically
-- Desktop VNC enabled by default
-
-**Development Without Browser:**
-```bash
-bash run_autobot.sh --dev --no-browser
-```
-- Development mode without browser
-- Faster startup
-- Access frontend manually at http://172.16.168.21:5173
-
-### Desktop Access (VNC)
-
-Desktop access is **enabled by default** on all modes:
-- **Access URL**: `http://127.0.0.1:6080/vnc.html`
-- **Disable**: Add `--no-desktop` flag
-- **Distributed Setup**: VNC runs on main machine (WSL)
+**Full options**: `bash run_autobot.sh --help`
 
 ---
 
 ## Monitoring & Debugging
 
-### Check Service Health
+**Health checks**:
+- Backend: `curl http://localhost:8001/api/health`
+- Redis: `redis-cli -h 172.16.168.23 ping`
+- Logs: `tail -f logs/backend.log`
 
-```bash
-# Backend health
-curl http://localhost:8001/api/health
-
-# Redis connection
-redis-cli -h 172.16.168.23 ping
-
-# View logs
-tail -f logs/backend.log
-```
-
-### Frontend Debugging
-
-Browser DevTools automatically open in dev mode to monitor:
-
-- API calls and timeouts
-- RUM (Real User Monitoring) events
-- Console errors
-
-**🚨 CRITICAL: Browser Debugging on Kali Linux**
-
-- **❌ NEVER install Playwright locally on Kali Linux** - incompatible environment
-- **✅ ALWAYS use AutoBot's dedicated Browser VM** (`172.16.168.25:3000`)
-- **✅ Playwright is pre-installed and ready on Browser VM** - Claude can use it directly
-- **✅ Use Browser VM for all web automation and debugging tasks**
-- **✅ Access frontend via Browser VM's Playwright instance for console debugging**
-- **Browser VM Services:**
-  - Playwright automation: `172.16.168.25:3000`
-  - VNC access for visual debugging when needed
-  - Full browser compatibility and tool support
+**Browser automation**: Use Browser VM (`172.16.168.25:3000`) - Playwright pre-installed. **Never install locally on Kali** (incompatible).
 
 ---
 
-## Documentation Structure
+## Documentation
 
-**Complete documentation available in:**
+**Key docs**: [`docs/developer/PHASE_5_DEVELOPER_SETUP.md`](docs/developer/PHASE_5_DEVELOPER_SETUP.md) (setup) | [`docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`](docs/api/COMPREHENSIVE_API_DOCUMENTATION.md) (API) | [`docs/system-state.md`](docs/system-state.md) (status)
 
-```
-docs/
-├── api/                    # API documentation (518+ endpoints)
-├── architecture/          # System architecture and design
-├── developer/             # Developer setup and onboarding
-├── features/              # Feature documentation
-├── security/              # Security implementation
-├── troubleshooting/       # Problem resolution guides
-└── system-state.md        # System status and updates
-```
-
-**Key Documents:**
-- [`docs/developer/PHASE_5_DEVELOPER_SETUP.md`](docs/developer/PHASE_5_DEVELOPER_SETUP.md) - 25-minute developer setup
-- [`docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`](docs/api/COMPREHENSIVE_API_DOCUMENTATION.md) - Complete API reference
-- [`docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`](docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md) - Architecture overview
-- [`docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`](docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md) - Problem resolution
-- [`docs/system-state.md`](docs/system-state.md) - **System status and updates**
+**All docs**: `docs/` contains api/, architecture/, developer/, features/, security/, troubleshooting/
 
 ---
 
