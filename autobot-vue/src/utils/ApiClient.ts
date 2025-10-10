@@ -175,28 +175,25 @@ export class ApiClient {
   }
 
   /**
-   * DEPRECATED: Backend doesn't support saving messages in bulk
-   * Messages should be sent individually via sendChatMessage()
-   * This method is kept for backward compatibility but will log a warning
+   * Save chat messages in bulk to a session
+   * Backend endpoint: POST /api/chats/{chat_id}/save
+   * @param chatId - The chat session ID
+   * @param messages - Array of messages to save
+   * @returns Promise with save result
    */
   async saveChatMessages(chatId: string, messages: any[]): Promise<any> {
-    console.warn('saveChatMessages is deprecated. Messages should be sent individually via sendChatMessage()');
-    console.warn('Attempting to send messages individually...');
-
     try {
-      const results = [];
-      for (const message of messages) {
-        if (message.sender === 'user' || message.role === 'user') {
-          const result = await this.sendChatMessage(message.content || message.text, {
-            session_id: chatId,
-            metadata: message.metadata || {}
-          });
-          results.push(result);
+      const response = await this.post(`/api/chats/${chatId}/save`, {
+        data: {
+          messages: messages,
+          name: ""  // Optional session name
         }
-      }
-      return { success: true, results };
+      });
+
+      const result = await response.json();
+      return result;
     } catch (error) {
-      console.error('Failed to save messages individually:', error);
+      console.error('Failed to save chat messages:', error);
       throw error;
     }
   }

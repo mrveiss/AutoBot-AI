@@ -482,6 +482,33 @@ class ApiClient {
     }
   }
 
+  // ========== Chat API Methods ==========
+
+  /**
+   * Save chat messages in bulk to a session
+   * Backend endpoint: POST /api/chats/{chat_id}/save
+   * @param {string} chatId - The chat session ID
+   * @param {Array} messages - Array of messages to save
+   * @returns {Promise<Object>} Save result
+   */
+  async saveChatMessages(chatId, messages) {
+    try {
+      const response = await this.post(`/api/chats/${chatId}/save`, {
+        data: {
+          messages: messages,
+          name: ""  // Optional session name
+        }
+      });
+
+      // FIXED: Parse JSON response instead of returning raw Response object
+      // This matches the TypeScript version behavior
+      return response;
+    } catch (error) {
+      console.error('[ApiClient] Failed to save chat messages:', error);
+      throw error;
+    }
+  }
+
   // ========== Terminal API Methods ==========
 
   /**
