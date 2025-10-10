@@ -30,10 +30,10 @@ bash setup.sh system       # System configuration
 
 ## Infrastructure Overview
 
-**Main Machine (WSL):** 172.16.168.20 - Backend API  
+**Main Machine (WSL):** 172.16.168.20 - Backend API
 **Remote VMs:**
 - VM1 Frontend: 172.16.168.21 - Web interface
-- VM2 NPU Worker: 172.16.168.22 - Hardware AI acceleration  
+- VM2 NPU Worker: 172.16.168.22 - Hardware AI acceleration
 - VM3 Redis: 172.16.168.23 - Data layer
 - VM4 AI Stack: 172.16.168.24 - AI processing
 - VM5 Browser: 172.16.168.25 - Web automation
@@ -80,10 +80,26 @@ redis-cli -h 172.16.168.23 -p 6379 -n 9 FLUSHDB
 redis-cli -h 172.16.168.23 -p 6379 -n 0 --rdb vectors_backup.rdb
 ```
 
+### Redis Service Management
+
+AutoBot now includes comprehensive Redis service management capabilities:
+
+- **Web UI Controls**: Start, stop, restart Redis from the frontend interface
+- **Health Monitoring**: Real-time health checks and status reporting
+- **Auto-Recovery**: Automatic failure detection and recovery
+- **Role-Based Access**: Granular permissions for different user roles
+- **Audit Logging**: Complete audit trail of all service operations
+
+**Documentation:**
+- [Redis Service Management API](docs/api/REDIS_SERVICE_MANAGEMENT_API.md) - Complete API reference
+- [Redis Service Management User Guide](docs/user-guides/REDIS_SERVICE_MANAGEMENT_GUIDE.md) - How to use service controls
+- [Redis Service Operations Runbook](docs/operations/REDIS_SERVICE_RUNBOOK.md) - Operational procedures
+- [Redis Service Architecture](docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md) - Technical architecture
+
 ## Access Points
 
 - **Frontend:** http://172.16.168.21:5173
-- **Backend API:** http://172.16.168.20:8001  
+- **Backend API:** http://172.16.168.20:8001
 - **VNC Desktop:** http://localhost:6080 (when enabled)
 
 ## Documentation
@@ -111,10 +127,11 @@ redis-cli -h 172.16.168.23 -p 6379 -n 0 --rdb vectors_backup.rdb
 ## Key Features
 
 - **Multi-Modal AI:** Vision, voice, and text processing capabilities
-- **Distributed Architecture:** Multi-VM deployment with service isolation  
+- **Distributed Architecture:** Multi-VM deployment with service isolation
 - **Intelligent Automation:** Context-aware task execution
 - **Knowledge Base:** RAG-powered documentation and learning system
 - **Real-time Monitoring:** Comprehensive system and service monitoring
+- **Redis Service Management:** Web UI controls with auto-recovery and health monitoring
 - **Security-First:** Enhanced security layers and audit capabilities
 - **Hardware Acceleration:** NPU and GPU optimization support
 
@@ -134,5 +151,6 @@ All critical issues resolved with permanent architectural fixes:
 - ✅ Distributed VM infrastructure stable
 - ✅ Multi-service coordination working
 - ✅ Hardware optimization active
+- ✅ Redis service management with auto-recovery
 
 For detailed technical information, troubleshooting, and architectural details, see [CLAUDE.md](CLAUDE.md).

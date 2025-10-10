@@ -440,6 +440,13 @@ try:
 except ImportError as e:
     logging.warning(f"⚠️ Optional router not available: npu_workers - {e}")
 
+try:
+    from backend.api.redis_service import router as redis_service_router
+    optional_routers.append((redis_service_router, "", ["redis-service"], "redis_service"))
+    logging.info("✅ Optional router loaded: redis_service (includes prefix /api/redis-service)")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: redis_service - {e}")
+
 # Store logger for app usage
 logger = logging.getLogger(__name__)
 

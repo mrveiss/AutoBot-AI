@@ -117,6 +117,13 @@
       @rum-setting-changed="updateRUMSetting"
     />
 
+    <!-- Services Settings -->
+    <ServicesSettings
+      v-if="activeTab === 'services'"
+      :isSettingsLoaded="isSettingsLoaded"
+      @change="markAsChanged"
+    />
+
     <!-- Save Settings Button -->
     <div v-if="isSettingsLoaded && hasUnsavedChanges" class="settings-actions">
       <button @click="saveSettings" :disabled="isSaving" class="save-settings-btn">
@@ -149,6 +156,7 @@ import LoggingSettings from './settings/LoggingSettings.vue'
 import CacheSettings from './settings/CacheSettings.vue'
 import PromptsSettings from './settings/PromptsSettings.vue'
 import DeveloperSettings from './settings/DeveloperSettings.vue'
+import ServicesSettings from './settings/ServicesSettings.vue'
 
 // Import services and types
 import cacheService from '../services/CacheService'
@@ -195,6 +203,7 @@ const tabs = ref<SettingsTab[]>([
   { id: 'logging', label: 'Logging' },
   { id: 'cache', label: 'Cache' },
   { id: 'prompts', label: 'Prompts' },
+  { id: 'services', label: 'Services' },
   { id: 'developer', label: 'Developer' }
 ])
 const activeTab = ref('backend')
