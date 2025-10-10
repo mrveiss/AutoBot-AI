@@ -413,3 +413,4 @@ vault.yml
 vault.yaml
 *-vault.yml
 .claude/agents-optimized/
+.claude/
