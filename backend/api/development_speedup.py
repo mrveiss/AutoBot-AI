@@ -14,12 +14,23 @@ from pydantic import BaseModel
 from src.constants.network_constants import NetworkConstants
 from src.agents.development_speedup_agent import (
     analyze_codebase,
-    development_speedup,
+    get_development_speedup_agent,
     find_duplicates,
 )
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Lazy initialization for development speedup agent
+_development_speedup_instance = None
+
+
+def _get_dev_speedup_agent():
+    """Get or create the development speedup agent instance (lazy initialization)"""
+    global _development_speedup_instance
+    if _development_speedup_instance is None:
+        _development_speedup_instance = get_development_speedup_agent()
+    return _development_speedup_instance
 
 
 class AnalysisRequest(BaseModel):
@@ -49,21 +60,21 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
         if request.analysis_type == "comprehensive":
             result = await analyze_codebase(request.root_path)
         elif request.analysis_type == "duplicates":
-            result = await development_speedup.find_duplicate_code(request.root_path)
+            result = await _get_dev_speedup_agent().find_duplicate_code(request.root_path)
         elif request.analysis_type == "patterns":
-            result = await development_speedup.identify_code_patterns(request.root_path)
+            result = await _get_dev_speedup_agent().identify_code_patterns(request.root_path)
         elif request.analysis_type == "imports":
-            result = await development_speedup.analyze_imports_and_dependencies(
+            result = await _get_dev_speedup_agent().analyze_imports_and_dependencies(
                 request.root_path
             )
         elif request.analysis_type == "dead_code":
-            result = await development_speedup.detect_dead_code(request.root_path)
+            result = await _get_dev_speedup_agent().detect_dead_code(request.root_path)
         elif request.analysis_type == "refactoring":
-            result = await development_speedup.find_refactoring_opportunities(
+            result = await _get_dev_speedup_agent().find_refactoring_opportunities(
                 request.root_path
             )
         elif request.analysis_type == "quality":
-            result = await development_speedup.analyze_code_quality_consistency(
+            result = await _get_dev_speedup_agent().analyze_code_quality_consistency(
                 request.root_path
             )
         else:
@@ -120,14 +131,15 @@ async def find_duplicates_endpoint(
         logger.info(f"Finding duplicates in: {path}")
 
         # Temporarily adjust minimum lines threshold
-        original_threshold = development_speedup.min_duplicate_lines
-        development_speedup.min_duplicate_lines = min_lines
+        agent = _get_dev_speedup_agent()
+        original_threshold = agent.min_duplicate_lines
+        agent.min_duplicate_lines = min_lines
 
         try:
             result = await find_duplicates(path)
         finally:
             # Restore original threshold
-            development_speedup.min_duplicate_lines = original_threshold
+            agent.min_duplicate_lines = original_threshold
 
         return JSONResponse(
             status_code=200,
@@ -162,7 +174,7 @@ async def analyze_patterns_endpoint(
     try:
         logger.info(f"Analyzing patterns in: {path}")
 
-        result = await development_speedup.identify_code_patterns(path)
+        result = await _get_dev_speedup_agent().identify_code_patterns(path)
 
         # Filter by pattern type if specified
         if pattern_type:
@@ -206,7 +218,7 @@ async def analyze_imports_endpoint(
     try:
         logger.info(f"Analyzing imports in: {path}")
 
-        result = await development_speedup.analyze_imports_and_dependencies(path)
+        result = await _get_dev_speedup_agent().analyze_imports_and_dependencies(path)
 
         if not show_unused:
             result.pop("potential_unused_imports", None)
@@ -239,7 +251,7 @@ async def detect_dead_code_endpoint(
     try:
         logger.info(f"Detecting dead code in: {path}")
 
-        result = await development_speedup.detect_dead_code(path)
+        result = await _get_dev_speedup_agent().detect_dead_code(path)
 
         return JSONResponse(
             status_code=200,
@@ -273,7 +285,7 @@ async def find_refactoring_opportunities_endpoint(
     try:
         logger.info(f"Finding refactoring opportunities in: {path}")
 
-        result = await development_speedup.find_refactoring_opportunities(path)
+        result = await _get_dev_speedup_agent().find_refactoring_opportunities(path)
 
         # Filter by complexity if specified
         if min_complexity > 1.0:
@@ -320,7 +332,7 @@ async def analyze_quality_endpoint(
     try:
         logger.info(f"Analyzing code quality in: {path}")
 
-        result = await development_speedup.analyze_code_quality_consistency(path)
+        result = await _get_dev_speedup_agent().analyze_code_quality_consistency(path)
 
         # Filter by severity if specified
         if severity:
@@ -469,9 +481,9 @@ async def get_development_speedup_status():
                 },
                 "search_index": search_status,
                 "thresholds": {
-                    "duplicate_similarity": development_speedup.duplicate_threshold,
-                    "min_duplicate_lines": development_speedup.min_duplicate_lines,
-                    "complexity_threshold": development_speedup.complexity_threshold,
+                    "duplicate_similarity": _get_dev_speedup_agent().duplicate_threshold,
+                    "min_duplicate_lines": _get_dev_speedup_agent().min_duplicate_lines,
+                    "complexity_threshold": _get_dev_speedup_agent().complexity_threshold,
                 },
             },
         )

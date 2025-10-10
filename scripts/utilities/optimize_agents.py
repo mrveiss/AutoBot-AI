@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """
-Agent File Optimization Tool
+Agent File Optimization Tool - In-Place Edition
 
-This tool creates optimized copies of agent files by stripping code blocks
-and other verbose content while preserving structure and functionality.
+This tool optimizes agent files by stripping code blocks and other verbose content
+while preserving structure and functionality. Uses git for backup and version control.
 
-Zero-Risk Design:
-- NEVER modifies original agent files
-- Creates optimized copies in separate directory
-- Fully reversible (delete optimized directory to revert)
-- Feature flag controlled activation
+Git-Based Backup Design:
+- Creates timestamped git tags before optimization
+- Commits optimized files with detailed statistics
+- Fully reversible via git restore
+- No duplicate directories needed
 
 Usage:
-    python scripts/utilities/optimize_agents.py [--force] [--dry-run] [--stats]
+    python scripts/utilities/optimize_agents.py [--force] [--stats] [--restore [TAG]]
 
 Options:
-    --force     Force regeneration of all optimized agents
-    --dry-run   Show what would be done without making changes
-    --stats     Show detailed token savings statistics
+    --force         Force regeneration of all optimized agents
+    --stats         Show detailed token savings statistics
+    --restore       Restore agents from most recent backup tag
+    --restore TAG   Restore agents from specific tag
+    --list-backups  List all available backup tags
 """
 
 import argparse
@@ -25,7 +27,9 @@ import hashlib
 import json
 import logging
 import re
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -39,20 +43,22 @@ logger = logging.getLogger(__name__)
 
 class AgentOptimizer:
     """
-    Optimizes agent markdown files by stripping code blocks and verbose sections.
+    Optimizes agent markdown files in-place by stripping code blocks and verbose sections.
 
     Features:
+    - In-place optimization of .claude/agents/ directory
+    - Git-based backup via tags before optimization
+    - Automatic git commit after optimization
     - Code block removal with preservation markers
     - YAML frontmatter preservation
     - Incremental updates via caching
     - Token usage statistics
-    - Thread-safe operations
+    - Full restore capability via git
     """
 
     def __init__(
         self,
-        source_dir: Path,
-        target_dir: Path,
+        agent_dir: Path,
         cache_file: Optional[Path] = None,
         strip_code_blocks: bool = True,
         strip_verbose_sections: bool = False
@@ -61,15 +67,13 @@ class AgentOptimizer:
         Initialize the optimizer.
 
         Args:
-            source_dir: Directory containing original agent files
-            target_dir: Directory for optimized agent files
+            agent_dir: Directory containing agent files (will be modified in-place)
             cache_file: Path to cache file for tracking modifications
             strip_code_blocks: Whether to strip code blocks (default: True)
             strip_verbose_sections: Whether to strip verbose sections (default: False)
         """
-        self.source_dir = Path(source_dir)
-        self.target_dir = Path(target_dir)
-        self.cache_file = cache_file or (self.target_dir / '.optimization_cache.json')
+        self.agent_dir = Path(agent_dir)
+        self.cache_file = cache_file or (self.agent_dir / '.optimization_cache.json')
         self.strip_code_blocks = strip_code_blocks
         self.strip_verbose_sections = strip_verbose_sections
 
@@ -103,7 +107,6 @@ class AgentOptimizer:
     def _save_cache(self) -> None:
         """Save optimization cache to disk."""
         try:
-            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.cache, f, indent=2)
         except Exception as e:
@@ -120,7 +123,7 @@ class AgentOptimizer:
 
     def _is_file_cached(self, file_path: Path) -> bool:
         """Check if file needs optimization based on cache."""
-        file_key = str(file_path.relative_to(self.source_dir))
+        file_key = str(file_path.name)
         current_hash = self._get_file_hash(file_path)
 
         if file_key in self.cache and self.cache[file_key] == current_hash:
@@ -132,7 +135,7 @@ class AgentOptimizer:
 
     def _update_cache(self, file_path: Path) -> None:
         """Update cache with current file hash."""
-        file_key = str(file_path.relative_to(self.source_dir))
+        file_key = str(file_path.name)
         current_hash = self._get_file_hash(file_path)
         self.cache[file_key] = current_hash
 
@@ -178,7 +181,7 @@ class AgentOptimizer:
             first_line = match.group(0).split('\n')[0]
             lang = first_line.replace('```', '').strip()
             lang_hint = f" ({lang})" if lang else ""
-            return f"```\n[Code example removed for token optimization{lang_hint} - see original agent file]\n```"
+            return f"```\n[Code example removed for token optimization{lang_hint}]\n```"
 
         processed = code_block_pattern.sub(replace_code_block, content)
         return processed, blocks_removed
@@ -195,7 +198,7 @@ class AgentOptimizer:
         # Only strip sections explicitly marked as verbose
         # Be conservative to maintain agent functionality
         patterns = [
-            (r'## Examples\n.*?(?=\n##|\Z)', '## Examples\n[Examples removed for token optimization - see original agent file]\n\n'),
+            (r'## Examples\n.*?(?=\n##|\Z)', '## Examples\n[Examples removed for token optimization]\n\n'),
         ]
 
         processed = content
@@ -204,19 +207,19 @@ class AgentOptimizer:
 
         return processed
 
-    def optimize_agent_file(self, source_path: Path) -> Optional[Path]:
+    def optimize_agent_file(self, file_path: Path) -> bool:
         """
-        Optimize a single agent file.
+        Optimize a single agent file in-place.
 
         Args:
-            source_path: Path to original agent file
+            file_path: Path to agent file to optimize
 
         Returns:
-            Path to optimized file if successful, None otherwise
+            True if file was modified, False if skipped or unchanged
         """
         try:
             # Read original content
-            with open(source_path, 'r', encoding='utf-8') as f:
+            with open(file_path, 'r', encoding='utf-8') as f:
                 original_content = f.read()
 
             original_size = len(original_content)
@@ -235,46 +238,44 @@ class AgentOptimizer:
             # Strip verbose sections (if enabled)
             optimized_body = self._strip_verbose_sections(optimized_body)
 
-            # Reconstruct content
+            # Reconstruct content (no optimization notice needed for in-place)
             optimized_content = frontmatter + optimized_body
-
-            # Add optimization notice at the end
-            optimization_notice = f"\n\n---\n**Note:** This is an optimized version of the agent file. {blocks_removed} code blocks were removed to reduce token usage. See the original file at `.claude/agents/{source_path.name}` for complete examples.\n"
-            optimized_content += optimization_notice
 
             optimized_size = len(optimized_content)
             self.stats['total_optimized_size'] += optimized_size
+
+            # Check if content actually changed
+            if optimized_content == original_content:
+                logger.debug(f"No changes needed for {file_path.name}")
+                return False
 
             # Calculate savings
             savings_bytes = original_size - optimized_size
             savings_percent = (savings_bytes / original_size * 100) if original_size > 0 else 0
 
             logger.info(
-                f"Optimized {source_path.name}: "
+                f"Optimized {file_path.name}: "
                 f"{original_size} -> {optimized_size} bytes "
                 f"({savings_percent:.1f}% reduction, {blocks_removed} code blocks removed)"
             )
 
-            # Write optimized content
-            target_path = self.target_dir / source_path.name
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(target_path, 'w', encoding='utf-8') as f:
+            # Write optimized content back to same file
+            with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(optimized_content)
 
             # Update cache
-            self._update_cache(source_path)
+            self._update_cache(file_path)
 
             self.stats['files_updated'] += 1
-            return target_path
+            return True
 
         except Exception as e:
-            logger.error(f"Failed to optimize {source_path}: {e}")
-            return None
+            logger.error(f"Failed to optimize {file_path}: {e}")
+            return False
 
     def optimize_all(self, force: bool = False) -> Dict[str, any]:
         """
-        Optimize all agent files in source directory.
+        Optimize all agent files in the directory.
 
         Args:
             force: Force regeneration of all files, ignoring cache
@@ -282,14 +283,11 @@ class AgentOptimizer:
         Returns:
             Dictionary with optimization statistics
         """
-        # Ensure target directory exists
-        self.target_dir.mkdir(parents=True, exist_ok=True)
-
-        # Find all markdown files in source directory
-        agent_files = list(self.source_dir.glob('*.md'))
+        # Find all markdown files in agent directory
+        agent_files = list(self.agent_dir.glob('*.md'))
 
         if not agent_files:
-            logger.warning(f"No agent files found in {self.source_dir}")
+            logger.warning(f"No agent files found in {self.agent_dir}")
             return self.stats
 
         logger.info(f"Found {len(agent_files)} agent files to process")
@@ -340,10 +338,178 @@ class AgentOptimizer:
         print("=" * 70 + "\n")
 
 
+def check_git_available() -> bool:
+    """Check if git is available and we're in a git repository."""
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', '--git-dir'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.returncode == 0
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+def create_backup_tag() -> str:
+    """
+    Create git tag before optimization.
+
+    Returns:
+        Tag name created
+    """
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    tag_name = f"agents-pre-optimization-{timestamp}"
+
+    # Check for uncommitted changes in agents directory
+    result = subprocess.run(
+        ['git', 'status', '--porcelain', '.claude/agents/'],
+        capture_output=True,
+        text=True
+    )
+
+    if result.stdout.strip():
+        logger.warning("⚠️  Uncommitted changes detected in .claude/agents/")
+        logger.info("Creating backup tag anyway (recommended for safety)")
+
+    # Create annotated tag
+    try:
+        subprocess.run(
+            ['git', 'tag', '-a', tag_name, '-m',
+             f'Backup before agent optimization {timestamp}'],
+            check=True
+        )
+        logger.info(f"✅ Created backup tag: {tag_name}")
+        return tag_name
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to create git tag: {e}")
+        raise
+
+
+def commit_optimization(stats: Dict[str, any]) -> None:
+    """
+    Commit optimized agent files.
+
+    Args:
+        stats: Optimization statistics dictionary
+    """
+    try:
+        # Check if there are changes to commit
+        result = subprocess.run(
+            ['git', 'status', '--porcelain', '.claude/agents/'],
+            capture_output=True,
+            text=True
+        )
+
+        if not result.stdout.strip():
+            logger.info("No changes to commit")
+            return
+
+        # Add modified files
+        subprocess.run(['git', 'add', '.claude/agents/'], check=True)
+
+        # Create detailed commit message
+        reduction_pct = stats.get('total_savings_percent', 0)
+        bytes_saved = stats.get('total_savings_bytes', 0)
+
+        message = f"""chore(agents): optimize Claude Code agents for token efficiency
+
+- Files optimized: {stats['files_updated']}
+- Code blocks removed: {stats['code_blocks_removed']}
+- Token reduction: {reduction_pct:.1f}%
+- Bytes saved: {bytes_saved:,}
+
+This optimization strips code examples from agent files to reduce
+token usage while preserving all agent functionality and routing.
+Generated by: scripts/utilities/optimize_agents.py"""
+
+        # Commit changes
+        subprocess.run(['git', 'commit', '-m', message], check=True)
+        logger.info("✅ Changes committed to git")
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to commit changes: {e}")
+        raise
+
+
+def restore_agents(tag_name: Optional[str] = None) -> None:
+    """
+    Restore agents from git tag.
+
+    Args:
+        tag_name: Specific tag to restore from, or None for most recent
+    """
+    try:
+        if tag_name is None:
+            # Find most recent backup tag
+            result = subprocess.run(
+                ['git', 'tag', '--list', 'agents-pre-optimization-*', '--sort=-creatordate'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            tags = [t for t in result.stdout.strip().split('\n') if t]
+            if not tags:
+                logger.error("❌ No backup tags found")
+                logger.info("Available tags should match pattern: agents-pre-optimization-*")
+                sys.exit(1)
+            tag_name = tags[0]
+
+        logger.info(f"Restoring from tag: {tag_name}")
+
+        # Restore files from tag
+        subprocess.run(
+            ['git', 'restore', '.claude/agents/', f'--source={tag_name}'],
+            check=True
+        )
+
+        logger.info("✅ Agents restored from backup")
+        logger.info(f"Restored from tag: {tag_name}")
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to restore from git: {e}")
+        logger.info("Make sure the tag exists: git tag -l 'agents-pre-optimization-*'")
+        sys.exit(1)
+
+
+def list_backup_tags() -> None:
+    """List all available backup tags."""
+    try:
+        result = subprocess.run(
+            ['git', 'tag', '--list', 'agents-pre-optimization-*', '--sort=-creatordate'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        tags = [t for t in result.stdout.strip().split('\n') if t]
+
+        if not tags:
+            print("No backup tags found")
+            return
+
+        print("\nAvailable backup tags:")
+        print("=" * 70)
+        for tag in tags:
+            # Get tag date
+            result = subprocess.run(
+                ['git', 'log', '-1', '--format=%ai', tag],
+                capture_output=True,
+                text=True
+            )
+            date = result.stdout.strip() if result.returncode == 0 else "unknown"
+            print(f"  {tag:50s} {date}")
+        print("=" * 70)
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to list tags: {e}")
+
+
 def main():
     """Main entry point for the optimization tool."""
     parser = argparse.ArgumentParser(
-        description='Optimize agent files by stripping code blocks and verbose content'
+        description='Optimize agent files in-place with git-based backup'
     )
     parser.add_argument(
         '--force',
@@ -351,14 +517,21 @@ def main():
         help='Force regeneration of all optimized agents'
     )
     parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Show what would be done without making changes'
-    )
-    parser.add_argument(
         '--stats',
         action='store_true',
         help='Show detailed statistics after optimization'
+    )
+    parser.add_argument(
+        '--restore',
+        nargs='?',
+        const='',
+        metavar='TAG',
+        help='Restore agents from backup tag (most recent if not specified)'
+    )
+    parser.add_argument(
+        '--list-backups',
+        action='store_true',
+        help='List all available backup tags'
     )
     parser.add_argument(
         '--strip-verbose',
@@ -366,16 +539,10 @@ def main():
         help='Enable stripping of verbose example sections (use with caution)'
     )
     parser.add_argument(
-        '--source-dir',
+        '--agent-dir',
         type=Path,
         default=Path('.claude/agents'),
-        help='Source directory containing agent files (default: .claude/agents)'
-    )
-    parser.add_argument(
-        '--target-dir',
-        type=Path,
-        default=Path('.claude/agents-optimized'),
-        help='Target directory for optimized agents (default: .claude/agents-optimized)'
+        help='Agent directory to optimize (default: .claude/agents)'
     )
 
     args = parser.parse_args()
@@ -391,25 +558,41 @@ def main():
         logger.error("Could not find .claude directory. Run this script from AutoBot project root.")
         sys.exit(1)
 
-    # Resolve paths relative to project root
-    source_dir = project_root / args.source_dir
-    target_dir = project_root / args.target_dir
+    # Resolve agent directory relative to project root
+    agent_dir = project_root / args.agent_dir
 
-    if not source_dir.exists():
-        logger.error(f"Source directory not found: {source_dir}")
+    if not agent_dir.exists():
+        logger.error(f"Agent directory not found: {agent_dir}")
         sys.exit(1)
 
-    logger.info(f"Source directory: {source_dir}")
-    logger.info(f"Target directory: {target_dir}")
+    # Check git availability
+    if not check_git_available():
+        logger.error("Git is not available or not in a git repository")
+        logger.error("This tool requires git for backup and version control")
+        sys.exit(1)
 
-    if args.dry_run:
-        logger.info("DRY RUN MODE - No files will be modified")
+    # Handle list backups
+    if args.list_backups:
+        list_backup_tags()
         return 0
+
+    # Handle restore
+    if args.restore is not None:
+        tag_name = args.restore if args.restore else None
+        restore_agents(tag_name)
+        return 0
+
+    # Run optimization
+    logger.info(f"Agent directory: {agent_dir}")
+    logger.info("Optimization mode: IN-PLACE (files will be modified directly)")
+
+    # Create backup tag before optimization
+    backup_tag = create_backup_tag()
+    logger.info(f"Backup tag created: {backup_tag}")
 
     # Create optimizer
     optimizer = AgentOptimizer(
-        source_dir=source_dir,
-        target_dir=target_dir,
+        agent_dir=agent_dir,
         strip_code_blocks=True,
         strip_verbose_sections=args.strip_verbose
     )
@@ -417,12 +600,17 @@ def main():
     # Run optimization
     stats = optimizer.optimize_all(force=args.force)
 
-    # Print statistics if requested
+    # Print statistics if requested or if files were updated
     if args.stats or stats['files_updated'] > 0:
         optimizer.print_statistics()
 
-    logger.info(f"Optimization complete! Optimized agents available in: {target_dir}")
-    logger.info(f"To use optimized agents, set CLAUDE_AGENT_DIR={target_dir}")
+    # Commit changes if files were updated
+    if stats['files_updated'] > 0:
+        commit_optimization(stats)
+        logger.info("✅ Optimization complete and committed!")
+        logger.info(f"To restore from backup: python {__file__} --restore {backup_tag}")
+    else:
+        logger.info("No files needed optimization (all up to date)")
 
     return 0
 
