@@ -19,6 +19,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from src.secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

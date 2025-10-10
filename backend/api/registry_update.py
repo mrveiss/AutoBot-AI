@@ -4,6 +4,7 @@ Add Phase 9 monitoring router to the registry
 
 # Read the registry file and add the Phase 9 monitoring entry
 import re
+from src.constants.network_constants import NetworkConstants
 
 def add_monitoring_to_registry():
     """Add Phase 9 monitoring router to the registry"""

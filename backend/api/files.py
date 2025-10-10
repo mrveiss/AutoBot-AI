@@ -21,6 +21,7 @@ from pydantic import BaseModel, field_validator
 from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from src.auth_middleware import auth_middleware
 from src.security_layer import SecurityLayer
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

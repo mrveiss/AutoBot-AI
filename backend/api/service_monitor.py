@@ -737,7 +737,7 @@ async def get_all_services():
         # Get distributed service URLs from environment
         import os
         redis_host = os.environ.get('REDIS_HOST', '172.16.168.23')
-        redis_port = os.environ.get('REDIS_PORT', '6379')
+        redis_port = os.environ.get('REDIS_PORT', str(NetworkConstants.REDIS_PORT))
         
         services = {
             "backend": {"status": "online", "url": ServiceURLs.BACKEND_LOCAL, "health": "✅"},

@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 import torch
 
 # Import AutoBot multi-modal components
+from src.constants.network_constants import NetworkConstants
 from src.unified_multimodal_processor import (
     unified_processor,
     MultiModalInput,

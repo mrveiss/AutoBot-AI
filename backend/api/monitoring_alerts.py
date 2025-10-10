@@ -11,11 +11,12 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
 
+from src.constants.network_constants import NetworkConstants
 from src.utils.monitoring_alerts import (
-    get_alerts_manager, 
-    AlertRule, 
-    Alert, 
-    AlertSeverity, 
+    get_alerts_manager,
+    AlertRule,
+    Alert,
+    AlertSeverity,
     AlertStatus,
     LogNotificationChannel,
     RedisNotificationChannel

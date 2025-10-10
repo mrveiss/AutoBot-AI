@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Query, P
 from pydantic import BaseModel, Field, validator
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.background_vectorization import get_background_vectorizer
+from src.constants.network_constants import NetworkConstants
 
 # Import RAG Agent for enhanced search capabilities
 try:
@@ -2395,7 +2396,7 @@ async def vectorize_existing_facts(
             raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
         # Get all fact keys from Redis
-        fact_keys = await asyncio.to_thread(kb._scan_redis_keys, "fact:*")
+        fact_keys = await kb._scan_redis_keys_async("fact:*")
 
         if not fact_keys:
             return {
@@ -2427,7 +2428,7 @@ async def vectorize_existing_facts(
             for fact_key in batch:
                 try:
                     # Get fact data
-                    fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
+                    fact_data = await kb.aioredis_client.hgetall(fact_key)
 
                     if not fact_data:
                         logger.warning(f"No data found for fact key: {fact_key}")
@@ -2448,7 +2449,7 @@ async def vectorize_existing_facts(
                     if skip_existing:
                         # Check if this fact is already in the vector index
                         vector_key = f"llama_index/vector_{fact_id}"
-                        has_vector = await asyncio.to_thread(kb.redis_client.exists, vector_key)
+                        has_vector = await kb.aioredis_client.exists(vector_key)
                         if has_vector:
                             skipped_count += 1
                             continue

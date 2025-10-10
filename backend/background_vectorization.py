@@ -9,6 +9,7 @@ import asyncio
 import logging
 from typing import Optional
 from datetime import datetime, timedelta
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class BackgroundVectorizer:
             logger.info("Starting background vectorization...")
             
             # Get all fact keys
-            fact_keys = await asyncio.to_thread(kb._scan_redis_keys, "fact:*")
+            fact_keys = await kb._scan_redis_keys_async("fact:*")
             
             if not fact_keys:
                 logger.info("No facts found for vectorization")
@@ -59,7 +60,7 @@ class BackgroundVectorizer:
                 for fact_key in batch:
                     try:
                         # Get fact data
-                        fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
+                        fact_data = await kb.aioredis_client.hgetall(fact_key)
                         
                         if not fact_data:
                             failed_count += 1

@@ -63,6 +63,7 @@ from src.chat_workflow_manager import ChatWorkflowManager
 from src.redis_pool_manager import RedisPoolManager
 from src.utils.background_llm_sync import background_llm_sync
 from backend.services.ai_stack_client import get_ai_stack_client, close_ai_stack_client
+from src.constants.network_constants import NetworkConstants
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

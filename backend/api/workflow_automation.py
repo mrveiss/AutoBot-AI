@@ -21,6 +21,7 @@ from src.enhanced_orchestrator import EnhancedOrchestrator
 
 # Import existing orchestrator and workflow components
 from src.orchestrator import Orchestrator
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
+from src.constants.network_constants import NetworkConstants
 
 
 class ProviderStatus(str, Enum):

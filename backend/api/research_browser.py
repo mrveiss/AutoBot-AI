@@ -14,6 +14,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from src.research_browser_manager import research_browser_manager
+from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +41,16 @@ async def health_check():
         # Check if browser manager is initialized
         status = "healthy" if research_browser_manager else "not_initialized"
         
+        # Get browser service URL from config
+        try:
+            browser_service_url = cfg.get_service_url('browser_service')
+        except Exception:
+            browser_service_url = f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"
+
         return {
             "status": status,
             "service": "research_browser",
-            "browser_service_url": "http://172.16.168.25:3000",
+            "browser_service_url": browser_service_url,
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:

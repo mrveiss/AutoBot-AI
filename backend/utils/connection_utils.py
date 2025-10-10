@@ -14,6 +14,7 @@ import requests
 
 from src.unified_config_manager import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT, config as global_config_manager
 from src.utils.redis_client import get_redis_client
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +210,7 @@ class ConnectionTester:
                     "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
                 )
                 redis_port = redis_config.get(
-                    "port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+                    "port", int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
                 )
             else:
                 # Check memory.redis config (current structure)
@@ -221,7 +222,7 @@ class ConnectionTester:
                         "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
                     )
                     redis_port = redis_config.get(
-                        "port", int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+                        "port", int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
                     )
                 else:
                     return {

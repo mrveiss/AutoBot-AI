@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
 from backend.dependencies import get_redis_client
+from src.constants.network_constants import NetworkConstants
 from backend.services.agent_terminal_service import (
     AgentTerminalService,
     AgentRole,

@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 from backend.services.playwright_service import (
     get_playwright_service,
     playwright_service,

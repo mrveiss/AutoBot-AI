@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from src.unified_config_manager import config as global_config_manager
 from src.config_helper import cfg
 from src.utils.distributed_service_discovery import get_redis_connection_params_sync
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

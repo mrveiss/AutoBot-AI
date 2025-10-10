@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 import aiofiles
 import yaml
 
+from src.constants.network_constants import NetworkConstants
 from backend.models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,

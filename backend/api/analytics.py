@@ -26,16 +26,17 @@ from .monitoring import hardware_monitor
 from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
 from src.utils.system_metrics import get_metrics_collector
 from src.config_helper import cfg
-# Simple service address function to avoid import conflicts
+from src.constants import PATH
+from src.constants.network_constants import NetworkConstants
+# Simple service address function using configuration
 def get_service_address(service_name: str, port: int, protocol: str = "http") -> str:
-    """Get standardized service address"""
-    host_mapping = {
-        "ollama": "127.0.0.1",
-        "frontend": "172.16.168.21",
-        "redis": "172.16.168.23",
-        "backend": "172.16.168.20"
-    }
-    host = host_mapping.get(service_name, "localhost")
+    """Get standardized service address from config helper"""
+    # Get host from configuration system
+    try:
+        host = cfg.get_host(service_name)
+    except Exception:
+        # Fallback to localhost if config lookup fails
+        host = "localhost"
     return f"{protocol}://{host}:{port}"
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ class CommunicationPattern(BaseModel):
 
 class CodeAnalysisRequest(BaseModel):
     """Code analysis request model"""
-    target_path: Optional[str] = "/home/kali/Desktop/AutoBot"
+    target_path: Optional[str] = Field(default_factory=lambda: str(PATH.PROJECT_ROOT))
     analysis_type: str = Field(default="full", description="full, incremental, or communication_chains")
     include_metrics: bool = True
 
@@ -106,8 +107,8 @@ class AnalyticsController:
     def __init__(self):
         self.redis_manager = RedisDatabaseManager()
         self.metrics_collector = get_metrics_collector()
-        self.code_analysis_path = Path("/home/kali/Desktop/AutoBot/tools/code-analysis-suite")
-        self.code_index_path = Path("/home/kali/Desktop/AutoBot/mcp-tools/code-index-mcp")
+        self.code_analysis_path = PATH.PROJECT_ROOT / "tools" / "code-analysis-suite"
+        self.code_index_path = PATH.PROJECT_ROOT / "mcp-tools" / "code-index-mcp"
 
         # Performance tracking
         self.api_call_tracker = defaultdict(list)
@@ -616,9 +617,9 @@ async def get_detailed_system_health():
 
         # Check service connectivity
         services = {
-            "ollama": get_service_address("ollama", 11434),
-            "frontend": get_service_address("frontend", 5173),
-            "redis": get_service_address("redis", 6379)
+            "ollama": get_service_address("ollama", NetworkConstants.OLLAMA_PORT),
+            "frontend": get_service_address("frontend", NetworkConstants.FRONTEND_PORT),
+            "redis": get_service_address("redis", NetworkConstants.REDIS_PORT)
         }
 
         for service_name, service_url in services.items():

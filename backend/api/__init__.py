@@ -1,3 +1,5 @@
+
+from src.constants.network_constants import NetworkConstants
 # Enhanced API modules with NPU semantic search and analytics
 __all__ = [
     "chat",

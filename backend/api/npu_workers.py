@@ -21,6 +21,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
+from src.constants.network_constants import NetworkConstants
 from backend.models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,

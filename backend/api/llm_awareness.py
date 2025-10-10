@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.llm_self_awareness import get_llm_self_awareness
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -14,15 +14,26 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.constants.network_constants import NetworkConstants
 from src.agents.npu_code_search_agent import (
     index_project,
-    npu_code_search,
+    get_npu_code_search,
     search_codebase,
 )
 from src.utils.redis_client import get_redis_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Lazy initialization for NPU code search agent
+_npu_code_search_instance = None
+
+def _get_code_search_agent():
+    """Get or create the NPU code search agent instance (lazy initialization)"""
+    global _npu_code_search_instance
+    if _npu_code_search_instance is None:
+        _npu_code_search_instance = get_npu_code_search()
+    return _npu_code_search_instance
 
 
 class IndexRequest(BaseModel):
@@ -122,7 +133,7 @@ async def search_code(request: SearchRequest):
         )
 
         # Get search statistics
-        stats = npu_code_search.get_search_stats()
+        stats = _get_code_search_agent().get_search_stats()
 
         # Convert results to serializable format
         serialized_results = []

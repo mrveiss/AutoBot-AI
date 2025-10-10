@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from src.utils.terminal_websocket_manager import TerminalWebSocketAdapter
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

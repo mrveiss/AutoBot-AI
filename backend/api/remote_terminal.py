@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, De
 from pydantic import BaseModel
 
 from backend.services.ssh_manager import SSHManager, RemoteCommandResult
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

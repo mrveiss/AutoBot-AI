@@ -15,6 +15,7 @@ import logging
 from typing import Optional, Dict
 from fastapi import Request, HTTPException
 from src.auth_middleware import auth_middleware
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
