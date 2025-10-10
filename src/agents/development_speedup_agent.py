@@ -16,7 +16,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.agents.npu_code_search_agent import npu_code_search
+from src.agents.npu_code_search_agent import get_npu_code_search
 from src.utils.redis_client import get_redis_client
 from src.constants.network_constants import NetworkConstants
 
@@ -87,6 +87,9 @@ class DevelopmentSpeedupAgent:
         """Initialize the development speedup agent"""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
+        # NPU code search agent (lazy initialization)
+        self.npu_code_search = get_npu_code_search()
+
         # Redis setup
         self.redis_client = get_redis_client(async_client=False)
 
@@ -115,7 +118,7 @@ class DevelopmentSpeedupAgent:
         self.logger.info(f"Starting comprehensive codebase analysis: {root_path}")
 
         # First, ensure the codebase is indexed
-        await npu_code_search.index_codebase(root_path, force_reindex=False)
+        await self.npu_code_search.index_codebase(root_path, force_reindex=False)
 
         # Run parallel analysis tasks
         analysis_tasks = [
@@ -316,7 +319,7 @@ class DevelopmentSpeedupAgent:
 
         for pattern_config in pattern_searches:
             try:
-                results = await npu_code_search.search_code(
+                results = await self.npu_code_search.search_code(
                     query=pattern_config["query"],
                     search_type=pattern_config["type"],
                     max_results=50,
@@ -358,7 +361,7 @@ class DevelopmentSpeedupAgent:
         self.logger.info("Analyzing imports and dependencies...")
 
         # Search for import statements
-        import_results = await npu_code_search.search_code(
+        import_results = await self.npu_code_search.search_code(
             query="import", search_type="exact", language="python", max_results=1000
         )
 
@@ -442,7 +445,7 @@ class DevelopmentSpeedupAgent:
 
         for pattern in unreachable_patterns:
             try:
-                results = await npu_code_search.search_code(
+                results = await self.npu_code_search.search_code(
                     query=pattern["query"], search_type=pattern["type"], max_results=50
                 )
 
@@ -564,7 +567,7 @@ class DevelopmentSpeedupAgent:
         patterns = []
 
         # Find star imports
-        star_imports = await npu_code_search.search_code(
+        star_imports = await self.npu_code_search.search_code(
             query="from .* import \\*",
             search_type="regex",
             language="python",
@@ -633,7 +636,7 @@ class DevelopmentSpeedupAgent:
 
         for pattern in complex_patterns:
             try:
-                results = await npu_code_search.search_code(
+                results = await self.npu_code_search.search_code(
                     query=pattern,
                     search_type="regex",
                     language="python",
@@ -662,7 +665,7 @@ class DevelopmentSpeedupAgent:
         issues = []
 
         # Check for non-snake_case functions in Python
-        camel_case_functions = await npu_code_search.search_code(
+        camel_case_functions = await self.npu_code_search.search_code(
             query="def [a-z][a-zA-Z]*[A-Z]",
             search_type="regex",
             language="python",
@@ -690,7 +693,7 @@ class DevelopmentSpeedupAgent:
         issues = []
 
         # Find functions without docstrings
-        functions_without_docs = await npu_code_search.search_code(
+        functions_without_docs = await self.npu_code_search.search_code(
             query="def \\w+\\([^)]*\\):\\s*$",
             search_type="regex",
             language="python",
@@ -801,8 +804,16 @@ class DevelopmentSpeedupAgent:
         }
 
 
-# Global instance for easy access
-development_speedup = DevelopmentSpeedupAgent()
+# Lazy initialization for global instance
+_development_speedup_instance = None
+
+
+def get_development_speedup_agent() -> DevelopmentSpeedupAgent:
+    """Get or create the development speedup agent instance (lazy initialization)"""
+    global _development_speedup_instance
+    if _development_speedup_instance is None:
+        _development_speedup_instance = DevelopmentSpeedupAgent()
+    return _development_speedup_instance
 
 
 async def analyze_codebase(root_path: str) -> Dict[str, Any]:
@@ -815,7 +826,8 @@ async def analyze_codebase(root_path: str) -> Dict[str, Any]:
     Returns:
         Comprehensive analysis results
     """
-    return await development_speedup.analyze_codebase_comprehensive(root_path)
+    agent = get_development_speedup_agent()
+    return await agent.analyze_codebase_comprehensive(root_path)
 
 
 async def find_duplicates(root_path: str) -> Dict[str, Any]:
@@ -828,4 +840,5 @@ async def find_duplicates(root_path: str) -> Dict[str, Any]:
     Returns:
         Duplicate code analysis results
     """
-    return await development_speedup.find_duplicate_code(root_path)
+    agent = get_development_speedup_agent()
+    return await agent.find_duplicate_code(root_path)
