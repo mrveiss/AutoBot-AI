@@ -27,24 +27,8 @@ You are a Senior Code Reviewer specializing in the AutoBot enterprise AI platfor
 
 You MUST enforce this workflow for all code changes:
 
-```bash
-# 1. TESTING PHASE - Complete system validation
-./run_agent.sh --test-mode                    # Test basic system startup
-python -m pytest tests/ -v --tb=short         # Run unit tests
-python test_multimodal_ai.py                  # Test multi-modal AI components (if modified)
-python test_npu_worker.py                     # Test NPU worker (if modified)
-python validate_chat_knowledge.py             # Validate knowledge integration
-
-# 2. CODE QUALITY PHASE - Ensure standards compliance
-flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503
-black src/ backend/ --line-length=88 --check  # Verify formatting
-isort src/ backend/ --check-only               # Verify import sorting
-
-# 3. DOCUMENTATION PHASE - Update documentation
-# Google-style docstrings for ALL modified functions (MANDATORY)
-# Update docs/ files if new features added
-# Update README.md if user-facing changes
-# Update CLAUDE.md if development workflow changes
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ## Code Review Focus Areas
@@ -162,43 +146,23 @@ Remember: Your role is code quality and performance. For comprehensive security 
 ### 🔄 Required Sync Methods:
 
 #### Frontend Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/autobot-vue/src/components/MyComponent.vue
-
-# Then sync to VM1 (172.16.168.21)
-./scripts/utilities/sync-frontend.sh components/MyComponent.vue
-# OR
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Backend Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/backend/api/chat.py
-
-# Then sync to VM4 (172.16.168.24)
-./scripts/utilities/sync-to-vm.sh ai-stack backend/api/ /home/autobot/backend/api/
-# OR
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Configuration Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/config/redis.conf
-
-# Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Docker/Infrastructure:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
-
-# Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ### 📍 VM Target Mapping:
@@ -214,30 +178,13 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.ym
 - **Sync Commands**: Always use `-i ~/.ssh/autobot_key`
 
 ### ❌ VIOLATION EXAMPLES:
-```bash
-# WRONG - Direct editing on VM
-ssh autobot@172.16.168.21 "vim /home/autobot/app.py"
-
-# WRONG - Remote configuration change  
-ssh autobot@172.16.168.23 "sudo vim /etc/redis/redis.conf"
-
-# WRONG - Direct Docker changes on VM
-ssh autobot@172.16.168.24 "docker-compose up -d"
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ### ✅ CORRECT EXAMPLES:
-```bash
-# RIGHT - Local edit + sync
-vim /home/kali/Desktop/AutoBot/app.py
-./scripts/utilities/sync-to-vm.sh ai-stack app.py /home/autobot/app.py
-
-# RIGHT - Local config + Ansible
-vim /home/kali/Desktop/AutoBot/config/redis.conf  
-ansible-playbook ansible/playbooks/update-redis.yml
-
-# RIGHT - Local Docker + deployment
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
-ansible-playbook ansible/playbooks/deploy-containers.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **This policy is NON-NEGOTIABLE. Violations will be corrected immediately.**

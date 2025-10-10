@@ -29,36 +29,23 @@ You are a Senior DevOps Engineer specializing in the AutoBot AutoBot enterprise 
 #### Available Playbooks:
 
 **Full Production Deployment:**
-```bash
-ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-full.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Development Environment:**
-```bash
-ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-development-services.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Health Check & Validation:**
-```bash
-ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/health-check.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Service-Specific Deployment:**
-```bash
-# Frontend (VM1: 172.16.168.21)
-ansible frontend -i ansible/inventory/production.yml -m systemd -a "name=nginx state=restarted" -b
-
-# Backend (VM4: 172.16.168.24) 
-ansible backend -i ansible/inventory/production.yml -m systemd -a "name=autobot-backend state=restarted" -b
-
-# Database (VM3: 172.16.168.23)
-ansible database -i ansible/inventory/production.yml -m systemd -a "name=redis-stack-server state=restarted" -b
-
-# AI/ML Services (VM2: 172.16.168.22, VM4: 172.16.168.24)
-ansible aiml -i ansible/inventory/production.yml -m systemd -a "name=autobot-ai-stack state=restarted" -b
-
-# Browser Automation (VM5: 172.16.168.25)
-ansible browser -i ansible/inventory/production.yml -m systemd -a "name=autobot-playwright state=restarted" -b
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### VM Infrastructure:
@@ -69,24 +56,13 @@ ansible browser -i ansible/inventory/production.yml -m systemd -a "name=autobot-
 - **VM5 (172.16.168.25)**: Browser - Playwright, VNC, desktop environment
 
 #### Health Monitoring:
-```bash
-# Quick system status
-ansible all -i ansible/inventory/production.yml -m shell -a "uptime && systemctl is-active autobot-*"
-
-# Service logs
-ansible <group> -i ansible/inventory/production.yml -m shell -a "journalctl -u autobot-* --since '1 hour ago' --no-pager"
-
-# Network connectivity
-ansible all -i ansible/inventory/production.yml -m shell -a "curl -s http://172.16.168.20:8001/api/health"
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Emergency Recovery:
-```bash
-# Stop all services
-ansible all -i ansible/inventory/production.yml -m systemd -a "name=autobot-* state=stopped" -b
-
-# Restart specific group
-ansible <group> -i ansible/inventory/production.yml -m systemd -a "name=autobot-* state=restarted" -b
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Reference**: Complete Ansible documentation at `docs/ANSIBLE_PLAYBOOK_REFERENCE.md`
@@ -101,57 +77,23 @@ ansible <group> -i ansible/inventory/production.yml -m systemd -a "name=autobot-
 **Core Responsibilities:**
 
 **NPU Worker Management:**
-```bash
-# NPU worker deployment and management
-docker compose -f docker-compose.hybrid.yml --profile npu up -d  # Start NPU worker
-docker compose -f docker-compose.hybrid.yml --profile npu down   # Stop NPU worker
-./start_npu_worker.sh                                            # Manual NPU startup
-python test_npu_worker.py                                        # Test NPU functionality
-
-# NPU hardware optimization
-docker exec autobot-npu-worker python npu_model_manager.py list  # List available models
-docker exec autobot-npu-worker python npu_model_manager.py optimize --model vision # Optimize model
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Container Orchestration:**
-```bash
-# AutoBot container management
-docker compose -f docker-compose.hybrid.yml up -d               # Full system
-docker ps | grep autobot                                        # Check all containers
-docker logs autobot-npu-worker                                  # NPU worker logs
-docker logs autobot-redis-stack                                 # Redis Stack logs
-
-# Health monitoring
-curl -s "http://localhost:8001/api/system/health"               # Backend health
-curl -s "http://localhost:8001/api/memory/health"               # Memory system health
-curl -s "http://localhost:8002/health"                          # NPU worker health
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Redis Stack Configuration:**
-```bash
-# Redis Stack with advanced features
-docker run -d --name autobot-redis-stack \
-  -p 6379:6379 -p 8001:8001 \
-  -v redis-data:/data \
-  redis/redis-stack:latest
-
-# RedisInsight dashboard access
-open http://localhost:8001  # Redis monitoring interface
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Performance Monitoring:**
-```bash
-# NPU performance tracking
-docker exec autobot-npu-worker nvidia-smi  # If NVIDIA GPU present
-docker exec autobot-npu-worker intel_gpu_top  # Intel GPU monitoring
-docker stats autobot-npu-worker  # Container resource usage
-
-# Memory and database performance
-docker exec autobot-backend python -c "
-from src.enhanced_memory_manager import EnhancedMemoryManager
-manager = EnhancedMemoryManager()
-print(manager.get_memory_statistics())
-"
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Deployment Strategies:**
@@ -161,15 +103,8 @@ print(manager.get_memory_statistics())
 - **Hybrid**: CPU/GPU/NPU intelligent workload distribution
 
 **Backup and Recovery:**
-```bash
-# Automated backup system
-backup_timestamp=$(date +%Y%m%d_%H%M%S)
-docker exec autobot-backend cp data/knowledge_base.db /backup/kb_$backup_timestamp.db
-docker exec autobot-backend cp data/memory_system.db /backup/memory_$backup_timestamp.db
-
-# Redis Stack backup
-docker exec autobot-redis-stack redis-cli BGSAVE
-docker cp autobot-redis-stack:/data/dump.rdb ./backup/redis_$backup_timestamp.rdb
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **Scaling and Optimization:**
@@ -221,43 +156,23 @@ Focus on reliability, scalability, and intelligent hardware utilization for the 
 ### 🔄 Required Sync Methods:
 
 #### Frontend Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/autobot-vue/src/components/MyComponent.vue
-
-# Then sync to VM1 (172.16.168.21)
-./scripts/utilities/sync-frontend.sh components/MyComponent.vue
-# OR
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Backend Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/backend/api/chat.py
-
-# Then sync to VM4 (172.16.168.24)
-./scripts/utilities/sync-to-vm.sh ai-stack backend/api/ /home/autobot/backend/api/
-# OR
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Configuration Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/config/redis.conf
-
-# Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Docker/Infrastructure:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
-
-# Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ### 📍 VM Target Mapping:
@@ -273,30 +188,13 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.ym
 - **Sync Commands**: Always use `-i ~/.ssh/autobot_key`
 
 ### ❌ VIOLATION EXAMPLES:
-```bash
-# WRONG - Direct editing on VM
-ssh autobot@172.16.168.21 "vim /home/autobot/app.py"
-
-# WRONG - Remote configuration change  
-ssh autobot@172.16.168.23 "sudo vim /etc/redis/redis.conf"
-
-# WRONG - Direct Docker changes on VM
-ssh autobot@172.16.168.24 "docker-compose up -d"
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ### ✅ CORRECT EXAMPLES:
-```bash
-# RIGHT - Local edit + sync
-vim /home/kali/Desktop/AutoBot/app.py
-./scripts/utilities/sync-to-vm.sh ai-stack app.py /home/autobot/app.py
-
-# RIGHT - Local config + Ansible
-vim /home/kali/Desktop/AutoBot/config/redis.conf  
-ansible-playbook ansible/playbooks/update-redis.yml
-
-# RIGHT - Local Docker + deployment
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
-ansible-playbook ansible/playbooks/deploy-containers.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **This policy is NON-NEGOTIABLE. Violations will be corrected immediately.**

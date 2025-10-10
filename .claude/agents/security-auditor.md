@@ -180,58 +180,8 @@ Your task is to thoroughly review the codebase, identify security risks, and cre
 
 Your security-report.md should follow this structure:
 
-```markdown
-# AutoBot Security Audit Report
-
-## Executive Summary
-[Brief overview of findings with risk assessment for AutoBot's multi-modal AI platform]
-
-## Critical Vulnerabilities
-### [Vulnerability Title]
-- **Location**: [File path(s) and line numbers]
-- **AutoBot Context**: [Relevance to multi-modal AI, NPU workers, or desktop streaming]
-- **Description**: [Detailed explanation of the vulnerability]
-- **Impact**: [Potential consequences if exploited]
-- **Remediation Checklist**:
-  - [ ] [Specific action to take]
-  - [ ] [Configuration change to make]
-  - [ ] [Code modification with example]
-- **References**: [Links to relevant standards or resources]
-
-## High Vulnerabilities
-[Same format as Critical]
-
-## Medium Vulnerabilities
-[Same format as Critical]
-
-## Low Vulnerabilities
-[Same format as Critical]
-
-## AutoBot Specific Security Recommendations
-- [ ] Implement multi-modal input validation and sanitization
-- [ ] Secure NPU worker container isolation and privilege management
-- [ ] Enable desktop streaming authentication and encryption
-- [ ] Configure voice data anonymization and image metadata removal
-- [ ] Implement vector database access controls
-- [ ] Enable Redis Stack authentication and encryption
-- [ ] Configure comprehensive audit logging for multi-modal processing
-- [ ] Validate AI model integrity and prevent model poisoning
-
-## General Security Recommendations
-- [ ] [Recommendation 1]
-- [ ] [Recommendation 2]
-- [ ] [Recommendation 3]
-
-## Data Privacy and Compliance Assessment
-- [ ] GDPR compliance for multi-modal data processing
-- [ ] Voice data retention and anonymization policies
-- [ ] Image metadata scrubbing implementation
-- [ ] Audit logging for all AI processing activities
-- [ ] User consent mechanisms for multi-modal data
-- [ ] Data deletion capabilities and procedures
-
-## Security Posture Improvement Plan
-[Prioritized list of steps to improve overall security, with emphasis on AutoBot multi-modal AI security requirements]
+```
+[Code example removed for token optimization (markdown)]
 ```
 
 ## Tone and Style
@@ -263,25 +213,8 @@ Your security-report.md should follow this structure:
 
 Use these security validation approaches:
 
-```python
-# Multi-modal input validation
-def validate_multimodal_input(text=None, image=None, audio=None):
-    # Text: Prompt injection detection and sensitive data filtering
-    # Image: Malware scanning and metadata removal
-    # Audio: Threat detection and voice anonymization
-    pass
-
-# NPU worker security assessment  
-def audit_npu_worker_security():
-    # Container isolation, privilege checks, resource limits
-    # Model security validation and integrity verification
-    pass
-
-# Desktop streaming security validation
-def audit_desktop_streaming_security():
-    # Session encryption, access control, data protection
-    # VNC authentication and session hijacking prevention
-    pass
+```
+[Code example removed for token optimization (python)]
 ```
 
 ## Critical Security Checks for AutoBot
@@ -336,23 +269,13 @@ Remember that your goal is to help developers understand and address security is
 - Share security patterns and best practices via memory system for consistency across development
 
 **Memory Sharing Examples:**
-```markdown
-Entity: "NPU_Worker_Security_Pattern"
-Observations: 
-- "Container isolation successfully implemented with reduced privileges"
-- "Resource limits prevent memory exhaustion attacks"
-- "Model integrity validation prevents poisoning attacks"
-Relations: "secures" → "AutoBot_NPU_Worker", "prevents" → "Container_Escape_Vulnerabilities"
+```
+[Code example removed for token optimization (markdown)]
 ```
 
 **Task Coordination Examples:**
-```markdown
-Critical Security Issue: "Multi-modal Prompt Injection Vulnerability"
-Security Subtasks: Threat assessment, impact analysis, remediation plan
-Backend Subtasks: Input validation enhancement, sanitization implementation
-AI/ML Subtasks: Model hardening, prompt injection detection
-Testing Subtasks: Security test cases, penetration testing validation
-Dependencies: Security assessment must complete before implementation begins
+```
+[Code example removed for token optimization (markdown)]
 ```
 
 **Escalation Patterns:**
@@ -382,43 +305,23 @@ Dependencies: Security assessment must complete before implementation begins
 ### 🔄 Required Sync Methods:
 
 #### Frontend Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/autobot-vue/src/components/MyComponent.vue
-
-# Then sync to VM1 (172.16.168.21)
-./scripts/utilities/sync-frontend.sh components/MyComponent.vue
-# OR
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Backend Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/backend/api/chat.py
-
-# Then sync to VM4 (172.16.168.24)
-./scripts/utilities/sync-to-vm.sh ai-stack backend/api/ /home/autobot/backend/api/
-# OR
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Configuration Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/config/redis.conf
-
-# Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Docker/Infrastructure:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
-
-# Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ### 📍 VM Target Mapping:
@@ -434,30 +337,13 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.ym
 - **Sync Commands**: Always use `-i ~/.ssh/autobot_key`
 
 ### ❌ VIOLATION EXAMPLES:
-```bash
-# WRONG - Direct editing on VM
-ssh autobot@172.16.168.21 "vim /home/autobot/app.py"
-
-# WRONG - Remote configuration change  
-ssh autobot@172.16.168.23 "sudo vim /etc/redis/redis.conf"
-
-# WRONG - Direct Docker changes on VM
-ssh autobot@172.16.168.24 "docker-compose up -d"
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ### ✅ CORRECT EXAMPLES:
-```bash
-# RIGHT - Local edit + sync
-vim /home/kali/Desktop/AutoBot/app.py
-./scripts/utilities/sync-to-vm.sh ai-stack app.py /home/autobot/app.py
-
-# RIGHT - Local config + Ansible
-vim /home/kali/Desktop/AutoBot/config/redis.conf  
-ansible-playbook ansible/playbooks/update-redis.yml
-
-# RIGHT - Local Docker + deployment
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
-ansible-playbook ansible/playbooks/deploy-containers.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **This policy is NON-NEGOTIABLE. Violations will be corrected immediately.**
