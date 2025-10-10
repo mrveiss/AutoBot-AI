@@ -1,0 +1,57 @@
+# AutoBot with Seq Logging Only
+# Minimal configuration that worked in previous tests
+name: autobot
+
+services:
+  # Redis Stack (essential service)
+  autobot-redis:
+    image: redis/redis-stack:7.4.0-v1
+    container_name: autobot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+      - "8002:8001"  # RedisInsight
+    volumes:
+      - autobot_redis_data:/data
+    environment:
+      - REDIS_ARGS=--appendonly yes --save 60 1
+    networks:
+      - autobot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Seq centralized logging (worked in previous test)
+  autobot-seq:
+    image: datalust/seq:latest
+    container_name: autobot-seq
+    restart: unless-stopped
+    ports:
+      - "5341:80"  # Seq web interface
+    environment:
+      - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_ADMINUSERNAME=admin
+      - SEQ_FIRSTRUN_ADMINPASSWORD=${AUTOBOT_SEQ_ADMIN_PASSWORD}
+    volumes:
+      - autobot_seq_data:/data
+    networks:
+      - autobot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  autobot_redis_data:
+    name: autobot_redis_data
+  autobot_seq_data:
+    name: autobot_seq_data
+
+networks:
+  autobot-network:
+    external: true
+    name: autobot-network

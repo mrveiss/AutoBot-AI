@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "last_updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "categories": {
+    "system_docs": {
+      "name": "System Documentation",
+      "description": "Core system documentation including agent guides, testing frameworks, and implementation details",
+      "path": "/app/knowledge_base/system_docs"
+    },
+    "user_guides": {
+      "name": "User Guides",
+      "description": "End-user documentation and tutorials",
+      "path": "/app/knowledge_base/user_guides"
+    },
+    "api_docs": {
+      "name": "API Documentation",
+      "description": "API endpoints, request/response formats, and integration guides",
+      "path": "/app/knowledge_base/api_docs"
+    },
+    "architecture": {
+      "name": "Architecture Documents",
+      "description": "System architecture, design patterns, and technical decisions",
+      "path": "/app/knowledge_base/architecture"
+    }
+  },
+  "auto_index_patterns": [
+    "*.md",
+    "*.txt",
+    "*.json",
+    "*.yaml",
+    "*.yml"
+  ]
+}
