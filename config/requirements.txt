@@ -100,7 +100,7 @@ pyjwt>=2.8.0                     # JWT token authentication
 bcrypt>=4.0.0                    # Password hashing
 
 # ===== MONITORING & OBSERVABILITY =====
-prometheus-client>=0.19.0         # Metrics collection
+prometheus-client==0.20.0         # Prometheus metrics collection for timeout tracking
 structlog>=23.2.0                # Structured logging
 rich>=13.7.0                     # Enhanced console output
 tqdm==4.67.1                     # Progress bars for long operations - pinned
