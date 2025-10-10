@@ -353,3 +353,63 @@ certs/
 *.key
 *.crt
 config/service-keys/
+
+# === MCP DIRECTORY EXCLUSIONS ===
+# Prevent MCP binaries and archives from being tracked
+.mcp/github-mcp-server
+.mcp/github-mcp-server*
+.mcp/*.tar.gz
+.mcp/*.zip
+.mcp/node_modules/
+
+# === IDE DIRECTORIES (STRENGTHEN EXCLUSIONS) ===
+# Ensure .vscode directories are excluded at all levels
+/.vscode/
+**/.vscode/
+.vscode/*
+*/.vscode/
+
+# === BACKUP DIRECTORIES THAT KEEP APPEARING ===
+# Specific backup directories from past debugging sessions
+.accessibility-fix-backups/
+.console-cleanup-backups/
+.sidebar-backups/
+backup/
+backups/
+
+# === ADDITIONAL CLOUD PROVIDER CREDENTIALS ===
+# AWS credentials
+.aws/credentials
+.aws/config
+
+# Google Cloud credentials
+gcloud-credentials.json
+*-gcloud-key.json
+service-account*.json
+
+# Azure credentials
+.azure/credentials
+
+# === DATABASE BACKUPS ===
+# Database backup files
+*.sql.gz
+*.sql.bz2
+*.dump
+*.backup.sql
+database-backup-*
+
+# === KUBERNETES SECRETS ===
+secrets/
+*secret.yaml
+*secret.yml
+
+# === TERRAFORM STATE ===
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# === ANSIBLE VAULT ===
+vault.yml
+vault.yaml
+*-vault.yml
+.claude/agents-optimized/
