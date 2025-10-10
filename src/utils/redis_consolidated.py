@@ -44,6 +44,7 @@ import redis.asyncio as async_redis
 import yaml
 from aioredis import Redis as AsyncRedis
 from tenacity import (
+from src.constants.network_constants import NetworkConstants
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -101,7 +102,7 @@ class RedisConfig:
     Consolidates config patterns from all Redis managers
     """
     host: str = "localhost"
-    port: int = 6379
+    port: int = NetworkConstants.REDIS_PORT
     db: int = 0
     password: Optional[str] = None
     socket_timeout: float = 2.0

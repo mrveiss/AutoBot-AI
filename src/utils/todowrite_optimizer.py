@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 import difflib
 import hashlib
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

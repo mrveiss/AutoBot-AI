@@ -10,6 +10,7 @@ import logging
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 
+from src.constants.network_constants import NetworkConstants
 from src.security.prompt_injection_detector import (
     PromptInjectionDetector,
     InjectionRisk,

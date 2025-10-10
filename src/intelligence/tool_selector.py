@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 from src.intelligence.goal_processor import GoalCategory, ProcessedGoal
 from src.intelligence.os_detector import LinuxDistro, OSDetector, OSType
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

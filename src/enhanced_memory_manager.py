@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from src.utils.database_pool import EagerLoader, get_connection_pool
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

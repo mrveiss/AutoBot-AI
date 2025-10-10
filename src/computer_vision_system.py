@@ -21,6 +21,7 @@ from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
 # Import correct classes for multimodal processing
 from src.multimodal_processor import ModalInput, multimodal_processor
 from src.task_execution_tracker import task_tracker
+from src.constants.network_constants import NetworkConstants
 from src.unified_multimodal_processor import (
     ModalityType,
     MultiModalInput,

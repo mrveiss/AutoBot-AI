@@ -25,6 +25,7 @@ import math
 from src.knowledge_base import KnowledgeBase
 from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
 from src.utils.logging_manager import get_llm_logger
+from src.constants.network_constants import NetworkConstants
 
 logger = get_llm_logger("advanced_rag_optimizer")
 
@@ -430,7 +431,7 @@ class AdvancedRAGOptimizer:
             )
 
             # Get all facts for keyword search
-            all_facts = await asyncio.to_thread(self.kb.get_all_facts)
+            all_facts = await self.kb.get_all_facts()
 
             # Keyword search
             keyword_results = self._perform_keyword_search(query, all_facts)

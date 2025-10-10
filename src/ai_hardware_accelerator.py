@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from src.unified_config_manager import cfg
 from src.utils.redis_client import get_redis_client
 from src.utils.logging_manager import get_llm_logger
+from src.constants.network_constants import NetworkConstants
 
 # Import transformers models for multi-modal embeddings
 try:

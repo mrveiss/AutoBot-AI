@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 # Import communication protocol
+from src.constants.network_constants import NetworkConstants
 from src.protocols.agent_communication import (
     AgentIdentity,
     AgentCommunicationManager,

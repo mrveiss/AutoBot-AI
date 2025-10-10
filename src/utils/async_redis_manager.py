@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import aioredis
 from aioredis import Redis
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 class RedisConfig:
     """Redis connection configuration"""
     host: str = "localhost"
-    port: int = 6379
+    port: int = NetworkConstants.REDIS_PORT
     db: int = 0
     password: Optional[str] = None
     socket_timeout: float = 2.0
@@ -264,7 +265,7 @@ async def initialize_default_redis() -> None:
             
         config = RedisConfig(
             host=redis_host,
-            port=6379,
+            port = NetworkConstants.REDIS_PORT,
             db=0,
             socket_timeout=2.0,
             socket_connect_timeout=2.0

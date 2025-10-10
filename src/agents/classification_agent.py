@@ -17,6 +17,7 @@ from src.workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

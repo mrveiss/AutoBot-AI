@@ -14,6 +14,7 @@ import numpy as np
 
 from src.computer_vision_system import ScreenState, UIElement, computer_vision_system
 from src.enhanced_memory_manager import EnhancedMemoryManager
+from src.constants.network_constants import NetworkConstants
 from src.enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,

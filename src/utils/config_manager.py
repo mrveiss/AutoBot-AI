@@ -72,14 +72,14 @@ class ConfigManager:
                     "model": os.getenv("AUTOBOT_OLLAMA_MODEL", "llama3.2"),
                     "base_url": f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
                     "timeout": int(os.getenv("AUTOBOT_OLLAMA_TIMEOUT", "30")),
-                    "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
+                    "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))),
                 },
                 "openai": {"api_key": ""},
             },
             "deployment": {
                 "mode": "local",
                 "host": REDIS_HOST_IP,
-                "port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
+                "port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
             },
             "data": {
                 "reliability_stats_file": "data/reliability_stats.json",
@@ -89,7 +89,7 @@ class ConfigManager:
             },
             "redis": {
                 "host": REDIS_HOST_IP,
-                "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+                "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
                 "db": int(os.getenv("AUTOBOT_REDIS_DB", "0")),
                 "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
             },
@@ -151,7 +151,7 @@ class ConfigManager:
                 "redis": {
                     "enabled": True,
                     "host": REDIS_HOST_IP,
-                    "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+                    "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
                     "db": int(os.getenv("AUTOBOT_REDIS_MEMORY_DB", "0")),
                     "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
                 }
@@ -160,7 +160,7 @@ class ConfigManager:
                 "type": "redis",
                 "redis": {
                     "host": REDIS_HOST_IP,
-                    "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
+                    "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
                     "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
                     "db": int(os.getenv("AUTOBOT_REDIS_TASK_DB", "0")),
                 },

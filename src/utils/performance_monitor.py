@@ -25,6 +25,7 @@ from functools import wraps
 # Import existing monitoring infrastructure
 from src.utils.system_metrics import get_metrics_collector, SystemMetric
 from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

@@ -2,6 +2,7 @@
 # This fixes socket_timeout from 30s to 2s as per CLAUDE.md documentation
 
 import os
+from src.constants.network_constants import NetworkConstants
 
 # Set Redis timeout to 2 seconds to prevent blocking
 os.environ["REDIS_SOCKET_TIMEOUT"] = "2"

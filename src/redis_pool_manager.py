@@ -44,6 +44,7 @@ from redis.backoff import ExponentialBackoff
 
 from src.unified_config import config
 from src.utils.distributed_service_discovery import get_redis_connection_params_sync
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

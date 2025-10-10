@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from collections import defaultdict, deque
 import json
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

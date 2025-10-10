@@ -17,6 +17,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.models.atomic_fact import AtomicFact
+from src.constants.network_constants import NetworkConstants
 from src.models.entity_mapping import (
     EntityMapping,
     EntityRelationship,

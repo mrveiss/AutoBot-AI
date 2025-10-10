@@ -9,6 +9,7 @@ import time
 from typing import Optional, Callable, Any, Dict
 from dataclasses import dataclass
 from enum import Enum
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

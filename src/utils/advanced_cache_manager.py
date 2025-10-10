@@ -14,6 +14,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
 from src.utils.redis_client import get_redis_client
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

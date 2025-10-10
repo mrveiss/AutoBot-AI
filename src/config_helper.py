@@ -245,7 +245,7 @@ class ConfigHelper:
             },
             'database_connections': {
                 'redis_host': 'localhost',
-                'redis_port': '6379'
+                'redis_port': str(NetworkConstants.REDIS_PORT)
             }
         }
 

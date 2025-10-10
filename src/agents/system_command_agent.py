@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from src.agents.interactive_terminal_agent import InteractiveTerminalAgent
 from src.event_manager import event_manager
 from src.security_layer import SecurityLayer
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

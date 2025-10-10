@@ -20,6 +20,7 @@ from scripts.phase_validation_system import PhaseValidator
 from src.phase_progression_manager import PhasePromotionStatus, get_progression_manager
 from src.project_state_manager import ProjectStateManager
 from src.utils.redis_client import get_redis_client
+from src.constants.network_constants import NetworkConstants
 
 try:
     from src.utils.error_boundaries import get_error_boundary_manager

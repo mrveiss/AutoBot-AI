@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+from src.constants.network_constants import NetworkConstants
 
 
 class NumpyEncoder(json.JSONEncoder):

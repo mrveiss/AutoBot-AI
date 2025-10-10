@@ -8,6 +8,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Import from unified processor for consistency
+from src.constants.network_constants import NetworkConstants
 from src.unified_multimodal_processor import (
     ModalityType,
     ProcessingIntent,

@@ -1,5 +1,6 @@
 # Import centralized Redis client utility
 from src.utils.redis_client import get_redis_client
+from src.constants.network_constants import NetworkConstants
 
 # GPU OPTIMIZATION: Import GPU-optimized semantic chunker for 5x performance improvement
 try:

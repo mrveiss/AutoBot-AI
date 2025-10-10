@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
+from src.constants.network_constants import NetworkConstants
 
 # Add project root to path for imports
 sys.path.insert(

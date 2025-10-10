@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from typing import Dict, List, Optional
 
 from ..utils.service_registry import get_service_url
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ class TerminalInputHandler:
                            _get_config_default("test_user_name", "test_user"))
         elif "port" in prompt_lower:
             return os.getenv("AUTOBOT_DEFAULT_PORT",
-                           _get_config_default("default_port", "8080"))
+                           _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT)))
         elif "host" in prompt_lower:
             return os.getenv("AUTOBOT_DEFAULT_HOST",
                            _get_config_default("default_host", "localhost"))
@@ -396,7 +397,7 @@ def configure_testing_defaults():
         "name": os.getenv("AUTOBOT_TEST_USER_NAME",
                         _get_config_default("test_user_name", "test_user")),
         "port": os.getenv("AUTOBOT_AI_STACK_PORT",
-                        _get_config_default("default_port", "8080")),
+                        _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT))),
         "host": os.getenv("AUTOBOT_AI_STACK_HOST",
                         _get_config_default("default_host", "127.0.0.1")),
         "url": get_service_url("ai-stack"),

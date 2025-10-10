@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from typing import Any, Callable, Optional, Type, TypeVar
 
 from src.exceptions import AutoBotError, InternalError
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

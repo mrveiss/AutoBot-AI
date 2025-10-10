@@ -22,6 +22,7 @@ from typing import Optional, Union
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

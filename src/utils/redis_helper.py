@@ -18,6 +18,7 @@ Usage:
 import redis
 import redis.asyncio as aioredis
 from typing import Optional
+from src.constants.network_constants import NetworkConstants
 
 try:
     from src.config.timeout_config import get_redis_timeout_config
@@ -34,7 +35,7 @@ except ImportError:
 
 def get_redis_connection(
     host: str = "172.16.168.23",
-    port: int = 6379,
+    port: int = NetworkConstants.REDIS_PORT,
     db: int = 0,
     password: Optional[str] = None,
     **kwargs
@@ -72,7 +73,7 @@ def get_redis_connection(
 
 async def get_async_redis_connection(
     host: str = "172.16.168.23",
-    port: int = 6379,
+    port: int = NetworkConstants.REDIS_PORT,
     db: int = 0,
     password: Optional[str] = None,
     **kwargs
@@ -110,7 +111,7 @@ async def get_async_redis_connection(
 
 def get_redis_pool(
     host: str = "172.16.168.23",
-    port: int = 6379,
+    port: int = NetworkConstants.REDIS_PORT,
     db: int = 0,
     password: Optional[str] = None,
     max_connections: int = 20,

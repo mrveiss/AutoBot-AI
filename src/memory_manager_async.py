@@ -23,6 +23,7 @@ from src.config_helper import cfg
 
 # Import shared path utilities
 from src.utils.common import PathUtils
+from src.constants.network_constants import NetworkConstants
 
 
 @dataclass

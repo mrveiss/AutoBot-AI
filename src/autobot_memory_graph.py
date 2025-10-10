@@ -36,6 +36,7 @@ import numpy as np
 from cachetools import LRUCache
 
 from src.unified_config import config
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

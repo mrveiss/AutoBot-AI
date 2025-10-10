@@ -25,6 +25,7 @@ from collections import defaultdict, deque
 import statistics
 import re
 from pathlib import Path
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

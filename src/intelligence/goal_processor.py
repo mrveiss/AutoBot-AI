@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from enum import Enum
 from typing import Dict, List
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

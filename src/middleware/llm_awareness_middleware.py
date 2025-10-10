@@ -14,6 +14,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.llm_self_awareness import get_llm_self_awareness
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

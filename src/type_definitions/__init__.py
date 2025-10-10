@@ -10,6 +10,7 @@ from enum import Enum, IntEnum
 from pathlib import Path
 
 # Standard typing imports
+from src.constants.network_constants import NetworkConstants
 from typing import (
     Any,
     AsyncGenerator,

@@ -15,6 +15,7 @@ import logging
 from typing import List, Tuple, Dict, Any
 from enum import Enum
 from dataclasses import dataclass
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

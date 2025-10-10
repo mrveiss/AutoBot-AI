@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from src.unified_config_manager import config as global_config_manager
 from src.llm_interface import LLMInterface
+from src.constants.network_constants import NetworkConstants
 
 # Import communication protocol
 try:

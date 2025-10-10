@@ -24,6 +24,7 @@ import logging
 from src.knowledge_sync_incremental import IncrementalKnowledgeSync, SyncMetrics
 from src.advanced_rag_optimizer import get_rag_optimizer
 from src.utils.logging_manager import get_llm_logger
+from src.constants.network_constants import NetworkConstants
 
 logger = get_llm_logger("knowledge_sync_service")
 

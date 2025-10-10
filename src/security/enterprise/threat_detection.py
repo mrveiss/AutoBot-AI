@@ -21,6 +21,7 @@ import yaml
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

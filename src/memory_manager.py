@@ -28,6 +28,7 @@ from src.utils.database_pool import get_connection_pool
 
 # Import shared path utilities
 from src.utils.common import PathUtils
+from src.constants.network_constants import NetworkConstants
 
 
 @dataclass

@@ -23,6 +23,7 @@ import yaml
 
 from .utils.service_registry import get_service_url
 from .config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -588,7 +589,7 @@ class ConfigManager:
             ),
             "ollama": {
                 "host": unified_config["local"]["providers"]["ollama"]["host"],
-                "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
+                "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))),
                 "model": unified_config["local"]["providers"]["ollama"][
                     "selected_model"
                 ],
@@ -818,10 +819,10 @@ class ConfigManager:
 
         defaults = {
             "server_host": os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0"),
-            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
+            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
             "api_endpoint": os.getenv(
                 "AUTOBOT_BACKEND_API_ENDPOINT",
-                f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', '8001')}",
+                f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}",
             ),
             "cors_origins": self._get_cors_origins(),
         }
@@ -836,7 +837,7 @@ class ConfigManager:
 
         # Dynamic default CORS origins based on frontend configuration
         frontend_host = os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.1")
-        frontend_port = os.getenv("AUTOBOT_FRONTEND_PORT", "5173")
+        frontend_port = os.getenv("AUTOBOT_FRONTEND_PORT", str(NetworkConstants.FRONTEND_PORT))
 
         return [
             f"http://{frontend_host}:{frontend_port}",
@@ -961,7 +962,7 @@ class ConfigManager:
 
         # Finally fall back to configured host
         host = os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1")
-        port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
+        port = os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))
         return f"http://{host}:{port}"
 
     def get_redis_url(self) -> str:
