@@ -199,7 +199,7 @@ async def get_search_status():
     language distribution, and cache statistics.
     """
     try:
-        status = await npu_code_search.get_index_status()
+        status = await _get_code_search_agent().get_index_status()
 
         return JSONResponse(
             status_code=200,
@@ -251,7 +251,7 @@ async def clear_search_cache():
     and ensure fresh results on next search.
     """
     try:
-        result = await npu_code_search.clear_cache()
+        result = await _get_code_search_agent().clear_cache()
 
         if result["status"] == "success":
             return JSONResponse(
@@ -716,7 +716,7 @@ async def get_codebase_statistics():
     """
     try:
         # Get current index status
-        index_status = await npu_code_search.get_index_status()
+        index_status = await _get_code_search_agent().get_index_status()
 
         if not index_status.get("is_indexed", False):
             raise HTTPException(
