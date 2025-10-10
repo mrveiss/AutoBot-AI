@@ -49,43 +49,8 @@ If the user provides images or mockups:
 
 2. **Generate Comprehensive Design Schema**
    Create a detailed JSON schema that captures:
-   ```json
-   {
-     "designSystem": {
-       "colors": {},
-       "typography": {},
-       "spacing": {},
-       "breakpoints": {},
-       "shadows": {},
-       "borderRadius": {},
-       "animations": {}
-     },
-     "components": {
-       "[ComponentName]": {
-         "variants": [],
-         "states": [],
-         "props": {},
-         "accessibility": {},
-         "responsive": {},
-         "interactions": {}
-       }
-     },
-     "layouts": {},
-     "patterns": {}
-   }
    ```
-
-3. **Use Available Tools**
-   - Search for best practices and modern implementations
-   - Look up accessibility standards for components
-   - Find performance optimization techniques
-   - Research similar successful implementations
-   - Check component library documentation
-
-## Deliverable: Frontend Design Document
-
-Generate `frontend-design-spec.md` in the user-specified location (ask for confirmation on location, suggest `/docs/design/` if not specified):
-
+[Code example removed for token optimization (json)]
 ```markdown
 # Frontend Design Specification
 
@@ -115,10 +80,8 @@ Generate `frontend-design-spec.md` in the user-specified location (ask for confi
 **Variants**: [List of variants with use cases]
 
 **Props Interface**:
-```typescript
-interface [ComponentName]Props {
-  // Detailed prop definitions
-}
+```
+[Code example removed for token optimization (typescript)]
 ```
 
 **Visual Specifications**:
@@ -129,8 +92,8 @@ interface [ComponentName]Props {
 - [ ] Animation details
 
 **Implementation Example**:
-```jsx
-// Complete component code example
+```
+[Code example removed for token optimization (jsx)]
 ```
 
 **Accessibility Requirements**:
@@ -157,69 +120,7 @@ interface [ComponentName]Props {
 ## Feedback & Iteration Notes
 [Space for user feedback and design iterations]
 ```
-
-## Iterative Feedback Loop
-
-After presenting initial design:
-
-1. **Gather Specific Feedback**
-   - "Which components need adjustment?"
-   - "Are there missing interaction patterns?"
-   - "Do the proposed implementations align with your vision?"
-   - "What accessibility requirements are critical?"
-
-2. **Refine Based on Feedback**
-   - Update component specifications
-   - Adjust design tokens
-   - Add missing patterns
-   - Enhance implementation examples
-
-3. **Validate Technical Feasibility**
-   - Check compatibility with existing codebase
-   - Verify performance implications
-   - Ensure maintainability
-
-## Analysis Guidelines
-
-- **Be Specific**: Avoid generic component descriptions
-- **Think Systematically**: Consider the entire design system, not isolated components
-- **Prioritize Reusability**: Design components for maximum flexibility
-- **Consider Edge Cases**: Account for empty states, errors, loading
-- **Mobile-First**: Design with responsive behavior as primary concern
-- **Performance Conscious**: Consider bundle size and render performance
-- **Accessibility First**: WCAG compliance should be built-in, not added later
-
-## Tool Usage Instructions
-
-Actively use all available tools:
-- **Web Search**: Find modern implementation patterns and best practices
-- **MCP Tools**: Access documentation and examples
-- **Image Analysis**: Extract precise details from provided mockups
-- **Code Examples**: Generate working prototypes when possible
-
-Remember: The goal is to create a living design document that bridges the gap between design vision and code reality, enabling developers to build exactly what was envisioned without ambiguity.
-
-
-## 🚨 MANDATORY LOCAL-ONLY EDITING ENFORCEMENT
-
-**CRITICAL: ALL code edits MUST be done locally, NEVER on remote servers**
-
-### ⛔ ABSOLUTE PROHIBITIONS:
-- **NEVER SSH to remote VMs to edit files**: `ssh user@172.16.168.21 "vim file"`
-- **NEVER use remote text editors**: vim, nano, emacs on VMs
-- **NEVER modify configuration directly on servers**
-- **NEVER execute code changes directly on remote hosts**
-
-### ✅ MANDATORY WORKFLOW: LOCAL EDIT → SYNC → DEPLOY
-
-1. **Edit Locally**: ALL changes in `/home/kali/Desktop/AutoBot/`
-2. **Test Locally**: Verify changes work in local environment
-3. **Sync to Remote**: Use approved sync scripts or Ansible
-4. **Verify Remote**: Check deployment success (READ-ONLY)
-
-### 🔄 Required Sync Methods:
-
-#### Frontend Changes:
+[Code example removed for token optimization]
 ```bash
 # Edit locally first
 vim /home/kali/Desktop/AutoBot/autobot-vue/src/components/MyComponent.vue
@@ -229,8 +130,7 @@ vim /home/kali/Desktop/AutoBot/autobot-vue/src/components/MyComponent.vue
 # OR
 ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
 ```
-
-#### Backend Changes:
+[Code example removed for token optimization]
 ```bash
 # Edit locally first
 vim /home/kali/Desktop/AutoBot/backend/api/chat.py
@@ -240,8 +140,7 @@ vim /home/kali/Desktop/AutoBot/backend/api/chat.py
 # OR
 ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
 ```
-
-#### Configuration Changes:
+[Code example removed for token optimization]
 ```bash
 # Edit locally first
 vim /home/kali/Desktop/AutoBot/config/redis.conf
@@ -249,8 +148,7 @@ vim /home/kali/Desktop/AutoBot/config/redis.conf
 # Then deploy via Ansible
 ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
 ```
-
-#### Docker/Infrastructure:
+[Code example removed for token optimization]
 ```bash
 # Edit locally first
 vim /home/kali/Desktop/AutoBot/docker-compose.yml
@@ -258,20 +156,7 @@ vim /home/kali/Desktop/AutoBot/docker-compose.yml
 # Then deploy via Ansible
 ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.yml
 ```
-
-### 📍 VM Target Mapping:
-- **VM1 (172.16.168.21)**: Frontend - Web interface
-- **VM2 (172.16.168.22)**: NPU Worker - Hardware AI acceleration  
-- **VM3 (172.16.168.23)**: Redis - Data layer
-- **VM4 (172.16.168.24)**: AI Stack - AI processing
-- **VM5 (172.16.168.25)**: Browser - Web automation
-
-### 🔐 SSH Key Requirements:
-- **Key Location**: `~/.ssh/autobot_key`
-- **Authentication**: ONLY SSH key-based (NO passwords)
-- **Sync Commands**: Always use `-i ~/.ssh/autobot_key`
-
-### ❌ VIOLATION EXAMPLES:
+[Code example removed for token optimization]
 ```bash
 # WRONG - Direct editing on VM
 ssh autobot@172.16.168.21 "vim /home/autobot/app.py"
@@ -282,8 +167,7 @@ ssh autobot@172.16.168.23 "sudo vim /etc/redis/redis.conf"
 # WRONG - Direct Docker changes on VM
 ssh autobot@172.16.168.24 "docker-compose up -d"
 ```
-
-### ✅ CORRECT EXAMPLES:
+[Code example removed for token optimization]
 ```bash
 # RIGHT - Local edit + sync
 vim /home/kali/Desktop/AutoBot/app.py

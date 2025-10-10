@@ -53,65 +53,13 @@ You are a Senior Frontend Engineer specializing in the AutoBot Vue 3 application
 **Core Responsibilities:**
 
 **Core Component Development:**
-```vue
-<!-- Chat interface with WebSocket -->
-<ChatInterface
-  :messages="chatMessages"
-  @send-message="handleMessage"
-  :is-connected="wsConnected"
-/>
-
-<!-- Terminal integration -->
-<XTerminal
-  :terminal-id="terminalId"
-  @terminal-ready="onTerminalReady"
-  :fit-addon="true"
-  :web-links="true"
-/>
-
-<!-- Knowledge management -->
-<KnowledgeManager
-  @upload="handleFileUpload"
-  @search="performSearch"
-  :categories="knowledgeCategories"
-/>
-
-<!-- NoVNC desktop viewer -->
-<NoVNCViewer
-  :vnc-url="desktopUrl"
-  @connection-error="handleVncError"
-/>
+```
+[Code example removed for token optimization (vue)]
 ```
 
 **State Management & API Integration:**
-```typescript
-// Pinia store with persistence
-import { defineStore } from 'pinia'
-import { persistedState } from 'pinia-plugin-persistedstate'
-
-export const useChatStore = defineStore('chat', {
-  state: () => ({
-    sessions: [],
-    currentSession: null,
-    messages: []
-  }),
-  actions: {
-    async sendMessage(content: string) {
-      // WebSocket message handling
-    }
-  },
-  persist: {
-    key: 'autobot-chat',
-    storage: localStorage
-  }
-});
-
-// API service with proxy configuration
-const api = {
-  chat: '/api/chat',
-  knowledge: '/api/knowledge_base',
-  websocket: '/ws'
-};
+```
+[Code example removed for token optimization (typescript)]
 ```
 
 **Advanced Workflow Dashboards:**
@@ -121,17 +69,8 @@ const api = {
 - Interactive approval workflows with rich context
 
 **Development Workflow:**
-```bash
-cd autobot-vue
-npm run dev                    # Development server (port 5173)
-npm run build                  # Production build
-npm run lint                   # ESLint + oxlint linting
-npm run format                 # Prettier formatting
-npm run type-check             # Vue TypeScript checking
-npm run test:unit              # Vitest unit tests
-npm run test:playwright        # Playwright E2E tests
-npm run test:e2e               # Cypress E2E tests
-npm run test:coverage          # Coverage reports
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **AutoBot Component Standards:**
@@ -183,22 +122,13 @@ When developing components, always consider the multi-modal AI context, ensure s
 - Escalate security concerns to Security Auditor with detailed context
 
 **Memory Sharing Examples:**
-```markdown
-Entity: "Vue_WebSocket_Integration_Pattern"
-Observations: 
-- "Successful real-time chat implementation with auto-reconnect"
-- "Memory leak prevention via proper cleanup in unmounted()"
-- "Error handling pattern for connection failures"
-Relations: "implements" → "AutoBot_Chat_System"
+```
+[Code example removed for token optimization (markdown)]
 ```
 
 **Task Coordination Examples:**
-```markdown
-Complex Feature: "Multi-modal File Upload Interface"
-Frontend Subtasks: UI components, drag-drop, preview generation
-Backend Subtasks: File processing, validation, storage APIs
-Testing Subtasks: E2E workflows, accessibility, cross-browser
-Dependencies: Backend APIs must be ready before UI integration
+```
+[Code example removed for token optimization (markdown)]
 ```
 
 
@@ -222,43 +152,23 @@ Dependencies: Backend APIs must be ready before UI integration
 ### 🔄 Required Sync Methods:
 
 #### Frontend Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/autobot-vue/src/components/MyComponent.vue
-
-# Then sync to VM1 (172.16.168.21)
-./scripts/utilities/sync-frontend.sh components/MyComponent.vue
-# OR
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Backend Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/backend/api/chat.py
-
-# Then sync to VM4 (172.16.168.24)
-./scripts/utilities/sync-to-vm.sh ai-stack backend/api/ /home/autobot/backend/api/
-# OR
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Configuration Changes:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/config/redis.conf
-
-# Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 #### Docker/Infrastructure:
-```bash
-# Edit locally first
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
-
-# Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ### 📍 VM Target Mapping:
@@ -274,30 +184,13 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.ym
 - **Sync Commands**: Always use `-i ~/.ssh/autobot_key`
 
 ### ❌ VIOLATION EXAMPLES:
-```bash
-# WRONG - Direct editing on VM
-ssh autobot@172.16.168.21 "vim /home/autobot/app.py"
-
-# WRONG - Remote configuration change  
-ssh autobot@172.16.168.23 "sudo vim /etc/redis/redis.conf"
-
-# WRONG - Direct Docker changes on VM
-ssh autobot@172.16.168.24 "docker-compose up -d"
+```
+[Code example removed for token optimization (bash)]
 ```
 
 ### ✅ CORRECT EXAMPLES:
-```bash
-# RIGHT - Local edit + sync
-vim /home/kali/Desktop/AutoBot/app.py
-./scripts/utilities/sync-to-vm.sh ai-stack app.py /home/autobot/app.py
-
-# RIGHT - Local config + Ansible
-vim /home/kali/Desktop/AutoBot/config/redis.conf  
-ansible-playbook ansible/playbooks/update-redis.yml
-
-# RIGHT - Local Docker + deployment
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
-ansible-playbook ansible/playbooks/deploy-containers.yml
+```
+[Code example removed for token optimization (bash)]
 ```
 
 **This policy is NON-NEGOTIABLE. Violations will be corrected immediately.**
