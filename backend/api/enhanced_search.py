@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from src.npu_semantic_search import get_npu_search_engine, SearchResult, SearchMetrics
 from src.ai_hardware_accelerator import HardwareDevice
 from src.utils.logging_manager import get_llm_logger
+from src.constants.network_constants import NetworkConstants
 
 logger = get_llm_logger("enhanced_search_api")
 

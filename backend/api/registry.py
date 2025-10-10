@@ -5,6 +5,7 @@ Single source of truth for all API endpoints and routing configuration
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from src.constants.network_constants import NetworkConstants
 
 
 class RouterStatus(Enum):

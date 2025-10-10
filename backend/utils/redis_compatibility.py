@@ -12,6 +12,7 @@ import redis
 import redis.asyncio as aioredis
 
 from .async_redis_manager import get_redis_manager
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

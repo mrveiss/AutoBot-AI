@@ -13,6 +13,7 @@ import time
 from typing import Optional, Dict, Any
 from backend.security.service_auth import ServiceAuthManager
 import structlog
+from src.constants.network_constants import NetworkConstants
 
 logger = structlog.get_logger()
 

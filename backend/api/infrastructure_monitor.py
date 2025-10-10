@@ -19,6 +19,7 @@ from pydantic import BaseModel
 # Import unified configuration system - NO HARDCODED VALUES
 from src.config_helper import cfg
 from src.utils.distributed_service_discovery import get_redis_connection_params_sync
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -497,7 +498,8 @@ class InfrastructureMonitor:
         services.core.append(backend_service)
         
         # Frontend
-        if self.check_port(backend_host, 5173):
+        frontend_port = cfg.get_port('frontend')
+        if self.check_port(backend_host, frontend_port):
             services.core.append(ServiceInfo(
                 name="Frontend",
                 status="online",
@@ -507,7 +509,7 @@ class InfrastructureMonitor:
             services.core.append(ServiceInfo(
                 name="Frontend",
                 status="offline",
-                error="Port 5173 not accessible"
+                error=f"Port {frontend_port} not accessible"
             ))
         
         # WebSocket Server
@@ -777,7 +779,7 @@ class InfrastructureMonitor:
             ))
         
         # VS Code Server check (if running)
-        vscode_port = cfg.get('infrastructure.ports.vscode', 8080)  # Common VS Code server port
+        vscode_port = cfg.get('infrastructure.ports.vscode', NetworkConstants.AI_STACK_PORT)  # VS Code server port
         if self.check_port("127.0.0.1", vscode_port):
             services.support.append(ServiceInfo(
                 name="VS Code Server",

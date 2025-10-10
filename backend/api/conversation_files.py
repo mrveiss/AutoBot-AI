@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.auth_middleware import auth_middleware
 from src.security_layer import SecurityLayer
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

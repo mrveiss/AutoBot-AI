@@ -11,6 +11,7 @@ from src.unified_config import config
 
 # Import caching utilities (RESTORED - Fixed FastAPI 0.115.9 compatibility)
 from backend.utils.cache_manager import cache_response
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 

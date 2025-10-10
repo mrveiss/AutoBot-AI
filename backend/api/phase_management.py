@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from scripts.phase_validation_system import PhaseValidator
 from src.phase_progression_manager import ProgressionTrigger, get_progression_manager
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

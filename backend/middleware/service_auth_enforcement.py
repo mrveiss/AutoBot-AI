@@ -10,6 +10,7 @@ from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from backend.security.service_auth import validate_service_auth
 import structlog
+from src.constants.network_constants import NetworkConstants
 
 logger = structlog.get_logger()
 

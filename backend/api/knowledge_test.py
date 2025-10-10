@@ -6,6 +6,7 @@ This bypasses cached instances and creates fresh knowledge base for testing
 from fastapi import APIRouter
 import asyncio
 import logging
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -11,6 +11,7 @@ from backend.utils.connection_utils import ModelManager
 # Add caching support for performance improvement
 from backend.utils.cache_manager import cache_response
 from src.unified_config import config
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 

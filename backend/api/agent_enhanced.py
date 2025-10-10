@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from backend.dependencies import get_config, get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

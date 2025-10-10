@@ -12,11 +12,12 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 import aiofiles
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, WebSocket, WebSocketDisconnect, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 # Import AutoBot monitoring system
+from src.constants.network_constants import NetworkConstants
 from src.utils.performance_monitor import (
     phase9_monitor,
     start_monitoring,
@@ -1054,3 +1055,62 @@ class HardwareMonitor:
 
 # Create global hardware monitor instance for import compatibility
 hardware_monitor = HardwareMonitor()
+
+
+# ===== PROMETHEUS METRICS ENDPOINTS =====
+
+from src.monitoring.prometheus_metrics import get_metrics_manager
+
+
+@router.get("/metrics",
+            summary="Prometheus Metrics Endpoint",
+            description="Exposes metrics in Prometheus format for scraping")
+async def get_prometheus_metrics():
+    """
+    Prometheus metrics endpoint.
+
+    Returns metrics in Prometheus text format for scraping by Prometheus server.
+    Includes timeout tracking, latency metrics, connection pool stats,
+    circuit breaker state, and request success/failure rates.
+    """
+    metrics_manager = get_metrics_manager()
+    metrics_data = metrics_manager.get_metrics()
+
+    return Response(
+        content=metrics_data,
+        media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
+
+
+@router.get("/health/metrics",
+            summary="Metrics Health Check",
+            description="Verify metrics collection is working")
+async def metrics_health_check():
+    """Health check for Prometheus metrics system"""
+    try:
+        metrics_manager = get_metrics_manager()
+        metrics_data = metrics_manager.get_metrics()
+
+        return {
+            "status": "healthy",
+            "metrics_count": len(metrics_data.decode('utf-8').split('\n')),
+            "endpoint": "/api/monitoring/metrics",
+            "format": "Prometheus text format",
+            "metric_categories": [
+                "autobot_timeout_total",
+                "autobot_operation_duration_seconds",
+                "autobot_timeout_rate",
+                "autobot_redis_pool_connections",
+                "autobot_redis_pool_saturation_ratio",
+                "autobot_circuit_breaker_events_total",
+                "autobot_circuit_breaker_state",
+                "autobot_circuit_breaker_failure_count",
+                "autobot_redis_requests_total",
+                "autobot_redis_success_rate"
+            ]
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }

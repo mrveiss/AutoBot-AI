@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.audit_logger import get_audit_logger, AuditEntry, AuditResult
 from src.auth_middleware import auth_middleware
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 logger = logging.getLogger(__name__)

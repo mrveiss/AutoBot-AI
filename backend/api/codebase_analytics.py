@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.utils.distributed_service_discovery import get_redis_connection_params_sync
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])
@@ -248,7 +249,7 @@ def analyze_python_file(file_path: str) -> Dict[str, Any]:
             # Look for port numbers
             port_matches = re.findall(r'\b(80[0-9][0-9]|[1-9][0-9]{3,4})\b', line)
             for port in port_matches:
-                if port in ['8001', '8080', '6379', '11434', '5173', '3000']:
+                if port in [str(NetworkConstants.BACKEND_PORT), str(NetworkConstants.AI_STACK_PORT), str(NetworkConstants.REDIS_PORT), str(NetworkConstants.OLLAMA_PORT), str(NetworkConstants.FRONTEND_PORT), str(NetworkConstants.BROWSER_SERVICE_PORT)]:
                     hardcodes.append({
                         'type': 'port',
                         'value': port,

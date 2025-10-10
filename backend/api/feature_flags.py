@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
 
+from src.constants.network_constants import NetworkConstants
 from backend.services.feature_flags import (
     get_feature_flags,
     EnforcementMode,

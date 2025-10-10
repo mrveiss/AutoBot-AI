@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from src.utils.model_optimizer import get_model_optimizer, TaskRequest, TaskComplexity
 from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

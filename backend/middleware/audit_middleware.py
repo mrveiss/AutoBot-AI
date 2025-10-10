@@ -38,6 +38,7 @@ from starlette.types import ASGIApp
 
 from backend.services.audit_logger import get_audit_logger, AuditResult
 import logging
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

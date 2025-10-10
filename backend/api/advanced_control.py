@@ -14,6 +14,7 @@ from src.desktop_streaming_manager import desktop_streaming
 from src.enhanced_memory_manager_async import TaskPriority
 from src.takeover_manager import TakeoverTrigger, takeover_manager
 from src.task_execution_tracker import task_tracker
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["advanced_control"])

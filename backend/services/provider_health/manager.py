@@ -9,6 +9,7 @@ from typing import Dict, Optional
 
 from .base import ProviderHealthResult, ProviderStatus
 from .providers import OllamaHealth, OpenAIHealth, AnthropicHealth, GoogleHealth
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

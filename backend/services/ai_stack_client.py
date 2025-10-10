@@ -14,6 +14,7 @@ from urllib.parse import urljoin
 
 import aiohttp
 from fastapi import HTTPException
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

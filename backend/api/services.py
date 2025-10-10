@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from src.constants.network_constants import NetworkConstants
 
 # Import existing monitoring functionality
 try:

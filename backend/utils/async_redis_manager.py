@@ -22,6 +22,7 @@ import redis.asyncio as aioredis
 from redis.asyncio import ConnectionPool
 from redis.asyncio.client import Pipeline  # Import Pipeline correctly for aioredis 2.0
 from redis.exceptions import ConnectionError, TimeoutError, RedisError
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ class AsyncRedisDatabase:
         self.config = config
         # Default to environment variables if not provided
         self.host = host if host is not None else os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
-        self.port = port if port is not None else int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+        self.port = port if port is not None else int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
         
         # Connection state
         self._redis: Optional[aioredis.Redis] = None
@@ -387,7 +388,7 @@ class AsyncRedisManager:
                  host: str = None, port: int = None):
         # Get host and port from environment variables if not provided
         self.host = host if host is not None else os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
-        self.port = port if port is not None else int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+        self.port = port if port is not None else int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
         self.config_file = config_file
         self._databases: Dict[str, AsyncRedisDatabase] = {}
         self._start_time = time.time()
@@ -678,7 +679,7 @@ async def get_redis_manager(host: str = None, port: int = None) -> AsyncRedisMan
             if host is None:
                 host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
             if port is None:
-                port = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
+                port = int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
 
             logger.info(f"Initializing AsyncRedisManager with host={host}, port={port}")
 

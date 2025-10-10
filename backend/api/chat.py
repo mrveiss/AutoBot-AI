@@ -28,6 +28,7 @@ from fastapi import Depends
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from backend.security.session_ownership import validate_session_ownership
+from src.constants.network_constants import NetworkConstants
 
 # Create placeholder dependency functions for missing imports
 def get_current_user():
@@ -1204,7 +1205,8 @@ async def send_chat_message_by_id(
 async def save_chat_by_id(
     chat_id: str,
     request_data: dict,
-    request: Request
+    request: Request,
+    ownership: Dict = Depends(validate_chat_ownership)  # SECURITY: Validate ownership
 ):
     """Save chat session by ID (frontend compatibility endpoint)"""
     request_id = generate_request_id()

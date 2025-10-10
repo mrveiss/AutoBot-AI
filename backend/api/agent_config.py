@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from backend.utils.connection_utils import ConnectionTester
 from backend.services.config_service import ConfigService
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
