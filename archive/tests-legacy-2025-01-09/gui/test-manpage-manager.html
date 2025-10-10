@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ManPageManager Test</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .title {
+            font-size: 2rem;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .title i {
+            margin-right: 10px;
+            color: #3498db;
+        }
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        .section-header h3 {
+            margin: 0;
+            color: #2c3e50;
+        }
+        .machine-info {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+        .info-item label {
+            font-weight: 600;
+            color: #495057;
+        }
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .linux {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .mono {
+            font-family: 'Courier New', monospace;
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .highlight {
+            color: #3498db;
+            font-weight: 600;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+        }
+        .btn i {
+            margin-right: 8px;
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #229954;
+        }
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        .btn-info:hover {
+            background: #138496;
+        }
+        .progress-section {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .progress-item {
+            margin-bottom: 15px;
+        }
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #27ae60, #229954);
+        }
+        .progress-messages {
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 15px 0;
+            padding: 10px;
+        }
+        .progress-message {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f3f4;
+            font-size: 0.9em;
+        }
+        .progress-message:last-child {
+            border-bottom: none;
+        }
+        .progress-message .timestamp {
+            color: #6c757d;
+            font-size: 0.8em;
+            margin-right: 10px;
+            min-width: 70px;
+        }
+        .progress-message .message {
+            flex: 1;
+        }
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .text-green-500 { color: #10b981; }
+        .text-green-600 { color: #059669; }
+        .demo-note {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #856404;
+        }
+        .demo-note h4 {
+            margin: 0 0 10px 0;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="demo-note">
+            <h4><i class="fas fa-info-circle"></i> Demo Mode</h4>
+            <p>This is a standalone demonstration of the ManPageManager component with mock data. 
+            Once the backend is restarted with the API fixes, this interface will be fully functional 
+            at <strong>/knowledge/manpages</strong> in the AutoBot GUI.</p>
+        </div>
+
+        <div class="header">
+            <h2 class="title">
+                <i class="fas fa-book"></i>
+                Man Page Knowledge Integration
+            </h2>
+            <p class="subtitle">
+                Integrate Linux manual pages into AutoBot's machine-specific knowledge base
+            </p>
+        </div>
+
+        <!-- Machine Profile Section -->
+        <div class="machine-profile-section">
+            <div class="section-header">
+                <h3><i class="fas fa-desktop"></i> Current Machine Profile</h3>
+                <button class="btn btn-sm btn-outline">
+                    <i class="fas fa-sync"></i>
+                    Refresh
+                </button>
+            </div>
+
+            <div class="machine-info">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Machine ID:</label>
+                        <span class="mono">linux_5582</span>
+                    </div>
+                    <div class="info-item">
+                        <label>OS Type:</label>
+                        <span class="badge linux">linux</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Distribution:</label>
+                        <span>Kali Linux</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Package Manager:</label>
+                        <span class="mono">apt</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Available Tools:</label>
+                        <span class="highlight">51</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Integration Status:</label>
+                        <span class="badge linux">Ready</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Integration Actions -->
+        <div class="integration-actions">
+            <div class="section-header">
+                <h3><i class="fas fa-cogs"></i> Integration Actions</h3>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="simulateInitialization()">
+                    <i class="fas fa-rocket"></i>
+                    Initialize Machine Knowledge
+                </button>
+
+                <button class="btn btn-success" onclick="simulateIntegration()">
+                    <i class="fas fa-book-open"></i>
+                    Integrate Man Pages
+                </button>
+
+                <button class="btn btn-info" onclick="simulateSearch()">
+                    <i class="fas fa-search"></i>
+                    Test Search
+                </button>
+            </div>
+        </div>
+
+        <!-- Real-time Progress Tracking -->
+        <div id="progressSection" class="progress-section" style="display: none;">
+            <div class="section-header">
+                <h3><i class="fas fa-tasks"></i> Progress Tracking</h3>
+                <button class="btn btn-sm btn-outline" onclick="hideProgress()">
+                    <i class="fas fa-times"></i>
+                    Hide
+                </button>
+            </div>
+
+            <div class="progress-container">
+                <!-- Overall Progress -->
+                <div class="progress-item">
+                    <div class="progress-label">
+                        <span id="currentTask">Waiting...</span>
+                        <span class="progress-percentage" id="overallProgress">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressBar" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- Progress Messages -->
+                <div class="progress-messages" id="progressMessages">
+                    <!-- Messages will be added here -->
+                </div>
+
+                <!-- Connection Status -->
+                <div class="connection-status">
+                    <i class="fas fa-plug text-green-500"></i>
+                    <span class="text-green-600">Connected (Demo Mode)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-info">
+            <div class="info-item">
+                <strong>Initialize Machine Knowledge:</strong> 
+                Detects your machine and creates machine-specific knowledge including man page integration.
+            </div>
+            <div class="info-item">
+                <strong>Integrate Man Pages:</strong> 
+                Extracts manual pages for available Linux commands (Linux only).
+            </div>
+            <div class="info-item">
+                <strong>Test Search:</strong> 
+                Tests searching through integrated man page knowledge.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let progressMessages = [];
+
+        function addProgressMessage(text, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const message = { text, type, timestamp };
+            progressMessages.push(message);
+            
+            const messagesContainer = document.getElementById('progressMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'progress-message';
+            
+            const icons = {
+                'info': 'fas fa-info-circle text-blue-500',
+                'success': 'fas fa-check-circle text-green-500',
+                'warning': 'fas fa-exclamation-triangle text-yellow-500',
+                'error': 'fas fa-times-circle text-red-500'
+            };
+            
+            messageDiv.innerHTML = `
+                <i class="${icons[type] || icons.info}"></i>
+                <span class="timestamp">${timestamp}</span>
+                <span class="message">${text}</span>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function updateProgress(taskName, percentage) {
+            document.getElementById('currentTask').textContent = taskName;
+            document.getElementById('overallProgress').textContent = `${percentage}%`;
+            document.getElementById('progressBar').style.width = `${percentage}%`;
+        }
+
+        function showProgress() {
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('progressMessages').innerHTML = '';
+            progressMessages = [];
+        }
+
+        function hideProgress() {
+            document.getElementById('progressSection').style.display = 'none';
+        }
+
+        function simulateInitialization() {
+            showProgress();
+            updateProgress('Initializing Machine Knowledge', 10);
+            addProgressMessage('Starting machine knowledge initialization', 'info');
+
+            setTimeout(() => {
+                updateProgress('Detecting System Capabilities', 30);
+                addProgressMessage('Detecting OS type and available tools', 'info');
+            }, 1000);
+
+            setTimeout(() => {
+                updateProgress('Creating Machine Profile', 60);
+                addProgressMessage('Created machine profile for linux_5582', 'success');
+            }, 2000);
+
+            setTimeout(() => {
+                updateProgress('Setting Up Knowledge Directories', 80);
+                addProgressMessage('Created knowledge directories structure', 'info');
+            }, 3000);
+
+            setTimeout(() => {
+                updateProgress('Machine Knowledge Initialized', 100);
+                addProgressMessage('Machine knowledge initialization completed successfully', 'success');
+            }, 4000);
+        }
+
+        function simulateIntegration() {
+            showProgress();
+            updateProgress('Integrating Man Pages', 10);
+            addProgressMessage('Starting man page integration', 'info');
+
+            const commands = ['ls', 'grep', 'cat', 'ps', 'find'];
+            let processed = 0;
+
+            commands.forEach((cmd, index) => {
+                setTimeout(() => {
+                    processed++;
+                    const percentage = 20 + (processed / commands.length) * 60;
+                    updateProgress(`Processing Man Page: ${cmd}`, percentage);
+                    addProgressMessage(`Successfully integrated man page for '${cmd}'`, 'success');
+                    
+                    if (processed === commands.length) {
+                        setTimeout(() => {
+                            updateProgress('Man Pages Integrated', 100);
+                            addProgressMessage('Man page integration completed - 51 commands processed', 'success');
+                        }, 500);
+                    }
+                }, (index + 1) * 800);
+            });
+        }
+
+        function simulateSearch() {
+            showProgress();
+            updateProgress('Searching Man Page Knowledge', 20);
+            addProgressMessage('Searching for "list files" in man page knowledge', 'info');
+
+            setTimeout(() => {
+                updateProgress('Processing Search Query', 60);
+                addProgressMessage('Found 3 relevant commands: ls, find, locate', 'success');
+            }, 1000);
+
+            setTimeout(() => {
+                updateProgress('Search Complete', 100);
+                addProgressMessage('Search completed successfully', 'success');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

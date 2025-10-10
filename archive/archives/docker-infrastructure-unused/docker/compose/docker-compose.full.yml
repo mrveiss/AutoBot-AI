@@ -1,0 +1,164 @@
+# Full Docker Deployment - All services in Docker
+# Use this for complete containerized deployment on a single machine
+
+version: '3.8'
+name: autobot
+
+services:
+  # Redis Database
+  autobot-redis:
+    image: redis:7-alpine
+    container_name: autobot-redis
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_REDIS_PORT:-6379}:6379"
+    volumes:
+      - autobot_redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - autobot-network
+
+  # AI Stack (Ollama)
+  autobot-ai-stack:
+    image: ollama/ollama:latest
+    container_name: autobot-ai-stack
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - autobot_ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # NPU Worker
+  autobot-npu-worker:
+    build:
+      context: ../..
+      dockerfile: docker/npu-worker/Dockerfile
+    container_name: autobot-npu-worker
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_NPU_WORKER_PORT:-8081}:8081"
+    environment:
+      - PYTHONPATH=/app
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
+    depends_on:
+      - autobot-redis
+    networks:
+      - autobot-network
+
+  # Backend API
+  autobot-backend:
+    build:
+      context: ../..
+      dockerfile: docker/backend/Dockerfile
+    container_name: autobot-backend
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_BACKEND_PORT:-8001}:8001"
+    environment:
+      - PYTHONPATH=/app
+      - REDIS_HOST=autobot-redis
+      - REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
+      - OLLAMA_HOST=autobot-ai-stack
+      - OLLAMA_PORT=${AUTOBOT_OLLAMA_PORT:-11434}
+      - NPU_WORKER_HOST=autobot-npu-worker
+      - NPU_WORKER_PORT=${AUTOBOT_NPU_WORKER_PORT:-8081}
+    depends_on:
+      - autobot-redis
+      - autobot-ai-stack
+      - autobot-npu-worker
+    volumes:
+      - autobot_data:/app/data
+      - autobot_logs:/app/logs
+    networks:
+      - autobot-network
+
+  # Frontend
+  autobot-frontend:
+    build:
+      context: ../..
+      dockerfile: docker/frontend/Dockerfile
+    container_name: autobot-frontend
+    restart: unless-stopped
+    ports:
+      - "${AUTOBOT_FRONTEND_PORT:-3000}:80"
+    environment:
+      - VITE_API_BASE_URL=http://127.0.0.3:8001
+    depends_on:
+      - autobot-backend
+    networks:
+      - autobot-network
+
+  # Playwright VNC (Browser Automation)
+  autobot-playwright-vnc:
+    image: browserless/chrome:latest
+    container_name: autobot-playwright-vnc
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - CONNECTION_TIMEOUT=60000
+      - MAX_CONCURRENT_SESSIONS=10
+      - ENABLE_DEBUGGER=true
+    networks:
+      - autobot-network
+
+  # Centralized Logging - Fluentd
+  autobot-fluentd:
+    build:
+      context: ../fluentd
+      dockerfile: Dockerfile
+    container_name: autobot-fluentd
+    restart: unless-stopped
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes:
+      - autobot_logs:/fluentd/log
+      - ../fluentd/fluent.conf:/fluentd/etc/fluent.conf
+    networks:
+      - autobot-network
+
+  # Log Viewer - Seq
+  autobot-seq:
+    image: datalust/seq:latest
+    container_name: autobot-seq
+    restart: unless-stopped
+    ports:
+      - "5341:80"
+    environment:
+      - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_ADMINUSERNAME=admin
+      - SEQ_FIRSTRUN_ADMINPASSWORD=${AUTOBOT_SEQ_ADMIN_PASSWORD}
+    volumes:
+      - autobot_seq_data:/data
+    networks:
+      - autobot-network
+
+volumes:
+  autobot_redis_data:
+    driver: local
+  autobot_ollama_data:
+    driver: local
+  autobot_data:
+    driver: local
+  autobot_logs:
+    driver: local
+  autobot_seq_data:
+    driver: local
+
+networks:
+  autobot-network:
+    external: false
+    name: autobot-network

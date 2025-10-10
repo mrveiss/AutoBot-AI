@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>XTerm.js Test</title>
+    <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://unpkg.com/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
+    <style>
+        body { margin: 0; padding: 20px; background: #000; }
+        #terminal { height: 400px; width: 800px; }
+    </style>
+</head>
+<body>
+    <div id="terminal"></div>
+    
+    <script>
+        // Test XTerm.js basic functionality
+        const terminal = new Terminal({
+            theme: {
+                background: '#000000',
+                foreground: '#ffffff'
+            },
+            fontSize: 14,
+            cursorBlink: true
+        });
+        
+        const fitAddon = new FitAddon.FitAddon();
+        terminal.loadAddon(fitAddon);
+        
+        terminal.open(document.getElementById('terminal'));
+        fitAddon.fit();
+        
+        // Test ANSI sequences
+        terminal.write('XTerm.js Test Terminal\r\n');
+        terminal.write('\x1b[32m✅ Green text works\x1b[0m\r\n');
+        terminal.write('\x1b[31m❌ Red text works\x1b[0m\r\n');
+        terminal.write('\x1b[1;34mBlue bold text\x1b[0m\r\n');
+        terminal.write('\x1b[?2004hBracketed paste mode enabled\x1b[?2004l\r\n');
+        terminal.write('$ ');
+        
+        terminal.onData(data => {
+            terminal.write(data);
+        });
+    </script>
+</body>
+</html>

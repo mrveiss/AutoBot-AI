@@ -1,0 +1,159 @@
+{
+  "suite_metadata": {
+    "timestamp": 1758442370.335115,
+    "execution_time_seconds": 9.454787015914917,
+    "total_tests": 6,
+    "passed_tests": 3,
+    "failed_tests": 3,
+    "success_rate": 50.0
+  },
+  "test_results": [
+    {
+      "test_name": "api_health_check",
+      "success": true,
+      "response_times": [
+        10.255098342895508
+      ],
+      "success_count": 1,
+      "total_requests": 1,
+      "avg_response_ms": 10.255098342895508,
+      "max_response_ms": 10.255098342895508,
+      "min_response_ms": 10.255098342895508,
+      "success_rate": 100.0,
+      "meets_expectations": true,
+      "error_messages": []
+    },
+    {
+      "test_name": "chat_endpoint_basic",
+      "success": true,
+      "response_times": [
+        7.148027420043945
+      ],
+      "success_count": 1,
+      "total_requests": 1,
+      "avg_response_ms": 7.148027420043945,
+      "max_response_ms": 7.148027420043945,
+      "min_response_ms": 7.148027420043945,
+      "success_rate": 100.0,
+      "meets_expectations": true,
+      "error_messages": []
+    },
+    {
+      "test_name": "knowledge_base_stats",
+      "success": false,
+      "response_times": [
+        9348.876953125
+      ],
+      "success_count": 1,
+      "total_requests": 1,
+      "avg_response_ms": 9348.876953125,
+      "max_response_ms": 9348.876953125,
+      "min_response_ms": 9348.876953125,
+      "success_rate": 100.0,
+      "meets_expectations": false,
+      "error_messages": []
+    },
+    {
+      "test_name": "monitoring_status",
+      "success": false,
+      "response_times": [
+        11.440277099609375
+      ],
+      "success_count": 0,
+      "total_requests": 1,
+      "avg_response_ms": 11.440277099609375,
+      "max_response_ms": 11.440277099609375,
+      "min_response_ms": 11.440277099609375,
+      "success_rate": 0.0,
+      "meets_expectations": false,
+      "error_messages": []
+    },
+    {
+      "test_name": "analytics_overview",
+      "success": false,
+      "response_times": [
+        12.580633163452148
+      ],
+      "success_count": 0,
+      "total_requests": 1,
+      "avg_response_ms": 12.580633163452148,
+      "max_response_ms": 12.580633163452148,
+      "min_response_ms": 12.580633163452148,
+      "success_rate": 0.0,
+      "meets_expectations": false,
+      "error_messages": []
+    },
+    {
+      "test_name": "concurrent_chat_load",
+      "success": true,
+      "response_times": [
+        16.573667526245117,
+        15.30599594116211,
+        19.10114288330078,
+        17.409801483154297,
+        37.93644905090332
+      ],
+      "success_count": 5,
+      "total_requests": 5,
+      "avg_response_ms": 21.265411376953125,
+      "max_response_ms": 37.93644905090332,
+      "min_response_ms": 15.30599594116211,
+      "success_rate": 100.0,
+      "meets_expectations": true,
+      "error_messages": []
+    }
+  ],
+  "performance_summary": {
+    "overall_avg_response_ms": 949.6628046035767,
+    "overall_max_response_ms": 9348.876953125,
+    "overall_min_response_ms": 7.148027420043945,
+    "overall_success_rate": 80.0,
+    "total_requests_tested": 10,
+    "fastest_endpoint": "chat_endpoint_basic",
+    "slowest_endpoint": "knowledge_base_stats"
+  },
+  "regression_analysis": {
+    "regressions_detected": 2,
+    "regressions": [
+      {
+        "type": "response_time_regression",
+        "test_name": "analytics_overview",
+        "endpoint": "/api/analytics/overview",
+        "baseline_ms": 8.92,
+        "current_ms": 12.580633163452148,
+        "degradation_percent": 41.038488379508394
+      },
+      {
+        "type": "response_time_regression",
+        "test_name": "concurrent_chat_load",
+        "endpoint": "/api/chats",
+        "baseline_ms": 11.4,
+        "current_ms": 21.265411376953125,
+        "degradation_percent": 86.53869628906249
+      }
+    ],
+    "baseline_available": true
+  },
+  "recommendations": [
+    {
+      "priority": "critical",
+      "category": "reliability",
+      "issue": "3 tests failed",
+      "recommendation": "Investigate failing endpoints and fix critical issues before continuing refactoring",
+      "affected_endpoints": [
+        "knowledge_base_stats",
+        "monitoring_status",
+        "analytics_overview"
+      ]
+    },
+    {
+      "priority": "high",
+      "category": "performance",
+      "issue": "1 endpoints responding slowly (>500ms)",
+      "recommendation": "Optimize slow endpoints, especially database queries and external service calls",
+      "affected_endpoints": [
+        "knowledge_base_stats"
+      ]
+    }
+  ]
+}
