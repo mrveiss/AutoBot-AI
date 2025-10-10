@@ -83,12 +83,39 @@ async def get_services():
             except Exception as e:
                 logger.warning(f"Could not get monitoring services data: {e}")
 
+        # Get Redis service status from RedisServiceManager
+        redis_status_obj = None
+        try:
+            from backend.api.redis_service import get_service_manager
+            manager = await get_service_manager()
+            redis_status_obj = await manager.get_service_status()
+        except Exception as e:
+            logger.warning(f"Could not get Redis service status: {e}")
+
         # Add default/fallback services if monitoring data unavailable
         if not services:
             # Get configuration for default response time
             from src.unified_config_manager import unified_config_manager
             monitoring_config = unified_config_manager.get_config_section("monitoring") or {}
             default_response_time = monitoring_config.get("default_response_time_ms", 10.0)
+
+            # Determine Redis status based on actual service status
+            if redis_status_obj:
+                if redis_status_obj.status == "running":
+                    redis_status = "healthy"
+                    redis_message = "Redis service running"
+                elif redis_status_obj.status == "stopped":
+                    redis_status = "error"
+                    redis_message = "Redis service stopped"
+                elif redis_status_obj.status == "failed":
+                    redis_status = "error"
+                    redis_message = "Redis service failed"
+                else:
+                    redis_status = "warning"
+                    redis_message = "Redis service status unknown"
+            else:
+                redis_status = "warning"
+                redis_message = "Status check needed"
 
             default_services = [
                 ServiceStatus(
@@ -104,8 +131,8 @@ async def get_services():
                 ),
                 ServiceStatus(
                     name="Redis",
-                    status="warning",
-                    message="Status check needed"
+                    status=redis_status,
+                    message=redis_message
                 ),
                 ServiceStatus(
                     name="LLM Service",
