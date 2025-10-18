@@ -1,0 +1,11 @@
+---
+# Redis role variables (can be overridden in group_vars or inventory)
+
+redis_port: 6379
+redis_insight_port: 8002
+redis_memory_limit: "6gb"
+redis_persistence: true
+redis_maxclients: 10000
+redis_timeout: 300
+redis_tcp_keepalive: 60
+redis_backup_retention_days: 30

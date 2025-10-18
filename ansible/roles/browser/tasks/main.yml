@@ -1,0 +1,136 @@
+---
+# Browser role - Playwright, VNC, and desktop environment
+
+- name: "Browser | Install desktop environment and VNC"
+  apt:
+    name:
+      - xfce4
+      - xfce4-goodies
+      - tightvncserver
+      - dbus-x11
+      - x11vnc
+      - xvfb
+    state: present
+  become: yes
+  tags: ['browser', 'packages']
+
+- name: "Browser | Install Playwright system dependencies"
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - libnss3
+      - libatk1.0-0
+      - libatk-bridge2.0-0
+      - libcups2
+      - libdrm2
+      - libxkbcommon0
+      - libxcomposite1
+      - libxdamage1
+      - libxfixes3
+      - libxrandr2
+      - libgbm1
+      - libasound2
+    state: present
+  become: yes
+  tags: ['browser', 'packages']
+
+- name: "Browser | Install Playwright via pip"
+  pip:
+    name:
+      - playwright
+      - playwright-stealth
+    state: present
+    executable: pip3
+  become: yes
+  tags: ['browser', 'packages']
+
+- name: "Browser | Install Playwright browsers"
+  command: playwright install chromium firefox
+  become: yes
+  changed_when: false
+  tags: ['browser', 'packages']
+
+- name: "Browser | Create VNC directory"
+  file:
+    path: /home/autobot/.vnc
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: '0700'
+  become: yes
+  tags: ['browser', 'directories']
+
+- name: "Browser | Create VNC systemd service"
+  template:
+    src: vnc.service.j2
+    dest: /etc/systemd/system/autobot-vnc.service
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart vnc
+  tags: ['browser', 'systemd']
+
+- name: "Browser | Create Playwright systemd service"
+  template:
+    src: playwright.service.j2
+    dest: /etc/systemd/system/autobot-playwright.service
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart playwright
+  tags: ['browser', 'systemd']
+
+- name: "Browser | Configure firewall - Allow VNC"
+  ufw:
+    rule: allow
+    port: "{{ vnc_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "VNC Server"
+  become: yes
+  notify: reload firewall
+  tags: ['browser', 'firewall']
+
+- name: "Browser | Configure firewall - Allow Playwright API"
+  ufw:
+    rule: allow
+    port: "{{ playwright_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "Playwright API"
+  become: yes
+  notify: reload firewall
+  tags: ['browser', 'firewall']
+
+- name: "Browser | Enable VNC service"
+  systemd:
+    name: autobot-vnc
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+  tags: ['browser', 'service']
+
+- name: "Browser | Enable Playwright service"
+  systemd:
+    name: autobot-playwright
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+  tags: ['browser', 'service']
+
+- name: "Browser | Display configuration summary"
+  debug:
+    msg:
+      - "=== Browser Configuration Complete ==="
+      - "Desktop Environment: XFCE4"
+      - "VNC Port: {{ vnc_port }}"
+      - "VNC Display: {{ vnc_display }}"
+      - "Playwright Port: {{ playwright_port }}"
+      - "Browsers: Chromium, Firefox"
+      - "Services: autobot-vnc, autobot-playwright (configured)"
+      - "Note: Services will start when code is synced"
+  tags: ['browser', 'report']

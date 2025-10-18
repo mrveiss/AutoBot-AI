@@ -1,0 +1,26 @@
+---
+# Browser role handlers
+
+- name: restart vnc
+  systemd:
+    name: autobot-vnc
+    state: restarted
+  become: yes
+  ignore_errors: yes
+
+- name: restart playwright
+  systemd:
+    name: autobot-playwright
+    state: restarted
+  become: yes
+  ignore_errors: yes
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: reload firewall
+  ufw:
+    state: reloaded
+  become: yes
