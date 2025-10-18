@@ -39,7 +39,7 @@ class DatabaseConfig:
     """Configuration for a Redis database"""
     db: int
     description: str
-    max_connections: int = 10
+    max_connections: int = 100  # Increased from 10 to handle concurrent operations
     retry_attempts: int = 3
     timeout_seconds: float = 5.0
     circuit_breaker_threshold: int = 5

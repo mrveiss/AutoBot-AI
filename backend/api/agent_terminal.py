@@ -67,11 +67,25 @@ class InterruptRequest(BaseModel):
 
 
 # Dependency for AgentTerminalService
+# CRITICAL: Use singleton pattern to maintain sessions across requests
+
+_agent_terminal_service_instance: Optional[AgentTerminalService] = None
 
 
 def get_agent_terminal_service(redis_client=Depends(get_redis_client)) -> AgentTerminalService:
-    """Get AgentTerminalService instance"""
-    return AgentTerminalService(redis_client=redis_client)
+    """
+    Get singleton AgentTerminalService instance.
+
+    IMPORTANT: This MUST return the same instance for all requests,
+    otherwise sessions will be lost between API calls.
+    """
+    global _agent_terminal_service_instance
+
+    if _agent_terminal_service_instance is None:
+        logger.info("Initializing AgentTerminalService singleton")
+        _agent_terminal_service_instance = AgentTerminalService(redis_client=redis_client)
+
+    return _agent_terminal_service_instance
 
 
 # API Endpoints
@@ -270,12 +284,15 @@ async def approve_agent_command(
     User approves HIGH/DANGEROUS commands that agents want to execute.
     """
     try:
+        logger.info(f"[API] Approval request received: session_id={session_id}, approved={request.approved}, user_id={request.user_id}")
+
         result = await service.approve_command(
             session_id=session_id,
             approved=request.approved,
             user_id=request.user_id,
         )
 
+        logger.info(f"[API] Approval result: {result.get('status')}, error={result.get('error')}")
         return result
 
     except Exception as e:
