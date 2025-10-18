@@ -127,6 +127,56 @@
           <div v-if="hasCodeBlocks(message.content)" class="code-blocks">
             <!-- This would be rendered by the formatMessageContent function -->
           </div>
+
+          <!-- Command Approval Request UI - Inline in chat history -->
+          <div v-if="message.metadata?.requires_approval" class="approval-request">
+            <div class="approval-header">
+              <i class="fas fa-exclamation-triangle text-yellow-600"></i>
+              <span class="font-semibold">Command Approval Required</span>
+            </div>
+            <div class="approval-details">
+              <div class="approval-detail-item">
+                <span class="detail-label">Command:</span>
+                <code class="detail-value">{{ message.metadata.command }}</code>
+              </div>
+              <div class="approval-detail-item">
+                <span class="detail-label">Risk Level:</span>
+                <span class="detail-value" :class="getRiskClass(message.metadata.risk_level)">
+                  {{ message.metadata.risk_level }}
+                </span>
+              </div>
+              <div v-if="message.metadata.purpose" class="approval-detail-item">
+                <span class="detail-label">Purpose:</span>
+                <span class="detail-value">{{ message.metadata.purpose }}</span>
+              </div>
+              <div v-if="message.metadata.reasons && message.metadata.reasons.length > 0" class="approval-detail-item">
+                <span class="detail-label">Reasons:</span>
+                <span class="detail-value">{{ message.metadata.reasons.join(', ') }}</span>
+              </div>
+            </div>
+            <div class="approval-actions">
+              <button
+                @click="approveCommand(message.metadata.terminal_session_id, true)"
+                class="approve-btn"
+                :disabled="processingApproval"
+              >
+                <i class="fas fa-check"></i>
+                <span>Approve</span>
+              </button>
+              <button
+                @click="approveCommand(message.metadata.terminal_session_id, false)"
+                class="deny-btn"
+                :disabled="processingApproval"
+              >
+                <i class="fas fa-times"></i>
+                <span>Deny</span>
+              </button>
+            </div>
+            <div v-if="processingApproval" class="approval-processing">
+              <LoadingSpinner size="sm" />
+              <span>Processing approval...</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -227,6 +277,7 @@ const emit = defineEmits<{
     host: string
     purpose: string
     params: Record<string, any>
+    terminal_session_id: string | null
   }]
 }>()
 
@@ -246,6 +297,9 @@ const editingMessage = ref<ChatMessage | null>(null)
 // Enhanced typing indicator state
 const typingStartTime = ref<number | null>(null)
 const estimatedResponseTime = ref<number | null>(null)
+
+// Approval state
+const processingApproval = ref(false)
 
 // Computed
 const filteredMessages = computed(() => {
@@ -478,9 +532,9 @@ const retryMessage = async (messageId: string) => {
 }
 
 // TOOL_CALL Detection
-const detectToolCalls = (content: string) => {
+const detectToolCalls = (message: ChatMessage) => {
   const toolCallRegex = /<TOOL_CALL\s+name="execute_command"\s+params='({.*?})'>(.*?)<\/TOOL_CALL>/gs
-  const matches = [...content.matchAll(toolCallRegex)]
+  const matches = [...message.content.matchAll(toolCallRegex)]
 
   for (const match of matches) {
     try {
@@ -489,17 +543,93 @@ const detectToolCalls = (content: string) => {
 
       console.log('🔧 TOOL_CALL detected:', { command: params.command, host: params.host, purpose: description })
 
+      // Search for terminal_session_id in recent assistant messages
+      // The terminal_session_id might be in metadata of streaming chunks, not necessarily the message with TOOL_CALL
+      let terminal_session_id = message.metadata?.terminal_session_id || null
+
+      if (!terminal_session_id) {
+        // Search backwards through recent assistant messages for terminal_session_id
+        const recentAssistantMessages = store.currentMessages
+          .filter(m => m.sender === 'assistant')
+          .reverse()
+          .slice(0, 10) // Check last 10 assistant messages
+
+        for (const msg of recentAssistantMessages) {
+          if (msg.metadata?.terminal_session_id) {
+            terminal_session_id = msg.metadata.terminal_session_id
+            console.log('[TOOL_CALL] Found terminal_session_id in message metadata:', terminal_session_id)
+            break
+          }
+        }
+
+        if (!terminal_session_id) {
+          console.warn('[TOOL_CALL] No terminal_session_id found in recent messages')
+        }
+      }
+
       // Emit event to parent to show approval dialog
       emit('tool-call-detected', {
         command: params.command,
         host: params.host || 'main',
         purpose: description,
-        params: params
+        params: params,
+        terminal_session_id: terminal_session_id
       })
     } catch (error) {
       console.error('Failed to parse TOOL_CALL:', error)
     }
   }
+}
+
+// Command Approval - Use HTTP POST to agent-terminal API
+const approveCommand = async (terminal_session_id: string, approved: boolean) => {
+  if (!terminal_session_id) {
+    console.error('No terminal_session_id provided for approval')
+    return
+  }
+
+  processingApproval.value = true
+  console.log(`${approved ? 'Approving' : 'Denying'} command for session:`, terminal_session_id)
+
+  try {
+    // Use HTTP POST to agent-terminal approval endpoint
+    const backendUrl = `http://172.16.168.20:8001/api/agent-terminal/sessions/${terminal_session_id}/approve`
+
+    const response = await fetch(backendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        approved,
+        user_id: 'web_user'
+      })
+    })
+
+    const result = await response.json()
+    console.log('Approval response:', result)
+
+    if (result.status === 'approved' || result.status === 'denied') {
+      console.log(`Command ${approved ? 'approved' : 'denied'} successfully`)
+    } else if (result.status === 'error') {
+      console.error('Approval error:', result.error)
+    }
+
+    processingApproval.value = false
+  } catch (error) {
+    console.error('Error sending approval:', error)
+    processingApproval.value = false
+  }
+}
+
+const getRiskClass = (riskLevel: string): string => {
+  const riskClasses: Record<string, string> = {
+    'LOW': 'text-green-600',
+    'MODERATE': 'text-yellow-600',
+    'HIGH': 'text-orange-600',
+    'DANGEROUS': 'text-red-600'
+  }
+  return riskClasses[riskLevel] || 'text-gray-600'
 }
 
 const scrollToBottom = () => {
@@ -535,13 +665,24 @@ watch(() => store.isTyping, (isTyping) => {
   }
 })
 
-// Watch for TOOL_CALL markers in assistant messages
-watch(() => store.currentMessages, (messages) => {
-  const lastMessage = messages[messages.length - 1]
-  if (lastMessage?.sender === 'assistant' && lastMessage.content) {
-    detectToolCalls(lastMessage.content)
-  }
-}, { deep: true })
+// DISABLED: Watch for TOOL_CALL markers in assistant messages
+// This caused duplicate approval dialogs for auto-approved SAFE commands
+// Only use `requires_approval` metadata from backend for approval UI
+// watch(() => store.currentMessages, (messages) => {
+//   const lastMessage = messages[messages.length - 1]
+//   if (lastMessage?.sender === 'assistant' && lastMessage.content) {
+//     detectToolCalls(lastMessage)
+//   }
+// }, { deep: true })
+
+// DISABLED: Watch for popup trigger - keeping inline approval in chat instead
+// Approval UI stays in chat history showing the state (pending/approved/denied)
+// watch(() => store.currentMessages, (messages) => {
+//   const lastMessage = messages[messages.length - 1]
+//   if (lastMessage?.metadata?.requires_approval) {
+//     emit('tool-call-detected', { ... })
+//   }
+// }, { deep: true })
 
 // Scroll to bottom on mount
 onMounted(() => {
@@ -883,6 +1024,56 @@ onMounted(() => {
   animation: slideInFromBottom 0.25s ease-out;
 }
 
+/* Approval Request Styles */
+.approval-request {
+  @apply mt-3 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg;
+}
+
+.approval-header {
+  @apply flex items-center gap-2 mb-3 text-yellow-900 font-semibold;
+}
+
+.approval-details {
+  @apply space-y-2 mb-3;
+}
+
+.approval-detail-item {
+  @apply flex items-start gap-2 text-sm;
+}
+
+.detail-label {
+  @apply font-medium text-gray-700 min-w-24;
+}
+
+.detail-value {
+  @apply flex-1 text-gray-900;
+}
+
+.detail-value code {
+  @apply bg-gray-200 px-2 py-1 rounded text-xs font-mono;
+}
+
+.approval-actions {
+  @apply flex gap-2;
+}
+
+.approve-btn,
+.deny-btn {
+  @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.approve-btn {
+  @apply bg-green-600 text-white hover:bg-green-700 active:bg-green-800;
+}
+
+.deny-btn {
+  @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
+}
+
+.approval-processing {
+  @apply flex items-center gap-2 mt-2 text-sm text-gray-600;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .message-wrapper.user-message {
@@ -911,6 +1102,15 @@ onMounted(() => {
 
   .action-btn {
     @apply w-5 h-5 text-xs;
+  }
+
+  .approval-actions {
+    @apply flex-col;
+  }
+
+  .approve-btn,
+  .deny-btn {
+    @apply w-full justify-center;
   }
 }
 </style>

@@ -83,13 +83,11 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // State
-const sessionId = ref(
-  props.chatSessionId
-    ? `chat_terminal_${props.chatSessionId}_${Date.now()}`
-    : `system_terminal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-)
+// CRITICAL: Session ID will be retrieved from backend (for chat) or generated (for system terminal)
+const sessionId = ref<string | null>(null)
 const isConnected = ref(false)
 const isConnecting = ref(false)
+const sessionInitialized = ref(false)
 const websocket = ref<WebSocket | null>(null)
 const statusMessage = ref('')
 const terminalLines = ref<Array<{prefix: string, content: string, type: string}>>([])
@@ -126,6 +124,76 @@ const statusIconClass = computed(() => {
 })
 
 // Methods
+/**
+ * Initialize terminal session ID - check for existing or create new
+ * CRITICAL: This ensures frontend and backend use the same session
+ */
+const initializeSession = async (): Promise<string> => {
+  if (sessionInitialized.value && sessionId.value) {
+    return sessionId.value
+  }
+
+  try {
+    if (props.chatSessionId) {
+      // Chat terminal - check if session already exists
+      console.log(`[Terminal] Checking for existing terminal session for chat ${props.chatSessionId}`)
+
+      const response = await fetch(
+        `http://172.16.168.20:8001/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
+      )
+      const data = await response.json()
+
+      if (data.sessions && data.sessions.length > 0) {
+        // Use existing session
+        const existingSession = data.sessions[0]
+        sessionId.value = existingSession.session_id
+        console.log(`[Terminal] Using existing terminal session: ${sessionId.value}`)
+        addTerminalLine('system', `Connected to existing terminal session ${sessionId.value.slice(-8)}`, 'info')
+      } else {
+        // Create new session via AgentTerminalService
+        console.log(`[Terminal] Creating new terminal session for chat ${props.chatSessionId}`)
+
+        const createResponse = await fetch(
+          'http://172.16.168.20:8001/api/agent-terminal/sessions',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              agent_id: `chat_agent_${props.chatSessionId}`,
+              agent_role: 'chat_agent',
+              conversation_id: props.chatSessionId,
+              host: 'main',
+              metadata: { created_by: 'frontend_terminal' }
+            })
+          }
+        )
+
+        const createData = await createResponse.json()
+        sessionId.value = createData.session_id
+        console.log(`[Terminal] Created new terminal session: ${sessionId.value}`)
+        addTerminalLine('system', `Created new terminal session ${sessionId.value.slice(-8)}`, 'success')
+      }
+    } else {
+      // System terminal - generate local ID
+      sessionId.value = `system_terminal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      console.log(`[Terminal] Created system terminal session: ${sessionId.value}`)
+      addTerminalLine('system', `System terminal session ${sessionId.value.slice(-8)}`, 'info')
+    }
+
+    sessionInitialized.value = true
+    return sessionId.value
+  } catch (error) {
+    console.error('[Terminal] Failed to initialize session:', error)
+    // Fallback to local generation
+    sessionId.value = props.chatSessionId
+      ? `chat_terminal_${props.chatSessionId}_${Date.now()}`
+      : `system_terminal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    sessionInitialized.value = true
+    addTerminalLine('system', `Using fallback session ID (backend unavailable)`, 'warning')
+    return sessionId.value
+  }
+}
+
 const getWebSocketUrl = () => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = '172.16.168.20:8001' // Backend VM
@@ -145,10 +213,14 @@ const connectTerminal = async () => {
 
   try {
     isConnecting.value = true
-    statusMessage.value = 'Connecting to terminal...'
+    statusMessage.value = 'Initializing terminal session...'
 
+    // CRITICAL: Initialize session first to get correct session ID
+    await initializeSession()
+
+    statusMessage.value = 'Connecting to terminal...'
     const wsUrl = getWebSocketUrl()
-    console.log('[WorkingTerminal] Connecting to:', wsUrl)
+    console.log('[WorkingTerminal] Connecting to:', wsUrl, 'Session:', sessionId.value)
 
     websocket.value = new WebSocket(wsUrl)
 
@@ -363,20 +435,18 @@ const handleKeyup = (event: KeyboardEvent) => {
 }
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   if (props.chatSessionId) {
     addTerminalLine('system', `Chat Terminal (Session: ${props.chatSessionId.slice(-8)})`, 'info')
-    addTerminalLine('system', `Terminal session: ${sessionId.value}`, 'info')
     addTerminalLine('system', `Connection type: ${props.sessionType}`, 'info')
-    addTerminalLine('system', `Note: This terminal is associated with chat session ${props.chatSessionId.slice(-8)}`, 'info')
+    addTerminalLine('system', `Initializing session...`, 'info')
   } else {
     addTerminalLine('system', `System Terminal (Independent)`, 'info')
-    addTerminalLine('system', `Session: ${sessionId.value}`, 'info')
     addTerminalLine('system', `Connection type: ${props.sessionType}`, 'info')
-    addTerminalLine('system', `Note: This terminal is not associated with any chat session`, 'warning')
   }
 
   if (props.autoConnect) {
+    // connectTerminal will call initializeSession internally
     connectTerminal()
   }
 })

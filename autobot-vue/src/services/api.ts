@@ -6,7 +6,7 @@ import type {
   WorkflowApproval 
 } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
-import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
+import appConfig from '@/config/AppConfig.js'
 
 /**
  * API Service - provides typed methods for interacting with AutoBot backend
@@ -19,22 +19,28 @@ class ApiService {
   }
 
   // Core HTTP methods with JSON parsing
-  async get<T = any>(endpoint: string): Promise<T> {
+  // FIXED: Pass endpoints directly to ApiClient (it handles baseURL internally)
+  async get<T>(endpoint: string): Promise<T> {
     const response = await this.client.get(endpoint)
     return await response.json()
   }
 
-  async post<T = any>(endpoint: string, data?: any): Promise<T> {
+  async post<T>(endpoint: string, data: unknown): Promise<T> {
     const response = await this.client.post(endpoint, data)
+    console.log('[ApiService.post] Response type:', typeof response, 'Has json?:', typeof response.json)
+    if (typeof response.json !== 'function') {
+      console.error('[ApiService.post] Invalid response object:', response)
+      throw new Error('Invalid response from ApiClient - response.json is not a function')
+    }
     return await response.json()
   }
 
-  async put<T = any>(endpoint: string, data?: any): Promise<T> {
+  async put<T>(endpoint: string, data: unknown): Promise<T> {
     const response = await this.client.put(endpoint, data)
     return await response.json()
   }
 
-  async delete<T = any>(endpoint: string): Promise<T> {
+  async delete<T>(endpoint: string): Promise<T> {
     const response = await this.client.delete(endpoint)
     return await response.json()
   }
@@ -131,7 +137,7 @@ class ApiService {
   }
 
   async getSystemHealth(): Promise<ApiResponse> {
-    return this.get('/api/system/health')
+    return this.get('/api/health')
   }
 
   async getSystemInfo(): Promise<ApiResponse> {
@@ -144,11 +150,11 @@ class ApiService {
   }
 
   async interruptProcess(): Promise<ApiResponse> {
-    return this.post('/api/terminal/interrupt')
+    return this.post('/api/terminal/interrupt', {})
   }
 
   async killAllProcesses(): Promise<ApiResponse> {
-    return this.post('/api/terminal/kill')
+    return this.post('/api/terminal/kill', {})
   }
 
   // Knowledge Base API - Updated to match backend specs
@@ -198,14 +204,14 @@ class ApiService {
     // FIXED: Use correct endpoint with graceful fallback
     // Old: '/api/services/health' -> New: '/api/monitoring/services/health'
     try {
-      const response = await apiEndpointMapper.fetchWithFallback('/api/services/health', { timeout: 10000 });
-      return await response.json();
-    } catch (error) {
-      console.warn('[ApiService] Service health check failed, using fallback:', error);
+      const response = await this.get<ApiResponse>('/api/monitoring/services/health');
+      return response;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn('[ApiService] Service health check failed, using fallback:', errorMessage);
       return {
         success: false,
-        error: error.message,
-        fallback: true,
+        error: errorMessage,
         data: {
           services: {
             backend: { status: 'warning', health: 'Status Unknown' },
@@ -213,7 +219,7 @@ class ApiService {
             ollama: { status: 'warning', health: 'Status Unknown' }
           }
         }
-      };
+      } as ApiResponse;
     }
   }
 

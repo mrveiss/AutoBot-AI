@@ -100,6 +100,7 @@
         :risk-level="pendingCommand.riskLevel"
         :chat-id="store.currentSessionId"
         :original-message="pendingCommand.originalMessage"
+        :terminal-session-id="pendingCommand.terminalSessionId"
         @approved="onCommandApproved"
         @denied="onCommandDenied"
         @commented="onCommandCommented"
@@ -156,7 +157,8 @@ const pendingCommand = ref({
   command: '',
   purpose: '',
   riskLevel: 'MEDIUM' as const,
-  originalMessage: ''
+  originalMessage: '',
+  terminalSessionId: null as string | null
 })
 const currentWorkflowId = ref<string | null>(null)
 
@@ -228,12 +230,13 @@ const sessionInfo = computed(() => {
   const messageCount = session.messages.length
   const lastMessage = session.messages[session.messages.length - 1]
   const lastMessageTime = lastMessage ? new Date(lastMessage.timestamp).toLocaleTimeString() : null
+  const sessionIdShort = session.id.slice(0, 8)
 
   if (messageCount === 0) {
-    return 'No messages yet'
+    return `Session: ${sessionIdShort} • No messages yet`
   }
 
-  return `${messageCount} message${messageCount > 1 ? 's' : ''} • Last: ${lastMessageTime}`
+  return `Session: ${sessionIdShort} • ${messageCount} message${messageCount > 1 ? 's' : ''} • Last: ${lastMessageTime}`
 })
 
 
@@ -362,7 +365,8 @@ const handleToolCallDetected = async (toolCall: any) => {
     command: toolCall.command,
     purpose: toolCall.purpose,
     riskLevel: riskLevel,
-    originalMessage: JSON.stringify(toolCall)
+    originalMessage: JSON.stringify(toolCall),
+    terminalSessionId: toolCall.terminal_session_id || null
   }
 
   // Show approval dialog
@@ -372,39 +376,18 @@ const handleToolCallDetected = async (toolCall: any) => {
 const onCommandApproved = async (commandData: any) => {
   console.log('[ChatInterface] Command approved:', commandData)
 
-  try {
-    // 1. Create agent terminal session
-    const sessionResponse = await ApiClient.post('/api/agent-terminal/sessions', {
-      agent_id: `chat-${store.currentSessionId}`,
-      agent_role: 'chat_agent',
-      conversation_id: store.currentSessionId,
-      host: pendingCommand.value.command.includes('host') ?
-            JSON.parse(pendingCommand.value.originalMessage).host : 'main'
-    })
+  // IMPORTANT: The backend is already waiting for approval and will execute automatically.
+  // CommandPermissionDialog has already sent the approval POST request.
+  // We just need to close the dialog and switch to terminal tab.
+  // The backend polling loop will detect the approval and execute the command.
 
-    const sessionId = sessionResponse.data.session_id
-    console.log('[ChatInterface] Agent terminal session created:', sessionId)
+  // Switch to terminal tab to show execution
+  activeTab.value = 'terminal'
 
-    // 2. Execute the command
-    const execResponse = await ApiClient.post(`/api/agent-terminal/execute`, {
-      command: commandData.command,
-      description: commandData.purpose || pendingCommand.value.purpose
-    }, {
-      params: { session_id: sessionId }
-    })
+  // Close dialog
+  showCommandDialog.value = false
 
-    console.log('[ChatInterface] Command executed:', execResponse.data)
-
-    // 3. Switch to terminal tab to show execution
-    activeTab.value = 'terminal'
-
-    // Close dialog
-    showCommandDialog.value = false
-  } catch (error: any) {
-    console.error('[ChatInterface] Failed to execute approved command:', error)
-    appStore.setGlobalError(`Failed to execute command: ${error.message}`)
-    showCommandDialog.value = false
-  }
+  console.log('[ChatInterface] Dialog closed, backend will execute the approved command')
 }
 
 const onCommandDenied = (reason: string) => {

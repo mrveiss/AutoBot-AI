@@ -386,7 +386,7 @@ export default class ServiceDiscovery {
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       // Use different endpoints based on service type
-      let testEndpoint = '/health';
+      let testEndpoint = '/api/system/health';
       if (serviceName.startsWith('vnc_')) {
         testEndpoint = '/vnc.html';
       } else if (serviceName === 'redis') {

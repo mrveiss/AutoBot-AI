@@ -8,6 +8,11 @@ class CacheBuster {
         this.buildId = import.meta.env.VITE_BUILD_TIMESTAMP || Date.now();
         this.sessionId = this.generateSessionId();
         this.requestCounter = 0;
+
+        // Error logging rate limiting
+        this.lastConnectionErrorLog = 0;
+        this.connectionErrorCount = 0;
+        this.connectionErrorCooldown = 5000; // Log once every 5 seconds max
     }
 
     generateSessionId() {
@@ -207,9 +212,41 @@ class CacheBuster {
                     console.debug('[CacheBuster] Potential cached response detected');
                 }
 
+                // Reset connection error counter on successful response
+                if (this.connectionErrorCount > 0) {
+                    console.log(`[CacheBuster] Connection restored after ${this.connectionErrorCount} failed requests`);
+                    this.connectionErrorCount = 0;
+                }
+
                 return response;
             } catch (error) {
-                console.error('[CacheBuster] Fetch error:', error);
+                // Rate-limit connection error logging to prevent console spam
+                const isConnectionError =
+                    error.name === 'AbortError' ||
+                    error.message.includes('Failed to fetch') ||
+                    error.message.includes('ERR_CONNECTION_REFUSED') ||
+                    error.message.includes('NetworkError') ||
+                    error.message.includes('Network request failed') ||
+                    error.message.includes('signal is aborted');
+
+                if (isConnectionError) {
+                    this.connectionErrorCount++;
+                    const now = Date.now();
+
+                    // Only log once every cooldown period
+                    if (now - this.lastConnectionErrorLog >= this.connectionErrorCooldown) {
+                        console.warn(
+                            `[CacheBuster] Backend connection error (${this.connectionErrorCount} failed requests in last ${
+                                Math.round((now - this.lastConnectionErrorLog) / 1000)
+                            }s) - Backend may be restarting`
+                        );
+                        this.lastConnectionErrorLog = now;
+                    }
+                } else {
+                    // Log non-connection errors immediately (these are unexpected)
+                    console.error('[CacheBuster] Fetch error:', error);
+                }
+
                 throw error;
             }
         };

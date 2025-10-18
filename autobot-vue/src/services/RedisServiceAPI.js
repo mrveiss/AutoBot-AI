@@ -13,7 +13,10 @@ import apiClient from '@/utils/ApiClient'
 class RedisServiceAPI {
   constructor() {
     this.client = apiClient
-    this.baseEndpoint = '/api/services/redis'
+    // Note: Redis service control endpoints require paramiko (SSH library)
+    // which is not currently installed. Temporarily disabled.
+    // this.baseEndpoint = '/api/redis-service'
+    this.baseEndpoint = '/api/service-monitor/services'  // Use monitoring endpoint for now
   }
 
   /**

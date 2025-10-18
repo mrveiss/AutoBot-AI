@@ -670,7 +670,7 @@ const revertPromptToDefault = async (promptId: string) => {
 const loadHealthStatus = async () => {
   try {
     // Try the correct detailed health endpoint first
-    const response = await axios.get('/api/health/detailed')
+    const response = await axios.get('/api/system/health/detailed')
     healthStatus.value = response.data
     console.log('Loaded detailed health status successfully')
   } catch (error) {
@@ -678,7 +678,7 @@ const loadHealthStatus = async () => {
 
     // Fallback to basic health endpoint
     try {
-      const fallbackResponse = await axios.get('/api/health')
+      const fallbackResponse = await axios.get('/api/system/health')
       healthStatus.value = {
         basic_health: fallbackResponse.data,
         detailed_available: false
