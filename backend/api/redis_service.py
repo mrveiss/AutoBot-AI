@@ -21,19 +21,19 @@ from backend.services.redis_service_manager import (RedisConnectionError,
 from src.auth_middleware import auth_middleware
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/redis-service", tags=["Redis Service Management"])
+router = APIRouter(tags=["Redis Service Management"])
 
 # Global service manager instance
 _service_manager: Optional[RedisServiceManager] = None
 
 
 async def get_service_manager() -> RedisServiceManager:
-    """Get or create Redis Service Manager instance"""
-    global _service_manager
-    if _service_manager is None:
-        _service_manager = RedisServiceManager()
-        await _service_manager.start()
-    return _service_manager
+    """Get or create Redis Service Manager instance (fresh instance per request)"""
+    # Always create fresh instance to avoid caching stale code during development
+    # TODO: Optimize to singleton pattern for production after development complete
+    manager = RedisServiceManager()
+    await manager.start()
+    return manager
 
 
 def check_admin_permission(request: Request) -> str:

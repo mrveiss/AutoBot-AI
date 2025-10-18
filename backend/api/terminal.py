@@ -265,10 +265,10 @@ class ConsolidatedTerminalWebSocket:
             self.pty_output_task = asyncio.create_task(self._read_pty_output())
             logger.info(f"PTY output reader started for session {self.session_id}")
 
-            # Send initial shell prompt/output
+            # Send initial shell prompt/output with newline for proper formatting
             await self.send_message({
                 "type": "connected",
-                "content": f"Connected to terminal session {self.session_id}"
+                "content": f"Connected to terminal session {self.session_id}\r\n"
             })
         else:
             logger.warning(f"PTY not available for session {self.session_id}")
@@ -568,6 +568,20 @@ class ConsolidatedTerminalManager:
         """Get statistics for a session"""
         return self.session_stats.get(session_id, {})
 
+    def get_command_history(self, session_id: str) -> list:
+        """Get command history for a session"""
+        if session_id in self.active_connections:
+            terminal = self.active_connections[session_id]
+            return [
+                {
+                    "command": entry["command"],
+                    "timestamp": entry["timestamp"].isoformat(),
+                    "risk_level": entry["risk_level"]
+                }
+                for entry in terminal.command_history
+            ]
+        return []
+
 
 # Global session manager
 session_manager = ConsolidatedTerminalManager()
@@ -791,6 +805,42 @@ async def send_terminal_signal(session_id: str, signal_name: str):
         raise
     except Exception as e:
         logger.error(f"Error sending signal to session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions/{session_id}/history")
+async def get_terminal_command_history(session_id: str):
+    """Get command history for a terminal session"""
+    try:
+        config = session_manager.session_configs.get(session_id)
+        if not config:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Check if session has active connection
+        is_active = session_manager.has_connection(session_id)
+
+        if not is_active:
+            return {
+                "session_id": session_id,
+                "is_active": False,
+                "history": [],
+                "message": "Session is not active, no command history available"
+            }
+
+        # Get command history from active terminal
+        history = session_manager.get_command_history(session_id)
+
+        return {
+            "session_id": session_id,
+            "is_active": True,
+            "history": history,
+            "total_commands": len(history)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting command history for session {session_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

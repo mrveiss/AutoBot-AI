@@ -221,41 +221,8 @@ async def get_knowledge_stats(req: Request):
         stats = await kb_to_use.get_stats()
         stats["rag_available"] = RAG_AVAILABLE
 
-        # Add vectorization statistics
-        try:
-            # Get all fact IDs from Redis hash
-            all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
-            fact_ids = [fid.decode() if isinstance(fid, bytes) else fid for fid in all_facts_data.keys()]
-
-            if fact_ids:
-                # Use batch checking for efficiency
-                vectorization_result = await _check_vectorization_batch_internal(kb_to_use, fact_ids)
-                vectorization_summary = vectorization_result.get("summary", {})
-
-                stats["vectorization_stats"] = {
-                    "total_facts": vectorization_summary.get("total_checked", len(fact_ids)),
-                    "vectorized_count": vectorization_summary.get("vectorized", 0),
-                    "not_vectorized_count": vectorization_summary.get("not_vectorized", 0),
-                    "vectorization_percentage": vectorization_summary.get("vectorization_percentage", 0.0),
-                    "last_checked": datetime.now().isoformat()
-                }
-            else:
-                stats["vectorization_stats"] = {
-                    "total_facts": 0,
-                    "vectorized_count": 0,
-                    "not_vectorized_count": 0,
-                    "vectorization_percentage": 0.0,
-                    "last_checked": datetime.now().isoformat()
-                }
-        except Exception as vec_err:
-            logger.warning(f"Could not get vectorization stats: {vec_err}")
-            stats["vectorization_stats"] = {
-                "total_facts": stats.get("total_facts", 0),
-                "vectorized_count": 0,
-                "not_vectorized_count": 0,
-                "vectorization_percentage": 0.0,
-                "error": str(vec_err)
-            }
+        # Vectorization stats removed - get_stats() already provides fact counts using async operations
+        # The previous implementation used synchronous redis_client.hgetall() which blocked the event loop
 
         return stats
 

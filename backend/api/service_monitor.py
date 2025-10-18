@@ -251,7 +251,7 @@ class ServiceMonitor:
             start_time = time.time()
             
             # Use configuration system for knowledge base URL
-            kb_url = cfg.get_service_url('backend', '/api/knowledge_base/stats')
+            kb_url = cfg.get_service_url('backend', '/api/knowledge_base/stats/basic')
             
             timeout = aiohttp.ClientTimeout(
                 total=cfg.get_timeout('knowledge_base', 'search'), 

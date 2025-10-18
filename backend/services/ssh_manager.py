@@ -296,25 +296,26 @@ class SSHManager:
         # Validate command security if requested
         security_info = {}
         if validate:
-            validation_result = await self.command_executor.validate_command_safety(command)
+            risk_level, reasons = self.command_executor.assess_command_risk(command)
             security_info = {
                 'validated': True,
-                'risk_level': validation_result.get('risk_level', 'unknown'),
-                'validation_result': validation_result
+                'risk_level': risk_level.value,
+                'reasons': reasons
             }
 
-            # Block dangerous commands
-            if validation_result.get('risk_level') == CommandRisk.DANGEROUS.value:
+            # Block forbidden and high-risk commands
+            if risk_level in [CommandRisk.FORBIDDEN, CommandRisk.HIGH]:
                 security_info['blocked'] = True
-                security_info['reason'] = 'Dangerous command blocked by security policy'
+                security_info['reason'] = f"Command blocked: {'; '.join(reasons)}"
 
                 self._audit_log('command_blocked', {
                     'host': host,
                     'command': command,
+                    'risk_level': risk_level.value,
                     'reason': security_info['reason']
                 })
 
-                raise PermissionError(f"Command blocked: {security_info['reason']}")
+                raise PermissionError(security_info['reason'])
 
         # Audit log command execution attempt
         self._audit_log('command_execution', {

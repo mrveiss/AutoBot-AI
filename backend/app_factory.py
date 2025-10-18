@@ -442,10 +442,17 @@ except ImportError as e:
 
 try:
     from backend.api.redis_service import router as redis_service_router
-    optional_routers.append((redis_service_router, "", ["redis-service"], "redis_service"))
-    logging.info("✅ Optional router loaded: redis_service (includes prefix /api/redis-service)")
+    optional_routers.append((redis_service_router, "/redis-service", ["redis-service"], "redis_service"))
+    logging.info("✅ Optional router loaded: redis_service")
 except ImportError as e:
     logging.warning(f"⚠️ Optional router not available: redis_service - {e}")
+
+try:
+    from backend.api.infrastructure import router as infrastructure_router
+    optional_routers.append((infrastructure_router, "/iac", ["Infrastructure as Code"], "infrastructure"))
+    logging.info("✅ Optional router loaded: infrastructure")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: infrastructure - {e}")
 
 # Store logger for app usage
 logger = logging.getLogger(__name__)
@@ -493,16 +500,16 @@ class AppFactory:
                 app_state["config"] = config
                 logger.info("✅ [ 10%] Config: Configuration loaded successfully")
 
-                # Initialize Redis - CRITICAL (but with graceful degradation)
-                logger.info("✅ [ 20%] Redis: Initializing Redis connection...")
+                # Initialize Redis Stack - CRITICAL (but with graceful degradation)
+                logger.info("✅ [ 20%] Redis Stack: Initializing Redis Stack connection...")
                 try:
                     from src.redis_pool_manager import RedisPoolManager
                     redis_manager = RedisPoolManager()
                     app.state.redis_manager = redis_manager
-                    logger.info("✅ [ 20%] Redis: Pool Manager initialized successfully")
+                    logger.info("✅ [ 20%] Redis Stack: Pool Manager initialized successfully")
                 except Exception as redis_error:
-                    logger.error(f"Redis initialization failed: {redis_error}")
-                    logger.warning("⚠️ Continuing without Redis - some features may be limited")
+                    logger.error(f"Redis Stack initialization failed: {redis_error}")
+                    logger.warning("⚠️ Continuing without Redis Stack - some features may be limited")
 
                 # Initialize Chat History Manager - CRITICAL
                 logger.info("✅ [ 30%] Chat History: Initializing chat history manager...")

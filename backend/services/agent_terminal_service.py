@@ -55,6 +55,7 @@ class AgentTerminalSession:
     command_history: List[Dict[str, Any]] = field(default_factory=list)
     pending_approval: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    pty_session_id: Optional[str] = None  # PTY session for terminal display
 
 
 class AgentTerminalService:
@@ -124,7 +125,7 @@ class AgentTerminalService:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> AgentTerminalSession:
         """
-        Create a new agent terminal session.
+        Create a new agent terminal session with PTY integration.
 
         Args:
             agent_id: Unique identifier for the agent
@@ -138,6 +139,33 @@ class AgentTerminalService:
         """
         session_id = str(uuid.uuid4())
 
+        # Create PTY session for terminal display
+        pty_session_id = None
+        try:
+            from backend.services.simple_pty import simple_pty_manager
+
+            # Use conversation_id as PTY session ID if available, otherwise use agent session_id
+            pty_session_id = conversation_id or session_id
+
+            # Check if PTY session already exists
+            existing_pty = simple_pty_manager.get_session(pty_session_id)
+            if not existing_pty:
+                # Create new PTY session
+                pty = simple_pty_manager.create_session(
+                    pty_session_id,
+                    initial_cwd="/home/kali/Desktop/AutoBot"
+                )
+                if pty:
+                    logger.info(f"Created PTY session {pty_session_id} for agent terminal {session_id}")
+                else:
+                    logger.warning(f"Failed to create PTY session for agent terminal {session_id}")
+                    pty_session_id = None
+            else:
+                logger.info(f"Reusing existing PTY session {pty_session_id} for agent terminal {session_id}")
+        except Exception as e:
+            logger.error(f"Error creating PTY session: {e}")
+            pty_session_id = None
+
         session = AgentTerminalSession(
             session_id=session_id,
             agent_id=agent_id,
@@ -145,13 +173,15 @@ class AgentTerminalService:
             conversation_id=conversation_id,
             host=host,
             metadata=metadata or {},
+            pty_session_id=pty_session_id,
         )
 
         self.sessions[session_id] = session
 
         logger.info(
             f"Created agent terminal session {session_id} "
-            f"for agent {agent_id} (role: {agent_role.value})"
+            f"for agent {agent_id} (role: {agent_role.value}), "
+            f"PTY session: {pty_session_id}"
         )
 
         # Persist to Redis if available
@@ -321,6 +351,37 @@ class AgentTerminalService:
         # HIGH and DANGEROUS always need approval
         return True
 
+    def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
+        """
+        Write text to PTY terminal display.
+
+        Args:
+            session: Agent terminal session
+            text: Text to write to terminal
+
+        Returns:
+            True if written successfully
+        """
+        if not session.pty_session_id:
+            logger.debug("No PTY session available for writing")
+            return False
+
+        try:
+            from backend.services.simple_pty import simple_pty_manager
+
+            pty = simple_pty_manager.get_session(session.pty_session_id)
+            if pty and pty.is_alive():
+                success = pty.write_input(text)
+                if success:
+                    logger.debug(f"Wrote to PTY {session.pty_session_id}: {text[:50]}...")
+                return success
+            else:
+                logger.warning(f"PTY session {session.pty_session_id} not alive")
+                return False
+        except Exception as e:
+            logger.error(f"Error writing to PTY: {e}")
+            return False
+
     async def execute_command(
         self,
         session_id: str,
@@ -434,6 +495,10 @@ class AgentTerminalService:
 
         # Execute command (auto-approved safe commands)
         try:
+            # Write command to PTY terminal for visibility
+            self._write_to_pty(session, f"{command}\n")
+
+            # Execute the command
             result = await executor.run_shell_command(command, force_approval=False)
 
             # Add to command history
@@ -445,6 +510,11 @@ class AgentTerminalService:
             })
 
             session.last_activity = time.time()
+
+            # Write output to PTY if available
+            if result.get("status") == "success" and result.get("stdout"):
+                # Output is already in PTY from command execution
+                pass
 
             return result
 
@@ -475,12 +545,19 @@ class AgentTerminalService:
         """
         session = await self.get_session(session_id)
         if not session:
+            logger.error(f"approve_command: Session {session_id} not found")
+            logger.error(f"approve_command: Available sessions: {list(self.sessions.keys())}")
             return {
                 "status": "error",
                 "error": "Session not found",
             }
 
+        logger.warning(f"approve_command: session_id={session_id}, pending_approval={session.pending_approval is not None}, approved={approved}")
+        logger.warning(f"approve_command: Session state={session.state.value}, agent_id={session.agent_id}")
+        logger.warning(f"approve_command: pending_approval content={session.pending_approval}")
+
         if not session.pending_approval:
+            logger.warning(f"approve_command: No pending approval for session {session_id}. State: {session.state.value}, command_history: {len(session.command_history)} commands")
             return {
                 "status": "error",
                 "error": "No pending approval",
@@ -496,6 +573,10 @@ class AgentTerminalService:
             )
 
             try:
+                # Write command to PTY terminal for visibility
+                self._write_to_pty(session, f"{command}\n")
+
+                # Execute the command
                 result = await executor.run_shell_command(command, force_approval=False)
 
                 # Add to command history
@@ -512,6 +593,11 @@ class AgentTerminalService:
                 session.last_activity = time.time()
 
                 logger.info(f"Command approved and executed: {command}")
+
+                # Write output to PTY if available
+                if result.get("status") == "success" and result.get("stdout"):
+                    # Output is already in PTY from command execution
+                    pass
 
                 return {
                     "status": "approved",

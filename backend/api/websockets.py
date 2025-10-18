@@ -265,6 +265,47 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif data.get("type") == "pong":
                     # Client responded to ping
                     logger.debug("Received pong from client")
+                elif data.get("type") == "command_approval":
+                    # Handle command approval from frontend
+                    logger.info(f"Received command approval via WebSocket: {data}")
+
+                    terminal_session_id = data.get("terminal_session_id")
+                    approved = data.get("approved", False)
+                    user_id = data.get("user_id", "web_user")
+
+                    if terminal_session_id:
+                        try:
+                            # Call the approval API
+                            from backend.services.agent_terminal_service import AgentTerminalService
+
+                            service = AgentTerminalService()
+                            result = await service.approve_command(
+                                session_id=terminal_session_id,
+                                approved=approved,
+                                user_id=user_id
+                            )
+
+                            logger.info(f"Command approval result: {result.get('status')}")
+
+                            # Send confirmation back to frontend
+                            await websocket.send_json({
+                                "type": "approval_processed",
+                                "payload": {
+                                    "terminal_session_id": terminal_session_id,
+                                    "approved": approved,
+                                    "result": result
+                                }
+                            })
+                        except Exception as approval_error:
+                            logger.error(f"Error processing approval: {approval_error}", exc_info=True)
+                            await websocket.send_json({
+                                "type": "approval_error",
+                                "payload": {
+                                    "error": str(approval_error)
+                                }
+                            })
+                    else:
+                        logger.warning("Received approval message without terminal_session_id")
             except json.JSONDecodeError:
                 logger.warning(f"Received invalid JSON via WebSocket: {message}")
 
