@@ -57,20 +57,20 @@ export function useKnowledgeBase() {
    * Safely parse JSON from response - handles both Response objects and already-parsed data
    * Enhanced with better error handling and logging
    */
-  const parseResponse = async (response: any): Promise<any> => {
+  const parseResponse = async (response: unknown): Promise<unknown> => {
     try {
       // Check if response is already parsed data
-      if (response && typeof response === 'object' && typeof response.json !== 'function') {
+      if (response && typeof response === 'object' && (response as Response).json === undefined) {
         return response
       }
 
       // Check if response has json() method (fetch Response object)
-      if (typeof response.json === 'function') {
+      if (typeof (response as Response).json === 'function') {
         // Clone the response to avoid consuming the body if we need to debug
-        const clonedResponse = response.clone()
+        const clonedResponse = (response as Response).clone()
 
         try {
-          const data = await response.json()
+          const data = await (response as Response).json()
           return data
         } catch (jsonError) {
           // If JSON parsing fails, try to get text for debugging
@@ -102,16 +102,12 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get('/api/knowledge_base/stats')
 
-      // Check response status
-      if (!response.ok) {
-        console.error('Stats fetch failed with status:', response.status)
-        const errorText = await response.text()
-        console.error('Error response:', errorText)
-        throw new Error(`Failed to fetch stats: ${response.status} ${response.statusText}`)
+      if (!response) {
+        throw new Error('Failed to fetch stats: No response from server');
       }
 
       const data = await parseResponse(response)
-      return data
+      return data as KnowledgeStats
     } catch (error) {
       console.error('Error fetching stats:', error)
       throw error
@@ -121,17 +117,16 @@ export function useKnowledgeBase() {
   /**
    * Fetch knowledge by category
    */
-  const fetchCategory = async (category: string): Promise<any> => {
+  const fetchCategory = async (category: string): Promise<unknown> => {
     try {
       const response = await apiClient.get(`/api/knowledge_base/category/${category}`)
 
-      if (!response.ok) {
-        console.error('Category fetch failed with status:', response.status)
-        throw new Error(`Failed to fetch category: ${response.status} ${response.statusText}`)
+      if (!response) {
+        throw new Error('Failed to fetch category: No response from server');
       }
 
       const data = await parseResponse(response)
-      return data
+      return data as ManPagesSummary
     } catch (error) {
       console.error('Error fetching category:', error)
       throw error
@@ -141,13 +136,12 @@ export function useKnowledgeBase() {
   /**
    * Search knowledge base
    */
-  const searchKnowledge = async (query: string): Promise<any> => {
+  const searchKnowledge = async (query: string): Promise<unknown> => {
     try {
       const response = await apiClient.get(`/api/knowledge_base/search?query=${encodeURIComponent(query)}`)
 
-      if (!response.ok) {
-        console.error('Search failed with status:', response.status)
-        throw new Error(`Search failed: ${response.status} ${response.statusText}`)
+      if (!response) {
+        throw new Error('Search failed: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -164,16 +158,13 @@ export function useKnowledgeBase() {
   const addFact = async (fact: {
     content: string
     category: string
-    metadata?: Record<string, any>
-  }): Promise<any> => {
+    metadata?: Record<string, unknown>
+  }): Promise<unknown> => {
     try {
       const response = await apiClient.post('/api/knowledge_base/facts', fact)
 
-      if (!response.ok) {
-        console.error('Add fact failed with status:', response.status)
-        const errorText = await response.text()
-        console.error('Error response:', errorText)
-        throw new Error(`Failed to add fact: ${response.status} ${response.statusText}`)
+      if (!response) {
+        throw new Error('Failed to add fact: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -187,7 +178,7 @@ export function useKnowledgeBase() {
   /**
    * Upload knowledge base file
    */
-  const uploadKnowledgeFile = async (formData: FormData): Promise<any> => {
+  const uploadKnowledgeFile = async (formData: FormData): Promise<unknown> => {
     try {
       const url = await appConfig.getApiUrl('/api/knowledge_base/upload')
 
@@ -218,9 +209,8 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get('/api/knowledge_base/machine_profiles')
 
-      if (!response.ok) {
-        console.error('Machine profiles fetch failed with status:', response.status)
-        throw new Error(`Failed to fetch machine profiles: ${response.status} ${response.statusText}`)
+      if (!response) {
+        throw new Error('Failed to fetch machine profiles: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -238,9 +228,8 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get('/api/knowledge_base/man_pages/summary')
 
-      if (!response.ok) {
-        console.error('Man pages summary fetch failed with status:', response.status)
-        throw new Error(`Failed to fetch man pages summary: ${response.status} ${response.statusText}`)
+      if (!response) {
+        throw new Error('Failed to fetch man pages summary: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -254,17 +243,14 @@ export function useKnowledgeBase() {
   /**
    * Integrate man pages for a specific machine
    */
-  const integrateManPages = async (machineId: string): Promise<any> => {
+  const integrateManPages = async (machineId: string): Promise<unknown> => {
     try {
       const response = await apiClient.post('/api/knowledge_base/man_pages/integrate', {
         machine_id: machineId
       })
 
-      if (!response.ok) {
-        console.error('Man pages integration failed with status:', response.status)
-        const errorText = await response.text()
-        console.error('Error response:', errorText)
-        throw new Error(`Integration failed: ${response.status} ${response.statusText}`)
+      if (!response) {
+        throw new Error('Integration failed: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -278,13 +264,12 @@ export function useKnowledgeBase() {
   /**
    * Get vectorization status
    */
-  const getVectorizationStatus = async (): Promise<any> => {
+  const getVectorizationStatus = async (): Promise<unknown> => {
     try {
       const response = await apiClient.get('/api/knowledge_base/vectorization/status')
 
-      if (!response.ok) {
-        console.error('Vectorization status fetch failed with status:', response.status)
-        throw new Error(`Failed to get vectorization status: ${response.status} ${response.statusText}`)
+      if (!response) {
+        throw new Error('Failed to get vectorization status: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -324,31 +309,8 @@ export function useKnowledgeBase() {
         headers: Object.fromEntries(response.headers.entries())
       })
 
-      // Check response status BEFORE parsing
-      if (!response.ok) {
-        console.error('[vectorizeFacts] Request failed with status:', response.status)
-
-        // Try to get error details from response
-        let errorMessage = `Vectorization failed: ${response.status} ${response.statusText}`
-        try {
-          const errorText = await response.text()
-          console.error('[vectorizeFacts] Error response text:', errorText)
-
-          // Try to parse error as JSON
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.detail || errorData.message || errorMessage
-          } catch {
-            // Not JSON, use text as-is
-            if (errorText) {
-              errorMessage = errorText
-            }
-          }
-        } catch (textError) {
-          console.error('[vectorizeFacts] Could not read error response:', textError)
-        }
-
-        throw new Error(errorMessage)
+      if (!response) {
+        throw new Error('Vectorization failed: No response from server');
       }
 
       // Parse successful response
@@ -373,7 +335,7 @@ export function useKnowledgeBase() {
    * Initialize machine knowledge for a specific host
    * POST /api/knowledge_base/machine_knowledge/initialize
    */
-  const initializeMachineKnowledge = async (machineId: string): Promise<any> => {
+  const initializeMachineKnowledge = async (machineId: string): Promise<unknown> => {
     try {
       console.log('[initializeMachineKnowledge] Starting initialization request...')
       console.log('[initializeMachineKnowledge] Machine ID:', machineId)
@@ -388,27 +350,8 @@ export function useKnowledgeBase() {
         statusText: response.statusText
       })
 
-      if (!response.ok) {
-        console.error('[initializeMachineKnowledge] Request failed with status:', response.status)
-
-        let errorMessage = `Machine knowledge initialization failed: ${response.status} ${response.statusText}`
-        try {
-          const errorText = await response.text()
-          console.error('[initializeMachineKnowledge] Error response text:', errorText)
-
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.detail || errorData.message || errorMessage
-          } catch {
-            if (errorText) {
-              errorMessage = errorText
-            }
-          }
-        } catch (textError) {
-          console.error('[initializeMachineKnowledge] Could not read error response:', textError)
-        }
-
-        throw new Error(errorMessage)
+      if (!response) {
+        throw new Error('Machine knowledge initialization failed: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -424,7 +367,7 @@ export function useKnowledgeBase() {
    * Refresh system knowledge (rescan and update all system information)
    * POST /api/knowledge_base/refresh_system_knowledge
    */
-  const refreshSystemKnowledge = async (): Promise<any> => {
+  const refreshSystemKnowledge = async (): Promise<unknown> => {
     try {
       console.log('[refreshSystemKnowledge] Starting refresh request...')
 
@@ -436,27 +379,8 @@ export function useKnowledgeBase() {
         statusText: response.statusText
       })
 
-      if (!response.ok) {
-        console.error('[refreshSystemKnowledge] Request failed with status:', response.status)
-
-        let errorMessage = `System knowledge refresh failed: ${response.status} ${response.statusText}`
-        try {
-          const errorText = await response.text()
-          console.error('[refreshSystemKnowledge] Error response text:', errorText)
-
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.detail || errorData.message || errorMessage
-          } catch {
-            if (errorText) {
-              errorMessage = errorText
-            }
-          }
-        } catch (textError) {
-          console.error('[refreshSystemKnowledge] Could not read error response:', textError)
-        }
-
-        throw new Error(errorMessage)
+      if (!response) {
+        throw new Error('System knowledge refresh failed: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -472,7 +396,7 @@ export function useKnowledgeBase() {
    * Populate man pages for a specific machine
    * POST /api/knowledge_base/populate_man_pages
    */
-  const populateManPages = async (machineId: string): Promise<any> => {
+  const populateManPages = async (machineId: string): Promise<unknown> => {
     try {
       console.log('[populateManPages] Starting population request...')
       console.log('[populateManPages] Machine ID:', machineId)
@@ -487,27 +411,8 @@ export function useKnowledgeBase() {
         statusText: response.statusText
       })
 
-      if (!response.ok) {
-        console.error('[populateManPages] Request failed with status:', response.status)
-
-        let errorMessage = `Man pages population failed: ${response.status} ${response.statusText}`
-        try {
-          const errorText = await response.text()
-          console.error('[populateManPages] Error response text:', errorText)
-
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.detail || errorData.message || errorMessage
-          } catch {
-            if (errorText) {
-              errorMessage = errorText
-            }
-          }
-        } catch (textError) {
-          console.error('[populateManPages] Could not read error response:', textError)
-        }
-
-        throw new Error(errorMessage)
+      if (!response) {
+        throw new Error('Man pages population failed: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -523,7 +428,7 @@ export function useKnowledgeBase() {
    * Populate AutoBot documentation
    * POST /api/knowledge_base/populate_autobot_docs
    */
-  const populateAutoBotDocs = async (): Promise<any> => {
+  const populateAutoBotDocs = async (): Promise<unknown> => {
     try {
       console.log('[populateAutoBotDocs] Starting documentation population request...')
 
@@ -535,27 +440,8 @@ export function useKnowledgeBase() {
         statusText: response.statusText
       })
 
-      if (!response.ok) {
-        console.error('[populateAutoBotDocs] Request failed with status:', response.status)
-
-        let errorMessage = `AutoBot docs population failed: ${response.status} ${response.statusText}`
-        try {
-          const errorText = await response.text()
-          console.error('[populateAutoBotDocs] Error response text:', errorText)
-
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.detail || errorData.message || errorMessage
-          } catch {
-            if (errorText) {
-              errorMessage = errorText
-            }
-          }
-        } catch (textError) {
-          console.error('[populateAutoBotDocs] Could not read error response:', textError)
-        }
-
-        throw new Error(errorMessage)
+      if (!response) {
+        throw new Error('AutoBot docs population failed: No response from server');
       }
 
       const data = await parseResponse(response)
@@ -585,32 +471,13 @@ export function useKnowledgeBase() {
         statusText: response.statusText
       })
 
-      if (!response.ok) {
-        console.error('[fetchMachineProfile] Request failed with status:', response.status)
-
-        let errorMessage = `Machine profile fetch failed: ${response.status} ${response.statusText}`
-        try {
-          const errorText = await response.text()
-          console.error('[fetchMachineProfile] Error response text:', errorText)
-
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.detail || errorData.message || errorMessage
-          } catch {
-            if (errorText) {
-              errorMessage = errorText
-            }
-          }
-        } catch (textError) {
-          console.error('[fetchMachineProfile] Could not read error response:', textError)
-        }
-
-        throw new Error(errorMessage)
+      if (!response) {
+        throw new Error('Machine profile fetch failed: No response from server');
       }
 
       const data = await parseResponse(response)
       console.log('[fetchMachineProfile] Success:', data)
-      return data
+      return data as MachineProfile
     } catch (error) {
       console.error('[fetchMachineProfile] Error:', error)
       return null
@@ -633,32 +500,13 @@ export function useKnowledgeBase() {
         statusText: response.statusText
       })
 
-      if (!response.ok) {
-        console.error('[fetchBasicStats] Request failed with status:', response.status)
-
-        let errorMessage = `Basic stats fetch failed: ${response.status} ${response.statusText}`
-        try {
-          const errorText = await response.text()
-          console.error('[fetchBasicStats] Error response text:', errorText)
-
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.detail || errorData.message || errorMessage
-          } catch {
-            if (errorText) {
-              errorMessage = errorText
-            }
-          }
-        } catch (textError) {
-          console.error('[fetchBasicStats] Could not read error response:', textError)
-        }
-
-        throw new Error(errorMessage)
+      if (!response) {
+        throw new Error('Basic stats fetch failed: No response from server');
       }
 
       const data = await parseResponse(response)
       console.log('[fetchBasicStats] Success:', data)
-      return data
+      return data as KnowledgeStats
     } catch (error) {
       console.error('[fetchBasicStats] Error:', error)
       return null

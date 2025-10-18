@@ -160,6 +160,11 @@ export default {
     originalMessage: {
       type: String,
       default: ''
+    },
+    terminalSessionId: {
+      type: String,
+      required: false,
+      default: null
     }
   },
   emits: ['approved', 'denied', 'commented', 'close'],
@@ -172,30 +177,71 @@ export default {
     const commentText = ref('');
 
     const handleAllow = async () => {
+      // CRITICAL: Prevent double-click/concurrent execution
+      if (isProcessing.value) {
+        console.warn('handleAllow: Already processing, ignoring duplicate click');
+        return;
+      }
+
       isProcessing.value = true;
       error.value = '';
 
       try {
-        // Send approval to chat endpoint with "yes" response
-        const response = await apiService.post('/chat/direct', {
-          message: 'yes',
-          chat_id: props.chatId,
-          remember_choice: rememberForSession.value
+        // Verify terminal_session_id is available
+        if (!props.terminalSessionId) {
+          error.value = 'Missing terminal session ID - cannot approve command';
+          console.error('handleAllow: terminal_session_id is missing');
+          isProcessing.value = false;
+          return;
+        }
+
+        console.log('[CommandPermissionDialog] Sending approval request:');
+        console.log('  Terminal Session ID:', props.terminalSessionId);
+        console.log('  Command:', props.command);
+        console.log('  URL:', `http://172.16.168.20:8001/api/agent-terminal/sessions/${props.terminalSessionId}/approve`);
+
+        // Send approval using direct fetch (bypasses buggy API service)
+        const fetchResponse = await fetch(
+          `http://172.16.168.20:8001/api/agent-terminal/sessions/${props.terminalSessionId}/approve`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              approved: true,
+              user_id: 'web_user'
+            })
+          }
+        );
+
+        const data = await fetchResponse.json();
+
+        // DEBUG: Log exact response to understand what we're getting
+        console.log('[CommandPermissionDialog] Approval API response:', JSON.stringify(data, null, 2));
+        console.log('[CommandPermissionDialog] Response status:', data.status);
+        console.log('[CommandPermissionDialog] Status check result:', {
+          isApproved: data.status === 'approved',
+          isSuccess: data.status === 'success',
+          willClose: data.status === 'approved' || data.status === 'success'
         });
 
-        if (response.data) {
+        // CRITICAL FIX: Backend returns "approved" status, not "success"
+        if (data.status === 'approved' || data.status === 'success') {
+          console.log('[CommandPermissionDialog] ✅ Status matched - closing dialog');
           emit('approved', {
             command: props.command,
-            result: response.data,
+            result: data,
             rememberChoice: rememberForSession.value
           });
           closeDialog();
         } else {
-          error.value = 'Command execution failed';
+          console.error('[CommandPermissionDialog] ❌ Status did NOT match - showing error');
+          error.value = data.error || 'Command execution failed';
         }
       } catch (err) {
         console.error('Command approval error:', err);
-        error.value = err.response?.data?.message || 'Command execution failed';
+        error.value = err.response?.data?.detail || err.message || 'Command execution failed';
       } finally {
         isProcessing.value = false;
       }
@@ -203,11 +249,19 @@ export default {
 
     const handleDeny = async () => {
       try {
-        // Send denial to chat endpoint with "no" response
-        await apiService.post('/chat/direct', {
-          message: 'no',
-          chat_id: props.chatId
-        });
+        // Verify terminal_session_id is available
+        if (props.terminalSessionId) {
+          // Send denial to agent terminal API
+          await apiService.post(
+            `/api/agent-terminal/sessions/${props.terminalSessionId}/approve`,
+            {
+              approved: false,
+              user_id: 'web_user'
+            }
+          );
+        } else {
+          console.warn('handleDeny: terminal_session_id is missing - continuing with client-side denial');
+        }
 
         emit('denied', {
           command: props.command,

@@ -67,6 +67,7 @@
       class="absolute inset-0 flex flex-col min-h-0"
     >
       <ChatTerminal
+        :key="currentSessionId || 'terminal'"
         :chat-session-id="currentSessionId"
         :auto-connect="true"
         :allow-user-takeover="true"

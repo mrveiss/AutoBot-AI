@@ -436,13 +436,13 @@ import { useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/useAppStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useSystemStatus } from '@/composables/useSystemStatus'
 import SystemStatusNotification from '@/components/SystemStatusNotification.vue';
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
-import apiEndpointMapper from '@/utils/ApiEndpointMapper.js';
 
 export default {
   name: 'App',
@@ -459,27 +459,21 @@ export default {
     const knowledgeStore = useKnowledgeStore();
     const router = useRouter();
 
-    // Reactive data
+    // FIXED: Use useSystemStatus composable instead of duplicate logic
+    const {
+      systemStatus,
+      systemServices,
+      showSystemStatus,
+      getSystemStatusTooltip,
+      getSystemStatusText,
+      getSystemStatusDescription,
+      toggleSystemStatus,
+      refreshSystemStatus,
+      updateSystemStatus
+    } = useSystemStatus()
+
+    // Reactive data (non-status related)
     const showMobileNav = ref(false);
-    const showSystemStatus = ref(false);
-
-    // System status state
-    const systemStatus = ref({
-      isHealthy: true,
-      hasIssues: false,
-      lastChecked: new Date()
-    });
-
-    const systemServices = ref([
-      { name: 'Backend API', status: 'healthy', statusText: 'Running' },
-      { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
-      { name: 'WebSocket', status: 'healthy', statusText: 'Connected' },
-      { name: 'Redis', status: 'warning', statusText: 'Disk Issues' },
-      { name: 'Ollama', status: 'error', statusText: 'Disconnected' },
-      { name: 'NPU Worker', status: 'healthy', statusText: 'Running' },
-      { name: 'Browser Service', status: 'healthy', statusText: 'Running' }
-    ]);
-
     let notificationCleanup = null;
 
     // Computed properties
@@ -520,185 +514,6 @@ export default {
       } catch (error) {
         console.error('Error clearing caches:', error);
       }
-    };
-
-    // System status methods
-    const toggleSystemStatus = () => {
-      showSystemStatus.value = !showSystemStatus.value;
-    };
-
-    const getSystemStatusTooltip = () => {
-      if (systemStatus.value.hasIssues) {
-        return 'Click to view system issues';
-      } else if (!systemStatus.value.isHealthy) {
-        return 'Click to view system warnings';
-      } else {
-        return 'Click to view system status - all services operational';
-      }
-    };
-
-    const getSystemStatusText = () => {
-      if (systemStatus.value.hasIssues) {
-        return 'System Issues Detected';
-      } else if (!systemStatus.value.isHealthy) {
-        return 'System Warnings';
-      } else {
-        return 'All Systems Operational';
-      }
-    };
-
-    const getSystemStatusDescription = () => {
-      const errorCount = systemServices.value.filter(s => s.status === 'error').length;
-      const warningCount = systemServices.value.filter(s => s.status === 'warning').length;
-
-      if (errorCount > 0) {
-        return `${errorCount} service${errorCount > 1 ? 's' : ''} down, ${warningCount} warning${warningCount !== 1 ? 's' : ''}`;
-      } else if (warningCount > 0) {
-        return `${warningCount} service${warningCount > 1 ? 's' : ''} with warnings`;
-      } else {
-        return 'All services running normally';
-      }
-    };
-
-    const refreshSystemStatus = async () => {
-      console.log('[App] Starting graceful system status refresh...');
-      
-      try {
-        const updatedServices = [];
-        let hasApiErrors = false;
-
-        // CRITICAL FIX: Use graceful API calls that won't block Vue mounting
-        try {
-          console.log('[App] Testing basic connectivity...');
-          const healthResponse = await apiEndpointMapper.fetchWithFallback('/api/health', { timeout: 3000 });
-          const healthData = await healthResponse.json();
-
-          if (healthResponse.fallback) {
-            console.log('[App] Using fallback for basic health check');
-            hasApiErrors = true;
-          }
-
-          if (healthResponse.ok || healthData.status) {
-            console.log('[App] Backend connectivity confirmed');
-            updatedServices.push({
-              name: 'Backend API',
-              status: healthResponse.fallback ? 'warning' : 'healthy',
-              statusText: healthResponse.fallback ? 'Limited Connectivity' : 'Connected'
-            });
-          } else {
-            updatedServices.push({
-              name: 'Backend API',
-              status: 'error',
-              statusText: 'Connection Failed'
-            });
-          }
-        } catch (healthError) {
-          console.warn('[App] Basic health check failed:', healthError.message);
-          hasApiErrors = true;
-          updatedServices.push({
-            name: 'Backend API',
-            status: 'error',
-            statusText: 'Connection Failed'
-          });
-        }
-
-        // Always add frontend and websocket status (local)
-        updatedServices.push(
-          { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
-          { name: 'WebSocket', status: 'healthy', statusText: 'Connected' }
-        );
-
-        // Try to get additional service info with graceful fallback
-        try {
-          console.log('[App] Fetching additional service status...');
-          const monitoringResponse = await apiEndpointMapper.fetchWithFallback('/api/monitoring/status', { timeout: 3000 });
-          const monitoringData = await monitoringResponse.json();
-
-          if (monitoringResponse.fallback) {
-            console.log('[App] Using fallback for monitoring data');
-            hasApiErrors = true;
-          }
-
-          // Add monitoring data to services if available
-          if (monitoringData.services) {
-            Object.entries(monitoringData.services).forEach(([key, service]) => {
-              updatedServices.push({
-                name: service.name || key,
-                status: service.status === 'online' ? 'healthy' :
-                        service.status === 'warning' ? 'warning' : 'error',
-                statusText: service.message || service.status
-              });
-            });
-          } else {
-            // Add default service status when monitoring is not available
-            updatedServices.push(
-              { name: 'Redis', status: 'warning', statusText: 'Status Unknown' },
-              { name: 'Ollama', status: 'warning', statusText: 'Status Unknown' },
-              { name: 'NPU Worker', status: 'warning', statusText: 'Status Unknown' },
-              { name: 'Browser Service', status: 'warning', statusText: 'Status Unknown' }
-            );
-          }
-        } catch (monitoringError) {
-          console.log('[App] Additional monitoring not available:', monitoringError.message);
-          hasApiErrors = true;
-          
-          // Add fallback service statuses
-          updatedServices.push(
-            { name: 'Redis', status: 'warning', statusText: 'Status Unknown' },
-            { name: 'Ollama', status: 'warning', statusText: 'Status Unknown' },
-            { name: 'NPU Worker', status: 'warning', statusText: 'Status Unknown' },
-            { name: 'Browser Service', status: 'warning', statusText: 'Status Unknown' }
-          );
-        }
-
-        // Update systemServices with processed data
-        systemServices.value = updatedServices;
-
-        // Update system status based on real data
-        const hasErrors = systemServices.value.some(s => s.status === 'error');
-        const hasWarnings = systemServices.value.some(s => s.status === 'warning');
-
-        systemStatus.value = {
-          isHealthy: !hasErrors && !hasWarnings,
-          hasIssues: hasErrors,
-          lastChecked: new Date(),
-          apiErrors: hasApiErrors // Track if we used fallbacks
-        };
-
-        console.log(`[App] ✅ System status refresh complete. Services: ${updatedServices.length}, Errors: ${hasErrors}, API Fallbacks: ${hasApiErrors}`);
-        
-      } catch (criticalError) {
-        console.error('[App] CRITICAL: System status refresh failed completely:', criticalError);
-
-        // CRITICAL: Ensure Vue app can still mount - provide minimal working state
-        systemServices.value = [
-          { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
-          { name: 'Backend API', status: 'error', statusText: 'Connection Failed' },
-          { name: 'System Status', status: 'error', statusText: 'Refresh Failed' }
-        ];
-
-        systemStatus.value = {
-          isHealthy: false,
-          hasIssues: true,
-          lastChecked: new Date(),
-          criticalError: true
-        };
-        
-        // Don't throw the error - let Vue app continue mounting
-        console.log('[App] ⚠️ Using emergency fallback state to prevent Vue mounting failure');
-      }
-    };
-
-    // Update system status periodically
-    const updateSystemStatus = () => {
-      const errorCount = systemServices.value.filter(s => s.status === 'error').length;
-      const warningCount = systemServices.value.filter(s => s.status === 'warning').length;
-
-      systemStatus.value = {
-        isHealthy: errorCount === 0 && warningCount === 0,
-        hasIssues: errorCount > 0,
-        lastChecked: new Date()
-      };
     };
 
     const handleGlobalError = (error) => {
@@ -837,8 +652,8 @@ export default {
         // OPTIMIZED: Start optimized health monitoring
         startOptimizedHealthCheck();
 
-        // CRITICAL FIX: Use graceful system status initialization that won't block Vue mounting
-        console.log('[App] Initializing system status with graceful error handling...');
+        // FIXED: Use useSystemStatus composable's refresh method
+        console.log('[App] Initializing system status with composable...');
         try {
           await refreshSystemStatus();
           updateSystemStatus();
@@ -889,9 +704,9 @@ export default {
 
       // Reactive data
       showMobileNav,
-      showSystemStatus,
 
-      // System status
+      // System status (from composable)
+      showSystemStatus,
       systemStatus,
       systemServices,
 
@@ -910,7 +725,7 @@ export default {
       handleLoadingError,
       handleLoadingTimeout,
 
-      // System status methods
+      // System status methods (from composable)
       toggleSystemStatus,
       getSystemStatusTooltip,
       getSystemStatusText,

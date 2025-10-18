@@ -1,5 +1,4 @@
 import appConfig from '@/config/AppConfig.js';
-import apiEndpointMapper from '@/utils/ApiEndpointMapper.js';
 
 // Type definitions for API client
 export interface RequestOptions {
@@ -100,7 +99,9 @@ export class ApiClient {
 
   // POST request
   async post(endpoint: string, data?: any, options: RequestOptions = {}): Promise<ApiResponse> {
-    return this.request(endpoint, { method: 'POST', body: data, ...options });
+    const result = await this.request(endpoint, { method: 'POST', body: data, ...options });
+    console.log('[ApiClient.post] Returning:', typeof result, 'Has json?:', typeof result.json, 'Result:', result);
+    return result;
   }
 
   // PUT request
@@ -150,9 +151,10 @@ export class ApiClient {
   /**
    * Create a new chat session
    * Backend endpoint: POST /api/chat/sessions
+   * Backend expects SessionCreate model: { title?: string, metadata?: dict }
    */
   async createNewChat(): Promise<any> {
-    const response = await this.post('/api/chat/sessions');
+    const response = await this.post('/api/chat/sessions', {});
     return response.json();
   }
 
@@ -274,9 +276,8 @@ export class ApiClient {
   }
 
   async getServiceHealth(): Promise<any> {
-    // FIXED: Use correct endpoint with graceful fallback
-    // Old: '/api/services/health' -> New: '/api/monitoring/services/health'
-    const response = await apiEndpointMapper.fetchWithFallback('/api/services/health', { timeout: 10000 });
+    // Use monitoring services health endpoint
+    const response = await this.get('/api/monitoring/services/health');
     return response.json();
   }
 

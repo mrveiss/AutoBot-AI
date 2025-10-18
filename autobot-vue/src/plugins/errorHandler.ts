@@ -81,13 +81,24 @@ class GlobalErrorHandler {
         const response = await originalFetch(...args)
 
         if (!response.ok) {
+          const requestUrl = typeof args[0] === 'string' ? args[0] : args[0]?.url
+
           // Track HTTP errors
           rumAgent.trackError('http_error', {
             status: response.status,
             statusText: response.statusText,
-            url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
+            url: requestUrl,
             source: 'fetch_interceptor'
           })
+
+          // Log HTTP errors to console for debugging (especially 404s)
+          if (response.status === 404) {
+            console.error(`[HTTP 404] Resource not found: ${requestUrl}`)
+          } else if (response.status >= 400 && response.status < 500) {
+            console.warn(`[HTTP ${response.status}] Client error: ${requestUrl} - ${response.statusText}`)
+          } else if (response.status >= 500) {
+            console.error(`[HTTP ${response.status}] Server error: ${requestUrl} - ${response.statusText}`)
+          }
 
           if (response.status >= 500) {
             this.addNotification({

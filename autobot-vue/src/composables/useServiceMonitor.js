@@ -15,7 +15,7 @@ export function useServiceMonitor() {
   const lastCheck = ref(null)
   const isLoading = ref(false)
   const error = ref(null)
-  
+
   // Service summary stats
   const serviceSummary = ref({
     total: 0,
@@ -24,21 +24,21 @@ export function useServiceMonitor() {
     error: 0,
     offline: 0
   })
-  
+
   // Auto-refresh interval
   let refreshInterval = null
   const REFRESH_INTERVAL = 30000 // 30 seconds
-  
+
   // Computed properties
   const healthyServices = computed(() => {
     return serviceSummary.value.online || 0
   })
-  
+
   const healthPercentage = computed(() => {
     if (serviceSummary.value.total === 0) return 0
     return Math.round((serviceSummary.value.online / serviceSummary.value.total) * 100)
   })
-  
+
   const statusColor = computed(() => {
     switch (overallStatus.value) {
       case 'online': return 'green'
@@ -48,7 +48,7 @@ export function useServiceMonitor() {
       default: return 'gray'
     }
   })
-  
+
   const statusIcon = computed(() => {
     switch (overallStatus.value) {
       case 'online': return 'fas fa-check-circle'
@@ -59,7 +59,7 @@ export function useServiceMonitor() {
       default: return 'fas fa-question-circle'
     }
   })
-  
+
   const statusMessage = computed(() => {
     switch (overallStatus.value) {
       case 'online': return `${serviceSummary.value.online} services online`
@@ -70,7 +70,7 @@ export function useServiceMonitor() {
       default: return 'Status unknown'
     }
   })
-  
+
   // Service categories for dashboard grouping
   const servicesByCategory = computed(() => {
     const categories = {}
@@ -82,27 +82,28 @@ export function useServiceMonitor() {
     })
     return categories
   })
-  
+
   // Core services (most important ones for dashboard)
   const coreServices = computed(() => {
-    return services.value.filter(s => 
+    return services.value.filter(s =>
       ['core', 'database', 'web', 'ai'].includes(s.category)
     ).slice(0, 8) // Limit to 8 for dashboard display
   })
-  
+
   // Fetch service status
   const fetchServiceStatus = async () => {
     if (isLoading.value) return // Prevent concurrent requests
-    
+
     try {
       isLoading.value = true
       error.value = null
-      
-      console.log('Fetching service status...')
-      const data = await apiService.get('/api/services/status')
-      console.log('Service status response:', data)
-      console.log('Response type:', typeof data)
-      
+
+      console.log('[useServiceMonitor] Fetching service status from correct endpoint...')
+      // FIXED: Use correct endpoint /api/service-monitor/services/status
+      const data = await apiService.get('/api/service-monitor/services/status')
+      console.log('[useServiceMonitor] Service status response:', data)
+      console.log('[useServiceMonitor] Response type:', typeof data)
+
       // Backend returns data directly, not wrapped in success/data structure
       if (data && typeof data === 'object') {
         // Update service data
@@ -111,21 +112,21 @@ export function useServiceMonitor() {
         overallStatus.value = data.overall_status || 'unknown'
         serviceSummary.value = data.summary || { total: 0, online: 0, warning: 0, error: 0, offline: 0 }
         lastCheck.value = new Date()
-        
+
         // Log status for debugging
-        console.log(`Service Monitor: ${serviceSummary.value.online}/${serviceSummary.value.total} services online`)
-        
+        console.log(`[useServiceMonitor] ${serviceSummary.value.online}/${serviceSummary.value.total} services online`)
+
       } else {
-        console.error('Invalid response data:', data)
+        console.error('[useServiceMonitor] Invalid response data:', data)
         throw new Error('Invalid response format from service status endpoint')
       }
-      
+
     } catch (err) {
-      console.error('Service monitoring error:', err)
-      console.error('Error stack:', err.stack)
+      console.error('[useServiceMonitor] Service monitoring error:', err)
+      console.error('[useServiceMonitor] Error stack:', err.stack)
       error.value = err.message
       overallStatus.value = 'error'
-      
+
       // Fallback data
       services.value = [
         {
@@ -137,54 +138,54 @@ export function useServiceMonitor() {
         }
       ]
       serviceSummary.value = { total: 1, online: 0, warning: 0, error: 1, offline: 0 }
-      
+
     } finally {
       isLoading.value = false
     }
   }
-  
+
   // Quick health check (lighter weight) with graceful fallbacks
   const fetchHealthCheck = async () => {
     try {
       console.log('[useServiceMonitor] Performing graceful health check...')
-      
+
       // FIXED: Use correct endpoint with graceful fallback
-      // Old: '/api/services/health' -> New: '/api/monitoring/services/health'
-      const response = await apiEndpointMapper.fetchWithFallback('/api/services/health', { timeout: 8000 })
+      // Old: '/api/services/health' -> New: '/api/service-monitor/services/health'
+      const response = await apiEndpointMapper.fetchWithFallback('/api/service-monitor/services/health', { timeout: 8000 })
       const data = await response.json()
-      
+
       if (response.fallback) {
         console.log('[useServiceMonitor] Using fallback data for health check')
       }
-      
+
       if (data && typeof data === 'object') {
         // Handle both direct response and wrapped response formats
         const healthData = data.data || data
-        
+
         overallStatus.value = healthData.status || (response.fallback ? 'warning' : 'unknown')
         serviceSummary.value.online = healthData.healthy || 0
         serviceSummary.value.total = healthData.total || 0
         serviceSummary.value.warning = healthData.warnings || (response.fallback ? 1 : 0)
         serviceSummary.value.error = healthData.errors || 0
         lastCheck.value = new Date()
-        
+
         console.log(`[useServiceMonitor] Health check complete: ${serviceSummary.value.online}/${serviceSummary.value.total} online, fallback: ${response.fallback}`)
       }
     } catch (err) {
       console.warn('[useServiceMonitor] Health check failed, using minimal fallback:', err.message)
-      
+
       // Provide minimal fallback state
       overallStatus.value = 'warning'
       serviceSummary.value = { total: 1, online: 0, warning: 1, error: 0, offline: 0 }
       lastCheck.value = new Date()
     }
   }
-  
+
   // Start monitoring
   const startMonitoring = () => {
     // Initial load
     fetchServiceStatus()
-    
+
     // Set up auto-refresh
     refreshInterval = setInterval(() => {
       // Alternate between full status and quick health check
@@ -196,7 +197,7 @@ export function useServiceMonitor() {
       }
     }, REFRESH_INTERVAL)
   }
-  
+
   // Stop monitoring
   const stopMonitoring = () => {
     if (refreshInterval) {
@@ -204,22 +205,22 @@ export function useServiceMonitor() {
       refreshInterval = null
     }
   }
-  
+
   // Refresh manually
   const refresh = () => {
     fetchServiceStatus()
   }
-  
+
   // Get service by name
   const getService = (name) => {
     return services.value.find(s => s.name === name)
   }
-  
+
   // Get services by status
   const getServicesByStatus = (status) => {
     return services.value.filter(s => s.status === status)
   }
-  
+
   // Format response time
   const formatResponseTime = (ms) => {
     if (!ms) return 'N/A'
@@ -227,31 +228,31 @@ export function useServiceMonitor() {
     if (ms < 1000) return `${ms}ms`
     return `${(ms / 1000).toFixed(1)}s`
   }
-  
+
   // Format last check time
   const formatLastCheck = () => {
     if (!lastCheck.value) return 'Never'
-    
+
     // Ensure lastCheck.value is a valid Date
     let checkTime = lastCheck.value
     if (!(checkTime instanceof Date)) {
       checkTime = new Date(checkTime)
       if (isNaN(checkTime.getTime())) return 'Never'
     }
-    
+
     const now = new Date()
     const diff = now - checkTime
-    
+
     if (diff < 60000) return 'Just now'
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
     return checkTime.toLocaleTimeString()
   }
-  
+
   // Lifecycle
   onMounted(() => {
     startMonitoring()
   })
-  
+
   const instance = getCurrentInstance()
   if (instance) {
     onUnmounted(() => {
@@ -260,7 +261,7 @@ export function useServiceMonitor() {
   } else {
     console.warn('useServiceMonitor: Not inside Vue component, manual cleanup required')
   }
-  
+
   return {
     // State
     services,
@@ -270,7 +271,7 @@ export function useServiceMonitor() {
     lastCheck,
     isLoading,
     error,
-    
+
     // Computed
     healthyServices,
     healthPercentage,
@@ -279,7 +280,7 @@ export function useServiceMonitor() {
     statusMessage,
     servicesByCategory,
     coreServices,
-    
+
     // Methods
     fetchServiceStatus,
     fetchHealthCheck,

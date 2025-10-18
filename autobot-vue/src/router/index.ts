@@ -13,6 +13,7 @@ import ToolsView from '@/views/ToolsView.vue'
 import MonitoringView from '@/views/MonitoringView.vue'
 import SecretsView from '@/views/SecretsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
+import InfrastructureManager from '@/views/InfrastructureManager.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
 // Route configuration
@@ -300,6 +301,17 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/infrastructure',
+    name: 'infrastructure',
+    component: InfrastructureManager,
+    meta: {
+      title: 'Infrastructure',
+      icon: 'fas fa-server',
+      description: 'Manage hosts and deploy configurations',
+      requiresAuth: false
+    }
+  },
+  {
     path: '/secrets',
     name: 'secrets',
     component: SecretsView,
@@ -497,7 +509,7 @@ router.beforeEach(async (to, from, next) => {
     // Update active tab in store (with null safety)
     if (to.name && typeof to.name === 'string' && appStore && typeof appStore.updateRoute === 'function') {
       const tabName = to.name.split('-')[0] // Extract main section
-      const validTabs = ['chat', 'knowledge', 'tools', 'monitoring', 'secrets', 'settings'] as const
+      const validTabs = ['chat', 'knowledge', 'tools', 'monitoring', 'infrastructure', 'secrets', 'settings'] as const
       type ValidTab = typeof validTabs[number]
 
       if ((validTabs as readonly string[]).includes(tabName)) {

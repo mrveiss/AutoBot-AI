@@ -21,7 +21,7 @@
         </div>
 
         <div class="text-xs text-gray-500">
-          Session: {{ chatSessionId?.slice(-8) || 'None' }}
+          Chat: {{ chatSessionId?.slice(0, 8) || 'None' }} | Terminal: {{ backendSessionId?.slice(0, 8) || 'Not Connected' }}
         </div>
       </div>
 
@@ -260,7 +260,7 @@ const handleTerminalReady = (term: Terminal) => {
   } else {
     // Write initial message only for new sessions
     term.writeln('\x1b[1;36mChat Terminal Initialized\x1b[0m')
-    term.writeln(`Session: ${props.chatSessionId?.slice(-8) || 'None'}`)
+    term.writeln(`Session: ${props.chatSessionId?.slice(0, 8) || 'None'}`)
     term.writeln(`Control: ${controlState.value.toUpperCase()}`)
     term.writeln('')
   }
@@ -305,13 +305,58 @@ const connectTerminal = async () => {
     const host = terminalStore.selectedHost
     terminalStore.createSession(sessionId.value, host)
 
-    // Create backend session
-    const backendSession = await terminalService.createSession()
+    // CRITICAL: Use Agent Terminal API to ensure approval workflow works
+    // Query for existing session first
+    let backendSession = null
+
+    if (props.chatSessionId) {
+      console.log(`[ChatTerminal] Checking for existing agent terminal session for chat ${props.chatSessionId}`)
+      const queryResponse = await fetch(
+        `http://172.16.168.20:8001/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
+      )
+      const queryData = await queryResponse.json()
+
+      if (queryData.sessions && queryData.sessions.length > 0) {
+        // Use existing session
+        backendSession = queryData.sessions[0].session_id
+        console.log(`[ChatTerminal] Using existing agent terminal session: ${backendSession}`)
+        if (terminal.value) {
+          terminal.value.writeln(`\x1b[1;36mConnected to existing terminal session ${backendSession.slice(0, 8)}\x1b[0m`)
+        }
+      }
+    }
+
+    // Create new session if not found
+    if (!backendSession) {
+      console.log(`[ChatTerminal] Creating new agent terminal session for chat ${props.chatSessionId || 'system'}`)
+      const createResponse = await fetch(
+        'http://172.16.168.20:8001/api/agent-terminal/sessions',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent_id: props.chatSessionId ? `chat_agent_${props.chatSessionId}` : `system_terminal_${Date.now()}`,
+            agent_role: 'chat_agent',
+            conversation_id: props.chatSessionId || null,
+            host: 'main',
+            metadata: { created_by: 'chat_terminal_component' }
+          })
+        }
+      )
+      const createData = await createResponse.json()
+      backendSession = createData.session_id
+      console.log(`[ChatTerminal] Created new agent terminal session: ${backendSession}`)
+      if (terminal.value) {
+        terminal.value.writeln(`\x1b[1;32mCreated new terminal session ${backendSession.slice(0, 8)}\x1b[0m`)
+      }
+    }
+
     backendSessionId.value = backendSession
 
     console.log('[ChatTerminal] Session IDs:', {
       frontend: sessionId.value,
-      backend: backendSessionId.value
+      backend: backendSessionId.value,
+      chatSession: props.chatSessionId
     })
 
     // Connect WebSocket
@@ -340,8 +385,8 @@ const connectTerminal = async () => {
     isConnected.value = true
     terminalStore.updateSessionStatus(sessionId.value, 'connected')
 
+    // Focus terminal for user input
     if (terminal.value) {
-      terminal.value.writeln('\x1b[1;32mConnected to terminal session\x1b[0m')
       terminal.value.focus()
     }
   } catch (error) {

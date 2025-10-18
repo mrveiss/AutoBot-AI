@@ -219,6 +219,12 @@ export class AppConfigService {
    * Get API endpoint URL with cache busting
    */
   async getApiUrl(endpoint = '', options = {}) {
+    // CRITICAL FIX: Detect if endpoint is already a full URL
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      this.log(`Endpoint is already full URL: ${endpoint}`);
+      return endpoint; // Already a full URL, don't prepend base URL
+    }
+
     const baseUrl = await this.serviceDiscovery.getServiceUrl('backend');
 
     // CRITICAL FIX: Handle proxy mode when baseUrl is empty
@@ -480,7 +486,7 @@ export class AppConfigService {
       }
 
       // Try to fetch from backend API
-      const response = await this.fetchApi('/api/config', {
+      const response = await this.fetchApi('/api/system/frontend-config', {
         timeout: 5000,
         cacheBust: false
       });

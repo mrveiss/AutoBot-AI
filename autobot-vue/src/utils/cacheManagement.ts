@@ -278,44 +278,21 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
       </div>
     `
   } else {
-    // Safe to auto-reload
-    let countdown = 10 // Longer countdown for safety
-    const updateCountdown = () => {
-      notification.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: #10b981;">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-          </svg>
-          <span>
-            <strong>Update available</strong> - v${version}
-            <span style="font-size: 11px; opacity: 0.8; margin-left: 8px;">
-              ${countdown > 0
-                ? `Auto-refreshing in ${countdown}s`
-                : 'Refreshing now...'
-              }
-              <button onclick="performSafeReload()" style="background: none; border: 1px solid #059669; color: #059669; border-radius: 3px; padding: 2px 6px; margin-left: 8px; font-size: 10px; cursor: pointer;">Refresh now</button>
-              <button onclick="cancelAutoReload()" style="background: none; border: 1px solid #6b7280; color: #6b7280; border-radius: 3px; padding: 2px 6px; margin-left: 4px; font-size: 10px; cursor: pointer;">Cancel</button>
-            </span>
+    // DISABLED AUTO-REFRESH - Manual refresh only to avoid interruptions during development
+    notification.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: #10b981;">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+        </svg>
+        <span>
+          <strong>Update available</strong> - v${version}
+          <span style="font-size: 11px; opacity: 0.8; margin-left: 8px;">
+            <button onclick="performSafeReload()" style="background: none; border: 1px solid #059669; color: #059669; border-radius: 3px; padding: 2px 6px; margin-left: 8px; font-size: 10px; cursor: pointer;">Refresh now</button>
+            <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" style="background: none; border: 1px solid #6b7280; color: #6b7280; border-radius: 3px; padding: 2px 6px; margin-left: 4px; font-size: 10px; cursor: pointer;">Dismiss</button>
           </span>
-        </div>
-      `
-    }
-
-    updateCountdown()
-
-    // Auto-refresh countdown
-    const countdownInterval = setInterval(() => {
-      countdown--
-      if (countdown > 0) {
-        updateCountdown()
-      } else {
-        clearInterval(countdownInterval)
-        performSafeReload()
-      }
-    }, 1000)
-
-    // Store interval ID for potential cancellation
-    notification.setAttribute('data-countdown-interval', countdownInterval.toString())
+        </span>
+      </div>
+    `
   }
 
   // Add safe reload function to global scope
