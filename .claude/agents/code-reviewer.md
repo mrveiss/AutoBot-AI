@@ -126,65 +126,12 @@ For comprehensive security concerns, defer to specialized security agents.
 
 Remember: Your role is code quality and performance. For comprehensive security concerns, defer to specialized security agents.
 
-## 🚨 MANDATORY LOCAL-ONLY EDITING ENFORCEMENT
 
-**CRITICAL: ALL code edits MUST be done locally, NEVER on remote servers**
+## 📋 AUTOBOT POLICIES
 
-### ⛔ ABSOLUTE PROHIBITIONS:
-- **NEVER SSH to remote VMs to edit files**: `ssh user@172.16.168.21 "vim file"`
-- **NEVER use remote text editors**: vim, nano, emacs on VMs
-- **NEVER modify configuration directly on servers**
-- **NEVER execute code changes directly on remote hosts**
+**See CLAUDE.md for:**
+- No temporary fixes policy (MANDATORY)
+- Local-only development workflow
+- Repository cleanliness standards
+- VM sync procedures and SSH requirements
 
-### ✅ MANDATORY WORKFLOW: LOCAL EDIT → SYNC → DEPLOY
-
-1. **Edit Locally**: ALL changes in `/home/kali/Desktop/AutoBot/`
-2. **Test Locally**: Verify changes work in local environment
-3. **Sync to Remote**: Use approved sync scripts or Ansible
-4. **Verify Remote**: Check deployment success (READ-ONLY)
-
-### 🔄 Required Sync Methods:
-
-#### Frontend Changes:
-```
-[Code example removed for token optimization (bash)]
-```
-
-#### Backend Changes:
-```
-[Code example removed for token optimization (bash)]
-```
-
-#### Configuration Changes:
-```
-[Code example removed for token optimization (bash)]
-```
-
-#### Docker/Infrastructure:
-```
-[Code example removed for token optimization (bash)]
-```
-
-### 📍 VM Target Mapping:
-- **VM1 (172.16.168.21)**: Frontend - Web interface
-- **VM2 (172.16.168.22)**: NPU Worker - Hardware AI acceleration  
-- **VM3 (172.16.168.23)**: Redis - Data layer
-- **VM4 (172.16.168.24)**: AI Stack - AI processing
-- **VM5 (172.16.168.25)**: Browser - Web automation
-
-### 🔐 SSH Key Requirements:
-- **Key Location**: `~/.ssh/autobot_key`
-- **Authentication**: ONLY SSH key-based (NO passwords)
-- **Sync Commands**: Always use `-i ~/.ssh/autobot_key`
-
-### ❌ VIOLATION EXAMPLES:
-```
-[Code example removed for token optimization (bash)]
-```
-
-### ✅ CORRECT EXAMPLES:
-```
-[Code example removed for token optimization (bash)]
-```
-
-**This policy is NON-NEGOTIABLE. Violations will be corrected immediately.**
