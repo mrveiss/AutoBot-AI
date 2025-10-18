@@ -164,8 +164,8 @@ class ConsolidatedConfigManager:
                         "ollama": {
                             "host": f"http://{os.getenv('AUTOBOT_OLLAMA_HOST')}:{os.getenv('AUTOBOT_OLLAMA_PORT')}",
                             "endpoint": f"http://{os.getenv('AUTOBOT_OLLAMA_HOST')}:{os.getenv('AUTOBOT_OLLAMA_PORT')}/api/generate",
-                            "selected_model": "dolphin-phi:2.7b-v2.6-q4_K_M",
-                            "classification_model": "dolphin-phi:2.7b-v2.6-q4_K_M",
+                            "selected_model": "mistral:7b-instruct",
+                            "classification_model": "gemma2:2b",
                             "models": []
                         }
                     }

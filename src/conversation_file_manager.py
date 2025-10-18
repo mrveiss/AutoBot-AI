@@ -490,6 +490,91 @@ class ConversationFileManager:
                 cursor.close()
                 connection.close()
 
+    async def list_files(
+        self,
+        session_id: str,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        List files for a session with pagination support.
+
+        Args:
+            session_id: Chat session identifier
+            page: Page number (1-indexed)
+            page_size: Number of files per page
+
+        Returns:
+            Dict with keys:
+                - files: List of file metadata dictionaries
+                - total_files: Total number of files
+                - total_size: Total size of all files in bytes
+        """
+        connection = self._get_db_connection()
+        cursor = connection.cursor()
+
+        try:
+            # Get total count
+            cursor.execute("""
+                SELECT COUNT(*) as total, COALESCE(SUM(cf.file_size), 0) as total_size
+                FROM conversation_files cf
+                JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
+                WHERE sfa.session_id = ? AND cf.is_deleted = 0
+            """, (session_id,))
+
+            totals = cursor.fetchone()
+            total_files = totals['total']
+            total_size = totals['total_size']
+
+            # Get paginated files
+            offset = (page - 1) * page_size
+            cursor.execute("""
+                SELECT
+                    cf.file_id,
+                    cf.session_id,
+                    cf.original_filename as filename,
+                    cf.original_filename,
+                    cf.stored_filename,
+                    cf.file_path,
+                    cf.file_size as size,
+                    cf.file_hash,
+                    cf.mime_type,
+                    cf.uploaded_at,
+                    cf.uploaded_by,
+                    cf.is_deleted,
+                    cf.deleted_at,
+                    sfa.association_type,
+                    sfa.message_id,
+                    sfa.associated_at,
+                    LOWER(SUBSTR(cf.original_filename, INSTR(cf.original_filename, '.') + 1)) as extension
+                FROM conversation_files cf
+                JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
+                WHERE sfa.session_id = ? AND cf.is_deleted = 0
+                ORDER BY sfa.associated_at DESC
+                LIMIT ? OFFSET ?
+            """, (session_id, page_size, offset))
+
+            files = []
+            for row in cursor.fetchall():
+                file_info = dict(row)
+                files.append(file_info)
+
+            logger.info(f"Listed {len(files)} files for session {session_id} (page {page}/{(total_files + page_size - 1) // page_size})")
+
+            return {
+                'files': files,
+                'total_files': total_files,
+                'total_size': total_size
+            }
+
+        except Exception as e:
+            logger.error(f"Error listing files: {e}")
+            raise RuntimeError(f"Failed to list files: {e}")
+
+        finally:
+            cursor.close()
+            connection.close()
+
     async def get_session_files(
         self,
         session_id: str,

@@ -792,6 +792,101 @@ EOF
     fi
 }
 
+start_redis_stack() {
+    log "Starting Redis Stack service on VM3..."
+
+    if [ ! -f "$SSH_KEY" ]; then
+        warning "SSH key not found - skipping Redis Stack auto-start"
+        return 0
+    fi
+
+    # Check if Redis Stack is already running
+    echo -n "  Checking Redis Stack status... "
+    if timeout 3 redis-cli -h "${VMS["redis"]}" ping 2>/dev/null | grep -q PONG; then
+        echo -e "${GREEN}✅ Already running${NC}"
+        return 0
+    fi
+    echo -e "${YELLOW}⚠️  Not running${NC}"
+
+    # Start Redis Stack via systemd on VM3
+    log "Starting Redis Stack systemd service on ${VMS["redis"]}..."
+
+    timeout 15 ssh -i "$SSH_KEY" "$SSH_USER@${VMS["redis"]}" << 'EOF'
+        # Check if service exists
+        if ! systemctl list-unit-files redis-stack-server.service >/dev/null 2>&1; then
+            echo "⚠️  WARNING: redis-stack-server.service not found"
+            echo "Run: bash scripts/vm-management/start-redis.sh"
+            exit 1
+        fi
+
+        # Start the service
+        echo "Starting redis-stack-server service..."
+        if ! sudo systemctl start redis-stack-server; then
+            echo "❌ ERROR: Failed to start redis-stack-server service"
+            exit 1
+        fi
+
+        echo "Service start command sent, waiting for Redis to be ready..."
+
+        # Wait for Redis to be ready (up to 10 seconds)
+        for i in {1..10}; do
+            if redis-cli ping 2>/dev/null | grep -q PONG; then
+                echo "✅ Redis Stack is ready"
+                exit 0
+            fi
+            sleep 1
+            echo -n "."
+        done
+
+        echo ""
+        echo "⚠️  Redis Stack service started but may still be loading dataset"
+        echo "This is normal for large datasets. Backend will wait for Redis to be ready."
+        exit 0
+EOF
+
+    local ssh_status=$?
+
+    if [ $ssh_status -eq 0 ]; then
+        success "Redis Stack service started successfully"
+
+        # Wait for Redis to complete loading dataset (critical for backend startup)
+        log "Waiting for Redis to complete dataset loading..."
+        local retries=0
+        local max_retries=600  # Up to 10 minutes for large datasets (3+ GB)
+        while [ $retries -lt $max_retries ]; do
+            local redis_response=$(timeout 2 redis-cli -h "${VMS["redis"]}" ping 2>&1 || true)
+
+            # Check if Redis is ready (responds with PONG)
+            if echo "$redis_response" | grep -q "^PONG$"; then
+                echo ""
+                success "Redis fully ready - dataset loaded successfully"
+                return 0
+            fi
+
+            # Check if Redis is still loading
+            if echo "$redis_response" | grep -q "LOADING"; then
+                if [ $((retries % 10)) -eq 0 ]; then
+                    echo ""
+                    info "Redis loading dataset... ($retries seconds elapsed)"
+                fi
+                echo -n "."
+            fi
+
+            sleep 1
+            retries=$((retries + 1))
+        done
+        echo ""
+        error "Redis failed to complete loading after $max_retries seconds"
+        error "Backend startup ABORTED - Redis must be fully loaded"
+        echo -e "${YELLOW}Check Redis status: ssh autobot@${VMS["redis"]} 'redis-cli INFO persistence'${NC}"
+        exit 1
+    else
+        error "Redis Stack auto-start failed"
+        echo -e "${YELLOW}Manual start: bash scripts/vm-management/start-redis.sh${NC}"
+        exit 1
+    fi
+}
+
 start_frontend_dev() {
     if [ "$DEV_MODE" = true ]; then
         echo -e "${CYAN}🔧 Starting Frontend Development Mode...${NC}"
@@ -906,6 +1001,9 @@ main() {
 
     # Verify Redis permissions
     verify_redis_permissions
+
+    # Start Redis Stack service automatically
+    start_redis_stack
 
     # Check if VM services are running
     check_vm_services
