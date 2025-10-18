@@ -1,0 +1,19 @@
+---
+# NPU Worker role handlers
+
+- name: restart npu-worker
+  systemd:
+    name: autobot-npu-worker
+    state: restarted
+  become: yes
+  ignore_errors: yes
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: reload firewall
+  ufw:
+    state: reloaded
+  become: yes

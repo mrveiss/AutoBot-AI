@@ -1,0 +1,13 @@
+---
+# Common role handlers
+
+- name: reload firewall
+  ufw:
+    state: reloaded
+  become: yes
+
+- name: restart ssh
+  systemd:
+    name: sshd
+    state: restarted
+  become: yes

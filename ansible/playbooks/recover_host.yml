@@ -1,0 +1,138 @@
+---
+# Recover Host Playbook
+# Reinstall and reconfigure a host (disaster recovery)
+
+- name: "Recover AutoBot Host"
+  hosts: "{{ target_host }}"
+  gather_facts: yes
+  become: yes
+
+  vars:
+    recovery_timestamp: "{{ ansible_date_time.iso8601 }}"
+    backup_config: true
+
+  pre_tasks:
+    - name: "Validate target_host parameter"
+      fail:
+        msg: "target_host parameter is required. Use: -e 'target_host=<hostname>'"
+      when: target_host is not defined
+      run_once: true
+      tags: ['always']
+
+    - name: "Display recovery information"
+      debug:
+        msg:
+          - "========================================"
+          - "⚠️  AutoBot Host Recovery ⚠️"
+          - "========================================"
+          - "Target Host: {{ inventory_hostname }}"
+          - "Host Role: {{ vm_role | default('undefined') }}"
+          - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
+          - "Timestamp: {{ recovery_timestamp }}"
+          - ""
+          - "⚠️  WARNING: This will reinstall all services"
+          - "Backup existing config: {{ backup_config }}"
+      tags: ['always']
+
+    - name: "Pause for confirmation"
+      pause:
+        prompt: "Press ENTER to continue with recovery or Ctrl+C to abort"
+      tags: ['always']
+
+  tasks:
+    - name: "Backup existing configuration"
+      block:
+        - name: "Create backup directory"
+          file:
+            path: /var/backups/autobot-recovery
+            state: directory
+            mode: '0755'
+
+        - name: "Archive existing configuration"
+          archive:
+            path:
+              - /home/autobot
+              - /etc/systemd/system/autobot-*
+              - /etc/nginx/sites-available/autobot-*
+            dest: "/var/backups/autobot-recovery/config-{{ recovery_timestamp }}.tar.gz"
+            format: gz
+          ignore_errors: yes
+
+        - name: "Display backup location"
+          debug:
+            msg: "Configuration backed up to: /var/backups/autobot-recovery/config-{{ recovery_timestamp }}.tar.gz"
+      when: backup_config
+      tags: ['backup']
+
+    - name: "Stop all AutoBot services"
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - autobot-frontend
+        - nginx
+        - redis-stack-server
+        - autobot-npu-worker
+        - autobot-ai-stack
+        - ollama
+        - autobot-vnc
+        - autobot-playwright
+      ignore_errors: yes
+      tags: ['stop_services']
+
+    - name: "Clean existing installation"
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /home/autobot/autobot-vue
+        - /home/autobot/backend
+        - /etc/systemd/system/autobot-*.service
+      ignore_errors: yes
+      tags: ['cleanup']
+
+    - name: "Reload systemd"
+      systemd:
+        daemon_reload: yes
+      tags: ['cleanup']
+
+  roles:
+    - role: common
+      tags: ['common', 'recovery']
+
+    - role: frontend
+      when: "'frontend' in group_names"
+      tags: ['frontend', 'recovery']
+
+    - role: redis
+      when: "'database' in group_names"
+      tags: ['redis', 'recovery']
+
+    - role: npu_worker
+      when: "'npu' in group_names"
+      tags: ['npu_worker', 'recovery']
+
+    - role: ai_stack
+      when: "'aiml' in group_names"
+      tags: ['ai_stack', 'recovery']
+
+    - role: browser
+      when: "'browser' in group_names"
+      tags: ['browser', 'recovery']
+
+  post_tasks:
+    - name: "Display recovery summary"
+      debug:
+        msg:
+          - "========================================"
+          - "Host Recovery Complete"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "Roles Recovered: {{ ansible_play_role_names | join(', ') }}"
+          - "Status: Ready for code sync and service startup"
+          - ""
+          - "Next Steps:"
+          - "1. Sync application code: ./scripts/utilities/sync-to-vm.sh {{ vm_role }}"
+          - "2. Start services: ansible-playbook manage_services.yml -e 'target_host={{ inventory_hostname }} action=start'"
+          - "3. Verify: ansible-playbook health-check.yml -e 'target_host={{ inventory_hostname }}'"
+      tags: ['always']
