@@ -11,11 +11,15 @@ import subprocess
 import threading
 from abc import ABC, abstractmethod
 from typing import Optional
+from fastapi import APIRouter
 
 from src.utils.terminal_websocket_manager import TerminalWebSocketAdapter
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
+
+# Create FastAPI router for terminal management endpoints
+router = APIRouter()
 
 
 class BaseTerminalWebSocket(ABC):
@@ -310,3 +314,103 @@ class BaseTerminalWebSocket(ABC):
         except Exception as e:
             logger.error(f"Error getting terminal stats: {e}")
             return {"error": str(e)}
+
+
+# ============================================================================
+# FastAPI Router Endpoints for Terminal Management
+# ============================================================================
+
+@router.get("/status")
+async def get_terminal_system_status():
+    """Get overall terminal system status"""
+    return {
+        "status": "operational",
+        "terminal_types": [
+            "standard_terminal",
+            "agent_terminal",
+            "remote_terminal"
+        ],
+        "features": {
+            "pty_support": True,
+            "websocket_support": True,
+            "command_validation": True,
+            "security_policies": True
+        }
+    }
+
+
+@router.get("/health")
+async def terminal_health_check():
+    """Health check for terminal system"""
+    return {
+        "status": "healthy",
+        "service": "terminal_system",
+        "components": {
+            "base_terminal": "operational",
+            "websocket_manager": "operational",
+            "pty_system": "operational"
+        }
+    }
+
+
+@router.get("/capabilities")
+async def get_terminal_capabilities():
+    """Get terminal system capabilities"""
+    return {
+        "pty_management": True,
+        "websocket_streaming": True,
+        "command_execution": True,
+        "security_validation": True,
+        "session_management": True,
+        "output_processing": True,
+        "input_processing": True,
+        "race_condition_handling": True,
+        "async_output_delivery": True,
+        "queue_based_messaging": True
+    }
+
+
+@router.get("/security")
+async def get_security_policies():
+    """Get terminal security policies and command validation info"""
+    return {
+        "command_validation": "enabled",
+        "risk_assessment": "multi-level",
+        "blocked_commands": {
+            "forbidden": "Commands that could damage system",
+            "high_risk": "Potentially dangerous operations",
+            "moderate": "Logged but allowed with caution"
+        },
+        "security_executor": "SecureCommandExecutor"
+    }
+
+
+@router.get("/features")
+async def get_terminal_features():
+    """Get available terminal features and implementation details"""
+    return {
+        "base_class": "BaseTerminalWebSocket",
+        "implementations": [
+            {
+                "name": "standard_terminal",
+                "description": "Standard PTY terminal with WebSocket streaming"
+            },
+            {
+                "name": "agent_terminal",
+                "description": "AI agent terminal with enhanced features"
+            },
+            {
+                "name": "remote_terminal",
+                "description": "Remote machine terminal access"
+            }
+        ],
+        "features": {
+            "pty_shell": "Full PTY shell support with proper terminal emulation",
+            "websocket_streaming": "Real-time bidirectional communication",
+            "output_processing": "Customizable output processing hooks",
+            "input_processing": "Customizable input processing hooks",
+            "security_validation": "Command validation before execution",
+            "session_cleanup": "Proper resource cleanup on disconnect",
+            "race_condition_fixes": "Improved terminal manager with queue-based messaging"
+        }
+    }

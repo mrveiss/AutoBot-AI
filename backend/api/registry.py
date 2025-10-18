@@ -5,7 +5,11 @@ Single source of truth for all API endpoints and routing configuration
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from fastapi import APIRouter
 from src.constants.network_constants import NetworkConstants
+
+# Create FastAPI router
+router = APIRouter()
 
 
 class RouterStatus(Enum):
@@ -354,3 +358,99 @@ def get_router_configs() -> Dict[str, RouterConfig]:
 def get_endpoint_documentation() -> List[Dict]:
     """Get endpoint documentation for API docs"""
     return registry.get_endpoint_list()
+
+
+# ============================================================================
+# FastAPI Router Endpoints
+# ============================================================================
+
+@router.get("/endpoints")
+async def list_endpoints():
+    """List all registered API endpoints"""
+    return {
+        "endpoints": registry.get_endpoint_list(),
+        "total": len(registry.get_enabled_routers())
+    }
+
+
+@router.get("/routers")
+async def list_routers():
+    """List all registered routers with full configuration"""
+    routers_data = {}
+    for name, config in registry.get_enabled_routers().items():
+        routers_data[name] = {
+            "name": config.name,
+            "module_path": config.module_path,
+            "prefix": config.prefix,
+            "tags": config.tags,
+            "status": config.status.value,
+            "description": config.description,
+            "version": config.version,
+            "requires_auth": config.requires_auth,
+            "dependencies": config.dependencies
+        }
+    return routers_data
+
+
+@router.get("/router/{router_name}")
+async def get_router_details(router_name: str):
+    """Get details for a specific router"""
+    config = registry.get_router_by_name(router_name)
+    if not config:
+        return {"error": f"Router '{router_name}' not found"}
+
+    return {
+        "name": config.name,
+        "module_path": config.module_path,
+        "prefix": config.prefix,
+        "tags": config.tags,
+        "status": config.status.value,
+        "description": config.description,
+        "version": config.version,
+        "requires_auth": config.requires_auth,
+        "dependencies": config.dependencies
+    }
+
+
+@router.get("/tags")
+async def list_tags():
+    """List all unique tags across all routers"""
+    all_tags = set()
+    for config in registry.routers.values():
+        all_tags.update(config.tags)
+    return {"tags": sorted(list(all_tags))}
+
+
+@router.get("/tags/{tag}")
+async def get_routers_by_tag(tag: str):
+    """Get all routers with a specific tag"""
+    routers_with_tag = registry.get_routers_by_tag(tag)
+    return {
+        "tag": tag,
+        "routers": [name for name in routers_with_tag.keys()],
+        "count": len(routers_with_tag)
+    }
+
+
+@router.get("/validate")
+async def validate_dependencies():
+    """Validate router dependencies"""
+    errors = registry.validate_dependencies()
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors
+    }
+
+
+@router.get("/health")
+async def registry_health():
+    """Health check for registry system"""
+    return {
+        "status": "healthy",
+        "total_routers": len(registry.routers),
+        "enabled_routers": len(registry.get_enabled_routers()),
+        "disabled_routers": len([
+            c for c in registry.routers.values()
+            if c.status == RouterStatus.DISABLED
+        ])
+    }
