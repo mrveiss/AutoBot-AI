@@ -19,7 +19,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from src.unified_config_manager import config_manager
-from src.memory_manager import MemoryManager
+from src.memory_manager import LongTermMemoryManager
 from src.retry_mechanism import RetryStrategy, retry_network_operation
 from src.circuit_breaker import circuit_breaker_async
 from src.llm_interface import LLMInterface
@@ -36,6 +36,30 @@ try:
     CLASSIFICATION_AVAILABLE = True
 except ImportError:
     CLASSIFICATION_AVAILABLE = False
+
+# Import workflow types for backward compatibility
+try:
+    from src.workflow_scheduler import WorkflowStatus
+    from src.workflow_templates import WorkflowStep
+    WORKFLOW_TYPES_AVAILABLE = True
+except ImportError:
+    WORKFLOW_TYPES_AVAILABLE = False
+    # Define minimal fallback types
+    from enum import Enum
+    from dataclasses import dataclass
+
+    class WorkflowStatus(Enum):
+        SCHEDULED = "scheduled"
+        RUNNING = "running"
+        COMPLETED = "completed"
+        FAILED = "failed"
+
+    @dataclass
+    class WorkflowStep:
+        id: str
+        agent_type: str
+        action: str
+        description: str
 
 
 logger = get_logger("orchestrator")
@@ -113,7 +137,7 @@ class ConsolidatedOrchestrator:
 
         # Core components
         self.llm_interface = LLMInterface()
-        self.memory_manager = MemoryManager()
+        self.memory_manager = LongTermMemoryManager()
         self.conversation_manager = ConversationManager()
         self.agent_manager = AgentManager()
 
@@ -580,6 +604,103 @@ class ConsolidatedOrchestrator:
             logger.error(f"Failed to update configuration: {e}")
             return False
 
+    # ========================================================================
+    # Backward Compatibility Methods
+    # ========================================================================
+
+    async def classify_request_complexity(self, user_request: str) -> TaskComplexity:
+        """
+        Classify request complexity (backward compatibility method).
+
+        This method provides backward compatibility for code that expects
+        the old orchestrator interface.
+        """
+        if not CLASSIFICATION_AVAILABLE:
+            logger.warning("Classification agent not available, defaulting to COMPLEX")
+            return TaskComplexity.COMPLEX
+
+        try:
+            if self.classification_agent:
+                result = await self.classification_agent.classify_user_request(user_request)
+                return result.complexity
+            else:
+                logger.warning("Classification agent not initialized, defaulting to COMPLEX")
+                return TaskComplexity.COMPLEX
+        except Exception as e:
+            logger.error(f"Classification failed: {e}, defaulting to COMPLEX")
+            return TaskComplexity.COMPLEX
+
+    async def plan_workflow_steps(
+        self, user_request: str, complexity: TaskComplexity
+    ) -> List[WorkflowStep]:
+        """
+        Plan workflow steps based on request complexity (backward compatibility method).
+
+        This method provides backward compatibility for code that expects
+        the old orchestrator interface.
+        """
+        if not WORKFLOW_TYPES_AVAILABLE:
+            logger.warning("Workflow types not available, returning empty step list")
+            return []
+
+        try:
+            # Create a basic workflow plan based on complexity
+            steps = []
+
+            if complexity == TaskComplexity.SIMPLE:
+                # Simple request: single LLM response step
+                steps.append(WorkflowStep(
+                    id="step_1",
+                    agent_type="llm",
+                    action="generate_response",
+                    description="Generate direct response to user query",
+                    requires_approval=False,
+                    dependencies=[],
+                    inputs={"query": user_request},
+                    expected_duration_ms=2000
+                ))
+            else:  # COMPLEX
+                # Complex request: multi-step workflow
+                steps.extend([
+                    WorkflowStep(
+                        id="step_1",
+                        agent_type="analyzer",
+                        action="analyze_request",
+                        description="Analyze user request and determine requirements",
+                        requires_approval=False,
+                        dependencies=[],
+                        inputs={"query": user_request},
+                        expected_duration_ms=3000
+                    ),
+                    WorkflowStep(
+                        id="step_2",
+                        agent_type="executor",
+                        action="execute_plan",
+                        description="Execute the planned actions",
+                        requires_approval=True,
+                        dependencies=["step_1"],
+                        inputs={"query": user_request},
+                        expected_duration_ms=10000
+                    ),
+                    WorkflowStep(
+                        id="step_3",
+                        agent_type="synthesizer",
+                        action="synthesize_results",
+                        description="Synthesize results and generate final response",
+                        requires_approval=False,
+                        dependencies=["step_2"],
+                        inputs={"query": user_request},
+                        expected_duration_ms=2000
+                    )
+                ])
+
+            logger.info(f"Generated {len(steps)} workflow steps for {complexity.value} task")
+            return steps
+
+        except Exception as e:
+            logger.error(f"Failed to plan workflow steps: {e}")
+            return []
+
 
 # Global orchestrator instance
 _orchestrator_instance = None
@@ -601,3 +722,33 @@ async def shutdown_orchestrator():
     if _orchestrator_instance:
         await _orchestrator_instance.shutdown()
         _orchestrator_instance = None
+
+
+# ============================================================================
+# Backward Compatibility Alias
+# ============================================================================
+
+# Provide backward compatibility for code expecting "Orchestrator" class
+Orchestrator = ConsolidatedOrchestrator
+
+
+# ============================================================================
+# Module Exports
+# ============================================================================
+
+__all__ = [
+    # Main orchestrator classes
+    "Orchestrator",  # Backward compatibility alias
+    "ConsolidatedOrchestrator",
+    "OrchestratorConfig",
+    # Enums
+    "TaskPriority",
+    "OrchestrationMode",
+    "TaskComplexity",
+    "WorkflowStatus",
+    # Data classes
+    "WorkflowStep",
+    # Functions
+    "get_orchestrator",
+    "shutdown_orchestrator",
+]

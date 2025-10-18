@@ -7,6 +7,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
@@ -14,11 +15,21 @@ from src.enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     get_async_enhanced_memory_manager,
     ExecutionRecord,
+    Priority,  # Import Priority for backward compatibility
     TaskPriority,
     TaskStatus,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class TaskType(Enum):
+    """Task type classification for tracking purposes"""
+    USER_REQUEST = "user_request"
+    AGENT_TASK = "agent_task"
+    SYSTEM_TASK = "system_task"
+    BACKGROUND_TASK = "background_task"
+    WORKFLOW_STEP = "workflow_step"
 
 
 class TaskExecutionTracker:
@@ -278,6 +289,87 @@ class TaskExecutionTracker:
             }
 
         return insights
+
+    # ========================================================================
+    # Backward Compatibility Methods for orchestrator.py
+    # ========================================================================
+
+    def start_task(
+        self,
+        task_id: str,
+        task_type: TaskType,
+        description: str,
+        priority: Priority,
+        context: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Start a task with the given parameters (backward compatibility wrapper).
+
+        Note: This is a simplified interface for backward compatibility.
+        For full functionality, use the async track_task() context manager.
+        """
+        # Create task record in memory manager
+        actual_task_id = self.memory_manager.create_task_record(
+            task_name=task_type.value,
+            description=description,
+            priority=priority if isinstance(priority, TaskPriority) else TaskPriority.MEDIUM,
+            agent_type=None,
+            inputs=context,
+            metadata={"task_id": task_id, "task_type": task_type.value}
+        )
+
+        # Start the task
+        self.memory_manager.start_task(actual_task_id)
+
+        # Track the mapping from user task_id to actual task_id
+        if not hasattr(self, '_task_id_mapping'):
+            self._task_id_mapping = {}
+        self._task_id_mapping[task_id] = actual_task_id
+
+        logger.info(f"Started task: {task_id} (type: {task_type.value}, priority: {priority})")
+
+    def complete_task(self, task_id: str, result: Any):
+        """
+        Complete a task (backward compatibility wrapper).
+
+        Note: This is a simplified interface for backward compatibility.
+        For full functionality, use the async track_task() context manager.
+        """
+        # Get actual task ID from mapping
+        if hasattr(self, '_task_id_mapping') and task_id in self._task_id_mapping:
+            actual_task_id = self._task_id_mapping[task_id]
+
+            # Complete the task
+            outputs = {"result": result} if result else None
+            self.memory_manager.complete_task(actual_task_id, outputs=outputs)
+
+            # Clean up mapping
+            del self._task_id_mapping[task_id]
+
+            logger.info(f"Completed task: {task_id}")
+        else:
+            logger.warning(f"Task {task_id} not found in mapping for completion")
+
+    def fail_task(self, task_id: str, error_message: str):
+        """
+        Mark a task as failed (backward compatibility wrapper).
+
+        Note: This is a simplified interface for backward compatibility.
+        For full functionality, use the async track_task() context manager.
+        """
+        # Get actual task ID from mapping
+        if hasattr(self, '_task_id_mapping') and task_id in self._task_id_mapping:
+            actual_task_id = self._task_id_mapping[task_id]
+
+            # Fail the task
+            self.memory_manager.fail_task(actual_task_id, error_message)
+
+            # Clean up mapping
+            del self._task_id_mapping[task_id]
+
+            logger.error(f"Failed task: {task_id} - {error_message}")
+        else:
+            logger.warning(f"Task {task_id} not found in mapping for failure")
 
 
 class TaskExecutionContext:

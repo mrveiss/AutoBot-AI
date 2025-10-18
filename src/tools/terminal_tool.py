@@ -238,6 +238,88 @@ class TerminalTool:
                 "error": str(e),
             }
 
+    async def get_user_command_history(
+        self, conversation_id: str
+    ) -> Dict[str, Any]:
+        """
+        Get command history from user's interactive terminal session.
+
+        This allows the agent to see what commands the user has run
+        in their terminal, enabling context-aware assistance.
+
+        Args:
+            conversation_id: Chat conversation ID (used to find user's terminal session)
+
+        Returns:
+            Command history with timestamps and risk levels
+        """
+        try:
+            # Import httpx for API call
+            import httpx
+            from src.constants.network_constants import NetworkConstants
+
+            # Get user's terminal session ID from conversation
+            # For now, we'll need to list all sessions and find the user's
+            # In production, this mapping should be stored
+
+            backend_url = f"http://{NetworkConstants.MAIN_HOST}:{NetworkConstants.BACKEND_PORT}"
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # List all terminal sessions
+                response = await client.get(f"{backend_url}/api/terminal/sessions")
+
+                if response.status_code != 200:
+                    return {
+                        "status": "error",
+                        "error": "Failed to list terminal sessions"
+                    }
+
+                sessions_data = response.json()
+                sessions = sessions_data.get("sessions", [])
+
+                # Find user's active terminal session
+                # User sessions have user_id "default" and are not agent sessions
+                user_sessions = [
+                    s for s in sessions
+                    if s.get("is_active") and s.get("user_id") == "default"
+                ]
+
+                if not user_sessions:
+                    return {
+                        "status": "success",
+                        "history": [],
+                        "message": "No active user terminal session found"
+                    }
+
+                # Get history from first active user session
+                user_session_id = user_sessions[0]["session_id"]
+
+                history_response = await client.get(
+                    f"{backend_url}/api/terminal/sessions/{user_session_id}/history"
+                )
+
+                if history_response.status_code != 200:
+                    return {
+                        "status": "error",
+                        "error": "Failed to retrieve command history"
+                    }
+
+                history_data = history_response.json()
+
+                return {
+                    "status": "success",
+                    "session_id": user_session_id,
+                    "history": history_data.get("history", []),
+                    "total_commands": history_data.get("total_commands", 0)
+                }
+
+        except Exception as e:
+            logger.error(f"Error getting user command history: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+
     async def close_session(self, conversation_id: str) -> Dict[str, Any]:
         """
         Close the terminal session for this conversation.

@@ -26,8 +26,9 @@ accelerate>=0.25.0               # HuggingFace model optimization and GPU accele
 
 # Agent Communication & Coordination
 asyncio-mqtt>=0.16.0             # MQTT for agent communication (future)
-celery>=5.3.0                    # Task queue for agent coordination
+celery>=5.3.4                    # Task queue for agent coordination - version bump for IaC platform
 kombu>=5.3.0                     # Messaging for Celery
+ansible-runner>=2.3.4            # Ansible playbook execution with event streaming for IaC
 
 # Memory & Storage
 redis>=5.0,<6.0                  # Redis for agent state and coordination
@@ -110,4 +111,5 @@ python-dotenv>=1.0.0             # Environment variable management
 click>=8.1.0                     # CLI interface utilities
 jsonschema>=4.20.0               # JSON schema validation
 validators>=0.22.0               # Input validation utilities
-python-json-logger
+python-json-logger>=2.0.7
+paramiko>=3.4.0                   # SSH client library for infrastructure provisioning

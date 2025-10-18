@@ -469,47 +469,7 @@ class KnowledgeBaseV2:
             logger.error(f"Redis ping failed: {e}")
             return "error"
 
-    def get_stats(self) -> Dict[str, Any]:
-        """Get knowledge base statistics"""
-        self.ensure_initialized()
-
-        try:
-            if not self.redis_client:
-                return {"error": "Redis client not available"}
-
-            # Get vector count (LlamaIndex uses llama_index/vector_* pattern)
-            vector_keys = self._scan_redis_keys("llama_index/vector_*")
-            vector_count = len(vector_keys)
-
-            # Get index info if available
-            index_info = {}
-            try:
-                info = self.redis_client.execute_command("FT.INFO", self.redis_index_name)
-                # Parse basic info
-                if info:
-                    for i in range(0, len(info) - 1, 2):
-                        key = info[i].decode() if isinstance(info[i], bytes) else str(info[i])
-                        value = info[i + 1]
-                        if isinstance(value, bytes):
-                            value = value.decode()
-                        index_info[key] = value
-            except:
-                pass
-
-            return {
-                "total_documents": vector_count,
-                "total_chunks": vector_count,  # In Redis, each document is typically one chunk
-                "total_facts": self._count_facts(),
-                "redis_db": self.redis_db,
-                "index_name": self.redis_index_name,
-                "index_info": index_info,
-                "initialized": self.initialized,
-                "llama_index_configured": self.llama_index_configured
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting knowledge base stats: {e}")
-            return {"error": str(e)}
+    # REMOVED: Old synchronous get_stats() method - replaced by async version below
 
     def _scan_redis_keys(self, pattern: str) -> List[str]:
         """Scan Redis keys with pattern using sync client"""
@@ -772,6 +732,8 @@ class KnowledgeBaseV2:
         """Get comprehensive knowledge base statistics (async version)"""
         self.ensure_initialized()
 
+        print("🔍 [DEBUG] ASYNC get_stats() CALLED!", flush=True)
+        logger.info("=== ASYNC get_stats() called with caching ===")
         try:
             stats = {
                 "total_documents": 0,
@@ -791,23 +753,71 @@ class KnowledgeBaseV2:
             }
 
             if self.aioredis_client:
-                # Count facts - use iterator count without loading all keys into memory
-                fact_count = 0
-                fact_keys_sample = []
-                async for key in self.aioredis_client.scan_iter(match="fact:*", count=100):
-                    fact_count += 1
-                    # Sample first 50 for category extraction
-                    if len(fact_keys_sample) < 50:
-                        fact_keys_sample.append(key)
-                stats["total_facts"] = fact_count
+                # PERFORMANCE FIX: Use cached counts instead of scanning all keys
+                # Scanning through 296k+ Redis keys to count 1,358 facts takes minutes
+                # Use pre-computed counts stored in Redis for instant lookups
 
-                # Count vector documents - use iterator count without loading all keys
-                vector_count = 0
-                async for key in self.aioredis_client.scan_iter(match="llama_index/vector_*", count=100):
-                    vector_count += 1
+                try:
+                    # Try to get cached counts first (instant lookup)
+                    cached_fact_count = await self.aioredis_client.get("kb:stats:fact_count")
+                    cached_vector_count = await self.aioredis_client.get("kb:stats:vector_count")
+
+                    if cached_fact_count is not None and cached_vector_count is not None:
+                        # Use cached values
+                        fact_count = int(cached_fact_count)
+                        vector_count = int(cached_vector_count)
+                        logger.debug(f"Using cached counts: {fact_count} facts, {vector_count} vectors")
+                    else:
+                        # Cache miss - use fast count via redis-cli
+                        # This is still much faster than scan_iter()
+                        import subprocess
+
+                        # Count facts quickly using redis-cli
+                        fact_result = subprocess.run(
+                            ['redis-cli', '-h', self.redis_host, '-p', str(self.redis_port),
+                             '--scan', '--pattern', 'fact:*'],
+                            capture_output=True, text=True, timeout=15
+                        )
+                        fact_count = len(fact_result.stdout.strip().split('\n')) if fact_result.stdout.strip() else 0
+
+                        # Count vectors quickly using redis-cli
+                        vector_result = subprocess.run(
+                            ['redis-cli', '-h', self.redis_host, '-p', str(self.redis_port),
+                             '--scan', '--pattern', 'llama_index/vector_*'],
+                            capture_output=True, text=True, timeout=15
+                        )
+                        vector_count = len(vector_result.stdout.strip().split('\n')) if vector_result.stdout.strip() else 0
+
+                        # Cache the counts for 60 seconds
+                        await self.aioredis_client.set("kb:stats:fact_count", fact_count, ex=60)
+                        await self.aioredis_client.set("kb:stats:vector_count", vector_count, ex=60)
+                        logger.info(f"Counted and cached: {fact_count} facts, {vector_count} vectors")
+
+                except subprocess.TimeoutExpired:
+                    logger.warning("Redis count timed out, using fallback")
+                    fact_count = 0
+                    vector_count = 0
+                except Exception as count_error:
+                    logger.warning(f"Error counting keys, using fallback: {count_error}")
+                    fact_count = 0
+                    vector_count = 0
+
+                stats["total_facts"] = fact_count
                 stats["total_documents"] = vector_count
                 stats["total_vectors"] = vector_count
                 stats["total_chunks"] = vector_count
+
+                # Sample a few facts for category extraction (limit to 10 for speed)
+                fact_keys_sample = []
+                try:
+                    count = 0
+                    async for key in self.aioredis_client.scan_iter(match="fact:*", count=10):
+                        fact_keys_sample.append(key)
+                        count += 1
+                        if count >= 10:  # Only sample 10 facts maximum
+                            break
+                except Exception as sample_error:
+                    logger.warning(f"Error sampling facts: {sample_error}")
 
                 # Get database size
                 try:
