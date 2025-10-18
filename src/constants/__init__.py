@@ -19,6 +19,8 @@ from .network_constants import (
     LOCALHOST_IP,
 )
 
+from .path_constants import PATH
+
 __all__ = [
     'NetworkConstants',
     'ServiceURLs',
@@ -31,4 +33,6 @@ __all__ = [
     'REDIS_HOST',
     'MAIN_MACHINE_IP',
     'LOCALHOST_IP',
+    # Path constants
+    'PATH',
 ]
