@@ -322,7 +322,9 @@ class ConsolidatedTerminalWebSocket:
         """Enhanced message handling with security and workflow features"""
         try:
             message_type = message.get("type", "unknown")
-            logger.info(f"[HANDLE MSG] Session {self.session_id}, Type: {message_type}, Message: {str(message)[:100]}")
+            logger.info(
+                f"[HANDLE MSG] Session {self.session_id}, Type: {message_type}, Message: {str(message)[:100]}"
+            )
 
             # Log all messages for security tracking
             if self.enable_logging:
@@ -358,14 +360,20 @@ class ConsolidatedTerminalWebSocket:
 
     async def _handle_input_message(self, message: dict):
         """Handle terminal input with security assessment"""
-        logger.info(f"[_handle_input_message] CALLED for session {self.session_id}, message: {str(message)[:100]}")
+        logger.info(
+            f"[_handle_input_message] CALLED for session {self.session_id}, message: {str(message)[:100]}"
+        )
 
         # Support both 'text' and 'content' fields for compatibility
         text = message.get("text") or message.get("content", "")
-        logger.info(f"[_handle_input_message] Extracted text: {repr(text[:50]) if text else 'EMPTY'}")
+        logger.info(
+            f"[_handle_input_message] Extracted text: {repr(text[:50]) if text else 'EMPTY'}"
+        )
 
         if not text:
-            logger.warning(f"[_handle_input_message] No text found in message, returning")
+            logger.warning(
+                f"[_handle_input_message] No text found in message, returning"
+            )
             return
 
         # Security assessment for commands
@@ -390,7 +398,9 @@ class ConsolidatedTerminalWebSocket:
         )
         if self.terminal_logger and self.conversation_id:
             try:
-                logger.info(f"[MANUAL CMD] Logging to {self.conversation_id}: {text[:50]}")
+                logger.info(
+                    f"[MANUAL CMD] Logging to {self.conversation_id}: {text[:50]}"
+                )
                 await self.terminal_logger.log_command(
                     session_id=self.conversation_id,
                     command=text,
@@ -398,7 +408,9 @@ class ConsolidatedTerminalWebSocket:
                     status="executing",
                     user_id=None,
                 )
-                logger.info(f"[MANUAL CMD] Successfully logged to {self.conversation_id}")
+                logger.info(
+                    f"[MANUAL CMD] Successfully logged to {self.conversation_id}"
+                )
             except Exception as e:
                 logger.error(f"Failed to log command to TerminalLogger: {e}")
         else:
@@ -962,7 +974,9 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
             while True:
                 data = await websocket.receive_text()
                 message = json.loads(data)
-                logger.info(f"[WS RECV] Session {session_id}, Type: {message.get('type')}, Data: {str(message)[:100]}")
+                logger.info(
+                    f"[WS RECV] Session {session_id}, Type: {message.get('type')}, Data: {str(message)[:100]}"
+                )
                 await terminal.handle_message(message)
 
         except WebSocketDisconnect:
