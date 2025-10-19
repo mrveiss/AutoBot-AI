@@ -747,16 +747,10 @@
 </template>
 
 <script setup lang="ts">
+import type { HealthStatus } from "@/types/settings"
+
 import { computed, ref, reactive, onMounted } from 'vue'
 
-interface HealthStatus {
-  backend?: {
-    llm_provider?: {
-      status: string
-      message: string
-    }
-  }
-}
 
 interface EmbeddingSettings {
   provider: string

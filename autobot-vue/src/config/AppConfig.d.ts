@@ -92,42 +92,44 @@ export declare class AppConfigService {
   debugMode: boolean;
 
   constructor();
-  
+
   initializeConfig(): AppConfig;
-  
+
   getServiceUrl(serviceName: string, options?: ServiceUrlOptions): Promise<string>;
-  
+
   getVncUrl(type?: string, options?: ServiceUrlOptions): Promise<string>;
-  
+
   getInfrastructureMachines(): { [key: string]: MachineConfig };
-  
+
   getMachine(machineId: string): MachineConfig;
-  
+
   getMachinesArray(): MachineConfig[];
-  
+
   getWebSocketUrl(endpoint?: string): Promise<string>;
-  
+
   getApiUrl(endpoint?: string, options?: ServiceUrlOptions): Promise<string>;
-  
+
   fetchApi(endpoint: string, options?: FetchOptions): Promise<Response>;
-  
+
   loadRemoteConfig(): Promise<void>;
-  
+
   mergeConfig(remoteConfig: Partial<AppConfig>): void;
-  
+
   get(path: string, defaultValue?: any): any;
-  
+
   isFeatureEnabled(featureName: string): boolean;
-  
+
   getTimeout(operation?: string): number;
-  
+
   validateConnection(): Promise<boolean>;
-  
+
   invalidateCache(): void;
-  
+
   log(...args: any[]): void;
-  
+
   getAllServiceUrls(): Promise<{ [key: string]: string }>;
+
+  getBackendConfig(): Promise<AppConfig>;
 }
 
 declare const appConfig: AppConfigService;
