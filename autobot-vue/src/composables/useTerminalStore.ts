@@ -129,7 +129,7 @@ export const useTerminalStore = defineStore('terminal', () => {
       id: sessionId,
       host,
       status: 'disconnected',
-      controlState: 'user',
+      controlState: 'agent',  // Default to agent control mode
       createdAt: new Date(),
       lastActivityAt: new Date()
     }

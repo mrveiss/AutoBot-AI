@@ -1022,7 +1022,7 @@ NEVER teach commands - ALWAYS execute them."""
                                                 f"Waiting for approval of command: {command} (terminal_session: {terminal_session_id})"
                                             )
 
-                                            max_wait_time = 60  # 60 seconds timeout
+                                            max_wait_time = 3600  # 1 hour timeout (effectively infinite for user approval)
                                             poll_interval = 0.5  # Poll every 500ms
                                             elapsed_time = 0
 

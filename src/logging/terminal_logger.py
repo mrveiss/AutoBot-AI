@@ -10,6 +10,7 @@ Provides detailed logging of terminal commands with:
 
 import logging
 import os
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,9 @@ import aiofiles
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
+
+# ANSI escape code regex pattern
+ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b\][^\a]*\a|\x1b[=>]|\x1b\?[0-9]+[hl]')
 
 
 class TerminalLogger:
@@ -148,11 +152,18 @@ class TerminalLogger:
 
         return log_entry
 
+    @staticmethod
+    def _strip_ansi_codes(text: str) -> str:
+        """Remove ANSI escape codes from text."""
+        if not text:
+            return text
+        return ANSI_ESCAPE_PATTERN.sub('', text)
+
     def _format_log_line(self, entry: Dict[str, Any]) -> str:
-        """Format log entry as a readable log line."""
+        """Format log entry as a readable log line (with ANSI codes stripped)."""
         timestamp = entry["timestamp"]
         run_type = entry["run_type"]
-        command = entry["command"]
+        command = self._strip_ansi_codes(entry["command"])
         status = entry["status"].upper()
 
         # Base log line
@@ -172,13 +183,13 @@ class TerminalLogger:
             if result.get("return_code") is not None:
                 line += f" | EXIT_CODE: {result['return_code']}"
 
-            # Add truncated output
+            # Add truncated output (stripped of ANSI codes)
             if result.get("stdout"):
-                stdout = result["stdout"][:200].replace("\n", " ")
+                stdout = self._strip_ansi_codes(result["stdout"])[:200].replace("\n", " ")
                 line += f" | OUTPUT: {stdout}..."
 
             if result.get("stderr"):
-                stderr = result["stderr"][:200].replace("\n", " ")
+                stderr = self._strip_ansi_codes(result["stderr"])[:200].replace("\n", " ")
                 line += f" | ERROR: {stderr}..."
 
         return line

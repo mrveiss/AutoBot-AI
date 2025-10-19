@@ -739,6 +739,21 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
 
     if (result.status === 'approved' || result.status === 'denied') {
       console.log(`Command ${approved ? 'approved' : 'denied'} successfully`)
+
+      // Update the message metadata to reflect approval status
+      const targetMessage = store.currentMessages.find(
+        msg => msg.metadata?.terminal_session_id === terminal_session_id &&
+               msg.metadata?.requires_approval === true
+      )
+
+      if (targetMessage && targetMessage.metadata) {
+        targetMessage.metadata.approval_status = result.status
+        targetMessage.metadata.approval_comment = comment || result.comment
+        console.log('Updated message approval status:', targetMessage.metadata)
+      } else {
+        console.warn('Could not find message to update approval status')
+      }
+
       // Reset auto-approve checkbox after submission
       autoApproveFuture.value = false
     } else if (result.status === 'error') {

@@ -123,7 +123,7 @@ const session = computed(() => {
 
 // Control state
 const controlState = computed(() => {
-  return session.value?.controlState || 'user'
+  return session.value?.controlState || 'agent'  // Default to agent control mode
 })
 
 const isAgentControlled = computed(() => {
@@ -173,7 +173,7 @@ const controlStateIcon = computed(() => ({
 }))
 
 const controlStateText = computed(() => {
-  return isAgentControlled.value ? 'AUTOMATED' : 'MANUAL'
+  return isAgentControlled.value ? 'automated' : 'manual'
 })
 
 // Terminal body class based on control state
