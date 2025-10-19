@@ -21,7 +21,7 @@ from backend.models.infrastructure import (
     InfraRole,
     InfraCredential,
     InfraDeployment,
-    InfraAuditLog
+    InfraAuditLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,9 @@ class InfrastructureDB:
     - Comprehensive audit logging
     """
 
-    def __init__(self, db_path: Optional[str] = None, encryption_key: Optional[bytes] = None):
+    def __init__(
+        self, db_path: Optional[str] = None, encryption_key: Optional[bytes] = None
+    ):
         """
         Initialize infrastructure database service.
 
@@ -49,10 +51,12 @@ class InfrastructureDB:
         """
         # Use existing autobot_data.db database
         if db_path is None:
-            db_path = os.environ.get('DATABASE_PATH', '/home/kali/Desktop/AutoBot/autobot_data.db')
+            db_path = os.environ.get(
+                "DATABASE_PATH", "/home/kali/Desktop/AutoBot/autobot_data.db"
+            )
 
         self.db_path = db_path
-        self.engine = create_engine(f'sqlite:///{db_path}', echo=False)
+        self.engine = create_engine(f"sqlite:///{db_path}", echo=False)
 
         # Create all tables if they don't exist
         Base.metadata.create_all(self.engine)
@@ -64,13 +68,13 @@ class InfrastructureDB:
         # Initialize Fernet encryption for credentials
         if encryption_key is None:
             # Generate or load encryption key
-            key_path = Path(db_path).parent / '.infra_encryption_key'
+            key_path = Path(db_path).parent / ".infra_encryption_key"
             if key_path.exists():
-                with open(key_path, 'rb') as f:
+                with open(key_path, "rb") as f:
                     encryption_key = f.read()
             else:
                 encryption_key = Fernet.generate_key()
-                with open(key_path, 'wb') as f:
+                with open(key_path, "wb") as f:
                     f.write(encryption_key)
                 os.chmod(key_path, 0o600)  # Restrict permissions
                 logger.warning(f"Generated new encryption key at {key_path}")
@@ -87,35 +91,35 @@ class InfrastructureDB:
             if count == 0:
                 roles = [
                     InfraRole(
-                        name='frontend',
-                        description='Vue.js frontend server (port 5173)',
-                        ansible_playbook_path='ansible/playbooks/deploy_role.yml',
-                        required_ports=[5173]
+                        name="frontend",
+                        description="Vue.js frontend server (port 5173)",
+                        ansible_playbook_path="ansible/playbooks/deploy_role.yml",
+                        required_ports=[5173],
                     ),
                     InfraRole(
-                        name='redis',
-                        description='Redis Stack data layer (port 6379)',
-                        ansible_playbook_path='ansible/playbooks/deploy_role.yml',
-                        required_ports=[6379]
+                        name="redis",
+                        description="Redis Stack data layer (port 6379)",
+                        ansible_playbook_path="ansible/playbooks/deploy_role.yml",
+                        required_ports=[6379],
                     ),
                     InfraRole(
-                        name='npu-worker',
-                        description='NPU hardware acceleration worker (port 8081)',
-                        ansible_playbook_path='ansible/playbooks/deploy_role.yml',
-                        required_ports=[8081]
+                        name="npu-worker",
+                        description="NPU hardware acceleration worker (port 8081)",
+                        ansible_playbook_path="ansible/playbooks/deploy_role.yml",
+                        required_ports=[8081],
                     ),
                     InfraRole(
-                        name='ai-stack',
-                        description='AI processing stack (port 8080)',
-                        ansible_playbook_path='ansible/playbooks/deploy_role.yml',
-                        required_ports=[8080]
+                        name="ai-stack",
+                        description="AI processing stack (port 8080)",
+                        ansible_playbook_path="ansible/playbooks/deploy_role.yml",
+                        required_ports=[8080],
                     ),
                     InfraRole(
-                        name='browser',
-                        description='Playwright browser automation (port 3000)',
-                        ansible_playbook_path='ansible/playbooks/deploy_role.yml',
-                        required_ports=[3000]
-                    )
+                        name="browser",
+                        description="Playwright browser automation (port 3000)",
+                        ansible_playbook_path="ansible/playbooks/deploy_role.yml",
+                        required_ports=[3000],
+                    ),
                 ]
                 session.add_all(roles)
                 session.commit()
@@ -154,10 +158,10 @@ class InfrastructureDB:
             # Audit log
             self._create_audit_log(
                 session,
-                action='create_host',
-                resource_type='host',
+                action="create_host",
+                resource_type="host",
                 resource_id=host.id,
-                details={'hostname': host.hostname, 'ip_address': host.ip_address}
+                details={"hostname": host.hostname, "ip_address": host.ip_address},
             )
 
             logger.info(f"Created host: {host.hostname} ({host.ip_address})")
@@ -170,11 +174,16 @@ class InfrastructureDB:
         Uses eager loading to prevent N+1 queries and session detachment issues.
         """
         with self.SessionLocal() as session:
-            return session.query(InfraHost).options(
-                joinedload(InfraHost.role),
-                joinedload(InfraHost.credentials),
-                joinedload(InfraHost.deployments)
-            ).filter(InfraHost.id == host_id).first()
+            return (
+                session.query(InfraHost)
+                .options(
+                    joinedload(InfraHost.role),
+                    joinedload(InfraHost.credentials),
+                    joinedload(InfraHost.deployments),
+                )
+                .filter(InfraHost.id == host_id)
+                .first()
+            )
 
     def get_host_by_ip(self, ip_address: str) -> Optional[InfraHost]:
         """
@@ -183,13 +192,20 @@ class InfrastructureDB:
         Uses eager loading to prevent N+1 queries and session detachment issues.
         """
         with self.SessionLocal() as session:
-            return session.query(InfraHost).options(
-                joinedload(InfraHost.role),
-                joinedload(InfraHost.credentials),
-                joinedload(InfraHost.deployments)
-            ).filter(InfraHost.ip_address == ip_address).first()
+            return (
+                session.query(InfraHost)
+                .options(
+                    joinedload(InfraHost.role),
+                    joinedload(InfraHost.credentials),
+                    joinedload(InfraHost.deployments),
+                )
+                .filter(InfraHost.ip_address == ip_address)
+                .first()
+            )
 
-    def get_hosts(self, filters: Optional[Dict] = None, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+    def get_hosts(
+        self, filters: Optional[Dict] = None, page: int = 1, page_size: int = 20
+    ) -> Dict[str, Any]:
         """
         Get hosts with optional filters and database-level pagination.
 
@@ -215,17 +231,23 @@ class InfrastructureDB:
             # Build query with eager loading to prevent N+1 query problem
             # This loads all relationships in a single query with JOINs
             query = session.query(InfraHost).options(
-                joinedload(InfraHost.role),           # Eager load role relationship
-                joinedload(InfraHost.credentials),    # Eager load credentials relationship
-                joinedload(InfraHost.deployments)     # Eager load deployments relationship
+                joinedload(InfraHost.role),  # Eager load role relationship
+                joinedload(
+                    InfraHost.credentials
+                ),  # Eager load credentials relationship
+                joinedload(
+                    InfraHost.deployments
+                ),  # Eager load deployments relationship
             )
 
             # Apply filters
             if filters:
-                if 'role' in filters:
-                    query = query.join(InfraRole).filter(InfraRole.name == filters['role'])
-                if 'status' in filters:
-                    query = query.filter(InfraHost.status == filters['status'])
+                if "role" in filters:
+                    query = query.join(InfraRole).filter(
+                        InfraRole.name == filters["role"]
+                    )
+                if "status" in filters:
+                    query = query.filter(InfraHost.status == filters["status"])
 
             # Get total count for pagination metadata (before applying LIMIT/OFFSET)
             total_count = query.count()
@@ -236,7 +258,9 @@ class InfrastructureDB:
             hosts = query.offset(offset).limit(page_size).all()
 
             # Calculate total pages
-            total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 0
+            total_pages = (
+                (total_count + page_size - 1) // page_size if total_count > 0 else 0
+            )
 
             logger.info(
                 f"Retrieved {len(hosts)} hosts (page {page}/{total_pages}, "
@@ -244,14 +268,16 @@ class InfrastructureDB:
             )
 
             return {
-                'hosts': hosts,
-                'total': total_count,
-                'page': page,
-                'page_size': page_size,
-                'total_pages': total_pages
+                "hosts": hosts,
+                "total": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
             }
 
-    def update_host_status(self, host_id: int, status: str, user_id: Optional[str] = None):
+    def update_host_status(
+        self, host_id: int, status: str, user_id: Optional[str] = None
+    ):
         """
         Update host status.
 
@@ -271,11 +297,11 @@ class InfrastructureDB:
                 # Audit log
                 self._create_audit_log(
                     session,
-                    action='update_host_status',
-                    resource_type='host',
+                    action="update_host_status",
+                    resource_type="host",
                     resource_id=host_id,
-                    details={'old_status': old_status, 'new_status': status},
-                    user_id=user_id
+                    details={"old_status": old_status, "new_status": status},
+                    user_id=user_id,
                 )
 
                 logger.info(f"Updated host {host_id} status: {old_status} → {status}")
@@ -298,11 +324,11 @@ class InfrastructureDB:
                 # Audit log
                 self._create_audit_log(
                     session,
-                    action='delete_host',
-                    resource_type='host',
+                    action="delete_host",
+                    resource_type="host",
                     resource_id=host_id,
-                    details={'hostname': hostname},
-                    user_id=user_id
+                    details={"hostname": hostname},
+                    user_id=user_id,
                 )
 
                 logger.info(f"Deleted host {host_id} ({hostname})")
@@ -314,7 +340,7 @@ class InfrastructureDB:
         host_id: int,
         credential_type: str,
         value: str,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> InfraCredential:
         """
         Store encrypted SSH credential.
@@ -336,7 +362,7 @@ class InfrastructureDB:
                 host_id=host_id,
                 credential_type=credential_type,
                 encrypted_value=encrypted_value,
-                is_active=True
+                is_active=True,
             )
             session.add(credential)
             session.commit()
@@ -345,17 +371,19 @@ class InfrastructureDB:
             # Audit log (without sensitive details)
             self._create_audit_log(
                 session,
-                action='store_credential',
-                resource_type='credential',
+                action="store_credential",
+                resource_type="credential",
                 resource_id=credential.id,
-                details={'host_id': host_id, 'credential_type': credential_type},
-                user_id=user_id
+                details={"host_id": host_id, "credential_type": credential_type},
+                user_id=user_id,
             )
 
             logger.info(f"Stored {credential_type} credential for host {host_id}")
             return credential
 
-    def get_active_credential(self, host_id: int, credential_type: str = 'ssh_key') -> Optional[str]:
+    def get_active_credential(
+        self, host_id: int, credential_type: str = "ssh_key"
+    ) -> Optional[str]:
         """
         Get decrypted active credential for host.
 
@@ -367,20 +395,31 @@ class InfrastructureDB:
             Decrypted credential string or None
         """
         with self.SessionLocal() as session:
-            credential = session.query(InfraCredential).filter(
-                InfraCredential.host_id == host_id,
-                InfraCredential.credential_type == credential_type,
-                InfraCredential.is_active == True
-            ).first()
+            credential = (
+                session.query(InfraCredential)
+                .filter(
+                    InfraCredential.host_id == host_id,
+                    InfraCredential.credential_type == credential_type,
+                    InfraCredential.is_active == True,
+                )
+                .first()
+            )
 
             if credential:
                 # Decrypt and return
-                decrypted = self.fernet.decrypt(credential.encrypted_value.encode()).decode()
+                decrypted = self.fernet.decrypt(
+                    credential.encrypted_value.encode()
+                ).decode()
                 return decrypted
 
             return None
 
-    def deactivate_credentials(self, host_id: int, credential_type: Optional[str] = None, user_id: Optional[str] = None):
+    def deactivate_credentials(
+        self,
+        host_id: int,
+        credential_type: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ):
         """
         Deactivate credentials (for rotation).
 
@@ -391,8 +430,7 @@ class InfrastructureDB:
         """
         with self.SessionLocal() as session:
             query = session.query(InfraCredential).filter(
-                InfraCredential.host_id == host_id,
-                InfraCredential.is_active == True
+                InfraCredential.host_id == host_id, InfraCredential.is_active == True
             )
 
             if credential_type:
@@ -408,14 +446,20 @@ class InfrastructureDB:
             # Audit log
             self._create_audit_log(
                 session,
-                action='deactivate_credentials',
-                resource_type='credential',
+                action="deactivate_credentials",
+                resource_type="credential",
                 resource_id=None,
-                details={'host_id': host_id, 'credential_type': credential_type, 'count': len(credentials)},
-                user_id=user_id
+                details={
+                    "host_id": host_id,
+                    "credential_type": credential_type,
+                    "count": len(credentials),
+                },
+                user_id=user_id,
             )
 
-            logger.info(f"Deactivated {len(credentials)} credentials for host {host_id}")
+            logger.info(
+                f"Deactivated {len(credentials)} credentials for host {host_id}"
+            )
 
     # ==================== Deployment Management ====================
 
@@ -423,8 +467,8 @@ class InfrastructureDB:
         self,
         host_id: int,
         role: str,
-        status: str = 'queued',
-        user_id: Optional[str] = None
+        status: str = "queued",
+        user_id: Optional[str] = None,
     ) -> InfraDeployment:
         """
         Create deployment record.
@@ -439,11 +483,7 @@ class InfrastructureDB:
             Created InfraDeployment instance
         """
         with self.SessionLocal() as session:
-            deployment = InfraDeployment(
-                host_id=host_id,
-                role=role,
-                status=status
-            )
+            deployment = InfraDeployment(host_id=host_id, role=role, status=status)
             session.add(deployment)
             session.commit()
             session.refresh(deployment)
@@ -451,14 +491,16 @@ class InfrastructureDB:
             # Audit log
             self._create_audit_log(
                 session,
-                action='create_deployment',
-                resource_type='deployment',
+                action="create_deployment",
+                resource_type="deployment",
                 resource_id=deployment.id,
-                details={'host_id': host_id, 'role': role, 'status': status},
-                user_id=user_id
+                details={"host_id": host_id, "role": role, "status": status},
+                user_id=user_id,
             )
 
-            logger.info(f"Created deployment {deployment.id} for host {host_id} (role: {role})")
+            logger.info(
+                f"Created deployment {deployment.id} for host {host_id} (role: {role})"
+            )
             return deployment
 
     def update_deployment_status(
@@ -466,7 +508,7 @@ class InfrastructureDB:
         deployment_id: int,
         status: str,
         error_message: Optional[str] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ):
         """
         Update deployment status.
@@ -478,9 +520,11 @@ class InfrastructureDB:
             user_id: Optional user ID for audit log
         """
         with self.SessionLocal() as session:
-            deployment = session.query(InfraDeployment).filter(
-                InfraDeployment.id == deployment_id
-            ).first()
+            deployment = (
+                session.query(InfraDeployment)
+                .filter(InfraDeployment.id == deployment_id)
+                .first()
+            )
 
             if deployment:
                 old_status = deployment.status
@@ -489,9 +533,9 @@ class InfrastructureDB:
                 if error_message:
                     deployment.error_message = error_message
 
-                if status == 'running' and not deployment.started_at:
+                if status == "running" and not deployment.started_at:
                     deployment.started_at = datetime.utcnow()
-                elif status in ('success', 'failed', 'rolled_back'):
+                elif status in ("success", "failed", "rolled_back"):
                     deployment.completed_at = datetime.utcnow()
 
                 session.commit()
@@ -499,16 +543,24 @@ class InfrastructureDB:
                 # Audit log
                 self._create_audit_log(
                     session,
-                    action='update_deployment_status',
-                    resource_type='deployment',
+                    action="update_deployment_status",
+                    resource_type="deployment",
                     resource_id=deployment_id,
-                    details={'old_status': old_status, 'new_status': status, 'has_error': bool(error_message)},
-                    user_id=user_id
+                    details={
+                        "old_status": old_status,
+                        "new_status": status,
+                        "has_error": bool(error_message),
+                    },
+                    user_id=user_id,
                 )
 
-                logger.info(f"Updated deployment {deployment_id} status: {old_status} → {status}")
+                logger.info(
+                    f"Updated deployment {deployment_id} status: {old_status} → {status}"
+                )
 
-    def get_deployments(self, host_id: Optional[int] = None, status: Optional[str] = None) -> List[InfraDeployment]:
+    def get_deployments(
+        self, host_id: Optional[int] = None, status: Optional[str] = None
+    ) -> List[InfraDeployment]:
         """
         Get deployments with optional filters.
 
@@ -539,7 +591,7 @@ class InfrastructureDB:
         resource_id: Optional[int],
         details: Optional[Dict] = None,
         user_id: Optional[str] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ):
         """
         Internal method to create audit log entry.
@@ -554,12 +606,12 @@ class InfrastructureDB:
             ip_address: Source IP address
         """
         audit_log = InfraAuditLog(
-            user_id=user_id or 'system',
+            user_id=user_id or "system",
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
             details=details,
-            ip_address=ip_address
+            ip_address=ip_address,
         )
         session.add(audit_log)
         session.commit()
@@ -568,7 +620,7 @@ class InfrastructureDB:
         self,
         resource_type: Optional[str] = None,
         resource_id: Optional[int] = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> List[InfraAuditLog]:
         """
         Get audit logs with optional filters.
@@ -602,26 +654,39 @@ class InfrastructureDB:
         """
         with self.SessionLocal() as session:
             stats = {
-                'total_hosts': session.query(InfraHost).count(),
-                'hosts_by_status': {},
-                'total_roles': session.query(InfraRole).count(),
-                'total_deployments': session.query(InfraDeployment).count(),
-                'deployments_by_status': {},
-                'active_credentials': session.query(InfraCredential).filter(
-                    InfraCredential.is_active == True
-                ).count(),
+                "total_hosts": session.query(InfraHost).count(),
+                "hosts_by_status": {},
+                "total_roles": session.query(InfraRole).count(),
+                "total_deployments": session.query(InfraDeployment).count(),
+                "deployments_by_status": {},
+                "active_credentials": session.query(InfraCredential)
+                .filter(InfraCredential.is_active == True)
+                .count(),
             }
 
             # Count hosts by status
-            for status in ['new', 'provisioning', 'deployed', 'healthy', 'degraded', 'failed']:
-                count = session.query(InfraHost).filter(InfraHost.status == status).count()
+            for status in [
+                "new",
+                "provisioning",
+                "deployed",
+                "healthy",
+                "degraded",
+                "failed",
+            ]:
+                count = (
+                    session.query(InfraHost).filter(InfraHost.status == status).count()
+                )
                 if count > 0:
-                    stats['hosts_by_status'][status] = count
+                    stats["hosts_by_status"][status] = count
 
             # Count deployments by status
-            for status in ['queued', 'running', 'success', 'failed', 'rolled_back']:
-                count = session.query(InfraDeployment).filter(InfraDeployment.status == status).count()
+            for status in ["queued", "running", "success", "failed", "rolled_back"]:
+                count = (
+                    session.query(InfraDeployment)
+                    .filter(InfraDeployment.status == status)
+                    .count()
+                )
                 if count > 0:
-                    stats['deployments_by_status'][status] = count
+                    stats["deployments_by_status"][status] = count
 
             return stats

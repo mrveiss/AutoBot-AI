@@ -1,4 +1,5 @@
 """Knowledge Base API endpoints for content management and search with RAG integration."""
+
 import logging
 import asyncio
 import json
@@ -21,6 +22,7 @@ from src.constants.network_constants import NetworkConstants
 try:
     from src.agents.rag_agent import get_rag_agent
     from src.agents.agent_orchestrator import get_agent_orchestrator
+
     RAG_AVAILABLE = True
 except ImportError:
     RAG_AVAILABLE = False
@@ -34,73 +36,81 @@ router = APIRouter()
 
 # ===== PYDANTIC MODELS FOR INPUT VALIDATION =====
 
+
 class FactIdValidator(BaseModel):
     """Validator for fact ID format and security"""
+
     fact_id: str = Field(..., min_length=1, max_length=255)
 
-    @validator('fact_id')
+    @validator("fact_id")
     def validate_fact_id(cls, v):
         """Validate fact_id format to prevent injection attacks"""
         # Allow UUID format or safe alphanumeric with underscores/hyphens
-        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('Invalid fact_id format: only alphanumeric, underscore, and hyphen allowed')
+        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError(
+                "Invalid fact_id format: only alphanumeric, underscore, and hyphen allowed"
+            )
         # Prevent path traversal attempts
-        if '..' in v or '/' in v or '\\' in v:
-            raise ValueError('Path traversal not allowed in fact_id')
+        if ".." in v or "/" in v or "\\" in v:
+            raise ValueError("Path traversal not allowed in fact_id")
         return v
 
 
 class SearchRequest(BaseModel):
     """Request model for search endpoints"""
+
     query: str = Field(..., min_length=1, max_length=1000)
     limit: int = Field(default=10, ge=1, le=100)
     category: Optional[str] = Field(default=None, max_length=100)
 
-    @validator('category')
+    @validator("category")
     def validate_category(cls, v):
         """Validate category format"""
-        if v and not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('Invalid category format')
+        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError("Invalid category format")
         return v
 
 
 class PaginationRequest(BaseModel):
     """Request model for pagination"""
+
     limit: int = Field(default=100, ge=1, le=1000)
     offset: int = Field(default=0, ge=0)
     cursor: Optional[str] = Field(default=None, max_length=255)
     category: Optional[str] = Field(default=None, max_length=100)
 
-    @validator('cursor')
+    @validator("cursor")
     def validate_cursor(cls, v):
         """Validate cursor format"""
-        if v and not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('Invalid cursor format')
+        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError("Invalid cursor format")
         return v
 
-    @validator('category')
+    @validator("category")
     def validate_category(cls, v):
         """Validate category format"""
-        if v and not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('Invalid category format')
+        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError("Invalid category format")
         return v
 
 
 class AddTextRequest(BaseModel):
     """Request model for adding text to knowledge base"""
+
     text: str = Field(..., min_length=1, max_length=1000000)
     metadata: Optional[Dict[str, Any]] = Field(default=None)
     category: Optional[str] = Field(default="general", max_length=100)
 
-    @validator('metadata')
+    @validator("metadata")
     def validate_metadata(cls, v):
         """Validate metadata structure"""
         if v is not None and not isinstance(v, dict):
-            raise ValueError('Metadata must be a dictionary')
+            raise ValueError("Metadata must be a dictionary")
         return v
 
 
 # ===== HELPER FUNCTIONS FOR BATCH VECTORIZATION STATUS =====
+
 
 def _generate_cache_key(fact_ids: List[str]) -> str:
     """
@@ -117,7 +127,9 @@ def _generate_cache_key(fact_ids: List[str]) -> str:
     return hashlib.md5(ids_str.encode()).hexdigest()
 
 
-async def _check_vectorization_batch_internal(kb_instance, fact_ids: List[str], include_dimensions: bool = False) -> Dict[str, Any]:
+async def _check_vectorization_batch_internal(
+    kb_instance, fact_ids: List[str], include_dimensions: bool = False
+) -> Dict[str, Any]:
     """
     Internal helper to check vectorization status for multiple facts using Redis pipeline.
 
@@ -158,7 +170,7 @@ async def _check_vectorization_batch_internal(kb_instance, fact_ids: List[str], 
                 if include_dimensions:
                     # Get embedding dimensions from knowledge base config
                     # Default to 768 for nomic-embed-text
-                    dimensions = getattr(kb_instance, 'embedding_dimensions', 768)
+                    dimensions = getattr(kb_instance, "embedding_dimensions", 768)
                     status_entry["dimensions"] = dimensions
 
                 statuses[fact_id] = status_entry
@@ -168,7 +180,9 @@ async def _check_vectorization_batch_internal(kb_instance, fact_ids: List[str], 
         # Calculate summary statistics
         total_checked = len(fact_ids)
         not_vectorized_count = total_checked - vectorized_count
-        vectorization_percentage = (vectorized_count / total_checked * 100) if total_checked > 0 else 0.0
+        vectorization_percentage = (
+            (vectorized_count / total_checked * 100) if total_checked > 0 else 0.0
+        )
 
         check_time_ms = (time.time() - start_time) * 1000
 
@@ -178,9 +192,9 @@ async def _check_vectorization_batch_internal(kb_instance, fact_ids: List[str], 
                 "total_checked": total_checked,
                 "vectorized": vectorized_count,
                 "not_vectorized": not_vectorized_count,
-                "vectorization_percentage": round(vectorization_percentage, 2)
+                "vectorization_percentage": round(vectorization_percentage, 2),
             },
-            "check_time_ms": round(check_time_ms, 2)
+            "check_time_ms": round(check_time_ms, 2),
         }
 
     except Exception as e:
@@ -189,6 +203,7 @@ async def _check_vectorization_batch_internal(kb_instance, fact_ids: List[str], 
 
 
 # ===== ENDPOINTS =====
+
 
 @router.get("/stats")
 async def get_knowledge_stats(req: Request):
@@ -214,8 +229,8 @@ async def get_knowledge_stats(req: Request):
                     "total_facts": 0,
                     "vectorized_count": 0,
                     "not_vectorized_count": 0,
-                    "vectorization_percentage": 0.0
-                }
+                    "vectorization_percentage": 0.0,
+                },
             }
 
         stats = await kb_to_use.get_stats()
@@ -235,6 +250,7 @@ async def get_knowledge_stats(req: Request):
 async def test_main_categories():
     """Test endpoint to verify file is loaded"""
     from backend.knowledge_categories import CATEGORY_METADATA
+
     return {"status": "working", "categories": list(CATEGORY_METADATA.keys())}
 
 
@@ -245,11 +261,7 @@ async def get_knowledge_stats_basic(req: Request):
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
         if kb_to_use is None:
-            return {
-                "total_facts": 0,
-                "total_vectors": 0,
-                "status": "offline"
-            }
+            return {"total_facts": 0, "total_vectors": 0, "status": "offline"}
 
         stats = await kb_to_use.get_stats()
 
@@ -258,16 +270,12 @@ async def get_knowledge_stats_basic(req: Request):
             "total_facts": stats.get("total_facts", 0),
             "total_vectors": stats.get("total_vectors", 0),
             "categories": stats.get("categories", []),
-            "status": "online" if stats.get("initialized", False) else "offline"
+            "status": "online" if stats.get("initialized", False) else "offline",
         }
 
     except Exception as e:
         logger.error(f"Error getting basic knowledge stats: {str(e)}")
-        return {
-            "total_facts": 0,
-            "total_vectors": 0,
-            "status": "error"
-        }
+        return {"total_facts": 0, "total_vectors": 0, "status": "error"}
 
 
 @router.get("/categories/main")
@@ -291,7 +299,11 @@ async def get_main_categories(req: Request):
         }
     """
     try:
-        from backend.knowledge_categories import CATEGORY_METADATA, KnowledgeCategory, get_category_for_source
+        from backend.knowledge_categories import (
+            CATEGORY_METADATA,
+            KnowledgeCategory,
+            get_category_for_source,
+        )
 
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
@@ -299,7 +311,7 @@ async def get_main_categories(req: Request):
         category_counts = {
             KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
             KnowledgeCategory.SYSTEM_KNOWLEDGE: 0,
-            KnowledgeCategory.USER_KNOWLEDGE: 0
+            KnowledgeCategory.USER_KNOWLEDGE: 0,
         }
 
         # Count facts per main category by querying all facts
@@ -313,10 +325,14 @@ async def get_main_categories(req: Request):
                 # Categorize each fact based on its source/metadata
                 for fact in all_facts:
                     # Get source from fact metadata
-                    source = fact.get("metadata", {}).get("source", "") or fact.get("source", "")
+                    source = fact.get("metadata", {}).get("source", "") or fact.get(
+                        "source", ""
+                    )
                     if not source:
                         # Try to get filename or title as fallback
-                        source = fact.get("metadata", {}).get("filename", "") or fact.get("title", "")
+                        source = fact.get("metadata", {}).get(
+                            "filename", ""
+                        ) or fact.get("title", "")
 
                     # Map to main category
                     main_category = get_category_for_source(source)
@@ -335,20 +351,19 @@ async def get_main_categories(req: Request):
         for cat_id, meta in CATEGORY_METADATA.items():
             count = category_counts.get(cat_id, 0)
 
-            main_categories.append({
-                "id": cat_id,
-                "name": meta["name"],
-                "description": meta["description"],
-                "icon": meta["icon"],
-                "color": meta["color"],
-                "examples": meta["examples"],
-                "count": count
-            })
+            main_categories.append(
+                {
+                    "id": cat_id,
+                    "name": meta["name"],
+                    "description": meta["description"],
+                    "icon": meta["icon"],
+                    "color": meta["color"],
+                    "examples": meta["examples"],
+                    "count": count,
+                }
+            )
 
-        return {
-            "categories": main_categories,
-            "total": len(main_categories)
-        }
+        return {"categories": main_categories, "total": len(main_categories)}
 
     except Exception as e:
         logger.error(f"Error getting main categories: {str(e)}")
@@ -398,7 +413,7 @@ async def check_vectorization_status_batch(request: dict, req: Request):
         if kb_to_use is None:
             raise HTTPException(
                 status_code=500,
-                detail="Knowledge base not initialized - please check logs for errors"
+                detail="Knowledge base not initialized - please check logs for errors",
             )
 
         # Extract parameters
@@ -414,17 +429,17 @@ async def check_vectorization_status_batch(request: dict, req: Request):
                     "total_checked": 0,
                     "vectorized": 0,
                     "not_vectorized": 0,
-                    "vectorization_percentage": 0.0
+                    "vectorization_percentage": 0.0,
                 },
                 "cached": False,
                 "check_time_ms": 0.0,
-                "message": "No fact IDs provided"
+                "message": "No fact IDs provided",
             }
 
         if len(fact_ids) > 1000:
             raise HTTPException(
                 status_code=400,
-                detail=f"Too many fact IDs ({len(fact_ids)}). Maximum 1000 per request."
+                detail=f"Too many fact IDs ({len(fact_ids)}). Maximum 1000 per request.",
             )
 
         # Generate cache key
@@ -438,18 +453,22 @@ async def check_vectorization_status_batch(request: dict, req: Request):
                 if cached_json:
                     cached_result = json.loads(cached_json)
                     cached_result["cached"] = True
-                    logger.debug(f"Cache hit for vectorization status ({len(fact_ids)} facts)")
+                    logger.debug(
+                        f"Cache hit for vectorization status ({len(fact_ids)} facts)"
+                    )
                     return cached_result
             except Exception as cache_err:
-                logger.debug(f"Cache read failed (continuing without cache): {cache_err}")
+                logger.debug(
+                    f"Cache read failed (continuing without cache): {cache_err}"
+                )
 
         # Cache miss - perform batch check
-        logger.info(f"Checking vectorization status for {len(fact_ids)} facts (batch operation)")
+        logger.info(
+            f"Checking vectorization status for {len(fact_ids)} facts (batch operation)"
+        )
 
         result = await _check_vectorization_batch_internal(
-            kb_to_use,
-            fact_ids,
-            include_dimensions
+            kb_to_use, fact_ids, include_dimensions
         )
 
         result["cached"] = False
@@ -458,9 +477,7 @@ async def check_vectorization_status_batch(request: dict, req: Request):
         if use_cache:
             try:
                 kb_to_use.redis_client.setex(
-                    cache_key,
-                    60,  # 60 second TTL
-                    json.dumps(result)
+                    cache_key, 60, json.dumps(result)  # 60 second TTL
                 )
                 logger.debug(f"Cached vectorization status for {len(fact_ids)} facts")
             except Exception as cache_err:
@@ -472,7 +489,9 @@ async def check_vectorization_status_batch(request: dict, req: Request):
         raise
     except Exception as e:
         logger.error(f"Error checking vectorization status: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Vectorization status check failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Vectorization status check failed: {str(e)}"
+        )
 
 
 @router.get("/categories")
@@ -482,13 +501,10 @@ async def get_knowledge_categories(req: Request):
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
         if kb_to_use is None:
-            return {
-                "categories": [],
-                "total": 0
-            }
+            return {"categories": [], "total": 0}
 
         # Get stats - await async method
-        stats = await kb_to_use.get_stats() if hasattr(kb_to_use, 'get_stats') else {}
+        stats = await kb_to_use.get_stats() if hasattr(kb_to_use, "get_stats") else {}
         categories_list = stats.get("categories", [])
 
         # Get all facts to count by category - sync redis operation
@@ -509,27 +525,18 @@ async def get_knowledge_categories(req: Request):
 
         # Format for frontend with counts
         categories = [
-            {
-                "name": cat,
-                "count": category_counts.get(cat, 0),
-                "id": cat
-            }
+            {"name": cat, "count": category_counts.get(cat, 0), "id": cat}
             for cat in categories_list
         ]
 
-        return {
-            "categories": categories,
-            "total": len(categories)
-        }
+        return {"categories": categories, "total": len(categories)}
 
     except Exception as e:
         logger.error(f"Error getting categories: {str(e)}")
         import traceback
+
         logger.error(traceback.format_exc())
-        return {
-            "categories": [],
-            "total": 0
-        }
+        return {"categories": [], "total": 0}
 
 
 @router.post("/add_text")
@@ -541,7 +548,7 @@ async def add_text_to_knowledge(request: dict, req: Request):
         if kb_to_use is None:
             return {
                 "status": "error",
-                "message": "Knowledge base not initialized - please check logs for errors"
+                "message": "Knowledge base not initialized - please check logs for errors",
             }
 
         text = request.get("text", "")
@@ -552,29 +559,23 @@ async def add_text_to_knowledge(request: dict, req: Request):
         if not text:
             raise HTTPException(status_code=400, detail="Text content is required")
 
-        logger.info(f"Adding text to knowledge: title='{title}', source='{source}', length={len(text)}")
+        logger.info(
+            f"Adding text to knowledge: title='{title}', source='{source}', length={len(text)}"
+        )
 
         # Use the store_fact method for KnowledgeBaseV2 or add_fact for compatibility
-        if hasattr(kb_to_use, 'store_fact'):
+        if hasattr(kb_to_use, "store_fact"):
             # KnowledgeBaseV2
             result = await kb_to_use.store_fact(
                 content=text,
-                metadata={
-                    "title": title,
-                    "source": source,
-                    "category": category
-                }
+                metadata={"title": title, "source": source, "category": category},
             )
             fact_id = result.get("fact_id")
         else:
             # Original KnowledgeBase
             result = await kb_to_use.store_fact(
                 text=text,
-                metadata={
-                    "title": title,
-                    "source": source,
-                    "category": category
-                }
+                metadata={"title": title, "source": source, "category": category},
             )
             fact_id = result.get("fact_id")
 
@@ -584,7 +585,7 @@ async def add_text_to_knowledge(request: dict, req: Request):
             "fact_id": fact_id,
             "text_length": len(text),
             "title": title,
-            "source": source
+            "source": source,
         }
 
     except Exception as e:
@@ -602,7 +603,7 @@ async def search_knowledge(request: dict, req: Request):
             return {
                 "results": [],
                 "total_results": 0,
-                "message": "Knowledge base not initialized - please check logs for errors"
+                "message": "Knowledge base not initialized - please check logs for errors",
             }
 
         query = request.get("query", "")
@@ -614,7 +615,9 @@ async def search_knowledge(request: dict, req: Request):
         # Use limit if provided, otherwise use top_k
         search_limit = limit if request.get("limit") is not None else top_k
 
-        logger.info(f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, use_rag={use_rag})")
+        logger.info(
+            f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, use_rag={use_rag})"
+        )
 
         # Check if knowledge base is empty - fast check to avoid timeout
         try:
@@ -622,14 +625,16 @@ async def search_knowledge(request: dict, req: Request):
             fact_count = stats.get("total_facts", 0)
 
             if fact_count == 0:
-                logger.info("Knowledge base is empty - returning empty results immediately")
+                logger.info(
+                    "Knowledge base is empty - returning empty results immediately"
+                )
                 return {
                     "results": [],
                     "total_results": 0,
                     "query": query,
                     "mode": mode,
                     "kb_implementation": kb_to_use.__class__.__name__,
-                    "message": "Knowledge base is empty - no documents to search. Add documents in the Manage tab."
+                    "message": "Knowledge base is empty - no documents to search. Add documents in the Manage tab.",
                 }
         except Exception as stats_err:
             logger.warning(f"Could not check KB stats: {stats_err}")
@@ -639,16 +644,11 @@ async def search_knowledge(request: dict, req: Request):
 
         if kb_class_name == "KnowledgeBaseV2":
             # KnowledgeBaseV2 uses 'top_k' parameter
-            results = await kb_to_use.search(
-                query=query,
-                top_k=search_limit
-            )
+            results = await kb_to_use.search(query=query, top_k=search_limit)
         else:
             # Original KnowledgeBase uses 'similarity_top_k' parameter
             results = await kb_to_use.search(
-                query=query,
-                similarity_top_k=search_limit,
-                mode=mode
+                query=query, similarity_top_k=search_limit, mode=mode
             )
 
         # Enhanced search with RAG if requested and available
@@ -662,7 +662,7 @@ async def search_knowledge(request: dict, req: Request):
                     "mode": mode,
                     "kb_implementation": kb_class_name,
                     "rag_enhanced": True,
-                    "rag_analysis": rag_enhancement
+                    "rag_analysis": rag_enhancement,
                 }
             except Exception as e:
                 logger.error(f"RAG enhancement failed: {e}")
@@ -674,7 +674,7 @@ async def search_knowledge(request: dict, req: Request):
             "query": query,
             "mode": mode,
             "kb_implementation": kb_class_name,
-            "rag_enhanced": False
+            "rag_enhanced": False,
         }
 
     except Exception as e:
@@ -689,7 +689,7 @@ async def rag_enhanced_search(request: dict, req: Request):
         if not RAG_AVAILABLE:
             raise HTTPException(
                 status_code=503,
-                detail="RAG functionality not available - AI Stack may not be running"
+                detail="RAG functionality not available - AI Stack may not be running",
             )
 
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -699,7 +699,7 @@ async def rag_enhanced_search(request: dict, req: Request):
                 "status": "error",
                 "synthesized_response": "",
                 "results": [],
-                "message": "Knowledge base not initialized - please check logs for errors"
+                "message": "Knowledge base not initialized - please check logs for errors",
             }
 
         query = request.get("query", "")
@@ -713,7 +713,9 @@ async def rag_enhanced_search(request: dict, req: Request):
         # Use limit if provided, otherwise use top_k
         search_limit = limit if request.get("limit") is not None else top_k
 
-        logger.info(f"RAG-enhanced search request: '{query}' (top_k={search_limit}, reformulate={reformulate_query})")
+        logger.info(
+            f"RAG-enhanced search request: '{query}' (top_k={search_limit}, reformulate={reformulate_query})"
+        )
 
         # Check if knowledge base is empty - fast check to avoid timeout
         try:
@@ -721,7 +723,9 @@ async def rag_enhanced_search(request: dict, req: Request):
             fact_count = stats.get("total_facts", 0)
 
             if fact_count == 0:
-                logger.info("Knowledge base is empty - returning empty RAG results immediately")
+                logger.info(
+                    "Knowledge base is empty - returning empty RAG results immediately"
+                )
                 return {
                     "status": "success",
                     "synthesized_response": "The knowledge base is currently empty. Please add documents in the Manage tab to enable search functionality.",
@@ -732,9 +736,9 @@ async def rag_enhanced_search(request: dict, req: Request):
                         "relevance_score": 0.0,
                         "confidence": 0.0,
                         "sources_used": 0,
-                        "synthesis_quality": "empty_kb"
+                        "synthesis_quality": "empty_kb",
                     },
-                    "message": "Knowledge base is empty"
+                    "message": "Knowledge base is empty",
                 }
         except Exception as stats_err:
             logger.warning(f"Could not check KB stats: {stats_err}")
@@ -749,8 +753,12 @@ async def rag_enhanced_search(request: dict, req: Request):
                 reformulation_result = await rag_agent.reformulate_query(query)
 
                 if reformulation_result.get("status") == "success":
-                    additional_queries = reformulation_result.get("reformulated_queries", [])
-                    reformulated_queries.extend(additional_queries[:3])  # Limit to avoid too many queries
+                    additional_queries = reformulation_result.get(
+                        "reformulated_queries", []
+                    )
+                    reformulated_queries.extend(
+                        additional_queries[:3]
+                    )  # Limit to avoid too many queries
 
             except Exception as e:
                 logger.warning(f"Query reformulation failed: {e}")
@@ -766,13 +774,11 @@ async def rag_enhanced_search(request: dict, req: Request):
 
                 if kb_class_name == "KnowledgeBaseV2":
                     query_results = await kb_to_use.search(
-                        query=search_query,
-                        top_k=search_limit
+                        query=search_query, top_k=search_limit
                     )
                 else:
                     query_results = await kb_to_use.search(
-                        query=search_query,
-                        similarity_top_k=search_limit
+                        query=search_query, similarity_top_k=search_limit
                     )
 
                 # Deduplicate results
@@ -797,22 +803,32 @@ async def rag_enhanced_search(request: dict, req: Request):
                 # Convert results to RAG-compatible format
                 documents = []
                 for result in all_results:
-                    documents.append({
-                        "content": result.get("content", ""),
-                        "metadata": {
-                            "filename": result.get("metadata", {}).get("title", "Unknown"),
-                            "source": result.get("metadata", {}).get("source", "knowledge_base"),
-                            "category": result.get("metadata", {}).get("category", "general"),
-                            "score": result.get("score", 0.0),
-                            "source_query": result.get("source_query", original_query)
+                    documents.append(
+                        {
+                            "content": result.get("content", ""),
+                            "metadata": {
+                                "filename": result.get("metadata", {}).get(
+                                    "title", "Unknown"
+                                ),
+                                "source": result.get("metadata", {}).get(
+                                    "source", "knowledge_base"
+                                ),
+                                "category": result.get("metadata", {}).get(
+                                    "category", "general"
+                                ),
+                                "score": result.get("score", 0.0),
+                                "source_query": result.get(
+                                    "source_query", original_query
+                                ),
+                            },
                         }
-                    })
+                    )
 
                 # Process with RAG agent
                 rag_result = await rag_agent.process_document_query(
                     query=original_query,
                     documents=documents,
-                    context={"reformulated_queries": reformulated_queries}
+                    context={"reformulated_queries": reformulated_queries},
                 )
 
                 return {
@@ -824,10 +840,14 @@ async def rag_enhanced_search(request: dict, req: Request):
                     "results": all_results,
                     "total_results": len(all_results),
                     "original_query": original_query,
-                    "reformulated_queries": reformulated_queries[1:] if len(reformulated_queries) > 1 else [],
+                    "reformulated_queries": (
+                        reformulated_queries[1:]
+                        if len(reformulated_queries) > 1
+                        else []
+                    ),
                     "kb_implementation": kb_to_use.__class__.__name__,
                     "agent_metadata": rag_result.get("metadata", {}),
-                    "rag_enhanced": True
+                    "rag_enhanced": True,
                 }
 
             except Exception as e:
@@ -839,9 +859,13 @@ async def rag_enhanced_search(request: dict, req: Request):
                     "results": all_results,
                     "total_results": len(all_results),
                     "original_query": original_query,
-                    "reformulated_queries": reformulated_queries[1:] if len(reformulated_queries) > 1 else [],
+                    "reformulated_queries": (
+                        reformulated_queries[1:]
+                        if len(reformulated_queries) > 1
+                        else []
+                    ),
                     "error": str(e),
-                    "rag_enhanced": False
+                    "rag_enhanced": False,
                 }
         else:
             return {
@@ -850,8 +874,10 @@ async def rag_enhanced_search(request: dict, req: Request):
                 "results": [],
                 "total_results": 0,
                 "original_query": original_query,
-                "reformulated_queries": reformulated_queries[1:] if len(reformulated_queries) > 1 else [],
-                "rag_enhanced": True
+                "reformulated_queries": (
+                    reformulated_queries[1:] if len(reformulated_queries) > 1 else []
+                ),
+                "rag_enhanced": True,
             }
 
     except Exception as e:
@@ -869,7 +895,7 @@ async def similarity_search(request: dict, req: Request):
             return {
                 "results": [],
                 "total_results": 0,
-                "message": "Knowledge base not initialized - please check logs for errors"
+                "message": "Knowledge base not initialized - please check logs for errors",
             }
 
         query = request.get("query", "")
@@ -877,23 +903,19 @@ async def similarity_search(request: dict, req: Request):
         threshold = request.get("threshold", 0.7)
         use_rag = request.get("use_rag", False)
 
-        logger.info(f"Similarity search request: '{query}' (top_k={top_k}, threshold={threshold}, use_rag={use_rag})")
+        logger.info(
+            f"Similarity search request: '{query}' (top_k={top_k}, threshold={threshold}, use_rag={use_rag})"
+        )
 
         # FIXED: Check which knowledge base implementation we're using and call with correct parameters
         kb_class_name = kb_to_use.__class__.__name__
 
         if kb_class_name == "KnowledgeBaseV2":
             # KnowledgeBaseV2 uses 'top_k' parameter
-            results = await kb_to_use.search(
-                query=query,
-                top_k=top_k
-            )
+            results = await kb_to_use.search(query=query, top_k=top_k)
         else:
             # Original KnowledgeBase uses 'similarity_top_k' parameter
-            results = await kb_to_use.search(
-                query=query,
-                similarity_top_k=top_k
-            )
+            results = await kb_to_use.search(query=query, similarity_top_k=top_k)
 
         # Filter by threshold if specified
         if threshold > 0:
@@ -914,7 +936,7 @@ async def similarity_search(request: dict, req: Request):
                     "threshold": threshold,
                     "kb_implementation": kb_class_name,
                     "rag_enhanced": True,
-                    "rag_analysis": rag_enhancement
+                    "rag_analysis": rag_enhancement,
                 }
             except Exception as e:
                 logger.error(f"RAG enhancement failed: {e}")
@@ -926,12 +948,14 @@ async def similarity_search(request: dict, req: Request):
             "query": query,
             "threshold": threshold,
             "kb_implementation": kb_class_name,
-            "rag_enhanced": False
+            "rag_enhanced": False,
         }
 
     except Exception as e:
         logger.error(f"Error in similarity search: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Similarity search failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Similarity search failed: {str(e)}"
+        )
 
 
 @router.get("/health")
@@ -948,7 +972,7 @@ async def get_knowledge_health(req: Request):
                 "vector_store_available": False,
                 "rag_available": RAG_AVAILABLE,
                 "rag_status": "disabled" if not RAG_AVAILABLE else "unknown",
-                "message": "Knowledge base not initialized"
+                "message": "Knowledge base not initialized",
             }
 
         # Try to get stats to verify health
@@ -973,7 +997,7 @@ async def get_knowledge_health(req: Request):
             "db_size": stats.get("db_size", 0),
             "kb_implementation": kb_to_use.__class__.__name__,
             "rag_available": RAG_AVAILABLE,
-            "rag_status": rag_status
+            "rag_status": rag_status,
         }
 
     except Exception as e:
@@ -985,11 +1009,12 @@ async def get_knowledge_health(req: Request):
             "vector_store_available": False,
             "rag_available": RAG_AVAILABLE,
             "rag_status": "disabled" if not RAG_AVAILABLE else f"error: {str(e)}",
-            "error": str(e)
+            "error": str(e),
         }
 
 
 # === NEW REPOPULATE ENDPOINTS ===
+
 
 @router.post("/populate_system_commands")
 async def populate_system_commands(request: dict, req: Request):
@@ -1001,7 +1026,7 @@ async def populate_system_commands(request: dict, req: Request):
             return {
                 "status": "error",
                 "message": "Knowledge base not initialized - please check logs for errors",
-                "items_added": 0
+                "items_added": 0,
             }
 
         logger.info("Starting system commands population...")
@@ -1016,7 +1041,7 @@ async def populate_system_commands(request: dict, req: Request):
                     "curl https://api.example.com/data",
                     "curl -X POST -d 'data' https://api.example.com",
                     "curl -H 'Authorization: Bearer token' https://api.example.com",
-                    "curl -o output.html https://example.com"
+                    "curl -o output.html https://example.com",
                 ],
                 "options": [
                     "-X: HTTP method (GET, POST, PUT, DELETE)",
@@ -1024,8 +1049,8 @@ async def populate_system_commands(request: dict, req: Request):
                     "-d: Data to send",
                     "-o: Output to file",
                     "-v: Verbose output",
-                    "--json: Send JSON data"
-                ]
+                    "--json: Send JSON data",
+                ],
             },
             {
                 "command": "grep",
@@ -1035,15 +1060,15 @@ async def populate_system_commands(request: dict, req: Request):
                     "grep 'error' /var/log/syslog",
                     "grep -r 'function' /path/to/code/",
                     "grep -i 'warning' *.log",
-                    "ps aux | grep python"
+                    "ps aux | grep python",
                 ],
                 "options": [
                     "-r: Recursive search",
                     "-i: Case insensitive",
                     "-n: Line numbers",
                     "-v: Invert match",
-                    "-l: Files with matches only"
-                ]
+                    "-l: Files with matches only",
+                ],
             },
             {
                 "command": "ssh",
@@ -1053,15 +1078,15 @@ async def populate_system_commands(request: dict, req: Request):
                     "ssh user@remote-server",
                     "ssh -i ~/.ssh/key user@server",
                     "ssh -p 2222 user@server",
-                    "ssh user@server 'ls -la'"
+                    "ssh user@server 'ls -la'",
                 ],
                 "options": [
                     "-i: Identity file (private key)",
                     "-p: Port number",
                     "-v: Verbose output",
                     "-X: Enable X11 forwarding",
-                    "-L: Local port forwarding"
-                ]
+                    "-L: Local port forwarding",
+                ],
             },
             {
                 "command": "docker",
@@ -1071,15 +1096,15 @@ async def populate_system_commands(request: dict, req: Request):
                     "docker run -it ubuntu bash",
                     "docker build -t myapp .",
                     "docker ps -a",
-                    "docker exec -it container_name bash"
+                    "docker exec -it container_name bash",
                 ],
                 "options": [
                     "run: Create and run container",
                     "build: Build image from Dockerfile",
                     "ps: List containers",
                     "exec: Execute command in container",
-                    "logs: View container logs"
-                ]
+                    "logs: View container logs",
+                ],
             },
             {
                 "command": "git",
@@ -1089,15 +1114,15 @@ async def populate_system_commands(request: dict, req: Request):
                     "git clone https://github.com/user/repo.git",
                     "git add .",
                     "git commit -m 'message'",
-                    "git push origin main"
+                    "git push origin main",
                 ],
                 "options": [
                     "clone: Clone repository",
                     "add: Stage changes",
                     "commit: Create commit",
                     "push: Upload changes",
-                    "pull: Download changes"
-                ]
+                    "pull: Download changes",
+                ],
             },
             {
                 "command": "find",
@@ -1107,15 +1132,15 @@ async def populate_system_commands(request: dict, req: Request):
                     "find /path -name '*.py'",
                     "find . -type f -mtime -7",
                     "find /var -size +100M",
-                    "find . -perm 755"
+                    "find . -perm 755",
                 ],
                 "options": [
                     "-name: File name pattern",
                     "-type: File type (f=file, d=directory)",
                     "-size: File size",
                     "-mtime: Modification time",
-                    "-exec: Execute command on results"
-                ]
+                    "-exec: Execute command on results",
+                ],
             },
             {
                 "command": "tar",
@@ -1125,15 +1150,15 @@ async def populate_system_commands(request: dict, req: Request):
                     "tar -czf archive.tar.gz folder/",
                     "tar -xzf archive.tar.gz",
                     "tar -tzf archive.tar.gz",
-                    "tar -xzf archive.tar.gz -C /destination/"
+                    "tar -xzf archive.tar.gz -C /destination/",
                 ],
                 "options": [
                     "-c: Create archive",
                     "-x: Extract archive",
                     "-z: Gzip compression",
                     "-f: Archive filename",
-                    "-t: List contents"
-                ]
+                    "-t: List contents",
+                ],
             },
             {
                 "command": "systemctl",
@@ -1143,15 +1168,15 @@ async def populate_system_commands(request: dict, req: Request):
                     "systemctl status nginx",
                     "systemctl start redis-server",
                     "systemctl enable docker",
-                    "systemctl restart apache2"
+                    "systemctl restart apache2",
                 ],
                 "options": [
                     "start: Start service",
                     "stop: Stop service",
                     "restart: Restart service",
                     "status: Check status",
-                    "enable: Auto-start on boot"
-                ]
+                    "enable: Auto-start on boot",
+                ],
             },
             {
                 "command": "ps",
@@ -1161,14 +1186,14 @@ async def populate_system_commands(request: dict, req: Request):
                     "ps aux",
                     "ps -ef",
                     "ps aux | grep python",
-                    "ps -u username"
+                    "ps -u username",
                 ],
                 "options": [
                     "aux: All processes with details",
                     "-ef: Full format listing",
                     "-u: Processes by user",
-                    "-C: Processes by command"
-                ]
+                    "-C: Processes by command",
+                ],
             },
             {
                 "command": "chmod",
@@ -1178,16 +1203,16 @@ async def populate_system_commands(request: dict, req: Request):
                     "chmod 755 script.sh",
                     "chmod +x program",
                     "chmod -R 644 /path/to/files/",
-                    "chmod u+w,g-w file.txt"
+                    "chmod u+w,g-w file.txt",
                 ],
                 "options": [
                     "755: rwxr-xr-x (executable)",
                     "644: rw-r--r-- (readable)",
                     "+x: Add execute permission",
                     "-R: Recursive",
-                    "u/g/o: user/group/others"
-                ]
-            }
+                    "u/g/o: user/group/others",
+                ],
+            },
         ]
 
         items_added = 0
@@ -1195,7 +1220,7 @@ async def populate_system_commands(request: dict, req: Request):
         # Process commands in batches to avoid timeouts
         batch_size = 5
         for i in range(0, len(system_commands), batch_size):
-            batch = system_commands[i:i+batch_size]
+            batch = system_commands[i : i + batch_size]
 
             for cmd_info in batch:
                 try:
@@ -1217,16 +1242,16 @@ Type: Command Reference
 """
 
                     # Store in knowledge base
-                    if hasattr(kb_to_use, 'store_fact'):
+                    if hasattr(kb_to_use, "store_fact"):
                         result = await kb_to_use.store_fact(
                             content=content,
                             metadata={
                                 "title": f"{cmd_info['command']} command",
                                 "source": "system_commands_population",
                                 "category": "commands",
-                                "command": cmd_info['command'],
-                                "type": "system_command"
-                            }
+                                "command": cmd_info["command"],
+                                "type": "system_command",
+                            },
                         )
                     else:
                         result = await kb_to_use.store_fact(
@@ -1235,9 +1260,9 @@ Type: Command Reference
                                 "title": f"{cmd_info['command']} command",
                                 "source": "system_commands_population",
                                 "category": "commands",
-                                "command": cmd_info['command'],
-                                "type": "system_command"
-                            }
+                                "command": cmd_info["command"],
+                                "type": "system_command",
+                            },
                         )
 
                     if result and result.get("fact_id"):
@@ -1252,18 +1277,22 @@ Type: Command Reference
             # Small delay between batches to prevent overload
             await asyncio.sleep(0.1)
 
-        logger.info(f"System commands population completed. Added {items_added} commands.")
+        logger.info(
+            f"System commands population completed. Added {items_added} commands."
+        )
 
         return {
             "status": "success",
             "message": f"Successfully populated {items_added} system commands",
             "items_added": items_added,
-            "total_commands": len(system_commands)
+            "total_commands": len(system_commands),
         }
 
     except Exception as e:
         logger.error(f"Error populating system commands: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"System commands population failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"System commands population failed: {str(e)}"
+        )
 
 
 async def _populate_man_pages_background(kb_to_use):
@@ -1273,11 +1302,53 @@ async def _populate_man_pages_background(kb_to_use):
 
         # Common commands to get man pages for
         common_commands = [
-            'ls', 'cd', 'cp', 'mv', 'rm', 'mkdir', 'rmdir', 'chmod', 'chown', 'find',
-            'grep', 'sed', 'awk', 'sort', 'uniq', 'head', 'tail', 'cat', 'less', 'more',
-            'ps', 'top', 'kill', 'jobs', 'nohup', 'crontab', 'systemctl', 'service',
-            'curl', 'wget', 'ssh', 'scp', 'rsync', 'tar', 'zip', 'unzip', 'gzip', 'gunzip',
-            'git', 'docker', 'npm', 'pip', 'python', 'node', 'java', 'gcc', 'make'
+            "ls",
+            "cd",
+            "cp",
+            "mv",
+            "rm",
+            "mkdir",
+            "rmdir",
+            "chmod",
+            "chown",
+            "find",
+            "grep",
+            "sed",
+            "awk",
+            "sort",
+            "uniq",
+            "head",
+            "tail",
+            "cat",
+            "less",
+            "more",
+            "ps",
+            "top",
+            "kill",
+            "jobs",
+            "nohup",
+            "crontab",
+            "systemctl",
+            "service",
+            "curl",
+            "wget",
+            "ssh",
+            "scp",
+            "rsync",
+            "tar",
+            "zip",
+            "unzip",
+            "gzip",
+            "gunzip",
+            "git",
+            "docker",
+            "npm",
+            "pip",
+            "python",
+            "node",
+            "java",
+            "gcc",
+            "make",
         ]
 
         items_added = 0
@@ -1285,16 +1356,16 @@ async def _populate_man_pages_background(kb_to_use):
         # Process man pages in batches
         batch_size = 5
         for i in range(0, len(common_commands), batch_size):
-            batch = common_commands[i:i+batch_size]
+            batch = common_commands[i : i + batch_size]
 
             for command in batch:
                 try:
                     # Try to get the man page with reduced timeout
                     result = subprocess.run(
-                        ['man', command],
+                        ["man", command],
                         capture_output=True,
                         text=True,
-                        timeout=3  # Reduced from 10 to 3 seconds
+                        timeout=3,  # Reduced from 10 to 3 seconds
                     )
 
                     if result.returncode == 0 and result.stdout.strip():
@@ -1303,7 +1374,8 @@ async def _populate_man_pages_background(kb_to_use):
 
                         # Remove ANSI escape sequences if present
                         import re
-                        man_content = re.sub(r'\x1b\[[0-9;]*m', '', man_content)
+
+                        man_content = re.sub(r"\x1b\[[0-9;]*m", "", man_content)
 
                         # Create structured content
                         content = f"""Manual Page: {command}
@@ -1316,7 +1388,7 @@ Command: {command}
 """
 
                         # Store in knowledge base
-                        if hasattr(kb_to_use, 'store_fact'):
+                        if hasattr(kb_to_use, "store_fact"):
                             store_result = await kb_to_use.store_fact(
                                 content=content,
                                 metadata={
@@ -1324,8 +1396,8 @@ Command: {command}
                                     "source": "manual_pages_population",
                                     "category": "manpages",
                                     "command": command,
-                                    "type": "manual_page"
-                                }
+                                    "type": "manual_page",
+                                },
                             )
                         else:
                             store_result = await kb_to_use.store_fact(
@@ -1335,8 +1407,8 @@ Command: {command}
                                     "source": "manual_pages_population",
                                     "category": "manpages",
                                     "command": command,
-                                    "type": "manual_page"
-                                }
+                                    "type": "manual_page",
+                                },
                             )
 
                         if store_result and store_result.get("fact_id"):
@@ -1356,7 +1428,9 @@ Command: {command}
             # Small delay between batches (reduced for faster completion)
             await asyncio.sleep(0.1)
 
-        logger.info(f"Manual pages population completed. Added {items_added} man pages.")
+        logger.info(
+            f"Manual pages population completed. Added {items_added} man pages."
+        )
         return items_added
 
     except Exception as e:
@@ -1365,7 +1439,9 @@ Command: {command}
 
 
 @router.post("/populate_man_pages")
-async def populate_man_pages(request: dict, req: Request, background_tasks: BackgroundTasks):
+async def populate_man_pages(
+    request: dict, req: Request, background_tasks: BackgroundTasks
+):
     """Populate knowledge base with common manual pages (runs in background)"""
     try:
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -1374,7 +1450,7 @@ async def populate_man_pages(request: dict, req: Request, background_tasks: Back
             return {
                 "status": "error",
                 "message": "Knowledge base not initialized - please check logs for errors",
-                "items_added": 0
+                "items_added": 0,
             }
 
         # Start background task
@@ -1384,12 +1460,14 @@ async def populate_man_pages(request: dict, req: Request, background_tasks: Back
             "status": "success",
             "message": "Man pages population started in background",
             "items_added": 0,  # Will be updated as background task runs
-            "background": True
+            "background": True,
         }
 
     except Exception as e:
         logger.error(f"Error starting man pages population: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to start man pages population: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to start man pages population: {str(e)}"
+        )
 
 
 @router.post("/refresh_system_knowledge")
@@ -1403,50 +1481,50 @@ async def refresh_system_knowledge(request: dict, req: Request):
 
         # Run the comprehensive indexing script
         result = subprocess.run(
-            [sys.executable, 'scripts/utilities/index_all_man_pages.py'],
+            [sys.executable, "scripts/utilities/index_all_man_pages.py"],
             capture_output=True,
             text=True,
-            timeout=600  # 10 minute timeout for comprehensive indexing
+            timeout=600,  # 10 minute timeout for comprehensive indexing
         )
 
         if result.returncode == 0:
             # Parse output for statistics
-            output_lines = result.stdout.split('\n')
+            output_lines = result.stdout.split("\n")
             indexed_count = 0
             total_facts = 0
 
             for line in output_lines:
-                if 'Successfully indexed:' in line:
-                    indexed_count = int(line.split(':')[1].strip())
-                elif 'Total facts in KB:' in line:
-                    total_facts = int(line.split(':')[1].strip())
+                if "Successfully indexed:" in line:
+                    indexed_count = int(line.split(":")[1].strip())
+                elif "Total facts in KB:" in line:
+                    total_facts = int(line.split(":")[1].strip())
 
-            logger.info(f"System knowledge refresh complete: {indexed_count} commands indexed")
+            logger.info(
+                f"System knowledge refresh complete: {indexed_count} commands indexed"
+            )
 
             return {
                 "status": "success",
                 "message": f"System knowledge refreshed successfully",
                 "commands_indexed": indexed_count,
-                "total_facts": total_facts
+                "total_facts": total_facts,
             }
         else:
             logger.error(f"System knowledge refresh failed: {result.stderr}")
             raise HTTPException(
                 status_code=500,
-                detail=f"Knowledge refresh failed: {result.stderr[:500]}"
+                detail=f"Knowledge refresh failed: {result.stderr[:500]}",
             )
 
     except subprocess.TimeoutExpired:
         logger.error("System knowledge refresh timed out")
         raise HTTPException(
-            status_code=504,
-            detail="Knowledge refresh timed out (>10 minutes)"
+            status_code=504, detail="Knowledge refresh timed out (>10 minutes)"
         )
     except Exception as e:
         logger.error(f"Error refreshing system knowledge: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Knowledge refresh failed: {str(e)}"
+            status_code=500, detail=f"Knowledge refresh failed: {str(e)}"
         )
 
 
@@ -1458,8 +1536,8 @@ def extract_category_from_path(doc_file: str) -> str:
         docs/architecture/file.md -> "architecture"
         CLAUDE.md -> "root"
     """
-    path_parts = str(doc_file).split('/')
-    if len(path_parts) > 1 and path_parts[0] == 'docs':
+    path_parts = str(doc_file).split("/")
+    if len(path_parts) > 1 and path_parts[0] == "docs":
         # docs/api/file.md -> "api"
         return path_parts[1] if len(path_parts) > 2 else "docs"
     # Root files like CLAUDE.md
@@ -1473,7 +1551,7 @@ async def populate_autobot_docs(request: dict, req: Request):
         from backend.models.knowledge_import_tracking import ImportTracker
 
         # Check if force reindex is requested
-        force_reindex = request.get('force', False) if request else False
+        force_reindex = request.get("force", False) if request else False
 
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
@@ -1481,7 +1559,7 @@ async def populate_autobot_docs(request: dict, req: Request):
             return {
                 "status": "error",
                 "message": "Knowledge base not initialized - please check logs for errors",
-                "items_added": 0
+                "items_added": 0,
             }
 
         logger.info("Starting AutoBot documentation population with import tracking...")
@@ -1522,7 +1600,7 @@ async def populate_autobot_docs(request: dict, req: Request):
 
                 if file_path.exists() and file_path.is_file():
                     # Read file content
-                    with open(file_path, 'r', encoding='utf-8') as f:
+                    with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
 
                     if content.strip():
@@ -1543,7 +1621,7 @@ Type: Documentation
 """
 
                         # Store in knowledge base
-                        if hasattr(kb_to_use, 'store_fact'):
+                        if hasattr(kb_to_use, "store_fact"):
                             result = await kb_to_use.store_fact(
                                 content=structured_content,
                                 metadata={
@@ -1552,8 +1630,8 @@ Type: Documentation
                                     "category": category,
                                     "filename": doc_file,
                                     "type": f"{category}_documentation",
-                                    "file_path": str(file_path)
-                                }
+                                    "file_path": str(file_path),
+                                },
                             )
                         else:
                             result = await kb_to_use.store_fact(
@@ -1564,8 +1642,8 @@ Type: Documentation
                                     "category": category,
                                     "filename": doc_file,
                                     "type": f"{category}_documentation",
-                                    "file_path": str(file_path)
-                                }
+                                    "file_path": str(file_path),
+                                },
                             )
 
                         if result and result.get("fact_id"):
@@ -1578,13 +1656,15 @@ Type: Documentation
                                 metadata={
                                     "fact_id": result.get("fact_id"),
                                     "title": f"AutoBot: {doc_file}",
-                                    "content_length": len(content)
-                                }
+                                    "content_length": len(content),
+                                },
                             )
                             logger.info(f"Added AutoBot doc: {doc_file}")
                         else:
                             items_failed += 1
-                            tracker.mark_failed(str(file_path), "Failed to store in knowledge base")
+                            tracker.mark_failed(
+                                str(file_path), "Failed to store in knowledge base"
+                            )
                             logger.warning(f"Failed to store AutoBot doc: {doc_file}")
                     else:
                         items_skipped += 1
@@ -1629,15 +1709,15 @@ Category: AutoBot
 Type: System Configuration
 """
 
-            if hasattr(kb_to_use, 'store_fact'):
+            if hasattr(kb_to_use, "store_fact"):
                 result = await kb_to_use.store_fact(
                     content=config_info,
                     metadata={
                         "title": "AutoBot System Configuration",
                         "source": "autobot_docs_population",
                         "category": "configuration",
-                        "type": "system_configuration"
-                    }
+                        "type": "system_configuration",
+                    },
                 )
             else:
                 result = await kb_to_use.store_fact(
@@ -1646,8 +1726,8 @@ Type: System Configuration
                         "title": "AutoBot System Configuration",
                         "source": "autobot_docs_population",
                         "category": "configuration",
-                        "type": "system_configuration"
-                    }
+                        "type": "system_configuration",
+                    },
                 )
 
             if result and result.get("fact_id"):
@@ -1657,7 +1737,9 @@ Type: System Configuration
         except Exception as e:
             logger.error(f"Error adding AutoBot configuration: {e}")
 
-        logger.info(f"AutoBot documentation population completed. Added {items_added} documents ({items_skipped} skipped, {items_failed} failed).")
+        logger.info(
+            f"AutoBot documentation population completed. Added {items_added} documents ({items_skipped} skipped, {items_failed} failed)."
+        )
 
         mode = "Force reindex" if force_reindex else "Incremental update"
         return {
@@ -1667,20 +1749,22 @@ Type: System Configuration
             "items_skipped": items_skipped,
             "items_failed": items_failed,
             "total_files": len(doc_files) + 1,  # +1 for config info
-            "force_reindex": force_reindex
+            "force_reindex": force_reindex,
         }
 
     except Exception as e:
         logger.error(f"Error populating AutoBot docs: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"AutoBot docs population failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"AutoBot docs population failed: {str(e)}"
+        )
 
 
 @router.get("/entries")
 async def get_knowledge_entries(
     req: Request,
     limit: int = Query(default=100, ge=1, le=1000),
-    cursor: Optional[str] = Query(default="0", regex=r'^[0-9]+$'),
-    category: Optional[str] = Query(default=None, regex=r'^[a-zA-Z0-9_-]*$')
+    cursor: Optional[str] = Query(default="0", regex=r"^[0-9]+$"),
+    category: Optional[str] = Query(default=None, regex=r"^[a-zA-Z0-9_-]*$"),
 ):
     """
     Get knowledge base entries with cursor-based pagination.
@@ -1708,10 +1792,12 @@ async def get_knowledge_entries(
                 "next_cursor": "0",
                 "count": 0,
                 "has_more": False,
-                "message": "Knowledge base not initialized"
+                "message": "Knowledge base not initialized",
             }
 
-        logger.info(f"Getting knowledge entries: limit={limit}, cursor={cursor}, category={category}")
+        logger.info(
+            f"Getting knowledge entries: limit={limit}, cursor={cursor}, category={category}"
+        )
 
         # Use Redis SCAN for memory-efficient cursor-based iteration
         entries = []
@@ -1723,7 +1809,7 @@ async def get_knowledge_entries(
             next_cursor, items = kb_to_use.redis_client.hscan(
                 "knowledge_base:facts",
                 cursor=current_cursor,
-                count=limit * 2  # Scan more to account for filtering
+                count=limit * 2,  # Scan more to account for filtering
             )
 
             # Parse and filter facts
@@ -1732,19 +1818,24 @@ async def get_knowledge_entries(
                     fact = json.loads(fact_json)
 
                     # Filter by category if specified
-                    if category and fact.get("metadata", {}).get("category", "") != category:
+                    if (
+                        category
+                        and fact.get("metadata", {}).get("category", "") != category
+                    ):
                         continue
 
                     # Format entry for frontend
                     entry = {
-                        "id": fact_id.decode() if isinstance(fact_id, bytes) else fact_id,
+                        "id": (
+                            fact_id.decode() if isinstance(fact_id, bytes) else fact_id
+                        ),
                         "content": fact.get("content", ""),
                         "title": fact.get("metadata", {}).get("title", "Untitled"),
                         "source": fact.get("metadata", {}).get("source", "unknown"),
                         "category": fact.get("metadata", {}).get("category", "general"),
                         "type": fact.get("metadata", {}).get("type", "document"),
                         "created_at": fact.get("metadata", {}).get("created_at"),
-                        "metadata": fact.get("metadata", {})
+                        "metadata": fact.get("metadata", {}),
                     }
                     entries.append(entry)
 
@@ -1766,7 +1857,7 @@ async def get_knowledge_entries(
                 "entries": entries,
                 "next_cursor": str(next_cursor),
                 "count": len(entries),
-                "has_more": next_cursor != 0
+                "has_more": next_cursor != 0,
             }
 
         except Exception as redis_err:
@@ -1776,7 +1867,7 @@ async def get_knowledge_entries(
                 "next_cursor": "0",
                 "count": 0,
                 "has_more": False,
-                "error": "Redis connection error"
+                "error": "Redis connection error",
             }
 
     except Exception as e:
@@ -1798,7 +1889,7 @@ async def get_detailed_stats(req: Request):
                 "category_breakdown": {},
                 "source_breakdown": {},
                 "type_breakdown": {},
-                "size_metrics": {}
+                "size_metrics": {},
             }
 
         # Get basic stats
@@ -1858,14 +1949,16 @@ async def get_detailed_stats(req: Request):
                 "average_fact_size": avg_size,
                 "median_fact_size": median_size,
                 "largest_fact_size": max(fact_sizes) if fact_sizes else 0,
-                "smallest_fact_size": min(fact_sizes) if fact_sizes else 0
+                "smallest_fact_size": min(fact_sizes) if fact_sizes else 0,
             },
-            "rag_available": RAG_AVAILABLE
+            "rag_available": RAG_AVAILABLE,
         }
 
     except Exception as e:
         logger.error(f"Error getting detailed stats: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get detailed stats: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get detailed stats: {str(e)}"
+        )
 
 
 @router.get("/machine_profile")
@@ -1887,9 +1980,11 @@ async def get_machine_profile(req: Request):
             "cpu_count": psutil.cpu_count(logical=False),
             "cpu_count_logical": psutil.cpu_count(logical=True),
             "memory_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-            "memory_available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
-            "disk_total_gb": round(psutil.disk_usage('/').total / (1024**3), 2),
-            "disk_free_gb": round(psutil.disk_usage('/').free / (1024**3), 2)
+            "memory_available_gb": round(
+                psutil.virtual_memory().available / (1024**3), 2
+            ),
+            "disk_total_gb": round(psutil.disk_usage("/").total / (1024**3), 2),
+            "disk_free_gb": round(psutil.disk_usage("/").free / (1024**3), 2),
         }
 
         # Get knowledge base stats
@@ -1904,13 +1999,15 @@ async def get_machine_profile(req: Request):
                 "rag_available": RAG_AVAILABLE,
                 "vector_search": kb_stats.get("initialized", False),
                 "man_pages_available": True,  # Always available on Linux
-                "system_knowledge": True
-            }
+                "system_knowledge": True,
+            },
         }
 
     except Exception as e:
         logger.error(f"Error getting machine profile: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get machine profile: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get machine profile: {str(e)}"
+        )
 
 
 @router.get("/man_pages/summary")
@@ -1926,8 +2023,8 @@ async def get_man_pages_summary(req: Request):
                 "man_pages_summary": {
                     "total_man_pages": 0,
                     "indexed_count": 0,
-                    "last_indexed": None
-                }
+                    "last_indexed": None,
+                },
             }
 
         # Get all facts and count man pages
@@ -1950,7 +2047,9 @@ async def get_man_pages_summary(req: Request):
 
                     # Track most recent timestamp
                     created_at = metadata.get("created_at")
-                    if created_at and (last_indexed is None or created_at > last_indexed):
+                    if created_at and (
+                        last_indexed is None or created_at > last_indexed
+                    ):
                         last_indexed = created_at
                 except:
                     continue
@@ -1962,8 +2061,8 @@ async def get_man_pages_summary(req: Request):
                     "system_commands": system_command_count,
                     "indexed_count": man_page_count + system_command_count,
                     "last_indexed": last_indexed,
-                    "integration_active": man_page_count > 0
-                }
+                    "integration_active": man_page_count > 0,
+                },
             }
 
         except Exception as redis_err:
@@ -1974,13 +2073,15 @@ async def get_man_pages_summary(req: Request):
                 "man_pages_summary": {
                     "total_man_pages": 0,
                     "indexed_count": 0,
-                    "last_indexed": None
-                }
+                    "last_indexed": None,
+                },
             }
 
     except Exception as e:
         logger.error(f"Error getting man pages summary: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get man pages summary: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get man pages summary: {str(e)}"
+        )
 
 
 @router.post("/machine_knowledge/initialize")
@@ -1993,7 +2094,7 @@ async def initialize_machine_knowledge(request: dict, req: Request):
             return {
                 "status": "error",
                 "message": "Knowledge base not initialized",
-                "items_added": 0
+                "items_added": 0,
             }
 
         logger.info("Initializing machine knowledge...")
@@ -2008,8 +2109,8 @@ async def initialize_machine_knowledge(request: dict, req: Request):
             "items_added": commands_added,
             "components": {
                 "system_commands": commands_added,
-                "man_pages": "background_task"  # Man pages run in background
-            }
+                "man_pages": "background_task",  # Man pages run in background
+            },
         }
 
     except Exception as e:
@@ -2027,7 +2128,7 @@ async def integrate_man_pages(req: Request, background_tasks: BackgroundTasks):
             return {
                 "status": "error",
                 "message": "Knowledge base not initialized",
-                "integration_started": False
+                "integration_started": False,
             }
 
         # Start background task for man pages
@@ -2037,12 +2138,14 @@ async def integrate_man_pages(req: Request, background_tasks: BackgroundTasks):
             "status": "success",
             "message": "Man pages integration started in background",
             "integration_started": True,
-            "background": True
+            "background": True,
         }
 
     except Exception as e:
         logger.error(f"Error integrating man pages: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to start integration: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to start integration: {str(e)}"
+        )
 
 
 @router.get("/man_pages/search")
@@ -2052,11 +2155,7 @@ async def search_man_pages(req: Request, query: str, limit: int = 10):
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
         if kb_to_use is None:
-            return {
-                "results": [],
-                "total_results": 0,
-                "query": query
-            }
+            return {"results": [], "total_results": 0, "query": query}
 
         logger.info(f"Searching man pages: '{query}' (limit={limit})")
 
@@ -2079,7 +2178,7 @@ async def search_man_pages(req: Request, query: str, limit: int = 10):
             "results": man_page_results,
             "total_results": len(man_page_results),
             "query": query,
-            "limit": limit
+            "limit": limit,
         }
 
     except Exception as e:
@@ -2097,10 +2196,12 @@ async def clear_all_knowledge(request: dict, req: Request):
             return {
                 "status": "error",
                 "message": "Knowledge base not initialized - please check logs for errors",
-                "items_removed": 0
+                "items_removed": 0,
             }
 
-        logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
+        logger.warning(
+            "Starting DESTRUCTIVE operation: clearing all knowledge base entries"
+        )
 
         # Get current stats before clearing
         try:
@@ -2110,14 +2211,14 @@ async def clear_all_knowledge(request: dict, req: Request):
             items_before = 0
 
         # Clear the knowledge base
-        if hasattr(kb_to_use, 'clear_all'):
+        if hasattr(kb_to_use, "clear_all"):
             # Use specific clear_all method if available
             result = await kb_to_use.clear_all()
             items_removed = result.get("items_removed", items_before)
         else:
             # Fallback: try to clear via Redis if that's the implementation
             try:
-                if hasattr(kb_to_use, 'redis') and kb_to_use.redis:
+                if hasattr(kb_to_use, "redis") and kb_to_use.redis:
                     # For Redis-based implementations
                     keys = await kb_to_use.redis.keys("fact:*")
                     if keys:
@@ -2130,12 +2231,18 @@ async def clear_all_knowledge(request: dict, req: Request):
 
                     items_removed = len(keys)
                 else:
-                    logger.error("No clear method available for knowledge base implementation")
-                    raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
+                    logger.error(
+                        "No clear method available for knowledge base implementation"
+                    )
+                    raise HTTPException(
+                        status_code=500, detail="Knowledge base clearing not supported"
+                    )
 
             except Exception as e:
                 logger.error(f"Error during knowledge base clearing: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to clear knowledge base: {str(e)}")
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to clear knowledge base: {str(e)}"
+                )
 
         logger.warning(f"Knowledge base cleared. Removed {items_removed} entries.")
 
@@ -2143,12 +2250,14 @@ async def clear_all_knowledge(request: dict, req: Request):
             "status": "success",
             "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
             "items_removed": items_removed,
-            "items_before": items_before
+            "items_before": items_before,
         }
 
     except Exception as e:
         logger.error(f"Error clearing knowledge base: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Knowledge base clearing failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Knowledge base clearing failed: {str(e)}"
+        )
 
 
 # Legacy endpoints for backward compatibility
@@ -2165,7 +2274,9 @@ async def query_knowledge(request: dict, req: Request):
 
 
 # Helper function for RAG enhancement
-async def _enhance_search_with_rag(query: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+async def _enhance_search_with_rag(
+    query: str, results: List[Dict[str, Any]]
+) -> Dict[str, Any]:
     """Enhance search results with RAG analysis"""
     try:
         rag_agent = get_rag_agent()
@@ -2173,14 +2284,18 @@ async def _enhance_search_with_rag(query: str, results: List[Dict[str, Any]]) ->
         # Convert results to documents for RAG processing
         documents = []
         for result in results:
-            documents.append({
-                "content": result.get("content", ""),
-                "metadata": {
-                    "filename": result.get("metadata", {}).get("title", "Unknown"),
-                    "source": result.get("metadata", {}).get("source", "knowledge_base"),
-                    "score": result.get("score", 0.0)
+            documents.append(
+                {
+                    "content": result.get("content", ""),
+                    "metadata": {
+                        "filename": result.get("metadata", {}).get("title", "Unknown"),
+                        "source": result.get("metadata", {}).get(
+                            "source", "knowledge_base"
+                        ),
+                        "score": result.get("score", 0.0),
+                    },
                 }
-            })
+            )
 
         # Analyze document relevance
         document_analysis = rag_agent._analyze_document_relevance(query, documents)
@@ -2195,20 +2310,25 @@ async def _enhance_search_with_rag(query: str, results: List[Dict[str, Any]]) ->
                 "total_analyzed": len(documents),
                 "high_relevance_count": document_analysis.get("high_relevance", 0),
                 "medium_relevance_count": document_analysis.get("medium_relevance", 0),
-                "low_relevance_count": document_analysis.get("low_relevance", 0)
-            }
+                "low_relevance_count": document_analysis.get("low_relevance", 0),
+            },
         }
 
     except Exception as e:
         logger.error(f"RAG enhancement error: {e}")
         return {
             "error": str(e),
-            "analysis_summary": {"total_analyzed": len(results), "error": "RAG analysis failed"}
+            "analysis_summary": {
+                "total_analyzed": len(results),
+                "error": "RAG analysis failed",
+            },
         }
 
 
 @router.get("/facts/by_category")
-async def get_facts_by_category(req: Request, category: Optional[str] = None, limit: int = 100):
+async def get_facts_by_category(
+    req: Request, category: Optional[str] = None, limit: int = 100
+):
     """Get facts grouped by category for browsing"""
     try:
         kb = await get_or_create_knowledge_base(req.app)
@@ -2218,10 +2338,7 @@ async def get_facts_by_category(req: Request, category: Optional[str] = None, li
         fact_keys = kb.redis_client.keys("fact:*")
 
         if not fact_keys:
-            return {
-                "categories": {},
-                "total_facts": 0
-            }
+            return {"categories": {}, "total_facts": 0}
 
         # Group facts by category
         categories_dict = {}
@@ -2235,31 +2352,47 @@ async def get_facts_by_category(req: Request, category: Optional[str] = None, li
                     continue
 
                 # Extract metadata
-                metadata_str = fact_data.get(b'metadata', b'{}')
-                metadata = json.loads(metadata_str.decode('utf-8') if isinstance(metadata_str, bytes) else metadata_str)
+                metadata_str = fact_data.get(b"metadata", b"{}")
+                metadata = json.loads(
+                    metadata_str.decode("utf-8")
+                    if isinstance(metadata_str, bytes)
+                    else metadata_str
+                )
 
                 # Extract content
-                content_bytes = fact_data.get(b'content', b'')
-                content = content_bytes.decode('utf-8') if isinstance(content_bytes, bytes) else str(content_bytes)
+                content_bytes = fact_data.get(b"content", b"")
+                content = (
+                    content_bytes.decode("utf-8")
+                    if isinstance(content_bytes, bytes)
+                    else str(content_bytes)
+                )
 
                 # Get category from metadata
-                fact_category = metadata.get('category', 'general')
-                fact_title = metadata.get('title', metadata.get('command', 'Untitled'))
-                fact_type = metadata.get('type', 'unknown')
+                fact_category = metadata.get("category", "general")
+                fact_title = metadata.get("title", metadata.get("command", "Untitled"))
+                fact_type = metadata.get("type", "unknown")
 
                 if fact_category not in categories_dict:
                     categories_dict[fact_category] = []
 
                 # Add to category list
-                categories_dict[fact_category].append({
-                    "key": fact_key.decode('utf-8') if isinstance(fact_key, bytes) else str(fact_key),
-                    "title": fact_title,
-                    "content": content[:500] + "..." if len(content) > 500 else content,  # Preview
-                    "full_content": content,
-                    "category": fact_category,
-                    "type": fact_type,
-                    "metadata": metadata
-                })
+                categories_dict[fact_category].append(
+                    {
+                        "key": (
+                            fact_key.decode("utf-8")
+                            if isinstance(fact_key, bytes)
+                            else str(fact_key)
+                        ),
+                        "title": fact_title,
+                        "content": (
+                            content[:500] + "..." if len(content) > 500 else content
+                        ),  # Preview
+                        "full_content": content,
+                        "category": fact_category,
+                        "type": fact_type,
+                        "metadata": metadata,
+                    }
+                )
 
             except Exception as e:
                 logger.warning(f"Error processing fact {fact_key}: {e}")
@@ -2267,7 +2400,9 @@ async def get_facts_by_category(req: Request, category: Optional[str] = None, li
 
         # Filter by category if specified
         if category:
-            categories_dict = {k: v for k, v in categories_dict.items() if k == category}
+            categories_dict = {
+                k: v for k, v in categories_dict.items() if k == category
+            }
 
         # Limit results per category
         for cat in categories_dict:
@@ -2276,7 +2411,7 @@ async def get_facts_by_category(req: Request, category: Optional[str] = None, li
         return {
             "categories": categories_dict,
             "total_facts": sum(len(v) for v in categories_dict.values()),
-            "category_filter": category
+            "category_filter": category,
         }
     except Exception as e:
         logger.error(f"Error getting facts by category: {e}")
@@ -2285,8 +2420,8 @@ async def get_facts_by_category(req: Request, category: Optional[str] = None, li
 
 @router.get("/fact/{fact_key}")
 async def get_fact_by_key(
-    fact_key: str = Path(..., regex=r'^[a-zA-Z0-9_:-]+$', max_length=255),
-    req: Request = None
+    fact_key: str = Path(..., regex=r"^[a-zA-Z0-9_:-]+$", max_length=255),
+    req: Request = None,
 ):
     """
     Get a single fact by its Redis key.
@@ -2301,8 +2436,10 @@ async def get_fact_by_key(
     """
     try:
         # Additional security check for path traversal
-        if '..' in fact_key or '/' in fact_key or '\\' in fact_key:
-            raise HTTPException(status_code=400, detail="Invalid fact_key: path traversal not allowed")
+        if ".." in fact_key or "/" in fact_key or "\\" in fact_key:
+            raise HTTPException(
+                status_code=400, detail="Invalid fact_key: path traversal not allowed"
+            )
 
         kb = await get_or_create_knowledge_base(req.app)
         import json
@@ -2314,22 +2451,34 @@ async def get_fact_by_key(
             raise HTTPException(status_code=404, detail=f"Fact not found: {fact_key}")
 
         # Extract metadata
-        metadata_str = fact_data.get(b'metadata', b'{}')
-        metadata = json.loads(metadata_str.decode('utf-8') if isinstance(metadata_str, bytes) else metadata_str)
+        metadata_str = fact_data.get(b"metadata", b"{}")
+        metadata = json.loads(
+            metadata_str.decode("utf-8")
+            if isinstance(metadata_str, bytes)
+            else metadata_str
+        )
 
         # Extract content
-        content_bytes = fact_data.get(b'content', b'')
-        content = content_bytes.decode('utf-8') if isinstance(content_bytes, bytes) else str(content_bytes)
+        content_bytes = fact_data.get(b"content", b"")
+        content = (
+            content_bytes.decode("utf-8")
+            if isinstance(content_bytes, bytes)
+            else str(content_bytes)
+        )
 
         # Extract created_at
-        created_at_bytes = fact_data.get(b'created_at', b'')
-        created_at = created_at_bytes.decode('utf-8') if isinstance(created_at_bytes, bytes) else str(created_at_bytes)
+        created_at_bytes = fact_data.get(b"created_at", b"")
+        created_at = (
+            created_at_bytes.decode("utf-8")
+            if isinstance(created_at_bytes, bytes)
+            else str(created_at_bytes)
+        )
 
         return {
             "key": fact_key,
             "content": content,
             "metadata": metadata,
-            "created_at": created_at
+            "created_at": created_at,
         }
     except HTTPException:
         raise
@@ -2343,7 +2492,7 @@ async def vectorize_existing_facts(
     req: Request,
     batch_size: int = 50,
     batch_delay: float = 0.5,
-    skip_existing: bool = True
+    skip_existing: bool = True,
 ):
     """
     Generate vector embeddings for facts in Redis using batched processing.
@@ -2360,7 +2509,9 @@ async def vectorize_existing_facts(
         kb = await get_or_create_knowledge_base(req.app)
 
         if not kb:
-            raise HTTPException(status_code=500, detail="Knowledge base not initialized")
+            raise HTTPException(
+                status_code=500, detail="Knowledge base not initialized"
+            )
 
         # Get all fact keys from Redis
         fact_keys = await kb._scan_redis_keys_async("fact:*")
@@ -2372,10 +2523,12 @@ async def vectorize_existing_facts(
                 "processed": 0,
                 "success": 0,
                 "failed": 0,
-                "skipped": 0
+                "skipped": 0,
             }
 
-        logger.info(f"Starting batched vectorization of {len(fact_keys)} facts (batch_size={batch_size}, delay={batch_delay}s)")
+        logger.info(
+            f"Starting batched vectorization of {len(fact_keys)} facts (batch_size={batch_size}, delay={batch_delay}s)"
+        )
 
         success_count = 0
         failed_count = 0
@@ -2390,7 +2543,9 @@ async def vectorize_existing_facts(
             end_idx = min(start_idx + batch_size, len(fact_keys))
             batch = fact_keys[start_idx:end_idx]
 
-            logger.info(f"Processing batch {batch_num + 1}/{total_batches} ({len(batch)} facts)")
+            logger.info(
+                f"Processing batch {batch_num + 1}/{total_batches} ({len(batch)} facts)"
+            )
 
             for fact_key in batch:
                 try:
@@ -2403,14 +2558,22 @@ async def vectorize_existing_facts(
                         continue
 
                     # Extract content and metadata
-                    content_bytes = fact_data.get(b'content', b'')
-                    content = content_bytes.decode('utf-8') if isinstance(content_bytes, bytes) else str(content_bytes)
+                    content_bytes = fact_data.get(b"content", b"")
+                    content = (
+                        content_bytes.decode("utf-8")
+                        if isinstance(content_bytes, bytes)
+                        else str(content_bytes)
+                    )
 
-                    metadata_str = fact_data.get(b'metadata', b'{}')
-                    metadata = json.loads(metadata_str.decode('utf-8') if isinstance(metadata_str, bytes) else metadata_str)
+                    metadata_str = fact_data.get(b"metadata", b"{}")
+                    metadata = json.loads(
+                        metadata_str.decode("utf-8")
+                        if isinstance(metadata_str, bytes)
+                        else metadata_str
+                    )
 
                     # Extract fact ID from key (fact:uuid)
-                    fact_id = fact_key.split(':')[-1] if ':' in fact_key else fact_key
+                    fact_id = fact_key.split(":")[-1] if ":" in fact_key else fact_key
 
                     # Check if already vectorized by checking vector_indexed status
                     if skip_existing:
@@ -2423,20 +2586,21 @@ async def vectorize_existing_facts(
 
                     # Vectorize existing fact without duplication
                     result = await kb.vectorize_existing_fact(
-                        fact_id=fact_id,
-                        content=content,
-                        metadata=metadata
+                        fact_id=fact_id, content=content, metadata=metadata
                     )
 
-                    if result.get("status") == "success" and result.get("vector_indexed"):
+                    if result.get("status") == "success" and result.get(
+                        "vector_indexed"
+                    ):
                         success_count += 1
-                        processed_facts.append({
-                            "fact_id": fact_id,
-                            "status": "vectorized"
-                        })
+                        processed_facts.append(
+                            {"fact_id": fact_id, "status": "vectorized"}
+                        )
                     else:
                         failed_count += 1
-                        logger.warning(f"Failed to vectorize fact {fact_id}: {result.get('message')}")
+                        logger.warning(
+                            f"Failed to vectorize fact {fact_id}: {result.get('message')}"
+                        )
 
                 except Exception as e:
                     failed_count += 1
@@ -2457,7 +2621,7 @@ async def vectorize_existing_facts(
             "failed": failed_count,
             "skipped": skipped_count,
             "batches": total_batches,
-            "details": processed_facts[:10]  # Return first 10 for reference
+            "details": processed_facts[:10],  # Return first 10 for reference
         }
 
     except Exception as e:
@@ -2466,19 +2630,17 @@ async def vectorize_existing_facts(
 
 
 @router.get("/import/status")
-async def get_import_status(req: Request, file_path: Optional[str] = None, category: Optional[str] = None):
+async def get_import_status(
+    req: Request, file_path: Optional[str] = None, category: Optional[str] = None
+):
     """Get import status for files"""
     try:
         from backend.models.knowledge_import_tracking import ImportTracker
-        
+
         tracker = ImportTracker()
         results = tracker.get_import_status(file_path=file_path, category=category)
-        
-        return {
-            "status": "success",
-            "imports": results,
-            "total": len(results)
-        }
+
+        return {"status": "success", "imports": results, "total": len(results)}
     except Exception as e:
         logger.error(f"Error getting import status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2493,10 +2655,7 @@ async def get_import_statistics(req: Request):
         tracker = ImportTracker()
         stats = tracker.get_statistics()
 
-        return {
-            "status": "success",
-            "statistics": stats
-        }
+        return {"status": "success", "statistics": stats}
     except Exception as e:
         logger.error(f"Error getting import statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2504,7 +2663,10 @@ async def get_import_statistics(req: Request):
 
 # ===== INDIVIDUAL DOCUMENT VECTORIZATION =====
 
-async def _vectorize_fact_background(kb_instance, fact_id: str, job_id: str, force: bool = False):
+
+async def _vectorize_fact_background(
+    kb_instance, fact_id: str, job_id: str, force: bool = False
+):
     """
     Background task to vectorize a single fact and track progress in Redis.
 
@@ -2524,12 +2686,10 @@ async def _vectorize_fact_background(kb_instance, fact_id: str, job_id: str, for
             "started_at": datetime.now().isoformat(),
             "completed_at": None,
             "error": None,
-            "result": None
+            "result": None,
         }
         kb_instance.redis_client.setex(
-            f"vectorization_job:{job_id}",
-            3600,  # 1 hour TTL
-            json.dumps(job_data)
+            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)  # 1 hour TTL
         )
         logger.info(f"Started vectorization job {job_id} for fact {fact_id}")
 
@@ -2546,16 +2706,16 @@ async def _vectorize_fact_background(kb_instance, fact_id: str, job_id: str, for
         # Update progress
         job_data["progress"] = 30
         kb_instance.redis_client.setex(
-            f"vectorization_job:{job_id}",
-            3600,
-            json.dumps(job_data)
+            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
         # Check if already vectorized (unless force=True)
         if not force:
             vector_key = f"llama_index/vector_{fact_id}"
             if kb_instance.redis_client.exists(vector_key):
-                logger.info(f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)")
+                logger.info(
+                    f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)"
+                )
                 job_data["status"] = "completed"
                 job_data["progress"] = 100
                 job_data["completed_at"] = datetime.now().isoformat()
@@ -2563,28 +2723,22 @@ async def _vectorize_fact_background(kb_instance, fact_id: str, job_id: str, for
                     "status": "skipped",
                     "message": "Fact already vectorized",
                     "fact_id": fact_id,
-                    "vector_indexed": True
+                    "vector_indexed": True,
                 }
                 kb_instance.redis_client.setex(
-                    f"vectorization_job:{job_id}",
-                    3600,
-                    json.dumps(job_data)
+                    f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
                 )
                 return
 
         # Update progress
         job_data["progress"] = 50
         kb_instance.redis_client.setex(
-            f"vectorization_job:{job_id}",
-            3600,
-            json.dumps(job_data)
+            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
         # Vectorize the fact
         result = await kb_instance.vectorize_existing_fact(
-            fact_id=fact_id,
-            content=content,
-            metadata=metadata
+            fact_id=fact_id, content=content, metadata=metadata
         )
 
         # Update job with result
@@ -2598,18 +2752,20 @@ async def _vectorize_fact_background(kb_instance, fact_id: str, job_id: str, for
         else:
             job_data["status"] = "failed"
             job_data["error"] = result.get("message", "Unknown error")
-            logger.error(f"Failed to vectorize fact {fact_id} in job {job_id}: {job_data['error']}")
+            logger.error(
+                f"Failed to vectorize fact {fact_id} in job {job_id}: {job_data['error']}"
+            )
 
         job_data["completed_at"] = datetime.now().isoformat()
         kb_instance.redis_client.setex(
-            f"vectorization_job:{job_id}",
-            3600,
-            json.dumps(job_data)
+            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"Error in vectorization job {job_id} for fact {fact_id}: {error_msg}")
+        logger.error(
+            f"Error in vectorization job {job_id} for fact {fact_id}: {error_msg}"
+        )
 
         # Update job with error
         job_data = {
@@ -2620,21 +2776,16 @@ async def _vectorize_fact_background(kb_instance, fact_id: str, job_id: str, for
             "started_at": job_data.get("started_at", datetime.now().isoformat()),
             "completed_at": datetime.now().isoformat(),
             "error": error_msg,
-            "result": None
+            "result": None,
         }
         kb_instance.redis_client.setex(
-            f"vectorization_job:{job_id}",
-            3600,
-            json.dumps(job_data)
+            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
 
 @router.post("/vectorize_fact/{fact_id}")
 async def vectorize_individual_fact(
-    fact_id: str,
-    req: Request,
-    background_tasks: BackgroundTasks,
-    force: bool = False
+    fact_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
 ):
     """
     Vectorize a single fact by ID with progress tracking.
@@ -2651,16 +2802,14 @@ async def vectorize_individual_fact(
 
         if kb is None:
             raise HTTPException(
-                status_code=500,
-                detail="Knowledge base not initialized"
+                status_code=500, detail="Knowledge base not initialized"
             )
 
         # Check if fact exists
         fact_json = kb.redis_client.hget("knowledge_base:facts", fact_id)
         if not fact_json:
             raise HTTPException(
-                status_code=404,
-                detail=f"Fact {fact_id} not found in knowledge base"
+                status_code=404, detail=f"Fact {fact_id} not found in knowledge base"
             )
 
         # Generate job ID
@@ -2675,32 +2824,28 @@ async def vectorize_individual_fact(
             "started_at": datetime.now().isoformat(),
             "completed_at": None,
             "error": None,
-            "result": None
+            "result": None,
         }
 
         kb.redis_client.setex(
-            f"vectorization_job:{job_id}",
-            3600,  # 1 hour TTL
-            json.dumps(job_data)
+            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)  # 1 hour TTL
         )
 
         # Add background task
         background_tasks.add_task(
-            _vectorize_fact_background,
-            kb,
-            fact_id,
-            job_id,
-            force
+            _vectorize_fact_background, kb, fact_id, job_id, force
         )
 
-        logger.info(f"Created vectorization job {job_id} for fact {fact_id} (force={force})")
+        logger.info(
+            f"Created vectorization job {job_id} for fact {fact_id} (force={force})"
+        )
 
         return {
             "status": "success",
             "message": "Vectorization job started",
             "job_id": job_id,
             "fact_id": fact_id,
-            "force": force
+            "force": force,
         }
 
     except HTTPException:
@@ -2726,8 +2871,7 @@ async def get_vectorization_job_status(job_id: str, req: Request):
 
         if kb is None:
             raise HTTPException(
-                status_code=500,
-                detail="Knowledge base not initialized"
+                status_code=500, detail="Knowledge base not initialized"
             )
 
         # Get job data from Redis
@@ -2735,16 +2879,12 @@ async def get_vectorization_job_status(job_id: str, req: Request):
 
         if not job_json:
             raise HTTPException(
-                status_code=404,
-                detail=f"Vectorization job {job_id} not found"
+                status_code=404, detail=f"Vectorization job {job_id} not found"
             )
 
         job_data = json.loads(job_json)
 
-        return {
-            "status": "success",
-            "job": job_data
-        }
+        return {"status": "success", "job": job_data}
 
     except HTTPException:
         raise
@@ -2763,13 +2903,15 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
         # Use project-relative path instead of absolute path
         base_path = PathLib(__file__).parent.parent.parent
         scan_path = base_path / directory
-        
+
         if not scan_path.exists():
-            raise HTTPException(status_code=404, detail=f"Directory not found: {directory}")
-        
+            raise HTTPException(
+                status_code=404, detail=f"Directory not found: {directory}"
+            )
+
         unimported = []
         needs_reimport = []
-        
+
         # Scan for markdown files
         for file_path in scan_path.rglob("*.md"):
             if tracker.needs_reimport(str(file_path)):
@@ -2777,14 +2919,14 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
                     needs_reimport.append(str(file_path.relative_to(base_path)))
                 else:
                     unimported.append(str(file_path.relative_to(base_path)))
-        
+
         return {
             "status": "success",
             "directory": directory,
             "unimported_files": unimported,
             "needs_reimport": needs_reimport,
             "total_unimported": len(unimported),
-            "total_needs_reimport": len(needs_reimport)
+            "total_needs_reimport": len(needs_reimport),
         }
     except Exception as e:
         logger.error(f"Error scanning for unimported files: {e}")
@@ -2792,7 +2934,9 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
 
 
 @router.post("/vectorize_facts/background")
-async def start_background_vectorization(req: Request, background_tasks: BackgroundTasks):
+async def start_background_vectorization(
+    req: Request, background_tasks: BackgroundTasks
+):
     """
     Start background vectorization of all pending facts.
     Returns immediately while vectorization runs in the background.
@@ -2800,18 +2944,22 @@ async def start_background_vectorization(req: Request, background_tasks: Backgro
     try:
         kb = await get_or_create_knowledge_base(req.app)
         if not kb:
-            raise HTTPException(status_code=500, detail="Knowledge base not initialized")
-        
+            raise HTTPException(
+                status_code=500, detail="Knowledge base not initialized"
+            )
+
         vectorizer = get_background_vectorizer()
-        
+
         # Add vectorization to background tasks
         background_tasks.add_task(vectorizer.vectorize_pending_facts, kb)
-        
+
         return {
             "status": "started",
             "message": "Background vectorization started",
-            "last_run": vectorizer.last_run.isoformat() if vectorizer.last_run else None,
-            "is_running": vectorizer.is_running
+            "last_run": (
+                vectorizer.last_run.isoformat() if vectorizer.last_run else None
+            ),
+            "is_running": vectorizer.is_running,
         }
     except Exception as e:
         logger.error(f"Failed to start background vectorization: {e}")
@@ -2823,12 +2971,14 @@ async def get_vectorization_status(req: Request):
     """Get the status of background vectorization"""
     try:
         vectorizer = get_background_vectorizer()
-        
+
         return {
             "is_running": vectorizer.is_running,
-            "last_run": vectorizer.last_run.isoformat() if vectorizer.last_run else None,
+            "last_run": (
+                vectorizer.last_run.isoformat() if vectorizer.last_run else None
+            ),
             "check_interval": vectorizer.check_interval,
-            "batch_size": vectorizer.batch_size
+            "batch_size": vectorizer.batch_size,
         }
     except Exception as e:
         logger.error(f"Failed to get vectorization status: {e}")

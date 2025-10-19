@@ -11,6 +11,7 @@ from src.constants.network_constants import NetworkConstants
 
 class ProviderStatus(str, Enum):
     """Provider health status enumeration"""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"  # Provider available but experiencing issues
     UNAVAILABLE = "unavailable"
@@ -31,6 +32,7 @@ class ProviderHealthResult:
         provider: Provider name (ollama, openai, anthropic, google)
         details: Additional provider-specific details
     """
+
     status: ProviderStatus
     available: bool
     message: str

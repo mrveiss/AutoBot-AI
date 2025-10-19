@@ -218,7 +218,9 @@ class TerminalTool:
             }
 
         try:
-            session_info = await self.agent_terminal_service.get_session_info(session_id)
+            session_info = await self.agent_terminal_service.get_session_info(
+                session_id
+            )
 
             if not session_info:
                 return {
@@ -238,9 +240,7 @@ class TerminalTool:
                 "error": str(e),
             }
 
-    async def get_user_command_history(
-        self, conversation_id: str
-    ) -> Dict[str, Any]:
+    async def get_user_command_history(self, conversation_id: str) -> Dict[str, Any]:
         """
         Get command history from user's interactive terminal session.
 
@@ -262,7 +262,9 @@ class TerminalTool:
             # For now, we'll need to list all sessions and find the user's
             # In production, this mapping should be stored
 
-            backend_url = f"http://{NetworkConstants.MAIN_HOST}:{NetworkConstants.BACKEND_PORT}"
+            backend_url = (
+                f"http://{NetworkConstants.MAIN_HOST}:{NetworkConstants.BACKEND_PORT}"
+            )
 
             async with httpx.AsyncClient(timeout=5.0) as client:
                 # List all terminal sessions
@@ -271,7 +273,7 @@ class TerminalTool:
                 if response.status_code != 200:
                     return {
                         "status": "error",
-                        "error": "Failed to list terminal sessions"
+                        "error": "Failed to list terminal sessions",
                     }
 
                 sessions_data = response.json()
@@ -280,7 +282,8 @@ class TerminalTool:
                 # Find user's active terminal session
                 # User sessions have user_id "default" and are not agent sessions
                 user_sessions = [
-                    s for s in sessions
+                    s
+                    for s in sessions
                     if s.get("is_active") and s.get("user_id") == "default"
                 ]
 
@@ -288,7 +291,7 @@ class TerminalTool:
                     return {
                         "status": "success",
                         "history": [],
-                        "message": "No active user terminal session found"
+                        "message": "No active user terminal session found",
                     }
 
                 # Get history from first active user session
@@ -301,7 +304,7 @@ class TerminalTool:
                 if history_response.status_code != 200:
                     return {
                         "status": "error",
-                        "error": "Failed to retrieve command history"
+                        "error": "Failed to retrieve command history",
                     }
 
                 history_data = history_response.json()
@@ -310,15 +313,12 @@ class TerminalTool:
                     "status": "success",
                     "session_id": user_session_id,
                     "history": history_data.get("history", []),
-                    "total_commands": history_data.get("total_commands", 0)
+                    "total_commands": history_data.get("total_commands", 0),
                 }
 
         except Exception as e:
             logger.error(f"Error getting user command history: {e}", exc_info=True)
-            return {
-                "status": "error",
-                "error": str(e)
-            }
+            return {"status": "error", "error": str(e)}
 
     async def close_session(self, conversation_id: str) -> Dict[str, Any]:
         """
@@ -350,7 +350,9 @@ class TerminalTool:
                 # Remove from active sessions
                 del self.active_sessions[conversation_id]
 
-                logger.info(f"Closed terminal session for conversation {conversation_id}")
+                logger.info(
+                    f"Closed terminal session for conversation {conversation_id}"
+                )
 
                 return {
                     "status": "success",

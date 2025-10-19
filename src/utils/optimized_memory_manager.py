@@ -19,96 +19,98 @@ class OptimizedMemoryManager:
     """
     Intelligent memory management with LRU eviction and adaptive cleanup
     """
-    
+
     def __init__(self):
         self.memory_threshold = 0.8  # 80% memory usage threshold
         self.cleanup_percentage = 0.2  # Clean up 20% of data
         self.monitoring_interval = 60  # Check every minute
         self.lru_caches = {}
         self.monitoring_task = None
-        
+
     def create_lru_cache(self, name: str, max_size: int = 1000) -> OrderedDict:
         """Create named LRU cache with size limit"""
         if name not in self.lru_caches:
             self.lru_caches[name] = {
-                'cache': OrderedDict(),
-                'max_size': max_size,
-                'hits': 0,
-                'misses': 0
+                "cache": OrderedDict(),
+                "max_size": max_size,
+                "hits": 0,
+                "misses": 0,
             }
-        return self.lru_caches[name]['cache']
-    
+        return self.lru_caches[name]["cache"]
+
     def get_from_cache(self, cache_name: str, key: str) -> Optional[Any]:
         """Get item from LRU cache"""
         if cache_name not in self.lru_caches:
             return None
-            
+
         cache_info = self.lru_caches[cache_name]
-        cache = cache_info['cache']
-        
+        cache = cache_info["cache"]
+
         if key in cache:
             # Move to end (most recently used)
             value = cache.pop(key)
             cache[key] = value
-            cache_info['hits'] += 1
+            cache_info["hits"] += 1
             return value
         else:
-            cache_info['misses'] += 1
+            cache_info["misses"] += 1
             return None
-    
+
     def put_in_cache(self, cache_name: str, key: str, value: Any):
         """Put item in LRU cache with size management"""
         if cache_name not in self.lru_caches:
             self.create_lru_cache(cache_name)
-            
+
         cache_info = self.lru_caches[cache_name]
-        cache = cache_info['cache']
-        max_size = cache_info['max_size']
-        
+        cache = cache_info["cache"]
+        max_size = cache_info["max_size"]
+
         # Remove if already exists
         if key in cache:
             cache.pop(key)
-        
+
         # Add new item
         cache[key] = value
-        
+
         # Enforce size limit
         while len(cache) > max_size:
             oldest_key = next(iter(cache))
             cache.pop(oldest_key)
             logger.debug(f"Evicted {oldest_key} from {cache_name} cache")
-    
+
     def get_cache_stats(self) -> Dict[str, Dict]:
         """Get statistics for all caches"""
         stats = {}
         for name, cache_info in self.lru_caches.items():
-            cache = cache_info['cache']
+            cache = cache_info["cache"]
             hit_rate = 0
-            total_requests = cache_info['hits'] + cache_info['misses']
+            total_requests = cache_info["hits"] + cache_info["misses"]
             if total_requests > 0:
-                hit_rate = cache_info['hits'] / total_requests
-                
+                hit_rate = cache_info["hits"] / total_requests
+
             stats[name] = {
-                'size': len(cache),
-                'max_size': cache_info['max_size'],
-                'hit_rate': hit_rate,
-                'hits': cache_info['hits'],
-                'misses': cache_info['misses']
+                "size": len(cache),
+                "max_size": cache_info["max_size"],
+                "hit_rate": hit_rate,
+                "hits": cache_info["hits"],
+                "misses": cache_info["misses"],
             }
         return stats
-    
+
     async def adaptive_memory_cleanup(self):
         """Adaptive memory cleanup based on system pressure"""
         try:
             memory = psutil.virtual_memory()
-            
+
             if memory.percent > (self.memory_threshold * 100):
-                logger.warning(f"Memory usage high: {memory.percent:.1f}%, starting cleanup")
-                
+                logger.warning(
+                    f"Memory usage high: {memory.percent:.1f}%, starting cleanup"
+                )
+
                 # Clean up LRU caches
                 total_cleaned = 0
                 for cache_name, cache_info in self.lru_caches.items():
-                    cache = cache_info['cache']
+                    cache = cache_info["cache"]
                     cleanup_count = int(len(cache) * self.cleanup_percentage)
                     if cleanup_count > 0:
                         # Remove oldest entries
@@ -117,26 +119,28 @@ class OptimizedMemoryManager:
                                 removed_key = next(iter(cache))
                                 cache.pop(removed_key)
                                 total_cleaned += 1
-                                
+
                 logger.info(f"Cleaned {total_cleaned} cache entries")
-                
+
                 # Force garbage collection
                 collected = gc.collect()
-                
+
                 # Check memory after cleanup
                 memory_after = psutil.virtual_memory()
-                logger.info(f"Memory cleanup completed: {memory.percent:.1f}% -> {memory_after.percent:.1f}%, collected {collected} objects")
-                
+                logger.info(
+                    f"Memory cleanup completed: {memory.percent:.1f}% -> {memory_after.percent:.1f}%, collected {collected} objects"
+                )
+
             else:
                 logger.debug(f"Memory usage normal: {memory.percent:.1f}%")
-                
+
         except Exception as e:
             logger.error(f"Error during memory cleanup: {e}")
-    
+
     async def start_memory_monitor(self):
         """Start background memory monitoring"""
         logger.info("Starting optimized memory monitor")
-        
+
         try:
             while True:
                 await self.adaptive_memory_cleanup()
@@ -146,52 +150,53 @@ class OptimizedMemoryManager:
             raise
         except Exception as e:
             logger.error(f"Memory monitor error: {e}")
-    
+
     def start_monitoring(self):
         """Start memory monitoring task"""
         if self.monitoring_task is None or self.monitoring_task.done():
             self.monitoring_task = asyncio.create_task(self.start_memory_monitor())
             logger.info("Memory monitoring task started")
-    
+
     def stop_monitoring(self):
         """Stop memory monitoring task"""
         if self.monitoring_task and not self.monitoring_task.done():
             self.monitoring_task.cancel()
             logger.info("Memory monitoring task stopped")
-    
+
     def get_memory_usage(self) -> Dict[str, float]:
         """Get current memory usage statistics"""
         memory = psutil.virtual_memory()
         return {
-            'total_gb': memory.total / (1024**3),
-            'used_gb': memory.used / (1024**3),
-            'available_gb': memory.available / (1024**3),
-            'percent': memory.percent,
-            'threshold': self.memory_threshold * 100
+            "total_gb": memory.total / (1024**3),
+            "used_gb": memory.used / (1024**3),
+            "available_gb": memory.available / (1024**3),
+            "percent": memory.percent,
+            "threshold": self.memory_threshold * 100,
         }
-    
+
     def cleanup_specific_cache(self, cache_name: str, percentage: float = 0.5):
         """Clean up specific cache by percentage"""
         if cache_name not in self.lru_caches:
             logger.warning(f"Cache {cache_name} not found")
             return 0
-            
-        cache = self.lru_caches[cache_name]['cache']
+
+        cache = self.lru_caches[cache_name]["cache"]
         cleanup_count = int(len(cache) * percentage)
-        
+
         cleaned = 0
         for _ in range(cleanup_count):
             if cache:
                 removed_key = next(iter(cache))
                 cache.pop(removed_key)
                 cleaned += 1
-        
+
         logger.info(f"Cleaned {cleaned} entries from {cache_name} cache")
         return cleaned
 
 
 # Global optimized memory manager instance
 _memory_manager = None
+
 
 def get_optimized_memory_manager() -> OptimizedMemoryManager:
     """Get global optimized memory manager instance"""
@@ -208,10 +213,12 @@ def create_managed_cache(name: str, max_size: int = 1000) -> OrderedDict:
     manager = get_optimized_memory_manager()
     return manager.create_lru_cache(name, max_size)
 
+
 def cache_get(cache_name: str, key: str) -> Optional[Any]:
     """Get item from managed cache"""
     manager = get_optimized_memory_manager()
     return manager.get_from_cache(cache_name, key)
+
 
 def cache_put(cache_name: str, key: str, value: Any):
     """Put item in managed cache"""

@@ -36,13 +36,13 @@ class ConfigHelper:
 
     def _load_complete_config(self):
         """Load the complete configuration file"""
-        config_path = Path(__file__).parent.parent / 'config' / 'complete.yaml'
+        config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
 
         if not config_path.exists():
             raise FileNotFoundError(f"Complete configuration not found: {config_path}")
 
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 self._config = yaml.safe_load(f)
             logger.info("Complete configuration loaded successfully")
         except Exception as e:
@@ -60,7 +60,7 @@ class ConfigHelper:
         Returns:
             Configuration value or default
         """
-        keys = path.split('.')
+        keys = path.split(".")
         value = self._config
 
         for key in keys:
@@ -70,7 +70,7 @@ class ConfigHelper:
                 return default
 
         # Apply environment variable substitution if string contains ${...}
-        if isinstance(value, str) and '${' in value:
+        if isinstance(value, str) and "${" in value:
             value = self._substitute_variables(value)
 
         return value
@@ -86,7 +86,7 @@ class ConfigHelper:
             return str(replacement) if replacement is not None else match.group(0)
 
         # Replace ${path.to.value} patterns
-        pattern = r'\$\{([^}]+)\}'
+        pattern = r"\$\{([^}]+)\}"
         return re.sub(pattern, replace_var, value)
 
     def get_hardcoded_value(self, category: str, key: str, env: str = None) -> str:
@@ -113,15 +113,17 @@ class ConfigHelper:
             env_config = self._load_environment_config(current_env)
 
             # Try environment-specific override first
-            override_path = f'hardcoded_overrides.{category}.{key}'
+            override_path = f"hardcoded_overrides.{category}.{key}"
             override_value = self._get_nested_value(env_config, override_path)
 
             if override_value is not None:
-                logger.debug(f"Using environment override for {category}.{key}: {override_value}")
+                logger.debug(
+                    f"Using environment override for {category}.{key}: {override_value}"
+                )
                 return str(override_value)
 
             # Fall back to base configuration
-            base_path = f'{category}.{key}'
+            base_path = f"{category}.{key}"
             base_value = self.get(base_path)
 
             if base_value is not None:
@@ -130,7 +132,9 @@ class ConfigHelper:
 
             # Final fallback based on category defaults
             default_value = self._get_category_default(category, key)
-            logger.warning(f"No configuration found for {category}.{key}, using default: {default_value}")
+            logger.warning(
+                f"No configuration found for {category}.{key}, using default: {default_value}"
+            )
             return default_value
 
         except Exception as e:
@@ -152,15 +156,19 @@ class ConfigHelper:
         if env in self._environment_configs:
             return self._environment_configs[env]
 
-        env_file = Path(__file__).parent.parent / 'config' / 'environments' / f'{env}.yaml'
+        env_file = (
+            Path(__file__).parent.parent / "config" / "environments" / f"{env}.yaml"
+        )
 
         try:
             if env_file.exists():
-                with open(env_file, 'r') as f:
+                with open(env_file, "r") as f:
                     env_config = yaml.safe_load(f) or {}
                 logger.info(f"Loaded environment configuration for {env}")
             else:
-                logger.info(f"No environment config found for {env}, using base configuration")
+                logger.info(
+                    f"No environment config found for {env}, using base configuration"
+                )
                 env_config = {}
 
             # Cache the configuration
@@ -180,20 +188,20 @@ class ConfigHelper:
             Environment name (development, staging, production)
         """
         # Check environment variable first
-        env = os.getenv('AUTOBOT_ENVIRONMENT')
+        env = os.getenv("AUTOBOT_ENVIRONMENT")
         if env:
             return env.lower()
 
         # Check for common environment indicators
-        if os.getenv('NODE_ENV') == 'production':
-            return 'production'
-        elif os.getenv('NODE_ENV') == 'staging':
-            return 'staging'
-        elif os.getenv('DOCKER_CONTAINER'):
-            return 'production'
+        if os.getenv("NODE_ENV") == "production":
+            return "production"
+        elif os.getenv("NODE_ENV") == "staging":
+            return "staging"
+        elif os.getenv("DOCKER_CONTAINER"):
+            return "production"
 
         # Default to development
-        return 'development'
+        return "development"
 
     def _get_nested_value(self, config: Dict[str, Any], path: str) -> Any:
         """
@@ -206,7 +214,7 @@ class ConfigHelper:
         Returns:
             Value if found, None otherwise
         """
-        keys = path.split('.')
+        keys = path.split(".")
         value = config
 
         for key in keys:
@@ -229,28 +237,28 @@ class ConfigHelper:
             Safe default value
         """
         defaults = {
-            'file_paths': {
-                'logs': 'logs',
-                'data': 'data',
-                'temp': 'temp',
-                'cache': 'cache',
-                'config': 'config',
-                'backup': 'backup'
+            "file_paths": {
+                "logs": "logs",
+                "data": "data",
+                "temp": "temp",
+                "cache": "cache",
+                "config": "config",
+                "backup": "backup",
             },
-            'urls': {
-                'api_base': ServiceURLs.BACKEND_LOCAL,
-                'frontend_base': ServiceURLs.FRONTEND_LOCAL,
-                'redis_url': 'redis://localhost:6379',
-                'ollama_url': ServiceURLs.OLLAMA_LOCAL
+            "urls": {
+                "api_base": ServiceURLs.BACKEND_LOCAL,
+                "frontend_base": ServiceURLs.FRONTEND_LOCAL,
+                "redis_url": "redis://localhost:6379",
+                "ollama_url": ServiceURLs.OLLAMA_LOCAL,
             },
-            'database_connections': {
-                'redis_host': 'localhost',
-                'redis_port': str(NetworkConstants.REDIS_PORT)
-            }
+            "database_connections": {
+                "redis_host": "localhost",
+                "redis_port": str(NetworkConstants.REDIS_PORT),
+            },
         }
 
         category_defaults = defaults.get(category, {})
-        return category_defaults.get(key, f'{category}_{key}_default')
+        return category_defaults.get(key, f"{category}_{key}_default")
 
     def get_environment_info(self) -> Dict[str, Any]:
         """
@@ -263,12 +271,12 @@ class ConfigHelper:
         env_config = self._load_environment_config(current_env)
 
         return {
-            'current_environment': current_env,
-            'config_file_exists': len(env_config) > 0,
-            'available_overrides': list(env_config.keys()) if env_config else [],
-            'environment_variable': os.getenv('AUTOBOT_ENVIRONMENT'),
-            'node_env': os.getenv('NODE_ENV'),
-            'docker_container': bool(os.getenv('DOCKER_CONTAINER'))
+            "current_environment": current_env,
+            "config_file_exists": len(env_config) > 0,
+            "available_overrides": list(env_config.keys()) if env_config else [],
+            "environment_variable": os.getenv("AUTOBOT_ENVIRONMENT"),
+            "node_env": os.getenv("NODE_ENV"),
+            "docker_container": bool(os.getenv("DOCKER_CONTAINER")),
         }
 
     def get_service_url(self, service: str, endpoint: str = None) -> str:
@@ -282,9 +290,9 @@ class ConfigHelper:
         Returns:
             Complete service URL
         """
-        base_url = self.get(f'services.{service}.base_url')
+        base_url = self.get(f"services.{service}.base_url")
         if not base_url:
-            base_url = self.get(f'services.{service}.url')
+            base_url = self.get(f"services.{service}.url")
 
         if endpoint:
             return f"{base_url}{endpoint}"
@@ -293,14 +301,14 @@ class ConfigHelper:
     def get_redis_config(self) -> Dict[str, Any]:
         """Get complete Redis configuration"""
         return {
-            'host': self.get('redis.host'),
-            'port': self.get('redis.port'),
-            'password': self.get('redis.password'),
-            'db': self.get('redis.databases.main', 0),
-            **self.get('redis.connection', {})
+            "host": self.get("redis.host"),
+            "port": self.get("redis.port"),
+            "password": self.get("redis.password"),
+            "db": self.get("redis.databases.main", 0),
+            **self.get("redis.connection", {}),
         }
 
-    def get_timeout(self, category: str, type: str = 'default') -> float:
+    def get_timeout(self, category: str, type: str = "default") -> float:
         """
         Get timeout value for specific category and type.
 
@@ -311,7 +319,7 @@ class ConfigHelper:
         Returns:
             Timeout value in seconds
         """
-        return self.get(f'timeouts.{category}.{type}', 60)
+        return self.get(f"timeouts.{category}.{type}", 60)
 
     def get_path(self, category: str, name: str = None) -> str:
         """
@@ -325,8 +333,8 @@ class ConfigHelper:
             File or directory path
         """
         if name:
-            return self.get(f'paths.{category}.{name}')
-        return self.get(f'paths.{category}.directory')
+            return self.get(f"paths.{category}.{name}")
+        return self.get(f"paths.{category}.directory")
 
     def get_limit(self, category: str, name: str) -> Any:
         """
@@ -339,7 +347,7 @@ class ConfigHelper:
         Returns:
             Limit value
         """
-        return self.get(f'limits.{category}.{name}')
+        return self.get(f"limits.{category}.{name}")
 
     def is_feature_enabled(self, feature: str) -> bool:
         """
@@ -351,7 +359,7 @@ class ConfigHelper:
         Returns:
             True if feature is enabled
         """
-        return self.get(f'features.{feature}', False)
+        return self.get(f"features.{feature}", False)
 
     def get_retry_config(self, service: str = None) -> Dict[str, Any]:
         """
@@ -364,26 +372,26 @@ class ConfigHelper:
             Retry configuration dictionary
         """
         if service:
-            service_retry = self.get(f'retry.{service}', {})
+            service_retry = self.get(f"retry.{service}", {})
             if service_retry:
                 return service_retry
 
         return {
-            'attempts': self.get('retry.default_attempts', 3),
-            'delay': self.get('retry.default_delay', 1),
-            'max_attempts': self.get('retry.max_attempts', 5),
-            'exponential_backoff': self.get('retry.exponential_backoff', True),
-            'backoff_factor': self.get('retry.backoff_factor', 2),
-            'max_delay': self.get('retry.max_delay', 60)
+            "attempts": self.get("retry.default_attempts", 3),
+            "delay": self.get("retry.default_delay", 1),
+            "max_attempts": self.get("retry.max_attempts", 5),
+            "exponential_backoff": self.get("retry.exponential_backoff", True),
+            "backoff_factor": self.get("retry.backoff_factor", 2),
+            "max_delay": self.get("retry.max_delay", 60),
         }
 
     def get_host(self, service: str) -> str:
         """Get host IP for a service"""
-        return self.get(f'infrastructure.hosts.{service}', '127.0.0.1')
+        return self.get(f"infrastructure.hosts.{service}", "127.0.0.1")
 
     def get_port(self, service: str) -> int:
         """Get port for a service"""
-        return self.get(f'infrastructure.ports.{service}', 8000)
+        return self.get(f"infrastructure.ports.{service}", 8000)
 
     def reload(self):
         """Reload configuration from file"""
@@ -398,62 +406,62 @@ cfg = ConfigHelper()
 # Convenience functions for common access patterns
 def get_backend_url(endpoint: str = None) -> str:
     """Get backend service URL with optional endpoint"""
-    return cfg.get_service_url('backend', endpoint)
+    return cfg.get_service_url("backend", endpoint)
 
 
 def get_frontend_url(endpoint: str = None) -> str:
     """Get frontend service URL with optional endpoint"""
-    return cfg.get_service_url('frontend', endpoint)
+    return cfg.get_service_url("frontend", endpoint)
 
 
 def get_redis_url() -> str:
     """Get Redis connection URL"""
-    return cfg.get_service_url('redis')
+    return cfg.get_service_url("redis")
 
 
 def get_ollama_url(endpoint: str = None) -> str:
     """Get Ollama service URL with optional endpoint"""
-    return cfg.get_service_url('ollama', endpoint)
+    return cfg.get_service_url("ollama", endpoint)
 
 
-def get_timeout(category: str = 'http', type: str = 'standard') -> float:
+def get_timeout(category: str = "http", type: str = "standard") -> float:
     """Get timeout value"""
     return cfg.get_timeout(category, type)
 
 
-def get_log_path(name: str = 'system') -> str:
+def get_log_path(name: str = "system") -> str:
     """Get log file path"""
-    return cfg.get_path('logs', name)
+    return cfg.get_path("logs", name)
 
 
 def get_data_path(name: str = None) -> str:
     """Get data directory or file path"""
-    return cfg.get_path('data', name)
+    return cfg.get_path("data", name)
 
 
 # New convenience functions for hardcoded values
 def get_hardcoded_file_path(key: str, env: str = None) -> str:
     """Get hardcoded file path with environment overrides"""
-    return cfg.get_hardcoded_value('file_paths', key, env)
+    return cfg.get_hardcoded_value("file_paths", key, env)
 
 
 def get_hardcoded_url(key: str, env: str = None) -> str:
     """Get hardcoded URL with environment overrides"""
-    return cfg.get_hardcoded_value('urls', key, env)
+    return cfg.get_hardcoded_value("urls", key, env)
 
 
 # Export commonly used values as constants (computed at import time)
 # These are provided for convenience but cfg.get() should be preferred
 
 # Infrastructure
-BACKEND_HOST = cfg.get_host('backend')
-BACKEND_PORT = cfg.get_port('backend')
-FRONTEND_HOST = cfg.get_host('frontend')
-FRONTEND_PORT = cfg.get_port('frontend')
-REDIS_HOST = cfg.get_host('redis')
-REDIS_PORT = cfg.get_port('redis')
-OLLAMA_HOST = cfg.get_host('ollama')
-OLLAMA_PORT = cfg.get_port('ollama')
+BACKEND_HOST = cfg.get_host("backend")
+BACKEND_PORT = cfg.get_port("backend")
+FRONTEND_HOST = cfg.get_host("frontend")
+FRONTEND_PORT = cfg.get_port("frontend")
+REDIS_HOST = cfg.get_host("redis")
+REDIS_PORT = cfg.get_port("redis")
+OLLAMA_HOST = cfg.get_host("ollama")
+OLLAMA_PORT = cfg.get_port("ollama")
 
 # URLs
 BACKEND_URL = get_backend_url()
@@ -462,11 +470,11 @@ REDIS_URL = get_redis_url()
 OLLAMA_URL = get_ollama_url()
 
 # Timeouts
-DEFAULT_TIMEOUT = get_timeout('http', 'standard')
-LLM_TIMEOUT = get_timeout('llm', 'default')
-COMMAND_TIMEOUT = get_timeout('commands', 'standard')
+DEFAULT_TIMEOUT = get_timeout("http", "standard")
+LLM_TIMEOUT = get_timeout("llm", "default")
+COMMAND_TIMEOUT = get_timeout("commands", "standard")
 
 # Paths
-LOG_DIR = cfg.get_path('logs')
-DATA_DIR = cfg.get_path('data')
-CONFIG_DIR = cfg.get_path('config')
+LOG_DIR = cfg.get_path("logs")
+DATA_DIR = cfg.get_path("data")
+CONFIG_DIR = cfg.get_path("config")

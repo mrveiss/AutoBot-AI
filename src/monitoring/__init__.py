@@ -7,10 +7,7 @@ including Prometheus metrics for timeout tracking and performance monitoring.
 
 from src.monitoring.prometheus_metrics import (
     PrometheusMetricsManager,
-    get_metrics_manager
+    get_metrics_manager,
 )
 
-__all__ = [
-    "PrometheusMetricsManager",
-    "get_metrics_manager"
-]
+__all__ = ["PrometheusMetricsManager", "get_metrics_manager"]

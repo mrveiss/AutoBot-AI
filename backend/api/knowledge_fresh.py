@@ -24,8 +24,8 @@ async def get_fresh_knowledge_stats(request: Request = None):
         import sys
 
         # Force reload the knowledge base module
-        if 'src.knowledge_base' in sys.modules:
-            importlib.reload(sys.modules['src.knowledge_base'])
+        if "src.knowledge_base" in sys.modules:
+            importlib.reload(sys.modules["src.knowledge_base"])
 
         from src.knowledge_base import KnowledgeBase
 
@@ -56,13 +56,15 @@ async def get_fresh_knowledge_stats(request: Request = None):
             "debug_info": {
                 "vector_count": stats.get("total_documents", 0),
                 "indexed_count": stats.get("indexed_documents", 0),
-                "mismatch": stats.get("total_documents", 0) != stats.get("indexed_documents", 0)
-            }
+                "mismatch": stats.get("total_documents", 0)
+                != stats.get("indexed_documents", 0),
+            },
         }
 
     except Exception as e:
         logger.error(f"Error getting fresh KB stats: {e}")
         import traceback
+
         traceback.print_exc()
         return {
             "source": "completely_fresh_instance",
@@ -72,7 +74,7 @@ async def get_fresh_knowledge_stats(request: Request = None):
             "total_facts": 0,
             "categories": [],
             "status": "error",
-            "message": f"Fresh instance failed: {str(e)}"
+            "message": f"Fresh instance failed: {str(e)}",
         }
 
 
@@ -84,19 +86,21 @@ async def debug_redis_connection():
         import aioredis
 
         # Test direct Redis connection to the knowledge base
-        redis_host = os.getenv('AUTOBOT_REDIS_HOST')
-        redis_port = os.getenv('AUTOBOT_REDIS_PORT')
-        redis_db = os.getenv('AUTOBOT_REDIS_DB_KNOWLEDGE')
+        redis_host = os.getenv("AUTOBOT_REDIS_HOST")
+        redis_port = os.getenv("AUTOBOT_REDIS_PORT")
+        redis_db = os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE")
 
         if not all([redis_host, redis_port, redis_db]):
-            raise ValueError('Redis configuration missing: AUTOBOT_REDIS_HOST, AUTOBOT_REDIS_PORT, and AUTOBOT_REDIS_DB_KNOWLEDGE must be set')
+            raise ValueError(
+                "Redis configuration missing: AUTOBOT_REDIS_HOST, AUTOBOT_REDIS_PORT, and AUTOBOT_REDIS_DB_KNOWLEDGE must be set"
+            )
 
         redis_client = redis.Redis(
             host=redis_host,
             port=int(redis_port),
             db=int(redis_db),  # Knowledge base database
             decode_responses=False,
-            socket_timeout=5
+            socket_timeout=5,
         )
 
         # Test connection
@@ -105,16 +109,18 @@ async def debug_redis_connection():
         # Count vectors directly
         vector_keys = []
         for key in redis_client.scan_iter(match="llama_index/vector_*"):
-            vector_keys.append(key.decode('utf-8') if isinstance(key, bytes) else str(key))
+            vector_keys.append(
+                key.decode("utf-8") if isinstance(key, bytes) else str(key)
+            )
 
         # Get FT.INFO
         try:
-            ft_info = redis_client.execute_command('FT.INFO', 'llama_index')
+            ft_info = redis_client.execute_command("FT.INFO", "llama_index")
             indexed_docs = 0
             for i, item in enumerate(ft_info):
                 if isinstance(item, bytes):
                     item = item.decode()
-                if item == 'num_docs' and i + 1 < len(ft_info):
+                if item == "num_docs" and i + 1 < len(ft_info):
                     indexed_docs = int(ft_info[i + 1])
                     break
         except Exception as e:
@@ -126,14 +132,15 @@ async def debug_redis_connection():
             "vector_keys_found": len(vector_keys),
             "sample_keys": vector_keys[:5],
             "indexed_documents": indexed_docs,
-            "mismatch_detected": len(vector_keys) != indexed_docs if isinstance(indexed_docs, int) else True
+            "mismatch_detected": (
+                len(vector_keys) != indexed_docs
+                if isinstance(indexed_docs, int)
+                else True
+            ),
         }
 
     except Exception as e:
-        return {
-            "redis_connection": "failed",
-            "error": str(e)
-        }
+        return {"redis_connection": "failed", "error": str(e)}
 
 
 @router.post("/rebuild_index")
@@ -156,13 +163,9 @@ async def rebuild_search_index():
         return {
             "operation": "rebuild_search_index",
             "result": result,
-            "success": result.get("status") == "success"
+            "success": result.get("status") == "success",
         }
 
     except Exception as e:
         logger.error(f"Error rebuilding index: {e}")
-        return {
-            "operation": "rebuild_search_index",
-            "error": str(e),
-            "success": False
-        }
+        return {"operation": "rebuild_search_index", "error": str(e), "success": False}

@@ -11,7 +11,12 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 
 # Import host IP addresses from main config
-from src.unified_config_manager import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT, REDIS_HOST_IP
+from src.unified_config_manager import (
+    HTTP_PROTOCOL,
+    OLLAMA_HOST_IP,
+    OLLAMA_PORT,
+    REDIS_HOST_IP,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +77,22 @@ class ConfigManager:
                     "model": os.getenv("AUTOBOT_OLLAMA_MODEL", "llama3.2"),
                     "base_url": f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
                     "timeout": int(os.getenv("AUTOBOT_OLLAMA_TIMEOUT", "30")),
-                    "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))),
+                    "port": int(
+                        os.getenv(
+                            "AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT)
+                        )
+                    ),
                 },
                 "openai": {"api_key": ""},
             },
             "deployment": {
                 "mode": "local",
                 "host": REDIS_HOST_IP,
-                "port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
+                "port": int(
+                    os.getenv(
+                        "AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT)
+                    )
+                ),
             },
             "data": {
                 "reliability_stats_file": "data/reliability_stats.json",
@@ -89,7 +102,9 @@ class ConfigManager:
             },
             "redis": {
                 "host": REDIS_HOST_IP,
-                "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
+                "port": int(
+                    os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))
+                ),
                 "db": int(os.getenv("AUTOBOT_REDIS_DB", "0")),
                 "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
             },
@@ -151,7 +166,11 @@ class ConfigManager:
                 "redis": {
                     "enabled": True,
                     "host": REDIS_HOST_IP,
-                    "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
+                    "port": int(
+                        os.getenv(
+                            "AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)
+                        )
+                    ),
                     "db": int(os.getenv("AUTOBOT_REDIS_MEMORY_DB", "0")),
                     "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
                 }
@@ -160,7 +179,11 @@ class ConfigManager:
                 "type": "redis",
                 "redis": {
                     "host": REDIS_HOST_IP,
-                    "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
+                    "port": int(
+                        os.getenv(
+                            "AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)
+                        )
+                    ),
                     "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
                     "db": int(os.getenv("AUTOBOT_REDIS_TASK_DB", "0")),
                 },
@@ -379,7 +402,9 @@ class ConfigManager:
                 "ollama": {
                     "selected_model": ollama_provider.get("selected_model"),
                     "models": ollama_provider.get("models", []),
-                    "endpoint": ollama_provider.get("endpoint", ServiceURLs.OLLAMA_LOCAL)
+                    "endpoint": ollama_provider.get(
+                        "endpoint", ServiceURLs.OLLAMA_LOCAL
+                    ),
                 }
             }
 
@@ -411,7 +436,9 @@ from src.constants import NetworkConstants, ServiceURLs
 # Backward compatibility aliases
 config_manager = unified_config_manager
 
-logger.warning("DEPRECATED: src.utils.config_manager is deprecated. Use src.unified_config_manager instead.")
+logger.warning(
+    "DEPRECATED: src.utils.config_manager is deprecated. Use src.unified_config_manager instead."
+)
 
 
 # Convenience functions for common operations

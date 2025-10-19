@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class HostConfig:
     """Configuration for an SSH host"""
+
     name: str
     ip: str
     port: int
@@ -42,6 +43,7 @@ class HostConfig:
 @dataclass
 class RemoteCommandResult:
     """Result of a remote command execution"""
+
     host: str
     command: str
     stdout: str
@@ -68,42 +70,42 @@ class SSHManager:
 
     # Default host configurations
     DEFAULT_HOSTS = {
-        'main': {
-            'ip': '172.16.168.20',
-            'port': 22,
-            'user': 'autobot',
-            'description': 'Main machine - Backend API + VNC Desktop'
+        "main": {
+            "ip": "172.16.168.20",
+            "port": 22,
+            "user": "autobot",
+            "description": "Main machine - Backend API + VNC Desktop",
         },
-        'frontend': {
-            'ip': '172.16.168.21',
-            'port': 22,
-            'user': 'autobot',
-            'description': 'Frontend VM - Web interface'
+        "frontend": {
+            "ip": "172.16.168.21",
+            "port": 22,
+            "user": "autobot",
+            "description": "Frontend VM - Web interface",
         },
-        'npu-worker': {
-            'ip': '172.16.168.22',
-            'port': 22,
-            'user': 'autobot',
-            'description': 'NPU Worker VM - Hardware AI acceleration'
+        "npu-worker": {
+            "ip": "172.16.168.22",
+            "port": 22,
+            "user": "autobot",
+            "description": "NPU Worker VM - Hardware AI acceleration",
         },
-        'redis': {
-            'ip': '172.16.168.23',
-            'port': 22,
-            'user': 'autobot',
-            'description': 'Redis VM - Data layer'
+        "redis": {
+            "ip": "172.16.168.23",
+            "port": 22,
+            "user": "autobot",
+            "description": "Redis VM - Data layer",
         },
-        'ai-stack': {
-            'ip': '172.16.168.24',
-            'port': 22,
-            'user': 'autobot',
-            'description': 'AI Stack VM - AI processing'
+        "ai-stack": {
+            "ip": "172.16.168.24",
+            "port": 22,
+            "user": "autobot",
+            "description": "AI Stack VM - AI processing",
         },
-        'browser': {
-            'ip': '172.16.168.25',
-            'port': 22,
-            'user': 'autobot',
-            'description': 'Browser VM - Web automation (Playwright)'
-        }
+        "browser": {
+            "ip": "172.16.168.25",
+            "port": 22,
+            "user": "autobot",
+            "description": "Browser VM - Web automation (Playwright)",
+        },
     }
 
     def __init__(
@@ -111,7 +113,7 @@ class SSHManager:
         ssh_key_path: str = "~/.ssh/autobot_key",
         config_path: Optional[str] = None,
         enable_audit_logging: bool = True,
-        audit_log_file: str = "logs/audit.log"
+        audit_log_file: str = "logs/audit.log",
     ):
         """
         Initialize SSH Manager
@@ -132,7 +134,7 @@ class SSHManager:
             max_connections_per_host=5,
             connect_timeout=30,
             idle_timeout=300,
-            health_check_interval=60
+            health_check_interval=60,
         )
 
         # Initialize secure command executor for validation
@@ -157,23 +159,28 @@ class SSHManager:
             try:
                 # Load from YAML config
                 import yaml
-                with open(self.config_path, 'r') as f:
+
+                with open(self.config_path, "r") as f:
                     config = yaml.safe_load(f)
-                    ssh_config = config.get('ssh', {}).get('hosts', {})
+                    ssh_config = config.get("ssh", {}).get("hosts", {})
 
                 for name, host_config in ssh_config.items():
                     self.hosts[name] = HostConfig(
                         name=name,
-                        ip=host_config['ip'],
-                        port=host_config.get('port', 22),
-                        username=host_config.get('user', 'autobot'),
-                        description=host_config.get('description'),
-                        enabled=host_config.get('enabled', True)
+                        ip=host_config["ip"],
+                        port=host_config.get("port", 22),
+                        username=host_config.get("user", "autobot"),
+                        description=host_config.get("description"),
+                        enabled=host_config.get("enabled", True),
                     )
-                logger.info(f"Loaded {len(self.hosts)} host configs from {self.config_path}")
+                logger.info(
+                    f"Loaded {len(self.hosts)} host configs from {self.config_path}"
+                )
 
             except Exception as e:
-                logger.warning(f"Failed to load config from {self.config_path}: {e}, using defaults")
+                logger.warning(
+                    f"Failed to load config from {self.config_path}: {e}, using defaults"
+                )
                 self._load_default_hosts()
         else:
             self._load_default_hosts()
@@ -183,11 +190,11 @@ class SSHManager:
         for name, config in self.DEFAULT_HOSTS.items():
             self.hosts[name] = HostConfig(
                 name=name,
-                ip=config['ip'],
-                port=config['port'],
-                username=config['user'],
-                description=config['description'],
-                enabled=True
+                ip=config["ip"],
+                port=config["port"],
+                username=config["user"],
+                description=config["description"],
+                enabled=True,
             )
         logger.info(f"Loaded {len(self.hosts)} default host configurations")
 
@@ -200,13 +207,13 @@ class SSHManager:
                 os.makedirs(log_dir, exist_ok=True)
 
             # Create audit logger
-            self.audit_logger = logging.getLogger('ssh_audit')
+            self.audit_logger = logging.getLogger("ssh_audit")
             self.audit_logger.setLevel(logging.INFO)
 
             # File handler
             handler = logging.FileHandler(self.audit_log_file)
             handler.setFormatter(
-                logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+                logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
             )
             self.audit_logger.addHandler(handler)
 
@@ -223,9 +230,9 @@ class SSHManager:
 
         try:
             audit_entry = {
-                'timestamp': datetime.now().isoformat(),
-                'event_type': event_type,
-                'data': data
+                "timestamp": datetime.now().isoformat(),
+                "event_type": event_type,
+                "data": data,
             }
             self.audit_logger.info(json.dumps(audit_entry))
         except Exception as e:
@@ -263,7 +270,7 @@ class SSHManager:
         command: str,
         timeout: int = 30,
         validate: bool = True,
-        use_pty: bool = False
+        use_pty: bool = False,
     ) -> RemoteCommandResult:
         """
         Execute command on remote host
@@ -298,33 +305,39 @@ class SSHManager:
         if validate:
             risk_level, reasons = self.command_executor.assess_command_risk(command)
             security_info = {
-                'validated': True,
-                'risk_level': risk_level.value,
-                'reasons': reasons
+                "validated": True,
+                "risk_level": risk_level.value,
+                "reasons": reasons,
             }
 
             # Block forbidden and high-risk commands
             if risk_level in [CommandRisk.FORBIDDEN, CommandRisk.HIGH]:
-                security_info['blocked'] = True
-                security_info['reason'] = f"Command blocked: {'; '.join(reasons)}"
+                security_info["blocked"] = True
+                security_info["reason"] = f"Command blocked: {'; '.join(reasons)}"
 
-                self._audit_log('command_blocked', {
-                    'host': host,
-                    'command': command,
-                    'risk_level': risk_level.value,
-                    'reason': security_info['reason']
-                })
+                self._audit_log(
+                    "command_blocked",
+                    {
+                        "host": host,
+                        "command": command,
+                        "risk_level": risk_level.value,
+                        "reason": security_info["reason"],
+                    },
+                )
 
-                raise PermissionError(security_info['reason'])
+                raise PermissionError(security_info["reason"])
 
         # Audit log command execution attempt
-        self._audit_log('command_execution', {
-            'host': host,
-            'command': command,
-            'timeout': timeout,
-            'use_pty': use_pty,
-            'validated': validate
-        })
+        self._audit_log(
+            "command_execution",
+            {
+                "host": host,
+                "command": command,
+                "timeout": timeout,
+                "use_pty": use_pty,
+                "validated": validate,
+            },
+        )
 
         try:
             # Get SSH connection from pool
@@ -332,7 +345,7 @@ class SSHManager:
                 host=host_config.ip,
                 port=host_config.port,
                 username=host_config.username,
-                key_path=self.ssh_key_path
+                key_path=self.ssh_key_path,
             )
 
             # Execute command
@@ -350,7 +363,7 @@ class SSHManager:
                 client,
                 host=host_config.ip,
                 port=host_config.port,
-                username=host_config.username
+                username=host_config.username,
             )
 
             # Calculate execution time
@@ -366,17 +379,20 @@ class SSHManager:
                 success=(exit_code == 0),
                 execution_time=execution_time,
                 timestamp=datetime.now(),
-                security_info=security_info
+                security_info=security_info,
             )
 
             # Audit log result
-            self._audit_log('command_completed', {
-                'host': host,
-                'command': command,
-                'exit_code': exit_code,
-                'execution_time': execution_time,
-                'success': result.success
-            })
+            self._audit_log(
+                "command_completed",
+                {
+                    "host": host,
+                    "command": command,
+                    "exit_code": exit_code,
+                    "execution_time": execution_time,
+                    "success": result.success,
+                },
+            )
 
             return result
 
@@ -384,19 +400,14 @@ class SSHManager:
             logger.error(f"Command execution failed on {host}: {e}")
 
             # Audit log error
-            self._audit_log('command_failed', {
-                'host': host,
-                'command': command,
-                'error': str(e)
-            })
+            self._audit_log(
+                "command_failed", {"host": host, "command": command, "error": str(e)}
+            )
 
             raise
 
     async def _execute_simple(
-        self,
-        client: paramiko.SSHClient,
-        command: str,
-        timeout: int
+        self, client: paramiko.SSHClient, command: str, timeout: int
     ) -> Tuple[str, str, int]:
         """
         Execute command without PTY
@@ -413,8 +424,8 @@ class SSHManager:
             stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
 
             # Read output
-            stdout_data = stdout.read().decode('utf-8', errors='replace')
-            stderr_data = stderr.read().decode('utf-8', errors='replace')
+            stdout_data = stdout.read().decode("utf-8", errors="replace")
+            stderr_data = stderr.read().decode("utf-8", errors="replace")
             exit_code = stdout.channel.recv_exit_status()
 
             return stdout_data, stderr_data, exit_code
@@ -424,10 +435,7 @@ class SSHManager:
             raise
 
     async def _execute_with_pty(
-        self,
-        client: paramiko.SSHClient,
-        command: str,
-        timeout: int
+        self, client: paramiko.SSHClient, command: str, timeout: int
     ) -> Tuple[str, str, int]:
         """
         Execute command with PTY (for interactive commands)
@@ -456,7 +464,7 @@ class SSHManager:
             stdout_data = ""
             while True:
                 if channel.recv_ready():
-                    chunk = channel.recv(4096).decode('utf-8', errors='replace')
+                    chunk = channel.recv(4096).decode("utf-8", errors="replace")
                     stdout_data += chunk
 
                 if channel.exit_status_ready():
@@ -481,7 +489,7 @@ class SSHManager:
         command: str,
         timeout: int = 30,
         validate: bool = True,
-        parallel: bool = True
+        parallel: bool = True,
     ) -> Dict[str, RemoteCommandResult]:
         """
         Execute command on all enabled hosts
@@ -515,7 +523,9 @@ class SSHManager:
             results = {}
             for host in enabled_hosts:
                 try:
-                    results[host] = await self.execute_command(host, command, timeout, validate)
+                    results[host] = await self.execute_command(
+                        host, command, timeout, validate
+                    )
                 except Exception as e:
                     results[host] = e
 
@@ -544,7 +554,7 @@ class SSHManager:
                     host=host_name,
                     command="echo health_check",
                     timeout=5,
-                    validate=False
+                    validate=False,
                 )
                 results[host_name] = result.success and "health_check" in result.stdout
             except Exception as e:

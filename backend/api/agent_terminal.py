@@ -39,9 +39,17 @@ class CreateSessionRequest(BaseModel):
     """Request to create agent terminal session"""
 
     agent_id: str = Field(..., description="Unique identifier for the agent")
-    agent_role: str = Field(..., description="Role of the agent (chat_agent, automation_agent, system_agent, admin_agent)")
-    conversation_id: Optional[str] = Field(None, description="Chat conversation ID to link")
-    host: str = Field("main", description="Target host (main, frontend, npu-worker, redis, ai-stack, browser)")
+    agent_role: str = Field(
+        ...,
+        description="Role of the agent (chat_agent, automation_agent, system_agent, admin_agent)",
+    )
+    conversation_id: Optional[str] = Field(
+        None, description="Chat conversation ID to link"
+    )
+    host: str = Field(
+        "main",
+        description="Target host (main, frontend, npu-worker, redis, ai-stack, browser)",
+    )
     metadata: Optional[Dict] = Field(None, description="Additional session metadata")
 
 
@@ -49,8 +57,12 @@ class ExecuteCommandRequest(BaseModel):
     """Request to execute command in agent session"""
 
     command: str = Field(..., description="Command to execute")
-    description: Optional[str] = Field(None, description="Description of what command does")
-    force_approval: bool = Field(False, description="Force user approval even for safe commands")
+    description: Optional[str] = Field(
+        None, description="Description of what command does"
+    )
+    force_approval: bool = Field(
+        False, description="Force user approval even for safe commands"
+    )
 
 
 class ApproveCommandRequest(BaseModel):
@@ -58,8 +70,12 @@ class ApproveCommandRequest(BaseModel):
 
     approved: bool = Field(..., description="Whether command is approved")
     user_id: Optional[str] = Field(None, description="User who made the decision")
-    comment: Optional[str] = Field(None, description="Optional comment or reason for the decision")
-    auto_approve_future: bool = Field(False, description="Auto-approve similar commands in the future")
+    comment: Optional[str] = Field(
+        None, description="Optional comment or reason for the decision"
+    )
+    auto_approve_future: bool = Field(
+        False, description="Auto-approve similar commands in the future"
+    )
 
 
 class InterruptRequest(BaseModel):
@@ -74,7 +90,9 @@ class InterruptRequest(BaseModel):
 _agent_terminal_service_instance: Optional[AgentTerminalService] = None
 
 
-def get_agent_terminal_service(redis_client=Depends(get_redis_client)) -> AgentTerminalService:
+def get_agent_terminal_service(
+    redis_client=Depends(get_redis_client),
+) -> AgentTerminalService:
     """
     Get singleton AgentTerminalService instance.
 
@@ -85,7 +103,9 @@ def get_agent_terminal_service(redis_client=Depends(get_redis_client)) -> AgentT
 
     if _agent_terminal_service_instance is None:
         logger.info("Initializing AgentTerminalService singleton")
-        _agent_terminal_service_instance = AgentTerminalService(redis_client=redis_client)
+        _agent_terminal_service_instance = AgentTerminalService(
+            redis_client=redis_client
+        )
 
     return _agent_terminal_service_instance
 
@@ -286,7 +306,9 @@ async def approve_agent_command(
     User approves HIGH/DANGEROUS commands that agents want to execute.
     """
     try:
-        logger.info(f"[API] Approval request received: session_id={session_id}, approved={request.approved}, user_id={request.user_id}, comment={request.comment}")
+        logger.info(
+            f"[API] Approval request received: session_id={session_id}, approved={request.approved}, user_id={request.user_id}, comment={request.comment}"
+        )
 
         result = await service.approve_command(
             session_id=session_id,
@@ -296,7 +318,9 @@ async def approve_agent_command(
             auto_approve_future=request.auto_approve_future,
         )
 
-        logger.info(f"[API] Approval result: {result.get('status')}, error={result.get('error')}")
+        logger.info(
+            f"[API] Approval result: {result.get('status')}, error={result.get('error')}"
+        )
         return result
 
     except Exception as e:

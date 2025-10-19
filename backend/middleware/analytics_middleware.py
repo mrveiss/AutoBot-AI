@@ -15,17 +15,14 @@ from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
+
 class AnalyticsMiddleware(BaseHTTPMiddleware):
     """Middleware to automatically track API calls for analytics"""
 
     def __init__(self, app, analytics_controller=None):
         super().__init__(app)
         self.analytics_controller = analytics_controller
-        self.tracked_paths = {
-            "/api/",
-            "/docs",
-            "/redoc"
-        }
+        self.tracked_paths = {"/api/", "/docs", "/redoc"}
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Track API calls and response times"""
@@ -53,7 +50,9 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         response_time = time.time() - start_time
 
         # Track analytics asynchronously (don't block response)
-        if self.analytics_controller and hasattr(self.analytics_controller, 'track_api_call'):
+        if self.analytics_controller and hasattr(
+            self.analytics_controller, "track_api_call"
+        ):
             asyncio.create_task(
                 self._track_call_async(endpoint, response_time, status_code, method)
             )
@@ -64,17 +63,24 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    async def _track_call_async(self, endpoint: str, response_time: float, status_code: int, method: str):
+    async def _track_call_async(
+        self, endpoint: str, response_time: float, status_code: int, method: str
+    ):
         """Track API call asynchronously"""
         try:
             full_endpoint = f"{method} {endpoint}"
-            await self.analytics_controller.track_api_call(full_endpoint, response_time, status_code)
+            await self.analytics_controller.track_api_call(
+                full_endpoint, response_time, status_code
+            )
         except Exception as e:
             # Don't let analytics tracking errors affect the main request
             logger.debug(f"Analytics tracking failed for {endpoint}: {e}")
 
+
 def create_analytics_middleware(analytics_controller=None):
     """Factory function to create analytics middleware with controller"""
+
     def middleware_factory(app):
         return AnalyticsMiddleware(app, analytics_controller)
+
     return middleware_factory

@@ -40,11 +40,7 @@ class SSHKeyProvisioner:
         logger.info("SSH Key Provisioner initialized")
 
     def provision_key(
-        self,
-        host_ip: str,
-        port: int,
-        username: str,
-        password: str
+        self, host_ip: str, port: int, username: str, password: str
     ) -> Tuple[str, str]:
         """
         Provision SSH key on remote host
@@ -76,25 +72,23 @@ class SSHKeyProvisioner:
         # Generate 4096-bit RSA key pair
         logger.debug("Generating 4096-bit RSA key pair")
         private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=4096,
-            backend=default_backend()
+            public_exponent=65537, key_size=4096, backend=default_backend()
         )
 
         # Serialize private key (unencrypted - will be encrypted by InfrastructureDB)
         private_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.OpenSSH,
-            encryption_algorithm=serialization.NoEncryption()
+            encryption_algorithm=serialization.NoEncryption(),
         )
 
         # Serialize public key
         public_key = private_key.public_key()
         public_openssh = public_key.public_bytes(
             encoding=serialization.Encoding.OpenSSH,
-            format=serialization.PublicFormat.OpenSSH
+            format=serialization.PublicFormat.OpenSSH,
         )
-        pub_key_str = public_openssh.decode('utf-8')
+        pub_key_str = public_openssh.decode("utf-8")
 
         # Add comment to public key
         pub_key_with_comment = f"{pub_key_str} autobot-provisioned-key@{host_ip}"
@@ -113,7 +107,7 @@ class SSHKeyProvisioner:
                 username=username,
                 password=password,
                 timeout=self.connection_timeout,
-                banner_timeout=self.connection_timeout
+                banner_timeout=self.connection_timeout,
             )
 
             logger.info("Password authentication successful")
@@ -125,8 +119,7 @@ class SSHKeyProvisioner:
             # Add public key to authorized_keys
             logger.debug("Adding public key to authorized_keys")
             self._exec_command(
-                ssh,
-                f"echo '{pub_key_with_comment}' >> ~/.ssh/authorized_keys"
+                ssh, f"echo '{pub_key_with_comment}' >> ~/.ssh/authorized_keys"
             )
 
             # Set proper permissions on authorized_keys
@@ -139,7 +132,7 @@ class SSHKeyProvisioner:
             ssh = None
 
             # Convert private key to string for in-memory handling
-            private_key_str = private_pem.decode('utf-8')
+            private_key_str = private_pem.decode("utf-8")
 
             # Create paramiko RSAKey from in-memory string (SECURITY: No disk storage)
             logger.debug("Loading private key into paramiko RSAKey (in-memory only)")
@@ -157,7 +150,7 @@ class SSHKeyProvisioner:
                 username=username,
                 pkey=pkey,
                 timeout=self.connection_timeout,
-                banner_timeout=self.connection_timeout
+                banner_timeout=self.connection_timeout,
             )
 
             # Test command execution
@@ -193,10 +186,7 @@ class SSHKeyProvisioner:
                     logger.warning(f"Error closing SSH connection: {e}")
 
     def _exec_command(
-        self,
-        ssh: paramiko.SSHClient,
-        command: str,
-        timeout: int = 10
+        self, ssh: paramiko.SSHClient, command: str, timeout: int = 10
     ) -> str:
         """
         Execute command on remote host with error checking
@@ -216,13 +206,13 @@ class SSHKeyProvisioner:
         exit_status = stdout.channel.recv_exit_status()
 
         if exit_status != 0:
-            error_output = stderr.read().decode('utf-8', errors='ignore')
+            error_output = stderr.read().decode("utf-8", errors="ignore")
             raise Exception(
                 f"Command failed with exit status {exit_status}: {command}\n"
                 f"Error: {error_output}"
             )
 
-        return stdout.read().decode('utf-8', errors='ignore')
+        return stdout.read().decode("utf-8", errors="ignore")
 
     def _get_key_fingerprint(self, public_key) -> str:
         """
@@ -236,7 +226,7 @@ class SSHKeyProvisioner:
         """
         public_openssh = public_key.public_bytes(
             encoding=serialization.Encoding.OpenSSH,
-            format=serialization.PublicFormat.OpenSSH
+            format=serialization.PublicFormat.OpenSSH,
         )
 
         # Calculate SHA256 hash
@@ -246,16 +236,15 @@ class SSHKeyProvisioner:
 
         # Encode as base64 (no padding)
         import base64
-        fingerprint_b64 = base64.b64encode(fingerprint_bytes).decode('utf-8').rstrip('=')
+
+        fingerprint_b64 = (
+            base64.b64encode(fingerprint_bytes).decode("utf-8").rstrip("=")
+        )
 
         return f"SHA256:{fingerprint_b64}"
 
     def test_key_authentication(
-        self,
-        host_ip: str,
-        port: int,
-        username: str,
-        private_key_content: str
+        self, host_ip: str, port: int, username: str, private_key_content: str
     ) -> bool:
         """
         Test if SSH key authentication works
@@ -285,7 +274,7 @@ class SSHKeyProvisioner:
                 username=username,
                 pkey=pkey,
                 timeout=self.connection_timeout,
-                banner_timeout=self.connection_timeout
+                banner_timeout=self.connection_timeout,
             )
 
             # Execute test command

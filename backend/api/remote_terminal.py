@@ -34,6 +34,7 @@ router = APIRouter(tags=["remote-terminal"], prefix="/api/remote-terminal")
 
 class RemoteSessionType(Enum):
     """Remote session types"""
+
     COMMAND = "command"  # Single command execution
     INTERACTIVE = "interactive"  # Interactive PTY session
     BATCH = "batch"  # Batch command execution
@@ -78,15 +79,15 @@ async def get_ssh_manager() -> SSHManager:
     if _ssh_manager is None:
         # Load configuration
         try:
-            with open('config/config.yaml', 'r') as f:
+            with open("config/config.yaml", "r") as f:
                 config = yaml.safe_load(f)
-                ssh_config = config.get('ssh', {})
+                ssh_config = config.get("ssh", {})
 
             _ssh_manager = SSHManager(
-                ssh_key_path=ssh_config.get('key_path', '~/.ssh/autobot_key'),
-                config_path='config/config.yaml',
+                ssh_key_path=ssh_config.get("key_path", "~/.ssh/autobot_key"),
+                config_path="config/config.yaml",
                 enable_audit_logging=True,
-                audit_log_file='logs/audit.log'
+                audit_log_file="logs/audit.log",
             )
 
             # Start the manager
@@ -114,17 +115,17 @@ class RemoteSessionManager:
         session_id: str,
         host: str,
         session_type: RemoteSessionType,
-        websocket: WebSocket
+        websocket: WebSocket,
     ):
         """Create a new remote session"""
         self.sessions[session_id] = {
-            'session_id': session_id,
-            'host': host,
-            'session_type': session_type,
-            'websocket': websocket,
-            'created_at': datetime.now(),
-            'last_activity': datetime.now(),
-            'active': True
+            "session_id": session_id,
+            "host": host,
+            "session_type": session_type,
+            "websocket": websocket,
+            "created_at": datetime.now(),
+            "last_activity": datetime.now(),
+            "active": True,
         }
         logger.info(f"Remote session created: {session_id} for host {host}")
 
@@ -141,17 +142,17 @@ class RemoteSessionManager:
     def update_activity(self, session_id: str):
         """Update last activity timestamp"""
         if session_id in self.sessions:
-            self.sessions[session_id]['last_activity'] = datetime.now()
+            self.sessions[session_id]["last_activity"] = datetime.now()
 
     def list_sessions(self) -> List[Dict]:
         """List all active sessions"""
         return [
             {
-                'session_id': s['session_id'],
-                'host': s['host'],
-                'session_type': s['session_type'].value,
-                'created_at': s['created_at'].isoformat(),
-                'last_activity': s['last_activity'].isoformat()
+                "session_id": s["session_id"],
+                "host": s["host"],
+                "session_type": s["session_type"].value,
+                "created_at": s["created_at"].isoformat(),
+                "last_activity": s["last_activity"].isoformat(),
             }
             for s in self.sessions.values()
         ]
@@ -162,6 +163,7 @@ session_manager = RemoteSessionManager()
 
 
 # REST API Endpoints
+
 
 @router.get("/")
 async def remote_terminal_info():
@@ -175,15 +177,15 @@ async def remote_terminal_info():
             "Multi-host batch command execution",
             "Interactive SSH terminal sessions via WebSocket",
             "Connection pooling and health monitoring",
-            "Comprehensive audit logging"
+            "Comprehensive audit logging",
         ],
         "endpoints": {
             "hosts": "/api/remote-terminal/hosts",
             "execute": "/api/remote-terminal/execute",
             "batch": "/api/remote-terminal/batch",
             "sessions": "/api/remote-terminal/sessions",
-            "websocket": "/api/remote-terminal/ws/{session_id}"
-        }
+            "websocket": "/api/remote-terminal/ws/{session_id}",
+        },
     }
 
 
@@ -201,12 +203,12 @@ async def list_hosts(ssh_manager: SSHManager = Depends(get_ssh_manager)):
                     "port": h.port,
                     "username": h.username,
                     "description": h.description,
-                    "enabled": h.enabled
+                    "enabled": h.enabled,
                 }
                 for h in hosts
             ],
             "total": len(hosts),
-            "enabled": len([h for h in hosts if h.enabled])
+            "enabled": len([h for h in hosts if h.enabled]),
         }
 
     except Exception as e:
@@ -215,10 +217,7 @@ async def list_hosts(ssh_manager: SSHManager = Depends(get_ssh_manager)):
 
 
 @router.get("/hosts/{host}")
-async def get_host_info(
-    host: str,
-    ssh_manager: SSHManager = Depends(get_ssh_manager)
-):
+async def get_host_info(host: str, ssh_manager: SSHManager = Depends(get_ssh_manager)):
     """Get information about a specific host"""
     try:
         host_config = ssh_manager.get_host_config(host)
@@ -231,7 +230,7 @@ async def get_host_info(
             "port": host_config.port,
             "username": host_config.username,
             "description": host_config.description,
-            "enabled": host_config.enabled
+            "enabled": host_config.enabled,
         }
 
     except HTTPException:
@@ -243,8 +242,7 @@ async def get_host_info(
 
 @router.post("/execute")
 async def execute_remote_command(
-    request: RemoteCommandRequest,
-    ssh_manager: SSHManager = Depends(get_ssh_manager)
+    request: RemoteCommandRequest, ssh_manager: SSHManager = Depends(get_ssh_manager)
 ):
     """Execute a command on a remote host"""
     try:
@@ -253,7 +251,7 @@ async def execute_remote_command(
             command=request.command,
             timeout=request.timeout,
             validate=request.validate,
-            use_pty=request.use_pty
+            use_pty=request.use_pty,
         )
 
         return {
@@ -265,7 +263,7 @@ async def execute_remote_command(
             "success": result.success,
             "execution_time": result.execution_time,
             "timestamp": result.timestamp.isoformat(),
-            "security_info": result.security_info
+            "security_info": result.security_info,
         }
 
     except PermissionError as e:
@@ -283,8 +281,7 @@ async def execute_remote_command(
 
 @router.post("/batch")
 async def execute_batch_command(
-    request: BatchCommandRequest,
-    ssh_manager: SSHManager = Depends(get_ssh_manager)
+    request: BatchCommandRequest, ssh_manager: SSHManager = Depends(get_ssh_manager)
 ):
     """Execute a command on multiple hosts"""
     try:
@@ -294,12 +291,12 @@ async def execute_batch_command(
                 raise HTTPException(status_code=400, detail=f"Unknown host: {host}")
 
         # Execute on all hosts
-        if request.hosts[0] == 'all':
+        if request.hosts[0] == "all":
             results = await ssh_manager.execute_command_all_hosts(
                 command=request.command,
                 timeout=request.timeout,
                 validate=request.validate,
-                parallel=request.parallel
+                parallel=request.parallel,
             )
         else:
             # Execute on specified hosts
@@ -309,13 +306,17 @@ async def execute_batch_command(
                         host=host,
                         command=request.command,
                         timeout=request.timeout,
-                        validate=request.validate
+                        validate=request.validate,
                     )
                     for host in request.hosts
                 ]
                 results_list = await asyncio.gather(*tasks, return_exceptions=True)
                 results = {
-                    host: result if not isinstance(result, Exception) else {'error': str(result)}
+                    host: (
+                        result
+                        if not isinstance(result, Exception)
+                        else {"error": str(result)}
+                    )
                     for host, result in zip(request.hosts, results_list)
                 }
             else:
@@ -326,10 +327,10 @@ async def execute_batch_command(
                             host=host,
                             command=request.command,
                             timeout=request.timeout,
-                            validate=request.validate
+                            validate=request.validate,
                         )
                     except Exception as e:
-                        results[host] = {'error': str(e)}
+                        results[host] = {"error": str(e)}
 
         # Format response
         formatted_results = {}
@@ -340,7 +341,7 @@ async def execute_batch_command(
                     "stderr": result.stderr,
                     "exit_code": result.exit_code,
                     "success": result.success,
-                    "execution_time": result.execution_time
+                    "execution_time": result.execution_time,
                 }
             else:
                 formatted_results[host] = result
@@ -351,7 +352,13 @@ async def execute_batch_command(
             "parallel": request.parallel,
             "results": formatted_results,
             "total_hosts": len(request.hosts),
-            "successful": len([r for r in formatted_results.values() if isinstance(r, dict) and r.get('success', False)])
+            "successful": len(
+                [
+                    r
+                    for r in formatted_results.values()
+                    if isinstance(r, dict) and r.get("success", False)
+                ]
+            ),
         }
 
     except HTTPException:
@@ -373,7 +380,7 @@ async def check_all_hosts_health(ssh_manager: SSHManager = Depends(get_ssh_manag
             "total": len(health_status),
             "healthy": len([v for v in health_status.values() if v is True]),
             "unhealthy": len([v for v in health_status.values() if v is False]),
-            "disabled": len([v for v in health_status.values() if v is None])
+            "disabled": len([v for v in health_status.values() if v is None]),
         }
 
     except Exception as e:
@@ -390,9 +397,9 @@ async def get_connection_pool_stats(ssh_manager: SSHManager = Depends(get_ssh_ma
         return {
             "timestamp": datetime.now().isoformat(),
             "pools": stats,
-            "total_connections": sum(s.get('total', 0) for s in stats.values()),
-            "active_connections": sum(s.get('active', 0) for s in stats.values()),
-            "idle_connections": sum(s.get('idle', 0) for s in stats.values())
+            "total_connections": sum(s.get("total", 0) for s in stats.values()),
+            "active_connections": sum(s.get("active", 0) for s in stats.values()),
+            "idle_connections": sum(s.get("idle", 0) for s in stats.values()),
         }
 
     except Exception as e:
@@ -411,7 +418,7 @@ async def create_remote_session(request: RemoteSessionRequest):
             "host": request.host,
             "session_type": request.session_type.value,
             "websocket_url": f"/api/remote-terminal/ws/{session_id}",
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
         }
 
     except Exception as e:
@@ -425,10 +432,7 @@ async def list_remote_sessions():
     try:
         sessions = session_manager.list_sessions()
 
-        return {
-            "sessions": sessions,
-            "total": len(sessions)
-        }
+        return {"sessions": sessions, "total": len(sessions)}
 
     except Exception as e:
         logger.error(f"Error listing sessions: {e}")
@@ -436,6 +440,7 @@ async def list_remote_sessions():
 
 
 # WebSocket Endpoints
+
 
 @router.websocket("/ws/{session_id}")
 async def remote_terminal_websocket(websocket: WebSocket, session_id: str):
@@ -454,24 +459,32 @@ async def remote_terminal_websocket(websocket: WebSocket, session_id: str):
         init_data = await websocket.receive_text()
         init_message = json.loads(init_data)
 
-        host = init_message.get('host')
+        host = init_message.get("host")
         if not host:
-            await websocket.send_text(json.dumps({
-                'type': 'error',
-                'content': 'Host not specified',
-                'timestamp': time.time()
-            }))
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "error",
+                        "content": "Host not specified",
+                        "timestamp": time.time(),
+                    }
+                )
+            )
             await websocket.close()
             return
 
         # Validate host
         host_config = ssh_manager.get_host_config(host)
         if not host_config:
-            await websocket.send_text(json.dumps({
-                'type': 'error',
-                'content': f'Unknown host: {host}',
-                'timestamp': time.time()
-            }))
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "error",
+                        "content": f"Unknown host: {host}",
+                        "timestamp": time.time(),
+                    }
+                )
+            )
             await websocket.close()
             return
 
@@ -480,16 +493,20 @@ async def remote_terminal_websocket(websocket: WebSocket, session_id: str):
             session_id=session_id,
             host=host,
             session_type=RemoteSessionType.INTERACTIVE,
-            websocket=websocket
+            websocket=websocket,
         )
 
         # Send connection established message
-        await websocket.send_text(json.dumps({
-            'type': 'connected',
-            'host': host,
-            'session_id': session_id,
-            'timestamp': time.time()
-        }))
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "connected",
+                    "host": host,
+                    "session_id": session_id,
+                    "timestamp": time.time(),
+                }
+            )
+        )
 
         logger.info(f"Remote terminal WebSocket established for {session_id} to {host}")
 
@@ -499,43 +516,50 @@ async def remote_terminal_websocket(websocket: WebSocket, session_id: str):
                 data = await websocket.receive_text()
                 message = json.loads(data)
 
-                message_type = message.get('type')
+                message_type = message.get("type")
 
-                if message_type == 'input':
+                if message_type == "input":
                     # Execute command on remote host
-                    command = message.get('text', '')
+                    command = message.get("text", "")
 
                     result = await ssh_manager.execute_command(
                         host=host,
                         command=command,
                         timeout=30,
                         validate=True,
-                        use_pty=True
+                        use_pty=True,
                     )
 
                     # Send output back
-                    await websocket.send_text(json.dumps({
-                        'type': 'output',
-                        'content': result.stdout,
-                        'exit_code': result.exit_code,
-                        'timestamp': time.time()
-                    }))
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "output",
+                                "content": result.stdout,
+                                "exit_code": result.exit_code,
+                                "timestamp": time.time(),
+                            }
+                        )
+                    )
 
                     # Send stderr if present
                     if result.stderr:
-                        await websocket.send_text(json.dumps({
-                            'type': 'error_output',
-                            'content': result.stderr,
-                            'timestamp': time.time()
-                        }))
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "error_output",
+                                    "content": result.stderr,
+                                    "timestamp": time.time(),
+                                }
+                            )
+                        )
 
                     session_manager.update_activity(session_id)
 
-                elif message_type == 'ping':
-                    await websocket.send_text(json.dumps({
-                        'type': 'pong',
-                        'timestamp': time.time()
-                    }))
+                elif message_type == "ping":
+                    await websocket.send_text(
+                        json.dumps({"type": "pong", "timestamp": time.time()})
+                    )
 
                 else:
                     logger.warning(f"Unknown message type: {message_type}")
@@ -545,11 +569,11 @@ async def remote_terminal_websocket(websocket: WebSocket, session_id: str):
                 break
             except Exception as e:
                 logger.error(f"Error in remote terminal WebSocket: {e}")
-                await websocket.send_text(json.dumps({
-                    'type': 'error',
-                    'content': str(e),
-                    'timestamp': time.time()
-                }))
+                await websocket.send_text(
+                    json.dumps(
+                        {"type": "error", "content": str(e), "timestamp": time.time()}
+                    )
+                )
 
     except Exception as e:
         logger.error(f"Error establishing remote terminal WebSocket: {e}")

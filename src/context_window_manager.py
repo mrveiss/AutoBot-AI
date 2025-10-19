@@ -1,4 +1,5 @@
 """Centralized context window management for LLM interactions."""
+
 import logging
 import yaml
 from pathlib import Path
@@ -35,7 +36,7 @@ class ContextWindowManager:
             return self._get_default_config()
 
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 config = yaml.safe_load(f)
 
             logger.info(f"✅ Loaded config for {len(config['models'])} models")
@@ -59,8 +60,8 @@ class ContextWindowManager:
                     "message_budget": {
                         "system_prompt": 500,
                         "recent_messages": 20,
-                        "max_history_tokens": 3000
-                    }
+                        "max_history_tokens": 3000,
+                    },
                 },
                 "qwen2.5-coder-7b-instruct": {
                     "context_window_tokens": 4096,
@@ -68,14 +69,11 @@ class ContextWindowManager:
                     "message_budget": {
                         "system_prompt": 500,
                         "recent_messages": 20,
-                        "max_history_tokens": 3000
-                    }
-                }
+                        "max_history_tokens": 3000,
+                    },
+                },
             },
-            "token_estimation": {
-                "chars_per_token": 4,
-                "safety_margin": 0.9
-            }
+            "token_estimation": {"chars_per_token": 4, "safety_margin": 0.9},
         }
 
     def set_model(self, model_name: str):
@@ -152,8 +150,9 @@ class ContextWindowManager:
         # Fetch 2x what we plan to use (buffer for filtering)
         return message_limit * 2
 
-    def should_truncate_history(self, messages: List[Dict],
-                                model_name: Optional[str] = None) -> bool:
+    def should_truncate_history(
+        self, messages: List[Dict], model_name: Optional[str] = None
+    ) -> bool:
         """Check if message history needs truncation.
 
         Args:
@@ -166,7 +165,9 @@ class ContextWindowManager:
         # Calculate total characters from all message contents
         total_chars = sum(len(msg.get("content", "")) for msg in messages)
         # Estimate tokens based on character count
-        estimated_tokens = total_chars // self.config["token_estimation"]["chars_per_token"]
+        estimated_tokens = (
+            total_chars // self.config["token_estimation"]["chars_per_token"]
+        )
 
         max_tokens = self.get_max_history_tokens(model_name)
         return estimated_tokens > max_tokens

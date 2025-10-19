@@ -52,31 +52,25 @@ OPERATION_CATEGORIES = {
     "auth.permission_check": "Authentication",
     "auth.session_create": "Authentication",
     "auth.session_invalidate": "Authentication",
-
     "file.upload": "File Operations",
     "file.download": "File Operations",
     "file.delete": "File Operations",
     "file.create": "File Operations",
     "file.modify": "File Operations",
     "file.view": "File Operations",
-
     "elevation.request": "Privilege Escalation",
     "elevation.authorize": "Privilege Escalation",
     "elevation.execute": "Privilege Escalation",
-
     "session.create": "Session Management",
     "session.delete": "Session Management",
     "session.access": "Session Management",
     "session.update": "Session Management",
-
     "config.update": "Configuration",
     "config.delete": "Configuration",
     "config.view": "Configuration",
-
     "terminal.execute": "Terminal Operations",
     "terminal.create": "Terminal Operations",
     "terminal.delete": "Terminal Operations",
-
     "conversation.create": "Conversation Data",
     "conversation.access": "Conversation Data",
     "conversation.delete": "Conversation Data",
@@ -102,6 +96,7 @@ class AuditEntry:
     - vm_source: Which VM originated the action
     - details: Operation-specific metadata
     """
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
     date: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
@@ -131,26 +126,32 @@ class AuditEntry:
         return json.dumps(data, default=str)
 
     @classmethod
-    def from_json(cls, json_str: str) -> 'AuditEntry':
+    def from_json(cls, json_str: str) -> "AuditEntry":
         """Deserialize from JSON"""
         data = json.loads(json_str)
         return cls(**data)
 
-    def sanitize(self) -> 'AuditEntry':
+    def sanitize(self) -> "AuditEntry":
         """
         Remove sensitive data per OWASP guidelines
         NEVER log: passwords, tokens, API keys, PII
         """
         # Remove sensitive keys from details
         sensitive_keys = {
-            'password', 'token', 'secret', 'api_key', 'private_key',
-            'session_token', 'jwt', 'authorization', 'cookie'
+            "password",
+            "token",
+            "secret",
+            "api_key",
+            "private_key",
+            "session_token",
+            "jwt",
+            "authorization",
+            "cookie",
         }
 
         if self.details:
             self.details = {
-                k: v for k, v in self.details.items()
-                if k.lower() not in sensitive_keys
+                k: v for k, v in self.details.items() if k.lower() not in sensitive_keys
             }
 
         return self
@@ -170,7 +171,7 @@ class AuditLogger:
         retention_days: int = 90,
         batch_size: int = 50,
         batch_timeout_seconds: float = 1.0,
-        fallback_log_dir: str = "logs/audit"
+        fallback_log_dir: str = "logs/audit",
     ):
         """
         Initialize audit logger
@@ -203,7 +204,9 @@ class AuditLogger:
         self._total_failed = 0
         self._redis_failures = 0
 
-        logger.info(f"AuditLogger initialized: VM={self.vm_name} ({self.vm_source}), Retention={retention_days}d")
+        logger.info(
+            f"AuditLogger initialized: VM={self.vm_name} ({self.vm_source}), Retention={retention_days}d"
+        )
 
     def _get_vm_name(self) -> str:
         """Determine VM name from IP address"""
@@ -213,7 +216,7 @@ class AuditLogger:
             "172.16.168.22": "npu-worker",
             "172.16.168.23": "redis",
             "172.16.168.24": "ai-stack",
-            "172.16.168.25": "browser"
+            "172.16.168.25": "browser",
         }
         return vm_mapping.get(self.vm_source, socket.gethostname())
 
@@ -237,7 +240,7 @@ class AuditLogger:
         resource: Optional[str] = None,
         user_role: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
-        performance_ms: Optional[float] = None
+        performance_ms: Optional[float] = None,
     ) -> bool:
         """
         Log a security-sensitive operation
@@ -274,7 +277,7 @@ class AuditLogger:
                 vm_source=self.vm_source,
                 vm_name=self.vm_name,
                 details=details or {},
-                performance_ms=performance_ms
+                performance_ms=performance_ms,
             )
 
             # Sanitize sensitive data (OWASP requirement)
@@ -294,7 +297,9 @@ class AuditLogger:
             # Track performance
             log_duration_ms = (datetime.now() - start_time).total_seconds() * 1000
             if log_duration_ms > 5.0:
-                logger.warning(f"Audit logging exceeded 5ms target: {log_duration_ms:.2f}ms")
+                logger.warning(
+                    f"Audit logging exceeded 5ms target: {log_duration_ms:.2f}ms"
+                )
 
             self._total_logged += 1
             return True
@@ -304,7 +309,9 @@ class AuditLogger:
             self._total_failed += 1
 
             # Fallback to file logging
-            await self._fallback_log(entry if 'entry' in locals() else None, error=str(e))
+            await self._fallback_log(
+                entry if "entry" in locals() else None, error=str(e)
+            )
             return False
 
     async def _batch_timer(self):
@@ -400,20 +407,25 @@ class AuditLogger:
             await pipe.expire(f"audit:vm:{entry.vm_name}:{date}", retention_seconds)
         await pipe.expire(f"audit:result:{entry.result}:{date}", retention_seconds)
 
-    async def _fallback_log(self, entry: Optional[AuditEntry], error: Optional[str] = None):
+    async def _fallback_log(
+        self, entry: Optional[AuditEntry], error: Optional[str] = None
+    ):
         """Write audit entry to file as fallback when Redis unavailable"""
         try:
-            fallback_file = self.fallback_log_dir / f"audit_{datetime.now().strftime('%Y-%m-%d')}.jsonl"
+            fallback_file = (
+                self.fallback_log_dir
+                / f"audit_{datetime.now().strftime('%Y-%m-%d')}.jsonl"
+            )
 
             log_data = {
                 "timestamp": datetime.now().isoformat(),
                 "fallback_reason": error or "Redis unavailable",
-                "entry": asdict(entry) if entry else None
+                "entry": asdict(entry) if entry else None,
             }
 
             # Append to JSONL file (one JSON object per line)
-            with open(fallback_file, 'a') as f:
-                f.write(json.dumps(log_data, default=str) + '\n')
+            with open(fallback_file, "a") as f:
+                f.write(json.dumps(log_data, default=str) + "\n")
 
         except Exception as e:
             logger.error(f"Fallback logging also failed: {e}")
@@ -428,7 +440,7 @@ class AuditLogger:
         vm_name: Optional[str] = None,
         result: Optional[AuditResult] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[AuditEntry]:
         """
         Query audit logs with filtering
@@ -462,25 +474,39 @@ class AuditLogger:
             # Determine which index to use based on filters
             if session_id:
                 # Session index (most specific)
-                entries = await self._query_session(audit_db, session_id, start_time, end_time, limit, offset)
+                entries = await self._query_session(
+                    audit_db, session_id, start_time, end_time, limit, offset
+                )
             elif user_id and operation:
                 # Intersection of user and operation indexes
-                entries = await self._query_user_operation(audit_db, user_id, operation, start_time, end_time, limit, offset)
+                entries = await self._query_user_operation(
+                    audit_db, user_id, operation, start_time, end_time, limit, offset
+                )
             elif user_id:
                 # User index
-                entries = await self._query_user(audit_db, user_id, start_time, end_time, limit, offset)
+                entries = await self._query_user(
+                    audit_db, user_id, start_time, end_time, limit, offset
+                )
             elif operation:
                 # Operation index
-                entries = await self._query_operation(audit_db, operation, start_time, end_time, limit, offset)
+                entries = await self._query_operation(
+                    audit_db, operation, start_time, end_time, limit, offset
+                )
             elif vm_name:
                 # VM index
-                entries = await self._query_vm(audit_db, vm_name, start_time, end_time, limit, offset)
+                entries = await self._query_vm(
+                    audit_db, vm_name, start_time, end_time, limit, offset
+                )
             elif result:
                 # Result index
-                entries = await self._query_result(audit_db, result, start_time, end_time, limit, offset)
+                entries = await self._query_result(
+                    audit_db, result, start_time, end_time, limit, offset
+                )
             else:
                 # Primary time-series log
-                entries = await self._query_time_range(audit_db, start_time, end_time, limit, offset)
+                entries = await self._query_time_range(
+                    audit_db, start_time, end_time, limit, offset
+                )
 
             return entries
 
@@ -494,7 +520,7 @@ class AuditLogger:
         start_time: datetime,
         end_time: datetime,
         limit: int,
-        offset: int
+        offset: int,
     ) -> List[AuditEntry]:
         """Query primary audit log by time range"""
         entries = []
@@ -508,14 +534,15 @@ class AuditLogger:
             key = f"audit:log:{date_str}"
 
             # Query sorted set by timestamp range
-            start_score = start_time.timestamp() if current_date == start_time.date() else 0
-            end_score = end_time.timestamp() if current_date == end_date else float('inf')
+            start_score = (
+                start_time.timestamp() if current_date == start_time.date() else 0
+            )
+            end_score = (
+                end_time.timestamp() if current_date == end_date else float("inf")
+            )
 
             results = await audit_db.zrange(
-                key,
-                start_score,
-                end_score,
-                withscores=False
+                key, start_score, end_score, withscores=False
             )
 
             for json_str in results:
@@ -525,7 +552,7 @@ class AuditLogger:
 
         # Sort by timestamp descending, apply pagination
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset:offset + limit]
+        return entries[offset : offset + limit]
 
     async def _query_session(
         self,
@@ -534,24 +561,23 @@ class AuditLogger:
         start_time: datetime,
         end_time: datetime,
         limit: int,
-        offset: int
+        offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs for specific session"""
         key = f"audit:session:{session_id}"
 
         # Get entry IDs from session index
         entry_ids = await audit_db.zrange(
-            key,
-            start_time.timestamp(),
-            end_time.timestamp(),
-            withscores=False
+            key, start_time.timestamp(), end_time.timestamp(), withscores=False
         )
 
         # Fetch full entries from primary log
         entries = []
-        for entry_id in entry_ids[offset:offset + limit]:
+        for entry_id in entry_ids[offset : offset + limit]:
             # Find entry in daily logs
-            entry = await self._fetch_entry_by_id(audit_db, entry_id, start_time, end_time)
+            entry = await self._fetch_entry_by_id(
+                audit_db, entry_id, start_time, end_time
+            )
             if entry:
                 entries.append(entry)
 
@@ -564,7 +590,7 @@ class AuditLogger:
         start_time: datetime,
         end_time: datetime,
         limit: int,
-        offset: int
+        offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs for specific user"""
         entries = []
@@ -579,14 +605,16 @@ class AuditLogger:
             entry_ids = await audit_db.zrange(key, 0, -1, withscores=False)
 
             for entry_id in entry_ids:
-                entry = await self._fetch_entry_by_id(audit_db, entry_id, start_time, end_time)
+                entry = await self._fetch_entry_by_id(
+                    audit_db, entry_id, start_time, end_time
+                )
                 if entry:
                     entries.append(entry)
 
             current_date += timedelta(days=1)
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset:offset + limit]
+        return entries[offset : offset + limit]
 
     async def _query_operation(
         self,
@@ -595,7 +623,7 @@ class AuditLogger:
         start_time: datetime,
         end_time: datetime,
         limit: int,
-        offset: int
+        offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs for specific operation type"""
         entries = []
@@ -610,14 +638,16 @@ class AuditLogger:
             entry_ids = await audit_db.zrange(key, 0, -1, withscores=False)
 
             for entry_id in entry_ids:
-                entry = await self._fetch_entry_by_id(audit_db, entry_id, start_time, end_time)
+                entry = await self._fetch_entry_by_id(
+                    audit_db, entry_id, start_time, end_time
+                )
                 if entry:
                     entries.append(entry)
 
             current_date += timedelta(days=1)
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset:offset + limit]
+        return entries[offset : offset + limit]
 
     async def _query_vm(
         self,
@@ -626,7 +656,7 @@ class AuditLogger:
         start_time: datetime,
         end_time: datetime,
         limit: int,
-        offset: int
+        offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs for specific VM"""
         entries = []
@@ -641,14 +671,16 @@ class AuditLogger:
             entry_ids = await audit_db.zrange(key, 0, -1, withscores=False)
 
             for entry_id in entry_ids:
-                entry = await self._fetch_entry_by_id(audit_db, entry_id, start_time, end_time)
+                entry = await self._fetch_entry_by_id(
+                    audit_db, entry_id, start_time, end_time
+                )
                 if entry:
                     entries.append(entry)
 
             current_date += timedelta(days=1)
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset:offset + limit]
+        return entries[offset : offset + limit]
 
     async def _query_result(
         self,
@@ -657,7 +689,7 @@ class AuditLogger:
         start_time: datetime,
         end_time: datetime,
         limit: int,
-        offset: int
+        offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs by result (for security monitoring)"""
         entries = []
@@ -672,14 +704,16 @@ class AuditLogger:
             entry_ids = await audit_db.zrange(key, 0, -1, withscores=False)
 
             for entry_id in entry_ids:
-                entry = await self._fetch_entry_by_id(audit_db, entry_id, start_time, end_time)
+                entry = await self._fetch_entry_by_id(
+                    audit_db, entry_id, start_time, end_time
+                )
                 if entry:
                     entries.append(entry)
 
             current_date += timedelta(days=1)
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset:offset + limit]
+        return entries[offset : offset + limit]
 
     async def _query_user_operation(
         self,
@@ -689,22 +723,24 @@ class AuditLogger:
         start_time: datetime,
         end_time: datetime,
         limit: int,
-        offset: int
+        offset: int,
     ) -> List[AuditEntry]:
         """Query intersection of user and operation indexes"""
         # Get entries from both indexes and intersect
-        user_entries = await self._query_user(audit_db, user_id, start_time, end_time, limit * 2, 0)
+        user_entries = await self._query_user(
+            audit_db, user_id, start_time, end_time, limit * 2, 0
+        )
 
         # Filter by operation
         filtered = [e for e in user_entries if e.operation == operation]
-        return filtered[offset:offset + limit]
+        return filtered[offset : offset + limit]
 
     async def _fetch_entry_by_id(
         self,
         audit_db: AsyncRedisDatabase,
         entry_id: str,
         start_time: datetime,
-        end_time: datetime
+        end_time: datetime,
     ) -> Optional[AuditEntry]:
         """Fetch full audit entry from primary log by ID"""
         # Search daily logs in time range
@@ -737,7 +773,7 @@ class AuditLogger:
                 "total_failed": self._total_failed,
                 "redis_failures": self._redis_failures,
                 "batch_queue_size": len(self._batch_queue),
-                "redis_available": audit_db is not None
+                "redis_available": audit_db is not None,
             }
 
             if audit_db:
@@ -746,8 +782,16 @@ class AuditLogger:
                 date_str = yesterday.strftime("%Y-%m-%d")
                 today_str = datetime.now().strftime("%Y-%m-%d")
 
-                yesterday_count = await audit_db._redis.zcard(f"audit:log:{date_str}") if audit_db._redis else 0
-                today_count = await audit_db._redis.zcard(f"audit:log:{today_str}") if audit_db._redis else 0
+                yesterday_count = (
+                    await audit_db._redis.zcard(f"audit:log:{date_str}")
+                    if audit_db._redis
+                    else 0
+                )
+                today_count = (
+                    await audit_db._redis.zcard(f"audit:log:{today_str}")
+                    if audit_db._redis
+                    else 0
+                )
 
                 stats["entries_last_24h"] = yesterday_count + today_count
 
@@ -758,7 +802,7 @@ class AuditLogger:
             return {
                 "error": str(e),
                 "total_logged": self._total_logged,
-                "total_failed": self._total_failed
+                "total_failed": self._total_failed,
             }
 
     async def cleanup_old_logs(self, days_to_keep: Optional[int] = None):
@@ -777,7 +821,9 @@ class AuditLogger:
                 logger.warning("Cannot cleanup: Redis unavailable")
                 return
 
-            logger.info(f"Cleaning up audit logs older than {cutoff_date.strftime('%Y-%m-%d')}")
+            logger.info(
+                f"Cleaning up audit logs older than {cutoff_date.strftime('%Y-%m-%d')}"
+            )
 
             # Delete daily partitions older than cutoff
             current_date = cutoff_date.date()
@@ -794,11 +840,11 @@ class AuditLogger:
                     f"audit:op:*:{date_str}",
                     f"audit:user:*:{date_str}",
                     f"audit:vm:*:{date_str}",
-                    f"audit:result:*:{date_str}"
+                    f"audit:result:*:{date_str}",
                 ]
 
                 for key_pattern in keys_to_delete:
-                    if '*' in key_pattern:
+                    if "*" in key_pattern:
                         # Use scan for wildcard patterns
                         # Note: This is simplified - production should use scan_iter
                         pass
@@ -832,7 +878,9 @@ class AuditLogger:
             except asyncio.CancelledError:
                 pass
 
-        logger.info(f"Audit logger shutdown complete: {self._total_logged} entries logged, {self._total_failed} failed")
+        logger.info(
+            f"Audit logger shutdown complete: {self._total_logged} entries logged, {self._total_failed} failed"
+        )
 
 
 # Global audit logger instance
@@ -862,11 +910,7 @@ async def close_audit_logger():
 
 
 # Convenience function for quick logging
-async def audit_log(
-    operation: str,
-    result: AuditResult = "success",
-    **kwargs
-) -> bool:
+async def audit_log(operation: str, result: AuditResult = "success", **kwargs) -> bool:
     """
     Quick audit logging function
 

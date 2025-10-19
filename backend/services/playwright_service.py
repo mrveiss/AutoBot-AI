@@ -24,18 +24,18 @@ class PlaywrightService:
         self,
         container_host: str = "localhost",
         container_port: int = 3000,
-        timeout: int = 30
+        timeout: int = 30,
     ):
         self.base_url = f"http://{container_host}:{container_port}"
         self.timeout = timeout
         self._session: Optional[aiohttp.ClientSession] = None
         self._healthy = False
-        
+
     async def __aenter__(self):
         """Async context manager entry"""
         await self.initialize()
         return self
-        
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         await self.cleanup()
@@ -46,10 +46,9 @@ class PlaywrightService:
             # Create HTTP session with proper timeout and error handling
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             self._session = aiohttp.ClientSession(
-                timeout=timeout,
-                headers={"Content-Type": "application/json"}
+                timeout=timeout, headers={"Content-Type": "application/json"}
             )
-            
+
         # Check if container is healthy
         await self._health_check()
         logger.info(f"Playwright service initialized at {self.base_url}")
@@ -66,7 +65,7 @@ class PlaywrightService:
         try:
             if not self._session:
                 await self.initialize()
-                
+
             async with self._session.get(f"{self.base_url}/health") as response:
                 if response.status == 200:
                     health_data = await response.json()
@@ -77,7 +76,7 @@ class PlaywrightService:
                     logger.warning(f"Playwright health check failed: {response.status}")
                     self._healthy = False
                     return False
-                    
+
         except Exception as e:
             logger.error(f"Playwright health check error: {e}")
             self._healthy = False
@@ -90,19 +89,16 @@ class PlaywrightService:
         return self._healthy
 
     async def search_web(
-        self, 
-        query: str, 
-        search_engine: str = "duckduckgo",
-        max_results: int = 5
+        self, query: str, search_engine: str = "duckduckgo", max_results: int = 5
     ) -> Dict[str, Any]:
         """
         Perform web search using embedded Playwright
-        
+
         Args:
             query: Search query
             search_engine: Search engine to use
             max_results: Maximum number of results
-            
+
         Returns:
             Search results with metadata
         """
@@ -113,35 +109,36 @@ class PlaywrightService:
             payload = {
                 "query": query,
                 "search_engine": search_engine,
-                "max_results": max_results
+                "max_results": max_results,
             }
 
-            async with self._session.post(f"{self.base_url}/search", json=payload) as response:
+            async with self._session.post(
+                f"{self.base_url}/search", json=payload
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info(f"Web search completed: '{query}' -> {len(result.get('results', []))} results")
+                    logger.info(
+                        f"Web search completed: '{query}' -> {len(result.get('results', []))} results"
+                    )
                     return result
                 else:
                     error_text = await response.text()
                     logger.error(f"Search failed: {response.status} - {error_text}")
                     raise RuntimeError(f"Search failed: {response.status}")
-                    
+
         except Exception as e:
             logger.error(f"Web search error: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "query": query,
-                "results": []
-            }
+            return {"success": False, "error": str(e), "query": query, "results": []}
 
-    async def test_frontend(self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL) -> Dict[str, Any]:
+    async def test_frontend(
+        self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL
+    ) -> Dict[str, Any]:
         """
         Test frontend functionality using embedded Playwright
-        
+
         Args:
             frontend_url: URL of frontend to test
-            
+
         Returns:
             Test results with detailed analysis
         """
@@ -151,43 +148,49 @@ class PlaywrightService:
 
             payload = {"frontend_url": frontend_url}
 
-            async with self._session.post(f"{self.base_url}/test-frontend", json=payload) as response:
+            async with self._session.post(
+                f"{self.base_url}/test-frontend", json=payload
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     logger.info(f"Frontend test completed: {result.get('summary', {})}")
                     return result
                 else:
                     error_text = await response.text()
-                    logger.error(f"Frontend test failed: {response.status} - {error_text}")
+                    logger.error(
+                        f"Frontend test failed: {response.status} - {error_text}"
+                    )
                     raise RuntimeError(f"Frontend test failed: {response.status}")
-                    
+
         except Exception as e:
             import traceback
-from src.constants.network_constants import NetworkConstants, ServiceURLs
+
             error_details = f"Exception: {type(e).__name__}: {str(e)}"
-            if hasattr(e, '__cause__') and e.__cause__:
+            if hasattr(e, "__cause__") and e.__cause__:
                 error_details += f" | Caused by: {e.__cause__}"
-            error_details += f" | Traceback: {traceback.format_exc()[-500:]}"  # Last 500 chars
+            error_details += (
+                f" | Traceback: {traceback.format_exc()[-500:]}"  # Last 500 chars
+            )
             logger.error(f"Frontend test error: {error_details}")
             return {
                 "success": False,
                 "error": error_details,
                 "frontend_url": frontend_url,
-                "tests": []
+                "tests": [],
             }
 
     async def send_test_message(
-        self, 
+        self,
         message: str = "what network scanning tools do we have available?",
-        frontend_url: str = ServiceURLs.FRONTEND_LOCAL
+        frontend_url: str = ServiceURLs.FRONTEND_LOCAL,
     ) -> Dict[str, Any]:
         """
         Send test message through frontend using embedded Playwright
-        
+
         Args:
             message: Message to send
             frontend_url: Frontend URL
-            
+
         Returns:
             Message sending results with step-by-step details
         """
@@ -195,44 +198,39 @@ from src.constants.network_constants import NetworkConstants, ServiceURLs
             if not await self.is_ready():
                 raise RuntimeError("Playwright service not available")
 
-            payload = {
-                "message": message,
-                "frontend_url": frontend_url
-            }
+            payload = {"message": message, "frontend_url": frontend_url}
 
-            async with self._session.post(f"{self.base_url}/send-test-message", json=payload) as response:
+            async with self._session.post(
+                f"{self.base_url}/send-test-message", json=payload
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info(f"Test message sent: '{message}' -> {len(result.get('steps', []))} steps completed")
+                    logger.info(
+                        f"Test message sent: '{message}' -> {len(result.get('steps', []))} steps completed"
+                    )
                     return result
                 else:
                     error_text = await response.text()
-                    logger.error(f"Test message failed: {response.status} - {error_text}")
+                    logger.error(
+                        f"Test message failed: {response.status} - {error_text}"
+                    )
                     raise RuntimeError(f"Test message failed: {response.status}")
-                    
+
         except Exception as e:
             logger.error(f"Test message error: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "message": message,
-                "steps": []
-            }
+            return {"success": False, "error": str(e), "message": message, "steps": []}
 
     async def capture_screenshot(
-        self, 
-        url: str, 
-        full_page: bool = True,
-        wait_timeout: int = 5000
+        self, url: str, full_page: bool = True, wait_timeout: int = 5000
     ) -> Dict[str, Any]:
         """
         Capture screenshot of webpage
-        
+
         Args:
             url: URL to capture
             full_page: Whether to capture full page
             wait_timeout: How long to wait before capture
-            
+
         Returns:
             Screenshot metadata and status
         """
@@ -244,69 +242,75 @@ from src.constants.network_constants import NetworkConstants, ServiceURLs
             # For now, we can use the test-frontend endpoint which includes screenshots
             payload = {"frontend_url": url}
 
-            async with self._session.post(f"{self.base_url}/test-frontend", json=payload) as response:
+            async with self._session.post(
+                f"{self.base_url}/test-frontend", json=payload
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     screenshot_info = {
                         "success": result.get("has_screenshot", False),
                         "size": result.get("screenshot_size", 0),
                         "url": url,
-                        "timestamp": result.get("timestamp")
+                        "timestamp": result.get("timestamp"),
                     }
-                    logger.info(f"Screenshot captured: {url} -> {screenshot_info['size']} bytes")
+                    logger.info(
+                        f"Screenshot captured: {url} -> {screenshot_info['size']} bytes"
+                    )
                     return screenshot_info
                 else:
                     error_text = await response.text()
                     logger.error(f"Screenshot failed: {response.status} - {error_text}")
                     raise RuntimeError(f"Screenshot failed: {response.status}")
-                    
+
         except Exception as e:
             logger.error(f"Screenshot error: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "url": url
-            }
+            return {"success": False, "error": str(e), "url": url}
 
     async def get_service_status(self) -> Dict[str, Any]:
         """Get detailed service status"""
         try:
             await self._health_check()
-            
+
             status = {
                 "service": "playwright",
                 "status": "healthy" if self._healthy else "unhealthy",
                 "container_url": self.base_url,
                 "capabilities": [
                     "web_search",
-                    "frontend_testing", 
+                    "frontend_testing",
                     "message_automation",
-                    "screenshot_capture"
+                    "screenshot_capture",
                 ],
                 "ready": self._healthy,
-                "integration_type": "embedded_docker"
+                "integration_type": "embedded_docker",
             }
-            
+
             if self._healthy:
                 # Get additional health info from container
                 async with self._session.get(f"{self.base_url}/health") as response:
                     if response.status == 200:
                         container_health = await response.json()
-                        status.update({
-                            "browser_connected": container_health.get("browser_connected", False),
-                            "container_timestamp": container_health.get("timestamp"),
-                            "uptime": "active"
-                        })
-                        
+                        status.update(
+                            {
+                                "browser_connected": container_health.get(
+                                    "browser_connected", False
+                                ),
+                                "container_timestamp": container_health.get(
+                                    "timestamp"
+                                ),
+                                "uptime": "active",
+                            }
+                        )
+
             return status
-            
+
         except Exception as e:
             return {
                 "service": "playwright",
-                "status": "error", 
+                "status": "error",
                 "error": str(e),
                 "ready": False,
-                "integration_type": "embedded_docker"
+                "integration_type": "embedded_docker",
             }
 
 
@@ -317,15 +321,17 @@ _playwright_service: Optional[PlaywrightService] = None
 async def get_playwright_service() -> PlaywrightService:
     """Get or create the global Playwright service instance"""
     global _playwright_service
-    
+
     if _playwright_service is None:
         # Use correct Playwright container IP address
-        container_host = os.getenv('AUTOBOT_BROWSER_SERVICE_HOST')
+        container_host = os.getenv("AUTOBOT_BROWSER_SERVICE_HOST")
         if not container_host:
-            raise ValueError('AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set')
+            raise ValueError(
+                "AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set"
+            )
         _playwright_service = PlaywrightService(container_host=container_host)
         await _playwright_service.initialize()
-        
+
     return _playwright_service
 
 

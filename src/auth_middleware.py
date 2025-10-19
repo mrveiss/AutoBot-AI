@@ -32,9 +32,13 @@ class AuthenticationMiddleware:
         self.jwt_secret = self._get_jwt_secret()
         self.jwt_algorithm = "HS256"
         self.jwt_expiry_hours = 24
-        self.session_timeout_minutes = self.security_config.get("session_timeout_minutes", 30)
+        self.session_timeout_minutes = self.security_config.get(
+            "session_timeout_minutes", 30
+        )
         self.max_failed_attempts = self.security_config.get("max_failed_attempts", 3)
-        self.lockout_duration_minutes = self.security_config.get("lockout_duration_minutes", 15)
+        self.lockout_duration_minutes = self.security_config.get(
+            "lockout_duration_minutes", 15
+        )
 
         # Use Redis for session storage if available, fallback to in-memory
         self.redis_client = None
@@ -43,22 +47,27 @@ class AuthenticationMiddleware:
         # Fallback in-memory stores (used when Redis unavailable)
         self.active_sessions: Dict[str, dict] = {}
         self.failed_attempts: Dict[str, dict] = {}
-        
-        logger.info(f"AuthenticationMiddleware initialized. Auth enabled: {self.enable_auth}")
+
+        logger.info(
+            f"AuthenticationMiddleware initialized. Auth enabled: {self.enable_auth}"
+        )
 
     def _init_session_storage(self):
         """Initialize Redis session storage using standardized pool manager"""
         try:
             redis_config = config.get_redis_config()
-            if redis_config['enabled']:
+            if redis_config["enabled"]:
                 from src.redis_pool_manager import get_redis_sync
+
                 # Use sessions database for authentication sessions
-                self.redis_client = get_redis_sync('sessions')
+                self.redis_client = get_redis_sync("sessions")
                 # Test connection
                 self.redis_client.ping()
                 logger.info("Redis session storage initialized with pool manager")
         except Exception as e:
-            logger.warning(f"Failed to initialize Redis session storage, using in-memory: {e}")
+            logger.warning(
+                f"Failed to initialize Redis session storage, using in-memory: {e}"
+            )
             self.redis_client = None
 
     def _get_jwt_secret(self) -> str:
@@ -66,7 +75,7 @@ class AuthenticationMiddleware:
         # Priority order: Environment variable -> Config file -> Generated secure secret
 
         # 1. Check environment variable first (most secure)
-        secret = os.getenv('AUTOBOT_JWT_SECRET')
+        secret = os.getenv("AUTOBOT_JWT_SECRET")
         if secret and len(secret) >= 32:
             return secret
 
@@ -82,7 +91,7 @@ class AuthenticationMiddleware:
         # Store in configuration for consistency across restarts
         try:
             # Update the config in memory using the correct method
-            config.set_nested('security_config.jwt_secret', secure_secret)
+            config.set_nested("security_config.jwt_secret", secure_secret)
             logger.info("Generated and stored secure JWT secret")
             return secure_secret
         except Exception as e:
@@ -93,12 +102,12 @@ class AuthenticationMiddleware:
     def hash_password(self, password: str) -> str:
         """Hash password using bcrypt"""
         salt = bcrypt.gensalt(rounds=12)
-        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
     def verify_password(self, password: str, hashed: str) -> bool:
         """Verify password against hash"""
         try:
-            return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+            return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
         except Exception as e:
             logger.error(f"Password verification error: {e}")
             return False
@@ -107,32 +116,34 @@ class AuthenticationMiddleware:
         """Check if account is locked due to failed attempts"""
         if username not in self.failed_attempts:
             return False
-            
+
         attempt_data = self.failed_attempts[username]
         locked_until = attempt_data.get("locked_until")
-        
+
         if locked_until and datetime.datetime.now() < locked_until:
             return True
-            
+
         # Clear expired lockout
         if locked_until and datetime.datetime.now() >= locked_until:
             self.failed_attempts[username] = {"count": 0, "locked_until": None}
-            
+
         return False
 
     def record_failed_attempt(self, username: str, ip_address: str):
         """Record failed login attempt and lock account if needed"""
         if username not in self.failed_attempts:
             self.failed_attempts[username] = {"count": 0, "locked_until": None}
-            
+
         self.failed_attempts[username]["count"] += 1
         self.failed_attempts[username]["last_attempt"] = datetime.datetime.now()
         self.failed_attempts[username]["ip"] = ip_address
-        
+
         if self.failed_attempts[username]["count"] >= self.max_failed_attempts:
-            lockout_until = datetime.datetime.now() + datetime.timedelta(minutes=self.lockout_duration_minutes)
+            lockout_until = datetime.datetime.now() + datetime.timedelta(
+                minutes=self.lockout_duration_minutes
+            )
             self.failed_attempts[username]["locked_until"] = lockout_until
-            
+
             # Audit log the lockout
             self.security_layer.audit_log(
                 action="account_locked",
@@ -142,8 +153,8 @@ class AuthenticationMiddleware:
                     "reason": "excessive_failed_attempts",
                     "failed_attempts": self.failed_attempts[username]["count"],
                     "locked_until": lockout_until.isoformat(),
-                    "ip": ip_address
-                }
+                    "ip": ip_address,
+                },
             )
 
     def clear_failed_attempts(self, username: str):
@@ -151,10 +162,12 @@ class AuthenticationMiddleware:
         if username in self.failed_attempts:
             del self.failed_attempts[username]
 
-    def authenticate_user(self, username: str, password: str, ip_address: str = "unknown") -> Optional[Dict]:
+    def authenticate_user(
+        self, username: str, password: str, ip_address: str = "unknown"
+    ) -> Optional[Dict]:
         """
         Authenticate user with enhanced security measures
-        
+
         Returns:
             Dict with user info if successful, None if failed
         """
@@ -164,7 +177,7 @@ class AuthenticationMiddleware:
                 "username": "admin",
                 "role": "admin",
                 "email": "admin@autobot.local",
-                "auth_disabled": True
+                "auth_disabled": True,
             }
 
         # Check if account is locked
@@ -173,11 +186,11 @@ class AuthenticationMiddleware:
                 action="login_attempt_locked_account",
                 user=username,
                 outcome="denied",
-                details={"ip": ip_address, "reason": "account_locked"}
+                details={"ip": ip_address, "reason": "account_locked"},
             )
             raise HTTPException(
                 status_code=423,
-                detail="Account is temporarily locked due to excessive failed attempts"
+                detail="Account is temporarily locked due to excessive failed attempts",
             )
 
         # Get user from configuration
@@ -188,13 +201,13 @@ class AuthenticationMiddleware:
                 action="login_attempt",
                 user=username,
                 outcome="denied",
-                details={"ip": ip_address, "reason": "user_not_found"}
+                details={"ip": ip_address, "reason": "user_not_found"},
             )
             return None
 
         user_config = allowed_users[username]
         password_hash = user_config.get("password_hash", "")
-        
+
         # Verify password
         if not self.verify_password(password, password_hash):
             self.record_failed_attempt(username, ip_address)
@@ -202,28 +215,28 @@ class AuthenticationMiddleware:
                 action="login_attempt",
                 user=username,
                 outcome="denied",
-                details={"ip": ip_address, "reason": "invalid_password"}
+                details={"ip": ip_address, "reason": "invalid_password"},
             )
             return None
 
         # Clear failed attempts on successful login
         self.clear_failed_attempts(username)
-        
+
         # Update last login time (in production, persist this to database)
         user_config["last_login"] = datetime.datetime.now().isoformat()
-        
+
         self.security_layer.audit_log(
             action="login_successful",
             user=username,
             outcome="success",
-            details={"ip": ip_address, "role": user_config.get("role", "user")}
+            details={"ip": ip_address, "role": user_config.get("role", "user")},
         )
 
         return {
             "username": username,
             "role": user_config.get("role", "user"),
             "email": user_config.get("email", f"{username}@autobot.local"),
-            "last_login": user_config["last_login"]
+            "last_login": user_config["last_login"],
         }
 
     def create_jwt_token(self, user_data: Dict) -> str:
@@ -233,21 +246,24 @@ class AuthenticationMiddleware:
             "role": user_data["role"],
             "email": user_data.get("email", ""),
             "iat": datetime.datetime.utcnow(),
-            "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=self.jwt_expiry_hours)
+            "exp": datetime.datetime.utcnow()
+            + datetime.timedelta(hours=self.jwt_expiry_hours),
         }
-        
+
         return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
 
     def verify_jwt_token(self, token: str) -> Optional[Dict]:
         """Verify and decode JWT token"""
         try:
-            payload = jwt.decode(token, self.jwt_secret, algorithms=[self.jwt_algorithm])
-            
+            payload = jwt.decode(
+                token, self.jwt_secret, algorithms=[self.jwt_algorithm]
+            )
+
             # Check if user still exists and is active
             username = payload.get("username")
             if username and self.is_account_locked(username):
                 return None
-                
+
             return payload
         except jwt.ExpiredSignatureError:
             logger.warning("JWT token expired")
@@ -266,7 +282,7 @@ class AuthenticationMiddleware:
             "created_at": datetime.datetime.now().isoformat(),
             "last_activity": datetime.datetime.now().isoformat(),
             "ip_address": request.client.host if request.client else "unknown",
-            "user_agent": request.headers.get("User-Agent", "unknown")
+            "user_agent": request.headers.get("User-Agent", "unknown"),
         }
 
         # Store in Redis if available, otherwise in-memory
@@ -276,7 +292,7 @@ class AuthenticationMiddleware:
                 self.redis_client.setex(
                     session_key,
                     self.session_timeout_minutes * 60,  # TTL in seconds
-                    json.dumps(session_data, default=str)
+                    json.dumps(session_data, default=str),
                 )
                 logger.debug(f"Session {session_id[:8]}... stored in Redis")
             except Exception as e:
@@ -302,7 +318,7 @@ class AuthenticationMiddleware:
                     self.redis_client.setex(
                         session_key,
                         self.session_timeout_minutes * 60,
-                        json.dumps(session, default=str)
+                        json.dumps(session, default=str),
                     )
                     return session
             except Exception as e:
@@ -319,7 +335,9 @@ class AuthenticationMiddleware:
         if isinstance(last_activity, str):
             last_activity = datetime.datetime.fromisoformat(last_activity)
 
-        if datetime.datetime.now() - last_activity > datetime.timedelta(minutes=self.session_timeout_minutes):
+        if datetime.datetime.now() - last_activity > datetime.timedelta(
+            minutes=self.session_timeout_minutes
+        ):
             del self.active_sessions[session_id]
             return None
 
@@ -354,25 +372,25 @@ class AuthenticationMiddleware:
             action="logout",
             user=user_data.get("username", "unknown"),
             outcome="success",
-            details={"session_id": session_id[:16] + "..."}  # Partial ID for audit
+            details={"session_id": session_id[:16] + "..."},  # Partial ID for audit
         )
 
     def get_user_from_request(self, request: Request) -> Optional[Dict]:
         """
         Extract and validate user from request using multiple authentication methods
-        
+
         Priority:
         1. JWT token in Authorization header
-        2. Session ID in header  
+        2. Session ID in header
         3. Development mode header (X-User-Role)
         4. Default guest access
         """
         if not self.enable_auth:
             return {
                 "username": "admin",
-                "role": "admin", 
+                "role": "admin",
                 "email": "admin@autobot.local",
-                "auth_disabled": True
+                "auth_disabled": True,
             }
 
         # Method 1: JWT Token Authentication
@@ -385,7 +403,7 @@ class AuthenticationMiddleware:
                     "username": token_data["username"],
                     "role": token_data["role"],
                     "email": token_data.get("email", ""),
-                    "auth_method": "jwt"
+                    "auth_method": "jwt",
                 }
 
         # Method 2: Session ID Authentication
@@ -405,21 +423,23 @@ class AuthenticationMiddleware:
                 "username": f"dev_{user_role}",
                 "role": user_role,
                 "email": f"dev_{user_role}@autobot.local",
-                "auth_method": "development"
+                "auth_method": "development",
             }
 
         # Method 4: Default guest access
         return {
             "username": "guest",
             "role": "guest",
-            "email": "guest@autobot.local", 
-            "auth_method": "guest"
+            "email": "guest@autobot.local",
+            "auth_method": "guest",
         }
 
-    def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Optional[Dict]]:
+    def check_file_permissions(
+        self, request: Request, operation: str
+    ) -> Tuple[bool, Optional[Dict]]:
         """
         Enhanced permission checking with comprehensive security measures
-        
+
         Returns:
             Tuple of (permission_granted: bool, user_data: Dict)
         """
@@ -436,13 +456,13 @@ class AuthenticationMiddleware:
             has_permission = self.security_layer.check_permission(
                 user_role=user_role,
                 action_type=f"files.{operation}",
-                resource=f"file_operation:{operation}"
+                resource=f"file_operation:{operation}",
             )
 
             if not has_permission:
                 # Enhanced audit logging for denied access
                 self.security_layer.audit_log(
-                    action="file_access_denied", 
+                    action="file_access_denied",
                     user=username,
                     outcome="denied",
                     details={
@@ -453,28 +473,34 @@ class AuthenticationMiddleware:
                         "user_agent": request.headers.get("User-Agent", "unknown"),
                         "ip": ip_address,
                         "timestamp": datetime.datetime.now().isoformat(),
-                        "request_path": str(request.url.path) if hasattr(request, 'url') else "unknown"
-                    }
+                        "request_path": (
+                            str(request.url.path)
+                            if hasattr(request, "url")
+                            else "unknown"
+                        ),
+                    },
                 )
                 return False, user_data
-            
+
             # Log successful access
             self.security_layer.audit_log(
                 action="file_access_granted",
-                user=username, 
+                user=username,
                 outcome="success",
                 details={
                     "operation": operation,
                     "user_role": user_role,
                     "auth_method": user_data.get("auth_method", "unknown"),
-                    "ip": ip_address
-                }
+                    "ip": ip_address,
+                },
             )
-            
+
             return True, user_data
 
         except Exception as e:
-            logger.error(f"Error checking file permissions for operation '{operation}': {e}")
+            logger.error(
+                f"Error checking file permissions for operation '{operation}': {e}"
+            )
             # Fail secure - deny access on error
             return False, None
 
@@ -490,10 +516,7 @@ def get_current_user(request: Request) -> Dict:
     """
     user_data = auth_middleware.get_user_from_request(request)
     if not user_data:
-        raise HTTPException(
-            status_code=401, 
-            detail="Authentication required"
-        )
+        raise HTTPException(status_code=401, detail="Authentication required")
     return user_data
 
 
@@ -501,16 +524,21 @@ def require_file_permission(operation: str):
     """
     Decorator factory for file operations requiring specific permissions
     """
+
     def decorator(func):
         async def wrapper(request: Request, *args, **kwargs):
-            has_permission, user_data = auth_middleware.check_file_permissions(request, operation)
+            has_permission, user_data = auth_middleware.check_file_permissions(
+                request, operation
+            )
             if not has_permission:
                 raise HTTPException(
                     status_code=403,
-                    detail=f"Insufficient permissions for file {operation} operation"
+                    detail=f"Insufficient permissions for file {operation} operation",
                 )
             # Add user data to request state for use in endpoint
             request.state.user = user_data
             return await func(request, *args, **kwargs)
+
         return wrapper
+
     return decorator

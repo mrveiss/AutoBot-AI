@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class TaskType(Enum):
     """Task type classification for tracking purposes"""
+
     USER_REQUEST = "user_request"
     AGENT_TASK = "agent_task"
     SYSTEM_TASK = "system_task"
@@ -300,7 +301,7 @@ class TaskExecutionTracker:
         task_type: TaskType,
         description: str,
         priority: Priority,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ):
         """
         Start a task with the given parameters (backward compatibility wrapper).
@@ -312,21 +313,25 @@ class TaskExecutionTracker:
         actual_task_id = self.memory_manager.create_task_record(
             task_name=task_type.value,
             description=description,
-            priority=priority if isinstance(priority, TaskPriority) else TaskPriority.MEDIUM,
+            priority=(
+                priority if isinstance(priority, TaskPriority) else TaskPriority.MEDIUM
+            ),
             agent_type=None,
             inputs=context,
-            metadata={"task_id": task_id, "task_type": task_type.value}
+            metadata={"task_id": task_id, "task_type": task_type.value},
         )
 
         # Start the task
         self.memory_manager.start_task(actual_task_id)
 
         # Track the mapping from user task_id to actual task_id
-        if not hasattr(self, '_task_id_mapping'):
+        if not hasattr(self, "_task_id_mapping"):
             self._task_id_mapping = {}
         self._task_id_mapping[task_id] = actual_task_id
 
-        logger.info(f"Started task: {task_id} (type: {task_type.value}, priority: {priority})")
+        logger.info(
+            f"Started task: {task_id} (type: {task_type.value}, priority: {priority})"
+        )
 
     def complete_task(self, task_id: str, result: Any):
         """
@@ -336,7 +341,7 @@ class TaskExecutionTracker:
         For full functionality, use the async track_task() context manager.
         """
         # Get actual task ID from mapping
-        if hasattr(self, '_task_id_mapping') and task_id in self._task_id_mapping:
+        if hasattr(self, "_task_id_mapping") and task_id in self._task_id_mapping:
             actual_task_id = self._task_id_mapping[task_id]
 
             # Complete the task
@@ -358,7 +363,7 @@ class TaskExecutionTracker:
         For full functionality, use the async track_task() context manager.
         """
         # Get actual task ID from mapping
-        if hasattr(self, '_task_id_mapping') and task_id in self._task_id_mapping:
+        if hasattr(self, "_task_id_mapping") and task_id in self._task_id_mapping:
             actual_task_id = self._task_id_mapping[task_id]
 
             # Fail the task

@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LLMServiceStatus:
     """Status information for an LLM service"""
+
     service_name: str
     endpoint: str
     status: str  # healthy, degraded, offline
@@ -54,7 +55,9 @@ class BackgroundLLMSync:
         # Initialize known services
         self._initialize_known_services()
 
-        logger.info(f"BackgroundLLMSync initialized with {check_interval}s check interval")
+        logger.info(
+            f"BackgroundLLMSync initialized with {check_interval}s check interval"
+        )
 
     def _initialize_known_services(self):
         """Initialize known LLM services for monitoring."""
@@ -67,9 +70,7 @@ class BackgroundLLMSync:
 
         for name, endpoint in known_services:
             self.services[name] = LLMServiceStatus(
-                service_name=name,
-                endpoint=endpoint,
-                status="unknown"
+                service_name=name, endpoint=endpoint, status="unknown"
             )
 
     async def check_service_health(self, service: LLMServiceStatus) -> bool:
@@ -87,7 +88,9 @@ class BackgroundLLMSync:
             service.success_count += 1
             service.status = "healthy"
 
-            logger.debug(f"Health check passed for {service.service_name} ({response_time:.3f}s)")
+            logger.debug(
+                f"Health check passed for {service.service_name} ({response_time:.3f}s)"
+            )
             return True
 
         except Exception as e:
@@ -113,7 +116,9 @@ class BackgroundLLMSync:
         healthy_count = sum(1 for result in results if result is True)
         total_count = len(self.services)
 
-        logger.info(f"Health check complete: {healthy_count}/{total_count} services healthy")
+        logger.info(
+            f"Health check complete: {healthy_count}/{total_count} services healthy"
+        )
 
     async def warm_connection_pools(self):
         """Warm up connection pools for better performance."""
@@ -132,11 +137,17 @@ class BackgroundLLMSync:
         """Collect and log performance metrics."""
         try:
             total_services = len(self.services)
-            healthy_services = sum(1 for s in self.services.values() if s.status == "healthy")
-            offline_services = sum(1 for s in self.services.values() if s.status == "offline")
+            healthy_services = sum(
+                1 for s in self.services.values() if s.status == "healthy"
+            )
+            offline_services = sum(
+                1 for s in self.services.values() if s.status == "offline"
+            )
 
             avg_response_time = 0.0
-            response_times = [s.response_time for s in self.services.values() if s.response_time]
+            response_times = [
+                s.response_time for s in self.services.values() if s.response_time
+            ]
             if response_times:
                 avg_response_time = sum(response_times) / len(response_times)
 
@@ -145,7 +156,7 @@ class BackgroundLLMSync:
                 "healthy_services": healthy_services,
                 "offline_services": offline_services,
                 "average_response_time": avg_response_time,
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
             logger.debug(f"Performance metrics: {metrics}")
@@ -220,7 +231,7 @@ class BackgroundLLMSync:
                 "response_time": service.response_time,
                 "error_count": service.error_count,
                 "success_count": service.success_count,
-                "metadata": service.metadata
+                "metadata": service.metadata,
             }
             for name, service in self.services.items()
         }
@@ -264,5 +275,5 @@ __all__ = [
     "BackgroundLLMSync",
     "LLMServiceStatus",
     "background_llm_sync",
-    "get_background_llm_sync"
+    "get_background_llm_sync",
 ]

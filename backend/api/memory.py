@@ -47,19 +47,39 @@ logger = logging.getLogger(__name__)
 # Request/Response Models
 # ====================================================================
 
+
 class EntityCreateRequest(BaseModel):
     """Request model for creating a new entity"""
-    entity_type: str = Field(..., description="Type of entity (conversation, bug_fix, feature, etc.)")
-    name: str = Field(..., min_length=1, max_length=200, description="Human-readable entity name")
-    observations: List[str] = Field(..., min_items=1, description="List of observation strings")
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
-    tags: Optional[List[str]] = Field(default_factory=list, description="Classification tags")
 
-    @validator('entity_type')
+    entity_type: str = Field(
+        ..., description="Type of entity (conversation, bug_fix, feature, etc.)"
+    )
+    name: str = Field(
+        ..., min_length=1, max_length=200, description="Human-readable entity name"
+    )
+    observations: List[str] = Field(
+        ..., min_items=1, description="List of observation strings"
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
+    tags: Optional[List[str]] = Field(
+        default_factory=list, description="Classification tags"
+    )
+
+    @validator("entity_type")
     def validate_entity_type(cls, v):
         valid_types = {
-            "conversation", "bug_fix", "feature", "decision", "task",
-            "user_preference", "context", "learning", "research", "implementation"
+            "conversation",
+            "bug_fix",
+            "feature",
+            "decision",
+            "task",
+            "user_preference",
+            "context",
+            "learning",
+            "research",
+            "implementation",
         }
         if v not in valid_types:
             raise ValueError(f"entity_type must be one of: {valid_types}")
@@ -68,23 +88,40 @@ class EntityCreateRequest(BaseModel):
 
 class ObservationAddRequest(BaseModel):
     """Request model for adding observations to an entity"""
-    observations: List[str] = Field(..., min_items=1, description="New observations to add")
+
+    observations: List[str] = Field(
+        ..., min_items=1, description="New observations to add"
+    )
 
 
 class RelationCreateRequest(BaseModel):
     """Request model for creating a relationship between entities"""
+
     from_entity: str = Field(..., description="Source entity name")
     to_entity: str = Field(..., description="Target entity name")
     relation_type: str = Field(..., description="Type of relationship")
-    bidirectional: bool = Field(default=False, description="Create reverse relation as well")
-    strength: float = Field(default=1.0, ge=0.0, le=1.0, description="Relationship strength (0.0-1.0)")
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
+    bidirectional: bool = Field(
+        default=False, description="Create reverse relation as well"
+    )
+    strength: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="Relationship strength (0.0-1.0)"
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
 
-    @validator('relation_type')
+    @validator("relation_type")
     def validate_relation_type(cls, v):
         valid_types = {
-            "relates_to", "depends_on", "implements", "fixes",
-            "informs", "guides", "follows", "contains", "blocks"
+            "relates_to",
+            "depends_on",
+            "implements",
+            "fixes",
+            "informs",
+            "guides",
+            "follows",
+            "contains",
+            "blocks",
         }
         if v not in valid_types:
             raise ValueError(f"relation_type must be one of: {valid_types}")
@@ -93,6 +130,7 @@ class RelationCreateRequest(BaseModel):
 
 class EntityResponse(BaseModel):
     """Response model for entity data"""
+
     id: str
     type: str
     name: str
@@ -104,6 +142,7 @@ class EntityResponse(BaseModel):
 
 class RelationResponse(BaseModel):
     """Response model for relation data"""
+
     to: str
     type: str
     created_at: int
@@ -112,12 +151,14 @@ class RelationResponse(BaseModel):
 
 class GraphNodeResponse(BaseModel):
     """Response model for graph node with relations"""
+
     entity: EntityResponse
     relations: Dict[str, List[RelationResponse]]
 
 
 class SearchResponse(BaseModel):
     """Response model for search results"""
+
     entities: List[EntityResponse]
     total_count: int
     query: str
@@ -127,6 +168,7 @@ class SearchResponse(BaseModel):
 # ====================================================================
 # Dependency Injection
 # ====================================================================
+
 
 def get_memory_graph(request: Request) -> AutoBotMemoryGraph:
     """
@@ -146,16 +188,12 @@ def get_memory_graph(request: Request) -> AutoBotMemoryGraph:
     if memory_graph is None:
         logger.error("Memory Graph not initialized in app state")
         raise HTTPException(
-            status_code=503,
-            detail="Memory Graph service not available"
+            status_code=503, detail="Memory Graph service not available"
         )
 
     if not memory_graph.initialized:
         logger.error("Memory Graph not properly initialized")
-        raise HTTPException(
-            status_code=503,
-            detail="Memory Graph not initialized"
-        )
+        raise HTTPException(status_code=503, detail="Memory Graph not initialized")
 
     return memory_graph
 
@@ -169,11 +207,12 @@ def generate_request_id() -> str:
 # Entity Management Endpoints
 # ====================================================================
 
+
 @router.post("/entities", status_code=201)
 async def create_entity(
     entity_data: EntityCreateRequest,
     request: Request,
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Create a new entity in the memory graph
@@ -191,14 +230,16 @@ async def create_entity(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Creating entity: {entity_data.name} ({entity_data.entity_type})")
+        logger.info(
+            f"[{request_id}] Creating entity: {entity_data.name} ({entity_data.entity_type})"
+        )
 
         entity = await memory_graph.create_entity(
             entity_type=entity_data.entity_type,
             name=entity_data.name,
             observations=entity_data.observations,
             metadata=entity_data.metadata,
-            tags=entity_data.tags
+            tags=entity_data.tags,
         )
 
         logger.info(f"[{request_id}] Entity created successfully: {entity['id']}")
@@ -209,8 +250,8 @@ async def create_entity(
                 "success": True,
                 "data": entity,
                 "message": "Entity created successfully",
-                "request_id": request_id
-            }
+                "request_id": request_id,
+            },
         )
 
     except ValueError as e:
@@ -218,14 +259,16 @@ async def create_entity(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"[{request_id}] Error creating entity: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create entity: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create entity: {str(e)}"
+        )
 
 
 @router.get("/entities/{entity_id}")
 async def get_entity_by_id(
     entity_id: str = Path(..., description="Entity UUID"),
     include_relations: bool = Query(False, description="Include related entities"),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Get entity by ID
@@ -247,37 +290,36 @@ async def get_entity_by_id(
         logger.info(f"[{request_id}] Retrieving entity: {entity_id}")
 
         entity = await memory_graph.get_entity(
-            entity_id=entity_id,
-            include_relations=include_relations
+            entity_id=entity_id, include_relations=include_relations
         )
 
         if entity is None:
             logger.warning(f"[{request_id}] Entity not found: {entity_id}")
-            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Entity not found: {entity_id}"
+            )
 
         logger.info(f"[{request_id}] Entity retrieved: {entity['name']}")
 
         return JSONResponse(
             status_code=200,
-            content={
-                "success": True,
-                "data": entity,
-                "request_id": request_id
-            }
+            content={"success": True, "data": entity, "request_id": request_id},
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[{request_id}] Error retrieving entity: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve entity: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve entity: {str(e)}"
+        )
 
 
 @router.get("/entities")
 async def get_entity_by_name(
     name: str = Query(..., description="Entity name to search for"),
     include_relations: bool = Query(False, description="Include related entities"),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Get entity by name
@@ -299,8 +341,7 @@ async def get_entity_by_name(
         logger.info(f"[{request_id}] Searching for entity by name: {name}")
 
         entity = await memory_graph.get_entity(
-            entity_name=name,
-            include_relations=include_relations
+            entity_name=name, include_relations=include_relations
         )
 
         if entity is None:
@@ -311,25 +352,23 @@ async def get_entity_by_name(
 
         return JSONResponse(
             status_code=200,
-            content={
-                "success": True,
-                "data": entity,
-                "request_id": request_id
-            }
+            content={"success": True, "data": entity, "request_id": request_id},
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[{request_id}] Error searching entity: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to search entity: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to search entity: {str(e)}"
+        )
 
 
 @router.patch("/entities/{entity_id}/observations")
 async def add_observations(
     entity_id: str = Path(..., description="Entity UUID"),
     observation_data: ObservationAddRequest = Body(...),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Add observations to an existing entity
@@ -353,17 +392,20 @@ async def add_observations(
         # First get the entity to retrieve its name
         entity = await memory_graph.get_entity(entity_id=entity_id)
         if entity is None:
-            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Entity not found: {entity_id}"
+            )
 
         entity_name = entity["name"]
 
         # Add observations using entity name
         updated_entity = await memory_graph.add_observations(
-            entity_name=entity_name,
-            observations=observation_data.observations
+            entity_name=entity_name, observations=observation_data.observations
         )
 
-        logger.info(f"[{request_id}] Added {len(observation_data.observations)} observations to {entity_name}")
+        logger.info(
+            f"[{request_id}] Added {len(observation_data.observations)} observations to {entity_name}"
+        )
 
         return JSONResponse(
             status_code=200,
@@ -371,8 +413,8 @@ async def add_observations(
                 "success": True,
                 "data": updated_entity,
                 "message": f"Added {len(observation_data.observations)} observations",
-                "request_id": request_id
-            }
+                "request_id": request_id,
+            },
         )
 
     except HTTPException:
@@ -382,14 +424,18 @@ async def add_observations(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"[{request_id}] Error adding observations: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to add observations: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to add observations: {str(e)}"
+        )
 
 
 @router.delete("/entities/{entity_id}")
 async def delete_entity(
     entity_id: str = Path(..., description="Entity UUID"),
-    cascade_relations: bool = Query(True, description="Delete all relations to/from this entity"),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    cascade_relations: bool = Query(
+        True, description="Delete all relations to/from this entity"
+    ),
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Delete entity and optionally its relations
@@ -413,18 +459,21 @@ async def delete_entity(
         # First get the entity to retrieve its name
         entity = await memory_graph.get_entity(entity_id=entity_id)
         if entity is None:
-            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Entity not found: {entity_id}"
+            )
 
         entity_name = entity["name"]
 
         # Delete using entity name
         deleted = await memory_graph.delete_entity(
-            entity_name=entity_name,
-            cascade_relations=cascade_relations
+            entity_name=entity_name, cascade_relations=cascade_relations
         )
 
         if not deleted:
-            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Entity not found: {entity_id}"
+            )
 
         logger.info(f"[{request_id}] Entity deleted: {entity_name}")
 
@@ -436,29 +485,32 @@ async def delete_entity(
                     "entity_id": entity_id,
                     "entity_name": entity_name,
                     "deleted": True,
-                    "cascade_relations": cascade_relations
+                    "cascade_relations": cascade_relations,
                 },
                 "message": "Entity deleted successfully",
-                "request_id": request_id
-            }
+                "request_id": request_id,
+            },
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[{request_id}] Error deleting entity: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete entity: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete entity: {str(e)}"
+        )
 
 
 # ====================================================================
 # Relationship Management Endpoints
 # ====================================================================
 
+
 @router.post("/relations", status_code=201)
 async def create_relation(
     relation_data: RelationCreateRequest,
     request: Request,
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Create relationship between two entities
@@ -476,7 +528,9 @@ async def create_relation(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Creating relation: {relation_data.from_entity} --[{relation_data.relation_type}]--> {relation_data.to_entity}")
+        logger.info(
+            f"[{request_id}] Creating relation: {relation_data.from_entity} --[{relation_data.relation_type}]--> {relation_data.to_entity}"
+        )
 
         relation = await memory_graph.create_relation(
             from_entity=relation_data.from_entity,
@@ -484,7 +538,7 @@ async def create_relation(
             relation_type=relation_data.relation_type,
             bidirectional=relation_data.bidirectional,
             strength=relation_data.strength,
-            metadata=relation_data.metadata
+            metadata=relation_data.metadata,
         )
 
         logger.info(f"[{request_id}] Relation created successfully")
@@ -495,8 +549,8 @@ async def create_relation(
                 "success": True,
                 "data": relation,
                 "message": "Relation created successfully",
-                "request_id": request_id
-            }
+                "request_id": request_id,
+            },
         )
 
     except ValueError as e:
@@ -504,16 +558,22 @@ async def create_relation(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"[{request_id}] Error creating relation: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create relation: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create relation: {str(e)}"
+        )
 
 
 @router.get("/entities/{entity_id}/relations")
 async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
     relation_type: Optional[str] = Query(None, description="Filter by relation type"),
-    direction: str = Query("both", regex="^(outgoing|incoming|both)$", description="Relation direction"),
-    max_depth: int = Query(1, ge=1, le=3, description="Relationship traversal depth (1-3)"),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    direction: str = Query(
+        "both", regex="^(outgoing|incoming|both)$", description="Relation direction"
+    ),
+    max_depth: int = Query(
+        1, ge=1, le=3, description="Relationship traversal depth (1-3)"
+    ),
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Get entities related to specified entity
@@ -539,7 +599,9 @@ async def get_related_entities(
         # First get the entity to retrieve its name
         entity = await memory_graph.get_entity(entity_id=entity_id)
         if entity is None:
-            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Entity not found: {entity_id}"
+            )
 
         entity_name = entity["name"]
 
@@ -548,7 +610,7 @@ async def get_related_entities(
             entity_name=entity_name,
             relation_type=relation_type,
             direction=direction,
-            max_depth=max_depth
+            max_depth=max_depth,
         )
 
         logger.info(f"[{request_id}] Found {len(related)} related entities")
@@ -565,18 +627,20 @@ async def get_related_entities(
                     "filters": {
                         "relation_type": relation_type,
                         "direction": direction,
-                        "max_depth": max_depth
-                    }
+                        "max_depth": max_depth,
+                    },
                 },
-                "request_id": request_id
-            }
+                "request_id": request_id,
+            },
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[{request_id}] Error getting related entities: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get related entities: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get related entities: {str(e)}"
+        )
 
 
 @router.delete("/relations")
@@ -584,7 +648,7 @@ async def delete_relation(
     from_entity: str = Query(..., description="Source entity name"),
     to_entity: str = Query(..., description="Target entity name"),
     relation_type: str = Query(..., description="Relation type to delete"),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Delete specific relation between entities
@@ -604,18 +668,18 @@ async def delete_relation(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Deleting relation: {from_entity} --[{relation_type}]--> {to_entity}")
+        logger.info(
+            f"[{request_id}] Deleting relation: {from_entity} --[{relation_type}]--> {to_entity}"
+        )
 
         deleted = await memory_graph.delete_relation(
-            from_entity=from_entity,
-            to_entity=to_entity,
-            relation_type=relation_type
+            from_entity=from_entity, to_entity=to_entity, relation_type=relation_type
         )
 
         if not deleted:
             raise HTTPException(
                 status_code=404,
-                detail=f"Relation not found: {from_entity} --[{relation_type}]--> {to_entity}"
+                detail=f"Relation not found: {from_entity} --[{relation_type}]--> {to_entity}",
             )
 
         logger.info(f"[{request_id}] Relation deleted successfully")
@@ -628,23 +692,26 @@ async def delete_relation(
                     "from_entity": from_entity,
                     "to_entity": to_entity,
                     "relation_type": relation_type,
-                    "deleted": True
+                    "deleted": True,
                 },
                 "message": "Relation deleted successfully",
-                "request_id": request_id
-            }
+                "request_id": request_id,
+            },
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[{request_id}] Error deleting relation: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete relation: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete relation: {str(e)}"
+        )
 
 
 # ====================================================================
 # Search Endpoints
 # ====================================================================
+
 
 @router.get("/search")
 async def search_entities(
@@ -653,7 +720,7 @@ async def search_entities(
     tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
     status: Optional[str] = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=500, description="Maximum results to return"),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Semantic search across all entities
@@ -672,7 +739,9 @@ async def search_entities(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Searching entities: query='{query}', type={entity_type}, limit={limit}")
+        logger.info(
+            f"[{request_id}] Searching entities: query='{query}', type={entity_type}, limit={limit}"
+        )
 
         # Parse tags if provided
         tag_list = None
@@ -685,7 +754,7 @@ async def search_entities(
             entity_type=entity_type,
             tags=tag_list,
             status=status,
-            limit=limit
+            limit=limit,
         )
 
         logger.info(f"[{request_id}] Search returned {len(entities)} entities")
@@ -702,11 +771,11 @@ async def search_entities(
                         "entity_type": entity_type,
                         "tags": tag_list,
                         "status": status,
-                        "limit": limit
-                    }
+                        "limit": limit,
+                    },
                 },
-                "request_id": request_id
-            }
+                "request_id": request_id,
+            },
         )
 
     except Exception as e:
@@ -718,7 +787,7 @@ async def search_entities(
 async def get_entity_graph(
     entity_id: Optional[str] = Query(None, description="Root entity ID (optional)"),
     max_depth: int = Query(2, ge=1, le=3, description="Graph traversal depth"),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Get entity graph with relations
@@ -734,44 +803,37 @@ async def get_entity_graph(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Building entity graph: root={entity_id}, depth={max_depth}")
+        logger.info(
+            f"[{request_id}] Building entity graph: root={entity_id}, depth={max_depth}"
+        )
 
         if entity_id:
             # Get specific entity's graph
             entity = await memory_graph.get_entity(
-                entity_id=entity_id,
-                include_relations=True
+                entity_id=entity_id, include_relations=True
             )
 
             if entity is None:
-                raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+                raise HTTPException(
+                    status_code=404, detail=f"Entity not found: {entity_id}"
+                )
 
-            graph_data = {
-                "root_entity": entity,
-                "max_depth": max_depth
-            }
+            graph_data = {"root_entity": entity, "max_depth": max_depth}
         else:
             # Return sample of recent entities
-            entities = await memory_graph.search_entities(
-                query="*",
-                limit=50
-            )
+            entities = await memory_graph.search_entities(query="*", limit=50)
 
             graph_data = {
                 "entities": entities[:20],  # Limit to 20 for graph visualization
                 "total_available": len(entities),
-                "note": "Showing sample of entities. Provide entity_id for specific graph."
+                "note": "Showing sample of entities. Provide entity_id for specific graph.",
             }
 
         logger.info(f"[{request_id}] Graph data prepared")
 
         return JSONResponse(
             status_code=200,
-            content={
-                "success": True,
-                "data": graph_data,
-                "request_id": request_id
-            }
+            content={"success": True, "data": graph_data, "request_id": request_id},
         )
 
     except HTTPException:
@@ -785,9 +847,10 @@ async def get_entity_graph(
 # Health Check Endpoint
 # ====================================================================
 
+
 @router.get("/health")
 async def memory_health_check(
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph)
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Health check for Memory Graph service
@@ -800,23 +863,27 @@ async def memory_health_check(
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
             "components": {
-                "memory_graph": "healthy" if memory_graph.initialized else "unavailable",
-                "redis_connection": "healthy" if memory_graph.redis_client else "unavailable",
-                "knowledge_base": "healthy" if memory_graph.knowledge_base else "unavailable"
-            }
+                "memory_graph": (
+                    "healthy" if memory_graph.initialized else "unavailable"
+                ),
+                "redis_connection": (
+                    "healthy" if memory_graph.redis_client else "unavailable"
+                ),
+                "knowledge_base": (
+                    "healthy" if memory_graph.knowledge_base else "unavailable"
+                ),
+            },
         }
 
         overall_healthy = all(
-            status == "healthy"
-            for status in health_status["components"].values()
+            status == "healthy" for status in health_status["components"].values()
         )
 
         if not overall_healthy:
             health_status["status"] = "degraded"
 
         return JSONResponse(
-            status_code=200 if overall_healthy else 503,
-            content=health_status
+            status_code=200 if overall_healthy else 503, content=health_status
         )
 
     except Exception as e:
@@ -826,6 +893,6 @@ async def memory_health_check(
             content={
                 "status": "unhealthy",
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )

@@ -31,57 +31,82 @@ router = APIRouter(tags=["knowledge-enhanced"])
 # Request/Response Models
 # ====================================================================
 
+
 class EnhancedSearchRequest(BaseModel):
     """Enhanced search request with AI Stack integration."""
+
     query: str = Field(..., min_length=1, max_length=5000, description="Search query")
-    search_type: str = Field("comprehensive", description="Search type (precise, comprehensive, broad)")
+    search_type: str = Field(
+        "comprehensive", description="Search type (precise, comprehensive, broad)"
+    )
     max_results: int = Field(10, ge=1, le=50, description="Maximum results to return")
     include_rag: bool = Field(True, description="Include RAG-enhanced results")
-    include_local: bool = Field(True, description="Include local knowledge base results")
-    confidence_threshold: float = Field(0.3, ge=0.0, le=1.0, description="Minimum confidence score")
+    include_local: bool = Field(
+        True, description="Include local knowledge base results"
+    )
+    confidence_threshold: float = Field(
+        0.3, ge=0.0, le=1.0, description="Minimum confidence score"
+    )
+
 
 class KnowledgeExtractionRequest(BaseModel):
     """Request model for knowledge extraction."""
-    content: str = Field(..., min_length=1, description="Content to extract knowledge from")
+
+    content: str = Field(
+        ..., min_length=1, description="Content to extract knowledge from"
+    )
     title: Optional[str] = Field(None, description="Content title")
     source: Optional[str] = Field("api", description="Content source")
     category: Optional[str] = Field("general", description="Content category")
     content_type: str = Field("text", description="Content type (text, document, url)")
     extraction_mode: str = Field("comprehensive", description="Extraction mode")
-    auto_store: bool = Field(True, description="Automatically store extracted knowledge")
+    auto_store: bool = Field(
+        True, description="Automatically store extracted knowledge"
+    )
+
 
 class DocumentAnalysisRequest(BaseModel):
     """Request model for document analysis."""
+
     documents: List[Dict[str, Any]] = Field(..., description="Documents to analyze")
     analysis_type: str = Field("comprehensive", description="Analysis type")
     extract_entities: bool = Field(True, description="Extract entities")
     generate_summary: bool = Field(True, description="Generate summary")
 
+
 class RAGQueryRequest(BaseModel):
     """Request model for RAG queries."""
+
     query: str = Field(..., min_length=1, max_length=5000, description="RAG query")
-    documents: Optional[List[Dict[str, Any]]] = Field(None, description="Specific documents to query")
+    documents: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Specific documents to query"
+    )
     context: Optional[str] = Field(None, description="Additional context")
     max_results: int = Field(10, ge=1, le=30, description="Maximum results")
     include_reasoning: bool = Field(False, description="Include reasoning steps")
+
 
 # ====================================================================
 # Utility Functions
 # ====================================================================
 
-def create_success_response(data: Any, message: str = "Operation completed successfully") -> Dict[str, Any]:
+
+def create_success_response(
+    data: Any, message: str = "Operation completed successfully"
+) -> Dict[str, Any]:
     """Create standardized success response."""
     return {
         "success": True,
         "data": data,
         "message": message,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
+
 
 def create_error_response(
     error_code: str = "INTERNAL_ERROR",
     message: str = "An error occurred",
-    status_code: int = 500
+    status_code: int = 500,
 ) -> JSONResponse:
     """Create standardized error response."""
     return JSONResponse(
@@ -91,34 +116,39 @@ def create_error_response(
             "error": {
                 "code": error_code,
                 "message": message,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        },
     )
+
 
 async def handle_ai_stack_error(error: AIStackError, context: str):
     """Handle AI Stack errors gracefully."""
     logger.error(f"{context} failed: {error.message}")
-    status_code = 503 if error.status_code is None else (400 if error.status_code < 500 else 503)
+    status_code = (
+        503 if error.status_code is None else (400 if error.status_code < 500 else 503)
+    )
 
     raise HTTPException(
         status_code=status_code,
         detail={
             "error": error.message,
             "context": context,
-            "ai_stack_details": error.details
-        }
+            "ai_stack_details": error.details,
+        },
     )
+
 
 # ====================================================================
 # Enhanced Search Endpoints
 # ====================================================================
 
+
 @router.post("/search/enhanced")
 async def enhanced_search(
     request_data: EnhancedSearchRequest,
     req: Request,
-    knowledge_base=Depends(get_knowledge_base)
+    knowledge_base=Depends(get_knowledge_base),
 ):
     """
     Enhanced search combining local knowledge base with AI Stack RAG capabilities.
@@ -134,16 +164,18 @@ async def enhanced_search(
         # Local knowledge base search
         if request_data.include_local and knowledge_base:
             try:
-                kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+                kb_to_use = await get_or_create_knowledge_base(
+                    req.app, force_refresh=False
+                )
                 if kb_to_use:
                     local_results = await kb_to_use.search(
-                        query=request_data.query,
-                        top_k=request_data.max_results
+                        query=request_data.query, top_k=request_data.max_results
                     )
 
                     # Filter by confidence threshold
                     filtered_local = [
-                        result for result in local_results
+                        result
+                        for result in local_results
                         if result.get("score", 0) >= request_data.confidence_threshold
                     ]
 
@@ -151,17 +183,19 @@ async def enhanced_search(
                         "results": filtered_local,
                         "total_found": len(local_results),
                         "filtered_count": len(filtered_local),
-                        "source": "local_kb"
+                        "source": "local_kb",
                     }
 
-                    logger.info(f"Local KB search: {len(local_results)} results, {len(filtered_local)} above threshold")
+                    logger.info(
+                        f"Local KB search: {len(local_results)} results, {len(filtered_local)} above threshold"
+                    )
 
             except Exception as e:
                 logger.warning(f"Local knowledge base search failed: {e}")
                 results["local_knowledge_base"] = {
                     "results": [],
                     "error": str(e),
-                    "source": "local_kb"
+                    "source": "local_kb",
                 }
 
         # AI Stack enhanced search
@@ -177,12 +211,12 @@ async def enhanced_search(
                 rag_results = await ai_client.rag_query(
                     query=request_data.query,
                     documents=local_docs,
-                    max_results=request_data.max_results
+                    max_results=request_data.max_results,
                 )
 
                 results["rag_enhanced"] = {
                     "results": rag_results,
-                    "source": "ai_stack_rag"
+                    "source": "ai_stack_rag",
                 }
 
                 logger.info(f"RAG search completed successfully")
@@ -192,7 +226,7 @@ async def enhanced_search(
                 results["rag_enhanced"] = {
                     "results": [],
                     "error": e.message,
-                    "source": "ai_stack_rag"
+                    "source": "ai_stack_rag",
                 }
 
         # Enhanced search through AI Stack librarian
@@ -201,12 +235,12 @@ async def enhanced_search(
             enhanced_results = await ai_client.search_knowledge_enhanced(
                 query=request_data.query,
                 search_type=request_data.search_type,
-                max_results=request_data.max_results
+                max_results=request_data.max_results,
             )
 
             results["enhanced_librarian"] = {
                 "results": enhanced_results,
-                "source": "ai_stack_librarian"
+                "source": "ai_stack_librarian",
             }
 
             logger.info(f"Enhanced librarian search completed")
@@ -216,7 +250,7 @@ async def enhanced_search(
             results["enhanced_librarian"] = {
                 "results": [],
                 "error": e.message,
-                "source": "ai_stack_librarian"
+                "source": "ai_stack_librarian",
             }
 
         # Combine and rank results if multiple sources available
@@ -233,31 +267,33 @@ async def enhanced_search(
         # Sort combined results by relevance score
         combined_results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-        return create_success_response({
-            "query": request_data.query,
-            "search_type": request_data.search_type,
-            "total_sources": source_count,
-            "combined_results": combined_results[:request_data.max_results],
-            "source_breakdown": results,
-            "search_metadata": {
-                "confidence_threshold": request_data.confidence_threshold,
-                "max_results": request_data.max_results,
-                "sources_used": list(results.keys())
+        return create_success_response(
+            {
+                "query": request_data.query,
+                "search_type": request_data.search_type,
+                "total_sources": source_count,
+                "combined_results": combined_results[: request_data.max_results],
+                "source_breakdown": results,
+                "search_metadata": {
+                    "confidence_threshold": request_data.confidence_threshold,
+                    "max_results": request_data.max_results,
+                    "sources_used": list(results.keys()),
+                },
             }
-        })
+        )
 
     except Exception as e:
         logger.error(f"Enhanced search failed: {e}")
         return create_error_response(
             error_code="SEARCH_ERROR",
             message=f"Enhanced search failed: {str(e)}",
-            status_code=500
+            status_code=500,
         )
+
 
 @router.post("/search/rag")
 async def rag_search(
-    request_data: RAGQueryRequest,
-    knowledge_base=Depends(get_knowledge_base)
+    request_data: RAGQueryRequest, knowledge_base=Depends(get_knowledge_base)
 ):
     """
     Pure RAG search using AI Stack for document synthesis and generation.
@@ -274,10 +310,12 @@ async def rag_search(
             try:
                 kb_results = await knowledge_base.search(
                     query=request_data.query,
-                    top_k=15  # Get more documents for RAG context
+                    top_k=15,  # Get more documents for RAG context
                 )
                 documents = kb_results if isinstance(kb_results, list) else []
-                logger.info(f"Retrieved {len(documents)} documents from local KB for RAG")
+                logger.info(
+                    f"Retrieved {len(documents)} documents from local KB for RAG"
+                )
             except Exception as e:
                 logger.warning(f"Local KB document retrieval failed: {e}")
                 documents = []
@@ -287,28 +325,29 @@ async def rag_search(
             query=request_data.query,
             documents=documents,
             context=request_data.context,
-            max_results=request_data.max_results
+            max_results=request_data.max_results,
         )
 
-        return create_success_response({
-            "query": request_data.query,
-            "rag_response": rag_result,
-            "documents_used": len(documents) if documents else 0,
-            "include_reasoning": request_data.include_reasoning
-        })
+        return create_success_response(
+            {
+                "query": request_data.query,
+                "rag_response": rag_result,
+                "documents_used": len(documents) if documents else 0,
+                "include_reasoning": request_data.include_reasoning,
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "RAG search")
+
 
 # ====================================================================
 # Knowledge Extraction and Analysis Endpoints
 # ====================================================================
 
+
 @router.post("/extract")
-async def extract_knowledge(
-    request_data: KnowledgeExtractionRequest,
-    req: Request
-):
+async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Request):
     """
     Extract structured knowledge from content using AI Stack capabilities.
 
@@ -322,45 +361,55 @@ async def extract_knowledge(
         extraction_result = await ai_client.extract_knowledge(
             content=request_data.content,
             content_type=request_data.content_type,
-            extraction_mode=request_data.extraction_mode
+            extraction_mode=request_data.extraction_mode,
         )
 
         # Optionally store extracted knowledge in local knowledge base
         stored_facts = []
         if request_data.auto_store:
             try:
-                kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+                kb_to_use = await get_or_create_knowledge_base(
+                    req.app, force_refresh=False
+                )
                 if kb_to_use and extraction_result.get("extracted_facts"):
                     for fact in extraction_result["extracted_facts"]:
                         try:
                             store_result = await kb_to_use.store_fact(
                                 content=fact.get("content", ""),
                                 metadata={
-                                    "title": request_data.title or fact.get("title", "Extracted Knowledge"),
+                                    "title": request_data.title
+                                    or fact.get("title", "Extracted Knowledge"),
                                     "source": request_data.source,
                                     "category": request_data.category,
-                                    "extraction_confidence": fact.get("confidence", 0.5),
-                                    "extracted_at": datetime.utcnow().isoformat()
-                                }
+                                    "extraction_confidence": fact.get(
+                                        "confidence", 0.5
+                                    ),
+                                    "extracted_at": datetime.utcnow().isoformat(),
+                                },
                             )
                             stored_facts.append(store_result)
                         except Exception as e:
                             logger.warning(f"Failed to store extracted fact: {e}")
 
-                    logger.info(f"Stored {len(stored_facts)} extracted facts in knowledge base")
+                    logger.info(
+                        f"Stored {len(stored_facts)} extracted facts in knowledge base"
+                    )
 
             except Exception as e:
                 logger.warning(f"Auto-storage of extracted knowledge failed: {e}")
 
-        return create_success_response({
-            "extraction_result": extraction_result,
-            "auto_stored": request_data.auto_store,
-            "stored_facts_count": len(stored_facts),
-            "stored_facts": stored_facts if stored_facts else None
-        })
+        return create_success_response(
+            {
+                "extraction_result": extraction_result,
+                "auto_stored": request_data.auto_store,
+                "stored_facts_count": len(stored_facts),
+                "stored_facts": stored_facts if stored_facts else None,
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Knowledge extraction")
+
 
 @router.post("/analyze/documents")
 async def analyze_documents(request_data: DocumentAnalysisRequest):
@@ -378,20 +427,24 @@ async def analyze_documents(request_data: DocumentAnalysisRequest):
             documents=request_data.documents
         )
 
-        return create_success_response({
-            "documents_analyzed": len(request_data.documents),
-            "analysis_type": request_data.analysis_type,
-            "analysis_result": analysis_result,
-            "extract_entities": request_data.extract_entities,
-            "generate_summary": request_data.generate_summary
-        })
+        return create_success_response(
+            {
+                "documents_analyzed": len(request_data.documents),
+                "analysis_type": request_data.analysis_type,
+                "analysis_result": analysis_result,
+                "extract_entities": request_data.extract_entities,
+                "generate_summary": request_data.generate_summary,
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Document analysis")
 
+
 # ====================================================================
 # Query Enhancement Endpoints
 # ====================================================================
+
 
 @router.post("/query/reformulate")
 async def reformulate_query(query: str, context: Optional[str] = None):
@@ -405,22 +458,25 @@ async def reformulate_query(query: str, context: Optional[str] = None):
         ai_client = await get_ai_stack_client()
 
         reformulation_result = await ai_client.reformulate_query(
-            query=query,
-            context=context
+            query=query, context=context
         )
 
-        return create_success_response({
-            "original_query": query,
-            "reformulated_queries": reformulation_result,
-            "context_provided": context is not None
-        })
+        return create_success_response(
+            {
+                "original_query": query,
+                "reformulated_queries": reformulation_result,
+                "context_provided": context is not None,
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Query reformulation")
 
+
 # ====================================================================
 # System Knowledge Management
 # ====================================================================
+
 
 @router.get("/system/insights")
 async def get_system_knowledge_insights(knowledge_category: Optional[str] = None):
@@ -437,17 +493,18 @@ async def get_system_knowledge_insights(knowledge_category: Optional[str] = None
             knowledge_category=knowledge_category
         )
 
-        return create_success_response({
-            "knowledge_category": knowledge_category,
-            "system_insights": insights
-        })
+        return create_success_response(
+            {"knowledge_category": knowledge_category, "system_insights": insights}
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "System knowledge insights")
 
+
 # ====================================================================
 # Enhanced Statistics and Health
 # ====================================================================
+
 
 @router.get("/stats/enhanced")
 async def get_enhanced_stats(req: Request):
@@ -475,20 +532,23 @@ async def get_enhanced_stats(req: Request):
             logger.warning(f"Failed to get AI Stack stats: {e}")
             ai_stats = {"error": str(e)}
 
-        return create_success_response({
-            "local_knowledge_base": local_stats,
-            "ai_stack_insights": ai_stats,
-            "enhanced_capabilities": True,
-            "timestamp": datetime.utcnow().isoformat()
-        })
+        return create_success_response(
+            {
+                "local_knowledge_base": local_stats,
+                "ai_stack_insights": ai_stats,
+                "enhanced_capabilities": True,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Enhanced stats retrieval failed: {e}")
         return create_error_response(
             error_code="STATS_ERROR",
             message=f"Failed to retrieve enhanced stats: {str(e)}",
-            status_code=500
+            status_code=500,
         )
+
 
 @router.get("/health/enhanced")
 async def enhanced_knowledge_health():
@@ -499,7 +559,7 @@ async def enhanced_knowledge_health():
         health_status = {
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
-            "components": {}
+            "components": {},
         }
 
         # Check AI Stack connectivity
@@ -517,8 +577,7 @@ async def enhanced_knowledge_health():
             health_status["status"] = "degraded"
 
         return JSONResponse(
-            status_code=200 if overall_healthy else 503,
-            content=health_status
+            status_code=200 if overall_healthy else 503, content=health_status
         )
 
     except Exception as e:
@@ -528,6 +587,6 @@ async def enhanced_knowledge_health():
             content={
                 "status": "unhealthy",
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )

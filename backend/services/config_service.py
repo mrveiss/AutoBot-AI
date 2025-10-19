@@ -51,7 +51,7 @@ class ConfigService:
         ConfigService._cache_timestamp = None
         logger.info("Configuration cache cleared")
 
-    @staticmethod  
+    @staticmethod
     def get_full_config() -> Dict[str, Any]:
         """Get complete application configuration"""
         import time

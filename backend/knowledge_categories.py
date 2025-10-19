@@ -14,6 +14,7 @@ from src.constants.network_constants import NetworkConstants
 
 class KnowledgeCategory(str, Enum):
     """Main knowledge base categories"""
+
     AUTOBOT_DOCUMENTATION = "autobot-documentation"
     SYSTEM_KNOWLEDGE = "system-knowledge"
     USER_KNOWLEDGE = "user-knowledge"
@@ -26,22 +27,22 @@ CATEGORY_METADATA: Dict[str, Dict[str, str]] = {
         "description": "AutoBot's initial knowledge - documentation and guides",
         "icon": "fas fa-book",
         "color": "#3b82f6",  # Blue
-        "examples": "API docs, architecture guides, setup instructions"
+        "examples": "API docs, architecture guides, setup instructions",
     },
     KnowledgeCategory.SYSTEM_KNOWLEDGE: {
         "name": "System Knowledge",
         "description": "AutoBot's initial knowledge - system info, man pages, OS knowledge",
         "icon": "fas fa-server",
         "color": "#10b981",  # Green
-        "examples": "Man pages, system commands, configuration files, hardware info"
+        "examples": "Man pages, system commands, configuration files, hardware info",
     },
     KnowledgeCategory.USER_KNOWLEDGE: {
         "name": "User Knowledge",
         "description": "What AutoBot is used for - user-provided domain knowledge",
         "icon": "fas fa-user-circle",
         "color": "#f59e0b",  # Amber
-        "examples": "Programming books, law references, domain-specific guides"
-    }
+        "examples": "Programming books, law references, domain-specific guides",
+    },
 }
 
 
@@ -75,11 +76,16 @@ def get_category_for_source(source: str) -> str:
     source_lower = source.lower()
 
     # AutoBot documentation sources
-    if any(keyword in source_lower for keyword in ['autobot', 'docs/', 'documentation']):
+    if any(
+        keyword in source_lower for keyword in ["autobot", "docs/", "documentation"]
+    ):
         return KnowledgeCategory.AUTOBOT_DOCUMENTATION
 
     # System knowledge sources
-    if any(keyword in source_lower for keyword in ['man_page', 'manpage', 'system', 'command', 'os_', 'machine']):
+    if any(
+        keyword in source_lower
+        for keyword in ["man_page", "manpage", "system", "command", "os_", "machine"]
+    ):
         return KnowledgeCategory.SYSTEM_KNOWLEDGE
 
     # Default to user knowledge

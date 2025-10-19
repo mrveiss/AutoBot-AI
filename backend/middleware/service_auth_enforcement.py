@@ -21,75 +21,57 @@ logger = structlog.get_logger()
 # Endpoints that DO NOT require service authentication (frontend-accessible)
 EXEMPT_PATHS: List[str] = [
     # Health and version endpoints
-    "/health",                          # Health check (no /api prefix)
-    "/api/health",                      # API health check
-    "/api/version",                     # Version information
-
+    "/health",  # Health check (no /api prefix)
+    "/api/health",  # API health check
+    "/api/version",  # Version information
     # User-facing chat and conversation endpoints
     "/api/chat",
     "/api/chats",
     "/api/conversations",
     "/api/conversation_files",
-
     # Knowledge base user operations
     "/api/knowledge",
     "/api/knowledge_base",
-
     # Terminal access for users
     "/api/terminal",
     "/api/agent_terminal",
-
     # User settings and configuration
     "/api/settings",
     "/api/frontend_config",
-
     # System health and monitoring (public endpoints)
     "/api/system/health",
     "/api/monitoring/services/health",
     "/api/services/status",
-
     # Cache management (frontend-accessible)
     "/api/cache/",
-
     # NPU worker management (frontend-accessible via Settings panel)
-    "/api/npu/workers",           # NPU worker CRUD operations
-    "/api/npu/load-balancing",    # Load balancing configuration
-
+    "/api/npu/workers",  # NPU worker CRUD operations
+    "/api/npu/load-balancing",  # Load balancing configuration
     # User-facing file operations
     "/api/files",
-
     # LLM configuration and models
     "/api/llm",
-
     # Prompts management
     "/api/prompts",
-
     # Memory operations
     "/api/memory",
-
     # Monitoring dashboards
     "/api/monitoring",
     "/api/metrics",
     "/api/analytics",
-
     # WebSocket connections
     "/ws",
-
     # API documentation
     "/docs",
     "/openapi.json",
     "/redoc",
-
     # Development endpoints
     "/api/developer",
     "/api/validation_dashboard",
-
     # Real User Monitoring
     "/api/rum",
-
     # Infrastructure monitoring (visible to users)
     "/api/infrastructure",
-
     # Additional user-facing endpoints
     "/api/orchestration",
     "/api/workflow",
@@ -105,26 +87,21 @@ SERVICE_ONLY_PATHS: List[str] = [
     "/api/npu/heartbeat",
     "/api/npu/status",
     "/api/npu/internal",
-
     # AI Stack internal endpoints
     "/api/ai-stack/results",
     "/api/ai-stack/heartbeat",
     "/api/ai-stack/models",
     "/api/ai-stack/internal",
-
     # Browser Service internal endpoints
     "/api/browser/results",
     "/api/browser/screenshots",
     "/api/browser/logs",
     "/api/browser/heartbeat",
     "/api/browser/internal",
-
     # Internal service communication
     "/api/internal",
-
     # Service registry (internal only)
     "/api/registry/internal",
-
     # Audit logging (internal only)
     "/api/audit/internal",
 ]
@@ -132,6 +109,7 @@ SERVICE_ONLY_PATHS: List[str] = [
 # ============================================================================
 # PATH MATCHING FUNCTIONS
 # ============================================================================
+
 
 def is_path_exempt(path: str) -> bool:
     """
@@ -147,9 +125,12 @@ def is_path_exempt(path: str) -> bool:
     """
     for exempt in EXEMPT_PATHS:
         if path.startswith(exempt):
-            logger.debug("Path exempt from service auth", path=path, exempt_pattern=exempt)
+            logger.debug(
+                "Path exempt from service auth", path=path, exempt_pattern=exempt
+            )
             return True
     return False
+
 
 def requires_service_auth(path: str) -> bool:
     """
@@ -165,13 +146,17 @@ def requires_service_auth(path: str) -> bool:
     """
     for service_path in SERVICE_ONLY_PATHS:
         if path.startswith(service_path):
-            logger.debug("Path requires service auth", path=path, service_pattern=service_path)
+            logger.debug(
+                "Path requires service auth", path=path, service_pattern=service_path
+            )
             return True
     return False
+
 
 # ============================================================================
 # ENFORCEMENT MIDDLEWARE
 # ============================================================================
+
 
 async def enforce_service_auth(request: Request, call_next):
     """
@@ -201,7 +186,9 @@ async def enforce_service_auth(request: Request, call_next):
 
     # Check if path requires service authentication
     if requires_service_auth(path):
-        logger.info("Enforcing service authentication", path=path, method=request.method)
+        logger.info(
+            "Enforcing service authentication", path=path, method=request.method
+        )
 
         try:
             # Validate service authentication using shared validation function
@@ -215,7 +202,7 @@ async def enforce_service_auth(request: Request, call_next):
                 "Service authenticated successfully",
                 service_id=service_info["service_id"],
                 path=path,
-                method=request.method
+                method=request.method,
             )
 
         except HTTPException as e:
@@ -225,12 +212,12 @@ async def enforce_service_auth(request: Request, call_next):
                 path=path,
                 method=request.method,
                 error=str(e.detail),
-                status_code=e.status_code
+                status_code=e.status_code,
             )
             # Return proper JSON response instead of raising exception
             return JSONResponse(
                 status_code=e.status_code,
-                content={"detail": e.detail, "authenticated": False}
+                content={"detail": e.detail, "authenticated": False},
             )
 
         except Exception as e:
@@ -240,20 +227,21 @@ async def enforce_service_auth(request: Request, call_next):
                 path=path,
                 method=request.method,
                 error=str(e),
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )
             raise HTTPException(
-                status_code=500,
-                detail=f"Authentication system error: {str(e)}"
+                status_code=500, detail=f"Authentication system error: {str(e)}"
             )
 
     # Path doesn't require service auth - allow through
     logger.debug("Request allowed - no auth required", path=path, method=request.method)
     return await call_next(request)
 
+
 # ============================================================================
 # CONFIGURATION HELPERS
 # ============================================================================
+
 
 def get_enforcement_mode() -> bool:
     """
@@ -265,22 +253,25 @@ def get_enforcement_mode() -> bool:
     mode = os.getenv("SERVICE_AUTH_ENFORCEMENT_MODE", "false").lower()
     return mode == "true"
 
+
 def log_enforcement_status():
     """Log the current enforcement status at startup."""
     if get_enforcement_mode():
         logger.info(
             "✅ Service Authentication ENFORCEMENT MODE enabled",
             exempt_paths_count=len(EXEMPT_PATHS),
-            service_only_paths_count=len(SERVICE_ONLY_PATHS)
+            service_only_paths_count=len(SERVICE_ONLY_PATHS),
         )
         logger.info("Frontend-accessible paths (first 10)", paths=EXEMPT_PATHS[:10])
         logger.info("Service-only paths", paths=SERVICE_ONLY_PATHS)
     else:
         logger.info("ℹ️  Service Authentication in LOGGING MODE (enforcement disabled)")
 
+
 # ============================================================================
 # ENDPOINT INFORMATION ENDPOINT
 # ============================================================================
+
 
 def get_endpoint_categories() -> dict:
     """

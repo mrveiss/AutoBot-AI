@@ -13,13 +13,14 @@ import ipaddress
 
 class HostCreate(BaseModel):
     """Schema for creating a new infrastructure host"""
+
     hostname: str
     ip_address: str
     role: str
     ssh_port: int = 22
     ssh_user: str = "autobot"
 
-    @field_validator('ip_address')
+    @field_validator("ip_address")
     @classmethod
     def validate_ip_address(cls, v: str) -> str:
         """Validate IP address format (IPv4 or IPv6)"""
@@ -29,7 +30,7 @@ class HostCreate(BaseModel):
         except ValueError:
             raise ValueError(f"Invalid IP address: {v}")
 
-    @field_validator('ssh_port')
+    @field_validator("ssh_port")
     @classmethod
     def validate_ssh_port(cls, v: int) -> int:
         """Validate SSH port range"""
@@ -37,7 +38,7 @@ class HostCreate(BaseModel):
             raise ValueError(f"SSH port must be between 1 and 65535, got {v}")
         return v
 
-    @field_validator('hostname')
+    @field_validator("hostname")
     @classmethod
     def validate_hostname(cls, v: str) -> str:
         """Validate hostname is not empty"""
@@ -48,13 +49,14 @@ class HostCreate(BaseModel):
 
 class HostUpdate(BaseModel):
     """Schema for updating an existing host (all fields optional)"""
+
     hostname: Optional[str] = None
     ip_address: Optional[str] = None
     ssh_port: Optional[int] = None
     ssh_user: Optional[str] = None
     status: Optional[str] = None
 
-    @field_validator('ip_address')
+    @field_validator("ip_address")
     @classmethod
     def validate_ip_address(cls, v: Optional[str]) -> Optional[str]:
         """Validate IP address if provided"""
@@ -65,7 +67,7 @@ class HostUpdate(BaseModel):
                 raise ValueError(f"Invalid IP address: {v}")
         return v
 
-    @field_validator('ssh_port')
+    @field_validator("ssh_port")
     @classmethod
     def validate_ssh_port(cls, v: Optional[int]) -> Optional[int]:
         """Validate SSH port if provided"""
@@ -73,11 +75,18 @@ class HostUpdate(BaseModel):
             raise ValueError(f"SSH port must be between 1 and 65535, got {v}")
         return v
 
-    @field_validator('status')
+    @field_validator("status")
     @classmethod
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
         """Validate status value"""
-        valid_statuses = ['new', 'provisioning', 'deployed', 'healthy', 'degraded', 'failed']
+        valid_statuses = [
+            "new",
+            "provisioning",
+            "deployed",
+            "healthy",
+            "degraded",
+            "failed",
+        ]
         if v is not None and v not in valid_statuses:
             raise ValueError(f"Status must be one of {valid_statuses}, got {v}")
         return v
@@ -85,6 +94,7 @@ class HostUpdate(BaseModel):
 
 class HostResponse(BaseModel):
     """Schema for host response"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -103,6 +113,7 @@ class HostResponse(BaseModel):
 
 class HostDetailResponse(BaseModel):
     """Schema for detailed host response with related data"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -125,10 +136,11 @@ class HostDetailResponse(BaseModel):
 
 class DeploymentCreate(BaseModel):
     """Schema for creating a deployment"""
+
     host_ids: List[int]
     force_redeploy: bool = False
 
-    @field_validator('host_ids')
+    @field_validator("host_ids")
     @classmethod
     def validate_host_ids(cls, v: List[int]) -> List[int]:
         """Validate host IDs list is not empty"""
@@ -141,6 +153,7 @@ class DeploymentCreate(BaseModel):
 
 class DeploymentResponse(BaseModel):
     """Schema for deployment response"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -157,6 +170,7 @@ class DeploymentResponse(BaseModel):
 
 class DeploymentDetailResponse(BaseModel):
     """Schema for detailed deployment response with host info"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -176,6 +190,7 @@ class DeploymentDetailResponse(BaseModel):
 
 class RoleResponse(BaseModel):
     """Schema for infrastructure role response"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -188,6 +203,7 @@ class RoleResponse(BaseModel):
 
 class StatisticsResponse(BaseModel):
     """Schema for infrastructure statistics response"""
+
     total_hosts: int
     hosts_by_status: Dict[str, int]
     total_roles: int
@@ -198,9 +214,10 @@ class StatisticsResponse(BaseModel):
 
 class ProvisionKeyRequest(BaseModel):
     """Schema for SSH key provisioning request"""
+
     password: str
 
-    @field_validator('password')
+    @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
         """Validate password is not empty"""
@@ -211,6 +228,7 @@ class ProvisionKeyRequest(BaseModel):
 
 class ProvisionKeyResponse(BaseModel):
     """Schema for SSH key provisioning response"""
+
     success: bool
     message: str
     host_id: int
@@ -219,6 +237,7 @@ class ProvisionKeyResponse(BaseModel):
 
 class HostStatusResponse(BaseModel):
     """Schema for real-time host status"""
+
     host_id: int
     hostname: str
     ip_address: str

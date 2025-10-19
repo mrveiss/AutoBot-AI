@@ -59,7 +59,9 @@ class TimeoutConfiguration:
     health_check_deployment_timeout: int = 300
     graceful_shutdown_timeout: int = 30
 
-    def get_env_override(self, key: str, default: Union[int, float, bool]) -> Union[int, float, bool]:
+    def get_env_override(
+        self, key: str, default: Union[int, float, bool]
+    ) -> Union[int, float, bool]:
         """Get environment variable override for timeout value"""
         env_key = f"AUTOBOT_{key.upper()}"
         env_value = os.getenv(env_key)
@@ -69,7 +71,7 @@ class TimeoutConfiguration:
 
         try:
             if isinstance(default, bool):
-                return env_value.lower() in ('true', '1', 'yes', 'on')
+                return env_value.lower() in ("true", "1", "yes", "on")
             elif isinstance(default, float):
                 return float(env_value)
             elif isinstance(default, int):
@@ -94,29 +96,29 @@ TIMEOUT_CONFIG = TimeoutConfiguration()
 def get_redis_timeout_config() -> dict:
     """Get Redis-specific timeout configuration"""
     return {
-        'socket_timeout': TIMEOUT_CONFIG.redis_socket_timeout,
-        'socket_connect_timeout': TIMEOUT_CONFIG.redis_connect_timeout,
-        'retry_on_timeout': TIMEOUT_CONFIG.redis_retry_on_timeout,
-        'max_retries': TIMEOUT_CONFIG.redis_max_retries
+        "socket_timeout": TIMEOUT_CONFIG.redis_socket_timeout,
+        "socket_connect_timeout": TIMEOUT_CONFIG.redis_connect_timeout,
+        "retry_on_timeout": TIMEOUT_CONFIG.redis_retry_on_timeout,
+        "max_retries": TIMEOUT_CONFIG.redis_max_retries,
     }
 
 
 def get_api_timeout_config() -> dict:
     """Get API-specific timeout configuration"""
     return {
-        'request_timeout': TIMEOUT_CONFIG.api_request_timeout,
-        'health_check_timeout': TIMEOUT_CONFIG.health_check_timeout,
-        'websocket_timeout': TIMEOUT_CONFIG.websocket_timeout
+        "request_timeout": TIMEOUT_CONFIG.api_request_timeout,
+        "health_check_timeout": TIMEOUT_CONFIG.health_check_timeout,
+        "websocket_timeout": TIMEOUT_CONFIG.websocket_timeout,
     }
 
 
 def get_database_timeout_config() -> dict:
     """Get database-specific timeout configuration"""
     return {
-        'query_timeout': TIMEOUT_CONFIG.database_query_timeout,
-        'chromadb_timeout': TIMEOUT_CONFIG.chromadb_timeout,
-        'vector_search_timeout': TIMEOUT_CONFIG.vector_search_timeout,
-        'sqlite_timeout': TIMEOUT_CONFIG.sqlite_timeout
+        "query_timeout": TIMEOUT_CONFIG.database_query_timeout,
+        "chromadb_timeout": TIMEOUT_CONFIG.chromadb_timeout,
+        "vector_search_timeout": TIMEOUT_CONFIG.vector_search_timeout,
+        "sqlite_timeout": TIMEOUT_CONFIG.sqlite_timeout,
     }
 
 
@@ -134,6 +136,8 @@ def validate_timeout_hierarchy():
 
     # WebSocket timeout should be reasonable for interactive use
     if TIMEOUT_CONFIG.websocket_timeout > 60:
-        issues.append("WebSocket timeout should not exceed 60 seconds for user experience")
+        issues.append(
+            "WebSocket timeout should not exceed 60 seconds for user experience"
+        )
 
     return issues

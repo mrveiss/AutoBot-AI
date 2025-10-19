@@ -17,7 +17,13 @@ import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    BackgroundTasks,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import redis.asyncio as redis
@@ -30,7 +36,7 @@ from .long_running_operations_framework import (
     OperationPriority,
     LongRunningOperation,
     execute_codebase_indexing,
-    execute_comprehensive_test_suite
+    execute_comprehensive_test_suite,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,7 +117,9 @@ class OperationIntegrationManager:
             await self._broadcast_progress_update(progress_data)
 
         # Register callback for all future operations
-        self.operation_manager.progress_tracker.progress_callbacks["*"] = [progress_callback]
+        self.operation_manager.progress_tracker.progress_callbacks["*"] = [
+            progress_callback
+        ]
 
     async def shutdown(self):
         """Shutdown the integration manager"""
@@ -145,7 +153,7 @@ class OperationIntegrationManager:
                     priority=priority,
                     estimated_items=request.estimated_items,
                     context=request.context,
-                    execute_immediately=request.execute_immediately
+                    execute_immediately=request.execute_immediately,
                 )
 
                 return {"operation_id": operation_id, "status": "created"}
@@ -169,7 +177,7 @@ class OperationIntegrationManager:
         async def list_operations(
             status: Optional[str] = None,
             operation_type: Optional[str] = None,
-            limit: int = 50
+            limit: int = 50,
         ):
             """List operations with optional filtering"""
             status_filter = OperationStatus(status) if status else None
@@ -190,19 +198,26 @@ class OperationIntegrationManager:
             # Calculate statistics
             all_operations = list(self.operation_manager.operations.values())
             total_count = len(all_operations)
-            active_count = len([op for op in all_operations
-                              if op.status == OperationStatus.RUNNING])
-            completed_count = len([op for op in all_operations
-                                 if op.status == OperationStatus.COMPLETED])
-            failed_count = len([op for op in all_operations
-                              if op.status in [OperationStatus.FAILED, OperationStatus.TIMEOUT]])
+            active_count = len(
+                [op for op in all_operations if op.status == OperationStatus.RUNNING]
+            )
+            completed_count = len(
+                [op for op in all_operations if op.status == OperationStatus.COMPLETED]
+            )
+            failed_count = len(
+                [
+                    op
+                    for op in all_operations
+                    if op.status in [OperationStatus.FAILED, OperationStatus.TIMEOUT]
+                ]
+            )
 
             return OperationListResponse(
                 operations=operation_responses,
                 total_count=total_count,
                 active_count=active_count,
                 completed_count=completed_count,
-                failed_count=failed_count
+                failed_count=failed_count,
             )
 
         @self.router.post("/{operation_id}/cancel")
@@ -218,13 +233,14 @@ class OperationIntegrationManager:
         async def resume_operation_from_latest_checkpoint(operation_id: str):
             """Resume operation from its latest checkpoint"""
             try:
-                checkpoints = await self.operation_manager.checkpoint_manager.list_checkpoints(
-                    operation_id
+                checkpoints = (
+                    await self.operation_manager.checkpoint_manager.list_checkpoints(
+                        operation_id
+                    )
                 )
                 if not checkpoints:
                     raise HTTPException(
-                        status_code=404,
-                        detail="No checkpoints found for operation"
+                        status_code=404, detail="No checkpoints found for operation"
                     )
 
                 # Use latest checkpoint
@@ -236,7 +252,7 @@ class OperationIntegrationManager:
                 return {
                     "status": "resumed",
                     "new_operation_id": new_operation_id,
-                    "resumed_from": latest_checkpoint.checkpoint_id
+                    "resumed_from": latest_checkpoint.checkpoint_id,
                 }
 
             except Exception as e:
@@ -245,8 +261,7 @@ class OperationIntegrationManager:
 
         @self.router.post("/{operation_id}/progress")
         async def update_operation_progress(
-            operation_id: str,
-            request: ProgressUpdateRequest
+            operation_id: str, request: ProgressUpdateRequest
         ):
             """Manually update operation progress (for external integrations)"""
             operation = self.operation_manager.get_operation(operation_id)
@@ -259,7 +274,7 @@ class OperationIntegrationManager:
                 request.processed_items,
                 request.total_items,
                 request.performance_metrics,
-                request.status_message
+                request.status_message,
             )
 
             return {"status": "updated"}
@@ -278,10 +293,14 @@ class OperationIntegrationManager:
                 # Send current progress if operation exists
                 operation = self.operation_manager.get_operation(operation_id)
                 if operation:
-                    await websocket.send_json({
-                        "type": "current_progress",
-                        "data": self._convert_operation_to_response(operation).dict()
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "current_progress",
+                            "data": self._convert_operation_to_response(
+                                operation
+                            ).dict(),
+                        }
+                    )
 
                 # Keep connection alive
                 while True:
@@ -296,8 +315,10 @@ class OperationIntegrationManager:
                 pass
             finally:
                 # Remove from connections
-                if (operation_id in self.websocket_connections and
-                    websocket in self.websocket_connections[operation_id]):
+                if (
+                    operation_id in self.websocket_connections
+                    and websocket in self.websocket_connections[operation_id]
+                ):
                     self.websocket_connections[operation_id].remove(websocket)
 
         # Specialized operation endpoints
@@ -305,7 +326,7 @@ class OperationIntegrationManager:
         async def start_codebase_indexing(
             codebase_path: str,
             file_patterns: Optional[List[str]] = None,
-            background_tasks: BackgroundTasks = None
+            background_tasks: BackgroundTasks = None,
         ):
             """Start codebase indexing operation"""
             try:
@@ -321,7 +342,7 @@ class OperationIntegrationManager:
         async def start_comprehensive_testing(
             test_suite_path: str,
             test_patterns: Optional[List[str]] = None,
-            background_tasks: BackgroundTasks = None
+            background_tasks: BackgroundTasks = None,
         ):
             """Start comprehensive test suite operation"""
             try:
@@ -333,7 +354,9 @@ class OperationIntegrationManager:
                 logger.error(f"Failed to start comprehensive testing: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-    def _get_operation_function(self, operation_type: OperationType, context: Dict[str, Any]):
+    def _get_operation_function(
+        self, operation_type: OperationType, context: Dict[str, Any]
+    ):
         """Get the appropriate operation function based on type"""
 
         if operation_type == OperationType.CODEBASE_INDEXING:
@@ -349,12 +372,15 @@ class OperationIntegrationManager:
 
     def _codebase_indexing_wrapper(self, context: Dict[str, Any]):
         """Wrapper for codebase indexing operations"""
+
         async def operation_func(exec_context):
             from ..knowledge_base import KnowledgeBase
             from pathlib import Path
 
-            codebase_path = context.get('codebase_path', '/home/kali/Desktop/AutoBot')
-            file_patterns = context.get('file_patterns', ['*.py', '*.js', '*.vue', '*.ts'])
+            codebase_path = context.get("codebase_path", "/home/kali/Desktop/AutoBot")
+            file_patterns = context.get(
+                "file_patterns", ["*.py", "*.js", "*.vue", "*.ts"]
+            )
 
             path = Path(codebase_path)
             if not path.exists():
@@ -369,8 +395,9 @@ class OperationIntegrationManager:
             result = await kb.populate_from_codebase(
                 codebase_path,
                 patterns=file_patterns,
-                progress_callback=lambda step, processed, total:
-                    exec_context.update_progress(step, processed, total)
+                progress_callback=lambda step, processed, total: exec_context.update_progress(
+                    step, processed, total
+                ),
             )
 
             return result
@@ -379,9 +406,10 @@ class OperationIntegrationManager:
 
     def _test_suite_wrapper(self, context: Dict[str, Any]):
         """Wrapper for test suite operations"""
+
         async def operation_func(exec_context):
-            test_path = context.get('test_path', '/home/kali/Desktop/AutoBot/tests')
-            test_patterns = context.get('test_patterns', ['test_*.py'])
+            test_path = context.get("test_path", "/home/kali/Desktop/AutoBot/tests")
+            test_patterns = context.get("test_patterns", ["test_*.py"])
 
             # Implementation would integrate with actual test runners
             # This shows the integration pattern
@@ -398,42 +426,47 @@ class OperationIntegrationManager:
             results = []
             for i, test_file in enumerate(test_files):
                 await exec_context.update_progress(
-                    f"Running {test_file.name}",
-                    i,
-                    len(test_files)
+                    f"Running {test_file.name}", i, len(test_files)
                 )
 
                 # Run actual test
                 try:
                     result = subprocess.run(
-                        ['python', '-m', 'pytest', str(test_file), '-v'],
+                        ["python", "-m", "pytest", str(test_file), "-v"],
                         capture_output=True,
                         text=True,
-                        timeout=300
+                        timeout=300,
                     )
-                    results.append({
-                        'file': str(test_file),
-                        'exit_code': result.returncode,
-                        'output': result.stdout,
-                        'errors': result.stderr
-                    })
+                    results.append(
+                        {
+                            "file": str(test_file),
+                            "exit_code": result.returncode,
+                            "output": result.stdout,
+                            "errors": result.stderr,
+                        }
+                    )
                 except subprocess.TimeoutExpired:
-                    results.append({
-                        'file': str(test_file),
-                        'exit_code': -1,
-                        'error': 'Test timed out'
-                    })
+                    results.append(
+                        {
+                            "file": str(test_file),
+                            "exit_code": -1,
+                            "error": "Test timed out",
+                        }
+                    )
 
             return {
-                'total_tests': len(test_files),
-                'results': results,
-                'success_rate': len([r for r in results if r.get('exit_code') == 0]) / len(results) * 100
+                "total_tests": len(test_files),
+                "results": results,
+                "success_rate": len([r for r in results if r.get("exit_code") == 0])
+                / len(results)
+                * 100,
             }
 
         return operation_func
 
     def _code_analysis_wrapper(self, context: Dict[str, Any]):
         """Wrapper for code analysis operations"""
+
         async def operation_func(exec_context):
             # Implementation would integrate with existing code analysis tools
             # This is a placeholder showing the pattern
@@ -448,6 +481,7 @@ class OperationIntegrationManager:
 
     def _kb_population_wrapper(self, context: Dict[str, Any]):
         """Wrapper for knowledge base population operations"""
+
         async def operation_func(exec_context):
             # Implementation would integrate with KnowledgeBase
             await exec_context.update_progress("Starting KB population", 0, 1)
@@ -459,7 +493,9 @@ class OperationIntegrationManager:
 
         return operation_func
 
-    def _convert_operation_to_response(self, operation: LongRunningOperation) -> OperationResponse:
+    def _convert_operation_to_response(
+        self, operation: LongRunningOperation
+    ) -> OperationResponse:
         """Convert internal operation to API response format"""
         return OperationResponse(
             operation_id=operation.operation_id,
@@ -469,17 +505,22 @@ class OperationIntegrationManager:
             status=operation.status.value,
             priority=operation.priority.name.lower(),
             created_at=operation.created_at.isoformat(),
-            started_at=operation.started_at.isoformat() if operation.started_at else None,
-            completed_at=operation.completed_at.isoformat() if operation.completed_at else None,
+            started_at=(
+                operation.started_at.isoformat() if operation.started_at else None
+            ),
+            completed_at=(
+                operation.completed_at.isoformat() if operation.completed_at else None
+            ),
             progress_percentage=operation.progress.progress_percentage,
             processed_items=operation.progress.processed_items,
             total_items=operation.progress.total_items,
             current_step=operation.progress.current_step,
             estimated_completion=(
                 operation.progress.estimated_completion.isoformat()
-                if operation.progress.estimated_completion else None
+                if operation.progress.estimated_completion
+                else None
             ),
-            error_info=operation.error_info
+            error_info=operation.error_info,
         )
 
     async def _broadcast_progress_update(self, progress_data: Dict[str, Any]):
@@ -490,10 +531,9 @@ class OperationIntegrationManager:
             disconnected = []
             for websocket in self.websocket_connections[operation_id]:
                 try:
-                    await websocket.send_json({
-                        "type": "progress_update",
-                        "data": progress_data
-                    })
+                    await websocket.send_json(
+                        {"type": "progress_update", "data": progress_data}
+                    )
                 except Exception:
                     disconnected.append(websocket)
 
@@ -515,7 +555,7 @@ class OperationMigrator:
         operation_name: str,
         operation_function: Callable,
         timeout_seconds: int,
-        operation_type: OperationType = OperationType.CODE_ANALYSIS
+        operation_type: OperationType = OperationType.CODE_ANALYSIS,
     ) -> str:
         """Migrate an existing operation to use the long-running framework"""
 
@@ -523,14 +563,16 @@ class OperationMigrator:
         estimated_items = max(1, timeout_seconds // 60)  # Rough estimate
 
         # Create operation
-        operation_id = await operation_integration_manager.operation_manager.create_operation(
-            operation_type=operation_type,
-            name=f"Migrated: {operation_name}",
-            description=f"Migrated operation with {timeout_seconds}s timeout",
-            operation_function=operation_function,
-            priority=OperationPriority.NORMAL,
-            estimated_items=estimated_items,
-            execute_immediately=True
+        operation_id = (
+            await operation_integration_manager.operation_manager.create_operation(
+                operation_type=operation_type,
+                name=f"Migrated: {operation_name}",
+                description=f"Migrated operation with {timeout_seconds}s timeout",
+                operation_function=operation_function,
+                priority=OperationPriority.NORMAL,
+                estimated_items=estimated_items,
+                execute_immediately=True,
+            )
         )
 
         return operation_id
@@ -543,9 +585,14 @@ class OperationMigrator:
             """Wrapped function with progress tracking"""
 
             # If original function expects progress callback
-            if hasattr(original_function, '__code__') and 'progress_callback' in original_function.__code__.co_varnames:
-                progress_callback = lambda step, processed, total=None: asyncio.create_task(
-                    context.update_progress(step, processed, total)
+            if (
+                hasattr(original_function, "__code__")
+                and "progress_callback" in original_function.__code__.co_varnames
+            ):
+                progress_callback = (
+                    lambda step, processed, total=None: asyncio.create_task(
+                        context.update_progress(step, processed, total)
+                    )
                 )
                 return await original_function(progress_callback=progress_callback)
             else:
@@ -563,7 +610,7 @@ def long_running_operation(
     operation_type: OperationType,
     name: Optional[str] = None,
     estimated_items: int = 1,
-    priority: OperationPriority = OperationPriority.NORMAL
+    priority: OperationPriority = OperationPriority.NORMAL,
 ):
     """Decorator to convert regular functions into long-running operations"""
 
@@ -577,24 +624,28 @@ def long_running_operation(
                 return await func(*args, **kwargs)
 
             # Create and execute operation
-            operation_id = await operation_integration_manager.operation_manager.create_operation(
-                operation_type=operation_type,
-                name=operation_name,
-                description=f"Long-running operation: {operation_name}",
-                operation_function=operation_func,
-                priority=priority,
-                estimated_items=estimated_items,
-                execute_immediately=True
+            operation_id = (
+                await operation_integration_manager.operation_manager.create_operation(
+                    operation_type=operation_type,
+                    name=operation_name,
+                    description=f"Long-running operation: {operation_name}",
+                    operation_function=operation_func,
+                    priority=priority,
+                    estimated_items=estimated_items,
+                    execute_immediately=True,
+                )
             )
 
             return operation_id
 
         return wrapper
+
     return decorator
 
 
 # Example usage
 if __name__ == "__main__":
+
     async def example_integration():
         """Example of how to use the integration"""
 
@@ -606,7 +657,7 @@ if __name__ == "__main__":
             @long_running_operation(
                 OperationType.CODEBASE_INDEXING,
                 name="Example Codebase Index",
-                estimated_items=1000
+                estimated_items=1000,
             )
             async def index_codebase():
                 # Simulate existing function
@@ -619,8 +670,15 @@ if __name__ == "__main__":
 
             # Monitor progress
             while True:
-                operation = operation_integration_manager.operation_manager.get_operation(operation_id)
-                if operation.status in [OperationStatus.COMPLETED, OperationStatus.FAILED]:
+                operation = (
+                    operation_integration_manager.operation_manager.get_operation(
+                        operation_id
+                    )
+                )
+                if operation.status in [
+                    OperationStatus.COMPLETED,
+                    OperationStatus.FAILED,
+                ]:
                     break
 
                 print(f"Progress: {operation.progress.progress_percentage:.1f}%")

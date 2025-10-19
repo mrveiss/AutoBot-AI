@@ -9,7 +9,7 @@ from backend.schemas.infrastructure import (
     DeploymentCreate,
     DeploymentResponse,
     RoleResponse,
-    StatisticsResponse
+    StatisticsResponse,
 )
 
 __all__ = [
@@ -19,5 +19,5 @@ __all__ = [
     "DeploymentCreate",
     "DeploymentResponse",
     "RoleResponse",
-    "StatisticsResponse"
+    "StatisticsResponse",
 ]

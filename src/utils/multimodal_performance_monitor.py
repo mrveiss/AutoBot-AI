@@ -17,6 +17,7 @@ from src.constants.network_constants import NetworkConstants
 try:
     import torch
     import torch.cuda
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PerformanceMetrics:
     """Performance metrics data structure"""
+
     timestamp: float
     gpu_utilization: float
     gpu_memory_used: float
@@ -47,19 +49,21 @@ class MultiModalPerformanceMonitor:
     def __init__(self):
         self.gpu_memory_tracker: Dict[str, List[float]] = defaultdict(list)
         self.processing_times: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
-        self.throughput_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
+        self.throughput_history: Dict[str, deque] = defaultdict(
+            lambda: deque(maxlen=100)
+        )
 
         # Adaptive batch sizes optimized for RTX 4070 (8GB VRAM)
         self.batch_sizes = {
-            "text": 32,      # Text embeddings are memory efficient
-            "image": 8,     # Images require more VRAM
-            "audio": 16,    # Audio processing is moderate
-            "combined": 4   # Multi-modal fusion is memory intensive
+            "text": 32,  # Text embeddings are memory efficient
+            "image": 8,  # Images require more VRAM
+            "audio": 16,  # Audio processing is moderate
+            "combined": 4,  # Multi-modal fusion is memory intensive
         }
 
         # Performance thresholds
         self.memory_high_threshold = 80.0  # Reduce batch size above this
-        self.memory_low_threshold = 40.0   # Increase batch size below this
+        self.memory_low_threshold = 40.0  # Increase batch size below this
         self.optimization_interval = 30.0  # Optimize every 30 seconds
 
         # Monitoring state
@@ -70,9 +74,13 @@ class MultiModalPerformanceMonitor:
         if self.gpu_available:
             self.device_properties = torch.cuda.get_device_properties(0)
             self.total_gpu_memory = self.device_properties.total_memory
-            logger.info(f"GPU Performance Monitor initialized: {self.device_properties.name} ({self.total_gpu_memory / 1024**3:.1f}GB)")
+            logger.info(
+                f"GPU Performance Monitor initialized: {self.device_properties.name} ({self.total_gpu_memory / 1024**3:.1f}GB)"
+            )
         else:
-            logger.warning("GPU not available - performance monitoring limited to CPU metrics")
+            logger.warning(
+                "GPU not available - performance monitoring limited to CPU metrics"
+            )
 
     async def optimize_gpu_memory(self) -> Dict[str, Any]:
         """Optimize GPU memory usage and adjust batch sizes"""
@@ -108,17 +116,23 @@ class MultiModalPerformanceMonitor:
                     self.batch_sizes[modality] = max(1, self.batch_sizes[modality] // 2)
                     if self.batch_sizes[modality] != old_size:
                         optimization_applied = True
-                        logger.info(f"Reduced {modality} batch size: {old_size} -> {self.batch_sizes[modality]}")
+                        logger.info(
+                            f"Reduced {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
+                        )
 
             elif memory_usage_percent < self.memory_low_threshold:
                 # Increase batch sizes for better throughput
                 for modality in self.batch_sizes:
                     old_size = self.batch_sizes[modality]
                     max_sizes = {"text": 64, "image": 16, "audio": 32, "combined": 8}
-                    self.batch_sizes[modality] = min(max_sizes[modality], self.batch_sizes[modality] * 2)
+                    self.batch_sizes[modality] = min(
+                        max_sizes[modality], self.batch_sizes[modality] * 2
+                    )
                     if self.batch_sizes[modality] != old_size:
                         optimization_applied = True
-                        logger.info(f"Increased {modality} batch size: {old_size} -> {self.batch_sizes[modality]}")
+                        logger.info(
+                            f"Increased {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
+                        )
 
             self.last_optimization = time.time()
 
@@ -128,7 +142,7 @@ class MultiModalPerformanceMonitor:
                 "allocated_mb": allocated / 1024 / 1024,
                 "reserved_mb": reserved / 1024 / 1024,
                 "batch_sizes": self.batch_sizes.copy(),
-                "optimization_applied": optimization_applied
+                "optimization_applied": optimization_applied,
             }
 
         except Exception as e:
@@ -141,7 +155,11 @@ class MultiModalPerformanceMonitor:
             return False
 
         try:
-            if enable and hasattr(torch.cuda, 'amp') and torch.cuda.get_device_capability()[0] >= 7:
+            if (
+                enable
+                and hasattr(torch.cuda, "amp")
+                and torch.cuda.get_device_capability()[0] >= 7
+            ):
                 # RTX 4070 supports Tensor cores (compute capability 8.9)
                 logger.info("Mixed precision enabled for RTX 4070 Tensor cores")
                 return True
@@ -179,7 +197,7 @@ class MultiModalPerformanceMonitor:
                 "ram_usage": {
                     "used_mb": memory.used / 1024 / 1024,
                     "available_mb": memory.available / 1024 / 1024,
-                    "percent": memory.percent
+                    "percent": memory.percent,
                 },
                 "processing_times": processing_stats,
                 "throughput": throughput_stats,
@@ -187,8 +205,9 @@ class MultiModalPerformanceMonitor:
                 "optimization_status": {
                     "last_optimization": self.last_optimization,
                     "time_since_optimization": timestamp - self.last_optimization,
-                    "needs_optimization": timestamp - self.last_optimization > self.optimization_interval
-                }
+                    "needs_optimization": timestamp - self.last_optimization
+                    > self.optimization_interval,
+                },
             }
 
             # Store in history
@@ -218,7 +237,7 @@ class MultiModalPerformanceMonitor:
                 "free_mb": (self.total_gpu_memory - allocated) / 1024 / 1024,
                 "utilization_percent": (allocated / self.total_gpu_memory) * 100,
                 "tensor_cores_available": self.device_properties.major >= 7,
-                "device_count": torch.cuda.device_count()
+                "device_count": torch.cuda.device_count(),
             }
         except Exception as e:
             logger.error(f"Failed to get GPU stats: {e}")
@@ -239,7 +258,7 @@ class MultiModalPerformanceMonitor:
                     "min_ms": float(np.min(times_array) * 1000),
                     "max_ms": float(np.max(times_array) * 1000),
                     "p95_ms": float(np.percentile(times_array, 95) * 1000),
-                    "p99_ms": float(np.percentile(times_array, 99) * 1000)
+                    "p99_ms": float(np.percentile(times_array, 99) * 1000),
                 }
 
         return stats
@@ -255,14 +274,20 @@ class MultiModalPerformanceMonitor:
                 recent_5min = [x for x in history if time.time() - x[0] <= 300]
 
                 throughput[modality] = {
-                    "items_per_second_1min": len(recent_1min) / 60 if recent_1min else 0,
-                    "items_per_second_5min": len(recent_5min) / 300 if recent_5min else 0,
-                    "total_processed": len(history)
+                    "items_per_second_1min": (
+                        len(recent_1min) / 60 if recent_1min else 0
+                    ),
+                    "items_per_second_5min": (
+                        len(recent_5min) / 300 if recent_5min else 0
+                    ),
+                    "total_processed": len(history),
                 }
 
         return throughput
 
-    def record_processing(self, modality: str, processing_time: float, items_processed: int = 1):
+    def record_processing(
+        self, modality: str, processing_time: float, items_processed: int = 1
+    ):
         """Record processing completion for performance tracking"""
         timestamp = time.time()
 
@@ -295,7 +320,9 @@ class MultiModalPerformanceMonitor:
 
         # Calculate averages
         avg_cpu = np.mean([m.get("cpu_utilization", 0) for m in recent_metrics])
-        avg_ram = np.mean([m.get("ram_usage", {}).get("percent", 0) for m in recent_metrics])
+        avg_ram = np.mean(
+            [m.get("ram_usage", {}).get("percent", 0) for m in recent_metrics]
+        )
 
         gpu_utilization = 0
         if self.gpu_available and recent_metrics:
@@ -308,15 +335,22 @@ class MultiModalPerformanceMonitor:
 
         return {
             "measurement_count": len(recent_metrics),
-            "time_span_minutes": (recent_metrics[-1]["timestamp"] - recent_metrics[0]["timestamp"]) / 60 if len(recent_metrics) > 1 else 0,
+            "time_span_minutes": (
+                (recent_metrics[-1]["timestamp"] - recent_metrics[0]["timestamp"]) / 60
+                if len(recent_metrics) > 1
+                else 0
+            ),
             "average_cpu_utilization": float(avg_cpu),
             "average_ram_utilization": float(avg_ram),
             "average_gpu_utilization": float(gpu_utilization),
             "current_batch_sizes": self.batch_sizes.copy(),
             "gpu_available": self.gpu_available,
-            "mixed_precision_capable": self.gpu_available and hasattr(torch.cuda, 'amp'),
+            "mixed_precision_capable": self.gpu_available
+            and hasattr(torch.cuda, "amp"),
             "last_optimization": self.last_optimization,
-            "optimization_status": "recent" if time.time() - self.last_optimization < 60 else "needed"
+            "optimization_status": (
+                "recent" if time.time() - self.last_optimization < 60 else "needed"
+            ),
         }
 
 

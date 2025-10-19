@@ -33,7 +33,7 @@ from backend.schemas.infrastructure import (
     StatisticsResponse,
     ProvisionKeyRequest,
     ProvisionKeyResponse,
-    HostStatusResponse
+    HostStatusResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,12 +46,13 @@ ssh_provisioner = SSHKeyProvisioner()
 
 # ==================== Host Management Endpoints ====================
 
+
 @router.get("/hosts")
 async def list_hosts(
     role: Optional[str] = Query(None, description="Filter by role name"),
     status: Optional[str] = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page")
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
 ):
     """
     List all infrastructure hosts with optional filtering and database-level pagination
@@ -74,9 +75,9 @@ async def list_hosts(
     try:
         filters = {}
         if role:
-            filters['role'] = role
+            filters["role"] = role
         if status:
-            filters['status'] = status
+            filters["status"] = status
 
         # Database-level pagination with eager loading (prevents N+1 queries)
         result = db.get_hosts(filters=filters, page=page, page_size=page_size)
@@ -88,13 +89,13 @@ async def list_hosts(
         )
 
         return {
-            'hosts': result['hosts'],
-            'pagination': {
-                'total': result['total'],
-                'page': result['page'],
-                'page_size': result['page_size'],
-                'total_pages': result['total_pages']
-            }
+            "hosts": result["hosts"],
+            "pagination": {
+                "total": result["total"],
+                "page": result["page"],
+                "page_size": result["page_size"],
+                "total_pages": result["total_pages"],
+            },
         }
 
     except Exception as e:
@@ -109,9 +110,15 @@ async def create_host(
     role: str = Form(..., description="Infrastructure role name"),
     ssh_port: int = Form(22, description="SSH port number"),
     ssh_user: str = Form("autobot", description="SSH username"),
-    auth_method: str = Form("key", description="Authentication method: 'password' or 'key'"),
-    password: Optional[str] = Form(None, description="Password for initial auth (if auth_method=password)"),
-    key_file: Optional[UploadFile] = File(None, description="SSH private key file (if auth_method=key)")
+    auth_method: str = Form(
+        "key", description="Authentication method: 'password' or 'key'"
+    ),
+    password: Optional[str] = Form(
+        None, description="Password for initial auth (if auth_method=password)"
+    ),
+    key_file: Optional[UploadFile] = File(
+        None, description="SSH private key file (if auth_method=key)"
+    ),
 ):
     """
     Create new infrastructure host
@@ -135,7 +142,7 @@ async def create_host(
         if not role_obj:
             raise HTTPException(
                 status_code=404,
-                detail=f"Role '{role}' not found. Use /api/iac/roles to list available roles."
+                detail=f"Role '{role}' not found. Use /api/iac/roles to list available roles.",
             )
 
         # Check if host with IP already exists
@@ -143,30 +150,28 @@ async def create_host(
         if existing_host:
             raise HTTPException(
                 status_code=409,
-                detail=f"Host with IP address {ip_address} already exists (ID: {existing_host.id})"
+                detail=f"Host with IP address {ip_address} already exists (ID: {existing_host.id})",
             )
 
         # Validate auth method
         if auth_method == "password" and not password:
             raise HTTPException(
-                status_code=400,
-                detail="Password required when auth_method='password'"
+                status_code=400, detail="Password required when auth_method='password'"
             )
 
         if auth_method == "key" and not key_file:
             raise HTTPException(
-                status_code=400,
-                detail="SSH key file required when auth_method='key'"
+                status_code=400, detail="SSH key file required when auth_method='key'"
             )
 
         # Create host data
         host_data = {
-            'hostname': hostname,
-            'ip_address': ip_address,
-            'role_id': role_obj.id,
-            'ssh_port': ssh_port,
-            'ssh_user': ssh_user,
-            'status': 'new'
+            "hostname": hostname,
+            "ip_address": ip_address,
+            "role_id": role_obj.id,
+            "ssh_port": ssh_port,
+            "ssh_user": ssh_user,
+            "status": "new",
         }
 
         # Handle SSH key file upload
@@ -179,15 +184,15 @@ async def create_host(
             key_path = os.path.join(key_dir, key_filename)
 
             # Save key file
-            with open(key_path, 'wb') as f:
+            with open(key_path, "wb") as f:
                 content = await key_file.read()
                 f.write(content)
 
             # Set secure permissions
             os.chmod(key_path, 0o600)
 
-            host_data['ssh_key_path'] = key_path
-            key_content = content.decode('utf-8')
+            host_data["ssh_key_path"] = key_path
+            key_content = content.decode("utf-8")
 
         # Create host FIRST (CRITICAL: Must exist before credential storage)
         host = db.create_host(host_data)
@@ -195,17 +200,13 @@ async def create_host(
         # Store SSH key credential if uploaded (AFTER host creation)
         if auth_method == "key" and key_file:
             db.store_ssh_credential(
-                host_id=host.id,
-                credential_type='ssh_key',
-                value=key_content
+                host_id=host.id, credential_type="ssh_key", value=key_content
             )
 
         # Store password credential if provided
         if auth_method == "password" and password:
             db.store_ssh_credential(
-                host_id=host.id,
-                credential_type='password',
-                value=password
+                host_id=host.id, credential_type="password", value=password
             )
 
         logger.info(f"Created host: {hostname} ({ip_address}) with role {role}")
@@ -245,7 +246,7 @@ async def get_host(host_id: int):
         role_name = role.name if role else "unknown"
 
         # Check for active credentials
-        has_credential = db.get_active_credential(host_id, 'ssh_key') is not None
+        has_credential = db.get_active_credential(host_id, "ssh_key") is not None
 
         # Get deployment information
         deployments = db.get_deployments(host_id=host_id)
@@ -256,10 +257,10 @@ async def get_host(host_id: int):
         # Build detailed response
         host_detail = {
             **host.__dict__,
-            'role_name': role_name,
-            'has_active_credential': has_credential,
-            'deployment_count': deployment_count,
-            'last_deployment_status': last_deployment_status
+            "role_name": role_name,
+            "has_active_credential": has_credential,
+            "deployment_count": deployment_count,
+            "last_deployment_status": last_deployment_status,
         }
 
         return host_detail
@@ -272,10 +273,7 @@ async def get_host(host_id: int):
 
 
 @router.put("/hosts/{host_id}", response_model=HostResponse)
-async def update_host(
-    host_id: int,
-    host_update: HostUpdate
-):
+async def update_host(host_id: int, host_update: HostUpdate):
     """
     Update infrastructure host configuration
 
@@ -301,8 +299,7 @@ async def update_host(
 
         # Build update data from non-None fields
         update_data = {
-            k: v for k, v in host_update.model_dump().items()
-            if v is not None
+            k: v for k, v in host_update.model_dump().items() if v is not None
         }
 
         if not update_data:
@@ -314,8 +311,8 @@ async def update_host(
 
         # Save changes (would use db.update_host() in production)
         # For now, update_host_status handles status updates
-        if 'status' in update_data:
-            db.update_host_status(host_id, update_data['status'])
+        if "status" in update_data:
+            db.update_host_status(host_id, update_data["status"])
 
         # Get updated host
         updated_host = db.get_host(host_id)
@@ -410,7 +407,7 @@ async def get_host_status(host_id: int):
             end_time = datetime.now()
             response_time_ms = (end_time - start_time).total_seconds() * 1000
 
-            is_reachable = (result == 0)
+            is_reachable = result == 0
 
             if is_reachable:
                 # Update last_seen_at
@@ -421,7 +418,7 @@ async def get_host_status(host_id: int):
             logger.warning(f"Connectivity check failed for host {host_id}: {e}")
 
         # Get active deployments count
-        deployments = db.get_deployments(host_id=host_id, status='running')
+        deployments = db.get_deployments(host_id=host_id, status="running")
         active_deployments = len(deployments)
 
         return HostStatusResponse(
@@ -433,17 +430,20 @@ async def get_host_status(host_id: int):
             response_time_ms=response_time_ms,
             last_seen_at=host.last_seen_at,
             active_deployments=active_deployments,
-            error_message=error_message
+            error_message=error_message,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting host status {host_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting host status: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting host status: {str(e)}"
+        )
 
 
 # ==================== Deployment Management Endpoints ====================
+
 
 @router.post("/deployments", response_model=List[DeploymentResponse], status_code=202)
 async def create_deployment(deployment: DeploymentCreate):
@@ -471,37 +471,32 @@ async def create_deployment(deployment: DeploymentCreate):
             host = db.get_host(host_id)
 
             if not host:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Host {host_id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"Host {host_id} not found")
 
             # Check if SSH key is provisioned
-            ssh_key = db.get_active_credential(host_id, 'ssh_key')
+            ssh_key = db.get_active_credential(host_id, "ssh_key")
             if not ssh_key and not host.ssh_key_path:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Host {host_id} ({host.hostname}) has no SSH key provisioned. "
-                           f"Use POST /api/iac/hosts/{host_id}/provision-key first."
+                    f"Use POST /api/iac/hosts/{host_id}/provision-key first.",
                 )
 
             # Get role name
-            role_name = host.role.name if host.role else 'unknown'
+            role_name = host.role.name if host.role else "unknown"
 
             # Create deployment record
             deploy_record = db.create_deployment(
-                host_id=host_id,
-                role=role_name,
-                status='queued'
+                host_id=host_id, role=role_name, status="queued"
             )
 
             # Trigger Celery task
             host_config = {
-                'ip_address': host.ip_address,
-                'role': role_name,
-                'ssh_user': host.ssh_user,
-                'ssh_key_path': host.ssh_key_path,
-                'ssh_port': host.ssh_port
+                "ip_address": host.ip_address,
+                "role": role_name,
+                "ssh_user": host.ssh_user,
+                "ssh_key_path": host.ssh_key_path,
+                "ssh_port": host.ssh_port,
             }
 
             # Queue deployment task
@@ -523,7 +518,9 @@ async def create_deployment(deployment: DeploymentCreate):
         raise
     except Exception as e:
         logger.error(f"Error creating deployment: {e}")
-        raise HTTPException(status_code=500, detail=f"Error creating deployment: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error creating deployment: {str(e)}"
+        )
 
 
 @router.get("/deployments/{deployment_id}", response_model=DeploymentDetailResponse)
@@ -543,15 +540,11 @@ async def get_deployment(deployment_id: int):
     """
     try:
         deployments = db.get_deployments()
-        deployment = next(
-            (d for d in deployments if d.id == deployment_id),
-            None
-        )
+        deployment = next((d for d in deployments if d.id == deployment_id), None)
 
         if not deployment:
             raise HTTPException(
-                status_code=404,
-                detail=f"Deployment {deployment_id} not found"
+                status_code=404, detail=f"Deployment {deployment_id} not found"
             )
 
         # Get host information
@@ -559,7 +552,7 @@ async def get_deployment(deployment_id: int):
         if not host:
             raise HTTPException(
                 status_code=404,
-                detail=f"Host {deployment.host_id} for deployment not found"
+                detail=f"Host {deployment.host_id} for deployment not found",
             )
 
         # Calculate duration if completed
@@ -570,9 +563,9 @@ async def get_deployment(deployment_id: int):
 
         deployment_detail = {
             **deployment.__dict__,
-            'hostname': host.hostname,
-            'ip_address': host.ip_address,
-            'duration_seconds': duration_seconds
+            "hostname": host.hostname,
+            "ip_address": host.ip_address,
+            "duration_seconds": duration_seconds,
         }
 
         return deployment_detail
@@ -581,13 +574,15 @@ async def get_deployment(deployment_id: int):
         raise
     except Exception as e:
         logger.error(f"Error getting deployment {deployment_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting deployment: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting deployment: {str(e)}"
+        )
 
 
 @router.get("/deployments", response_model=List[DeploymentResponse])
 async def list_deployments(
     host_id: Optional[int] = Query(None, description="Filter by host ID"),
-    status: Optional[str] = Query(None, description="Filter by deployment status")
+    status: Optional[str] = Query(None, description="Filter by deployment status"),
 ):
     """
     List deployments with optional filtering
@@ -614,16 +609,16 @@ async def list_deployments(
 
     except Exception as e:
         logger.error(f"Error listing deployments: {e}")
-        raise HTTPException(status_code=500, detail=f"Error listing deployments: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error listing deployments: {str(e)}"
+        )
 
 
 # ==================== Credential Management Endpoints ====================
 
+
 @router.post("/hosts/{host_id}/provision-key", response_model=ProvisionKeyResponse)
-async def provision_ssh_key(
-    host_id: int,
-    provision_request: ProvisionKeyRequest
-):
+async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest):
     """
     Provision SSH key on host using password authentication
 
@@ -654,10 +649,12 @@ async def provision_ssh_key(
         if not host:
             raise HTTPException(status_code=404, detail=f"Host {host_id} not found")
 
-        logger.info(f"Starting SSH key provisioning for host {host_id} ({host.hostname})")
+        logger.info(
+            f"Starting SSH key provisioning for host {host_id} ({host.hostname})"
+        )
 
         # Update host status
-        db.update_host_status(host_id, 'provisioning')
+        db.update_host_status(host_id, "provisioning")
 
         try:
             # Provision SSH key (returns content, not file path)
@@ -665,25 +662,25 @@ async def provision_ssh_key(
                 host_ip=host.ip_address,
                 port=host.ssh_port,
                 username=host.ssh_user,
-                password=provision_request.password
+                password=provision_request.password,
             )
 
             # Deactivate old credentials
-            db.deactivate_credentials(host_id, 'ssh_key')
+            db.deactivate_credentials(host_id, "ssh_key")
 
             # Store new SSH key in encrypted database
             db.store_ssh_credential(
-                host_id=host_id,
-                credential_type='ssh_key',
-                value=private_key_content
+                host_id=host_id, credential_type="ssh_key", value=private_key_content
             )
 
             # Update host status (no key_path needed - key stored in database)
-            host.status = 'deployed'
-            db.update_host_status(host_id, 'deployed')
+            host.status = "deployed"
+            db.update_host_status(host_id, "deployed")
 
             # Calculate fingerprint for response
-            fingerprint = public_key_content.split()[-1] if '@' in public_key_content else None
+            fingerprint = (
+                public_key_content.split()[-1] if "@" in public_key_content else None
+            )
 
             logger.info(f"SSH key provisioning successful for host {host_id}")
 
@@ -691,28 +688,30 @@ async def provision_ssh_key(
                 success=True,
                 message=f"SSH key provisioned successfully for {host.hostname}",
                 host_id=host_id,
-                public_key_fingerprint=fingerprint
+                public_key_fingerprint=fingerprint,
             )
 
         except Exception as e:
             # Update host status to failed
-            db.update_host_status(host_id, 'failed')
+            db.update_host_status(host_id, "failed")
 
             logger.error(f"SSH key provisioning failed for host {host_id}: {e}")
 
             raise HTTPException(
-                status_code=400,
-                detail=f"SSH key provisioning failed: {str(e)}"
+                status_code=400, detail=f"SSH key provisioning failed: {str(e)}"
             )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error provisioning SSH key for host {host_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error provisioning SSH key: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error provisioning SSH key: {str(e)}"
+        )
 
 
 # ==================== Supporting Endpoints ====================
+
 
 @router.get("/roles", response_model=List[RoleResponse])
 async def list_roles():
@@ -757,7 +756,9 @@ async def get_statistics():
 
     except Exception as e:
         logger.error(f"Error getting statistics: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting statistics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting statistics: {str(e)}"
+        )
 
 
 @router.get("/health")
@@ -777,7 +778,7 @@ async def health_check():
             "service": "infrastructure_api",
             "timestamp": datetime.utcnow().isoformat(),
             "database": "connected",
-            "total_hosts": stats.get('total_hosts', 0)
+            "total_hosts": stats.get("total_hosts", 0),
         }
 
     except Exception as e:
@@ -788,6 +789,6 @@ async def health_check():
                 "status": "unhealthy",
                 "service": "infrastructure_api",
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )

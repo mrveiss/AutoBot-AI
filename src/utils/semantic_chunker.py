@@ -8,15 +8,16 @@ segmentation.
 
 import os
 from src.constants.network_constants import NetworkConstants
+
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
-os.environ['TF_USE_LEGACY_KERAS'] = '1'
-os.environ['KERAS_BACKEND'] = 'tensorflow'
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
+os.environ["KERAS_BACKEND"] = "tensorflow"
 
 # Reduce Hugging Face rate limiting and improve caching
-os.environ['HF_HUB_DISABLE_PROGRESS_BARS'] = '1'
-os.environ['TRANSFORMERS_OFFLINE'] = '0'  # Allow downloads but cache aggressively
-os.environ['HF_HUB_CACHE'] = os.path.expanduser('~/.cache/huggingface')
-os.environ['HUGGINGFACE_HUB_CACHE'] = os.path.expanduser('~/.cache/huggingface')
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "0"  # Allow downloads but cache aggressively
+os.environ["HF_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
+os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -89,105 +90,146 @@ class AutoBotSemanticChunker:
         try:
             import asyncio
             import concurrent.futures
-            
+
             # Run model loading in thread pool to avoid blocking event loop
             def load_model():
                 # Import only when needed to avoid startup delay
                 from sentence_transformers import SentenceTransformer
                 import torch
                 import time
-                
+
                 # Detect best available device
                 device = "cpu"  # Default fallback
-                
+
                 if torch.cuda.is_available():
                     device = "cuda"
                     gpu_count = torch.cuda.device_count()
-                    gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
-                    logger.info(f"Using CUDA GPU: {gpu_name} (device count: {gpu_count})")
+                    gpu_name = (
+                        torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
+                    )
+                    logger.info(
+                        f"Using CUDA GPU: {gpu_name} (device count: {gpu_count})"
+                    )
                 else:
                     logger.info("CUDA not available, using CPU for embeddings")
 
                 # Initialize model with device optimization and retry logic for HuggingFace rate limiting
                 max_retries = 3
                 retry_delay = 2  # seconds
-                
+
                 for attempt in range(max_retries):
                     try:
                         if attempt > 0:
-                            logger.info(f"Model loading attempt {attempt + 1}/{max_retries} after {retry_delay}s delay...")
+                            logger.info(
+                                f"Model loading attempt {attempt + 1}/{max_retries} after {retry_delay}s delay..."
+                            )
                             time.sleep(retry_delay)
                             retry_delay *= 2  # Exponential backoff
-                            
+
                         # Try to load model (this may hit HuggingFace rate limits)
-                        model = SentenceTransformer(self.embedding_model_name, device=device)
+                        model = SentenceTransformer(
+                            self.embedding_model_name, device=device
+                        )
                         break  # Success - exit retry loop
-                        
+
                     except Exception as load_error:
                         error_str = str(load_error).lower()
-                        if "429" in error_str or "rate limit" in error_str or "http error" in error_str:
+                        if (
+                            "429" in error_str
+                            or "rate limit" in error_str
+                            or "http error" in error_str
+                        ):
                             if attempt < max_retries - 1:
-                                logger.warning(f"HuggingFace rate limit hit (attempt {attempt + 1}), retrying in {retry_delay}s...")
+                                logger.warning(
+                                    f"HuggingFace rate limit hit (attempt {attempt + 1}), retrying in {retry_delay}s..."
+                                )
                                 continue
                             else:
-                                logger.error(f"Max retries exceeded for HuggingFace rate limiting: {load_error}")
+                                logger.error(
+                                    f"Max retries exceeded for HuggingFace rate limiting: {load_error}"
+                                )
                                 raise
                         else:
                             # Non-rate-limit error, don't retry
                             raise
-                
+
                 # After successful model loading, try to optimize for GPU
                 try:
                     # Log device and model info
                     actual_device = next(model.parameters()).device
-                    logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
-                    
+                    logger.info(
+                        f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}"
+                    )
+
                     # Enable mixed precision for GPU if available (with proper error handling)
                     if device == "cuda":
                         try:
                             # Check if model parameters are properly loaded before precision conversion
-                            param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+                            param_count = sum(
+                                p.numel() for p in model.parameters() if p.requires_grad
+                            )
                             if param_count > 0:
                                 # Use safe tensor conversion for meta tensors
                                 try:
                                     # First check if any parameters are on meta device
-                                    has_meta_tensors = any(p.device.type == 'meta' for p in model.parameters())
+                                    has_meta_tensors = any(
+                                        p.device.type == "meta"
+                                        for p in model.parameters()
+                                    )
                                     if has_meta_tensors:
                                         # Use to_empty() for meta tensors
-                                        model = model.to_empty(device=device, dtype=torch.float16)
-                                        logger.info("Converted meta tensors to FP16 on GPU")
+                                        model = model.to_empty(
+                                            device=device, dtype=torch.float16
+                                        )
+                                        logger.info(
+                                            "Converted meta tensors to FP16 on GPU"
+                                        )
                                     else:
                                         # Use regular to() for normal tensors
                                         model = model.to(device, dtype=torch.float16)
-                                        logger.info("Enabled FP16 mixed precision for GPU inference")
+                                        logger.info(
+                                            "Enabled FP16 mixed precision for GPU inference"
+                                        )
                                 except Exception as tensor_error:
-                                    logger.warning(f"FP16 conversion failed: {tensor_error}, trying FP32")
+                                    logger.warning(
+                                        f"FP16 conversion failed: {tensor_error}, trying FP32"
+                                    )
                                     model = model.to(device, dtype=torch.float32)
                             else:
-                                logger.warning("Model parameters not properly loaded, skipping precision conversion")
+                                logger.warning(
+                                    "Model parameters not properly loaded, skipping precision conversion"
+                                )
                         except Exception as precision_error:
-                            logger.warning(f"Could not enable FP16: {precision_error}, using FP32")
+                            logger.warning(
+                                f"Could not enable FP16: {precision_error}, using FP32"
+                            )
                             # Ensure model is on correct device even if precision fails
                             model = model.to(device)
-                            
+
                 except Exception as model_load_error:
-                    logger.warning(f"Failed to load model '{self.embedding_model_name}' on {device}: {model_load_error}")
+                    logger.warning(
+                        f"Failed to load model '{self.embedding_model_name}' on {device}: {model_load_error}"
+                    )
                     # Fallback to CPU with basic loading
                     if device != "cpu":
                         logger.info("Attempting fallback to CPU...")
-                        model = SentenceTransformer(self.embedding_model_name, device="cpu")
+                        model = SentenceTransformer(
+                            self.embedding_model_name, device="cpu"
+                        )
                     else:
                         raise  # Re-raise if CPU also fails
-                
+
                 return model
-            
+
             # Load model in background thread
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                logger.info(f"Loading embedding model '{self.embedding_model_name}' in background thread...")
+                logger.info(
+                    f"Loading embedding model '{self.embedding_model_name}' in background thread..."
+                )
                 self._embedding_model = await loop.run_in_executor(executor, load_model)
                 logger.info("Embedding model loading completed")
-                    
+
         except Exception as e:
             logger.error(
                 f"Failed to load embedding model {self.embedding_model_name}: {e}"
@@ -196,9 +238,11 @@ class AutoBotSemanticChunker:
             try:
                 from sentence_transformers import SentenceTransformer
                 import torch
-                
+
                 # Use CPU only for fallback to avoid device/tensor issues
-                logger.info("Attempting fallback model loading on CPU to avoid tensor issues...")
+                logger.info(
+                    "Attempting fallback model loading on CPU to avoid tensor issues..."
+                )
                 self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
                 logger.warning("Fallback to all-mpnet-base-v2 embedding model on CPU")
             except Exception as fallback_error:
@@ -221,10 +265,10 @@ class AutoBotSemanticChunker:
             # Import only when needed to avoid startup delay
             from sentence_transformers import SentenceTransformer
             import torch
-            
+
             # Detect best available device
             device = "cpu"  # Default fallback
-            
+
             if torch.cuda.is_available():
                 device = "cuda"
                 gpu_count = torch.cuda.device_count()
@@ -234,52 +278,78 @@ class AutoBotSemanticChunker:
                 logger.info("CUDA not available, using CPU for embeddings")
 
             # Initialize model with device optimization
-            self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
-            
+            self._embedding_model = SentenceTransformer(
+                self.embedding_model_name, device=device
+            )
+
             # Log device and model info
             actual_device = next(self._embedding_model.parameters()).device
-            logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
-            
+            logger.info(
+                f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}"
+            )
+
             # Enable mixed precision for GPU if available
             if device == "cuda":
                 try:
                     # Safe tensor conversion for mixed precision
-                    has_meta_tensors = any(p.device.type == 'meta' for p in self._embedding_model.parameters())
+                    has_meta_tensors = any(
+                        p.device.type == "meta"
+                        for p in self._embedding_model.parameters()
+                    )
                     if has_meta_tensors:
                         # Use to_empty() for meta tensors
-                        self._embedding_model = self._embedding_model.to_empty(device=device, dtype=torch.float16)
+                        self._embedding_model = self._embedding_model.to_empty(
+                            device=device, dtype=torch.float16
+                        )
                         logger.info("Converted meta tensors to FP16 on GPU")
                     else:
                         # Use regular to() for normal tensors
-                        self._embedding_model = self._embedding_model.to(device, dtype=torch.float16)
+                        self._embedding_model = self._embedding_model.to(
+                            device, dtype=torch.float16
+                        )
                         logger.info("Enabled FP16 mixed precision for GPU inference")
                 except Exception as precision_error:
-                    logger.warning(f"Could not enable FP16: {precision_error}, using FP32")
+                    logger.warning(
+                        f"Could not enable FP16: {precision_error}, using FP32"
+                    )
                     # Ensure model is on correct device
-                    self._embedding_model = self._embedding_model.to(device, dtype=torch.float32)
-                    
+                    self._embedding_model = self._embedding_model.to(
+                        device, dtype=torch.float32
+                    )
+
         except Exception as e:
-            logger.error(f"Failed to load embedding model {self.embedding_model_name}: {e}")
+            logger.error(
+                f"Failed to load embedding model {self.embedding_model_name}: {e}"
+            )
             # Fallback to a more basic model
             try:
                 from sentence_transformers import SentenceTransformer
                 import torch
-                
+
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 # Load model without specifying device to avoid meta tensor issues
                 self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
                 # Then manually move to device with proper handling
                 if device == "cuda":
                     try:
-                        has_meta_tensors = any(p.device.type == 'meta' for p in self._embedding_model.parameters())
+                        has_meta_tensors = any(
+                            p.device.type == "meta"
+                            for p in self._embedding_model.parameters()
+                        )
                         if has_meta_tensors:
-                            self._embedding_model = self._embedding_model.to_empty(device=device)
+                            self._embedding_model = self._embedding_model.to_empty(
+                                device=device
+                            )
                         else:
                             self._embedding_model = self._embedding_model.to(device)
                     except Exception as device_error:
-                        logger.warning(f"Failed to move model to GPU: {device_error}, using CPU")
+                        logger.warning(
+                            f"Failed to move model to GPU: {device_error}, using CPU"
+                        )
                         device = "cpu"
-                logger.warning(f"Fallback to all-mpnet-base-v2 embedding model on {device}")
+                logger.warning(
+                    f"Fallback to all-mpnet-base-v2 embedding model on {device}"
+                )
             except Exception as fallback_error:
                 logger.error(f"Failed to load fallback model: {fallback_error}")
                 raise RuntimeError("Could not initialize any embedding model")
@@ -325,7 +395,9 @@ class AutoBotSemanticChunker:
 
         return sentences
 
-    async def _compute_sentence_embeddings_async(self, sentences: List[str]) -> np.ndarray:
+    async def _compute_sentence_embeddings_async(
+        self, sentences: List[str]
+    ) -> np.ndarray:
         """
         Compute embeddings for a list of sentences asynchronously and non-blocking.
 
@@ -339,7 +411,7 @@ class AutoBotSemanticChunker:
         import concurrent.futures
         import psutil
         import os
-        
+
         # Ensure model is loaded before use
         await self._initialize_model()
 
@@ -347,27 +419,30 @@ class AutoBotSemanticChunker:
             # Get CPU count and current load for adaptive batching
             cpu_count = os.cpu_count() or 4
             cpu_load = psutil.cpu_percent(interval=0.1)
-            
+
             # Adaptive batch sizing optimized for your Intel Ultra 9 185H (22 cores)
             # and RTX 4070 GPU setup
             import torch
-            
+
             # Check if we have GPU acceleration
-            has_gpu = torch.cuda.is_available() and hasattr(self, '_embedding_model') and \
-                     self._embedding_model is not None and \
-                     next(self._embedding_model.parameters()).device.type == 'cuda'
-            
+            has_gpu = (
+                torch.cuda.is_available()
+                and hasattr(self, "_embedding_model")
+                and self._embedding_model is not None
+                and next(self._embedding_model.parameters()).device.type == "cuda"
+            )
+
             if has_gpu:
                 # GPU mode: Use larger batches and more CPU workers for preprocessing
                 if cpu_load > 80:
                     max_workers = min(4, cpu_count // 4)  # Still use multiple workers
-                    batch_size = min(50, len(sentences))   # Larger batches for GPU
+                    batch_size = min(50, len(sentences))  # Larger batches for GPU
                 elif cpu_load > 50:
-                    max_workers = min(8, cpu_count // 2)   # More workers available
+                    max_workers = min(8, cpu_count // 2)  # More workers available
                     batch_size = min(100, len(sentences))  # Bigger batches
                 else:
                     # Low CPU load: maximize parallel processing
-                    max_workers = min(12, cpu_count)       # Use more of your 22 cores
+                    max_workers = min(12, cpu_count)  # Use more of your 22 cores
                     batch_size = min(200, len(sentences))  # Large GPU batches
             else:
                 # CPU-only mode: More conservative batching
@@ -378,44 +453,48 @@ class AutoBotSemanticChunker:
                     max_workers = min(4, cpu_count // 4)
                     batch_size = min(25, len(sentences))
                 else:
-                    max_workers = min(6, cpu_count // 2)   # Still use good parallelism
+                    max_workers = min(6, cpu_count // 2)  # Still use good parallelism
                     batch_size = min(50, len(sentences))
-            
-            logger.info(f"Processing {len(sentences)} sentences with {max_workers} workers, batch_size={batch_size}, CPU load={cpu_load}%")
-            
+
+            logger.info(
+                f"Processing {len(sentences)} sentences with {max_workers} workers, batch_size={batch_size}, CPU load={cpu_load}%"
+            )
+
             # Process in batches to avoid blocking
             all_embeddings = []
-            
+
             for i in range(0, len(sentences), batch_size):
-                batch_sentences = sentences[i:i + batch_size]
-                
+                batch_sentences = sentences[i : i + batch_size]
+
                 # Run embedding computation in thread pool to avoid blocking event loop
                 loop = asyncio.get_event_loop()
-                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=max_workers
+                ) as executor:
                     embeddings = await loop.run_in_executor(
                         executor,
                         lambda: self._embedding_model.encode(
                             batch_sentences,
                             convert_to_tensor=False,
-                            show_progress_bar=False
-                        )
+                            show_progress_bar=False,
+                        ),
                     )
                     all_embeddings.append(embeddings)
-                
+
                 # Yield control to event loop after each batch
                 await asyncio.sleep(0.001)  # Allow other coroutines to run
-                
+
                 # Log progress for large batches
                 if len(sentences) > 20:
                     progress = min(100, int((i + batch_size) / len(sentences) * 100))
                     logger.debug(f"Embedding progress: {progress}%")
-            
+
             # Combine all batch results
             if len(all_embeddings) == 1:
                 return np.array(all_embeddings[0])
             else:
                 return np.vstack(all_embeddings)
-                
+
         except Exception as e:
             logger.error(f"Error computing sentence embeddings: {e}")
             # Return zero embeddings as fallback
@@ -425,11 +504,11 @@ class AutoBotSemanticChunker:
             except:
                 # Fallback dimension if model access fails
                 return np.zeros((len(sentences), 384))
-    
+
     def _compute_sentence_embeddings(self, sentences: List[str]) -> np.ndarray:
         """
         Synchronous wrapper for backward compatibility.
-        
+
         Args:
             sentences: List of sentence strings
 
@@ -437,22 +516,30 @@ class AutoBotSemanticChunker:
             numpy array of embeddings
         """
         import asyncio
-        
+
         try:
             # Try to get existing event loop
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # If we're in an async context, we shouldn't use this sync method
-                logger.warning("Using sync embedding method in async context. Use _compute_sentence_embeddings_async instead.")
-                logger.warning("WARNING: Model initialization may block event loop - use async method instead")
+                logger.warning(
+                    "Using sync embedding method in async context. Use _compute_sentence_embeddings_async instead."
+                )
+                logger.warning(
+                    "WARNING: Model initialization may block event loop - use async method instead"
+                )
                 # Fall back to direct computation (blocking) - creates a new sync version for fallback
                 if self._embedding_model is None:
                     self._sync_initialize_model()
-                embeddings = self._embedding_model.encode(sentences, convert_to_tensor=False)
+                embeddings = self._embedding_model.encode(
+                    sentences, convert_to_tensor=False
+                )
                 return np.array(embeddings)
             else:
                 # Run the async version
-                return loop.run_until_complete(self._compute_sentence_embeddings_async(sentences))
+                return loop.run_until_complete(
+                    self._compute_sentence_embeddings_async(sentences)
+                )
         except RuntimeError:
             # No event loop, create one
             return asyncio.run(self._compute_sentence_embeddings_async(sentences))

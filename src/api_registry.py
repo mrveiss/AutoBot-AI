@@ -23,9 +23,11 @@ class APIRegistry:
         self.routers[name] = {
             "router": router,
             "prefix": prefix,
-            "routes": len(router.routes) if hasattr(router, 'routes') else 0
+            "routes": len(router.routes) if hasattr(router, "routes") else 0,
         }
-        logger.debug(f"Registered router: {name} at {prefix} with {self.routers[name]['routes']} routes")
+        logger.debug(
+            f"Registered router: {name} at {prefix} with {self.routers[name]['routes']} routes"
+        )
 
     def get_registry(self) -> Dict[str, Dict[str, Any]]:
         """Get the complete registry."""
@@ -41,4 +43,6 @@ class APIRegistry:
 
     def get_total_routes(self) -> int:
         """Get total number of routes across all routers."""
-        return sum(router_info.get("routes", 0) for router_info in self.routers.values())
+        return sum(
+            router_info.get("routes", 0) for router_info in self.routers.values()
+        )

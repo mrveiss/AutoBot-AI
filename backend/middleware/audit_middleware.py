@@ -49,22 +49,18 @@ AUTO_AUDIT_OPERATIONS = {
     "/api/auth/login": "auth.login",
     "/api/auth/logout": "auth.logout",
     "/api/auth/check": "auth.permission_check",
-
     # File operations
     "/api/files/upload": "file.upload",
     "/api/files/download": "file.download",
     "/api/files/delete": "file.delete",
-
     # Elevation
     "/api/elevation/request": "elevation.request",
     "/api/elevation/authorize": "elevation.authorize",
     "/api/elevation/execute": "elevation.execute",
-
     # Session management
     "/api/chat/sessions": "session.create",
     "/api/agent-terminal/sessions": "session.create",
     "/api/terminal/sessions": "session.create",
-
     # Configuration
     "/api/config": "config.update",
 }
@@ -82,7 +78,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         self,
         app: ASGIApp,
         audit_all: bool = False,
-        exclude_paths: Optional[list] = None
+        exclude_paths: Optional[list] = None,
     ):
         """
         Initialize audit middleware
@@ -99,7 +95,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             "/openapi.json",
             "/api/health",
             "/api/metrics",
-            "/static"
+            "/static",
         ]
 
     def should_audit(self, path: str, method: str) -> bool:
@@ -114,7 +110,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
             return True
 
         # Check if path is in auto-audit list
-        return path in AUTO_AUDIT_OPERATIONS or self._is_sensitive_operation(path, method)
+        return path in AUTO_AUDIT_OPERATIONS or self._is_sensitive_operation(
+            path, method
+        )
 
     def _is_sensitive_operation(self, path: str, method: str) -> bool:
         """Check if operation is security-sensitive"""
@@ -128,7 +126,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             "/api/security/",
             "/api/elevation/",
             "/api/files/",
-            "/api/config/"
+            "/api/config/",
         ]
 
         return any(path.startswith(pattern) for pattern in sensitive_patterns)
@@ -151,7 +149,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
         ip_address = self._get_client_ip(request)
 
         # Determine operation type
-        operation = AUTO_AUDIT_OPERATIONS.get(path, f"{method.lower()}.{path.replace('/', '.')}")
+        operation = AUTO_AUDIT_OPERATIONS.get(
+            path, f"{method.lower()}.{path.replace('/', '.')}"
+        )
 
         # Process request
         response = None
@@ -195,7 +195,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                         "status_code": response.status_code if response else None,
                         "error": error_details,
                         "user_agent": request.headers.get("user-agent"),
-                    }
+                    },
                 )
             )
 
@@ -243,7 +243,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         ip_address: Optional[str],
         resource: Optional[str],
         performance_ms: float,
-        details: dict
+        details: dict,
     ):
         """Log audit entry asynchronously"""
         try:
@@ -256,7 +256,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 ip_address=ip_address,
                 resource=resource,
                 performance_ms=performance_ms,
-                details=details
+                details=details,
             )
         except Exception as e:
             logger.error(f"Failed to log audit entry: {e}")
@@ -265,7 +265,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
 def audit_operation(
     operation: str,
     result_handler: Optional[Callable[[Any], AuditResult]] = None,
-    resource_handler: Optional[Callable[..., str]] = None
+    resource_handler: Optional[Callable[..., str]] = None,
 ):
     """
     Decorator for audit logging function/endpoint calls
@@ -288,6 +288,7 @@ def audit_operation(
         async def delete_file(file_path: str):
             ...
     """
+
     def decorator(func: Callable):
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -353,7 +354,7 @@ def audit_operation(
                         ip_address=ip_address,
                         resource=resource,
                         performance_ms=performance_ms,
-                        details={"error": error_details} if error_details else {}
+                        details={"error": error_details} if error_details else {},
                     )
                 )
 
@@ -392,7 +393,7 @@ def audit_operation(
                         ip_address=None,
                         resource=None,
                         performance_ms=performance_ms,
-                        details={"error": error_details} if error_details else {}
+                        details={"error": error_details} if error_details else {},
                     )
                 )
 
@@ -411,7 +412,7 @@ async def audit_log_from_request(
     result: AuditResult = "success",
     resource: Optional[str] = None,
     user_role: Optional[str] = None,
-    details: Optional[dict] = None
+    details: Optional[dict] = None,
 ):
     """
     Manual audit logging from within an endpoint
@@ -445,7 +446,7 @@ async def audit_log_from_request(
         ip_address=_extract_ip(request),
         resource=resource or request.url.path,
         user_role=user_role,
-        details=details or {}
+        details=details or {},
     )
 
 
@@ -485,7 +486,7 @@ async def _log_audit_async(
     ip_address: Optional[str],
     resource: Optional[str],
     performance_ms: float,
-    details: dict
+    details: dict,
 ):
     """Async helper for audit logging"""
     try:
@@ -498,7 +499,7 @@ async def _log_audit_async(
             ip_address=ip_address,
             resource=resource,
             performance_ms=performance_ms,
-            details=details
+            details=details,
         )
     except Exception as e:
         logger.error(f"Audit logging failed: {e}")

@@ -26,23 +26,29 @@ from src.constants.network_constants import NetworkConstants
 
 logger = get_llm_logger("temporal_knowledge_manager")
 
+
 class KnowledgePriority(Enum):
     """Priority levels for knowledge content."""
-    CRITICAL = "critical"       # Core system docs, security
-    HIGH = "high"              # User guides, API docs
-    MEDIUM = "medium"          # Developer docs, tutorials
-    LOW = "low"                # Reports, logs, archived content
+
+    CRITICAL = "critical"  # Core system docs, security
+    HIGH = "high"  # User guides, API docs
+    MEDIUM = "medium"  # Developer docs, tutorials
+    LOW = "low"  # Reports, logs, archived content
+
 
 class FreshnessStatus(Enum):
     """Freshness status of knowledge content."""
-    FRESH = "fresh"            # Recently updated, high confidence
-    AGING = "aging"            # Older but still valid
-    STALE = "stale"            # Needs review/refresh
-    EXPIRED = "expired"        # Should be invalidated
+
+    FRESH = "fresh"  # Recently updated, high confidence
+    AGING = "aging"  # Older but still valid
+    STALE = "stale"  # Needs review/refresh
+    EXPIRED = "expired"  # Should be invalidated
+
 
 @dataclass
 class TemporalMetadata:
     """Temporal metadata for knowledge content."""
+
     content_id: str
     created_time: float
     last_modified: float
@@ -78,14 +84,17 @@ class TemporalMetadata:
         else:
             return FreshnessStatus.FRESH
 
+
 @dataclass
 class InvalidationJob:
     """Job for invalidating expired knowledge."""
+
     content_ids: List[str]
     priority: KnowledgePriority
     scheduled_time: float
     job_type: str = "expiry"  # expiry, manual, dependency
     estimated_duration: float = 0.0
+
 
 class TemporalKnowledgeManager:
     """
@@ -106,10 +115,10 @@ class TemporalKnowledgeManager:
 
         # Configuration
         self.default_ttl_by_priority = {
-            KnowledgePriority.CRITICAL: 24.0,    # 1 day
-            KnowledgePriority.HIGH: 72.0,        # 3 days
-            KnowledgePriority.MEDIUM: 168.0,     # 1 week
-            KnowledgePriority.LOW: 720.0         # 30 days
+            KnowledgePriority.CRITICAL: 24.0,  # 1 day
+            KnowledgePriority.HIGH: 72.0,  # 3 days
+            KnowledgePriority.MEDIUM: 168.0,  # 1 week
+            KnowledgePriority.LOW: 720.0,  # 30 days
         }
 
         # Background processing
@@ -123,7 +132,7 @@ class TemporalKnowledgeManager:
             "total_refreshes": 0,
             "avg_content_lifetime": 0.0,
             "most_accessed_content": [],
-            "staleness_distribution": {}
+            "staleness_distribution": {},
         }
 
         logger.info("TemporalKnowledgeManager initialized")
@@ -140,7 +149,9 @@ class TemporalKnowledgeManager:
             return KnowledgePriority.CRITICAL
 
         # High priority content
-        if any(keyword in category for keyword in ["api", "user-guide", "architecture"]):
+        if any(
+            keyword in category for keyword in ["api", "user-guide", "architecture"]
+        ):
             return KnowledgePriority.HIGH
         if any(keyword in source_path for keyword in ["api", "guide", "readme"]):
             return KnowledgePriority.HIGH
@@ -156,10 +167,7 @@ class TemporalKnowledgeManager:
         return KnowledgePriority.MEDIUM  # Default
 
     def register_content(
-        self,
-        content_id: str,
-        metadata: Dict[str, Any],
-        content_hash: str
+        self, content_id: str, metadata: Dict[str, Any], content_hash: str
     ) -> TemporalMetadata:
         """Register new content with temporal tracking."""
         current_time = time.time()
@@ -177,13 +185,15 @@ class TemporalKnowledgeManager:
             last_modified=current_time,
             last_accessed=current_time,
             priority=priority,
-            ttl_hours=ttl_hours
+            ttl_hours=ttl_hours,
         )
 
         # Store with content hash for change detection
         self.temporal_metadata[content_id] = temporal_meta
 
-        logger.debug(f"Registered content: {content_id} (priority: {priority.value}, TTL: {ttl_hours}h)")
+        logger.debug(
+            f"Registered content: {content_id} (priority: {priority.value}, TTL: {ttl_hours}h)"
+        )
         return temporal_meta
 
     def update_content_access(self, content_id: str):
@@ -207,12 +217,16 @@ class TemporalKnowledgeManager:
             if time_since_last > 0:
                 # Exponential moving average of update frequency
                 new_frequency = 86400 / time_since_last  # Updates per day
-                meta.update_frequency = (meta.update_frequency * 0.8) + (new_frequency * 0.2)
+                meta.update_frequency = (meta.update_frequency * 0.8) + (
+                    new_frequency * 0.2
+                )
 
             meta.last_modified = current_time
             meta.freshness_score = 1.0  # Reset to fresh
 
-            logger.debug(f"Updated modification: {content_id} (frequency: {meta.update_frequency:.2f}/day)")
+            logger.debug(
+                f"Updated modification: {content_id} (frequency: {meta.update_frequency:.2f}/day)"
+            )
 
     def _update_freshness_score(self, meta: TemporalMetadata):
         """Update freshness score based on various factors."""
@@ -230,7 +244,9 @@ class TemporalKnowledgeManager:
         frequency_factor = min(1.0, meta.update_frequency / 2.0)  # Cap at 2 updates/day
 
         # Combined freshness score
-        meta.freshness_score = (age_factor * 0.5) + (access_factor * 0.3) + (frequency_factor * 0.2)
+        meta.freshness_score = (
+            (age_factor * 0.5) + (access_factor * 0.3) + (frequency_factor * 0.2)
+        )
 
     async def scan_for_expired_content(self) -> List[InvalidationJob]:
         """Scan for expired content and create invalidation jobs."""
@@ -252,19 +268,23 @@ class TemporalKnowledgeManager:
                     priority=priority,
                     scheduled_time=current_time,
                     job_type="expiry",
-                    estimated_duration=len(content_ids) * 0.1  # 0.1s per content
+                    estimated_duration=len(content_ids) * 0.1,  # 0.1s per content
                 )
                 expired_jobs.append(job)
 
         if expired_jobs:
-            logger.info(f"Found {sum(len(job.content_ids) for job in expired_jobs)} expired content items")
+            logger.info(
+                f"Found {sum(len(job.content_ids) for job in expired_jobs)} expired content items"
+            )
 
         return expired_jobs
 
     async def process_invalidation_job(self, job: InvalidationJob, kb_instance):
         """Process an invalidation job by removing expired content."""
         try:
-            logger.info(f"Processing invalidation job: {len(job.content_ids)} items (priority: {job.priority.value})")
+            logger.info(
+                f"Processing invalidation job: {len(job.content_ids)} items (priority: {job.priority.value})"
+            )
 
             removed_count = 0
             for content_id in job.content_ids:
@@ -284,7 +304,9 @@ class TemporalKnowledgeManager:
             # Update analytics
             self.temporal_analytics["total_invalidations"] += removed_count
 
-            logger.info(f"Invalidation job completed: {removed_count}/{len(job.content_ids)} items removed")
+            logger.info(
+                f"Invalidation job completed: {removed_count}/{len(job.content_ids)} items removed"
+            )
 
         except Exception as e:
             logger.error(f"Invalidation job failed: {e}")
@@ -298,7 +320,10 @@ class TemporalKnowledgeManager:
             status = meta.get_freshness_status()
 
             # Schedule refresh for stale high-priority content
-            if status == FreshnessStatus.STALE and meta.priority in [KnowledgePriority.CRITICAL, KnowledgePriority.HIGH]:
+            if status == FreshnessStatus.STALE and meta.priority in [
+                KnowledgePriority.CRITICAL,
+                KnowledgePriority.HIGH,
+            ]:
                 refresh_candidates.append(content_id)
 
             # Schedule refresh for frequently accessed aging content
@@ -306,7 +331,9 @@ class TemporalKnowledgeManager:
                 refresh_candidates.append(content_id)
 
         if refresh_candidates:
-            logger.info(f"Scheduled smart refresh for {len(refresh_candidates)} content items")
+            logger.info(
+                f"Scheduled smart refresh for {len(refresh_candidates)} content items"
+            )
 
         return refresh_candidates
 
@@ -320,10 +347,7 @@ class TemporalKnowledgeManager:
 
         total_content = len(self.temporal_metadata)
         if total_content == 0:
-            return {
-                "total_content": 0,
-                "message": "No temporal metadata available"
-            }
+            return {"total_content": 0, "message": "No temporal metadata available"}
 
         # Calculate statistics
         ages = []
@@ -341,14 +365,18 @@ class TemporalKnowledgeManager:
 
         # Calculate averages
         avg_age = sum(ages) / len(ages) if ages else 0
-        avg_access_count = sum(access_counts) / len(access_counts) if access_counts else 0
-        avg_freshness = sum(freshness_scores) / len(freshness_scores) if freshness_scores else 0
+        avg_access_count = (
+            sum(access_counts) / len(access_counts) if access_counts else 0
+        )
+        avg_freshness = (
+            sum(freshness_scores) / len(freshness_scores) if freshness_scores else 0
+        )
 
         # Find most accessed content
         most_accessed = sorted(
             self.temporal_metadata.items(),
             key=lambda x: x[1].access_count,
-            reverse=True
+            reverse=True,
         )[:5]
 
         return {
@@ -358,22 +386,24 @@ class TemporalKnowledgeManager:
             "averages": {
                 "age_hours": avg_age,
                 "access_count": avg_access_count,
-                "freshness_score": avg_freshness
+                "freshness_score": avg_freshness,
             },
             "most_accessed_content": [
                 {
                     "content_id": content_id,
                     "access_count": meta.access_count,
                     "age_hours": meta.get_age_hours(),
-                    "priority": meta.priority.value
+                    "priority": meta.priority.value,
                 }
                 for content_id, meta in most_accessed
             ],
             "analytics": self.temporal_analytics,
-            "analysis_timestamp": datetime.now().isoformat()
+            "analysis_timestamp": datetime.now().isoformat(),
         }
 
-    async def start_background_processing(self, kb_instance, check_interval_minutes: int = 30):
+    async def start_background_processing(
+        self, kb_instance, check_interval_minutes: int = 30
+    ):
         """Start background processing for temporal management."""
         if self.is_running:
             logger.warning("Background processing already running")
@@ -382,7 +412,9 @@ class TemporalKnowledgeManager:
         self.is_running = True
         self.check_interval_minutes = check_interval_minutes
 
-        logger.info(f"Starting temporal background processing (interval: {check_interval_minutes} minutes)")
+        logger.info(
+            f"Starting temporal background processing (interval: {check_interval_minutes} minutes)"
+        )
 
         try:
             while self.is_running:
@@ -404,7 +436,9 @@ class TemporalKnowledgeManager:
                     refresh_candidates = await self.schedule_smart_refresh()
 
                     if invalidation_jobs or refresh_candidates:
-                        logger.info(f"Temporal processing: {len(invalidation_jobs)} invalidations, {len(refresh_candidates)} refreshes")
+                        logger.info(
+                            f"Temporal processing: {len(invalidation_jobs)} invalidations, {len(refresh_candidates)} refreshes"
+                        )
 
                 except asyncio.CancelledError:
                     logger.info("Temporal background processing cancelled")
@@ -452,12 +486,13 @@ class TemporalKnowledgeManager:
             "ttl_hours": meta.ttl_hours,
             "is_expired": meta.is_expired(),
             "last_accessed": datetime.fromtimestamp(meta.last_accessed).isoformat(),
-            "last_modified": datetime.fromtimestamp(meta.last_modified).isoformat()
+            "last_modified": datetime.fromtimestamp(meta.last_modified).isoformat(),
         }
 
 
 # Global instance for system integration
 _temporal_manager_instance = None
+
 
 def get_temporal_manager() -> TemporalKnowledgeManager:
     """Get the global temporal knowledge manager instance."""

@@ -68,7 +68,11 @@ class UnifiedConfigManager:
     file management, caching, and model management.
     """
 
-    def __init__(self, config_dir: str = "config", settings: Optional[UnifiedConfigSettings] = None):
+    def __init__(
+        self,
+        config_dir: str = "config",
+        settings: Optional[UnifiedConfigSettings] = None,
+    ):
         # Find project root dynamically
         self.project_root = Path(__file__).parent.parent
         self.config_dir = self.project_root / config_dir
@@ -85,7 +89,7 @@ class UnifiedConfigManager:
         self.CACHE_DURATION = 30  # 30 seconds for sync cache
 
         # Async support
-        self._async_lock = asyncio.Lock() if hasattr(asyncio, 'current_task') else None
+        self._async_lock = asyncio.Lock() if hasattr(asyncio, "current_task") else None
         self._sync_lock = None  # Will be created when needed
         self._file_watchers: Dict[str, asyncio.Task] = {}
         self._callbacks: Dict[str, List[Callable]] = {}
@@ -100,6 +104,7 @@ class UnifiedConfigManager:
         """Get or create synchronous lock"""
         if self._sync_lock is None:
             import threading
+
             self._sync_lock = threading.Lock()
         return self._sync_lock
 
@@ -140,7 +145,9 @@ class UnifiedConfigManager:
     def _load_yaml_config(self) -> Dict[str, Any]:
         """Load base configuration from YAML file"""
         if not self.base_config_file.exists():
-            logger.info(f"Base configuration file not found: {self.base_config_file}, using defaults")
+            logger.info(
+                f"Base configuration file not found: {self.base_config_file}, using defaults"
+            )
             return self._get_default_config()
 
         try:
@@ -171,10 +178,10 @@ class UnifiedConfigManager:
         """Get default configuration values"""
         try:
             # Use config helper for service IPs
-            ollama_host = cfg.get_host('ollama')
-            ollama_port = cfg.get_port('ollama')
-            redis_host = cfg.get_host('redis')
-            redis_port = cfg.get_port('redis')
+            ollama_host = cfg.get_host("ollama")
+            ollama_port = cfg.get_port("ollama")
+            redis_host = cfg.get_host("redis")
+            redis_port = cfg.get_port("redis")
         except Exception:
             # Fallback values
             ollama_host = "127.0.0.1"
@@ -193,7 +200,9 @@ class UnifiedConfigManager:
                                 "endpoint": f"http://{ollama_host}:{ollama_port}/api/generate",
                                 "host": f"http://{ollama_host}:{ollama_port}",
                                 "models": [],
-                                "selected_model": os.getenv("AUTOBOT_OLLAMA_MODEL", "gemma3:270m"),
+                                "selected_model": os.getenv(
+                                    "AUTOBOT_OLLAMA_MODEL", "gemma3:270m"
+                                ),
                             }
                         },
                     },
@@ -204,13 +213,19 @@ class UnifiedConfigManager:
                                 "endpoint": f"http://{ollama_host}:{ollama_port}/api/embeddings",
                                 "host": f"http://{ollama_host}:{ollama_port}",
                                 "models": [],
-                                "selected_model": os.getenv("AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text"),
+                                "selected_model": os.getenv(
+                                    "AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text"
+                                ),
                             }
                         },
                     },
                 },
                 "server_host": "0.0.0.0",
-                "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
+                "server_port": int(
+                    os.getenv(
+                        "AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT)
+                    )
+                ),
                 "timeout": 60,
                 "max_retries": 3,
                 "streaming": False,
@@ -242,7 +257,9 @@ class UnifiedConfigManager:
             },
         }
 
-    def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    def _deep_merge(
+        self, base: Dict[str, Any], override: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Deep merge two dictionaries, with override taking precedence"""
         result = base.copy()
 
@@ -270,30 +287,46 @@ class UnifiedConfigManager:
             "AUTOBOT_BACKEND_TIMEOUT": ["backend", "timeout"],
             "AUTOBOT_BACKEND_MAX_RETRIES": ["backend", "max_retries"],
             "AUTOBOT_BACKEND_STREAMING": ["backend", "streaming"],
-
             # LLM configuration
-            "AUTOBOT_OLLAMA_HOST": ["backend", "llm", "local", "providers", "ollama", "host"],
-            "AUTOBOT_OLLAMA_MODEL": ["backend", "llm", "local", "providers", "ollama", "selected_model"],
-            "AUTOBOT_OLLAMA_ENDPOINT": ["backend", "llm", "local", "providers", "ollama", "endpoint"],
-
+            "AUTOBOT_OLLAMA_HOST": [
+                "backend",
+                "llm",
+                "local",
+                "providers",
+                "ollama",
+                "host",
+            ],
+            "AUTOBOT_OLLAMA_MODEL": [
+                "backend",
+                "llm",
+                "local",
+                "providers",
+                "ollama",
+                "selected_model",
+            ],
+            "AUTOBOT_OLLAMA_ENDPOINT": [
+                "backend",
+                "llm",
+                "local",
+                "providers",
+                "ollama",
+                "endpoint",
+            ],
             # Redis configuration
             "AUTOBOT_REDIS_HOST": ["memory", "redis", "host"],
             "AUTOBOT_REDIS_PORT": ["memory", "redis", "port"],
             "AUTOBOT_REDIS_DB": ["memory", "redis", "db"],
             "AUTOBOT_REDIS_PASSWORD": ["memory", "redis", "password"],
             "AUTOBOT_REDIS_ENABLED": ["memory", "redis", "enabled"],
-
             # UI configuration
             "AUTOBOT_UI_THEME": ["ui", "theme"],
             "AUTOBOT_UI_FONT_SIZE": ["ui", "font_size"],
             "AUTOBOT_UI_LANGUAGE": ["ui", "language"],
             "AUTOBOT_UI_ANIMATIONS": ["ui", "animations"],
-
             # Chat configuration
             "AUTOBOT_CHAT_MAX_MESSAGES": ["chat", "max_messages"],
             "AUTOBOT_CHAT_AUTO_SCROLL": ["chat", "auto_scroll"],
             "AUTOBOT_CHAT_RETENTION_DAYS": ["chat", "message_retention_days"],
-
             # Logging configuration
             "AUTOBOT_LOG_LEVEL": ["logging", "log_level"],
             "AUTOBOT_LOG_TO_FILE": ["logging", "log_to_file"],
@@ -317,7 +350,9 @@ class UnifiedConfigManager:
         if env_overrides:
             self._config = self._deep_merge(self._config, env_overrides)
 
-    def _set_nested_value(self, config: Dict[str, Any], path: List[str], value: Any) -> None:
+    def _set_nested_value(
+        self, config: Dict[str, Any], path: List[str], value: Any
+    ) -> None:
         """Set a nested value in a dictionary using a path list"""
         current = config
         for key in path[:-1]:
@@ -380,6 +415,7 @@ class UnifiedConfigManager:
         try:
             # Filter out prompts before saving
             import copy
+
             filtered_config = copy.deepcopy(self._config)
             if "prompts" in filtered_config:
                 logger.info("Removing prompts section from settings save")
@@ -401,6 +437,7 @@ class UnifiedConfigManager:
         try:
             # Filter out prompts and legacy fields before saving
             import copy
+
             filtered_config = copy.deepcopy(self._config)
 
             if "prompts" in filtered_config:
@@ -413,7 +450,9 @@ class UnifiedConfigManager:
 
             # Clear cache to force fresh load on next access
             self._sync_cache_timestamp = None
-            logger.info(f"Configuration saved to {self.base_config_file} and cache cleared")
+            logger.info(
+                f"Configuration saved to {self.base_config_file} and cache cleared"
+            )
         except Exception as e:
             logger.error(f"Failed to save YAML configuration: {e}")
             raise
@@ -437,10 +476,14 @@ class UnifiedConfigManager:
         # This is the key method that was broken in the original global_config_manager
         # It must read from config.yaml, NOT return hardcoded values
 
-        selected_model = self.get_nested("backend.llm.local.providers.ollama.selected_model")
+        selected_model = self.get_nested(
+            "backend.llm.local.providers.ollama.selected_model"
+        )
 
         if selected_model:
-            logger.info(f"UNIFIED CONFIG: Selected model from config.yaml: {selected_model}")
+            logger.info(
+                f"UNIFIED CONFIG: Selected model from config.yaml: {selected_model}"
+            )
             return selected_model
 
         # Only fall back to environment if config.yaml doesn't have the value
@@ -451,7 +494,9 @@ class UnifiedConfigManager:
 
         # Final fallback
         fallback_model = "gemma3:270m"
-        logger.warning(f"UNIFIED CONFIG: No model configured, using fallback: {fallback_model}")
+        logger.warning(
+            f"UNIFIED CONFIG: No model configured, using fallback: {fallback_model}"
+        )
         return fallback_model
 
     def update_llm_model(self, model_name: str) -> None:
@@ -494,16 +539,24 @@ class UnifiedConfigManager:
         # CRITICAL: Always use the selected model from config, not hardcoded values
         selected_model = self.get_selected_model()
         if backend_llm.get("local", {}).get("providers", {}).get("ollama"):
-            backend_llm["local"]["providers"]["ollama"]["selected_model"] = selected_model
+            backend_llm["local"]["providers"]["ollama"][
+                "selected_model"
+            ] = selected_model
 
         # Return legacy-compatible format for existing code
         return {
             "ollama": {
                 "selected_model": selected_model,
-                "models": backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("models", []),
-                "endpoint": backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("endpoint", "http://172.16.168.20:11434")
+                "models": backend_llm.get("local", {})
+                .get("providers", {})
+                .get("ollama", {})
+                .get("models", []),
+                "endpoint": backend_llm.get("local", {})
+                .get("providers", {})
+                .get("ollama", {})
+                .get("endpoint", "http://172.16.168.20:11434"),
             },
-            "unified": backend_llm  # New unified format
+            "unified": backend_llm,  # New unified format
         }
 
     # BACKEND CONFIGURATION METHODS
@@ -514,7 +567,9 @@ class UnifiedConfigManager:
 
         defaults = {
             "server_host": "0.0.0.0",
-            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
+            "server_port": int(
+                os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
+            ),
             "api_endpoint": f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}",
             "timeout": 60,
             "max_retries": 3,
@@ -537,8 +592,8 @@ class UnifiedConfigManager:
         redis_config = self.get_nested("memory.redis", {})
 
         try:
-            default_host = cfg.get_host('redis')
-            default_port = cfg.get_port('redis')
+            default_host = cfg.get_host("redis")
+            default_port = cfg.get_port("redis")
         except Exception:
             default_host = "127.0.0.1"
             default_port = 6379
@@ -571,8 +626,8 @@ class UnifiedConfigManager:
 
         # Finally fall back to configured host
         try:
-            ollama_host = cfg.get_host('ollama')
-            ollama_port = cfg.get_port('ollama')
+            ollama_host = cfg.get_host("ollama")
+            ollama_port = cfg.get_port("ollama")
             return f"http://{ollama_host}:{ollama_port}"
         except Exception:
             return "http://127.0.0.1:11434"
@@ -595,19 +650,21 @@ class UnifiedConfigManager:
             self._async_lock = asyncio.Lock()
         return self._async_lock
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5))
+    @retry(
+        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5)
+    )
     async def _read_file_async(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """Read config file asynchronously with retry"""
         if not file_path.exists():
             return None
 
         try:
-            async with aiofiles.open(file_path, 'r', encoding='utf-8') as file:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as file:
                 content = await file.read()
 
-                if file_path.suffix.lower() == '.json':
+                if file_path.suffix.lower() == ".json":
                     return json.loads(content)
-                elif file_path.suffix.lower() in ['.yaml', '.yml']:
+                elif file_path.suffix.lower() in [".yaml", ".yml"]:
                     return yaml.safe_load(content)
                 else:
                     return json.loads(content)
@@ -616,16 +673,18 @@ class UnifiedConfigManager:
             logger.error(f"Failed to read config file {file_path}: {e}")
             raise
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5))
+    @retry(
+        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5)
+    )
     async def _write_file_async(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Write config file asynchronously with retry"""
         try:
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            async with aiofiles.open(file_path, 'w', encoding='utf-8') as file:
-                if file_path.suffix.lower() == '.json':
+            async with aiofiles.open(file_path, "w", encoding="utf-8") as file:
+                if file_path.suffix.lower() == ".json":
                     await file.write(json.dumps(data, indent=2, ensure_ascii=False))
-                elif file_path.suffix.lower() in ['.yaml', '.yml']:
+                elif file_path.suffix.lower() in [".yaml", ".yml"]:
                     await file.write(yaml.dump(data, default_flow_style=False))
                 else:
                     await file.write(json.dumps(data, indent=2, ensure_ascii=False))
@@ -634,7 +693,9 @@ class UnifiedConfigManager:
             logger.error(f"Failed to write config file {file_path}: {e}")
             raise
 
-    async def load_config_async(self, config_type: str = "main", use_cache: bool = True) -> Dict[str, Any]:
+    async def load_config_async(
+        self, config_type: str = "main", use_cache: bool = True
+    ) -> Dict[str, Any]:
         """Load configuration asynchronously"""
         async with await self._get_async_lock():
             # For main config, return current config
@@ -657,6 +718,7 @@ class UnifiedConfigManager:
         async with await self._get_async_lock():
             # Filter out prompts
             import copy
+
             filtered_data = copy.deepcopy(data)
             if "prompts" in filtered_data:
                 logger.info(f"Removing prompts section from async {config_type} save")
@@ -679,11 +741,13 @@ class UnifiedConfigManager:
 
             logger.info(f"Saved {config_type} config asynchronously")
 
-    async def get_config_value_async(self, config_type: str, key: str, default: Any = None) -> Any:
+    async def get_config_value_async(
+        self, config_type: str, key: str, default: Any = None
+    ) -> Any:
         """Get specific config value asynchronously with dot notation support"""
         config = await self.load_config_async(config_type)
 
-        keys = key.split('.')
+        keys = key.split(".")
         value = config
 
         for k in keys:
@@ -694,11 +758,13 @@ class UnifiedConfigManager:
 
         return value
 
-    async def set_config_value_async(self, config_type: str, key: str, value: Any) -> None:
+    async def set_config_value_async(
+        self, config_type: str, key: str, value: Any
+    ) -> None:
         """Set specific config value asynchronously with dot notation support"""
         config = await self.load_config_async(config_type)
 
-        keys = key.split('.')
+        keys = key.split(".")
         current = config
 
         for k in keys[:-1]:
@@ -786,6 +852,7 @@ config_manager = unified_config_manager  # For utils/config_manager.py imports
 global_config_manager = unified_config_manager  # For src/config.py imports
 config = unified_config_manager  # General usage
 
+
 # Legacy class wrapper for compatibility
 class Config:
     """Backward compatibility wrapper"""
@@ -806,21 +873,26 @@ def get_config(key: str, default: Any = None) -> Any:
     """Get configuration value"""
     return unified_config_manager.get(key, default)
 
+
 def get_config_section(section: str) -> Dict[str, Any]:
     """Get configuration section"""
     return unified_config_manager.get_nested(section, {})
+
 
 def get_llm_config() -> Dict[str, Any]:
     """Get LLM configuration"""
     return unified_config_manager.get_llm_config()
 
+
 def get_redis_config() -> Dict[str, Any]:
     """Get Redis configuration"""
     return unified_config_manager.get_redis_config()
 
+
 def reload_config() -> None:
     """Reload configuration from files"""
     unified_config_manager.reload()
+
 
 def validate_config() -> Dict[str, Any]:
     """Validate configuration and return status"""
@@ -829,21 +901,30 @@ def validate_config() -> Dict[str, Any]:
 
 # ASYNC CONVENIENCE FUNCTIONS
 
+
 async def get_config_manager_async():
     """Get async config manager instance"""
     return unified_config_manager
+
 
 async def load_config_async(config_type: str = "main") -> Dict[str, Any]:
     """Load configuration asynchronously"""
     return await unified_config_manager.load_config_async(config_type)
 
+
 async def save_config_async(config_type: str, data: Dict[str, Any]) -> None:
     """Save configuration asynchronously"""
     await unified_config_manager.save_config_async(config_type, data)
 
-async def get_config_value_async(config_type: str, key: str, default: Any = None) -> Any:
+
+async def get_config_value_async(
+    config_type: str, key: str, default: Any = None
+) -> Any:
     """Get configuration value asynchronously"""
-    return await unified_config_manager.get_config_value_async(config_type, key, default)
+    return await unified_config_manager.get_config_value_async(
+        config_type, key, default
+    )
+
 
 async def set_config_value_async(config_type: str, key: str, value: Any) -> None:
     """Set configuration value asynchronously"""
@@ -852,20 +933,22 @@ async def set_config_value_async(config_type: str, key: str, value: Any) -> None
 
 # Export host and service constants for backward compatibility
 HTTP_PROTOCOL = "http"
-OLLAMA_HOST_IP = cfg.get_host('ollama')
-OLLAMA_PORT = cfg.get_port('ollama')
-REDIS_HOST_IP = cfg.get_host('redis')
-OLLAMA_URL = cfg.get_service_url('ollama')
+OLLAMA_HOST_IP = cfg.get_host("ollama")
+OLLAMA_PORT = cfg.get_port("ollama")
+REDIS_HOST_IP = cfg.get_host("redis")
+OLLAMA_URL = cfg.get_service_url("ollama")
 
 # Playwright/Browser service constants
-PLAYWRIGHT_HOST_IP = cfg.get_host('browser_service')
-PLAYWRIGHT_VNC_PORT = cfg.get_port('vnc')
+PLAYWRIGHT_HOST_IP = cfg.get_host("browser_service")
+PLAYWRIGHT_VNC_PORT = cfg.get_port("vnc")
 PLAYWRIGHT_VNC_URL = f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
+
 
 # VNC Direct URL function
 def get_vnc_direct_url():
     """Get the direct VNC connection URL with appropriate port"""
     return f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
+
 
 # Export cfg for compatibility
 # This is already imported at the top, now we export it

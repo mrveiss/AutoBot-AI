@@ -30,21 +30,48 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 
 # Allowed file extensions - consistent with general file API
 ALLOWED_EXTENSIONS = {
-    ".txt", ".md", ".json", ".yaml", ".yml", ".py", ".js", ".ts",
-    ".html", ".css", ".xml", ".csv", ".log", ".cfg", ".ini",
-    ".sh", ".bat", ".sql", ".pdf", ".png", ".jpg", ".jpeg",
-    ".gif", ".svg", ".ico", ".doc", ".docx", ".xls", ".xlsx"
+    ".txt",
+    ".md",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".py",
+    ".js",
+    ".ts",
+    ".html",
+    ".css",
+    ".xml",
+    ".csv",
+    ".log",
+    ".cfg",
+    ".ini",
+    ".sh",
+    ".bat",
+    ".sql",
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
 }
 
 
 class FileDestination(str, Enum):
     """File transfer destination options"""
+
     KNOWLEDGE_BASE = "kb"
     SHARED = "shared"
 
 
 class ConversationFileInfo(BaseModel):
     """Conversation file information model"""
+
     file_id: str
     filename: str
     original_filename: str
@@ -59,6 +86,7 @@ class ConversationFileInfo(BaseModel):
 
 class ConversationFileListResponse(BaseModel):
     """Response model for listing conversation files"""
+
     session_id: str
     files: List[ConversationFileInfo]
     total_files: int
@@ -69,6 +97,7 @@ class ConversationFileListResponse(BaseModel):
 
 class FileUploadResponse(BaseModel):
     """Response model for file upload"""
+
     success: bool
     message: str
     file_info: Optional[ConversationFileInfo] = None
@@ -77,8 +106,13 @@ class FileUploadResponse(BaseModel):
 
 class FileTransferRequest(BaseModel):
     """Request model for file transfer operation"""
-    file_ids: List[str] = Field(..., min_items=1, description="List of file IDs to transfer")
-    destination: FileDestination = Field(..., description="Transfer destination (kb or shared)")
+
+    file_ids: List[str] = Field(
+        ..., min_items=1, description="List of file IDs to transfer"
+    )
+    destination: FileDestination = Field(
+        ..., description="Transfer destination (kb or shared)"
+    )
     target_path: Optional[str] = Field(None, description="Target path in destination")
     copy: bool = Field(False, description="Copy instead of move")
     tags: Optional[List[str]] = Field(None, description="Tags for KB indexing")
@@ -93,6 +127,7 @@ class FileTransferRequest(BaseModel):
 
 class FileTransferResponse(BaseModel):
     """Response model for file transfer operation"""
+
     success: bool
     message: str
     transferred_files: List[Dict[str, str]]
@@ -103,6 +138,7 @@ class FileTransferResponse(BaseModel):
 
 class FilePreviewResponse(BaseModel):
     """Response model for file preview"""
+
     file_info: ConversationFileInfo
     preview_available: bool
     preview_content: Optional[str] = None
@@ -121,7 +157,7 @@ def get_conversation_file_manager(request: Request):
     TODO: This will be injected when ConversationFileManager is available
     Currently returns None - integration point for file manager
     """
-    return getattr(request.app.state, 'conversation_file_manager', None)
+    return getattr(request.app.state, "conversation_file_manager", None)
 
 
 def get_chat_history_manager(request: Request):
@@ -130,9 +166,7 @@ def get_chat_history_manager(request: Request):
 
 
 async def validate_session_ownership(
-    request: Request,
-    session_id: str,
-    user_data: Dict
+    request: Request, session_id: str, user_data: Dict
 ) -> bool:
     """
     Validate that the authenticated user owns the conversation session
@@ -170,8 +204,7 @@ async def validate_session_ownership(
     except Exception as e:
         logger.error(f"Session ownership validation error: {e}")
         raise HTTPException(
-            status_code=500,
-            detail="Failed to validate session ownership"
+            status_code=500, detail="Failed to validate session ownership"
         )
 
 
@@ -199,8 +232,15 @@ def is_safe_file(filename: str) -> bool:
 
     # Check for dangerous filenames
     dangerous_names = {
-        ".htaccess", ".env", "passwd", "shadow", "config",
-        "web.config", "autoexec.bat", "boot.ini", "hosts"
+        ".htaccess",
+        ".env",
+        "passwd",
+        "shadow",
+        "config",
+        "web.config",
+        "autoexec.bat",
+        "boot.ini",
+        "hosts",
     }
     if filename.lower() in dangerous_names:
         return False
@@ -237,11 +277,12 @@ async def upload_conversation_file(
         500: Server error
     """
     # Authenticate and authorize
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "upload")
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, "upload"
+    )
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file upload"
+            status_code=403, detail="Insufficient permissions for file upload"
         )
 
     # Store user data in request state
@@ -257,8 +298,7 @@ async def upload_conversation_file(
 
         if not is_safe_file(file.filename):
             raise HTTPException(
-                status_code=400,
-                detail=f"File type not allowed: {file.filename}"
+                status_code=400, detail=f"File type not allowed: {file.filename}"
             )
 
         # Read file content
@@ -268,7 +308,7 @@ async def upload_conversation_file(
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
+                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
             )
 
         # Get conversation file manager
@@ -278,7 +318,7 @@ async def upload_conversation_file(
             logger.error("ConversationFileManager not available")
             raise HTTPException(
                 status_code=503,
-                detail="File management service temporarily unavailable"
+                detail="File management service temporarily unavailable",
             )
 
         # Upload file through manager
@@ -287,7 +327,7 @@ async def upload_conversation_file(
             filename=file.filename,
             content=content,
             user_id=user_data.get("username"),
-            description=description
+            description=description,
         )
 
         # Convert to Pydantic model
@@ -304,35 +344,33 @@ async def upload_conversation_file(
                 "filename": file.filename,
                 "file_id": file_info.file_id,
                 "size": len(content),
-                "ip": request.client.host if request.client else "unknown"
-            }
+                "ip": request.client.host if request.client else "unknown",
+            },
         )
 
-        upload_id = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
+        upload_id = (
+            f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
+        )
 
         return FileUploadResponse(
             success=True,
             message=f"File '{file.filename}' uploaded successfully to conversation",
             file_info=file_info,
-            upload_id=upload_id
+            upload_id=upload_id,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error uploading conversation file: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error uploading file: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
 
-@router.get("/conversation/{session_id}/list", response_model=ConversationFileListResponse)
+@router.get(
+    "/conversation/{session_id}/list", response_model=ConversationFileListResponse
+)
 async def list_conversation_files(
-    request: Request,
-    session_id: str,
-    page: int = 1,
-    page_size: int = 50
+    request: Request, session_id: str, page: int = 1, page_size: int = 50
 ):
     """
     List all files in a conversation session
@@ -354,8 +392,7 @@ async def list_conversation_files(
     has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file listing"
+            status_code=403, detail="Insufficient permissions for file listing"
         )
 
     request.state.user = user_data
@@ -370,14 +407,12 @@ async def list_conversation_files(
             logger.error("ConversationFileManager not available")
             raise HTTPException(
                 status_code=503,
-                detail="File management service temporarily unavailable"
+                detail="File management service temporarily unavailable",
             )
 
         # Get file list
         result = await file_manager.list_files(
-            session_id=session_id,
-            page=page,
-            page_size=page_size
+            session_id=session_id, page=page, page_size=page_size
         )
 
         # Convert to Pydantic models
@@ -389,25 +424,18 @@ async def list_conversation_files(
             total_files=result["total_files"],
             total_size=result["total_size"],
             page=page,
-            page_size=page_size
+            page_size=page_size,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error listing conversation files: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error listing files: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
 
 
 @router.get("/conversation/{session_id}/download/{file_id}")
-async def download_conversation_file(
-    request: Request,
-    session_id: str,
-    file_id: str
-):
+async def download_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Download a specific file from a conversation
 
@@ -424,11 +452,12 @@ async def download_conversation_file(
         500: Server error
     """
     # Authenticate and authorize
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "download")
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, "download"
+    )
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file download"
+            status_code=403, detail="Insufficient permissions for file download"
         )
 
     request.state.user = user_data
@@ -443,7 +472,7 @@ async def download_conversation_file(
             logger.error("ConversationFileManager not available")
             raise HTTPException(
                 status_code=503,
-                detail="File management service temporarily unavailable"
+                detail="File management service temporarily unavailable",
             )
 
         # Get file info and path
@@ -466,32 +495,27 @@ async def download_conversation_file(
                 "file_id": file_id,
                 "filename": file_info_dict["filename"],
                 "size": file_info_dict["size"],
-                "ip": request.client.host if request.client else "unknown"
-            }
+                "ip": request.client.host if request.client else "unknown",
+            },
         )
 
         return FileResponse(
             path=str(file_path),
             filename=file_info_dict["original_filename"],
-            media_type=file_info_dict.get("mime_type", "application/octet-stream")
+            media_type=file_info_dict.get("mime_type", "application/octet-stream"),
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error downloading conversation file: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error downloading file: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
 
 
-@router.get("/conversation/{session_id}/preview/{file_id}", response_model=FilePreviewResponse)
-async def preview_conversation_file(
-    request: Request,
-    session_id: str,
-    file_id: str
-):
+@router.get(
+    "/conversation/{session_id}/preview/{file_id}", response_model=FilePreviewResponse
+)
+async def preview_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Preview a file or get its metadata
 
@@ -511,8 +535,7 @@ async def preview_conversation_file(
     has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file preview"
+            status_code=403, detail="Insufficient permissions for file preview"
         )
 
     request.state.user = user_data
@@ -527,7 +550,7 @@ async def preview_conversation_file(
             logger.error("ConversationFileManager not available")
             raise HTTPException(
                 status_code=503,
-                detail="File management service temporarily unavailable"
+                detail="File management service temporarily unavailable",
             )
 
         # Get file info
@@ -562,25 +585,18 @@ async def preview_conversation_file(
             file_info=file_info,
             preview_available=preview_available,
             preview_content=preview_content,
-            preview_type=preview_type
+            preview_type=preview_type,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error previewing conversation file: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error previewing file: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error previewing file: {str(e)}")
 
 
 @router.delete("/conversation/{session_id}/files/{file_id}")
-async def delete_conversation_file(
-    request: Request,
-    session_id: str,
-    file_id: str
-):
+async def delete_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Delete a specific file from a conversation
 
@@ -597,11 +613,12 @@ async def delete_conversation_file(
         500: Server error
     """
     # Authenticate and authorize
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "delete")
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, "delete"
+    )
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file deletion"
+            status_code=403, detail="Insufficient permissions for file deletion"
         )
 
     request.state.user = user_data
@@ -616,7 +633,7 @@ async def delete_conversation_file(
             logger.error("ConversationFileManager not available")
             raise HTTPException(
                 status_code=503,
-                detail="File management service temporarily unavailable"
+                detail="File management service temporarily unavailable",
             )
 
         # Delete file
@@ -634,8 +651,8 @@ async def delete_conversation_file(
             details={
                 "session_id": session_id,
                 "file_id": file_id,
-                "ip": request.client.host if request.client else "unknown"
-            }
+                "ip": request.client.host if request.client else "unknown",
+            },
         )
 
         return JSONResponse(
@@ -643,7 +660,7 @@ async def delete_conversation_file(
                 "success": True,
                 "message": "File deleted successfully",
                 "session_id": session_id,
-                "file_id": file_id
+                "file_id": file_id,
             }
         )
 
@@ -651,17 +668,12 @@ async def delete_conversation_file(
         raise
     except Exception as e:
         logger.error(f"Error deleting conversation file: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error deleting file: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
 
 
 @router.post("/conversation/{session_id}/transfer", response_model=FileTransferResponse)
 async def transfer_conversation_files(
-    request: Request,
-    session_id: str,
-    transfer_request: FileTransferRequest
+    request: Request, session_id: str, transfer_request: FileTransferRequest
 ):
     """
     Transfer files from conversation to knowledge base or shared storage
@@ -679,11 +691,12 @@ async def transfer_conversation_files(
         500: Server error
     """
     # Authenticate and authorize - transfers require upload permission to destination
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "upload")
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, "upload"
+    )
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file transfer"
+            status_code=403, detail="Insufficient permissions for file transfer"
         )
 
     request.state.user = user_data
@@ -698,7 +711,7 @@ async def transfer_conversation_files(
             logger.error("ConversationFileManager not available")
             raise HTTPException(
                 status_code=503,
-                detail="File management service temporarily unavailable"
+                detail="File management service temporarily unavailable",
             )
 
         # Execute transfer
@@ -709,7 +722,7 @@ async def transfer_conversation_files(
             target_path=transfer_request.target_path,
             copy=transfer_request.copy,
             tags=transfer_request.tags,
-            user_id=user_data.get("username")
+            user_id=user_data.get("username"),
         )
 
         # Audit log
@@ -725,8 +738,8 @@ async def transfer_conversation_files(
                 "transferred": result["total_transferred"],
                 "failed": result["total_failed"],
                 "copy": transfer_request.copy,
-                "ip": request.client.host if request.client else "unknown"
-            }
+                "ip": request.client.host if request.client else "unknown",
+            },
         )
 
         return FileTransferResponse(
@@ -735,7 +748,7 @@ async def transfer_conversation_files(
             transferred_files=result["transferred_files"],
             failed_files=result["failed_files"],
             total_transferred=result["total_transferred"],
-            total_failed=result["total_failed"]
+            total_failed=result["total_failed"],
         )
 
     except HTTPException:
@@ -743,6 +756,5 @@ async def transfer_conversation_files(
     except Exception as e:
         logger.error(f"Error transferring conversation files: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error transferring files: {str(e)}"
+            status_code=500, detail=f"Error transferring files: {str(e)}"
         )

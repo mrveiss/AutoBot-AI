@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class ConnectionState(Enum):
     """SSH connection states"""
+
     IDLE = "idle"
     ACTIVE = "active"
     UNHEALTHY = "unhealthy"
@@ -37,6 +38,7 @@ class ConnectionState(Enum):
 @dataclass
 class SSHConnection:
     """Represents a single SSH connection in the pool"""
+
     client: paramiko.SSHClient
     host: str
     port: int
@@ -77,7 +79,7 @@ class SSHConnectionPool:
         idle_timeout: int = 300,
         health_check_interval: int = 60,
         retry_max_attempts: int = 3,
-        retry_base_delay: float = 1.0
+        retry_base_delay: float = 1.0,
     ):
         """
         Initialize SSH connection pool
@@ -146,7 +148,7 @@ class SSHConnectionPool:
         port: int = 22,
         username: str = "autobot",
         key_path: str = "~/.ssh/autobot_key",
-        passphrase: Optional[str] = None
+        passphrase: Optional[str] = None,
     ) -> paramiko.SSHClient:
         """
         Get an SSH connection from the pool
@@ -191,7 +193,10 @@ class SSHConnectionPool:
                         conn.state = ConnectionState.UNHEALTHY
 
             # No idle connection available, create new if under limit
-            if len([c for c in pool if c.state != ConnectionState.CLOSED]) < self.max_connections_per_host:
+            if (
+                len([c for c in pool if c.state != ConnectionState.CLOSED])
+                < self.max_connections_per_host
+            ):
                 client = await self._create_connection(
                     host, port, username, key_path, passphrase
                 )
@@ -205,7 +210,7 @@ class SSHConnectionPool:
                     created_at=datetime.now(),
                     last_used=datetime.now(),
                     last_health_check=datetime.now(),
-                    use_count=1
+                    use_count=1,
                 )
                 pool.append(conn)
 
@@ -230,7 +235,7 @@ class SSHConnectionPool:
         client: paramiko.SSHClient,
         host: str,
         port: int = 22,
-        username: str = "autobot"
+        username: str = "autobot",
     ):
         """
         Release a connection back to the pool
@@ -245,7 +250,9 @@ class SSHConnectionPool:
 
         async with self._lock:
             if pool_key not in self.pools:
-                logger.warning(f"Attempted to release connection for unknown pool {pool_key}")
+                logger.warning(
+                    f"Attempted to release connection for unknown pool {pool_key}"
+                )
                 return
 
             pool = self.pools[pool_key]
@@ -264,7 +271,7 @@ class SSHConnectionPool:
         port: int,
         username: str,
         key_path: str,
-        passphrase: Optional[str]
+        passphrase: Optional[str],
     ) -> paramiko.SSHClient:
         """
         Create a new SSH connection with retry logic
@@ -299,8 +306,7 @@ class SSHConnectionPool:
                     raise FileNotFoundError(f"SSH key not found: {key_path_expanded}")
 
                 private_key = paramiko.RSAKey.from_private_key_file(
-                    key_path_expanded,
-                    password=passphrase
+                    key_path_expanded, password=passphrase
                 )
 
                 # Connect with timeout
@@ -316,7 +322,7 @@ class SSHConnectionPool:
                     pkey=private_key,
                     timeout=self.connect_timeout,
                     allow_agent=False,
-                    look_for_keys=False
+                    look_for_keys=False,
                 )
 
                 logger.info(f"SSH connection established to {username}@{host}:{port}")
@@ -330,7 +336,7 @@ class SSHConnectionPool:
 
                 if attempt < self.retry_max_attempts - 1:
                     # Exponential backoff
-                    delay = self.retry_base_delay * (2 ** attempt)
+                    delay = self.retry_base_delay * (2**attempt)
                     logger.debug(f"Retrying in {delay}s...")
                     await asyncio.sleep(delay)
 
@@ -357,7 +363,9 @@ class SSHConnectionPool:
                 return False
 
             # Execute simple command
-            stdin, stdout, stderr = conn.client.exec_command("echo health_check", timeout=5)
+            stdin, stdout, stderr = conn.client.exec_command(
+                "echo health_check", timeout=5
+            )
             output = stdout.read().decode().strip()
 
             if output == "health_check":
@@ -365,7 +373,9 @@ class SSHConnectionPool:
                 conn.state = ConnectionState.IDLE
                 return True
             else:
-                logger.warning(f"Unexpected health check response from {conn.host}: {output}")
+                logger.warning(
+                    f"Unexpected health check response from {conn.host}: {output}"
+                )
                 return False
 
         except Exception as e:
@@ -415,7 +425,9 @@ class SSHConnectionPool:
                         logger.info(f"Removed unhealthy connection to {pool_key}")
 
                     # Remove idle timeout connections
-                    elif conn.state == ConnectionState.IDLE and conn.is_idle_timeout(self.idle_timeout):
+                    elif conn.state == ConnectionState.IDLE and conn.is_idle_timeout(
+                        self.idle_timeout
+                    ):
                         self._close_connection(conn)
                         connections_to_remove.append(conn)
                         logger.info(
@@ -457,9 +469,15 @@ class SSHConnectionPool:
                 stats[pool_key] = {
                     "total": len(pool),
                     "idle": len([c for c in pool if c.state == ConnectionState.IDLE]),
-                    "active": len([c for c in pool if c.state == ConnectionState.ACTIVE]),
-                    "unhealthy": len([c for c in pool if c.state == ConnectionState.UNHEALTHY]),
-                    "closed": len([c for c in pool if c.state == ConnectionState.CLOSED]),
+                    "active": len(
+                        [c for c in pool if c.state == ConnectionState.ACTIVE]
+                    ),
+                    "unhealthy": len(
+                        [c for c in pool if c.state == ConnectionState.UNHEALTHY]
+                    ),
+                    "closed": len(
+                        [c for c in pool if c.state == ConnectionState.CLOSED]
+                    ),
                 }
 
             return stats

@@ -454,7 +454,7 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
                     return response["content"].strip()
 
             # Handle LLMResponse object
-            if hasattr(response, 'content'):
+            if hasattr(response, "content"):
                 return response.content.strip()
 
             if isinstance(response, str):

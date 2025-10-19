@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RequestInfo:
     """Information about a single request"""
+
     timestamp: float
     payload_size: int
     response_time: Optional[float] = None
@@ -45,7 +46,11 @@ class PayloadSizeTracker:
             "size": size,
             "status": "safe",
             "recommendation": None,
-            "average_size": sum(self.size_history) / len(self.size_history) if self.size_history else 0
+            "average_size": (
+                sum(self.size_history) / len(self.size_history)
+                if self.size_history
+                else 0
+            ),
         }
 
         if size > self.max_safe_size:
@@ -61,13 +66,13 @@ class PayloadSizeTracker:
         """Calculate approximate size of payload in bytes"""
         try:
             if isinstance(payload, str):
-                return len(payload.encode('utf-8'))
+                return len(payload.encode("utf-8"))
             elif isinstance(payload, dict):
-                return len(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+                return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
             elif isinstance(payload, (list, tuple)):
-                return len(str(payload).encode('utf-8'))
+                return len(str(payload).encode("utf-8"))
             else:
-                return len(str(payload).encode('utf-8'))
+                return len(str(payload).encode("utf-8"))
         except Exception as e:
             logger.warning(f"Failed to calculate payload size: {e}")
             return 0
@@ -85,11 +90,13 @@ class ConversationRateLimiter:
     - Early warning system
     """
 
-    def __init__(self,
-                 requests_per_minute: int = 50,
-                 requests_per_hour: int = 2000,
-                 max_payload_size: int = 30000,
-                 warning_payload_size: int = 20000):
+    def __init__(
+        self,
+        requests_per_minute: int = 50,
+        requests_per_hour: int = 2000,
+        max_payload_size: int = 30000,
+        warning_payload_size: int = 20000,
+    ):
 
         self.requests_per_minute = requests_per_minute
         self.requests_per_hour = requests_per_hour
@@ -97,7 +104,9 @@ class ConversationRateLimiter:
 
         # Request tracking
         self.request_history = deque()
-        self.payload_tracker = PayloadSizeTracker(max_payload_size, warning_payload_size)
+        self.payload_tracker = PayloadSizeTracker(
+            max_payload_size, warning_payload_size
+        )
 
         # Statistics
         self.total_requests = 0
@@ -109,7 +118,9 @@ class ConversationRateLimiter:
         self.last_warning_time = 0
         self.warning_cooldown = 300  # 5 minutes between warnings
 
-        logger.info(f"ConversationRateLimiter initialized: {requests_per_minute}/min, {requests_per_hour}/hour")
+        logger.info(
+            f"ConversationRateLimiter initialized: {requests_per_minute}/min, {requests_per_hour}/hour"
+        )
 
     def can_make_request(self, payload: Any = None) -> Dict[str, Any]:
         """
@@ -132,14 +143,17 @@ class ConversationRateLimiter:
             payload_check = self.payload_tracker.analyze_payload(payload)
 
         # Determine if request can proceed
-        can_proceed = (rate_check["can_proceed"] and
-                      payload_check["status"] != "dangerous")
+        can_proceed = (
+            rate_check["can_proceed"] and payload_check["status"] != "dangerous"
+        )
 
         # Calculate wait time if needed
         wait_time = 0
         if not can_proceed:
-            wait_time = max(rate_check.get("wait_time", 0),
-                           30 if payload_check["status"] == "dangerous" else 0)
+            wait_time = max(
+                rate_check.get("wait_time", 0),
+                30 if payload_check["status"] == "dangerous" else 0,
+            )
 
         result = {
             "can_proceed": can_proceed,
@@ -147,7 +161,7 @@ class ConversationRateLimiter:
             "rate_status": rate_check,
             "payload_status": payload_check,
             "recommendation": self._get_recommendation(rate_check, payload_check),
-            "statistics": self.get_usage_statistics()
+            "statistics": self.get_usage_statistics(),
         }
 
         # Send warning if approaching limits
@@ -155,8 +169,13 @@ class ConversationRateLimiter:
 
         return result
 
-    def record_request(self, payload_size: int, response_time: float = None,
-                      success: bool = True, error_type: str = None):
+    def record_request(
+        self,
+        payload_size: int,
+        response_time: float = None,
+        success: bool = True,
+        error_type: str = None,
+    ):
         """Record a completed request for rate limiting calculations"""
         current_time = time.time()
 
@@ -165,7 +184,7 @@ class ConversationRateLimiter:
             payload_size=payload_size,
             response_time=response_time,
             success=success,
-            error_type=error_type
+            error_type=error_type,
         )
 
         self.request_history.append(request_info)
@@ -177,9 +196,8 @@ class ConversationRateLimiter:
         # Update average response time
         if response_time and success:
             self.average_response_time = (
-                (self.average_response_time * (self.total_requests - 1) + response_time)
-                / self.total_requests
-            )
+                self.average_response_time * (self.total_requests - 1) + response_time
+            ) / self.total_requests
 
         # Log rate limit violations
         if error_type == "rate_limit":
@@ -191,10 +209,12 @@ class ConversationRateLimiter:
         current_time = time.time()
         self._cleanup_old_requests(current_time)
 
-        minute_requests = len([r for r in self.request_history
-                              if current_time - r.timestamp <= 60])
-        hour_requests = len([r for r in self.request_history
-                            if current_time - r.timestamp <= 3600])
+        minute_requests = len(
+            [r for r in self.request_history if current_time - r.timestamp <= 60]
+        )
+        hour_requests = len(
+            [r for r in self.request_history if current_time - r.timestamp <= 3600]
+        )
 
         successful_requests = len([r for r in self.request_history if r.success])
 
@@ -208,8 +228,8 @@ class ConversationRateLimiter:
             "average_response_time": self.average_response_time,
             "rate_limit_utilization": {
                 "minute": (minute_requests / self.requests_per_minute) * 100,
-                "hour": (hour_requests / self.requests_per_hour) * 100
-            }
+                "hour": (hour_requests / self.requests_per_hour) * 100,
+            },
         }
 
     def _cleanup_old_requests(self, current_time: float):
@@ -223,10 +243,12 @@ class ConversationRateLimiter:
         minute_window = current_time - 60
         hour_window = current_time - 3600
 
-        minute_requests = len([r for r in self.request_history
-                              if r.timestamp > minute_window])
-        hour_requests = len([r for r in self.request_history
-                            if r.timestamp > hour_window])
+        minute_requests = len(
+            [r for r in self.request_history if r.timestamp > minute_window]
+        )
+        hour_requests = len(
+            [r for r in self.request_history if r.timestamp > hour_window]
+        )
 
         # Check limits
         minute_exceeded = minute_requests >= self.requests_per_minute
@@ -235,13 +257,19 @@ class ConversationRateLimiter:
         # Calculate wait times
         wait_time = 0
         if minute_exceeded:
-            oldest_in_minute = min([r.timestamp for r in self.request_history
-                                   if r.timestamp > minute_window])
+            oldest_in_minute = min(
+                [
+                    r.timestamp
+                    for r in self.request_history
+                    if r.timestamp > minute_window
+                ]
+            )
             wait_time = max(wait_time, 60 - (current_time - oldest_in_minute))
 
         if hour_exceeded:
-            oldest_in_hour = min([r.timestamp for r in self.request_history
-                                 if r.timestamp > hour_window])
+            oldest_in_hour = min(
+                [r.timestamp for r in self.request_history if r.timestamp > hour_window]
+            )
             wait_time = max(wait_time, 3600 - (current_time - oldest_in_hour))
 
         return {
@@ -250,7 +278,7 @@ class ConversationRateLimiter:
             "hour_exceeded": hour_exceeded,
             "minute_requests": minute_requests,
             "hour_requests": hour_requests,
-            "wait_time": wait_time
+            "wait_time": wait_time,
         }
 
     def _get_recommendation(self, rate_check: Dict, payload_check: Dict) -> str:
@@ -277,7 +305,7 @@ class ConversationRateLimiter:
         warning_conditions = [
             rate_status["minute_requests"] > self.requests_per_minute * 0.9,
             rate_status["hour_requests"] > self.requests_per_hour * 0.9,
-            payload_status["status"] == "warning"
+            payload_status["status"] == "warning",
         ]
 
         if any(warning_conditions):
@@ -288,7 +316,9 @@ class ConversationRateLimiter:
         """Handle when a rate limit is actually hit"""
         # Temporarily reduce limits to be more conservative
         self.requests_per_minute = max(10, int(self.requests_per_minute * 0.8))
-        logger.warning(f"Rate limits adjusted to {self.requests_per_minute}/min after limit hit")
+        logger.warning(
+            f"Rate limits adjusted to {self.requests_per_minute}/min after limit hit"
+        )
 
 
 # Global instance for easy access
@@ -310,8 +340,12 @@ def check_request_allowed(payload: Any = None) -> bool:
     return result["can_proceed"]
 
 
-def record_request_completion(payload_size: int, response_time: float = None,
-                            success: bool = True, error_type: str = None):
+def record_request_completion(
+    payload_size: int,
+    response_time: float = None,
+    success: bool = True,
+    error_type: str = None,
+):
     """Record a completed request"""
     limiter = get_rate_limiter()
     limiter.record_request(payload_size, response_time, success, error_type)

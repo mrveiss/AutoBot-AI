@@ -34,13 +34,15 @@ from src.utils.knowledge_base_timeouts import kb_timeouts
 class KnowledgeBase:
     def __init__(self):
         """Initialize the Knowledge Base with Redis vector store support."""
-        self.redis_host = config.get('redis.host')
-        self.redis_port = config.get('redis.port')
-        self.redis_password = config.get('redis.password')
+        self.redis_host = config.get("redis.host")
+        self.redis_port = config.get("redis.port")
+        self.redis_password = config.get("redis.password")
         # Knowledge base vectors are in database 0 (required for Redis search indexes)
         self.redis_db = 0
         # Redis index name with embedding model suffix to avoid dimension conflicts
-        self.redis_index_name = config.get('redis.indexes.knowledge_base', 'llama_index')
+        self.redis_index_name = config.get(
+            "redis.indexes.knowledge_base", "llama_index"
+        )
 
         # Redis client for fact management (non-vector operations)
         self.redis_client = None
@@ -95,7 +97,9 @@ class KnowledgeBase:
             )
 
             # Create async Redis client for async operations
-            redis_config["decode_responses"] = True  # Async client can use string responses
+            redis_config["decode_responses"] = (
+                True  # Async client can use string responses
+            )
             self.aioredis_client = aioredis.Redis(**redis_config)
             await self.aioredis_client.ping()
             logging.info(f"Async Redis client connected successfully")
@@ -111,7 +115,9 @@ class KnowledgeBase:
     async def _init_vector_store(self):
         """Initialize LlamaIndex vector store with Redis backend"""
         if not self.redis_client:
-            logging.warning("Redis client not available, skipping vector store initialization")
+            logging.warning(
+                "Redis client not available, skipping vector store initialization"
+            )
             return
 
         try:
@@ -121,9 +127,7 @@ class KnowledgeBase:
                 prefix="llama_index/vector_",
             )
 
-            logging.info(
-                f"Created Redis schema for index: {self.redis_index_name}"
-            )
+            logging.info(f"Created Redis schema for index: {self.redis_index_name}")
 
             self.vector_store = RedisVectorStore(
                 schema=schema,
@@ -160,22 +164,32 @@ class KnowledgeBase:
             vector_keys = await self._scan_redis_keys_async("llama_index/vector_*")
 
             if vector_keys:
-                logging.info(f"Found {len(vector_keys)} existing vectors, initializing index")
+                logging.info(
+                    f"Found {len(vector_keys)} existing vectors, initializing index"
+                )
 
                 # Create storage context and index from existing vector store
-                storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+                storage_context = StorageContext.from_defaults(
+                    vector_store=self.vector_store
+                )
                 self.vector_index = await asyncio.to_thread(
                     VectorStoreIndex.from_vector_store,
                     vector_store=self.vector_store,
-                    storage_context=storage_context
+                    storage_context=storage_context,
                 )
 
-                logging.info(f"Vector index initialized from {len(vector_keys)} existing vectors")
+                logging.info(
+                    f"Vector index initialized from {len(vector_keys)} existing vectors"
+                )
             else:
-                logging.info("No existing vectors found, vector index will be created when first document is added")
+                logging.info(
+                    "No existing vectors found, vector index will be created when first document is added"
+                )
 
         except Exception as e:
-            logging.error(f"Failed to initialize vector index from existing vectors: {e}")
+            logging.error(
+                f"Failed to initialize vector index from existing vectors: {e}"
+            )
             self.vector_index = None
 
     async def _ensure_redis_initialized(self):
@@ -201,7 +215,7 @@ class KnowledgeBase:
             keys = []
             for key in self.redis_client.scan_iter(match=pattern):
                 if isinstance(key, bytes):
-                    keys.append(key.decode('utf-8'))
+                    keys.append(key.decode("utf-8"))
                 else:
                     keys.append(str(key))
             return keys
@@ -218,7 +232,7 @@ class KnowledgeBase:
             keys = []
             async for key in self.aioredis_client.scan_iter(match=pattern):
                 if isinstance(key, bytes):
-                    keys.append(key.decode('utf-8'))
+                    keys.append(key.decode("utf-8"))
                 else:
                     keys.append(str(key))
             return keys
@@ -226,7 +240,9 @@ class KnowledgeBase:
             logging.error(f"Error scanning Redis keys async: {e}")
             return []
 
-    async def store_fact(self, text: str, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def store_fact(
+        self, text: str, metadata: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Store a fact in the knowledge base"""
         await self._ensure_redis_initialized()
 
@@ -263,7 +279,9 @@ class KnowledgeBase:
             logging.error(f"Failed to store fact: {e}")
             return {"status": "error", "message": f"Failed to store fact: {str(e)}"}
 
-    def get_fact(self, fact_id: Optional[str] = None, query: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_fact(
+        self, fact_id: Optional[str] = None, query: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Retrieve facts from the knowledge base"""
         if not self.redis_client:
             return []
@@ -276,30 +294,46 @@ class KnowledgeBase:
                 fact_key = f"fact:{fact_id}"
                 fact_data = self.redis_client.hgetall(fact_key)
                 if fact_data:
-                    facts.append({
-                        "id": fact_id,
-                        "content": fact_data.get(b"content", b"").decode('utf-8'),
-                        "metadata": json.loads(fact_data.get(b"metadata", b"{}").decode('utf-8')),
-                        "timestamp": fact_data.get(b"timestamp", b"").decode('utf-8'),
-                    })
+                    facts.append(
+                        {
+                            "id": fact_id,
+                            "content": fact_data.get(b"content", b"").decode("utf-8"),
+                            "metadata": json.loads(
+                                fact_data.get(b"metadata", b"{}").decode("utf-8")
+                            ),
+                            "timestamp": fact_data.get(b"timestamp", b"").decode(
+                                "utf-8"
+                            ),
+                        }
+                    )
             elif query:
                 # Search facts by content matching
                 all_fact_keys = self._scan_redis_keys("fact:*")
                 for fact_key in all_fact_keys:
                     fact_data = self.redis_client.hgetall(fact_key)
                     if fact_data:
-                        content = fact_data.get(b"content", b"").decode('utf-8')
+                        content = fact_data.get(b"content", b"").decode("utf-8")
                         if query.lower() in content.lower():
                             fact_id = fact_key.split(":")[1]
-                            facts.append({
-                                "id": fact_id,
-                                "content": content,
-                                "metadata": json.loads(fact_data.get(b"metadata", b"{}").decode('utf-8')),
-                                "timestamp": fact_data.get(b"timestamp", b"").decode('utf-8'),
-                            })
+                            facts.append(
+                                {
+                                    "id": fact_id,
+                                    "content": content,
+                                    "metadata": json.loads(
+                                        fact_data.get(b"metadata", b"{}").decode(
+                                            "utf-8"
+                                        )
+                                    ),
+                                    "timestamp": fact_data.get(
+                                        b"timestamp", b""
+                                    ).decode("utf-8"),
+                                }
+                            )
             else:
                 # Get all facts (with limit for performance)
-                all_fact_keys = self._scan_redis_keys("fact:*")[:100]  # Limit to 100 facts
+                all_fact_keys = self._scan_redis_keys("fact:*")[
+                    :100
+                ]  # Limit to 100 facts
                 if all_fact_keys:
                     # Use pipeline for efficiency
                     pipe = self.redis_client.pipeline()
@@ -352,7 +386,7 @@ class KnowledgeBase:
                     "total_chunks": 0,
                     "categories": [],
                     "total_facts": 0,
-                    "status": "redis_unavailable"
+                    "status": "redis_unavailable",
                 }
 
             # **CRITICAL FIX: Count actual vectors instead of indexed documents**
@@ -363,7 +397,7 @@ class KnowledgeBase:
             # Also get the FT.INFO for comparison (but don't rely on it)
             indexed_docs = 0
             try:
-                ft_info = await async_redis.execute_command('FT.INFO', 'llama_index')
+                ft_info = await async_redis.execute_command("FT.INFO", "llama_index")
                 if ft_info and len(ft_info) > 0:
                     for i, item in enumerate(ft_info):
                         # Handle both bytes and string responses from Redis
@@ -374,7 +408,7 @@ class KnowledgeBase:
                         else:
                             continue
 
-                        if decoded == 'num_docs' and i + 1 < len(ft_info):
+                        if decoded == "num_docs" and i + 1 < len(ft_info):
                             indexed_docs = int(ft_info[i + 1])
                             break
             except Exception as e:
@@ -390,9 +424,14 @@ class KnowledgeBase:
             # Get categories - use actual category structure from system
             try:
                 from src.agents.system_knowledge_manager import SystemKnowledgeManager
+
                 temp_knowledge_manager = SystemKnowledgeManager(self)
                 categories_response = temp_knowledge_manager.get_knowledge_categories()
-                if categories_response and categories_response.get("success") and categories_response.get("categories"):
+                if (
+                    categories_response
+                    and categories_response.get("success")
+                    and categories_response.get("categories")
+                ):
                     # Extract all category paths for stats display
                     def extract_category_names(cat_dict, prefix=""):
                         names = []
@@ -400,15 +439,28 @@ class KnowledgeBase:
                             if isinstance(value, dict):
                                 if "children" in value:
                                     names.append(f"{prefix}{key}" if prefix else key)
-                                    names.extend(extract_category_names(value["children"], f"{prefix}{key}/"))
+                                    names.extend(
+                                        extract_category_names(
+                                            value["children"], f"{prefix}{key}/"
+                                        )
+                                    )
                                 else:
                                     names.append(f"{prefix}{key}" if prefix else key)
                         return names
-                    categories = extract_category_names(categories_response["categories"])
+
+                    categories = extract_category_names(
+                        categories_response["categories"]
+                    )
                 else:
-                    categories = ["documentation", "system", "configuration"]  # Fallback
+                    categories = [
+                        "documentation",
+                        "system",
+                        "configuration",
+                    ]  # Fallback
             except Exception as e:
-                logging.warning(f"Could not get category structure: {e}, using fallback")
+                logging.warning(
+                    f"Could not get category structure: {e}, using fallback"
+                )
                 categories = ["documentation", "system", "configuration"]  # Fallback
 
             # Get actual facts count from Redis
@@ -427,9 +479,11 @@ class KnowledgeBase:
                 "total_facts": total_facts,  # Actual facts count from Redis
                 "status": "live_data",
                 "indexed_documents": indexed_docs,  # For debugging - show indexed vs actual
-                "vector_index_sync": indexed_docs == total_vectors  # Health indicator
+                "vector_index_sync": indexed_docs == total_vectors,  # Health indicator
             }
-            logging.info(f"Retrieved live stats: {total_vectors} vectors, {indexed_docs} indexed")
+            logging.info(
+                f"Retrieved live stats: {total_vectors} vectors, {indexed_docs} indexed"
+            )
             return stats
 
         except Exception as e:
@@ -440,7 +494,7 @@ class KnowledgeBase:
                 "total_chunks": 0,
                 "categories": [],
                 "total_facts": 0,
-                "status": "error"
+                "status": "error",
             }
 
     async def get_detailed_stats(self) -> Dict[str, Any]:
@@ -462,7 +516,7 @@ class KnowledgeBase:
             return {
                 **basic_stats,
                 "detailed_stats": False,
-                "message": "Redis not available for detailed analysis"
+                "message": "Redis not available for detailed analysis",
             }
 
         try:
@@ -472,8 +526,12 @@ class KnowledgeBase:
             try:
                 # Get approximate database size
                 info = await asyncio.to_thread(self.redis_client.info, "memory")
-                detailed["memory_usage_mb"] = round(info.get("used_memory", 0) / (1024 * 1024), 2)
-                detailed["peak_memory_mb"] = round(info.get("used_memory_peak", 0) / (1024 * 1024), 2)
+                detailed["memory_usage_mb"] = round(
+                    info.get("used_memory", 0) / (1024 * 1024), 2
+                )
+                detailed["peak_memory_mb"] = round(
+                    info.get("used_memory_peak", 0) / (1024 * 1024), 2
+                )
             except Exception as e:
                 logging.warning(f"Could not get memory stats: {e}")
 
@@ -495,7 +553,7 @@ class KnowledgeBase:
 
                     detailed["recent_activity"] = {
                         "total_facts": len(fact_keys),
-                        "sample_timestamps": recent_facts[:5]  # Show 5 most recent
+                        "sample_timestamps": recent_facts[:5],  # Show 5 most recent
                     }
             except Exception as e:
                 logging.warning(f"Could not get recent activity: {e}")
@@ -506,7 +564,9 @@ class KnowledgeBase:
                     detailed["vector_store_health"] = "healthy"
                 else:
                     detailed["vector_store_health"] = "index_out_of_sync"
-                    detailed["health_recommendation"] = "Consider rebuilding search index"
+                    detailed["health_recommendation"] = (
+                        "Consider rebuilding search index"
+                    )
             except Exception as e:
                 logging.warning(f"Could not assess vector store health: {e}")
 
@@ -517,18 +577,14 @@ class KnowledgeBase:
 
         except Exception as e:
             logging.error(f"Error generating detailed stats: {e}")
-            return {
-                **basic_stats,
-                "detailed_stats": False,
-                "error": str(e)
-            }
+            return {**basic_stats, "detailed_stats": False, "error": str(e)}
 
     async def search(
         self,
         query: str,
         similarity_top_k: int = 10,
         filters: Optional[Dict[str, Any]] = None,
-        mode: str = "auto"  # "vector", "text", or "auto"
+        mode: str = "auto",  # "vector", "text", or "auto"
     ) -> List[Dict[str, Any]]:
         """
         Search the knowledge base with multiple search modes.
@@ -550,29 +606,33 @@ class KnowledgeBase:
             # Use asyncio.wait_for to prevent indefinite blocking
             return await asyncio.wait_for(
                 self._perform_search(query, similarity_top_k, filters, mode),
-                timeout=kb_timeouts.llamaindex_search_query
+                timeout=kb_timeouts.llamaindex_search_query,
             )
         except asyncio.TimeoutError:
             logging.warning(f"Search operation timed out for query: {query[:50]}...")
-            return [{
-                "content": f"Search timed out for query: {query[:100]}",
-                "metadata": {"error": "timeout", "query": query},
-                "score": 0.0
-            }]
+            return [
+                {
+                    "content": f"Search timed out for query: {query[:100]}",
+                    "metadata": {"error": "timeout", "query": query},
+                    "score": 0.0,
+                }
+            ]
         except Exception as e:
             logging.error(f"Search error: {e}")
-            return [{
-                "content": f"Search error: {str(e)}",
-                "metadata": {"error": "search_failed", "query": query},
-                "score": 0.0
-            }]
+            return [
+                {
+                    "content": f"Search error: {str(e)}",
+                    "metadata": {"error": "search_failed", "query": query},
+                    "score": 0.0,
+                }
+            ]
 
     async def _perform_search(
         self,
         query: str,
         similarity_top_k: int,
         filters: Optional[Dict[str, Any]],
-        mode: str
+        mode: str,
     ) -> List[Dict[str, Any]]:
         """Internal search implementation with timeout protection"""
         await self._ensure_redis_initialized()
@@ -583,28 +643,32 @@ class KnowledgeBase:
                 # Use LlamaIndex for semantic search
                 query_engine = self.vector_index.as_query_engine(
                     similarity_top_k=similarity_top_k,
-                    response_mode="no_text"  # Just retrieve, don't generate
+                    response_mode="no_text",  # Just retrieve, don't generate
                 )
 
                 # Perform search with timeout protection
                 response = await asyncio.to_thread(query_engine.query, query)
 
                 results = []
-                if hasattr(response, 'source_nodes'):
+                if hasattr(response, "source_nodes"):
                     for node in response.source_nodes:
-                        results.append({
-                            "content": node.node.text,
-                            "metadata": node.node.metadata or {},
-                            "score": getattr(node, 'score', 0.0),
-                            "doc_id": node.node.id_ or str(uuid.uuid4())
-                        })
+                        results.append(
+                            {
+                                "content": node.node.text,
+                                "metadata": node.node.metadata or {},
+                                "score": getattr(node, "score", 0.0),
+                                "doc_id": node.node.id_ or str(uuid.uuid4()),
+                            }
+                        )
 
                 if results:
                     logging.info(f"Vector search returned {len(results)} results")
                     return results
 
             except Exception as e:
-                logging.warning(f"Vector search failed: {e}, falling back to text search")
+                logging.warning(
+                    f"Vector search failed: {e}, falling back to text search"
+                )
 
         # Fallback to text search in facts
         if mode in ["text", "auto"]:
@@ -626,15 +690,21 @@ class KnowledgeBase:
                                 # Calculate simple relevance score
                                 query_words = query.lower().split()
                                 content_lower = content.lower()
-                                matches = sum(1 for word in query_words if word in content_lower)
+                                matches = sum(
+                                    1 for word in query_words if word in content_lower
+                                )
                                 score = matches / len(query_words) if query_words else 0
 
-                                fact_results.append({
-                                    "content": content,
-                                    "metadata": json.loads(fact_data.get("metadata", "{}")),
-                                    "score": score,
-                                    "doc_id": fact_key.split(":")[-1]
-                                })
+                                fact_results.append(
+                                    {
+                                        "content": content,
+                                        "metadata": json.loads(
+                                            fact_data.get("metadata", "{}")
+                                        ),
+                                        "score": score,
+                                        "doc_id": fact_key.split(":")[-1],
+                                    }
+                                )
                     except Exception:
                         continue  # Skip failed facts
 
@@ -653,7 +723,7 @@ class KnowledgeBase:
         self,
         content: str,
         metadata: Dict[str, Any] = None,
-        doc_id: Optional[str] = None
+        doc_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Add a document to the knowledge base with async processing.
@@ -673,7 +743,7 @@ class KnowledgeBase:
             # **ASYNC TIMEOUT PROTECTION**
             return await asyncio.wait_for(
                 self._add_document_internal(content, metadata, doc_id),
-                timeout=kb_timeouts.document_add
+                timeout=kb_timeouts.document_add,
             )
         except asyncio.TimeoutError:
             logging.warning("Document addition timed out")
@@ -683,10 +753,7 @@ class KnowledgeBase:
             return {"status": "error", "message": str(e)}
 
     async def _add_document_internal(
-        self,
-        content: str,
-        metadata: Dict[str, Any],
-        doc_id: Optional[str]
+        self, content: str, metadata: Dict[str, Any], doc_id: Optional[str]
     ) -> Dict[str, Any]:
         """Internal document addition with proper async handling"""
         await self._ensure_redis_initialized()
@@ -699,30 +766,30 @@ class KnowledgeBase:
             doc_id = str(uuid.uuid4())
 
         # Add document metadata
-        metadata.update({
-            "doc_id": doc_id,
-            "added_at": datetime.now().isoformat(),
-            "content_length": len(content)
-        })
+        metadata.update(
+            {
+                "doc_id": doc_id,
+                "added_at": datetime.now().isoformat(),
+                "content_length": len(content),
+            }
+        )
 
         # If vector store is available, add to vector index
         if self.vector_store:
             try:
                 # Create LlamaIndex document
-                document = Document(
-                    text=content,
-                    metadata=metadata,
-                    id_=doc_id
-                )
+                document = Document(text=content, metadata=metadata, id_=doc_id)
 
                 # Add to vector store using async thread execution
                 if not self.vector_index:
                     # Create storage context and index
-                    storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+                    storage_context = StorageContext.from_defaults(
+                        vector_store=self.vector_store
+                    )
                     self.vector_index = await asyncio.to_thread(
                         VectorStoreIndex.from_documents,
                         [document],
-                        storage_context=storage_context
+                        storage_context=storage_context,
                     )
                 else:
                     # Add to existing index
@@ -734,7 +801,7 @@ class KnowledgeBase:
                     "status": "success",
                     "message": "Document added to vector store",
                     "doc_id": doc_id,
-                    "content_length": len(content)
+                    "content_length": len(content),
                 }
 
             except Exception as e:
@@ -755,13 +822,15 @@ class KnowledgeBase:
                 try:
                     fact_data = await self.aioredis_client.hgetall(fact_key)
                     if fact_data:
-                        all_facts.append({
-                            "type": "fact",
-                            "id": fact_key.split(":")[-1],
-                            "content": fact_data.get("content", ""),
-                            "metadata": json.loads(fact_data.get("metadata", "{}")),
-                            "timestamp": fact_data.get("timestamp", "")
-                        })
+                        all_facts.append(
+                            {
+                                "type": "fact",
+                                "id": fact_key.split(":")[-1],
+                                "content": fact_data.get("content", ""),
+                                "metadata": json.loads(fact_data.get("metadata", "{}")),
+                                "timestamp": fact_data.get("timestamp", ""),
+                            }
+                        )
                 except Exception as e:
                     logging.warning(f"Could not export fact {fact_key}: {e}")
 
@@ -792,7 +861,9 @@ class KnowledgeBase:
             # Recreate the index
             try:
                 # Drop existing index if it exists
-                await self.aioredis_client.execute_command('FT.DROPINDEX', self.redis_index_name)
+                await self.aioredis_client.execute_command(
+                    "FT.DROPINDEX", self.redis_index_name
+                )
                 logging.info(f"Dropped existing index: {self.redis_index_name}")
             except Exception:
                 logging.info("No existing index to drop")
@@ -809,14 +880,16 @@ class KnowledgeBase:
                 "message": f"Search index rebuilt successfully",
                 "vectors_found": total_vectors,
                 "indexed_documents": indexed_docs,
-                "sync_status": "synced" if indexed_docs == total_vectors else "partial"
+                "sync_status": "synced" if indexed_docs == total_vectors else "partial",
             }
 
         except Exception as e:
             logging.error(f"Failed to rebuild search index: {e}")
             return {"status": "error", "message": str(e)}
 
-    async def get_all_facts(self, collection: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_all_facts(
+        self, collection: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Get all facts from the knowledge base, optionally filtered by collection.
 
@@ -845,6 +918,7 @@ class KnowledgeBase:
                     fact_data = await self.aioredis_client.get(key)
                     if fact_data:
                         import json
+
                         fact = json.loads(fact_data)
 
                         # Filter by collection if specified
@@ -855,11 +929,13 @@ class KnowledgeBase:
 
                         # Add metadata
                         fact_id = key.replace("fact:", "")
-                        fact.update({
-                            "id": fact_id,
-                            "key": key,
-                            "collection": fact.get("collection", "general")
-                        })
+                        fact.update(
+                            {
+                                "id": fact_id,
+                                "key": key,
+                                "collection": fact.get("collection", "general"),
+                            }
+                        )
 
                         facts.append(fact)
 
@@ -867,7 +943,9 @@ class KnowledgeBase:
                     logging.warning(f"Failed to parse fact {key}: {fact_error}")
                     continue
 
-            logging.info(f"Retrieved {len(facts)} facts (filtered by collection: {collection})")
+            logging.info(
+                f"Retrieved {len(facts)} facts (filtered by collection: {collection})"
+            )
             return facts
 
         except Exception as e:

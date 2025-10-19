@@ -2,6 +2,7 @@
 Unified API Endpoint Registry
 Single source of truth for all API endpoints and routing configuration
 """
+
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -21,6 +22,7 @@ class RouterStatus(Enum):
 @dataclass
 class RouterConfig:
     """Configuration for a single API router"""
+
     name: str
     module_path: str
     prefix: str
@@ -48,7 +50,7 @@ class APIRegistry:
                 module_path="backend.api.system",
                 prefix="/api/system",
                 tags=["system", "health"],
-                description="System health, metrics, and information"
+                description="System health, metrics, and information",
             ),
             "chat_consolidated": RouterConfig(
                 name="chat_consolidated",
@@ -56,37 +58,36 @@ class APIRegistry:
                 prefix="/api",
                 tags=["chat", "consolidated", "all"],
                 description="CONSOLIDATED chat router with ALL functionality from 5 routers - ZERO functionality loss",
-                version="v1.0"
+                version="v1.0",
             ),
             "settings": RouterConfig(
                 name="settings",
                 module_path="backend.api.settings",
                 prefix="/api/settings",
                 tags=["settings", "config"],
-                description="Application settings and configuration"
+                description="Application settings and configuration",
             ),
             "cache": RouterConfig(
                 name="cache",
                 module_path="backend.api.cache",
                 prefix="/api/cache",
                 tags=["cache", "management"],
-                description="Cache management and clearing operations"
+                description="Cache management and clearing operations",
             ),
             "rum": RouterConfig(
                 name="rum",
                 module_path="backend.api.rum",
                 prefix="/api/rum",
                 tags=["rum", "monitoring", "developer"],
-                description="Real User Monitoring (RUM) for frontend event tracking"
+                description="Real User Monitoring (RUM) for frontend event tracking",
             ),
             "developer": RouterConfig(
                 name="developer",
                 module_path="backend.api.developer",
                 prefix="/api/developer",
                 tags=["developer", "debug", "config"],
-                description="Developer mode configuration and debugging utilities"
+                description="Developer mode configuration and debugging utilities",
             ),
-
             # Chat and Communication - NOW CONSOLIDATED
             # OLD: Separate chat.py, async_chat.py, chat_unified.py, chat_improved.py, chat_knowledge.py
             # NEW: All functionality consolidated into single router with ZERO loss
@@ -95,9 +96,8 @@ class APIRegistry:
                 module_path="backend.api.websockets",
                 prefix="",  # WebSocket routes don't use prefix
                 tags=["websockets", "realtime"],
-                description="WebSocket endpoints for real-time communication"
+                description="WebSocket endpoints for real-time communication",
             ),
-
             # Knowledge Management
             "knowledge": RouterConfig(
                 name="knowledge",
@@ -105,24 +105,23 @@ class APIRegistry:
                 prefix="/api/knowledge_base",
                 tags=["knowledge", "search"],
                 status=RouterStatus.ENABLED,
-                description="Knowledge base operations and search"
+                description="Knowledge base operations and search",
             ),
             # chat_knowledge functionality now included in consolidated chat router
-
             # Agent and AI
             "agent_config": RouterConfig(
                 name="agent_config",
                 module_path="backend.api.agent_config",
                 prefix="/api/agent-config",
                 tags=["agent", "config"],
-                description="Agent configuration and management"
+                description="Agent configuration and management",
             ),
             "prompts": RouterConfig(
                 name="prompts",
                 module_path="backend.api.prompts",
                 prefix="/api/prompts",
                 tags=["prompts", "ai"],
-                description="Prompt templates and management"
+                description="Prompt templates and management",
             ),
             "llm": RouterConfig(
                 name="llm",
@@ -130,25 +129,23 @@ class APIRegistry:
                 prefix="/api/llm",
                 tags=["llm", "ai"],
                 status=RouterStatus.LAZY_LOAD,
-                description="LLM integration and management"
+                description="LLM integration and management",
             ),
-
             # File and Content Management
             "files": RouterConfig(
                 name="files",
                 module_path="backend.api.files",
                 prefix="/api/files",
                 tags=["files", "upload"],
-                description="File operations and management"
+                description="File operations and management",
             ),
             "templates": RouterConfig(
                 name="templates",
                 module_path="backend.api.templates",
                 prefix="/api/templates",
                 tags=["templates"],
-                description="Template management and rendering"
+                description="Template management and rendering",
             ),
-
             # Security
             "secrets": RouterConfig(
                 name="secrets",
@@ -156,16 +153,15 @@ class APIRegistry:
                 prefix="/api/secrets",
                 tags=["secrets", "security"],
                 requires_auth=True,
-                description="Secrets and credential management"
+                description="Secrets and credential management",
             ),
-
             # Development and Automation
             "playwright": RouterConfig(
                 name="playwright",
                 module_path="backend.api.playwright",
                 prefix="/api/playwright",
                 tags=["automation", "browser"],
-                description="Browser automation via Playwright"
+                description="Browser automation via Playwright",
             ),
             "terminal": RouterConfig(
                 name="terminal",
@@ -173,7 +169,7 @@ class APIRegistry:
                 prefix="/api/terminal",
                 tags=["terminal", "execution"],
                 status=RouterStatus.ENABLED,  # Enable for fast backend
-                description="Terminal execution and management"
+                description="Terminal execution and management",
             ),
             "logs": RouterConfig(
                 name="logs",
@@ -181,7 +177,7 @@ class APIRegistry:
                 prefix="/api/logs",
                 tags=["logs", "monitoring"],
                 status=RouterStatus.ENABLED,
-                description="Log viewing and analysis"
+                description="Log viewing and analysis",
             ),
             "workflow": RouterConfig(
                 name="workflow",
@@ -189,25 +185,23 @@ class APIRegistry:
                 prefix="/api/workflow",
                 tags=["workflow", "automation"],
                 status=RouterStatus.DISABLED,  # Not in fast backend
-                description="Workflow automation and orchestration"
+                description="Workflow automation and orchestration",
             ),
-
             # Performance Optimization
             "batch": RouterConfig(
                 name="batch",
                 module_path="backend.api.batch",
                 prefix="/api/batch",
                 tags=["batch", "optimization"],
-                description="Batch API endpoints for optimized initial loading"
+                description="Batch API endpoints for optimized initial loading",
             ),
-
             # Monitoring and Analytics
             "service_monitor": RouterConfig(
                 name="service_monitor",
                 module_path="backend.api.service_monitor",
                 prefix="/api/monitoring",
                 tags=["monitoring", "services"],
-                description="Real-time service monitoring and health checks"
+                description="Real-time service monitoring and health checks",
             ),
             "infrastructure_monitor": RouterConfig(
                 name="infrastructure_monitor",
@@ -215,7 +209,7 @@ class APIRegistry:
                 prefix="/api/infrastructure",
                 tags=["monitoring", "infrastructure", "multi-machine"],
                 status=RouterStatus.ENABLED,
-                description="Multi-machine infrastructure monitoring with service hierarchies"
+                description="Multi-machine infrastructure monitoring with service hierarchies",
             ),
             "monitoring_alerts": RouterConfig(
                 name="monitoring_alerts",
@@ -223,7 +217,7 @@ class APIRegistry:
                 prefix="/api/alerts",
                 tags=["alerts", "notifications", "monitoring"],
                 status=RouterStatus.ENABLED,
-                description="Advanced monitoring alerts and notifications system"
+                description="Advanced monitoring alerts and notifications system",
             ),
             "monitoring": RouterConfig(
                 name="monitoring",
@@ -231,14 +225,14 @@ class APIRegistry:
                 prefix="/api/monitoring/phase9",
                 tags=["monitoring", "phase9", "gpu", "npu", "performance"],
                 status=RouterStatus.ENABLED,
-                description="Phase 9 comprehensive performance monitoring for GPU/NPU utilization and multi-modal AI"
+                description="Phase 9 comprehensive performance monitoring for GPU/NPU utilization and multi-modal AI",
             ),
             "system_validation": RouterConfig(
                 name="system_validation",
                 module_path="backend.api.system_validation",
                 prefix="/api/system_validation",
                 tags=["validation", "system", "testing"],
-                description="Comprehensive system validation and integration testing"
+                description="Comprehensive system validation and integration testing",
             ),
             "validation_dashboard": RouterConfig(
                 name="validation_dashboard",
@@ -246,9 +240,8 @@ class APIRegistry:
                 prefix="/api/validation-dashboard",
                 tags=["validation", "testing"],
                 status=RouterStatus.ENABLED,  # Enable for fast backend
-                description="Validation and testing dashboard"
+                description="Validation and testing dashboard",
             ),
-
             # Intelligence and AI Agent
             "intelligent_agent": RouterConfig(
                 name="intelligent_agent",
@@ -256,9 +249,8 @@ class APIRegistry:
                 prefix="/api/intelligent-agent",
                 tags=["ai", "agent", "intelligence"],
                 status=RouterStatus.LAZY_LOAD,  # Lazy load to avoid startup blocking
-                description="Intelligent agent system for goal processing"
+                description="Intelligent agent system for goal processing",
             ),
-
             # MCP Bridge for Knowledge Base
             "knowledge_mcp": RouterConfig(
                 name="knowledge_mcp",
@@ -266,9 +258,8 @@ class APIRegistry:
                 prefix="/api/knowledge",
                 tags=["knowledge", "mcp", "llm"],
                 status=RouterStatus.ENABLED,
-                description="MCP bridge for LLM access to knowledge base via LlamaIndex"
+                description="MCP bridge for LLM access to knowledge base via LlamaIndex",
             ),
-
             # Research and Browser Automation
             "research_browser": RouterConfig(
                 name="research_browser",
@@ -276,9 +267,8 @@ class APIRegistry:
                 prefix="/api/research",
                 tags=["research", "browser", "automation"],
                 status=RouterStatus.ENABLED,
-                description="Browser automation for research tasks with user interaction support"
+                description="Browser automation for research tasks with user interaction support",
             ),
-
             # Startup Status and Messages - DISABLED per user request to remove splash screen
             "startup": RouterConfig(
                 name="startup",
@@ -286,9 +276,8 @@ class APIRegistry:
                 prefix="/api/startup",
                 tags=["startup", "status", "websockets"],
                 status=RouterStatus.DISABLED,
-                description="Friendly startup messages and status updates for frontend"
+                description="Friendly startup messages and status updates for frontend",
             ),
-
             # Hot Reload for Development
             "hot_reload": RouterConfig(
                 name="hot_reload",
@@ -296,14 +285,15 @@ class APIRegistry:
                 prefix="/api/hot-reload",
                 tags=["development", "hot-reload"],
                 status=RouterStatus.ENABLED,
-                description="Hot reload functionality for chat workflow modules during development"
+                description="Hot reload functionality for chat workflow modules during development",
             ),
         }
 
     def get_enabled_routers(self) -> Dict[str, RouterConfig]:
         """Get all enabled routers"""
         return {
-            name: config for name, config in self.routers.items()
+            name: config
+            for name, config in self.routers.items()
             if config.status in [RouterStatus.ENABLED, RouterStatus.LAZY_LOAD]
         }
 
@@ -314,23 +304,24 @@ class APIRegistry:
     def get_routers_by_tag(self, tag: str) -> Dict[str, RouterConfig]:
         """Get all routers with specific tag"""
         return {
-            name: config for name, config in self.routers.items()
-            if tag in config.tags
+            name: config for name, config in self.routers.items() if tag in config.tags
         }
 
     def get_endpoint_list(self) -> List[Dict]:
         """Get list of all endpoints for documentation"""
         endpoints = []
         for name, config in self.get_enabled_routers().items():
-            endpoints.append({
-                "name": name,
-                "prefix": config.prefix,
-                "tags": config.tags,
-                "description": config.description,
-                "status": config.status.value,
-                "requires_auth": config.requires_auth,
-                "version": config.version
-            })
+            endpoints.append(
+                {
+                    "name": name,
+                    "prefix": config.prefix,
+                    "tags": config.tags,
+                    "description": config.description,
+                    "status": config.status.value,
+                    "requires_auth": config.requires_auth,
+                    "version": config.version,
+                }
+            )
         return endpoints
 
     def validate_dependencies(self) -> Dict[str, List[str]]:
@@ -364,12 +355,13 @@ def get_endpoint_documentation() -> List[Dict]:
 # FastAPI Router Endpoints
 # ============================================================================
 
+
 @router.get("/endpoints")
 async def list_endpoints():
     """List all registered API endpoints"""
     return {
         "endpoints": registry.get_endpoint_list(),
-        "total": len(registry.get_enabled_routers())
+        "total": len(registry.get_enabled_routers()),
     }
 
 
@@ -387,7 +379,7 @@ async def list_routers():
             "description": config.description,
             "version": config.version,
             "requires_auth": config.requires_auth,
-            "dependencies": config.dependencies
+            "dependencies": config.dependencies,
         }
     return routers_data
 
@@ -408,7 +400,7 @@ async def get_router_details(router_name: str):
         "description": config.description,
         "version": config.version,
         "requires_auth": config.requires_auth,
-        "dependencies": config.dependencies
+        "dependencies": config.dependencies,
     }
 
 
@@ -428,7 +420,7 @@ async def get_routers_by_tag(tag: str):
     return {
         "tag": tag,
         "routers": [name for name in routers_with_tag.keys()],
-        "count": len(routers_with_tag)
+        "count": len(routers_with_tag),
     }
 
 
@@ -436,10 +428,7 @@ async def get_routers_by_tag(tag: str):
 async def validate_dependencies():
     """Validate router dependencies"""
     errors = registry.validate_dependencies()
-    return {
-        "valid": len(errors) == 0,
-        "errors": errors
-    }
+    return {"valid": len(errors) == 0, "errors": errors}
 
 
 @router.get("/health")
@@ -449,8 +438,7 @@ async def registry_health():
         "status": "healthy",
         "total_routers": len(registry.routers),
         "enabled_routers": len(registry.get_enabled_routers()),
-        "disabled_routers": len([
-            c for c in registry.routers.values()
-            if c.status == RouterStatus.DISABLED
-        ])
+        "disabled_routers": len(
+            [c for c in registry.routers.values() if c.status == RouterStatus.DISABLED]
+        ),
     }

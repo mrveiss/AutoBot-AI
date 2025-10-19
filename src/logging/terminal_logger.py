@@ -184,7 +184,9 @@ class TerminalLogger:
                 import json
 
                 cache_key = f"chat:session:{session_id}:terminal"
-                cached_commands = await self.redis_client.lrange(cache_key, 0, limit - 1)
+                cached_commands = await self.redis_client.lrange(
+                    cache_key, 0, limit - 1
+                )
 
                 if cached_commands:
                     logger.debug(
@@ -288,7 +290,9 @@ class TerminalLogger:
             # Set expiry
             await self.redis_client.expire(cache_key, self.cache_ttl)
 
-            logger.debug(f"Warmed cache for session {session_id}: {len(commands)} commands")
+            logger.debug(
+                f"Warmed cache for session {session_id}: {len(commands)} commands"
+            )
 
         except Exception as e:
             logger.error(f"Failed to warm cache: {e}")

@@ -94,7 +94,7 @@ class PerformanceOptimizedConversation:
         self.kb_timeout = 8.0  # Reduced from 10s to 8s
         self.research_timeout = 45.0  # Reduced from unlimited to 45s
         self.classification_timeout = 5.0  # Added timeout for classification
-        
+
         self.include_sources = True
 
         logger.info(
@@ -140,11 +140,11 @@ class PerformanceOptimizedConversation:
         if len(self.messages) > self.cleanup_threshold:
             # Keep most recent messages within the limit
             old_count = len(self.messages)
-            self.messages = self.messages[-self.max_messages_per_conversation:]
-            
+            self.messages = self.messages[-self.max_messages_per_conversation :]
+
             # Force garbage collection to free memory
             collected_objects = gc.collect()
-            
+
             logger.info(
                 f"CONVERSATION CLEANUP: Trimmed messages from {old_count} to {len(self.messages)} "
                 f"in conversation {self.conversation_id} "
@@ -157,15 +157,17 @@ class PerformanceOptimizedConversation:
         self.memory_check_counter += 1
         if self.memory_check_counter >= self.memory_check_interval:
             self.memory_check_counter = 0
-            
+
             message_count = len(self.messages)
-            if message_count > self.max_messages_per_conversation * 0.8:  # 80% threshold
+            if (
+                message_count > self.max_messages_per_conversation * 0.8
+            ):  # 80% threshold
                 logger.warning(
                     f"MEMORY WARNING: Conversation {self.conversation_id} approaching limit - "
                     f"{message_count}/{self.max_messages_per_conversation} messages "
                     f"({(message_count/self.max_messages_per_conversation)*100:.1f}%)"
                 )
-            
+
             # Cleanup if needed
             self._cleanup_messages_if_needed()
 
@@ -173,7 +175,7 @@ class PerformanceOptimizedConversation:
         """
         PERFORMANCE OPTIMIZED: Process a user message with memory management
         and intelligent timeouts
-        
+
         Returns:
             Dict containing response, sources, and metadata
         """
@@ -182,7 +184,7 @@ class PerformanceOptimizedConversation:
         try:
             # Clear previous sources for new response
             clear_sources()
-            
+
             # PERFORMANCE: Periodic memory check
             self._periodic_memory_check()
 
@@ -209,7 +211,9 @@ class PerformanceOptimizedConversation:
                 and self.state.classification.complexity == TaskComplexity.COMPLEX
                 and self._needs_external_research(user_message, kb_results)
             ):
-                research_results = await self._conduct_research_with_timeout(user_message)
+                research_results = await self._conduct_research_with_timeout(
+                    user_message
+                )
 
             # Step 4: Generate response
             response = await self._generate_response(
@@ -305,7 +309,7 @@ class PerformanceOptimizedConversation:
             classification_task = asyncio.create_task(
                 self.classification_agent.classify_request(message)
             )
-            
+
             self.state.classification = await asyncio.wait_for(
                 classification_task, timeout=self.classification_timeout
             )
@@ -332,7 +336,9 @@ class PerformanceOptimizedConversation:
             )
 
         except asyncio.TimeoutError:
-            logger.warning(f"Classification timed out after {self.classification_timeout}s")
+            logger.warning(
+                f"Classification timed out after {self.classification_timeout}s"
+            )
             # Default to SIMPLE if classification times out
             self.state.classification = ClassificationResult(
                 complexity=TaskComplexity.SIMPLE,
@@ -343,7 +349,7 @@ class PerformanceOptimizedConversation:
                 user_approval_needed=False,
                 context_analysis={"timeout": True},
             )
-            
+
             timeout_msg = ConversationMessage(
                 message_id=str(uuid.uuid4()),
                 role="system",
@@ -353,7 +359,7 @@ class PerformanceOptimizedConversation:
                 metadata={"timeout": True},
             )
             self.messages.append(timeout_msg)
-            
+
         except Exception as e:
             logger.error(f"Classification failed: {e}")
             # Default to SIMPLE if classification fails
@@ -367,7 +373,9 @@ class PerformanceOptimizedConversation:
                 context_analysis={"error": str(e)},
             )
 
-    async def _search_knowledge_base_with_timeout(self, query: str) -> List[Dict[str, Any]]:
+    async def _search_knowledge_base_with_timeout(
+        self, query: str
+    ) -> List[Dict[str, Any]]:
         """PERFORMANCE OPTIMIZED: Search Knowledge Base with timeout protection"""
         try:
             if self.kb_librarian is None:
@@ -466,19 +474,17 @@ class PerformanceOptimizedConversation:
             self.messages.append(planning_msg)
 
             # Create research task with timeout
-            research_task = asyncio.create_task(
-                self._conduct_research(user_message)
-            )
-            
+            research_task = asyncio.create_task(self._conduct_research(user_message))
+
             research_results = await asyncio.wait_for(
                 research_task, timeout=self.research_timeout
             )
-            
+
             return research_results
-            
+
         except asyncio.TimeoutError:
             logger.warning(f"Research timed out after {self.research_timeout}s")
-            
+
             timeout_msg = ConversationMessage(
                 message_id=str(uuid.uuid4()),
                 role="system",
@@ -488,14 +494,14 @@ class PerformanceOptimizedConversation:
                 metadata={"timeout": True, "research_timeout": self.research_timeout},
             )
             self.messages.append(timeout_msg)
-            
+
             return {
                 "success": False,
                 "timeout": True,
                 "timeout_duration": self.research_timeout,
-                "message": "Research timed out - proceeding with available knowledge"
+                "message": "Research timed out - proceeding with available knowledge",
             }
-            
+
         except Exception as e:
             logger.error(f"Research failed: {e}")
             return {"success": False, "error": str(e)}
@@ -792,10 +798,16 @@ Please provide a helpful, accurate response based on the available information. 
             "current_messages": len(self.messages),
             "max_messages": self.max_messages_per_conversation,
             "cleanup_threshold": self.cleanup_threshold,
-            "memory_usage_percent": (len(self.messages) / self.max_messages_per_conversation) * 100,
+            "memory_usage_percent": (
+                len(self.messages) / self.max_messages_per_conversation
+            )
+            * 100,
             "memory_check_counter": self.memory_check_counter,
             "needs_cleanup": len(self.messages) > self.cleanup_threshold,
-            "conversation_age_minutes": (datetime.now() - self.created_at).total_seconds() / 60,
+            "conversation_age_minutes": (
+                datetime.now() - self.created_at
+            ).total_seconds()
+            / 60,
         }
 
     def force_cleanup(self) -> Dict[str, Any]:
@@ -803,14 +815,14 @@ Please provide a helpful, accurate response based on the available information. 
         old_count = len(self.messages)
         self._cleanup_messages_if_needed()
         collected_objects = gc.collect()
-        
+
         return {
             "conversation_id": self.conversation_id,
             "messages_before": old_count,
             "messages_after": len(self.messages),
             "messages_removed": old_count - len(self.messages),
             "objects_collected": collected_objects,
-            "cleanup_performed": old_count > len(self.messages)
+            "cleanup_performed": old_count > len(self.messages),
         }
 
     def get_conversation_summary(self) -> Dict[str, Any]:
@@ -848,11 +860,11 @@ Please provide a helpful, accurate response based on the available information. 
         """Clean up conversation resources with memory optimization"""
         old_message_count = len(self.messages)
         clear_sources()
-        
+
         # Force cleanup of messages and garbage collection
         self.messages = []
         collected_objects = gc.collect()
-        
+
         logger.info(
             f"PERFORMANCE: Cleaned up conversation {self.conversation_id} - "
             f"removed {old_message_count} messages, collected {collected_objects} objects"
@@ -865,10 +877,12 @@ class PerformanceOptimizedConversationManager:
 
     def __init__(self):
         self.conversations: Dict[str, PerformanceOptimizedConversation] = {}
-        self.max_conversations = 50  # Reduced from 100 to 50 for better memory management
+        self.max_conversations = (
+            50  # Reduced from 100 to 50 for better memory management
+        )
         self.cleanup_counter = 0
         self.cleanup_interval = 10  # Cleanup every 10 operations
-        
+
         logger.info(
             f"PERFORMANCE: ConversationManager initialized with "
             f"max_conversations: {self.max_conversations}"
@@ -879,17 +893,19 @@ class PerformanceOptimizedConversationManager:
         self.cleanup_counter += 1
         if self.cleanup_counter >= self.cleanup_interval:
             self.cleanup_counter = 0
-            
+
             if len(self.conversations) > self.max_conversations * 0.8:  # 80% threshold
                 logger.info(
                     f"PERFORMANCE: Conversation manager approaching limit - "
                     f"{len(self.conversations)}/{self.max_conversations} conversations"
                 )
 
-    def create_conversation(self, conversation_id: str = None) -> PerformanceOptimizedConversation:
+    def create_conversation(
+        self, conversation_id: str = None
+    ) -> PerformanceOptimizedConversation:
         """Create a new conversation with memory management"""
         conversation = PerformanceOptimizedConversation(conversation_id)
-        
+
         # Periodic cleanup check
         self._periodic_cleanup()
 
@@ -900,12 +916,12 @@ class PerformanceOptimizedConversationManager:
                 self.conversations.keys(),
                 key=lambda x: self.conversations[x].created_at,
             )
-            
+
             # Cleanup and remove oldest conversation
             old_conversation = self.conversations[oldest_id]
             asyncio.create_task(old_conversation.cleanup())  # Async cleanup
             del self.conversations[oldest_id]
-            
+
             logger.info(
                 f"PERFORMANCE: Cleaned up oldest conversation {oldest_id} "
                 f"to maintain limit of {self.max_conversations}"
@@ -914,11 +930,15 @@ class PerformanceOptimizedConversationManager:
         self.conversations[conversation.conversation_id] = conversation
         return conversation
 
-    def get_conversation(self, conversation_id: str) -> Optional[PerformanceOptimizedConversation]:
+    def get_conversation(
+        self, conversation_id: str
+    ) -> Optional[PerformanceOptimizedConversation]:
         """Get existing conversation"""
         return self.conversations.get(conversation_id)
 
-    def get_or_create_conversation(self, conversation_id: str = None) -> PerformanceOptimizedConversation:
+    def get_or_create_conversation(
+        self, conversation_id: str = None
+    ) -> PerformanceOptimizedConversation:
         """Get existing or create new conversation"""
         if conversation_id and conversation_id in self.conversations:
             return self.conversations[conversation_id]
@@ -938,7 +958,8 @@ class PerformanceOptimizedConversationManager:
             "total_conversations": len(self.conversations),
             "max_conversations": self.max_conversations,
             "total_messages": total_messages,
-            "memory_usage_percent": (len(self.conversations) / self.max_conversations) * 100,
+            "memory_usage_percent": (len(self.conversations) / self.max_conversations)
+            * 100,
             "cleanup_counter": self.cleanup_counter,
             "cleanup_interval": self.cleanup_interval,
             "performance_optimized": True,
@@ -948,28 +969,28 @@ class PerformanceOptimizedConversationManager:
         """Force cleanup of all conversations"""
         old_count = len(self.conversations)
         cleanup_tasks = []
-        
+
         for conversation_id, conversation in self.conversations.items():
             cleanup_tasks.append(conversation.cleanup())
-        
+
         # Wait for all cleanups to complete
         await asyncio.gather(*cleanup_tasks, return_exceptions=True)
-        
+
         # Clear conversations dictionary
         self.conversations.clear()
-        
+
         # Force garbage collection
         collected_objects = gc.collect()
-        
+
         logger.info(
             f"PERFORMANCE: Force cleanup completed - "
             f"removed {old_count} conversations, collected {collected_objects} objects"
         )
-        
+
         return {
             "conversations_cleaned": old_count,
             "objects_collected": collected_objects,
-            "cleanup_successful": True
+            "cleanup_successful": True,
         }
 
 

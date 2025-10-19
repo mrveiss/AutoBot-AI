@@ -21,11 +21,14 @@ class OllamaHealth(BaseProviderHealth):
     def __init__(self):
         super().__init__("ollama")
         # Get Ollama configuration from environment
-        from src.unified_config_manager import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT
+        from src.unified_config_manager import (
+            HTTP_PROTOCOL,
+            OLLAMA_HOST_IP,
+            OLLAMA_PORT,
+        )
 
         self.ollama_host = os.getenv(
-            "AUTOBOT_OLLAMA_HOST",
-            f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
+            "AUTOBOT_OLLAMA_HOST", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
         )
 
     async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
@@ -37,7 +40,9 @@ class OllamaHealth(BaseProviderHealth):
             tags_url = f"{self.ollama_host}/api/tags"
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(tags_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                async with session.get(
+                    tags_url, timeout=aiohttp.ClientTimeout(total=timeout)
+                ) as response:
                     response_time = time.time() - start_time
 
                     if response.status == 200:
@@ -53,7 +58,9 @@ class OllamaHealth(BaseProviderHealth):
                             details={
                                 "endpoint": self.ollama_host,
                                 "model_count": model_count,
-                                "models": [m.get("name") for m in models[:5]],  # First 5 models
+                                "models": [
+                                    m.get("name") for m in models[:5]
+                                ],  # First 5 models
                             },
                         )
                     else:
@@ -62,7 +69,10 @@ class OllamaHealth(BaseProviderHealth):
                             available=False,
                             message=f"Ollama returned status {response.status}",
                             response_time=response_time,
-                            details={"endpoint": self.ollama_host, "status_code": response.status},
+                            details={
+                                "endpoint": self.ollama_host,
+                                "status_code": response.status,
+                            },
                         )
 
         except aiohttp.ClientError as e:
@@ -121,7 +131,7 @@ class OpenAIHealth(BaseProviderHealth):
                 async with session.get(
                     models_url,
                     headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=timeout)
+                    timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as response:
                     response_time = time.time() - start_time
 
@@ -138,7 +148,9 @@ class OpenAIHealth(BaseProviderHealth):
                             details={
                                 "api_key_set": True,
                                 "model_count": model_count,
-                                "models": [m.get("id") for m in models[:5]],  # First 5 models
+                                "models": [
+                                    m.get("id") for m in models[:5]
+                                ],  # First 5 models
                             },
                         )
                     elif response.status == 401:
@@ -155,7 +167,11 @@ class OpenAIHealth(BaseProviderHealth):
                             available=False,
                             message="OpenAI rate limit exceeded",
                             response_time=response_time,
-                            details={"api_key_set": True, "status_code": 429, "rate_limited": True},
+                            details={
+                                "api_key_set": True,
+                                "status_code": 429,
+                                "rate_limited": True,
+                            },
                         )
                     else:
                         return self._create_result(
@@ -163,7 +179,10 @@ class OpenAIHealth(BaseProviderHealth):
                             available=False,
                             message=f"OpenAI returned status {response.status}",
                             response_time=response_time,
-                            details={"api_key_set": True, "status_code": response.status},
+                            details={
+                                "api_key_set": True,
+                                "status_code": response.status,
+                            },
                         )
 
         except aiohttp.ClientError as e:
@@ -232,7 +251,7 @@ class AnthropicHealth(BaseProviderHealth):
                     count_tokens_url,
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=timeout)
+                    timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as response:
                     response_time = time.time() - start_time
 
@@ -242,7 +261,10 @@ class AnthropicHealth(BaseProviderHealth):
                             available=True,
                             message="Anthropic connected successfully",
                             response_time=response_time,
-                            details={"api_key_set": True, "validation_method": "count_tokens"},
+                            details={
+                                "api_key_set": True,
+                                "validation_method": "count_tokens",
+                            },
                         )
                     elif response.status == 401:
                         return self._create_result(
@@ -258,7 +280,11 @@ class AnthropicHealth(BaseProviderHealth):
                             available=False,
                             message="Anthropic rate limit exceeded",
                             response_time=response_time,
-                            details={"api_key_set": True, "status_code": 429, "rate_limited": True},
+                            details={
+                                "api_key_set": True,
+                                "status_code": 429,
+                                "rate_limited": True,
+                            },
                         )
                     else:
                         return self._create_result(
@@ -266,7 +292,10 @@ class AnthropicHealth(BaseProviderHealth):
                             available=False,
                             message=f"Anthropic returned status {response.status}",
                             response_time=response_time,
-                            details={"api_key_set": True, "status_code": response.status},
+                            details={
+                                "api_key_set": True,
+                                "status_code": response.status,
+                            },
                         )
 
         except aiohttp.ClientError as e:
@@ -326,7 +355,7 @@ class GoogleHealth(BaseProviderHealth):
                 async with session.get(
                     models_url,
                     headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=timeout)
+                    timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as response:
                     response_time = time.time() - start_time
 
@@ -343,7 +372,9 @@ class GoogleHealth(BaseProviderHealth):
                             details={
                                 "api_key_set": True,
                                 "model_count": model_count,
-                                "models": [m.get("name") for m in models[:5]],  # First 5 models
+                                "models": [
+                                    m.get("name") for m in models[:5]
+                                ],  # First 5 models
                             },
                         )
                     elif response.status == 403 or response.status == 401:
@@ -352,7 +383,10 @@ class GoogleHealth(BaseProviderHealth):
                             available=False,
                             message="Google API key is invalid",
                             response_time=response_time,
-                            details={"api_key_set": True, "status_code": response.status},
+                            details={
+                                "api_key_set": True,
+                                "status_code": response.status,
+                            },
                         )
                     elif response.status == 429:
                         return self._create_result(
@@ -360,7 +394,11 @@ class GoogleHealth(BaseProviderHealth):
                             available=False,
                             message="Google rate limit exceeded",
                             response_time=response_time,
-                            details={"api_key_set": True, "status_code": 429, "rate_limited": True},
+                            details={
+                                "api_key_set": True,
+                                "status_code": 429,
+                                "rate_limited": True,
+                            },
                         )
                     else:
                         return self._create_result(
@@ -368,7 +406,10 @@ class GoogleHealth(BaseProviderHealth):
                             available=False,
                             message=f"Google returned status {response.status}",
                             response_time=response_time,
-                            details={"api_key_set": True, "status_code": response.status},
+                            details={
+                                "api_key_set": True,
+                                "status_code": response.status,
+                            },
                         )
 
         except aiohttp.ClientError as e:

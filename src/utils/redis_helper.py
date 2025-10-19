@@ -22,14 +22,15 @@ from src.constants.network_constants import NetworkConstants
 
 try:
     from src.config.timeout_config import get_redis_timeout_config
+
     TIMEOUT_CONFIG = get_redis_timeout_config()
 except ImportError:
     # Fallback configuration
     TIMEOUT_CONFIG = {
-        'socket_timeout': 5.0,
-        'socket_connect_timeout': 5.0,
-        'retry_on_timeout': True,
-        'max_retries': 3
+        "socket_timeout": 5.0,
+        "socket_connect_timeout": 5.0,
+        "retry_on_timeout": True,
+        "max_retries": 3,
     }
 
 
@@ -54,15 +55,15 @@ def get_redis_connection(
         Configured Redis client
     """
     connection_params = {
-        'host': host,
-        'port': port,
-        'db': db,
-        'password': password,
-        'socket_timeout': TIMEOUT_CONFIG['socket_timeout'],
-        'socket_connect_timeout': TIMEOUT_CONFIG['socket_connect_timeout'],
-        'retry_on_timeout': TIMEOUT_CONFIG['retry_on_timeout'],
-        'decode_responses': True,
-        **kwargs
+        "host": host,
+        "port": port,
+        "db": db,
+        "password": password,
+        "socket_timeout": TIMEOUT_CONFIG["socket_timeout"],
+        "socket_connect_timeout": TIMEOUT_CONFIG["socket_connect_timeout"],
+        "retry_on_timeout": TIMEOUT_CONFIG["retry_on_timeout"],
+        "decode_responses": True,
+        **kwargs,
     }
 
     # Remove None values
@@ -92,15 +93,15 @@ async def get_async_redis_connection(
         Configured async Redis client
     """
     connection_params = {
-        'host': host,
-        'port': port,
-        'db': db,
-        'password': password,
-        'socket_timeout': TIMEOUT_CONFIG['socket_timeout'],
-        'socket_connect_timeout': TIMEOUT_CONFIG['socket_connect_timeout'],
-        'retry_on_timeout': TIMEOUT_CONFIG['retry_on_timeout'],
-        'decode_responses': True,
-        **kwargs
+        "host": host,
+        "port": port,
+        "db": db,
+        "password": password,
+        "socket_timeout": TIMEOUT_CONFIG["socket_timeout"],
+        "socket_connect_timeout": TIMEOUT_CONFIG["socket_connect_timeout"],
+        "retry_on_timeout": TIMEOUT_CONFIG["retry_on_timeout"],
+        "decode_responses": True,
+        **kwargs,
     }
 
     # Remove None values
@@ -132,15 +133,15 @@ def get_redis_pool(
         Configured Redis connection pool
     """
     pool_params = {
-        'host': host,
-        'port': port,
-        'db': db,
-        'password': password,
-        'max_connections': max_connections,
-        'socket_timeout': TIMEOUT_CONFIG['socket_timeout'],
-        'socket_connect_timeout': TIMEOUT_CONFIG['socket_connect_timeout'],
-        'retry_on_timeout': TIMEOUT_CONFIG['retry_on_timeout'],
-        **kwargs
+        "host": host,
+        "port": port,
+        "db": db,
+        "password": password,
+        "max_connections": max_connections,
+        "socket_timeout": TIMEOUT_CONFIG["socket_timeout"],
+        "socket_connect_timeout": TIMEOUT_CONFIG["socket_connect_timeout"],
+        "retry_on_timeout": TIMEOUT_CONFIG["retry_on_timeout"],
+        **kwargs,
     }
 
     # Remove None values
@@ -171,12 +172,12 @@ class RedisConnectionManager:
     def close_all(self):
         """Close all managed connections"""
         for conn in self._connections.values():
-            if hasattr(conn, 'close'):
+            if hasattr(conn, "close"):
                 conn.close()
         self._connections.clear()
 
         for pool in self._pools.values():
-            if hasattr(pool, 'disconnect'):
+            if hasattr(pool, "disconnect"):
                 pool.disconnect()
         self._pools.clear()
 

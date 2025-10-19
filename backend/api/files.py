@@ -263,8 +263,7 @@ async def list_files(request: Request, path: str = ""):
     has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file operations"
+            status_code=403, detail="Insufficient permissions for file operations"
         )
 
     # Store user data in request state for audit logging
@@ -393,8 +392,7 @@ async def upload_file(
     )
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file upload"
+            status_code=403, detail="Insufficient permissions for file upload"
         )
 
     # Store user data in request state for audit logging
@@ -471,7 +469,7 @@ async def upload_file(
                 "size": len(content),
                 "user_role": user_data.get("role", "unknown"),
                 "ip": request.client.host if request.client else "unknown",
-                "overwrite": overwrite
+                "overwrite": overwrite,
             },
         )
 
@@ -503,8 +501,7 @@ async def download_file(request: Request, path: str):
     )
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file download"
+            status_code=403, detail="Insufficient permissions for file download"
         )
 
     # Store user data in request state for audit logging
@@ -530,7 +527,7 @@ async def download_file(request: Request, path: str):
                 "size": target_file.stat().st_size,
                 "filename": target_file.name,
                 "user_role": user_data.get("role", "unknown"),
-                "ip": request.client.host if request.client else "unknown"
+                "ip": request.client.host if request.client else "unknown",
             },
         )
 
@@ -616,8 +613,7 @@ async def delete_file(request: Request, file_operation: FileOperation):
     )
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file deletion"
+            status_code=403, detail="Insufficient permissions for file deletion"
         )
 
     # Store user data in request state for audit logging
@@ -645,7 +641,7 @@ async def delete_file(request: Request, file_operation: FileOperation):
                     "size": file_size,
                     "filename": target_path.name,
                     "user_role": user_data.get("role", "unknown"),
-                    "ip": request.client.host if request.client else "unknown"
+                    "ip": request.client.host if request.client else "unknown",
                 },
             )
             return {"message": f"File '{target_path.name}' deleted successfully"}
@@ -662,7 +658,7 @@ async def delete_file(request: Request, file_operation: FileOperation):
                         "type": "directory",
                         "dirname": target_path.name,
                         "user_role": user_data.get("role", "unknown"),
-                        "ip": request.client.host if request.client else "unknown"
+                        "ip": request.client.host if request.client else "unknown",
                     },
                 )
                 return {
@@ -681,7 +677,7 @@ async def delete_file(request: Request, file_operation: FileOperation):
                         "dirname": target_path.name,
                         "user_role": user_data.get("role", "unknown"),
                         "ip": request.client.host if request.client else "unknown",
-                        "warning": "recursive_delete_performed"
+                        "warning": "recursive_delete_performed",
                     },
                 )
                 return {
@@ -715,8 +711,7 @@ async def create_directory(
     )
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for directory creation"
+            status_code=403, detail="Insufficient permissions for directory creation"
         )
 
     # Store user data in request state for audit logging
@@ -750,7 +745,7 @@ async def create_directory(
                 "name": name,
                 "parent_path": path,
                 "user_role": user_data.get("role", "unknown"),
-                "ip": request.client.host if request.client else "unknown"
+                "ip": request.client.host if request.client else "unknown",
             },
         )
 
@@ -776,7 +771,7 @@ async def get_directory_tree(request: Request, path: str = ""):
     if not has_permission:
         raise HTTPException(
             status_code=403,
-            detail="Insufficient permissions for viewing directory tree"
+            detail="Insufficient permissions for viewing directory tree",
         )
 
     # Store user data in request state for audit logging
@@ -796,15 +791,14 @@ async def get_directory_tree(request: Request, path: str = ""):
             try:
                 items = []
                 for item in sorted(
-                    directory.iterdir(),
-                    key=lambda x: (not x.is_dir(), x.name.lower())
+                    directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
                 ):
                     try:
                         relative_path = str(item.relative_to(SANDBOXED_ROOT))
                         item_info = {
                             "name": item.name,
                             "path": relative_path,
-                            "type": "directory" if item.is_dir() else "file"
+                            "type": "directory" if item.is_dir() else "file",
                         }
 
                         if item.is_file():
@@ -828,10 +822,7 @@ async def get_directory_tree(request: Request, path: str = ""):
 
         tree_data = build_tree(target_path, SANDBOXED_ROOT)
 
-        return {
-            "path": path,
-            "tree": tree_data
-        }
+        return {"path": path, "tree": tree_data}
 
     except HTTPException:
         raise
@@ -849,8 +840,7 @@ async def get_file_stats(request: Request):
     has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions for file statistics"
+            status_code=403, detail="Insufficient permissions for file statistics"
         )
 
     # Store user data in request state for audit logging

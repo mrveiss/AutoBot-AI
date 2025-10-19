@@ -18,8 +18,7 @@ from backend.app_factory import create_app
 
 # Configure logging for main entry point
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,9 @@ if __name__ == "__main__":
     logger.info("🌟 Starting AutoBot Backend in standalone mode...")
 
     # Get configuration from environment with intelligent defaults
-    host = os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0")  # Use 0.0.0.0 for network access
+    host = os.getenv(
+        "AUTOBOT_BACKEND_HOST", "0.0.0.0"
+    )  # Use 0.0.0.0 for network access
     port = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
 
     # Determine if we're in development mode
@@ -56,7 +57,9 @@ if __name__ == "__main__":
             reload=reload,
             log_level="info",
             access_log=True,
-            workers=1 if reload else None,  # Single worker in dev mode, auto-detect in production
+            workers=(
+                1 if reload else None
+            ),  # Single worker in dev mode, auto-detect in production
             loop="auto",  # Use best available event loop
             http="auto",  # Use best available HTTP implementation
         )

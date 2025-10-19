@@ -54,11 +54,13 @@ class KnowledgeBaseV2:
         self.initialization_lock = asyncio.Lock()
 
         # Configuration from unified config
-        self.redis_host = config.get_host('redis')
-        self.redis_port = config.get_port('redis')
-        self.redis_password = config.get('redis.password')
-        self.redis_db = config.get('redis.databases.knowledge', 1)
-        self.redis_index_name = config.get('redis.indexes.knowledge_base', 'llama_index')
+        self.redis_host = config.get_host("redis")
+        self.redis_port = config.get_port("redis")
+        self.redis_password = config.get("redis.password")
+        self.redis_db = config.get("redis.databases.knowledge", 1)
+        self.redis_index_name = config.get(
+            "redis.indexes.knowledge_base", "llama_index"
+        )
 
         # Connection clients (initialized in async method)
         self.redis_client: Optional[redis.Redis] = None
@@ -109,10 +111,12 @@ class KnowledgeBaseV2:
         """Configure LlamaIndex with Ollama models"""
         try:
             # Manually construct Ollama URL due to config interpolation issue
-            ollama_host = config.get('infrastructure.hosts.ollama', '127.0.0.1')
-            ollama_port = config.get('infrastructure.ports.ollama', str(NetworkConstants.OLLAMA_PORT))
+            ollama_host = config.get("infrastructure.hosts.ollama", "127.0.0.1")
+            ollama_port = config.get(
+                "infrastructure.ports.ollama", str(NetworkConstants.OLLAMA_PORT)
+            )
             ollama_url = f"http://{ollama_host}:{ollama_port}"
-            llm_timeout = config.get_timeout('llm', 'default', 30.0)
+            llm_timeout = config.get_timeout("llm", "default", 30.0)
 
             Settings.llm = LlamaIndexOllamaLLM(
                 model="llama3.2:3b",
@@ -126,7 +130,9 @@ class KnowledgeBaseV2:
 
             if stored_model:
                 embed_model_name = stored_model
-                logger.info(f"Using stored embedding model: {embed_model_name} (dimensions: {detected_dim})")
+                logger.info(
+                    f"Using stored embedding model: {embed_model_name} (dimensions: {detected_dim})"
+                )
             elif detected_dim == 768:
                 embed_model_name = "nomic-embed-text"
                 logger.info("Using nomic-embed-text for 768-dimensional vectors")
@@ -158,30 +164,33 @@ class KnowledgeBaseV2:
 
             # Get sync Redis client for binary operations (needed for vector store)
             # Note: We need a special non-decode client for binary vector operations
-            self.redis_client = get_redis_sync('knowledge')
+            self.redis_client = get_redis_sync("knowledge")
 
             # Override decode_responses for binary operations if needed
-            if hasattr(self.redis_client.connection_pool, 'connection_kwargs'):
+            if hasattr(self.redis_client.connection_pool, "connection_kwargs"):
                 # Create a separate pool for binary operations
                 import redis
+
                 redis_config = config.get_redis_config()
                 self.redis_client = redis.Redis(
-                    host=redis_config['host'],
-                    port=redis_config['port'],
+                    host=redis_config["host"],
+                    port=redis_config["port"],
                     db=self.redis_db,
-                    password=redis_config.get('password'),
+                    password=redis_config.get("password"),
                     decode_responses=False,  # Needed for binary vector operations
-                    socket_timeout=redis_config['socket_timeout'],
-                    socket_connect_timeout=redis_config['socket_connect_timeout'],
-                    retry_on_timeout=redis_config['retry_on_timeout']
+                    socket_timeout=redis_config["socket_timeout"],
+                    socket_connect_timeout=redis_config["socket_connect_timeout"],
+                    retry_on_timeout=redis_config["retry_on_timeout"],
                 )
 
             # Test sync connection
             await asyncio.to_thread(self.redis_client.ping)
-            logger.info(f"Knowledge Base Redis sync client connected (database {self.redis_db})")
+            logger.info(
+                f"Knowledge Base Redis sync client connected (database {self.redis_db})"
+            )
 
             # Get async Redis client using pool manager
-            self.aioredis_client = await get_redis_async('knowledge')
+            self.aioredis_client = await get_redis_async("knowledge")
 
             # Test async connection
             await self.aioredis_client.ping()
@@ -194,7 +203,9 @@ class KnowledgeBaseV2:
     async def _init_vector_store(self):
         """Initialize LlamaIndex vector store with Redis backend - FIXED for dimension mismatch"""
         if not self.redis_client:
-            logger.warning("Redis client not available, skipping vector store initialization")
+            logger.warning(
+                "Redis client not available, skipping vector store initialization"
+            )
             return
 
         try:
@@ -204,30 +215,31 @@ class KnowledgeBaseV2:
 
             # CRITICAL FIX: Use IndexSchema.from_dict() with explicit dimension configuration
             # This ensures the Redis vector index is created with the correct dimensions
-            custom_schema = IndexSchema.from_dict({
-                "index": {
-                    "name": self.redis_index_name,
-                    "prefix": "doc"
-                },
-                "fields": [
-                    # Required fields for LlamaIndex
-                    {"type": "tag", "name": "id"},
-                    {"type": "tag", "name": "doc_id"},
-                    {"type": "text", "name": "text"},
-                    # Vector field with EXPLICIT dimension configuration
-                    {
-                        "type": "vector",
-                        "name": "vector",
-                        "attrs": {
-                            "dims": embedding_dim,  # CRITICAL: Match embedding model output
-                            "algorithm": "hnsw",
-                            "distance_metric": "cosine",
+            custom_schema = IndexSchema.from_dict(
+                {
+                    "index": {"name": self.redis_index_name, "prefix": "doc"},
+                    "fields": [
+                        # Required fields for LlamaIndex
+                        {"type": "tag", "name": "id"},
+                        {"type": "tag", "name": "doc_id"},
+                        {"type": "text", "name": "text"},
+                        # Vector field with EXPLICIT dimension configuration
+                        {
+                            "type": "vector",
+                            "name": "vector",
+                            "attrs": {
+                                "dims": embedding_dim,  # CRITICAL: Match embedding model output
+                                "algorithm": "hnsw",
+                                "distance_metric": "cosine",
+                            },
                         },
-                    },
-                ],
-            })
+                    ],
+                }
+            )
 
-            logger.info(f"Created Redis schema with explicit {embedding_dim} vector dimensions")
+            logger.info(
+                f"Created Redis schema with explicit {embedding_dim} vector dimensions"
+            )
 
             # Create vector store with properly configured schema
             redis_url = f"redis://{self.redis_host}:{self.redis_port}"
@@ -239,8 +251,12 @@ class KnowledgeBaseV2:
                 redis_kwargs={"db": self.redis_db},
             )
 
-            logger.info(f"LlamaIndex RedisVectorStore initialized with index: {self.redis_index_name}")
-            logger.info(f"✅ Vector dimension mismatch FIXED - using {embedding_dim} dimensions")
+            logger.info(
+                f"LlamaIndex RedisVectorStore initialized with index: {self.redis_index_name}"
+            )
+            logger.info(
+                f"✅ Vector dimension mismatch FIXED - using {embedding_dim} dimensions"
+            )
 
             # CRITICAL FIX: Create vector index immediately during initialization
             # This ensures the index exists even before any facts are stored
@@ -253,6 +269,7 @@ class KnowledgeBaseV2:
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             self.vector_store = None
 
@@ -276,22 +293,30 @@ class KnowledgeBaseV2:
 
                     # If there's a mismatch, we need to recreate the index
                     if detected_dim != default_dim:
-                        logger.warning(f"Index dimension mismatch: existing={detected_dim}, expected={default_dim}")
+                        logger.warning(
+                            f"Index dimension mismatch: existing={detected_dim}, expected={default_dim}"
+                        )
                         logger.info("Will recreate index with correct dimensions...")
 
                         # Drop the existing index
                         try:
                             await asyncio.to_thread(
-                                self.redis_client.execute_command, "FT.DROPINDEX", self.redis_index_name
+                                self.redis_client.execute_command,
+                                "FT.DROPINDEX",
+                                self.redis_index_name,
                             )
-                            logger.info(f"Dropped existing index {self.redis_index_name}")
+                            logger.info(
+                                f"Dropped existing index {self.redis_index_name}"
+                            )
                         except Exception as drop_error:
                             logger.warning(f"Could not drop index: {drop_error}")
 
                     return default_dim  # Always return the expected dimension
 
         except Exception as e:
-            logger.info(f"No existing index found or could not detect dimension, using default {default_dim}: {e}")
+            logger.info(
+                f"No existing index found or could not detect dimension, using default {default_dim}: {e}"
+            )
 
         return default_dim
 
@@ -303,19 +328,23 @@ class KnowledgeBaseV2:
         """
         try:
             if not self.vector_store:
-                logger.warning("Cannot create vector index - vector store not initialized")
+                logger.warning(
+                    "Cannot create vector index - vector store not initialized"
+                )
                 return
 
             logger.info("Creating initial vector index...")
 
             # Create empty index with storage context
-            storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+            storage_context = StorageContext.from_defaults(
+                vector_store=self.vector_store
+            )
 
             # Create index with empty document list (index will exist for future inserts)
             self.vector_index = await asyncio.to_thread(
                 VectorStoreIndex.from_documents,
                 [],  # Empty list - just creates the index structure
-                storage_context=storage_context
+                storage_context=storage_context,
             )
 
             logger.info("✅ Vector index created successfully - ready to index facts")
@@ -326,6 +355,7 @@ class KnowledgeBaseV2:
         except Exception as e:
             logger.error(f"Failed to create initial vector index: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             # Don't fail initialization - just log the error
             self.vector_index = None
@@ -350,12 +380,16 @@ class KnowledgeBaseV2:
                 logger.info("No existing facts to re-index")
                 return
 
-            logger.info(f"Found {len(fact_keys)} existing facts - checking which need indexing...")
+            logger.info(
+                f"Found {len(fact_keys)} existing facts - checking which need indexing..."
+            )
 
             # Get all existing vector doc keys to see what's already indexed
             # LlamaIndex uses llama_index/vector_* pattern for vector documents
             vector_doc_keys = set()
-            async for key in self.aioredis_client.scan_iter(match="llama_index/vector_*"):
+            async for key in self.aioredis_client.scan_iter(
+                match="llama_index/vector_*"
+            ):
                 vector_doc_keys.add(key)
 
             logger.info(f"Found {len(vector_doc_keys)} existing vector documents")
@@ -367,13 +401,23 @@ class KnowledgeBaseV2:
             for fact_key in fact_keys:
                 try:
                     # Extract fact_id from key (format: "fact:uuid")
-                    fact_id = fact_key.split(b":")[1].decode() if isinstance(fact_key, bytes) else fact_key.split(":")[1]
+                    fact_id = (
+                        fact_key.split(b":")[1].decode()
+                        if isinstance(fact_key, bytes)
+                        else fact_key.split(":")[1]
+                    )
 
                     # Check if this fact already has a vector document
                     # LlamaIndex creates keys like "llama_index/vector_{doc_id}"
                     # Simple check: if any vector key contains this fact_id, skip it
-                    already_indexed = any(fact_id.encode() in doc_key if isinstance(doc_key, bytes) else fact_id in doc_key
-                                         for doc_key in vector_doc_keys)
+                    already_indexed = any(
+                        (
+                            fact_id.encode() in doc_key
+                            if isinstance(doc_key, bytes)
+                            else fact_id in doc_key
+                        )
+                        for doc_key in vector_doc_keys
+                    )
 
                     if already_indexed:
                         skipped_count += 1
@@ -384,8 +428,12 @@ class KnowledgeBaseV2:
                     if not fact_data:
                         continue
 
-                    content = fact_data.get(b"content" if isinstance(fact_key, bytes) else "content")
-                    metadata_str = fact_data.get(b"metadata" if isinstance(fact_key, bytes) else "metadata")
+                    content = fact_data.get(
+                        b"content" if isinstance(fact_key, bytes) else "content"
+                    )
+                    metadata_str = fact_data.get(
+                        b"metadata" if isinstance(fact_key, bytes) else "metadata"
+                    )
 
                     if content:
                         if isinstance(content, bytes):
@@ -403,9 +451,7 @@ class KnowledgeBaseV2:
 
                         # Create document and index it
                         document = Document(
-                            text=content,
-                            metadata=metadata,
-                            doc_id=fact_id
+                            text=content, metadata=metadata, doc_id=fact_id
                         )
 
                         # Insert into vector index
@@ -413,17 +459,22 @@ class KnowledgeBaseV2:
                         reindexed_count += 1
 
                         if reindexed_count % 10 == 0:
-                            logger.info(f"Re-indexed {reindexed_count}/{len(fact_keys)} facts...")
+                            logger.info(
+                                f"Re-indexed {reindexed_count}/{len(fact_keys)} facts..."
+                            )
 
                 except Exception as fact_error:
                     logger.warning(f"Failed to re-index fact {fact_key}: {fact_error}")
                     continue
 
-            logger.info(f"✅ Re-indexing complete: {reindexed_count} facts indexed, {skipped_count} already had vectors")
+            logger.info(
+                f"✅ Re-indexing complete: {reindexed_count} facts indexed, {skipped_count} already had vectors"
+            )
 
         except Exception as e:
             logger.error(f"Failed to re-index existing facts: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             # Don't fail initialization - just log the error
 
@@ -480,7 +531,7 @@ class KnowledgeBaseV2:
             keys = []
             for key in self.redis_client.scan_iter(match=pattern):
                 if isinstance(key, bytes):
-                    keys.append(key.decode('utf-8'))
+                    keys.append(key.decode("utf-8"))
                 else:
                     keys.append(str(key))
             return keys
@@ -498,7 +549,7 @@ class KnowledgeBaseV2:
             keys = []
             async for key in self.aioredis_client.scan_iter(match=pattern):
                 if isinstance(key, bytes):
-                    keys.append(key.decode('utf-8'))
+                    keys.append(key.decode("utf-8"))
                 else:
                     keys.append(str(key))
 
@@ -533,10 +584,11 @@ class KnowledgeBaseV2:
             # Use retriever for search to avoid LLM timeout issues
             if not self.vector_index:
                 # Create index from vector store
-                storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+                storage_context = StorageContext.from_defaults(
+                    vector_store=self.vector_store
+                )
                 self.vector_index = VectorStoreIndex.from_vector_store(
-                    vector_store=self.vector_store,
-                    storage_context=storage_context
+                    vector_store=self.vector_store, storage_context=storage_context
                 )
 
             # Get retriever and search
@@ -548,20 +600,24 @@ class KnowledgeBaseV2:
             for node in nodes:
                 result = {
                     "content": node.text,
-                    "score": getattr(node, 'score', 0.0),
+                    "score": getattr(node, "score", 0.0),
                     "metadata": node.metadata or {},
-                    "node_id": node.node_id
+                    "node_id": node.node_id,
                 }
                 results.append(result)
 
-            logger.info(f"Knowledge base search returned {len(results)} results for query: {query[:50]}...")
+            logger.info(
+                f"Knowledge base search returned {len(results)} results for query: {query[:50]}..."
+            )
             return results
 
         except Exception as e:
             logger.error(f"Knowledge base search failed: {e}")
             return []
 
-    async def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def store_fact(
+        self, content: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Store a fact in the knowledge base with vector indexing"""
         self.ensure_initialized()
 
@@ -570,7 +626,7 @@ class KnowledgeBaseV2:
                 return {
                     "status": "error",
                     "message": "Content cannot be empty",
-                    "fact_id": None
+                    "fact_id": None,
                 }
 
             # Generate unique fact ID
@@ -578,12 +634,14 @@ class KnowledgeBaseV2:
 
             # Prepare metadata
             fact_metadata = metadata or {}
-            fact_metadata.update({
-                "fact_id": fact_id,
-                "stored_at": datetime.now().isoformat(),
-                "content_length": len(content),
-                "content_type": "fact"
-            })
+            fact_metadata.update(
+                {
+                    "fact_id": fact_id,
+                    "stored_at": datetime.now().isoformat(),
+                    "content_length": len(content),
+                    "content_type": "fact",
+                }
+            )
 
             # Store as traditional fact in Redis
             if self.aioredis_client:
@@ -591,7 +649,7 @@ class KnowledgeBaseV2:
                 fact_data = {
                     "content": content,
                     "metadata": json.dumps(fact_metadata),
-                    "created_at": datetime.now().isoformat()
+                    "created_at": datetime.now().isoformat(),
                 }
                 await self.aioredis_client.hset(fact_key, mapping=fact_data)
                 logger.debug(f"Stored fact {fact_id} in Redis")
@@ -602,28 +660,34 @@ class KnowledgeBaseV2:
                 try:
                     # Create LlamaIndex document
                     document = Document(
-                        text=content,
-                        metadata=fact_metadata,
-                        doc_id=fact_id
+                        text=content, metadata=fact_metadata, doc_id=fact_id
                     )
 
                     # Create or get vector index with proper async handling
                     if not self.vector_index:
-                        storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+                        storage_context = StorageContext.from_defaults(
+                            vector_store=self.vector_store
+                        )
                         try:
                             # FIXED: Wrap synchronous operations in asyncio.to_thread()
                             self.vector_index = await asyncio.to_thread(
                                 VectorStoreIndex.from_documents,
                                 [document],
-                                storage_context
+                                storage_context,
                             )
                             vector_indexed = True
-                            logger.info(f"Created vector index and stored fact {fact_id}")
+                            logger.info(
+                                f"Created vector index and stored fact {fact_id}"
+                            )
                         except Exception as index_error:
                             if "dimension" in str(index_error).lower():
-                                logger.error(f"Vector index creation failed due to dimension mismatch: {index_error}")
+                                logger.error(
+                                    f"Vector index creation failed due to dimension mismatch: {index_error}"
+                                )
                                 # This should NOT happen with the new schema fix
-                                logger.error("CRITICAL: Dimension mismatch still occurring after schema fix!")
+                                logger.error(
+                                    "CRITICAL: Dimension mismatch still occurring after schema fix!"
+                                )
                                 raise index_error
                             else:
                                 raise index_error
@@ -631,26 +695,34 @@ class KnowledgeBaseV2:
                         # FIXED: Wrap insert() in asyncio.to_thread() for proper async handling
                         await asyncio.to_thread(self.vector_index.insert, document)
                         vector_indexed = True
-                        logger.info(f"Inserted fact {fact_id} into existing vector index")
+                        logger.info(
+                            f"Inserted fact {fact_id} into existing vector index"
+                        )
 
                 except Exception as vector_error:
                     error_msg = str(vector_error)
-                    logger.error(f"CRITICAL: Failed to store fact {fact_id} in vector index: {error_msg}")
+                    logger.error(
+                        f"CRITICAL: Failed to store fact {fact_id} in vector index: {error_msg}"
+                    )
                     # Vector indexing failed - fact is in Redis but NOT searchable
                     return {
                         "status": "partial_success",
                         "message": f"Fact stored in Redis but NOT indexed for search: {error_msg}",
                         "fact_id": fact_id,
                         "vector_indexed": False,
-                        "searchable": False
+                        "searchable": False,
                     }
 
             return {
                 "status": "success",
-                "message": "Fact stored successfully and indexed for search" if vector_indexed else "Fact stored in Redis only (vector store unavailable)",
+                "message": (
+                    "Fact stored successfully and indexed for search"
+                    if vector_indexed
+                    else "Fact stored in Redis only (vector store unavailable)"
+                ),
                 "fact_id": fact_id,
                 "vector_indexed": vector_indexed,
-                "searchable": vector_indexed
+                "searchable": vector_indexed,
             }
 
         except Exception as e:
@@ -658,10 +730,12 @@ class KnowledgeBaseV2:
             return {
                 "status": "error",
                 "message": f"Failed to store fact: {str(e)}",
-                "fact_id": None
+                "fact_id": None,
             }
 
-    async def vectorize_existing_fact(self, fact_id: str, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def vectorize_existing_fact(
+        self, fact_id: str, content: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Vectorize an existing fact without creating a duplicate.
 
@@ -681,7 +755,7 @@ class KnowledgeBaseV2:
                     "status": "error",
                     "message": "Vector store not initialized",
                     "fact_id": fact_id,
-                    "vector_indexed": False
+                    "vector_indexed": False,
                 }
 
             # Prepare metadata
@@ -693,17 +767,17 @@ class KnowledgeBaseV2:
             document = Document(
                 text=content,
                 metadata=fact_metadata,
-                doc_id=fact_id  # Use existing ID to prevent duplication
+                doc_id=fact_id,  # Use existing ID to prevent duplication
             )
 
             # Add to vector index
             if not self.vector_index:
                 # Create initial index
-                storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+                storage_context = StorageContext.from_defaults(
+                    vector_store=self.vector_store
+                )
                 self.vector_index = await asyncio.to_thread(
-                    VectorStoreIndex.from_documents,
-                    [document],
-                    storage_context
+                    VectorStoreIndex.from_documents, [document], storage_context
                 )
                 logger.info(f"Created vector index and vectorized fact {fact_id}")
             else:
@@ -715,7 +789,7 @@ class KnowledgeBaseV2:
                 "status": "success",
                 "message": "Fact vectorized successfully",
                 "fact_id": fact_id,
-                "vector_indexed": True
+                "vector_indexed": True,
             }
 
         except Exception as e:
@@ -725,7 +799,7 @@ class KnowledgeBaseV2:
                 "status": "error",
                 "message": f"Vectorization failed: {error_msg}",
                 "fact_id": fact_id,
-                "vector_indexed": False
+                "vector_indexed": False,
             }
 
     async def get_stats(self) -> Dict[str, Any]:
@@ -749,7 +823,7 @@ class KnowledgeBaseV2:
                 "initialized": self.initialized,
                 "llama_index_configured": self.llama_index_configured,
                 "embedding_model": self.embedding_model_name,
-                "embedding_dimensions": self.embedding_dimensions
+                "embedding_dimensions": self.embedding_dimensions,
             }
 
             if self.aioredis_client:
@@ -759,14 +833,23 @@ class KnowledgeBaseV2:
 
                 try:
                     # Try to get cached counts first (instant lookup)
-                    cached_fact_count = await self.aioredis_client.get("kb:stats:fact_count")
-                    cached_vector_count = await self.aioredis_client.get("kb:stats:vector_count")
+                    cached_fact_count = await self.aioredis_client.get(
+                        "kb:stats:fact_count"
+                    )
+                    cached_vector_count = await self.aioredis_client.get(
+                        "kb:stats:vector_count"
+                    )
 
-                    if cached_fact_count is not None and cached_vector_count is not None:
+                    if (
+                        cached_fact_count is not None
+                        and cached_vector_count is not None
+                    ):
                         # Use cached values
                         fact_count = int(cached_fact_count)
                         vector_count = int(cached_vector_count)
-                        logger.debug(f"Using cached counts: {fact_count} facts, {vector_count} vectors")
+                        logger.debug(
+                            f"Using cached counts: {fact_count} facts, {vector_count} vectors"
+                        )
                     else:
                         # Cache miss - use fast count via redis-cli
                         # This is still much faster than scan_iter()
@@ -774,31 +857,67 @@ class KnowledgeBaseV2:
 
                         # Count facts quickly using redis-cli
                         fact_result = subprocess.run(
-                            ['redis-cli', '-h', self.redis_host, '-p', str(self.redis_port),
-                             '--scan', '--pattern', 'fact:*'],
-                            capture_output=True, text=True, timeout=15
+                            [
+                                "redis-cli",
+                                "-h",
+                                self.redis_host,
+                                "-p",
+                                str(self.redis_port),
+                                "--scan",
+                                "--pattern",
+                                "fact:*",
+                            ],
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
                         )
-                        fact_count = len(fact_result.stdout.strip().split('\n')) if fact_result.stdout.strip() else 0
+                        fact_count = (
+                            len(fact_result.stdout.strip().split("\n"))
+                            if fact_result.stdout.strip()
+                            else 0
+                        )
 
                         # Count vectors quickly using redis-cli
                         vector_result = subprocess.run(
-                            ['redis-cli', '-h', self.redis_host, '-p', str(self.redis_port),
-                             '--scan', '--pattern', 'llama_index/vector_*'],
-                            capture_output=True, text=True, timeout=15
+                            [
+                                "redis-cli",
+                                "-h",
+                                self.redis_host,
+                                "-p",
+                                str(self.redis_port),
+                                "--scan",
+                                "--pattern",
+                                "llama_index/vector_*",
+                            ],
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
                         )
-                        vector_count = len(vector_result.stdout.strip().split('\n')) if vector_result.stdout.strip() else 0
+                        vector_count = (
+                            len(vector_result.stdout.strip().split("\n"))
+                            if vector_result.stdout.strip()
+                            else 0
+                        )
 
                         # Cache the counts for 60 seconds
-                        await self.aioredis_client.set("kb:stats:fact_count", fact_count, ex=60)
-                        await self.aioredis_client.set("kb:stats:vector_count", vector_count, ex=60)
-                        logger.info(f"Counted and cached: {fact_count} facts, {vector_count} vectors")
+                        await self.aioredis_client.set(
+                            "kb:stats:fact_count", fact_count, ex=60
+                        )
+                        await self.aioredis_client.set(
+                            "kb:stats:vector_count", vector_count, ex=60
+                        )
+                        logger.info(
+                            f"Counted and cached: {fact_count} facts, {vector_count} vectors"
+                        )
 
                 except subprocess.TimeoutExpired:
                     logger.warning("Redis count timed out, using fallback")
                     fact_count = 0
                     vector_count = 0
                 except Exception as count_error:
-                    logger.warning(f"Error counting keys, using fallback: {count_error}")
+                    logger.warning(
+                        f"Error counting keys, using fallback: {count_error}"
+                    )
                     fact_count = 0
                     vector_count = 0
 
@@ -811,7 +930,9 @@ class KnowledgeBaseV2:
                 fact_keys_sample = []
                 try:
                     count = 0
-                    async for key in self.aioredis_client.scan_iter(match="fact:*", count=10):
+                    async for key in self.aioredis_client.scan_iter(
+                        match="fact:*", count=10
+                    ):
                         fact_keys_sample.append(key)
                         count += 1
                         if count >= 10:  # Only sample 10 facts maximum
@@ -848,13 +969,19 @@ class KnowledgeBaseV2:
             if self.redis_client:
                 try:
                     index_info = await asyncio.to_thread(
-                        self.redis_client.execute_command, "FT.INFO", self.redis_index_name
+                        self.redis_client.execute_command,
+                        "FT.INFO",
+                        self.redis_index_name,
                     )
                     if index_info:
                         stats["index_available"] = True
                         # Parse index info for additional stats
                         for i in range(0, len(index_info) - 1, 2):
-                            key = index_info[i].decode() if isinstance(index_info[i], bytes) else str(index_info[i])
+                            key = (
+                                index_info[i].decode()
+                                if isinstance(index_info[i], bytes)
+                                else str(index_info[i])
+                            )
                             if key == "num_docs":
                                 stats["indexed_documents"] = int(index_info[i + 1])
                 except Exception:
@@ -873,7 +1000,7 @@ class KnowledgeBaseV2:
                 "db_size": 0,
                 "status": "error",
                 "error": str(e),
-                "last_updated": datetime.now().isoformat()
+                "last_updated": datetime.now().isoformat(),
             }
 
     async def _detect_stored_embedding_model(self) -> Optional[str]:
@@ -881,7 +1008,9 @@ class KnowledgeBaseV2:
         try:
             if self.aioredis_client:
                 # Look for model metadata in existing facts
-                async for key in self.aioredis_client.scan_iter(match="fact:*", count=10):
+                async for key in self.aioredis_client.scan_iter(
+                    match="fact:*", count=10
+                ):
                     metadata_json = await self.aioredis_client.hget(key, "metadata")
                     if metadata_json:
                         try:
@@ -899,7 +1028,7 @@ class KnowledgeBaseV2:
         self,
         limit: Optional[int] = None,
         offset: int = 0,
-        collection: Optional[str] = None
+        collection: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve facts from Redis with optional pagination and filtering.
@@ -929,7 +1058,9 @@ class KnowledgeBaseV2:
             if limit:
                 fact_keys = fact_keys[:limit]
 
-            logger.debug(f"Retrieving {len(fact_keys)} facts (total={total_facts}, offset={offset}, limit={limit})")
+            logger.debug(
+                f"Retrieving {len(fact_keys)} facts (total={total_facts}, offset={offset}, limit={limit})"
+            )
 
             if not fact_keys:
                 return []
@@ -951,10 +1082,12 @@ class KnowledgeBaseV2:
 
                 try:
                     # Parse metadata
-                    metadata_raw = fact_data.get(b'metadata', b'{}')
+                    metadata_raw = fact_data.get(b"metadata", b"{}")
                     try:
                         metadata = json.loads(
-                            metadata_raw.decode('utf-8') if isinstance(metadata_raw, bytes) else metadata_raw
+                            metadata_raw.decode("utf-8")
+                            if isinstance(metadata_raw, bytes)
+                            else metadata_raw
                         )
                     except (json.JSONDecodeError, UnicodeDecodeError) as e:
                         logger.warning(f"Invalid metadata in {fact_key}: {e}")
@@ -967,8 +1100,12 @@ class KnowledgeBaseV2:
                             continue  # Skip facts not in requested collection
 
                     # Parse content
-                    content_raw = fact_data.get(b'content', b'')
-                    content = content_raw.decode('utf-8') if isinstance(content_raw, bytes) else str(content_raw)
+                    content_raw = fact_data.get(b"content", b"")
+                    content = (
+                        content_raw.decode("utf-8")
+                        if isinstance(content_raw, bytes)
+                        else str(content_raw)
+                    )
 
                     # Validate required fields
                     if not content:
@@ -981,7 +1118,9 @@ class KnowledgeBaseV2:
                         "metadata": metadata,
                         "source": metadata.get("source", ""),
                         "title": metadata.get("title", ""),
-                        "fact_id": metadata.get("fact_id", fact_key.replace("fact:", ""))
+                        "fact_id": metadata.get(
+                            "fact_id", fact_key.replace("fact:", "")
+                        ),
                     }
                     facts.append(fact)
 
@@ -992,7 +1131,9 @@ class KnowledgeBaseV2:
                     logger.exception(f"Error processing fact {fact_key}: {e}")
                     continue
 
-            logger.info(f"Retrieved {len(facts)} facts from Redis (filtered from {len(results)} results)")
+            logger.info(
+                f"Retrieved {len(facts)} facts from Redis (filtered from {len(results)} results)"
+            )
             return facts
 
         except redis.RedisError as e:
@@ -1020,4 +1161,6 @@ class KnowledgeBaseV2:
     def __del__(self):
         """Destructor - ensure cleanup"""
         if self.initialized:
-            logger.warning("KnowledgeBase instance deleted without proper cleanup - use await kb.close()")
+            logger.warning(
+                "KnowledgeBase instance deleted without proper cleanup - use await kb.close()"
+            )

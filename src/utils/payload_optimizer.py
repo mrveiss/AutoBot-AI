@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Request Payload Optimization for Claude API
-Prevents 413 errors and reduces API usage by analyzing and optimizing 
+Prevents 413 errors and reduces API usage by analyzing and optimizing
 request payloads through compression, summarization, and intelligent chunking.
 """
 
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class OptimizationResult:
     """Result of payload optimization"""
+
     original_size: int
     optimized_size: int
     chunks: List[Any]
@@ -32,7 +33,7 @@ class OptimizationResult:
 class PayloadOptimizer:
     """
     Intelligent payload optimization to prevent Claude API crashes.
-    
+
     Features:
     - Size analysis and warnings
     - Text compression and summarization
@@ -41,38 +42,40 @@ class PayloadOptimizer:
     - TodoWrite optimization
     """
 
-    def __init__(self, 
-                 max_size: int = 30000,
-                 warning_size: int = 20000,
-                 chunk_size: int = 15000,
-                 overlap_size: int = 500):
-        
+    def __init__(
+        self,
+        max_size: int = 30000,
+        warning_size: int = 20000,
+        chunk_size: int = 15000,
+        overlap_size: int = 500,
+    ):
+
         self.max_size = max_size
         self.warning_size = warning_size
         self.chunk_size = chunk_size
         self.overlap_size = overlap_size
-        
+
         # Optimization statistics
         self.total_optimizations = 0
         self.total_size_saved = 0
         self.compression_count = 0
         self.chunking_count = 0
-        
+
         logger.info(f"PayloadOptimizer initialized: max={max_size}, chunk={chunk_size}")
 
     def optimize_payload(self, payload: Any, context: str = "") -> OptimizationResult:
         """
         Optimize payload to prevent 413 errors and reduce API usage.
-        
+
         Args:
             payload: The payload to optimize
             context: Additional context about the payload type
-            
+
         Returns:
             OptimizationResult with optimized chunks and metadata
         """
         original_size = self._calculate_size(payload)
-        
+
         # Quick return if payload is already small
         if original_size <= self.warning_size:
             return OptimizationResult(
@@ -81,9 +84,9 @@ class PayloadOptimizer:
                 chunks=[payload],
                 optimization_type="none",
                 savings_percent=0.0,
-                needs_chunking=False
+                needs_chunking=False,
             )
-        
+
         # Apply appropriate optimization strategy
         if original_size > self.max_size:
             return self._chunk_payload(payload, original_size, context)
@@ -96,7 +99,7 @@ class PayloadOptimizer:
         Reduces verbose todo updates by using incremental changes.
         """
         original_size = self._calculate_size(todos)
-        
+
         if original_size <= self.warning_size:
             return OptimizationResult(
                 original_size=original_size,
@@ -104,54 +107,56 @@ class PayloadOptimizer:
                 chunks=[todos],
                 optimization_type="none",
                 savings_percent=0.0,
-                needs_chunking=False
+                needs_chunking=False,
             )
-        
+
         # Optimize todo structure
         optimized_todos = self._optimize_todo_structure(todos)
         optimized_size = self._calculate_size(optimized_todos)
-        
+
         # If still too large, chunk by priority
         if optimized_size > self.max_size:
             chunks = self._chunk_todos_by_priority(optimized_todos)
             total_chunked_size = sum(self._calculate_size(chunk) for chunk in chunks)
-            
+
             return OptimizationResult(
                 original_size=original_size,
                 optimized_size=total_chunked_size,
                 chunks=chunks,
                 optimization_type="todo_chunking",
-                savings_percent=((original_size - total_chunked_size) / original_size) * 100,
-                needs_chunking=True
+                savings_percent=((original_size - total_chunked_size) / original_size)
+                * 100,
+                needs_chunking=True,
             )
-        
+
         savings = ((original_size - optimized_size) / original_size) * 100
         self.total_optimizations += 1
-        self.total_size_saved += (original_size - optimized_size)
-        
+        self.total_size_saved += original_size - optimized_size
+
         return OptimizationResult(
             original_size=original_size,
             optimized_size=optimized_size,
             chunks=[optimized_todos],
             optimization_type="todo_optimization",
             savings_percent=savings,
-            needs_chunking=False
+            needs_chunking=False,
         )
 
-    def optimize_file_read_request(self, file_paths: List[str], 
-                                 max_files_per_chunk: int = 3) -> List[List[str]]:
+    def optimize_file_read_request(
+        self, file_paths: List[str], max_files_per_chunk: int = 3
+    ) -> List[List[str]]:
         """
         Optimize file reading requests to prevent large payloads.
         Chunks file lists to manageable sizes.
         """
         if len(file_paths) <= max_files_per_chunk:
             return [file_paths]
-        
+
         chunks = []
         for i in range(0, len(file_paths), max_files_per_chunk):
-            chunk = file_paths[i:i + max_files_per_chunk]
+            chunk = file_paths[i : i + max_files_per_chunk]
             chunks.append(chunk)
-        
+
         logger.info(f"Split {len(file_paths)} file reads into {len(chunks)} chunks")
         return chunks
 
@@ -159,18 +164,20 @@ class PayloadOptimizer:
         """Calculate payload size in bytes"""
         try:
             if isinstance(payload, str):
-                return len(payload.encode('utf-8'))
+                return len(payload.encode("utf-8"))
             elif isinstance(payload, dict):
-                return len(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+                return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
             elif isinstance(payload, (list, tuple)):
-                return len(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+                return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
             else:
-                return len(str(payload).encode('utf-8'))
+                return len(str(payload).encode("utf-8"))
         except Exception as e:
             logger.warning(f"Failed to calculate payload size: {e}")
             return 0
 
-    def _compress_payload(self, payload: Any, original_size: int, context: str) -> OptimizationResult:
+    def _compress_payload(
+        self, payload: Any, original_size: int, context: str
+    ) -> OptimizationResult:
         """Apply compression techniques to reduce payload size"""
         if isinstance(payload, str):
             compressed = self._compress_text(payload)
@@ -180,24 +187,26 @@ class PayloadOptimizer:
             compressed = self._compress_list(payload)
         else:
             compressed = payload
-        
+
         compressed_size = self._calculate_size(compressed)
         savings = ((original_size - compressed_size) / original_size) * 100
-        
+
         self.total_optimizations += 1
         self.compression_count += 1
-        self.total_size_saved += (original_size - compressed_size)
-        
+        self.total_size_saved += original_size - compressed_size
+
         return OptimizationResult(
             original_size=original_size,
             optimized_size=compressed_size,
             chunks=[compressed],
             optimization_type="compression",
             savings_percent=savings,
-            needs_chunking=False
+            needs_chunking=False,
         )
 
-    def _chunk_payload(self, payload: Any, original_size: int, context: str) -> OptimizationResult:
+    def _chunk_payload(
+        self, payload: Any, original_size: int, context: str
+    ) -> OptimizationResult:
         """Split large payload into manageable chunks"""
         if isinstance(payload, str):
             chunks = self._chunk_text(payload)
@@ -208,53 +217,55 @@ class PayloadOptimizer:
         else:
             # Fallback: convert to string and chunk
             chunks = self._chunk_text(str(payload))
-        
+
         total_chunked_size = sum(self._calculate_size(chunk) for chunk in chunks)
         savings = ((original_size - total_chunked_size) / original_size) * 100
-        
+
         self.total_optimizations += 1
         self.chunking_count += 1
-        
-        logger.info(f"Split payload into {len(chunks)} chunks, {savings:.1f}% size reduction")
-        
+
+        logger.info(
+            f"Split payload into {len(chunks)} chunks, {savings:.1f}% size reduction"
+        )
+
         return OptimizationResult(
             original_size=original_size,
             optimized_size=total_chunked_size,
             chunks=chunks,
             optimization_type="chunking",
             savings_percent=savings,
-            needs_chunking=True
+            needs_chunking=True,
         )
 
     def _compress_text(self, text: str) -> str:
         """Compress text by removing redundancy and unnecessary whitespace"""
         # Remove excessive whitespace
-        compressed = re.sub(r'\s+', ' ', text)
-        
+        compressed = re.sub(r"\s+", " ", text)
+
         # Remove redundant phrases
         redundant_patterns = [
-            r'\b(the|a|an)\s+',  # Articles
-            r'\b(very|really|quite|rather)\s+',  # Intensifiers
-            r'\s*(,|;)\s*',  # Punctuation spacing
+            r"\b(the|a|an)\s+",  # Articles
+            r"\b(very|really|quite|rather)\s+",  # Intensifiers
+            r"\s*(,|;)\s*",  # Punctuation spacing
         ]
-        
+
         for pattern in redundant_patterns:
-            compressed = re.sub(pattern, ' ', compressed, flags=re.IGNORECASE)
-        
+            compressed = re.sub(pattern, " ", compressed, flags=re.IGNORECASE)
+
         return compressed.strip()
 
     def _compress_dict(self, data: dict) -> dict:
         """Compress dictionary by removing empty values and shortening keys"""
         compressed = {}
-        
+
         for key, value in data.items():
             # Skip empty values
             if value in [None, "", [], {}]:
                 continue
-            
+
             # Shorten common keys
             short_key = self._shorten_key(key)
-            
+
             # Recursively compress nested structures
             if isinstance(value, dict):
                 compressed_value = self._compress_dict(value)
@@ -270,18 +281,18 @@ class PayloadOptimizer:
                     compressed[short_key] = compressed_value
             else:
                 compressed[short_key] = value
-        
+
         return compressed
 
     def _compress_list(self, data: list) -> list:
         """Compress list by removing duplicates and empty items"""
         compressed = []
         seen = set()
-        
+
         for item in data:
             if item in [None, "", {}, []]:
                 continue
-            
+
             # Handle duplicates for simple types
             if isinstance(item, (str, int, float, bool)):
                 if item not in seen:
@@ -299,49 +310,49 @@ class PayloadOptimizer:
                         compressed.append(compressed_item)
                 else:
                     compressed.append(item)
-        
+
         return compressed
 
     def _shorten_key(self, key: str) -> str:
         """Shorten dictionary keys to reduce payload size"""
         key_mappings = {
-            'description': 'desc',
-            'implementation': 'impl',
-            'verification': 'verify',
-            'dependencies': 'deps',
-            'activeForm': 'active',
-            'status': 'st',
-            'content': 'cnt',
-            'timestamp': 'ts',
-            'response': 'resp',
-            'request': 'req'
+            "description": "desc",
+            "implementation": "impl",
+            "verification": "verify",
+            "dependencies": "deps",
+            "activeForm": "active",
+            "status": "st",
+            "content": "cnt",
+            "timestamp": "ts",
+            "response": "resp",
+            "request": "req",
         }
-        
+
         return key_mappings.get(key, key)
 
     def _chunk_text(self, text: str) -> List[str]:
         """Split text into chunks with overlap for context preservation"""
         if len(text) <= self.chunk_size:
             return [text]
-        
+
         chunks = []
         start = 0
-        
+
         while start < len(text):
             end = min(start + self.chunk_size, len(text))
-            
+
             # Try to break at sentence boundaries
             if end < len(text):
-                sentence_break = text.rfind('.', start, end)
+                sentence_break = text.rfind(".", start, end)
                 if sentence_break > start + self.chunk_size // 2:
                     end = sentence_break + 1
-            
+
             chunk = text[start:end]
             chunks.append(chunk)
-            
+
             # Add overlap for context
             start = end - self.overlap_size if end < len(text) else end
-        
+
         return chunks
 
     def _chunk_list(self, data: list) -> List[List]:
@@ -349,110 +360,110 @@ class PayloadOptimizer:
         # Estimate items per chunk based on average item size
         if not data:
             return [data]
-        
-        sample_size = self._calculate_size(data[:min(5, len(data))])
+
+        sample_size = self._calculate_size(data[: min(5, len(data))])
         avg_item_size = sample_size / min(5, len(data))
         items_per_chunk = max(1, int(self.chunk_size / avg_item_size))
-        
+
         chunks = []
         for i in range(0, len(data), items_per_chunk):
-            chunk = data[i:i + items_per_chunk]
+            chunk = data[i : i + items_per_chunk]
             chunks.append(chunk)
-        
+
         return chunks
 
     def _chunk_dict(self, data: dict) -> List[Dict]:
         """Split dictionary into smaller dictionaries"""
         if len(data) <= 5:  # Small dict, don't chunk
             return [data]
-        
+
         items = list(data.items())
         chunk_size = max(3, len(items) // 3)  # Aim for 3 chunks
-        
+
         chunks = []
         for i in range(0, len(items), chunk_size):
-            chunk_items = items[i:i + chunk_size]
+            chunk_items = items[i : i + chunk_size]
             chunk_dict = dict(chunk_items)
             chunks.append(chunk_dict)
-        
+
         return chunks
 
     def _optimize_todo_structure(self, todos: List[Dict]) -> List[Dict]:
         """Optimize todo list structure to reduce size"""
         optimized = []
-        
+
         for todo in todos:
             optimized_todo = {}
-            
+
             # Use shortened keys
             for key, value in todo.items():
                 short_key = self._shorten_key(key)
-                
+
                 # Compress text fields
                 if isinstance(value, str):
                     optimized_todo[short_key] = self._compress_text(value)
                 else:
                     optimized_todo[short_key] = value
-            
+
             optimized.append(optimized_todo)
-        
+
         return optimized
 
     def _chunk_todos_by_priority(self, todos: List[Dict]) -> List[List[Dict]]:
         """Chunk todos by priority: in_progress, pending, completed"""
         chunks = []
-        
+
         # Group by status
-        status_groups = {'in_progress': [], 'pending': [], 'completed': []}
-        
+        status_groups = {"in_progress": [], "pending": [], "completed": []}
+
         for todo in todos:
-            status = todo.get('status', todo.get('st', 'pending'))
+            status = todo.get("status", todo.get("st", "pending"))
             if status in status_groups:
                 status_groups[status].append(todo)
             else:
-                status_groups['pending'].append(todo)
-        
+                status_groups["pending"].append(todo)
+
         # Create chunks prioritizing active work
         current_chunk = []
         current_size = 0
-        
+
         # Add in_progress first (highest priority)
-        for todo in status_groups['in_progress']:
+        for todo in status_groups["in_progress"]:
             todo_size = self._calculate_size(todo)
             if current_size + todo_size > self.chunk_size and current_chunk:
                 chunks.append(current_chunk)
                 current_chunk = []
                 current_size = 0
-            
+
             current_chunk.append(todo)
             current_size += todo_size
-        
+
         # Add pending
-        for todo in status_groups['pending']:
+        for todo in status_groups["pending"]:
             todo_size = self._calculate_size(todo)
             if current_size + todo_size > self.chunk_size and current_chunk:
                 chunks.append(current_chunk)
                 current_chunk = []
                 current_size = 0
-            
+
             current_chunk.append(todo)
             current_size += todo_size
-        
+
         # Add completed
-        for todo in status_groups['completed']:
+        for todo in status_groups["completed"]:
             todo_size = self._calculate_size(todo)
             if current_size + todo_size > self.chunk_size and current_chunk:
                 chunks.append(current_chunk)
                 current_chunk = []
                 current_size = 0
-            
+
             current_chunk.append(todo)
             current_size += todo_size
-        
+
         # Add final chunk
         if current_chunk:
             chunks.append(current_chunk)
-        
+
         return chunks if chunks else [[]]
 
     def get_optimization_stats(self) -> Dict[str, Any]:
@@ -462,13 +473,15 @@ class PayloadOptimizer:
             "total_size_saved": self.total_size_saved,
             "compression_count": self.compression_count,
             "chunking_count": self.chunking_count,
-            "average_savings": (self.total_size_saved / max(self.total_optimizations, 1)),
+            "average_savings": (
+                self.total_size_saved / max(self.total_optimizations, 1)
+            ),
             "settings": {
                 "max_size": self.max_size,
                 "warning_size": self.warning_size,
                 "chunk_size": self.chunk_size,
-                "overlap_size": self.overlap_size
-            }
+                "overlap_size": self.overlap_size,
+            },
         }
 
     def reset_stats(self):
@@ -507,11 +520,11 @@ def optimize_todowrite(todos: List[Dict]) -> OptimizationResult:
 if __name__ == "__main__":
     # Test payload optimization
     optimizer = PayloadOptimizer(max_size=1000, chunk_size=500)
-    
+
     # Test with large text
     large_text = "This is a very long text. " * 100
     result = optimizer.optimize_payload(large_text, "test_text")
-    
+
     print(f"Original size: {result.original_size}")
     print(f"Optimized size: {result.optimized_size}")
     print(f"Chunks: {len(result.chunks)}")

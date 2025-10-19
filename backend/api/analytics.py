@@ -28,6 +28,8 @@ from src.utils.system_metrics import get_metrics_collector
 from src.config_helper import cfg
 from src.constants import PATH
 from src.constants.network_constants import NetworkConstants
+
+
 # Simple service address function using configuration
 def get_service_address(service_name: str, port: int, protocol: str = "http") -> str:
     """Get standardized service address from config helper"""
@@ -39,6 +41,7 @@ def get_service_address(service_name: str, port: int, protocol: str = "http") ->
         host = "localhost"
     return f"{protocol}://{host}:{port}"
 
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])
 
@@ -49,15 +52,17 @@ analytics_state = {
     "performance_history": deque(maxlen=500),
     "communication_chains": defaultdict(list),
     "code_analysis_cache": {},
-    "last_analysis_time": None
+    "last_analysis_time": None,
 }
 
 # ============================================================================
 # PYDANTIC MODELS FOR ANALYTICS
 # ============================================================================
 
+
 class AnalyticsOverview(BaseModel):
     """Comprehensive analytics dashboard overview model"""
+
     timestamp: str
     system_health: Dict[str, Any]
     performance_metrics: Dict[str, Any]
@@ -67,8 +72,10 @@ class AnalyticsOverview(BaseModel):
     realtime_metrics: Dict[str, Any]
     trends: Dict[str, Any]
 
+
 class CommunicationPattern(BaseModel):
     """Communication pattern analysis model"""
+
     endpoint: str
     frequency: int
     avg_response_time: float
@@ -76,30 +83,40 @@ class CommunicationPattern(BaseModel):
     last_accessed: str
     pattern_type: str = Field(description="API, WebSocket, or Internal")
 
+
 class CodeAnalysisRequest(BaseModel):
     """Code analysis request model"""
+
     target_path: Optional[str] = Field(default_factory=lambda: str(PATH.PROJECT_ROOT))
-    analysis_type: str = Field(default="full", description="full, incremental, or communication_chains")
+    analysis_type: str = Field(
+        default="full", description="full, incremental, or communication_chains"
+    )
     include_metrics: bool = True
+
 
 class PerformanceMetrics(BaseModel):
     """Performance metrics model"""
+
     response_times: List[float]
     throughput: float
     error_rates: Dict[str, float]
     resource_utilization: Dict[str, float]
     bottlenecks: List[str]
 
+
 class RealTimeEvent(BaseModel):
     """Real-time analytics event model"""
+
     event_type: str
     timestamp: str
     data: Dict[str, Any]
     severity: str = "info"
 
+
 # ============================================================================
 # ANALYTICS CORE CLASS
 # ============================================================================
+
 
 class AnalyticsController:
     """Core analytics controller with comprehensive monitoring capabilities"""
@@ -129,7 +146,9 @@ class AnalyticsController:
             logger.error(f"Failed to get Redis connection for {database}: {e}")
             return None
 
-    async def track_api_call(self, endpoint: str, response_time: float, status_code: int):
+    async def track_api_call(
+        self, endpoint: str, response_time: float, status_code: int
+    ):
         """Track API call for pattern analysis"""
         timestamp = datetime.now().isoformat()
 
@@ -146,12 +165,14 @@ class AnalyticsController:
             self.error_counts[endpoint] += 1
 
         # Store in analytics state
-        analytics_state["api_call_patterns"].append({
-            "endpoint": endpoint,
-            "response_time": response_time,
-            "status_code": status_code,
-            "timestamp": timestamp
-        })
+        analytics_state["api_call_patterns"].append(
+            {
+                "endpoint": endpoint,
+                "response_time": response_time,
+                "status_code": status_code,
+                "timestamp": timestamp,
+            }
+        )
 
         # Store in Redis for persistence
         try:
@@ -159,14 +180,18 @@ class AnalyticsController:
             if redis_conn:
                 await redis_conn.lpush(
                     "analytics:api_calls",
-                    json.dumps({
-                        "endpoint": endpoint,
-                        "response_time": response_time,
-                        "status_code": status_code,
-                        "timestamp": timestamp
-                    })
+                    json.dumps(
+                        {
+                            "endpoint": endpoint,
+                            "response_time": response_time,
+                            "status_code": status_code,
+                            "timestamp": timestamp,
+                        }
+                    ),
                 )
-                await redis_conn.ltrim("analytics:api_calls", 0, 9999)  # Keep last 10k calls
+                await redis_conn.ltrim(
+                    "analytics:api_calls", 0, 9999
+                )  # Keep last 10k calls
         except Exception as e:
             logger.error(f"Failed to store API call analytics: {e}")
 
@@ -179,21 +204,23 @@ class AnalyticsController:
         for endpoint, frequency in self.api_frequencies.items():
             avg_response_time = (
                 sum(self.response_times[endpoint]) / len(self.response_times[endpoint])
-                if self.response_times[endpoint] else 0
+                if self.response_times[endpoint]
+                else 0
             )
             error_rate = (
-                self.error_counts[endpoint] / frequency * 100
-                if frequency > 0 else 0
+                self.error_counts[endpoint] / frequency * 100 if frequency > 0 else 0
             )
 
-            api_patterns.append(CommunicationPattern(
-                endpoint=endpoint,
-                frequency=frequency,
-                avg_response_time=avg_response_time,
-                error_rate=error_rate,
-                last_accessed=datetime.now().isoformat(),
-                pattern_type="API"
-            ))
+            api_patterns.append(
+                CommunicationPattern(
+                    endpoint=endpoint,
+                    frequency=frequency,
+                    avg_response_time=avg_response_time,
+                    error_rate=error_rate,
+                    last_accessed=datetime.now().isoformat(),
+                    pattern_type="API",
+                )
+            )
 
         # Sort by frequency
         api_patterns.sort(key=lambda x: x.frequency, reverse=True)
@@ -202,20 +229,21 @@ class AnalyticsController:
         patterns["websocket_activity"] = dict(self.websocket_activity)
         patterns["total_api_calls"] = sum(self.api_frequencies.values())
         patterns["unique_endpoints"] = len(self.api_frequencies)
-        patterns["avg_response_time"] = (
-            sum(sum(times) for times in self.response_times.values()) /
-            max(sum(len(times) for times in self.response_times.values()), 1)
-        )
+        patterns["avg_response_time"] = sum(
+            sum(times) for times in self.response_times.values()
+        ) / max(sum(len(times) for times in self.response_times.values()), 1)
 
         return patterns
 
-    async def perform_code_analysis(self, request: CodeAnalysisRequest) -> Dict[str, Any]:
+    async def perform_code_analysis(
+        self, request: CodeAnalysisRequest
+    ) -> Dict[str, Any]:
         """Perform code analysis using integrated tools"""
         analysis_results = {
             "status": "success",
             "timestamp": datetime.now().isoformat(),
             "analysis_type": request.analysis_type,
-            "target_path": request.target_path
+            "target_path": request.target_path,
         }
 
         try:
@@ -230,7 +258,10 @@ class AnalyticsController:
                 await self._run_code_analysis_suite(request, analysis_results)
 
             # Run code indexing if available
-            if self.code_index_path.exists() and request.analysis_type in ["full", "incremental"]:
+            if self.code_index_path.exists() and request.analysis_type in [
+                "full",
+                "incremental",
+            ]:
                 await self._run_code_indexing(request, analysis_results)
 
             # Store results in cache
@@ -244,14 +275,18 @@ class AnalyticsController:
 
         return analysis_results
 
-    async def _run_code_analysis_suite(self, request: CodeAnalysisRequest, results: Dict):
+    async def _run_code_analysis_suite(
+        self, request: CodeAnalysisRequest, results: Dict
+    ):
         """Run the code analysis suite"""
         try:
             cmd = [
                 "python3",
                 str(self.code_analysis_path / "scripts" / "analyze_project.py"),
-                "--target", request.target_path,
-                "--output-format", "json"
+                "--target",
+                request.target_path,
+                "--output-format",
+                "json",
             ]
 
             if request.analysis_type == "communication_chains":
@@ -261,7 +296,7 @@ class AnalyticsController:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(self.code_analysis_path)
+                cwd=str(self.code_analysis_path),
             )
 
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
@@ -269,7 +304,9 @@ class AnalyticsController:
             if process.returncode == 0:
                 analysis_data = json.loads(stdout.decode())
                 results["code_analysis"] = analysis_data
-                results["communication_chains"] = analysis_data.get("communication_patterns", {})
+                results["communication_chains"] = analysis_data.get(
+                    "communication_patterns", {}
+                )
             else:
                 results["code_analysis_error"] = stderr.decode()
 
@@ -284,15 +321,17 @@ class AnalyticsController:
             cmd = [
                 "python3",
                 str(self.code_index_path / "run.py"),
-                "--index-path", request.target_path,
-                "--output-format", "json"
+                "--index-path",
+                request.target_path,
+                "--output-format",
+                "json",
             ]
 
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(self.code_index_path)
+                cwd=str(self.code_index_path),
             )
 
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=180)
@@ -304,7 +343,7 @@ class AnalyticsController:
                     "total_files": index_data.get("file_count", 0),
                     "total_lines": index_data.get("line_count", 0),
                     "languages": index_data.get("languages", {}),
-                    "complexity_score": index_data.get("complexity", 0)
+                    "complexity_score": index_data.get("complexity", 0),
                 }
             else:
                 results["code_index_error"] = stderr.decode()
@@ -332,7 +371,9 @@ class AnalyticsController:
                 "cpu_percent": cpu_percent,
                 "memory_percent": memory.percent,
                 "disk_percent": (disk.used / disk.total) * 100,
-                "load_average": psutil.getloadavg() if hasattr(psutil, "getloadavg") else [0, 0, 0]
+                "load_average": (
+                    psutil.getloadavg() if hasattr(psutil, "getloadavg") else [0, 0, 0]
+                ),
             }
 
             # API performance from tracking
@@ -344,7 +385,15 @@ class AnalyticsController:
                         "min_response_time": min(times),
                         "max_response_time": max(times),
                         "total_calls": self.api_frequencies[endpoint],
-                        "error_rate": (self.error_counts[endpoint] / self.api_frequencies[endpoint] * 100) if self.api_frequencies[endpoint] > 0 else 0
+                        "error_rate": (
+                            (
+                                self.error_counts[endpoint]
+                                / self.api_frequencies[endpoint]
+                                * 100
+                            )
+                            if self.api_frequencies[endpoint] > 0
+                            else 0
+                        ),
                     }
 
             metrics["api_performance"] = api_performance
@@ -358,7 +407,7 @@ class AnalyticsController:
                 "gpu": gpu_status,
                 "npu": npu_status,
                 "gpu_utilization": gpu_status.get("utilization_percent", 0),
-                "gpu_memory_usage": gpu_status.get("memory_utilization_percent", 0)
+                "gpu_memory_usage": gpu_status.get("memory_utilization_percent", 0),
             }
 
             # Network and I/O
@@ -367,7 +416,7 @@ class AnalyticsController:
                 "bytes_sent": network.bytes_sent,
                 "bytes_recv": network.bytes_recv,
                 "packets_sent": network.packets_sent,
-                "packets_recv": network.packets_recv
+                "packets_recv": network.packets_recv,
             }
 
         except Exception as e:
@@ -384,9 +433,7 @@ class AnalyticsController:
             # API usage statistics
             total_calls = sum(self.api_frequencies.values())
             most_used_endpoints = sorted(
-                self.api_frequencies.items(),
-                key=lambda x: x[1],
-                reverse=True
+                self.api_frequencies.items(), key=lambda x: x[1], reverse=True
             )[:10]
 
             stats["api_usage"] = {
@@ -397,13 +444,17 @@ class AnalyticsController:
                     for endpoint, calls in most_used_endpoints
                 ],
                 "total_errors": sum(self.error_counts.values()),
-                "overall_error_rate": (sum(self.error_counts.values()) / total_calls * 100) if total_calls > 0 else 0
+                "overall_error_rate": (
+                    (sum(self.error_counts.values()) / total_calls * 100)
+                    if total_calls > 0
+                    else 0
+                ),
             }
 
             # WebSocket usage
             stats["websocket_usage"] = {
                 "active_connections": len(analytics_state["websocket_connections"]),
-                "activity_by_type": dict(self.websocket_activity)
+                "activity_by_type": dict(self.websocket_activity),
             }
 
             # System uptime and resource usage
@@ -413,7 +464,7 @@ class AnalyticsController:
             stats["system_usage"] = {
                 "uptime_hours": uptime_seconds / 3600,
                 "processes_count": len(psutil.pids()),
-                "active_users": len(psutil.users()) if hasattr(psutil, "users") else 0
+                "active_users": len(psutil.users()) if hasattr(psutil, "users") else 0,
             }
 
             # Knowledge base usage (if available)
@@ -423,7 +474,8 @@ class AnalyticsController:
                     kb_info = await redis_conn.info()
                     stats["knowledge_base_usage"] = {
                         "keys_count": kb_info.get("db1", {}).get("keys", 0),
-                        "memory_usage_mb": kb_info.get("used_memory", 0) / (1024 * 1024)
+                        "memory_usage_mb": kb_info.get("used_memory", 0)
+                        / (1024 * 1024),
                     }
             except Exception:
                 stats["knowledge_base_usage"] = {"error": "Unable to retrieve KB stats"}
@@ -444,13 +496,18 @@ class AnalyticsController:
                 recent_performance = list(analytics_state["performance_history"])[-50:]
 
                 # Calculate trends
-                cpu_trend = self._calculate_trend([p.get("cpu_percent", 0) for p in recent_performance])
-                memory_trend = self._calculate_trend([p.get("memory_percent", 0) for p in recent_performance])
+                cpu_trend = self._calculate_trend(
+                    [p.get("cpu_percent", 0) for p in recent_performance]
+                )
+                memory_trend = self._calculate_trend(
+                    [p.get("memory_percent", 0) for p in recent_performance]
+                )
 
                 trends["performance_trends"] = {
                     "cpu_trend": cpu_trend,
                     "memory_trend": memory_trend,
-                    "trend_period_minutes": len(recent_performance) * 2  # Assuming 2-minute intervals
+                    "trend_period_minutes": len(recent_performance)
+                    * 2,  # Assuming 2-minute intervals
                 }
 
             # API usage trends
@@ -462,14 +519,16 @@ class AnalyticsController:
                 trends["api_trends"] = {
                     "response_time_trend": response_time_trend,
                     "recent_calls_count": len(recent_calls),
-                    "avg_response_time": sum(response_times) / len(response_times)
+                    "avg_response_time": sum(response_times) / len(response_times),
                 }
 
             # Error trends
             error_calls = [call for call in recent_calls if call["status_code"] >= 400]
             trends["error_trends"] = {
-                "recent_error_rate": len(error_calls) / len(recent_calls) * 100 if recent_calls else 0,
-                "total_recent_errors": len(error_calls)
+                "recent_error_rate": (
+                    len(error_calls) / len(recent_calls) * 100 if recent_calls else 0
+                ),
+                "total_recent_errors": len(error_calls),
             }
 
         except Exception as e:
@@ -484,13 +543,15 @@ class AnalyticsController:
             return "stable"
 
         # Simple linear trend calculation
-        first_half = values[:len(values)//2]
-        second_half = values[len(values)//2:]
+        first_half = values[: len(values) // 2]
+        second_half = values[len(values) // 2 :]
 
         first_avg = sum(first_half) / len(first_half)
         second_avg = sum(second_half) / len(second_half)
 
-        change_percent = ((second_avg - first_avg) / first_avg * 100) if first_avg > 0 else 0
+        change_percent = (
+            ((second_avg - first_avg) / first_avg * 100) if first_avg > 0 else 0
+        )
 
         if abs(change_percent) < 5:
             return "stable"
@@ -499,12 +560,14 @@ class AnalyticsController:
         else:
             return "decreasing"
 
+
 # Global analytics controller instance
 analytics_controller = AnalyticsController()
 
 # ============================================================================
 # DASHBOARD OVERVIEW ENDPOINTS
 # ============================================================================
+
 
 @router.get("/dashboard/overview", response_model=AnalyticsOverview)
 async def get_dashboard_overview():
@@ -520,13 +583,19 @@ async def get_dashboard_overview():
         trends_task = analytics_controller.detect_trends()
 
         # Wait for all tasks to complete
-        system_health, performance_metrics, communication_patterns, usage_statistics, trends = await asyncio.gather(
+        (
+            system_health,
+            performance_metrics,
+            communication_patterns,
+            usage_statistics,
+            trends,
+        ) = await asyncio.gather(
             system_health_task,
             performance_task,
             communication_task,
             usage_task,
             trends_task,
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         # Handle any exceptions
@@ -544,12 +613,14 @@ async def get_dashboard_overview():
         # Get real-time metrics from existing monitoring
         realtime_metrics = {}
         try:
-            current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
+            current_metrics = (
+                await analytics_controller.metrics_collector.collect_all_metrics()
+            )
             realtime_metrics = {
                 name: {
                     "value": metric.value,
                     "unit": metric.unit,
-                    "category": metric.category
+                    "category": metric.category,
                 }
                 for name, metric in current_metrics.items()
             }
@@ -562,8 +633,8 @@ async def get_dashboard_overview():
             "cache_available": bool(analytics_state.get("code_analysis_cache")),
             "tools_available": {
                 "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-                "code_index_mcp": analytics_controller.code_index_path.exists()
-            }
+                "code_index_mcp": analytics_controller.code_index_path.exists(),
+            },
         }
 
         overview = AnalyticsOverview(
@@ -574,14 +645,17 @@ async def get_dashboard_overview():
             code_analysis_status=code_analysis_status,
             usage_statistics=usage_statistics,
             realtime_metrics=realtime_metrics,
-            trends=trends
+            trends=trends,
         )
 
         return overview
 
     except Exception as e:
         logger.error(f"Failed to get dashboard overview: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get dashboard overview: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get dashboard overview: {str(e)}"
+        )
+
 
 @router.get("/system/health-detailed")
 async def get_detailed_system_health():
@@ -597,10 +671,10 @@ async def get_detailed_system_health():
                 "api_tracking_active": len(analytics_state["api_call_patterns"]) > 0,
                 "websocket_connections": len(analytics_state["websocket_connections"]),
                 "performance_tracking": len(analytics_state["performance_history"]) > 0,
-                "redis_connectivity": {}
+                "redis_connectivity": {},
             },
             "service_connectivity": {},
-            "resource_alerts": []
+            "resource_alerts": [],
         }
 
         # Check Redis connectivity for all databases
@@ -609,58 +683,76 @@ async def get_detailed_system_health():
                 redis_conn = await analytics_controller.get_redis_connection(db)
                 if redis_conn:
                     await redis_conn.ping()
-                    detailed_health["analytics_health"]["redis_connectivity"][db.name] = "connected"
+                    detailed_health["analytics_health"]["redis_connectivity"][
+                        db.name
+                    ] = "connected"
                 else:
-                    detailed_health["analytics_health"]["redis_connectivity"][db.name] = "failed"
+                    detailed_health["analytics_health"]["redis_connectivity"][
+                        db.name
+                    ] = "failed"
             except Exception as e:
-                detailed_health["analytics_health"]["redis_connectivity"][db.name] = f"error: {str(e)}"
+                detailed_health["analytics_health"]["redis_connectivity"][
+                    db.name
+                ] = f"error: {str(e)}"
 
         # Check service connectivity
         services = {
             "ollama": get_service_address("ollama", NetworkConstants.OLLAMA_PORT),
             "frontend": get_service_address("frontend", NetworkConstants.FRONTEND_PORT),
-            "redis": get_service_address("redis", NetworkConstants.REDIS_PORT)
+            "redis": get_service_address("redis", NetworkConstants.REDIS_PORT),
         }
 
         for service_name, service_url in services.items():
             try:
                 if service_name == "redis":
                     # Redis check is already done above
-                    detailed_health["service_connectivity"][service_name] = "checked_via_redis"
+                    detailed_health["service_connectivity"][
+                        service_name
+                    ] = "checked_via_redis"
                 else:
                     response = requests.get(f"{service_url}/health", timeout=5)
                     detailed_health["service_connectivity"][service_name] = {
-                        "status": "healthy" if response.status_code == 200 else "unhealthy",
+                        "status": (
+                            "healthy" if response.status_code == 200 else "unhealthy"
+                        ),
                         "response_time": response.elapsed.total_seconds(),
-                        "status_code": response.status_code
+                        "status_code": response.status_code,
                     }
             except Exception as e:
                 detailed_health["service_connectivity"][service_name] = {
                     "status": "unreachable",
-                    "error": str(e)
+                    "error": str(e),
                 }
 
         # Resource alerts
         system_resources = hardware_monitor.get_system_resources()
-        if "cpu" in system_resources and system_resources["cpu"]["percent_overall"] > 90:
-            detailed_health["resource_alerts"].append({
-                "type": "cpu_high",
-                "message": f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%",
-                "severity": "warning"
-            })
+        if (
+            "cpu" in system_resources
+            and system_resources["cpu"]["percent_overall"] > 90
+        ):
+            detailed_health["resource_alerts"].append(
+                {
+                    "type": "cpu_high",
+                    "message": f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%",
+                    "severity": "warning",
+                }
+            )
 
         if "memory" in system_resources and system_resources["memory"]["percent"] > 90:
-            detailed_health["resource_alerts"].append({
-                "type": "memory_high",
-                "message": f"Memory usage at {system_resources['memory']['percent']:.1f}%",
-                "severity": "warning"
-            })
+            detailed_health["resource_alerts"].append(
+                {
+                    "type": "memory_high",
+                    "message": f"Memory usage at {system_resources['memory']['percent']:.1f}%",
+                    "severity": "warning",
+                }
+            )
 
         return detailed_health
 
     except Exception as e:
         logger.error(f"Failed to get detailed system health: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/performance/metrics")
 async def get_performance_metrics():
@@ -673,16 +765,24 @@ async def get_performance_metrics():
             recent_history = list(analytics_state["performance_history"])[-10:]
             metrics["historical_context"] = {
                 "samples_count": len(recent_history),
-                "avg_cpu_last_10": sum(h.get("cpu_percent", 0) for h in recent_history) / len(recent_history),
-                "avg_memory_last_10": sum(h.get("memory_percent", 0) for h in recent_history) / len(recent_history)
+                "avg_cpu_last_10": sum(h.get("cpu_percent", 0) for h in recent_history)
+                / len(recent_history),
+                "avg_memory_last_10": sum(
+                    h.get("memory_percent", 0) for h in recent_history
+                )
+                / len(recent_history),
             }
 
         # Store current metrics in history
         current_snapshot = {
             "timestamp": datetime.now().isoformat(),
             "cpu_percent": metrics.get("system_performance", {}).get("cpu_percent", 0),
-            "memory_percent": metrics.get("system_performance", {}).get("memory_percent", 0),
-            "gpu_utilization": metrics.get("hardware_performance", {}).get("gpu_utilization", 0)
+            "memory_percent": metrics.get("system_performance", {}).get(
+                "memory_percent", 0
+            ),
+            "gpu_utilization": metrics.get("hardware_performance", {}).get(
+                "gpu_utilization", 0
+            ),
         }
         analytics_state["performance_history"].append(current_snapshot)
 
@@ -692,9 +792,11 @@ async def get_performance_metrics():
         logger.error(f"Failed to get performance metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ============================================================================
 # COMMUNICATION PATTERN ANALYSIS ENDPOINTS
 # ============================================================================
+
 
 @router.get("/communication/patterns")
 async def get_communication_patterns():
@@ -710,35 +812,40 @@ async def get_communication_patterns():
         if patterns["api_patterns"]:
             # Find high-frequency, high-latency endpoints
             high_latency_endpoints = [
-                p for p in patterns["api_patterns"]
+                p
+                for p in patterns["api_patterns"]
                 if p["avg_response_time"] > 1.0 and p["frequency"] > 10
             ]
 
             if high_latency_endpoints:
-                patterns["pattern_insights"].append({
-                    "type": "performance_concern",
-                    "message": f"Found {len(high_latency_endpoints)} high-frequency endpoints with high latency",
-                    "details": high_latency_endpoints[:3]  # Show top 3
-                })
+                patterns["pattern_insights"].append(
+                    {
+                        "type": "performance_concern",
+                        "message": f"Found {len(high_latency_endpoints)} high-frequency endpoints with high latency",
+                        "details": high_latency_endpoints[:3],  # Show top 3
+                    }
+                )
 
             # Find endpoints with high error rates
             high_error_endpoints = [
-                p for p in patterns["api_patterns"]
-                if p["error_rate"] > 5.0
+                p for p in patterns["api_patterns"] if p["error_rate"] > 5.0
             ]
 
             if high_error_endpoints:
-                patterns["pattern_insights"].append({
-                    "type": "reliability_concern",
-                    "message": f"Found {len(high_error_endpoints)} endpoints with high error rates",
-                    "details": high_error_endpoints[:3]
-                })
+                patterns["pattern_insights"].append(
+                    {
+                        "type": "reliability_concern",
+                        "message": f"Found {len(high_error_endpoints)} endpoints with high error rates",
+                        "details": high_error_endpoints[:3],
+                    }
+                )
 
         return patterns
 
     except Exception as e:
         logger.error(f"Failed to get communication patterns: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/usage/statistics")
 async def get_usage_statistics():
@@ -748,9 +855,11 @@ async def get_usage_statistics():
 
         # Add time-based analysis
         stats["analysis_period"] = {
-            "start_time": analytics_state.get("session_start", datetime.now().isoformat()),
+            "start_time": analytics_state.get(
+                "session_start", datetime.now().isoformat()
+            ),
             "current_time": datetime.now().isoformat(),
-            "data_points": len(analytics_state["api_call_patterns"])
+            "data_points": len(analytics_state["api_call_patterns"]),
         }
 
         return stats
@@ -759,9 +868,11 @@ async def get_usage_statistics():
         logger.error(f"Failed to get usage statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ============================================================================
 # CODE ANALYSIS INTEGRATION ENDPOINTS
 # ============================================================================
+
 
 @router.post("/code/index")
 async def index_codebase(request: CodeAnalysisRequest):
@@ -769,7 +880,10 @@ async def index_codebase(request: CodeAnalysisRequest):
     try:
         # Validate request
         if not Path(request.target_path).exists():
-            raise HTTPException(status_code=400, detail=f"Target path does not exist: {request.target_path}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Target path does not exist: {request.target_path}",
+            )
 
         # Perform analysis
         results = await analytics_controller.perform_code_analysis(request)
@@ -778,12 +892,13 @@ async def index_codebase(request: CodeAnalysisRequest):
             "status": "completed",
             "request": request.dict(),
             "results": results,
-            "cached_for_reuse": True
+            "cached_for_reuse": True,
         }
 
     except Exception as e:
         logger.error(f"Failed to index codebase: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/code/status")
 async def get_code_analysis_status():
@@ -792,27 +907,31 @@ async def get_code_analysis_status():
         status = {
             "tools_available": {
                 "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-                "code_index_mcp": analytics_controller.code_index_path.exists()
+                "code_index_mcp": analytics_controller.code_index_path.exists(),
             },
             "last_analysis_time": analytics_state.get("last_analysis_time"),
             "cache_status": {
                 "has_cached_results": bool(analytics_state.get("code_analysis_cache")),
-                "cache_timestamp": analytics_state.get("last_analysis_time")
+                "cache_timestamp": analytics_state.get("last_analysis_time"),
             },
-            "supported_analysis_types": ["full", "incremental", "communication_chains"]
+            "supported_analysis_types": ["full", "incremental", "communication_chains"],
         }
 
         # Add tool details if available
         if analytics_controller.code_analysis_path.exists():
             status["code_analysis_suite"] = {
                 "path": str(analytics_controller.code_analysis_path),
-                "scripts_available": list(analytics_controller.code_analysis_path.glob("scripts/*.py"))
+                "scripts_available": list(
+                    analytics_controller.code_analysis_path.glob("scripts/*.py")
+                ),
             }
 
         if analytics_controller.code_index_path.exists():
             status["code_index_mcp"] = {
                 "path": str(analytics_controller.code_index_path),
-                "config_available": (analytics_controller.code_index_path / "pyproject.toml").exists()
+                "config_available": (
+                    analytics_controller.code_index_path / "pyproject.toml"
+                ).exists(),
             }
 
         return status
@@ -820,6 +939,7 @@ async def get_code_analysis_status():
     except Exception as e:
         logger.error(f"Failed to get code analysis status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/quality/assessment")
 async def get_code_quality_assessment():
@@ -837,7 +957,7 @@ async def get_code_quality_assessment():
             "complexity": 85,
             "security": 75,
             "performance": 80,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # If we have cached analysis, use it
@@ -853,17 +973,28 @@ async def get_code_quality_assessment():
 
             # Calculate maintainability
             maintainability = code_data.get("maintainability", "good")
-            maintainability_scores = {"excellent": 95, "good": 80, "fair": 65, "poor": 40}
-            quality_assessment["maintainability"] = maintainability_scores.get(maintainability, 80)
+            maintainability_scores = {
+                "excellent": 95,
+                "good": 80,
+                "fair": 65,
+                "poor": 40,
+            }
+            quality_assessment["maintainability"] = maintainability_scores.get(
+                maintainability, 80
+            )
 
             # Overall score is average of all factors
             quality_assessment["overall_score"] = round(
-                (quality_assessment["maintainability"] +
-                 quality_assessment["testability"] +
-                 quality_assessment["documentation"] +
-                 quality_assessment["complexity"] +
-                 quality_assessment["security"] +
-                 quality_assessment["performance"]) / 6, 1
+                (
+                    quality_assessment["maintainability"]
+                    + quality_assessment["testability"]
+                    + quality_assessment["documentation"]
+                    + quality_assessment["complexity"]
+                    + quality_assessment["security"]
+                    + quality_assessment["performance"]
+                )
+                / 6,
+                1,
             )
 
         return quality_assessment
@@ -879,8 +1010,9 @@ async def get_code_quality_assessment():
             "complexity": 85,
             "security": 75,
             "performance": 80,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
+
 
 @router.get("/code/quality-metrics")
 async def get_code_quality_metrics():
@@ -892,7 +1024,7 @@ async def get_code_quality_metrics():
             return {
                 "status": "no_analysis_available",
                 "message": "No cached code analysis found. Run /code/index first.",
-                "suggestion": "POST /api/analytics/code/index with analysis_type='full'"
+                "suggestion": "POST /api/analytics/code/index with analysis_type='full'",
             }
 
         # Extract quality metrics
@@ -900,7 +1032,7 @@ async def get_code_quality_metrics():
             "analysis_timestamp": cached_analysis.get("timestamp"),
             "codebase_metrics": cached_analysis.get("codebase_metrics", {}),
             "quality_indicators": {},
-            "recommendations": []
+            "recommendations": [],
         }
 
         # Process code analysis results if available
@@ -911,29 +1043,34 @@ async def get_code_quality_metrics():
                 "complexity_score": code_data.get("complexity", 0),
                 "maintainability": code_data.get("maintainability", "unknown"),
                 "test_coverage": code_data.get("test_coverage", 0),
-                "documentation_coverage": code_data.get("doc_coverage", 0)
+                "documentation_coverage": code_data.get("doc_coverage", 0),
             }
 
             # Generate recommendations
             if code_data.get("complexity", 0) > 7:
-                quality_metrics["recommendations"].append({
-                    "type": "complexity",
-                    "message": "High complexity detected. Consider refactoring complex functions.",
-                    "priority": "medium"
-                })
+                quality_metrics["recommendations"].append(
+                    {
+                        "type": "complexity",
+                        "message": "High complexity detected. Consider refactoring complex functions.",
+                        "priority": "medium",
+                    }
+                )
 
             if code_data.get("test_coverage", 0) < 70:
-                quality_metrics["recommendations"].append({
-                    "type": "testing",
-                    "message": "Low test coverage. Consider adding more unit tests.",
-                    "priority": "high"
-                })
+                quality_metrics["recommendations"].append(
+                    {
+                        "type": "testing",
+                        "message": "Low test coverage. Consider adding more unit tests.",
+                        "priority": "high",
+                    }
+                )
 
         return quality_metrics
 
     except Exception as e:
         logger.error(f"Failed to get code quality metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/code/communication-chains")
 async def get_communication_chains():
@@ -945,7 +1082,7 @@ async def get_communication_chains():
             return {
                 "status": "no_analysis_available",
                 "message": "No communication chain analysis found.",
-                "suggestion": "POST /api/analytics/code/index with analysis_type='communication_chains'"
+                "suggestion": "POST /api/analytics/code/index with analysis_type='communication_chains'",
             }
 
         chains = cached_analysis["communication_chains"]
@@ -955,7 +1092,7 @@ async def get_communication_chains():
             "static_analysis": chains,
             "runtime_patterns": dict(analytics_controller.communication_chains),
             "correlation_analysis": {},
-            "insights": []
+            "insights": [],
         }
 
         # Correlate static and runtime patterns
@@ -968,28 +1105,33 @@ async def get_communication_chains():
                     "static_detected": True,
                     "runtime_calls": runtime_patterns[endpoint],
                     "avg_response_time": (
-                        sum(analytics_controller.response_times[endpoint]) /
-                        len(analytics_controller.response_times[endpoint])
-                        if analytics_controller.response_times[endpoint] else 0
-                    )
+                        sum(analytics_controller.response_times[endpoint])
+                        / len(analytics_controller.response_times[endpoint])
+                        if analytics_controller.response_times[endpoint]
+                        else 0
+                    ),
                 }
 
         # Generate insights
         unused_endpoints = [ep for ep in static_endpoints if ep not in runtime_patterns]
         if unused_endpoints:
-            enhanced_chains["insights"].append({
-                "type": "unused_endpoints",
-                "message": f"Found {len(unused_endpoints)} endpoints that are defined but not used",
-                "details": unused_endpoints[:5]
-            })
+            enhanced_chains["insights"].append(
+                {
+                    "type": "unused_endpoints",
+                    "message": f"Found {len(unused_endpoints)} endpoints that are defined but not used",
+                    "details": unused_endpoints[:5],
+                }
+            )
 
         runtime_only = [ep for ep in runtime_patterns if ep not in static_endpoints]
         if runtime_only:
-            enhanced_chains["insights"].append({
-                "type": "undocumented_endpoints",
-                "message": f"Found {len(runtime_only)} endpoints in use but not in static analysis",
-                "details": runtime_only[:5]
-            })
+            enhanced_chains["insights"].append(
+                {
+                    "type": "undocumented_endpoints",
+                    "message": f"Found {len(runtime_only)} endpoints in use but not in static analysis",
+                    "details": runtime_only[:5],
+                }
+            )
 
         return enhanced_chains
 
@@ -997,16 +1139,20 @@ async def get_communication_chains():
         logger.error(f"Failed to get communication chains: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ============================================================================
 # REAL-TIME ANALYTICS ENDPOINTS
 # ============================================================================
+
 
 @router.get("/realtime/metrics")
 async def get_realtime_metrics():
     """Get current real-time metrics snapshot"""
     try:
         # Get current system metrics
-        current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
+        current_metrics = (
+            await analytics_controller.metrics_collector.collect_all_metrics()
+        )
         system_resources = hardware_monitor.get_system_resources()
 
         realtime_data = {
@@ -1016,21 +1162,27 @@ async def get_realtime_metrics():
                     "value": metric.value,
                     "unit": metric.unit,
                     "category": metric.category,
-                    "metadata": metric.metadata
+                    "metadata": metric.metadata,
                 }
                 for name, metric in current_metrics.items()
             },
             "system_resources": system_resources,
             "active_connections": len(analytics_state["websocket_connections"]),
-            "recent_api_calls": len([
-                call for call in analytics_state["api_call_patterns"]
-                if datetime.fromisoformat(call["timestamp"]) > datetime.now() - timedelta(minutes=1)
-            ]),
+            "recent_api_calls": len(
+                [
+                    call
+                    for call in analytics_state["api_call_patterns"]
+                    if datetime.fromisoformat(call["timestamp"])
+                    > datetime.now() - timedelta(minutes=1)
+                ]
+            ),
             "performance_snapshot": {
-                "cpu_percent": system_resources.get("cpu", {}).get("percent_overall", 0),
+                "cpu_percent": system_resources.get("cpu", {}).get(
+                    "percent_overall", 0
+                ),
                 "memory_percent": system_resources.get("memory", {}).get("percent", 0),
-                "disk_percent": system_resources.get("disk", {}).get("percent", 0)
-            }
+                "disk_percent": system_resources.get("disk", {}).get("percent", 0),
+            },
         }
 
         return realtime_data
@@ -1038,6 +1190,7 @@ async def get_realtime_metrics():
     except Exception as e:
         logger.error(f"Failed to get realtime metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/events/track")
 async def track_analytics_event(event: RealTimeEvent):
@@ -1048,12 +1201,11 @@ async def track_analytics_event(event: RealTimeEvent):
         event_data["processed_at"] = datetime.now().isoformat()
 
         # Store in Redis for persistence
-        redis_conn = await analytics_controller.get_redis_connection(RedisDatabase.METRICS)
+        redis_conn = await analytics_controller.get_redis_connection(
+            RedisDatabase.METRICS
+        )
         if redis_conn:
-            await redis_conn.lpush(
-                "analytics:events",
-                json.dumps(event_data)
-            )
+            await redis_conn.lpush("analytics:events", json.dumps(event_data))
             await redis_conn.ltrim("analytics:events", 0, 9999)  # Keep last 10k events
 
         # Update tracking based on event type
@@ -1061,7 +1213,9 @@ async def track_analytics_event(event: RealTimeEvent):
             endpoint = event.data.get("endpoint", "unknown")
             response_time = event.data.get("response_time", 0)
             status_code = event.data.get("status_code", 200)
-            await analytics_controller.track_api_call(endpoint, response_time, status_code)
+            await analytics_controller.track_api_call(
+                endpoint, response_time, status_code
+            )
 
         elif event.event_type == "websocket_activity":
             activity_type = event.data.get("activity_type", "unknown")
@@ -1069,10 +1223,7 @@ async def track_analytics_event(event: RealTimeEvent):
 
         # Broadcast to connected WebSocket clients
         if analytics_state["websocket_connections"]:
-            broadcast_data = {
-                "type": "analytics_event",
-                "event": event_data
-            }
+            broadcast_data = {"type": "analytics_event", "event": event_data}
             disconnected = set()
 
             for websocket in analytics_state["websocket_connections"]:
@@ -1087,12 +1238,13 @@ async def track_analytics_event(event: RealTimeEvent):
         return {
             "status": "tracked",
             "event_id": f"{event.event_type}_{event.timestamp}",
-            "broadcast_count": len(analytics_state["websocket_connections"])
+            "broadcast_count": len(analytics_state["websocket_connections"]),
         }
 
     except Exception as e:
         logger.error(f"Failed to track analytics event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/trends/historical")
 async def get_historical_trends(
@@ -1103,7 +1255,9 @@ async def get_historical_trends(
         trends = await analytics_controller.detect_trends()
 
         # Enhance with Redis historical data
-        redis_conn = await analytics_controller.get_redis_connection(RedisDatabase.METRICS)
+        redis_conn = await analytics_controller.get_redis_connection(
+            RedisDatabase.METRICS
+        )
         historical_data = {"trends": trends}
 
         if redis_conn:
@@ -1125,12 +1279,16 @@ async def get_historical_trends(
                 # Analyze historical patterns
                 if historical_calls:
                     # Group by hour
-                    hourly_stats = defaultdict(lambda: {"calls": 0, "avg_response_time": 0, "errors": 0})
+                    hourly_stats = defaultdict(
+                        lambda: {"calls": 0, "avg_response_time": 0, "errors": 0}
+                    )
 
                     for call in historical_calls:
                         hour_key = call["timestamp"][:13]  # YYYY-MM-DDTHH
                         hourly_stats[hour_key]["calls"] += 1
-                        hourly_stats[hour_key]["avg_response_time"] += call["response_time"]
+                        hourly_stats[hour_key]["avg_response_time"] += call[
+                            "response_time"
+                        ]
                         if call["status_code"] >= 400:
                             hourly_stats[hour_key]["errors"] += 1
 
@@ -1138,7 +1296,9 @@ async def get_historical_trends(
                     for hour_data in hourly_stats.values():
                         if hour_data["calls"] > 0:
                             hour_data["avg_response_time"] /= hour_data["calls"]
-                            hour_data["error_rate"] = hour_data["errors"] / hour_data["calls"] * 100
+                            hour_data["error_rate"] = (
+                                hour_data["errors"] / hour_data["calls"] * 100
+                            )
 
                     historical_data["hourly_patterns"] = dict(hourly_stats)
                     historical_data["analysis_period_hours"] = hours
@@ -1153,9 +1313,11 @@ async def get_historical_trends(
         logger.error(f"Failed to get historical trends: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ============================================================================
 # WEBSOCKET REAL-TIME ANALYTICS STREAMING
 # ============================================================================
+
 
 @router.websocket("/ws/realtime")
 async def websocket_realtime_analytics(websocket: WebSocket):
@@ -1167,57 +1329,75 @@ async def websocket_realtime_analytics(websocket: WebSocket):
         logger.info("Analytics WebSocket connected")
 
         # Send initial connection confirmation
-        await websocket.send_json({
-            "type": "connected",
-            "message": "Real-time analytics streaming connected",
-            "timestamp": datetime.now().isoformat()
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "message": "Real-time analytics streaming connected",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         # Start streaming loop
         while True:
             try:
                 # Wait for client message or timeout for periodic updates
                 try:
-                    message = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+                    message = await asyncio.wait_for(
+                        websocket.receive_text(), timeout=10.0
+                    )
 
                     # Handle client commands
                     try:
                         command = json.loads(message)
                         if command.get("type") == "subscribe":
                             # Client subscribing to specific metrics
-                            await websocket.send_json({
-                                "type": "subscription_confirmed",
-                                "subscribed_to": command.get("metrics", "all"),
-                                "timestamp": datetime.now().isoformat()
-                            })
+                            await websocket.send_json(
+                                {
+                                    "type": "subscription_confirmed",
+                                    "subscribed_to": command.get("metrics", "all"),
+                                    "timestamp": datetime.now().isoformat(),
+                                }
+                            )
                         elif command.get("type") == "get_current":
                             # Client requesting current snapshot
                             current_data = await get_realtime_metrics()
-                            await websocket.send_json({
-                                "type": "current_snapshot",
-                                "data": current_data,
-                                "timestamp": datetime.now().isoformat()
-                            })
+                            await websocket.send_json(
+                                {
+                                    "type": "current_snapshot",
+                                    "data": current_data,
+                                    "timestamp": datetime.now().isoformat(),
+                                }
+                            )
                     except json.JSONDecodeError:
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "Invalid JSON in client message",
-                            "timestamp": datetime.now().isoformat()
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "message": "Invalid JSON in client message",
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
 
                 except asyncio.TimeoutError:
                     # Periodic update - send current metrics
                     try:
                         current_data = await get_realtime_metrics()
-                        await websocket.send_json({
-                            "type": "periodic_update",
-                            "data": {
-                                "performance_snapshot": current_data["performance_snapshot"],
-                                "active_connections": current_data["active_connections"],
-                                "recent_api_calls": current_data["recent_api_calls"]
-                            },
-                            "timestamp": datetime.now().isoformat()
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "periodic_update",
+                                "data": {
+                                    "performance_snapshot": current_data[
+                                        "performance_snapshot"
+                                    ],
+                                    "active_connections": current_data[
+                                        "active_connections"
+                                    ],
+                                    "recent_api_calls": current_data[
+                                        "recent_api_calls"
+                                    ],
+                                },
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
                     except Exception as e:
                         logger.error(f"Failed to send periodic update: {e}")
                         break
@@ -1228,11 +1408,13 @@ async def websocket_realtime_analytics(websocket: WebSocket):
             except Exception as e:
                 logger.error(f"Error in analytics WebSocket: {e}")
                 try:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": str(e),
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": str(e),
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
                 except Exception:
                     break
 
@@ -1242,9 +1424,11 @@ async def websocket_realtime_analytics(websocket: WebSocket):
         analytics_state["websocket_connections"].discard(websocket)
         logger.info("Analytics WebSocket disconnected and cleaned up")
 
+
 # ============================================================================
 # UTILITY AND MANAGEMENT ENDPOINTS
 # ============================================================================
+
 
 @router.post("/collection/start")
 async def start_analytics_collection():
@@ -1263,12 +1447,13 @@ async def start_analytics_collection():
             "status": "started",
             "message": "Analytics collection started successfully",
             "session_id": analytics_state["session_start"],
-            "metrics_collection": collector._is_collecting
+            "metrics_collection": collector._is_collecting,
         }
 
     except Exception as e:
         logger.error(f"Failed to start analytics collection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/collection/stop")
 async def stop_analytics_collection():
@@ -1282,12 +1467,13 @@ async def stop_analytics_collection():
         return {
             "status": "stopped",
             "message": "Analytics collection stopped successfully",
-            "session_duration": analytics_state.get("session_start", "unknown")
+            "session_duration": analytics_state.get("session_start", "unknown"),
         }
 
     except Exception as e:
         logger.error(f"Failed to stop analytics collection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/status")
 async def get_analytics_status():
@@ -1301,25 +1487,29 @@ async def get_analytics_status():
             "collection_status": {
                 "is_collecting": collector._is_collecting,
                 "buffer_size": len(collector._metrics_buffer),
-                "retention_hours": collector._retention_hours
+                "retention_hours": collector._retention_hours,
             },
             "websocket_status": {
                 "active_connections": len(analytics_state["websocket_connections"]),
-                "total_events_tracked": len(analytics_state["api_call_patterns"])
+                "total_events_tracked": len(analytics_state["api_call_patterns"]),
             },
             "data_status": {
                 "api_patterns_tracked": len(analytics_state["api_call_patterns"]),
-                "performance_history_points": len(analytics_state["performance_history"]),
+                "performance_history_points": len(
+                    analytics_state["performance_history"]
+                ),
                 "communication_chains": len(analytics_controller.communication_chains),
-                "cached_code_analysis": bool(analytics_state.get("code_analysis_cache"))
+                "cached_code_analysis": bool(
+                    analytics_state.get("code_analysis_cache")
+                ),
             },
             "integration_status": {
                 "redis_connectivity": {},
                 "code_analysis_tools": {
                     "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-                    "code_index_mcp": analytics_controller.code_index_path.exists()
-                }
-            }
+                    "code_index_mcp": analytics_controller.code_index_path.exists(),
+                },
+            },
         }
 
         # Check Redis connectivity
@@ -1328,11 +1518,17 @@ async def get_analytics_status():
                 redis_conn = await analytics_controller.get_redis_connection(db)
                 if redis_conn:
                     await redis_conn.ping()
-                    status["integration_status"]["redis_connectivity"][db.name] = "connected"
+                    status["integration_status"]["redis_connectivity"][
+                        db.name
+                    ] = "connected"
                 else:
-                    status["integration_status"]["redis_connectivity"][db.name] = "failed"
+                    status["integration_status"]["redis_connectivity"][
+                        db.name
+                    ] = "failed"
             except Exception as e:
-                status["integration_status"]["redis_connectivity"][db.name] = f"error: {str(e)}"
+                status["integration_status"]["redis_connectivity"][
+                    db.name
+                ] = f"error: {str(e)}"
 
         return status
 
@@ -1340,9 +1536,11 @@ async def get_analytics_status():
         logger.error(f"Failed to get analytics status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ============================================================================
 # PHASE 9 MONITORING DASHBOARD ENDPOINTS
 # ============================================================================
+
 
 @router.get("/monitoring/phase9/status")
 async def get_monitoring_status():
@@ -1351,22 +1549,28 @@ async def get_monitoring_status():
         collector = analytics_controller.metrics_collector
 
         status = {
-            "active": collector._is_collecting if hasattr(collector, '_is_collecting') else True,
+            "active": (
+                collector._is_collecting
+                if hasattr(collector, "_is_collecting")
+                else True
+            ),
             "timestamp": datetime.now().isoformat(),
             "components": {
                 "gpu_monitoring": True,
                 "npu_monitoring": True,
                 "analytics_collection": True,
-                "websocket_streaming": len(analytics_state["websocket_connections"]) > 0
+                "websocket_streaming": len(analytics_state["websocket_connections"])
+                > 0,
             },
             "version": "Phase9",
-            "uptime_seconds": time.time() - psutil.boot_time()
+            "uptime_seconds": time.time() - psutil.boot_time(),
         }
 
         return status
     except Exception as e:
         logger.error(f"Failed to get Phase 9 monitoring status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/monitoring/phase9/dashboard")
 async def get_phase9_dashboard_data():
@@ -1379,9 +1583,15 @@ async def get_phase9_dashboard_data():
         system_health = await hardware_monitor.get_system_health()
 
         # Calculate overall health score
-        cpu_health = 100 - performance_data.get("system_performance", {}).get("cpu_percent", 0)
-        memory_health = 100 - performance_data.get("system_performance", {}).get("memory_percent", 0)
-        gpu_health = 100 - performance_data.get("hardware_performance", {}).get("gpu_utilization", 0)
+        cpu_health = 100 - performance_data.get("system_performance", {}).get(
+            "cpu_percent", 0
+        )
+        memory_health = 100 - performance_data.get("system_performance", {}).get(
+            "memory_percent", 0
+        )
+        gpu_health = 100 - performance_data.get("hardware_performance", {}).get(
+            "gpu_utilization", 0
+        )
 
         overall_score = (cpu_health + memory_health + gpu_health) / 3
 
@@ -1389,28 +1599,53 @@ async def get_phase9_dashboard_data():
             "timestamp": datetime.now().isoformat(),
             "overall_health": {
                 "score": round(overall_score, 1),
-                "status": "excellent" if overall_score > 80 else "good" if overall_score > 60 else "warning" if overall_score > 40 else "critical",
-                "text": "Excellent" if overall_score > 80 else "Good" if overall_score > 60 else "Warning" if overall_score > 40 else "Critical"
+                "status": (
+                    "excellent"
+                    if overall_score > 80
+                    else (
+                        "good"
+                        if overall_score > 60
+                        else "warning" if overall_score > 40 else "critical"
+                    )
+                ),
+                "text": (
+                    "Excellent"
+                    if overall_score > 80
+                    else (
+                        "Good"
+                        if overall_score > 60
+                        else "Warning" if overall_score > 40 else "Critical"
+                    )
+                ),
             },
-            "gpu_metrics": performance_data.get("hardware_performance", {}).get("gpu", {}),
-            "npu_metrics": performance_data.get("hardware_performance", {}).get("npu", {}),
+            "gpu_metrics": performance_data.get("hardware_performance", {}).get(
+                "gpu", {}
+            ),
+            "npu_metrics": performance_data.get("hardware_performance", {}).get(
+                "npu", {}
+            ),
             "system_metrics": {
                 "cpu": performance_data.get("system_performance", {}),
                 "memory": performance_data.get("system_performance", {}),
-                "network": performance_data.get("network_io", {})
+                "network": performance_data.get("network_io", {}),
             },
             "api_performance": performance_data.get("api_performance", {}),
             "active_connections": len(analytics_state["websocket_connections"]),
-            "recent_api_calls": len([
-                call for call in analytics_state["api_call_patterns"]
-                if datetime.fromisoformat(call["timestamp"]) > datetime.now() - timedelta(minutes=5)
-            ])
+            "recent_api_calls": len(
+                [
+                    call
+                    for call in analytics_state["api_call_patterns"]
+                    if datetime.fromisoformat(call["timestamp"])
+                    > datetime.now() - timedelta(minutes=5)
+                ]
+            ),
         }
 
         return dashboard_data
     except Exception as e:
         logger.error(f"Failed to get Phase 9 dashboard data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/monitoring/phase9/alerts")
 async def get_phase9_alerts():
@@ -1422,80 +1657,98 @@ async def get_phase9_alerts():
         performance_data = await analytics_controller.collect_performance_metrics()
 
         # CPU alerts
-        cpu_percent = performance_data.get("system_performance", {}).get("cpu_percent", 0)
+        cpu_percent = performance_data.get("system_performance", {}).get(
+            "cpu_percent", 0
+        )
         if cpu_percent > 90:
-            alerts.append({
-                "id": f"cpu_high_{int(time.time())}",
-                "type": "cpu",
-                "severity": "critical",
-                "title": "High CPU Usage",
-                "message": f"CPU usage is at {cpu_percent:.1f}%",
-                "timestamp": datetime.now().isoformat(),
-                "value": cpu_percent,
-                "threshold": 90
-            })
+            alerts.append(
+                {
+                    "id": f"cpu_high_{int(time.time())}",
+                    "type": "cpu",
+                    "severity": "critical",
+                    "title": "High CPU Usage",
+                    "message": f"CPU usage is at {cpu_percent:.1f}%",
+                    "timestamp": datetime.now().isoformat(),
+                    "value": cpu_percent,
+                    "threshold": 90,
+                }
+            )
         elif cpu_percent > 75:
-            alerts.append({
-                "id": f"cpu_warn_{int(time.time())}",
-                "type": "cpu",
-                "severity": "warning",
-                "title": "Elevated CPU Usage",
-                "message": f"CPU usage is at {cpu_percent:.1f}%",
-                "timestamp": datetime.now().isoformat(),
-                "value": cpu_percent,
-                "threshold": 75
-            })
+            alerts.append(
+                {
+                    "id": f"cpu_warn_{int(time.time())}",
+                    "type": "cpu",
+                    "severity": "warning",
+                    "title": "Elevated CPU Usage",
+                    "message": f"CPU usage is at {cpu_percent:.1f}%",
+                    "timestamp": datetime.now().isoformat(),
+                    "value": cpu_percent,
+                    "threshold": 75,
+                }
+            )
 
         # Memory alerts
-        memory_percent = performance_data.get("system_performance", {}).get("memory_percent", 0)
+        memory_percent = performance_data.get("system_performance", {}).get(
+            "memory_percent", 0
+        )
         if memory_percent > 90:
-            alerts.append({
-                "id": f"memory_high_{int(time.time())}",
-                "type": "memory",
-                "severity": "critical",
-                "title": "High Memory Usage",
-                "message": f"Memory usage is at {memory_percent:.1f}%",
-                "timestamp": datetime.now().isoformat(),
-                "value": memory_percent,
-                "threshold": 90
-            })
+            alerts.append(
+                {
+                    "id": f"memory_high_{int(time.time())}",
+                    "type": "memory",
+                    "severity": "critical",
+                    "title": "High Memory Usage",
+                    "message": f"Memory usage is at {memory_percent:.1f}%",
+                    "timestamp": datetime.now().isoformat(),
+                    "value": memory_percent,
+                    "threshold": 90,
+                }
+            )
 
         # GPU alerts
-        gpu_util = performance_data.get("hardware_performance", {}).get("gpu_utilization", 0)
+        gpu_util = performance_data.get("hardware_performance", {}).get(
+            "gpu_utilization", 0
+        )
         if gpu_util > 95:
-            alerts.append({
-                "id": f"gpu_high_{int(time.time())}",
-                "type": "gpu",
-                "severity": "warning",
-                "title": "High GPU Utilization",
-                "message": f"GPU utilization is at {gpu_util:.1f}%",
-                "timestamp": datetime.now().isoformat(),
-                "value": gpu_util,
-                "threshold": 95
-            })
+            alerts.append(
+                {
+                    "id": f"gpu_high_{int(time.time())}",
+                    "type": "gpu",
+                    "severity": "warning",
+                    "title": "High GPU Utilization",
+                    "message": f"GPU utilization is at {gpu_util:.1f}%",
+                    "timestamp": datetime.now().isoformat(),
+                    "value": gpu_util,
+                    "threshold": 95,
+                }
+            )
 
         # API performance alerts
         api_performance = performance_data.get("api_performance", {})
         slow_endpoints = [
-            endpoint for endpoint, data in api_performance.items()
+            endpoint
+            for endpoint, data in api_performance.items()
             if data.get("avg_response_time", 0) > 5.0
         ]
 
         if slow_endpoints:
-            alerts.append({
-                "id": f"api_slow_{int(time.time())}",
-                "type": "api_performance",
-                "severity": "warning",
-                "title": "Slow API Endpoints",
-                "message": f"{len(slow_endpoints)} endpoints have high response times",
-                "timestamp": datetime.now().isoformat(),
-                "details": slow_endpoints[:3]
-            })
+            alerts.append(
+                {
+                    "id": f"api_slow_{int(time.time())}",
+                    "type": "api_performance",
+                    "severity": "warning",
+                    "title": "Slow API Endpoints",
+                    "message": f"{len(slow_endpoints)} endpoints have high response times",
+                    "timestamp": datetime.now().isoformat(),
+                    "details": slow_endpoints[:3],
+                }
+            )
 
         return alerts
     except Exception as e:
         logger.error(f"Failed to get Phase 9 alerts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/monitoring/phase9/optimization/recommendations")
 async def get_phase9_optimization_recommendations():
@@ -1505,81 +1758,96 @@ async def get_phase9_optimization_recommendations():
 
         # Get current performance data
         performance_data = await analytics_controller.collect_performance_metrics()
-        communication_patterns = await analytics_controller.analyze_communication_patterns()
+        communication_patterns = (
+            await analytics_controller.analyze_communication_patterns()
+        )
 
         # CPU optimization recommendations
-        cpu_percent = performance_data.get("system_performance", {}).get("cpu_percent", 0)
+        cpu_percent = performance_data.get("system_performance", {}).get(
+            "cpu_percent", 0
+        )
         if cpu_percent > 80:
-            recommendations.append({
-                "type": "cpu_optimization",
-                "priority": "high",
-                "title": "Optimize CPU Usage",
-                "description": "CPU usage is consistently high. Consider optimizing background processes.",
-                "impact": "High",
-                "estimated_improvement": "15-25% performance boost",
-                "actions": [
-                    "Review running processes and terminate unnecessary ones",
-                    "Optimize async operations to reduce CPU blocking",
-                    "Consider scaling horizontally with additional VMs"
-                ]
-            })
+            recommendations.append(
+                {
+                    "type": "cpu_optimization",
+                    "priority": "high",
+                    "title": "Optimize CPU Usage",
+                    "description": "CPU usage is consistently high. Consider optimizing background processes.",
+                    "impact": "High",
+                    "estimated_improvement": "15-25% performance boost",
+                    "actions": [
+                        "Review running processes and terminate unnecessary ones",
+                        "Optimize async operations to reduce CPU blocking",
+                        "Consider scaling horizontally with additional VMs",
+                    ],
+                }
+            )
 
         # Memory optimization recommendations
-        memory_percent = performance_data.get("system_performance", {}).get("memory_percent", 0)
+        memory_percent = performance_data.get("system_performance", {}).get(
+            "memory_percent", 0
+        )
         if memory_percent > 80:
-            recommendations.append({
-                "type": "memory_optimization",
-                "priority": "medium",
-                "title": "Optimize Memory Usage",
-                "description": "Memory usage is high. Consider memory optimization strategies.",
-                "impact": "Medium",
-                "estimated_improvement": "10-20% memory reduction",
-                "actions": [
-                    "Clear Redis caches for unused data",
-                    "Optimize knowledge base vector storage",
-                    "Implement memory pooling for frequent operations"
-                ]
-            })
+            recommendations.append(
+                {
+                    "type": "memory_optimization",
+                    "priority": "medium",
+                    "title": "Optimize Memory Usage",
+                    "description": "Memory usage is high. Consider memory optimization strategies.",
+                    "impact": "Medium",
+                    "estimated_improvement": "10-20% memory reduction",
+                    "actions": [
+                        "Clear Redis caches for unused data",
+                        "Optimize knowledge base vector storage",
+                        "Implement memory pooling for frequent operations",
+                    ],
+                }
+            )
 
         # API optimization recommendations
         if communication_patterns.get("avg_response_time", 0) > 2.0:
-            recommendations.append({
-                "type": "api_optimization",
-                "priority": "high",
-                "title": "Optimize API Response Times",
-                "description": f"Average API response time is {communication_patterns.get('avg_response_time', 0):.2f}s",
-                "impact": "High",
-                "estimated_improvement": "50-70% faster responses",
-                "actions": [
-                    "Implement response caching for frequently requested data",
-                    "Optimize database queries and indexing",
-                    "Add connection pooling for external services"
-                ]
-            })
+            recommendations.append(
+                {
+                    "type": "api_optimization",
+                    "priority": "high",
+                    "title": "Optimize API Response Times",
+                    "description": f"Average API response time is {communication_patterns.get('avg_response_time', 0):.2f}s",
+                    "impact": "High",
+                    "estimated_improvement": "50-70% faster responses",
+                    "actions": [
+                        "Implement response caching for frequently requested data",
+                        "Optimize database queries and indexing",
+                        "Add connection pooling for external services",
+                    ],
+                }
+            )
 
         # Code analysis recommendations
         cached_analysis = analytics_state.get("code_analysis_cache")
         if cached_analysis and "code_analysis" in cached_analysis:
             complexity = cached_analysis["code_analysis"].get("complexity", 0)
             if complexity > 7:
-                recommendations.append({
-                    "type": "code_quality",
-                    "priority": "medium",
-                    "title": "Reduce Code Complexity",
-                    "description": f"Code complexity score is {complexity}/10",
-                    "impact": "Medium",
-                    "estimated_improvement": "Better maintainability and performance",
-                    "actions": [
-                        "Refactor complex functions into smaller components",
-                        "Extract common patterns into utility functions",
-                        "Implement proper error handling patterns"
-                    ]
-                })
+                recommendations.append(
+                    {
+                        "type": "code_quality",
+                        "priority": "medium",
+                        "title": "Reduce Code Complexity",
+                        "description": f"Code complexity score is {complexity}/10",
+                        "impact": "Medium",
+                        "estimated_improvement": "Better maintainability and performance",
+                        "actions": [
+                            "Refactor complex functions into smaller components",
+                            "Extract common patterns into utility functions",
+                            "Implement proper error handling patterns",
+                        ],
+                    }
+                )
 
         return recommendations
     except Exception as e:
         logger.error(f"Failed to get Phase 9 optimization recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/monitoring/phase9/start")
 async def start_monitoring():
@@ -1587,7 +1855,7 @@ async def start_monitoring():
     try:
         # Start metrics collection
         collector = analytics_controller.metrics_collector
-        if hasattr(collector, '_is_collecting') and not collector._is_collecting:
+        if hasattr(collector, "_is_collecting") and not collector._is_collecting:
             asyncio.create_task(collector.start_collection())
 
         # Initialize session tracking
@@ -1596,11 +1864,12 @@ async def start_monitoring():
         return {
             "status": "started",
             "message": "Phase 9 monitoring started successfully",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Failed to start Phase 9 monitoring: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/monitoring/phase9/stop")
 async def stop_monitoring():
@@ -1608,17 +1877,18 @@ async def stop_monitoring():
     try:
         # Stop metrics collection
         collector = analytics_controller.metrics_collector
-        if hasattr(collector, '_is_collecting') and collector._is_collecting:
+        if hasattr(collector, "_is_collecting") and collector._is_collecting:
             await collector.stop_collection()
 
         return {
             "status": "stopped",
             "message": "Phase 9 monitoring stopped successfully",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Failed to stop Phase 9 monitoring: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/monitoring/phase9/metrics/query")
 async def query_phase9_metrics(query_request: dict):
@@ -1628,7 +1898,9 @@ async def query_phase9_metrics(query_request: dict):
         time_range = query_request.get("time_range", 3600)  # 1 hour default
 
         # Get current metrics
-        current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
+        current_metrics = (
+            await analytics_controller.metrics_collector.collect_all_metrics()
+        )
 
         # Filter by metric name if specified
         if metric_name != "all" and metric_name in current_metrics:
@@ -1651,7 +1923,7 @@ async def query_phase9_metrics(query_request: dict):
                     "value": metric.value,
                     "unit": metric.unit,
                     "category": metric.category,
-                    "timestamp": metric.timestamp
+                    "timestamp": metric.timestamp,
                 }
                 for name, metric in filtered_metrics.items()
             },
@@ -1660,16 +1932,18 @@ async def query_phase9_metrics(query_request: dict):
                 "metric": metric_name,
                 "time_range_seconds": time_range,
                 "results_count": len(filtered_metrics),
-                "historical_points": len(historical_data)
-            }
+                "historical_points": len(historical_data),
+            },
         }
     except Exception as e:
         logger.error(f"Failed to query Phase 9 metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ============================================================================
 # ENHANCED CODE ANALYSIS INTEGRATION
 # ============================================================================
+
 
 @router.post("/code/analyze/communication-chains")
 async def analyze_communication_chains_detailed():
@@ -1677,8 +1951,7 @@ async def analyze_communication_chains_detailed():
     try:
         # Run communication chain analysis
         analysis_request = CodeAnalysisRequest(
-            analysis_type="communication_chains",
-            include_metrics=True
+            analysis_type="communication_chains", include_metrics=True
         )
 
         results = await analytics_controller.perform_code_analysis(analysis_request)
@@ -1696,13 +1969,17 @@ async def analyze_communication_chains_detailed():
                     "static_detected": True,
                     "runtime_calls": runtime_patterns.get(endpoint, 0),
                     "avg_response_time": (
-                        sum(analytics_controller.response_times.get(endpoint, [])) /
-                        max(len(analytics_controller.response_times.get(endpoint, [])), 1)
+                        sum(analytics_controller.response_times.get(endpoint, []))
+                        / max(
+                            len(analytics_controller.response_times.get(endpoint, [])),
+                            1,
+                        )
                     ),
                     "error_rate": (
-                        analytics_controller.error_counts.get(endpoint, 0) /
-                        max(runtime_patterns.get(endpoint, 1), 1) * 100
-                    )
+                        analytics_controller.error_counts.get(endpoint, 0)
+                        / max(runtime_patterns.get(endpoint, 1), 1)
+                        * 100
+                    ),
                 }
 
             results["runtime_correlation"] = correlation_data
@@ -1710,35 +1987,40 @@ async def analyze_communication_chains_detailed():
 
             # Generate insights
             unused_endpoints = [
-                ep for ep in static_patterns.get("api_endpoints", [])
+                ep
+                for ep in static_patterns.get("api_endpoints", [])
                 if ep not in runtime_patterns
             ]
 
             if unused_endpoints:
-                results["insights"].append({
-                    "type": "unused_endpoints",
-                    "count": len(unused_endpoints),
-                    "endpoints": unused_endpoints[:10],
-                    "recommendation": "Consider removing unused endpoints or adding tests"
-                })
+                results["insights"].append(
+                    {
+                        "type": "unused_endpoints",
+                        "count": len(unused_endpoints),
+                        "endpoints": unused_endpoints[:10],
+                        "recommendation": "Consider removing unused endpoints or adding tests",
+                    }
+                )
 
             high_error_endpoints = [
-                ep for ep, data in correlation_data.items()
-                if data["error_rate"] > 5.0
+                ep for ep, data in correlation_data.items() if data["error_rate"] > 5.0
             ]
 
             if high_error_endpoints:
-                results["insights"].append({
-                    "type": "high_error_endpoints",
-                    "count": len(high_error_endpoints),
-                    "endpoints": high_error_endpoints,
-                    "recommendation": "Investigate and fix endpoints with high error rates"
-                })
+                results["insights"].append(
+                    {
+                        "type": "high_error_endpoints",
+                        "count": len(high_error_endpoints),
+                        "endpoints": high_error_endpoints,
+                        "recommendation": "Investigate and fix endpoints with high error rates",
+                    }
+                )
 
         return results
     except Exception as e:
         logger.error(f"Failed to analyze communication chains: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/code/metrics/quality-score")
 async def get_code_quality_score():
@@ -1749,7 +2031,9 @@ async def get_code_quality_score():
         if not cached_analysis:
             # Trigger new analysis
             analysis_request = CodeAnalysisRequest(analysis_type="full")
-            cached_analysis = await analytics_controller.perform_code_analysis(analysis_request)
+            cached_analysis = await analytics_controller.perform_code_analysis(
+                analysis_request
+            )
 
         # Calculate quality score
         quality_factors = {
@@ -1757,7 +2041,7 @@ async def get_code_quality_score():
             "maintainability": 0,
             "test_coverage": 0,
             "documentation": 0,
-            "security": 0
+            "security": 0,
         }
 
         if "code_analysis" in cached_analysis:
@@ -1775,8 +2059,15 @@ async def get_code_quality_score():
 
             # Maintainability (convert to numeric)
             maintainability = code_data.get("maintainability", "poor")
-            maintainability_scores = {"excellent": 95, "good": 80, "fair": 65, "poor": 40}
-            quality_factors["maintainability"] = maintainability_scores.get(maintainability, 40)
+            maintainability_scores = {
+                "excellent": 95,
+                "good": 80,
+                "fair": 65,
+                "poor": 40,
+            }
+            quality_factors["maintainability"] = maintainability_scores.get(
+                maintainability, 40
+            )
 
             # Security score (placeholder - would need security analysis)
             quality_factors["security"] = 75  # Default security score
@@ -1786,19 +2077,33 @@ async def get_code_quality_score():
 
         return {
             "overall_score": round(overall_score, 1),
-            "grade": "A" if overall_score >= 90 else "B" if overall_score >= 80 else "C" if overall_score >= 70 else "D" if overall_score >= 60 else "F",
+            "grade": (
+                "A"
+                if overall_score >= 90
+                else (
+                    "B"
+                    if overall_score >= 80
+                    else (
+                        "C"
+                        if overall_score >= 70
+                        else "D" if overall_score >= 60 else "F"
+                    )
+                )
+            ),
             "quality_factors": quality_factors,
             "recommendations": [],
             "last_analysis": cached_analysis.get("timestamp"),
-            "codebase_metrics": cached_analysis.get("codebase_metrics", {})
+            "codebase_metrics": cached_analysis.get("codebase_metrics", {}),
         }
     except Exception as e:
         logger.error(f"Failed to get code quality score: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ============================================================================
 # ENHANCED REAL-TIME ANALYTICS
 # ============================================================================
+
 
 @router.websocket("/ws/analytics/live")
 async def websocket_live_analytics(websocket: WebSocket):
@@ -1810,11 +2115,13 @@ async def websocket_live_analytics(websocket: WebSocket):
         logger.info("Live analytics WebSocket connected")
 
         # Send initial connection data
-        await websocket.send_json({
-            "type": "connection_established",
-            "channels": ["performance", "api_activity", "system_health", "alerts"],
-            "timestamp": datetime.now().isoformat()
-        })
+        await websocket.send_json(
+            {
+                "type": "connection_established",
+                "channels": ["performance", "api_activity", "system_health", "alerts"],
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         # Start streaming loop with different update frequencies
         last_performance_update = 0
@@ -1828,17 +2135,29 @@ async def websocket_live_analytics(websocket: WebSocket):
                 # Performance updates (every 5 seconds)
                 if current_time - last_performance_update > 5:
                     try:
-                        performance_data = await analytics_controller.collect_performance_metrics()
-                        await websocket.send_json({
-                            "type": "performance_update",
-                            "data": {
-                                "cpu_percent": performance_data.get("system_performance", {}).get("cpu_percent", 0),
-                                "memory_percent": performance_data.get("system_performance", {}).get("memory_percent", 0),
-                                "gpu_utilization": performance_data.get("hardware_performance", {}).get("gpu_utilization", 0),
-                                "active_connections": len(analytics_state["websocket_connections"])
-                            },
-                            "timestamp": datetime.now().isoformat()
-                        })
+                        performance_data = (
+                            await analytics_controller.collect_performance_metrics()
+                        )
+                        await websocket.send_json(
+                            {
+                                "type": "performance_update",
+                                "data": {
+                                    "cpu_percent": performance_data.get(
+                                        "system_performance", {}
+                                    ).get("cpu_percent", 0),
+                                    "memory_percent": performance_data.get(
+                                        "system_performance", {}
+                                    ).get("memory_percent", 0),
+                                    "gpu_utilization": performance_data.get(
+                                        "hardware_performance", {}
+                                    ).get("gpu_utilization", 0),
+                                    "active_connections": len(
+                                        analytics_state["websocket_connections"]
+                                    ),
+                                },
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
                         last_performance_update = current_time
                     except Exception as e:
                         logger.error(f"Performance update error: {e}")
@@ -1847,19 +2166,25 @@ async def websocket_live_analytics(websocket: WebSocket):
                 if current_time - last_api_update > 2:
                     try:
                         recent_calls = [
-                            call for call in analytics_state["api_call_patterns"]
-                            if datetime.fromisoformat(call["timestamp"]) > datetime.now() - timedelta(seconds=10)
+                            call
+                            for call in analytics_state["api_call_patterns"]
+                            if datetime.fromisoformat(call["timestamp"])
+                            > datetime.now() - timedelta(seconds=10)
                         ]
 
-                        await websocket.send_json({
-                            "type": "api_activity",
-                            "data": {
-                                "recent_calls_count": len(recent_calls),
-                                "recent_calls": recent_calls[-5:],  # Last 5 calls
-                                "total_api_calls": sum(analytics_controller.api_frequencies.values())
-                            },
-                            "timestamp": datetime.now().isoformat()
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "api_activity",
+                                "data": {
+                                    "recent_calls_count": len(recent_calls),
+                                    "recent_calls": recent_calls[-5:],  # Last 5 calls
+                                    "total_api_calls": sum(
+                                        analytics_controller.api_frequencies.values()
+                                    ),
+                                },
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
                         last_api_update = current_time
                     except Exception as e:
                         logger.error(f"API activity update error: {e}")
@@ -1868,34 +2193,42 @@ async def websocket_live_analytics(websocket: WebSocket):
                 if current_time - last_health_update > 10:
                     try:
                         alerts = await get_phase9_alerts()
-                        critical_alerts = [a for a in alerts if a.get("severity") == "critical"]
+                        critical_alerts = [
+                            a for a in alerts if a.get("severity") == "critical"
+                        ]
 
-                        await websocket.send_json({
-                            "type": "system_health",
-                            "data": {
-                                "alerts_count": len(alerts),
-                                "critical_alerts_count": len(critical_alerts),
-                                "critical_alerts": critical_alerts
-                            },
-                            "timestamp": datetime.now().isoformat()
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "system_health",
+                                "data": {
+                                    "alerts_count": len(alerts),
+                                    "critical_alerts_count": len(critical_alerts),
+                                    "critical_alerts": critical_alerts,
+                                },
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
                         last_health_update = current_time
                     except Exception as e:
                         logger.error(f"System health update error: {e}")
 
                 # Wait for client message or timeout
                 try:
-                    message = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
+                    message = await asyncio.wait_for(
+                        websocket.receive_text(), timeout=1.0
+                    )
                     try:
                         command = json.loads(message)
                         if command.get("type") == "request_snapshot":
                             # Send immediate snapshot
                             snapshot_data = await get_realtime_metrics()
-                            await websocket.send_json({
-                                "type": "snapshot_response",
-                                "data": snapshot_data,
-                                "timestamp": datetime.now().isoformat()
-                            })
+                            await websocket.send_json(
+                                {
+                                    "type": "snapshot_response",
+                                    "data": snapshot_data,
+                                    "timestamp": datetime.now().isoformat(),
+                                }
+                            )
                     except json.JSONDecodeError:
                         pass
                 except asyncio.TimeoutError:
@@ -1906,11 +2239,13 @@ async def websocket_live_analytics(websocket: WebSocket):
             except Exception as e:
                 logger.error(f"Error in live analytics WebSocket: {e}")
                 try:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": str(e),
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": str(e),
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
                 except Exception:
                     break
 
@@ -1920,9 +2255,11 @@ async def websocket_live_analytics(websocket: WebSocket):
         analytics_state["websocket_connections"].discard(websocket)
         logger.info("Live analytics WebSocket disconnected")
 
+
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
+
 
 # Initialize analytics on module load
 @router.on_event("startup")
@@ -1936,7 +2273,7 @@ async def initialize_analytics():
 
         # Start metrics collection
         collector = analytics_controller.metrics_collector
-        if hasattr(collector, '_is_collecting') and not collector._is_collecting:
+        if hasattr(collector, "_is_collecting") and not collector._is_collecting:
             asyncio.create_task(collector.start_collection())
 
         logger.info("Enhanced Analytics API initialized successfully")

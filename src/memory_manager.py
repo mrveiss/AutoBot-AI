@@ -74,7 +74,6 @@ class LongTermMemoryManager:
 
         logging.info(f"Long-term memory manager initialized at {self.db_path}")
 
-
     def _init_memory_db(self):
         """Initialize SQLite database with comprehensive memory tables"""
         if self._initialized:

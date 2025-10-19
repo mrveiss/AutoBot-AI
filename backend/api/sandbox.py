@@ -87,9 +87,9 @@ async def execute_command(request: SandboxExecuteRequest):
         if sandbox is None:
             raise HTTPException(
                 status_code=503,
-                detail="Secure sandbox unavailable - command execution blocked for security"
+                detail="Secure sandbox unavailable - command execution blocked for security",
             )
-        
+
         # Execute command
         result = await sandbox.execute_command(request.command, config)
 
@@ -150,9 +150,9 @@ async def execute_script(request: SandboxScriptRequest):
         if sandbox is None:
             raise HTTPException(
                 status_code=503,
-                detail="Secure sandbox unavailable - script execution blocked for security"
+                detail="Secure sandbox unavailable - script execution blocked for security",
             )
-        
+
         # Execute script
         result = await sandbox.execute_script(
             request.script_content, request.language, config
@@ -228,9 +228,9 @@ async def execute_batch(request: SandboxBatchRequest):
         if sandbox is None:
             raise HTTPException(
                 status_code=503,
-                detail="Secure sandbox unavailable - batch execution blocked for security"
+                detail="Secure sandbox unavailable - batch execution blocked for security",
             )
-        
+
         # Execute as script
         result = await sandbox.execute_script(script_content, "bash", config)
 
@@ -277,19 +277,24 @@ async def get_sandbox_stats():
                     "statistics": {
                         "successful_executions": 0,
                         "failed_executions": 0,
-                        "active_containers": 0
+                        "active_containers": 0,
                     },
                     "capabilities": {
                         "security_levels": ["high", "medium", "low"],
-                        "execution_modes": ["command", "script", "batch", "interactive"],
+                        "execution_modes": [
+                            "command",
+                            "script",
+                            "batch",
+                            "interactive",
+                        ],
                         "supported_languages": ["bash", "sh", "python", "python3"],
                         "monitoring_enabled": False,
                         "network_isolation": False,
                         "resource_limits": False,
                     },
-                }
+                },
             )
-        
+
         stats = await sandbox.get_sandbox_stats()
 
         return JSONResponse(

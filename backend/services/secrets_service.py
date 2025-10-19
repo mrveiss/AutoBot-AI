@@ -29,6 +29,7 @@ class SecretsService:
         if db_path is None:
             # Use centralized path management for default path
             from backend.utils.paths_manager import get_data_path, ensure_data_directory
+
             ensure_data_directory()
             db_path = str(get_data_path("secrets.db"))
 

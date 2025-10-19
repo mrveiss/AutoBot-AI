@@ -23,17 +23,17 @@ logger = logging.getLogger(__name__)
 class RedisDatabase(Enum):
     """Enumeration of Redis databases for type safety"""
 
-    MAIN = cfg.get('redis.databases.main', 0)
-    KNOWLEDGE = cfg.get('redis.databases.knowledge', 1)
-    PROMPTS = cfg.get('redis.databases.prompts', 2)
-    AGENTS = cfg.get('redis.databases.agents', 3)
-    METRICS = cfg.get('redis.databases.metrics', 4)
-    LOGS = cfg.get('redis.databases.logs', 5)
-    SESSIONS = cfg.get('redis.databases.sessions', 6)
-    WORKFLOWS = cfg.get('redis.databases.workflows', 7)
-    VECTORS = cfg.get('redis.databases.vectors', 8)
-    MODELS = cfg.get('redis.databases.models', 9)
-    TESTING = cfg.get('redis.databases.testing', 15)
+    MAIN = cfg.get("redis.databases.main", 0)
+    KNOWLEDGE = cfg.get("redis.databases.knowledge", 1)
+    PROMPTS = cfg.get("redis.databases.prompts", 2)
+    AGENTS = cfg.get("redis.databases.agents", 3)
+    METRICS = cfg.get("redis.databases.metrics", 4)
+    LOGS = cfg.get("redis.databases.logs", 5)
+    SESSIONS = cfg.get("redis.databases.sessions", 6)
+    WORKFLOWS = cfg.get("redis.databases.workflows", 7)
+    VECTORS = cfg.get("redis.databases.vectors", 8)
+    MODELS = cfg.get("redis.databases.models", 9)
+    TESTING = cfg.get("redis.databases.testing", 15)
 
 
 class RedisDatabaseManager:
@@ -45,15 +45,21 @@ class RedisDatabaseManager:
     def __init__(self, config_path: Optional[str] = None):
         # PERFORMANCE FIX: Use correct config path for host-based backend
         default_config_path = "/app/config/redis-databases.yaml"  # Container path
-        host_config_path = "config/redis-databases.yaml"  # Host path (relative to project root)
-        
+        host_config_path = (
+            "config/redis-databases.yaml"  # Host path (relative to project root)
+        )
+
         # Auto-detect if we're running on host vs container
         if os.path.exists(host_config_path):
             default_config_path = host_config_path
         elif os.path.exists("/home/kali/Desktop/AutoBot/config/redis-databases.yaml"):
-            default_config_path = "/home/kali/Desktop/AutoBot/config/redis-databases.yaml"
-        
-        self.config_path = config_path or cfg.get_path('config', 'redis') or default_config_path
+            default_config_path = (
+                "/home/kali/Desktop/AutoBot/config/redis-databases.yaml"
+            )
+
+        self.config_path = (
+            config_path or cfg.get_path("config", "redis") or default_config_path
+        )
         self.config = self._load_config()
         self._connections: Dict[str, redis.Redis] = {}
         self._async_connections: Dict[str, aioredis.Redis] = {}
@@ -62,20 +68,12 @@ class RedisDatabaseManager:
         registry = get_service_registry()
         redis_config = registry.get_service_config("redis")
 
-        self.host = (
-            redis_config.host
-            if redis_config
-            else cfg.get_host('redis')
-        )
-        self.port = (
-            redis_config.port
-            if redis_config
-            else cfg.get_port('redis')
-        )
-        self.password = cfg.get('redis.password')
-        self.max_connections = cfg.get('redis.connection.max_connections', 20)
-        self.socket_timeout = cfg.get('redis.connection.socket_timeout', 30)
-        self.socket_keepalive = cfg.get('redis.connection.socket_keepalive', True)
+        self.host = redis_config.host if redis_config else cfg.get_host("redis")
+        self.port = redis_config.port if redis_config else cfg.get_port("redis")
+        self.password = cfg.get("redis.password")
+        self.max_connections = cfg.get("redis.connection.max_connections", 20)
+        self.socket_timeout = cfg.get("redis.connection.socket_timeout", 30)
+        self.socket_keepalive = cfg.get("redis.connection.socket_keepalive", True)
 
     def _load_config(self) -> Dict[str, Any]:
         """Load Redis database configuration"""
@@ -95,47 +93,47 @@ class RedisDatabaseManager:
         return {
             "redis_databases": {
                 "main": {
-                    "db": cfg.get('redis.databases.main', 0),
+                    "db": cfg.get("redis.databases.main", 0),
                     "description": "Main application data",
                 },
                 "knowledge": {
-                    "db": cfg.get('redis.databases.knowledge', 1),
+                    "db": cfg.get("redis.databases.knowledge", 1),
                     "description": "Knowledge base documents",
                 },
                 "prompts": {
-                    "db": cfg.get('redis.databases.prompts', 2),
+                    "db": cfg.get("redis.databases.prompts", 2),
                     "description": "Prompt templates",
                 },
                 "agents": {
-                    "db": cfg.get('redis.databases.agents', 3),
+                    "db": cfg.get("redis.databases.agents", 3),
                     "description": "Agent communication",
                 },
                 "metrics": {
-                    "db": cfg.get('redis.databases.metrics', 4),
+                    "db": cfg.get("redis.databases.metrics", 4),
                     "description": "Performance metrics",
                 },
                 "logs": {
-                    "db": cfg.get('redis.databases.logs', 5),
+                    "db": cfg.get("redis.databases.logs", 5),
                     "description": "Structured logs",
                 },
                 "sessions": {
-                    "db": cfg.get('redis.databases.sessions', 6),
+                    "db": cfg.get("redis.databases.sessions", 6),
                     "description": "User sessions",
                 },
                 "workflows": {
-                    "db": cfg.get('redis.databases.workflows', 7),
+                    "db": cfg.get("redis.databases.workflows", 7),
                     "description": "Workflow state",
                 },
                 "vectors": {
-                    "db": cfg.get('redis.databases.vectors', 8),
+                    "db": cfg.get("redis.databases.vectors", 8),
                     "description": "Vector embeddings",
                 },
                 "models": {
-                    "db": cfg.get('redis.databases.models', 9),
+                    "db": cfg.get("redis.databases.models", 9),
                     "description": "Model metadata",
                 },
                 "testing": {
-                    "db": cfg.get('redis.databases.testing', 15),
+                    "db": cfg.get("redis.databases.testing", 15),
                     "description": "Test data",
                 },
             }
@@ -201,7 +199,9 @@ class RedisDatabaseManager:
                     # Use a very short timeout to avoid blocking the event loop
                     self._connections[connection_key].ping()
                 except Exception as ping_error:
-                    logger.warning(f"Redis ping failed for '{database}', but continuing: {ping_error}")
+                    logger.warning(
+                        f"Redis ping failed for '{database}', but continuing: {ping_error}"
+                    )
                     # Don't raise - allow connection to be established even if ping fails
                 logger.info(
                     f"Connected to Redis database '{database}' (DB {db_number})"

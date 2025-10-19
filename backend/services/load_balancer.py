@@ -108,7 +108,8 @@ class Worker:
             self.enabled
             and self.status in (WorkerStatus.ONLINE, WorkerStatus.BUSY)
             and self.current_load < self.max_concurrent_tasks
-            and self.circuit_breaker_state in (CircuitBreakerState.CLOSED, CircuitBreakerState.HALF_OPEN)
+            and self.circuit_breaker_state
+            in (CircuitBreakerState.CLOSED, CircuitBreakerState.HALF_OPEN)
         )
 
     def record_success(self):
@@ -122,7 +123,9 @@ class Worker:
             self.circuit_breaker_state = CircuitBreakerState.CLOSED
             self.circuit_open_until = None
 
-    def record_failure(self, circuit_breaker_threshold: int = 3, circuit_breaker_timeout: int = 300):
+    def record_failure(
+        self, circuit_breaker_threshold: int = 3, circuit_breaker_timeout: int = 300
+    ):
         """Record task failure and update circuit breaker"""
         self.current_load = max(0, self.current_load - 1)
         self.total_tasks_failed += 1
@@ -131,7 +134,9 @@ class Worker:
         # Open circuit breaker if threshold reached
         if self.consecutive_failures >= circuit_breaker_threshold:
             self.circuit_breaker_state = CircuitBreakerState.OPEN
-            self.circuit_open_until = datetime.now() + timedelta(seconds=circuit_breaker_timeout)
+            self.circuit_open_until = datetime.now() + timedelta(
+                seconds=circuit_breaker_timeout
+            )
             self.status = WorkerStatus.ERROR
             logger.warning(
                 f"Circuit breaker OPEN for worker {self.worker_id} after "
@@ -143,7 +148,9 @@ class Worker:
         if self.circuit_breaker_state == CircuitBreakerState.OPEN:
             if self.circuit_open_until and datetime.now() >= self.circuit_open_until:
                 self.circuit_breaker_state = CircuitBreakerState.HALF_OPEN
-                logger.info(f"Circuit breaker HALF_OPEN for worker {self.worker_id}, allowing test requests")
+                logger.info(
+                    f"Circuit breaker HALF_OPEN for worker {self.worker_id}, allowing test requests"
+                )
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize worker to dictionary"""
@@ -158,10 +165,16 @@ class Worker:
             "total_tasks_completed": self.total_tasks_completed,
             "total_tasks_failed": self.total_tasks_failed,
             "consecutive_failures": self.consecutive_failures,
-            "last_health_check": self.last_health_check.isoformat() if self.last_health_check else None,
-            "last_success": self.last_success.isoformat() if self.last_success else None,
+            "last_health_check": (
+                self.last_health_check.isoformat() if self.last_health_check else None
+            ),
+            "last_success": (
+                self.last_success.isoformat() if self.last_success else None
+            ),
             "circuit_breaker_state": self.circuit_breaker_state.value,
-            "circuit_open_until": self.circuit_open_until.isoformat() if self.circuit_open_until else None,
+            "circuit_open_until": (
+                self.circuit_open_until.isoformat() if self.circuit_open_until else None
+            ),
         }
 
 
@@ -349,7 +362,9 @@ class NPULoadBalancer:
             enabled=enabled,
         )
         self._workers[worker_id] = worker
-        logger.info(f"Added worker {worker_id} at {endpoint} (priority={priority}, max_tasks={max_concurrent_tasks})")
+        logger.info(
+            f"Added worker {worker_id} at {endpoint} (priority={priority}, max_tasks={max_concurrent_tasks})"
+        )
         return worker
 
     def remove_worker(self, worker_id: str) -> bool:
@@ -409,7 +424,11 @@ class NPULoadBalancer:
             return selected
 
     async def submit_task(
-        self, worker_id: str, task_type: str, task_data: Dict[str, Any], max_retries: int = 2
+        self,
+        worker_id: str,
+        task_type: str,
+        task_data: Dict[str, Any],
+        max_retries: int = 2,
     ) -> Dict[str, Any]:
         """
         Submit task to specific worker with retry logic.
@@ -428,7 +447,10 @@ class NPULoadBalancer:
             return {"success": False, "error": f"Worker {worker_id} not found"}
 
         if not worker.can_accept_task():
-            return {"success": False, "error": f"Worker {worker_id} cannot accept tasks"}
+            return {
+                "success": False,
+                "error": f"Worker {worker_id} cannot accept tasks",
+            }
 
         # Create NPU client for this worker
         client = NPUWorkerClient(npu_endpoint=worker.endpoint)
@@ -442,21 +464,29 @@ class NPULoadBalancer:
                 worker.record_success()
                 await self._emit_worker_status_change(worker, "task_completed")
             else:
-                worker.record_failure(self._circuit_breaker_threshold, self._circuit_breaker_timeout)
+                worker.record_failure(
+                    self._circuit_breaker_threshold, self._circuit_breaker_timeout
+                )
                 await self._emit_worker_status_change(worker, "task_failed")
 
                 # Retry on different worker if configured
                 if max_retries > 0 and result.get("fallback"):
-                    logger.info(f"Retrying task on different worker (retries left: {max_retries})")
+                    logger.info(
+                        f"Retrying task on different worker (retries left: {max_retries})"
+                    )
                     alternative = await self.select_worker()
                     if alternative and alternative.worker_id != worker_id:
-                        return await self.submit_task(alternative.worker_id, task_type, task_data, max_retries - 1)
+                        return await self.submit_task(
+                            alternative.worker_id, task_type, task_data, max_retries - 1
+                        )
 
             return result
 
         except Exception as e:
             logger.error(f"Task execution error on worker {worker_id}: {e}")
-            worker.record_failure(self._circuit_breaker_threshold, self._circuit_breaker_timeout)
+            worker.record_failure(
+                self._circuit_breaker_threshold, self._circuit_breaker_timeout
+            )
             await self._emit_worker_status_change(worker, "task_error")
             return {"success": False, "error": str(e)}
         finally:
@@ -552,14 +582,18 @@ class NPULoadBalancer:
                 if worker.circuit_breaker_state == CircuitBreakerState.HALF_OPEN:
                     worker.circuit_breaker_state = CircuitBreakerState.CLOSED
                     worker.circuit_open_until = None
-                    logger.info(f"Circuit breaker CLOSED for worker {worker.worker_id} after successful health check")
+                    logger.info(
+                        f"Circuit breaker CLOSED for worker {worker.worker_id} after successful health check"
+                    )
             else:
                 # Health check failed
                 worker.consecutive_failures += 1
                 if worker.consecutive_failures >= self._circuit_breaker_threshold:
                     worker.status = WorkerStatus.ERROR
                     worker.circuit_breaker_state = CircuitBreakerState.OPEN
-                    worker.circuit_open_until = datetime.now() + timedelta(seconds=self._circuit_breaker_timeout)
+                    worker.circuit_open_until = datetime.now() + timedelta(
+                        seconds=self._circuit_breaker_timeout
+                    )
                 else:
                     worker.status = WorkerStatus.OFFLINE
 
@@ -577,7 +611,9 @@ class NPULoadBalancer:
             if worker.consecutive_failures >= self._circuit_breaker_threshold:
                 worker.status = WorkerStatus.ERROR
                 worker.circuit_breaker_state = CircuitBreakerState.OPEN
-                worker.circuit_open_until = datetime.now() + timedelta(seconds=self._circuit_breaker_timeout)
+                worker.circuit_open_until = datetime.now() + timedelta(
+                    seconds=self._circuit_breaker_timeout
+                )
                 await self._emit_worker_status_change(worker, "circuit_breaker_opened")
 
         finally:

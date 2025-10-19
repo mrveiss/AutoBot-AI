@@ -31,14 +31,19 @@ from src.constants.network_constants import NetworkConstants
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.knowledge_base import KnowledgeBase
-from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker, SemanticChunk
+from src.utils.semantic_chunker_gpu_optimized import (
+    get_optimized_semantic_chunker,
+    SemanticChunk,
+)
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("knowledge_sync_incremental")
 
+
 @dataclass
 class FileMetadata:
     """Metadata for tracking file changes and knowledge sync state."""
+
     path: str
     relative_path: str
     content_hash: str
@@ -56,9 +61,11 @@ class FileMetadata:
         if self.fact_ids is None:
             self.fact_ids = []
 
+
 @dataclass
 class SyncMetrics:
     """Performance metrics for sync operations."""
+
     total_files_scanned: int = 0
     files_changed: int = 0
     files_added: int = 0
@@ -71,7 +78,10 @@ class SyncMetrics:
     def calculate_performance(self):
         """Calculate derived performance metrics."""
         if self.total_processing_time > 0:
-            self.avg_chunks_per_second = self.total_chunks_processed / self.total_processing_time
+            self.avg_chunks_per_second = (
+                self.total_chunks_processed / self.total_processing_time
+            )
+
 
 class IncrementalKnowledgeSync:
     """
@@ -87,12 +97,17 @@ class IncrementalKnowledgeSync:
 
     def __init__(self, project_root: str = None):
         import os
+
         if project_root is None:
-            project_root = os.getenv('AUTOBOT_BASE_DIR')
+            project_root = os.getenv("AUTOBOT_BASE_DIR")
             if not project_root:
-                raise ValueError('Project root configuration missing: AUTOBOT_BASE_DIR environment variable must be set')
+                raise ValueError(
+                    "Project root configuration missing: AUTOBOT_BASE_DIR environment variable must be set"
+                )
         self.project_root = Path(project_root)
-        self.sync_state_path = self.project_root / "data" / "incremental_sync_state.json"
+        self.sync_state_path = (
+            self.project_root / "data" / "incremental_sync_state.json"
+        )
         self.file_metadata_path = self.project_root / "data" / "file_metadata.json"
 
         # Knowledge base and processing components
@@ -119,7 +134,7 @@ class IncrementalKnowledgeSync:
             "docs/**/*.md",
             "reports/**/*.md",
             "scripts/**/*.py",
-            "src/**/*.py"
+            "src/**/*.py",
         ]
 
         logger.info("IncrementalKnowledgeSync initialized")
@@ -151,7 +166,7 @@ class IncrementalKnowledgeSync:
         """Load existing file metadata and sync state."""
         try:
             if self.file_metadata_path.exists():
-                async with aiofiles.open(self.file_metadata_path, 'r') as f:
+                async with aiofiles.open(self.file_metadata_path, "r") as f:
                     content = await f.read()
                     data = json.loads(content)
 
@@ -178,7 +193,7 @@ class IncrementalKnowledgeSync:
             for path, metadata in self.file_metadata.items():
                 data[path] = asdict(metadata)
 
-            async with aiofiles.open(self.file_metadata_path, 'w') as f:
+            async with aiofiles.open(self.file_metadata_path, "w") as f:
                 await f.write(json.dumps(data, indent=2))
 
             logger.info(f"Saved metadata for {len(self.file_metadata)} files")
@@ -188,7 +203,7 @@ class IncrementalKnowledgeSync:
 
     def _compute_content_hash(self, content: str) -> str:
         """Compute SHA-256 hash of file content for change detection."""
-        return hashlib.sha256(content.encode('utf-8')).hexdigest()
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     async def _scan_files(self) -> List[Path]:
         """Scan for files matching documentation patterns."""
@@ -200,9 +215,11 @@ class IncrementalKnowledgeSync:
 
             for file_path in files:
                 path_obj = Path(file_path)
-                if (path_obj.is_file() and
-                    "node_modules" not in str(path_obj) and
-                    ".git" not in str(path_obj)):
+                if (
+                    path_obj.is_file()
+                    and "node_modules" not in str(path_obj)
+                    and ".git" not in str(path_obj)
+                ):
                     all_files.append(path_obj)
 
         # Remove duplicates and sort
@@ -211,7 +228,9 @@ class IncrementalKnowledgeSync:
 
         return unique_files
 
-    async def _analyze_file_changes(self, files: List[Path]) -> Tuple[List[Path], List[str], List[Path]]:
+    async def _analyze_file_changes(
+        self, files: List[Path]
+    ) -> Tuple[List[Path], List[str], List[Path]]:
         """
         Analyze files for changes using content hashing.
 
@@ -228,7 +247,7 @@ class IncrementalKnowledgeSync:
 
             try:
                 # Read file content
-                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     content = await f.read()
 
                 # Compute current hash
@@ -261,7 +280,9 @@ class IncrementalKnowledgeSync:
         for stored_path in list(self.file_metadata.keys()):
             if stored_path not in current_files:
                 removed_files.append(stored_path)
-                logger.debug(f"Removed file: {Path(stored_path).relative_to(self.project_root)}")
+                logger.debug(
+                    f"Removed file: {Path(stored_path).relative_to(self.project_root)}"
+                )
 
         return changed_files + new_files, removed_files, new_files
 
@@ -271,7 +292,7 @@ class IncrementalKnowledgeSync:
             relative_path = file_path.relative_to(self.project_root)
 
             # Read file content
-            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
 
             if not content.strip():
@@ -290,7 +311,7 @@ class IncrementalKnowledgeSync:
                 "relative_path": str(relative_path),
                 "filename": file_path.name,
                 "file_size": len(content),
-                "sync_time": self.current_sync_time
+                "sync_time": self.current_sync_time,
             }
 
             # Determine category for better organization
@@ -298,7 +319,9 @@ class IncrementalKnowledgeSync:
             base_metadata["category"] = category
 
             # Use GPU semantic chunker
-            chunks = await self.semantic_chunker.chunk_text_optimized(content, base_metadata)
+            chunks = await self.semantic_chunker.chunk_text_optimized(
+                content, base_metadata
+            )
 
             processing_time = time.time() - start_time
 
@@ -318,7 +341,7 @@ class IncrementalKnowledgeSync:
                     "semantic_score": chunk.semantic_score,
                     "sentence_count": len(chunk.sentences),
                     "character_count": len(chunk.content),
-                    "gpu_optimized": True
+                    "gpu_optimized": True,
                 }
 
                 # Store as fact for searchability
@@ -341,10 +364,12 @@ class IncrementalKnowledgeSync:
                 vector_ids=vector_ids,
                 fact_ids=fact_ids,
                 chunk_count=len(chunks),
-                processing_time=processing_time
+                processing_time=processing_time,
             )
 
-            logger.info(f"Processed: {relative_path} → {len(chunks)} chunks in {processing_time:.3f}s")
+            logger.info(
+                f"Processed: {relative_path} → {len(chunks)} chunks in {processing_time:.3f}s"
+            )
             return metadata
 
         except Exception as e:
@@ -392,7 +417,9 @@ class IncrementalKnowledgeSync:
                 # Remove from metadata
                 del self.file_metadata[file_path]
 
-                logger.info(f"Removed knowledge for: {Path(file_path).relative_to(self.project_root)}")
+                logger.info(
+                    f"Removed knowledge for: {Path(file_path).relative_to(self.project_root)}"
+                )
 
     async def _invalidate_expired_knowledge(self):
         """Remove knowledge that has exceeded TTL."""
@@ -434,7 +461,9 @@ class IncrementalKnowledgeSync:
 
             # Step 2: Analyze changes with content hashing
             logger.info("Analyzing file changes with content hashing...")
-            changed_files, removed_files, new_files = await self._analyze_file_changes(all_files)
+            changed_files, removed_files, new_files = await self._analyze_file_changes(
+                all_files
+            )
 
             metrics.files_changed = len(changed_files) - len(new_files)
             metrics.files_added = len(new_files)
@@ -452,7 +481,9 @@ class IncrementalKnowledgeSync:
 
             # Step 4: Process changed/new files with GPU acceleration
             if changed_files:
-                logger.info(f"Processing {len(changed_files)} changed files with GPU acceleration...")
+                logger.info(
+                    f"Processing {len(changed_files)} changed files with GPU acceleration..."
+                )
 
                 # Process files in parallel batches for maximum performance
                 semaphore = asyncio.Semaphore(self.max_concurrent_files)
@@ -510,13 +541,13 @@ class IncrementalKnowledgeSync:
                 "metrics": asdict(metrics),
                 "sync_type": "incremental",
                 "performance_improvement": "10-50x faster than full sync",
-                "gpu_acceleration": metrics.gpu_acceleration_used
+                "gpu_acceleration": metrics.gpu_acceleration_used,
             }
 
             summary_path = self.project_root / "data" / "last_sync_summary.json"
             summary_path.parent.mkdir(parents=True, exist_ok=True)
 
-            async with aiofiles.open(summary_path, 'w') as f:
+            async with aiofiles.open(summary_path, "w") as f:
                 await f.write(json.dumps(summary, indent=2))
 
         except Exception as e:
@@ -528,7 +559,9 @@ class IncrementalKnowledgeSync:
 
         Runs without blocking user operations.
         """
-        logger.info(f"Starting background sync daemon (check every {check_interval_minutes} minutes)")
+        logger.info(
+            f"Starting background sync daemon (check every {check_interval_minutes} minutes)"
+        )
 
         while True:
             try:
@@ -537,7 +570,10 @@ class IncrementalKnowledgeSync:
                 logger.info("Background sync check...")
                 metrics = await self.perform_incremental_sync()
 
-                if metrics.files_changed + metrics.files_added + metrics.files_removed > 0:
+                if (
+                    metrics.files_changed + metrics.files_added + metrics.files_removed
+                    > 0
+                ):
                     logger.info("Background sync found and processed changes")
                 else:
                     logger.debug("Background sync - no changes detected")
@@ -554,17 +590,19 @@ class IncrementalKnowledgeSync:
 
         latest_sync = max(
             (meta.sync_time for meta in self.file_metadata.values() if meta.sync_time),
-            default=0
+            default=0,
         )
 
         return {
             "total_files_tracked": total_files,
             "total_chunks": total_chunks,
             "total_facts": total_facts,
-            "latest_sync_time": datetime.fromtimestamp(latest_sync).isoformat() if latest_sync else None,
+            "latest_sync_time": (
+                datetime.fromtimestamp(latest_sync).isoformat() if latest_sync else None
+            ),
             "gpu_acceleration_available": self.semantic_chunker is not None,
             "auto_invalidation_enabled": self.auto_invalidation_enabled,
-            "knowledge_ttl_hours": self.knowledge_ttl_hours
+            "knowledge_ttl_hours": self.knowledge_ttl_hours,
         }
 
 
@@ -575,9 +613,9 @@ async def run_incremental_sync(project_root: str = None) -> SyncMetrics:
     await sync.initialize()
     return await sync.perform_incremental_sync()
 
+
 async def start_background_sync_daemon(
-    project_root: str = None,
-    check_interval_minutes: int = 15
+    project_root: str = None, check_interval_minutes: int = 15
 ):
     """Start background sync daemon."""
     sync = IncrementalKnowledgeSync(project_root)
@@ -589,8 +627,16 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Incremental Knowledge Sync")
-    parser.add_argument("--daemon", "-d", action="store_true", help="Run as background daemon")
-    parser.add_argument("--interval", "-i", type=int, default=15, help="Check interval in minutes (daemon mode)")
+    parser.add_argument(
+        "--daemon", "-d", action="store_true", help="Run as background daemon"
+    )
+    parser.add_argument(
+        "--interval",
+        "-i",
+        type=int,
+        default=15,
+        help="Check interval in minutes (daemon mode)",
+    )
     parser.add_argument("--status", "-s", action="store_true", help="Show sync status")
 
     args = parser.parse_args()
@@ -605,6 +651,8 @@ if __name__ == "__main__":
             await start_background_sync_daemon(check_interval_minutes=args.interval)
         else:
             metrics = await run_incremental_sync()
-            print(f"Sync completed - processed {metrics.total_chunks_processed} chunks in {metrics.total_processing_time:.3f}s")
+            print(
+                f"Sync completed - processed {metrics.total_chunks_processed} chunks in {metrics.total_processing_time:.3f}s"
+            )
 
     asyncio.run(main())

@@ -77,13 +77,17 @@ background_init_status = {
     "llm_sync": "pending",
     "ai_stack": "pending",
     "ai_stack_agents": "pending",
-    "errors": []
+    "errors": [],
 }
 
-def log_initialization_step(stage: str, message: str, percentage: int = 0, success: bool = True):
+
+def log_initialization_step(
+    stage: str, message: str, percentage: int = 0, success: bool = True
+):
     """Log initialization steps with consistent formatting."""
     icon = "✅" if success else "❌" if percentage == 100 else "🔄"
     logger.info(f"{icon} [{percentage:3d}%] {stage}: {message}")
+
 
 async def initialize_ai_stack(app: FastAPI) -> None:
     """Initialize AI Stack connection and verify agent availability."""
@@ -96,7 +100,9 @@ async def initialize_ai_stack(app: FastAPI) -> None:
 
         if health_status["status"] == "healthy":
             background_init_status["ai_stack"] = "ready"
-            log_initialization_step("AI Stack", "AI Stack connection established", 50, True)
+            log_initialization_step(
+                "AI Stack", "AI Stack connection established", 50, True
+            )
 
             # Test agent availability
             try:
@@ -108,7 +114,9 @@ async def initialize_ai_stack(app: FastAPI) -> None:
                 app.state.ai_stack_agents = agents_info
                 app.state.ai_stack_client = ai_client
 
-                log_initialization_step("AI Stack", f"Verified {agent_count} AI agents available", 100, True)
+                log_initialization_step(
+                    "AI Stack", f"Verified {agent_count} AI agents available", 100, True
+                )
 
             except Exception as e:
                 logger.warning(f"AI Stack agent verification failed: {e}")
@@ -118,13 +126,18 @@ async def initialize_ai_stack(app: FastAPI) -> None:
         else:
             background_init_status["ai_stack"] = "degraded"
             background_init_status["errors"].append("AI Stack health check failed")
-            log_initialization_step("AI Stack", "AI Stack connection degraded", 100, False)
+            log_initialization_step(
+                "AI Stack", "AI Stack connection degraded", 100, False
+            )
 
     except Exception as e:
         logger.error(f"AI Stack initialization failed: {e}")
         background_init_status["ai_stack"] = "failed"
         background_init_status["errors"].append(f"AI Stack init: {str(e)}")
-        log_initialization_step("AI Stack", f"Initialization failed: {str(e)}", 100, False)
+        log_initialization_step(
+            "AI Stack", f"Initialization failed: {str(e)}", 100, False
+        )
+
 
 async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False):
     """
@@ -139,8 +152,13 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
             background_init_status["knowledge_base"] = "ready"
 
             # Enhanced: Check if AI Stack integration is available
-            if hasattr(app.state, 'ai_stack_client') and background_init_status.get("ai_stack") == "ready":
-                logger.info("Knowledge Base initialized with AI Stack enhancement available")
+            if (
+                hasattr(app.state, "ai_stack_client")
+                and background_init_status.get("ai_stack") == "ready"
+            ):
+                logger.info(
+                    "Knowledge Base initialized with AI Stack enhancement available"
+                )
             else:
                 logger.info("Knowledge Base initialized in standalone mode")
         else:
@@ -153,12 +171,15 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         background_init_status["errors"].append(f"KB init: {str(e)}")
         return None
 
+
 async def enhanced_background_init(app: FastAPI):
     """
     Enhanced background initialization with AI Stack integration.
     """
     try:
-        log_initialization_step("Background Init", "Starting enhanced background initialization...", 0)
+        log_initialization_step(
+            "Background Init", "Starting enhanced background initialization...", 0
+        )
 
         # Original initialization tasks
         tasks = []
@@ -181,7 +202,9 @@ async def enhanced_background_init(app: FastAPI):
             kb = await get_or_create_knowledge_base(app, force_refresh=False)
             if kb:
                 app.state.knowledge_base = kb
-                log_initialization_step("Knowledge Base", "Knowledge base ready", 90, True)
+                log_initialization_step(
+                    "Knowledge Base", "Knowledge base ready", 90, True
+                )
 
         # Chat workflow initialization
         async def init_chat_workflow():
@@ -189,7 +212,9 @@ async def enhanced_background_init(app: FastAPI):
                 workflow_manager = ChatWorkflowManager()
                 app.state.chat_workflow_manager = workflow_manager
                 background_init_status["chat_workflow"] = "ready"
-                log_initialization_step("Chat Workflow", "Chat workflow manager initialized", 90, True)
+                log_initialization_step(
+                    "Chat Workflow", "Chat workflow manager initialized", 90, True
+                )
             except Exception as e:
                 logger.error(f"Chat workflow initialization failed: {e}")
                 background_init_status["chat_workflow"] = "failed"
@@ -200,7 +225,9 @@ async def enhanced_background_init(app: FastAPI):
             try:
                 await background_llm_sync()
                 background_init_status["llm_sync"] = "ready"
-                log_initialization_step("LLM Sync", "LLM synchronization completed", 90, True)
+                log_initialization_step(
+                    "LLM Sync", "LLM synchronization completed", 90, True
+                )
             except Exception as e:
                 logger.error(f"LLM sync failed: {e}")
                 background_init_status["llm_sync"] = "failed"
@@ -216,14 +243,15 @@ async def enhanced_background_init(app: FastAPI):
             init_kb(),
             init_chat_workflow(),
             init_llm_sync(),
-            init_ai_stack()  # New AI Stack initialization
+            init_ai_stack(),  # New AI Stack initialization
         ]
 
         await asyncio.gather(*tasks, return_exceptions=True)
 
         # Check overall initialization status
         failed_services = [
-            service for service, status in background_init_status.items()
+            service
+            for service, status in background_init_status.items()
             if status == "failed" and service != "errors"
         ]
 
@@ -231,14 +259,18 @@ async def enhanced_background_init(app: FastAPI):
             log_initialization_step(
                 "Background Init",
                 f"Completed with {len(failed_services)} failed services: {', '.join(failed_services)}",
-                100, False
+                100,
+                False,
             )
         else:
-            log_initialization_step("Background Init", "All services initialized successfully", 100, True)
+            log_initialization_step(
+                "Background Init", "All services initialized successfully", 100, True
+            )
 
     except Exception as e:
         logger.error(f"Background initialization failed: {e}")
         background_init_status["errors"].append(f"Background init: {str(e)}")
+
 
 @asynccontextmanager
 async def enhanced_lifespan(app: FastAPI):
@@ -271,6 +303,7 @@ async def enhanced_lifespan(app: FastAPI):
 
     logger.info("✅ Enhanced AutoBot Backend shutdown complete")
 
+
 def create_enhanced_app() -> FastAPI:
     """
     Create enhanced FastAPI application with AI Stack integration.
@@ -285,7 +318,7 @@ def create_enhanced_app() -> FastAPI:
         version="2.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
-        lifespan=enhanced_lifespan
+        lifespan=enhanced_lifespan,
     )
 
     # Add CORS middleware
@@ -313,8 +346,8 @@ def create_enhanced_app() -> FastAPI:
                 "detail": "Internal server error",
                 "path": str(request.url.path),
                 "timestamp": time.time(),
-                "ai_stack_available": background_init_status.get("ai_stack") == "ready"
-            }
+                "ai_stack_available": background_init_status.get("ai_stack") == "ready",
+            },
         )
 
     # Enhanced health check endpoint
@@ -327,21 +360,33 @@ def create_enhanced_app() -> FastAPI:
             "background_init": background_init_status,
             "services": {
                 "redis_pools": background_init_status.get("redis_pools", "unknown"),
-                "knowledge_base": background_init_status.get("knowledge_base", "unknown"),
+                "knowledge_base": background_init_status.get(
+                    "knowledge_base", "unknown"
+                ),
                 "chat_workflow": background_init_status.get("chat_workflow", "unknown"),
                 "llm_sync": background_init_status.get("llm_sync", "unknown"),
                 "ai_stack": background_init_status.get("ai_stack", "unknown"),
-                "ai_stack_agents": background_init_status.get("ai_stack_agents", "unknown")
+                "ai_stack_agents": background_init_status.get(
+                    "ai_stack_agents", "unknown"
+                ),
             },
             "ai_enhanced": background_init_status.get("ai_stack") == "ready",
-            "agent_count": len(getattr(app.state, 'ai_stack_agents', {}).get('agents', [])),
+            "agent_count": len(
+                getattr(app.state, "ai_stack_agents", {}).get("agents", [])
+            ),
             "capabilities": {
-                "rag_enhanced_search": background_init_status.get("ai_stack") == "ready",
-                "multi_agent_coordination": background_init_status.get("ai_stack_agents") == "ready",
-                "knowledge_extraction": background_init_status.get("ai_stack") == "ready",
+                "rag_enhanced_search": background_init_status.get("ai_stack")
+                == "ready",
+                "multi_agent_coordination": background_init_status.get(
+                    "ai_stack_agents"
+                )
+                == "ready",
+                "knowledge_extraction": background_init_status.get("ai_stack")
+                == "ready",
                 "enhanced_chat": background_init_status.get("ai_stack") == "ready",
-                "npu_acceleration": background_init_status.get("ai_stack_agents") == "ready"
-            }
+                "npu_acceleration": background_init_status.get("ai_stack_agents")
+                == "ready",
+            },
         }
 
     # AI Stack specific health endpoint
@@ -349,7 +394,7 @@ def create_enhanced_app() -> FastAPI:
     async def ai_stack_health():
         """Dedicated AI Stack health endpoint."""
         try:
-            if hasattr(app.state, 'ai_stack_client'):
+            if hasattr(app.state, "ai_stack_client"):
                 ai_client = app.state.ai_stack_client
                 health_status = await ai_client.health_check()
                 return health_status
@@ -357,20 +402,17 @@ def create_enhanced_app() -> FastAPI:
                 return {
                     "status": "unavailable",
                     "message": "AI Stack client not initialized",
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
         except Exception as e:
-            return {
-                "status": "error",
-                "message": str(e),
-                "timestamp": time.time()
-            }
+            return {"status": "error", "message": str(e), "timestamp": time.time()}
 
     # Add static files
     add_static_files(app)
 
     logger.info("✅ Enhanced FastAPI application configured successfully")
     return app
+
 
 def configure_enhanced_api_routes(app: FastAPI) -> None:
     """Configure all API routes including enhanced AI Stack endpoints."""
@@ -379,6 +421,7 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
 
     # Create main API router
     from fastapi import APIRouter
+
     api_router = APIRouter()
 
     # Core routers configuration (original)
@@ -393,7 +436,12 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
         (voice_router, "/voice", ["voice"], "voice"),
         (agent_router, "/agent", ["agent"], "agent"),
         (agent_config_router, "/agent-config", ["agent-config"], "agent_config"),
-        (intelligent_agent_router, "/intelligent-agent", ["intelligent-agent"], "intelligent_agent"),
+        (
+            intelligent_agent_router,
+            "/intelligent-agent",
+            ["intelligent-agent"],
+            "intelligent_agent",
+        ),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (embeddings_router, "/embeddings", ["embeddings"], "embeddings"),
@@ -414,7 +462,12 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
     ai_enhanced_routers_config = [
         (ai_stack_router, "/ai-stack", ["ai-stack"], "ai_stack_integration"),
         (chat_enhanced_router, "/chat/enhanced", ["chat-enhanced"], "chat_enhanced"),
-        (knowledge_enhanced_router, "/knowledge/enhanced", ["knowledge-enhanced"], "knowledge_enhanced"),
+        (
+            knowledge_enhanced_router,
+            "/knowledge/enhanced",
+            ["knowledge-enhanced"],
+            "knowledge_enhanced",
+        ),
     ]
 
     # Register core routers
@@ -439,20 +492,70 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
 
     # Add optional routers with error handling
     optional_routers = [
-        ("backend.api.workflow_automation", "/workflow_automation", ["workflow_automation"], "workflow_automation"),
-        ("backend.api.advanced_workflow_orchestrator", "/advanced_workflow", ["advanced_workflow"], "advanced_workflow"),
+        (
+            "backend.api.workflow_automation",
+            "/workflow_automation",
+            ["workflow_automation"],
+            "workflow_automation",
+        ),
+        (
+            "backend.api.advanced_workflow_orchestrator",
+            "/advanced_workflow",
+            ["advanced_workflow"],
+            "advanced_workflow",
+        ),
         ("backend.api.project_state", "", ["project_state"], "project_state"),
-        ("backend.api.orchestration", "/orchestration", ["orchestration"], "orchestration"),
+        (
+            "backend.api.orchestration",
+            "/orchestration",
+            ["orchestration"],
+            "orchestration",
+        ),
         ("backend.api.code_search", "/code_search", ["code_search"], "code_search"),
-        ("backend.api.development_speedup", "/development_speedup", ["development_speedup"], "development_speedup"),
+        (
+            "backend.api.development_speedup",
+            "/development_speedup",
+            ["development_speedup"],
+            "development_speedup",
+        ),
         ("backend.api.sandbox", "/sandbox", ["sandbox"], "sandbox"),
         ("backend.api.elevation", "/system/elevation", ["elevation"], "elevation"),
-        ("backend.api.enhanced_memory", "/memory", ["enhanced_memory"], "enhanced_memory"),
-        ("backend.api.advanced_control", "/control", ["advanced_control"], "advanced_control"),
-        ("backend.api.phase_management", "/phases", ["phase_management"], "phase_management"),
-        ("backend.api.state_tracking", "/state-tracking", ["state_tracking"], "state_tracking"),
-        ("backend.api.llm_awareness", "/llm-awareness", ["llm_awareness"], "llm_awareness"),
-        ("backend.api.validation_dashboard", "/validation-dashboard", ["validation_dashboard"], "validation_dashboard"),
+        (
+            "backend.api.enhanced_memory",
+            "/memory",
+            ["enhanced_memory"],
+            "enhanced_memory",
+        ),
+        (
+            "backend.api.advanced_control",
+            "/control",
+            ["advanced_control"],
+            "advanced_control",
+        ),
+        (
+            "backend.api.phase_management",
+            "/phases",
+            ["phase_management"],
+            "phase_management",
+        ),
+        (
+            "backend.api.state_tracking",
+            "/state-tracking",
+            ["state_tracking"],
+            "state_tracking",
+        ),
+        (
+            "backend.api.llm_awareness",
+            "/llm-awareness",
+            ["llm_awareness"],
+            "llm_awareness",
+        ),
+        (
+            "backend.api.validation_dashboard",
+            "/validation-dashboard",
+            ["validation_dashboard"],
+            "validation_dashboard",
+        ),
     ]
 
     # Register optional routers
@@ -463,7 +566,9 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
             router_tags: List[Union[str, Enum]] = list(tags) if tags else []
             api_router.include_router(router, prefix=prefix, tags=router_tags)
             api_registry.register_router(name, router, f"/api{prefix}")
-            logger.info(f"✅ Successfully registered optional router: {name} at /api{prefix}")
+            logger.info(
+                f"✅ Successfully registered optional router: {name} at /api{prefix}"
+            )
         except ImportError:
             logger.info(f"⏭️ Optional router not available - skipping: {name}")
         except Exception as e:
@@ -480,6 +585,7 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
 
     logger.info("✅ Enhanced API routes configured with AI Stack integration")
 
+
 def add_static_files(app: FastAPI) -> None:
     """Mount static file serving."""
     static_dir = "static"
@@ -487,10 +593,17 @@ def add_static_files(app: FastAPI) -> None:
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
         logger.info(f"Static files mounted from {static_dir}")
 
+
 # Backward compatibility: create_app function
 def create_app() -> FastAPI:
     """Create standard app (backward compatibility)."""
     return create_enhanced_app()
 
+
 # Export the factory functions
-__all__ = ["create_app", "create_enhanced_app", "get_or_create_knowledge_base", "initialize_ai_stack"]
+__all__ = [
+    "create_app",
+    "create_enhanced_app",
+    "get_or_create_knowledge_base",
+    "initialize_ai_stack",
+]

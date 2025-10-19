@@ -236,21 +236,27 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Check connection state before each operation
             if websocket.client_state != WebSocketState.CONNECTED:
-                logger.info(f"WebSocket state changed to {websocket.client_state}, ending loop")
+                logger.info(
+                    f"WebSocket state changed to {websocket.client_state}, ending loop"
+                )
                 break
-                
+
             try:
                 # ROOT CAUSE FIX: Replace timeout with natural message receive
                 message = await websocket.receive_text()
                 # No timeout needed - WebSocketDisconnect will be raised on disconnect
             except WebSocketDisconnect as e:
-                logger.info(f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'")
+                logger.info(
+                    f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'"
+                )
                 break
             except Exception as e:
                 logger.error(f"Error receiving message: {e}")
                 # Check if it's a connection error vs other error
                 if "connection" in str(e).lower() or "closed" in str(e).lower():
-                    logger.info("Connection-related error detected, ending WebSocket loop")
+                    logger.info(
+                        "Connection-related error detected, ending WebSocket loop"
+                    )
                     break
                 else:
                     # Other errors, continue trying
@@ -276,36 +282,47 @@ async def websocket_endpoint(websocket: WebSocket):
                     if terminal_session_id:
                         try:
                             # Call the approval API
-                            from backend.services.agent_terminal_service import AgentTerminalService
+                            from backend.services.agent_terminal_service import (
+                                AgentTerminalService,
+                            )
 
                             service = AgentTerminalService()
                             result = await service.approve_command(
                                 session_id=terminal_session_id,
                                 approved=approved,
-                                user_id=user_id
+                                user_id=user_id,
                             )
 
-                            logger.info(f"Command approval result: {result.get('status')}")
+                            logger.info(
+                                f"Command approval result: {result.get('status')}"
+                            )
 
                             # Send confirmation back to frontend
-                            await websocket.send_json({
-                                "type": "approval_processed",
-                                "payload": {
-                                    "terminal_session_id": terminal_session_id,
-                                    "approved": approved,
-                                    "result": result
+                            await websocket.send_json(
+                                {
+                                    "type": "approval_processed",
+                                    "payload": {
+                                        "terminal_session_id": terminal_session_id,
+                                        "approved": approved,
+                                        "result": result,
+                                    },
                                 }
-                            })
+                            )
                         except Exception as approval_error:
-                            logger.error(f"Error processing approval: {approval_error}", exc_info=True)
-                            await websocket.send_json({
-                                "type": "approval_error",
-                                "payload": {
-                                    "error": str(approval_error)
+                            logger.error(
+                                f"Error processing approval: {approval_error}",
+                                exc_info=True,
+                            )
+                            await websocket.send_json(
+                                {
+                                    "type": "approval_error",
+                                    "payload": {"error": str(approval_error)},
                                 }
-                            })
+                            )
                     else:
-                        logger.warning("Received approval message without terminal_session_id")
+                        logger.warning(
+                            "Received approval message without terminal_session_id"
+                        )
             except json.JSONDecodeError:
                 logger.warning(f"Received invalid JSON via WebSocket: {message}")
 
@@ -358,12 +375,14 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
                     "id": w.config.id,
                     "name": w.config.name,
                     "platform": w.config.platform,
-                    "ip_address": w.config.url.split("//")[1].split(":")[0]
-                    if "://" in w.config.url
-                    else "",
-                    "port": int(w.config.url.split(":")[-1])
-                    if ":" in w.config.url
-                    else 0,
+                    "ip_address": (
+                        w.config.url.split("//")[1].split(":")[0]
+                        if "://" in w.config.url
+                        else ""
+                    ),
+                    "port": (
+                        int(w.config.url.split(":")[-1]) if ":" in w.config.url else 0
+                    ),
                     "status": w.status.status.value,
                     "current_load": w.status.current_load,
                     "max_capacity": w.config.max_concurrent_tasks,
@@ -371,9 +390,11 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
                     "performance_metrics": w.metrics.dict() if w.metrics else {},
                     "priority": w.config.priority,
                     "weight": w.config.weight,
-                    "last_heartbeat": w.status.last_heartbeat.isoformat() + "Z"
-                    if w.status.last_heartbeat
-                    else "",
+                    "last_heartbeat": (
+                        w.status.last_heartbeat.isoformat() + "Z"
+                        if w.status.last_heartbeat
+                        else ""
+                    ),
                     "created_at": "",  # Not tracked
                 }
                 for w in workers
@@ -398,9 +419,7 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
                     if data.get("type") == "ping":
                         await websocket.send_json({"type": "pong"})
                     else:
-                        logger.debug(
-                            f"Received NPU worker WebSocket message: {data}"
-                        )
+                        logger.debug(f"Received NPU worker WebSocket message: {data}")
                 except json.JSONDecodeError:
                     logger.warning(
                         f"Received invalid JSON via NPU worker WebSocket: {message}"
@@ -511,7 +530,9 @@ def init_npu_worker_websocket():
         event_manager.subscribe("npu.worker.added", broadcast_npu_worker_event)
         event_manager.subscribe("npu.worker.updated", broadcast_npu_worker_event)
         event_manager.subscribe("npu.worker.removed", broadcast_npu_worker_event)
-        event_manager.subscribe("npu.worker.metrics.updated", broadcast_npu_worker_event)
+        event_manager.subscribe(
+            "npu.worker.metrics.updated", broadcast_npu_worker_event
+        )
 
         _npu_events_subscribed = True
         logger.info("NPU worker WebSocket event subscriptions initialized")

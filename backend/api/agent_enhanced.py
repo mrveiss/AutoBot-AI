@@ -32,57 +32,85 @@ router = APIRouter(tags=["agent-enhanced"])
 # Request/Response Models
 # ====================================================================
 
+
 class EnhancedGoalPayload(BaseModel):
     """Enhanced goal payload with AI Stack integration."""
-    goal: str = Field(..., min_length=1, max_length=10000, description="Goal description")
+
+    goal: str = Field(
+        ..., min_length=1, max_length=10000, description="Goal description"
+    )
     agents: Optional[List[str]] = Field(None, description="Specific agents to use")
-    coordination_mode: str = Field("intelligent", description="Coordination mode (parallel, sequential, intelligent)")
-    priority: str = Field("normal", description="Task priority (low, normal, high, urgent)")
+    coordination_mode: str = Field(
+        "intelligent",
+        description="Coordination mode (parallel, sequential, intelligent)",
+    )
+    priority: str = Field(
+        "normal", description="Task priority (low, normal, high, urgent)"
+    )
     context: Optional[str] = Field(None, description="Additional context")
     use_knowledge_base: bool = Field(True, description="Use knowledge base for context")
     include_reasoning: bool = Field(False, description="Include reasoning steps")
-    max_execution_time: int = Field(300, ge=30, le=1800, description="Max execution time in seconds")
+    max_execution_time: int = Field(
+        300, ge=30, le=1800, description="Max execution time in seconds"
+    )
+
 
 class MultiAgentTaskPayload(BaseModel):
     """Multi-agent task coordination payload."""
+
     task: str = Field(..., min_length=1, description="Task description")
     agents: List[str] = Field(..., min_items=1, description="Agents to coordinate")
     coordination_strategy: str = Field("adaptive", description="Coordination strategy")
-    subtasks: Optional[List[Dict[str, Any]]] = Field(None, description="Predefined subtasks")
-    dependencies: Optional[List[Dict[str, str]]] = Field(None, description="Task dependencies")
+    subtasks: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Predefined subtasks"
+    )
+    dependencies: Optional[List[Dict[str, str]]] = Field(
+        None, description="Task dependencies"
+    )
+
 
 class AgentAnalysisRequest(BaseModel):
     """Agent analysis request for development and optimization."""
+
     analysis_type: str = Field("comprehensive", description="Analysis type")
     target_path: Optional[str] = Field(None, description="Specific path to analyze")
     include_performance: bool = Field(True, description="Include performance analysis")
-    include_optimization: bool = Field(True, description="Include optimization suggestions")
+    include_optimization: bool = Field(
+        True, description="Include optimization suggestions"
+    )
+
 
 class ResearchTaskRequest(BaseModel):
     """Research task request using multiple research agents."""
+
     research_query: str = Field(..., min_length=1, description="Research query")
     research_depth: str = Field("comprehensive", description="Research depth")
     include_web: bool = Field(True, description="Include web research")
     include_code_search: bool = Field(False, description="Include code search")
     sources: Optional[List[str]] = Field(None, description="Specific sources")
 
+
 # ====================================================================
 # Utility Functions
 # ====================================================================
 
-def create_success_response(data: Any, message: str = "Operation completed successfully") -> Dict[str, Any]:
+
+def create_success_response(
+    data: Any, message: str = "Operation completed successfully"
+) -> Dict[str, Any]:
     """Create standardized success response."""
     return {
         "success": True,
         "data": data,
         "message": message,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
+
 
 def create_error_response(
     error_code: str = "INTERNAL_ERROR",
     message: str = "An error occurred",
-    status_code: int = 500
+    status_code: int = 500,
 ) -> JSONResponse:
     """Create standardized error response."""
     return JSONResponse(
@@ -92,26 +120,32 @@ def create_error_response(
             "error": {
                 "code": error_code,
                 "message": message,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        },
     )
+
 
 async def handle_ai_stack_error(error: AIStackError, context: str):
     """Handle AI Stack errors gracefully."""
     logger.error(f"{context} failed: {error.message}")
-    status_code = 503 if error.status_code is None else (400 if error.status_code < 500 else 503)
+    status_code = (
+        503 if error.status_code is None else (400 if error.status_code < 500 else 503)
+    )
 
     raise HTTPException(
         status_code=status_code,
         detail={
             "error": error.message,
             "context": context,
-            "ai_stack_details": error.details
-        }
+            "ai_stack_details": error.details,
+        },
     )
 
-async def get_optimal_agents_for_goal(goal: str, available_agents: List[str]) -> List[str]:
+
+async def get_optimal_agents_for_goal(
+    goal: str, available_agents: List[str]
+) -> List[str]:
     """
     Intelligently select optimal agents for a given goal.
 
@@ -130,7 +164,7 @@ async def get_optimal_agents_for_goal(goal: str, available_agents: List[str]) ->
         "classification": ["classify", "categorize", "identify", "tag"],
         "npu_code_search": ["code", "function", "programming", "development"],
         "development_speedup": ["optimize", "improve", "enhance", "performance"],
-        "system_knowledge_manager": ["system", "infrastructure", "architecture"]
+        "system_knowledge_manager": ["system", "infrastructure", "architecture"],
     }
 
     # Score agents based on goal relevance
@@ -142,7 +176,9 @@ async def get_optimal_agents_for_goal(goal: str, available_agents: List[str]) ->
                 agent_scores[agent] = score
 
     # Select top agents (max 3 for efficiency)
-    selected_agents = sorted(agent_scores.keys(), key=lambda x: agent_scores[x], reverse=True)[:3]
+    selected_agents = sorted(
+        agent_scores.keys(), key=lambda x: agent_scores[x], reverse=True
+    )[:3]
 
     # Ensure we have at least one agent
     if not selected_agents and available_agents:
@@ -155,16 +191,18 @@ async def get_optimal_agents_for_goal(goal: str, available_agents: List[str]) ->
     logger.info(f"Selected agents for goal '{goal[:50]}...': {selected_agents}")
     return selected_agents
 
+
 # ====================================================================
 # Enhanced Agent Goal Execution
 # ====================================================================
+
 
 @router.post("/goal/enhanced")
 async def execute_enhanced_goal(
     payload: EnhancedGoalPayload,
     request: Request,
     config=Depends(get_config),
-    knowledge_base=Depends(get_knowledge_base)
+    knowledge_base=Depends(get_knowledge_base),
 ):
     """
     Execute goal using enhanced AI Stack multi-agent coordination.
@@ -186,30 +224,35 @@ async def execute_enhanced_goal(
         # Determine which agents to use
         if payload.agents:
             # Use specified agents (filtered by availability)
-            selected_agents = [agent for agent in payload.agents if agent in available_agents]
+            selected_agents = [
+                agent for agent in payload.agents if agent in available_agents
+            ]
             if not selected_agents:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"None of the specified agents are available. Available: {available_agents}"
+                    detail=f"None of the specified agents are available. Available: {available_agents}",
                 )
         else:
             # Intelligently select agents based on goal
-            selected_agents = await get_optimal_agents_for_goal(payload.goal, available_agents)
+            selected_agents = await get_optimal_agents_for_goal(
+                payload.goal, available_agents
+            )
 
         # Enhance context with knowledge base if requested
         enhanced_context = payload.context
         if payload.use_knowledge_base and knowledge_base:
             try:
-                kb_results = await knowledge_base.search(
-                    query=payload.goal,
-                    top_k=5
-                )
+                kb_results = await knowledge_base.search(query=payload.goal, top_k=5)
                 if kb_results:
-                    kb_context = "\n".join([
-                        f"- {item.get('content', '')[:200]}..."
-                        for item in kb_results[:3]
-                    ])
-                    enhanced_context = f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
+                    kb_context = "\n".join(
+                        [
+                            f"- {item.get('content', '')[:200]}..."
+                            for item in kb_results[:3]
+                        ]
+                    )
+                    enhanced_context = (
+                        f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
+                    )
             except Exception as e:
                 logger.warning(f"Knowledge base context enhancement failed: {e}")
 
@@ -220,7 +263,10 @@ async def execute_enhanced_goal(
             # Use intelligent coordination based on goal complexity
             if len(selected_agents) == 1:
                 coordination_mode = "single"
-            elif any(word in payload.goal.lower() for word in ["analyze", "research", "comprehensive"]):
+            elif any(
+                word in payload.goal.lower()
+                for word in ["analyze", "research", "comprehensive"]
+            ):
                 coordination_mode = "sequential"
             else:
                 coordination_mode = "parallel"
@@ -232,23 +278,25 @@ async def execute_enhanced_goal(
             result = await ai_client.multi_agent_query(
                 query=payload.goal,
                 agents=selected_agents,
-                coordination_mode=coordination_mode
+                coordination_mode=coordination_mode,
             )
 
             execution_end = datetime.utcnow()
             execution_time = (execution_end - execution_start).total_seconds()
 
-            return create_success_response({
-                "goal": payload.goal,
-                "agents_used": selected_agents,
-                "coordination_mode": coordination_mode,
-                "execution_time": execution_time,
-                "priority": payload.priority,
-                "result": result,
-                "enhanced_context_used": enhanced_context is not None,
-                "knowledge_base_integrated": payload.use_knowledge_base,
-                "timestamp": execution_end.isoformat()
-            })
+            return create_success_response(
+                {
+                    "goal": payload.goal,
+                    "agents_used": selected_agents,
+                    "coordination_mode": coordination_mode,
+                    "execution_time": execution_time,
+                    "priority": payload.priority,
+                    "result": result,
+                    "enhanced_context_used": enhanced_context is not None,
+                    "knowledge_base_integrated": payload.use_knowledge_base,
+                    "timestamp": execution_end.isoformat(),
+                }
+            )
 
         except AIStackError as e:
             await handle_ai_stack_error(e, "Enhanced goal execution")
@@ -260,18 +308,17 @@ async def execute_enhanced_goal(
         return create_error_response(
             error_code="GOAL_EXECUTION_ERROR",
             message=f"Goal execution failed: {str(e)}",
-            status_code=500
+            status_code=500,
         )
+
 
 # ====================================================================
 # Multi-Agent Task Coordination
 # ====================================================================
 
+
 @router.post("/multi-agent/coordinate")
-async def coordinate_multi_agent_task(
-    payload: MultiAgentTaskPayload,
-    request: Request
-):
+async def coordinate_multi_agent_task(payload: MultiAgentTaskPayload, request: Request):
     """
     Coordinate complex multi-agent tasks with dependency management.
 
@@ -285,11 +332,13 @@ async def coordinate_multi_agent_task(
         agents_info = await ai_client.list_available_agents()
         available_agents = agents_info.get("agents", [])
 
-        unavailable_agents = [agent for agent in payload.agents if agent not in available_agents]
+        unavailable_agents = [
+            agent for agent in payload.agents if agent not in available_agents
+        ]
         if unavailable_agents:
             raise HTTPException(
                 status_code=400,
-                detail=f"Agents not available: {unavailable_agents}. Available: {available_agents}"
+                detail=f"Agents not available: {unavailable_agents}. Available: {available_agents}",
             )
 
         # Execute coordinated task
@@ -299,34 +348,39 @@ async def coordinate_multi_agent_task(
         coordination_result = await ai_client.multi_agent_query(
             query=payload.task,
             agents=payload.agents,
-            coordination_mode=payload.coordination_strategy
+            coordination_mode=payload.coordination_strategy,
         )
 
         coordination_end = datetime.utcnow()
         coordination_time = (coordination_end - coordination_start).total_seconds()
 
-        return create_success_response({
-            "task": payload.task,
-            "agents": payload.agents,
-            "coordination_strategy": payload.coordination_strategy,
-            "coordination_time": coordination_time,
-            "subtasks_count": len(payload.subtasks) if payload.subtasks else 0,
-            "dependencies_count": len(payload.dependencies) if payload.dependencies else 0,
-            "result": coordination_result,
-            "timestamp": coordination_end.isoformat()
-        })
+        return create_success_response(
+            {
+                "task": payload.task,
+                "agents": payload.agents,
+                "coordination_strategy": payload.coordination_strategy,
+                "coordination_time": coordination_time,
+                "subtasks_count": len(payload.subtasks) if payload.subtasks else 0,
+                "dependencies_count": (
+                    len(payload.dependencies) if payload.dependencies else 0
+                ),
+                "result": coordination_result,
+                "timestamp": coordination_end.isoformat(),
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Multi-agent coordination")
+
 
 # ====================================================================
 # Specialized Agent Endpoints
 # ====================================================================
 
+
 @router.post("/research/comprehensive")
 async def comprehensive_research_task(
-    request_data: ResearchTaskRequest,
-    knowledge_base=Depends(get_knowledge_base)
+    request_data: ResearchTaskRequest, knowledge_base=Depends(get_knowledge_base)
 ):
     """
     Execute comprehensive research using multiple specialized agents.
@@ -345,42 +399,39 @@ async def comprehensive_research_task(
         if knowledge_base:
             try:
                 kb_results = await knowledge_base.search(
-                    query=request_data.research_query,
-                    top_k=3
+                    query=request_data.research_query, top_k=3
                 )
                 if kb_results:
-                    kb_context = "\n".join([
-                        f"- {item.get('content', '')[:150]}..."
-                        for item in kb_results
-                    ])
+                    kb_context = "\n".join(
+                        [f"- {item.get('content', '')[:150]}..." for item in kb_results]
+                    )
                     enhanced_query = f"{request_data.research_query}\n\nExisting knowledge:\n{kb_context}"
             except Exception as e:
                 logger.warning(f"KB context failed: {e}")
 
         # Execute research using multiple agents
         research_result = await ai_client.multi_agent_query(
-            query=enhanced_query,
-            agents=research_agents,
-            coordination_mode="sequential"
+            query=enhanced_query, agents=research_agents, coordination_mode="sequential"
         )
 
-        return create_success_response({
-            "research_query": request_data.research_query,
-            "research_depth": request_data.research_depth,
-            "agents_used": research_agents,
-            "include_web": request_data.include_web,
-            "include_code_search": request_data.include_code_search,
-            "sources": request_data.sources,
-            "result": research_result
-        })
+        return create_success_response(
+            {
+                "research_query": request_data.research_query,
+                "research_depth": request_data.research_depth,
+                "agents_used": research_agents,
+                "include_web": request_data.include_web,
+                "include_code_search": request_data.include_code_search,
+                "sources": request_data.sources,
+                "result": research_result,
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Comprehensive research")
 
+
 @router.post("/development/analyze")
-async def analyze_development_task(
-    request_data: AgentAnalysisRequest
-):
+async def analyze_development_task(request_data: AgentAnalysisRequest):
     """
     Analyze codebase using development-focused AI agents.
     """
@@ -392,25 +443,28 @@ async def analyze_development_task(
 
         # Execute development analysis
         analysis_result = await ai_client.analyze_development_speedup(
-            code_path=request_data.target_path,
-            analysis_type=request_data.analysis_type
+            code_path=request_data.target_path, analysis_type=request_data.analysis_type
         )
 
-        return create_success_response({
-            "analysis_type": request_data.analysis_type,
-            "target_path": request_data.target_path,
-            "include_performance": request_data.include_performance,
-            "include_optimization": request_data.include_optimization,
-            "agents_used": dev_agents,
-            "result": analysis_result
-        })
+        return create_success_response(
+            {
+                "analysis_type": request_data.analysis_type,
+                "target_path": request_data.target_path,
+                "include_performance": request_data.include_performance,
+                "include_optimization": request_data.include_optimization,
+                "agents_used": dev_agents,
+                "result": analysis_result,
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Development analysis")
 
+
 # ====================================================================
 # Agent Management and Status
 # ====================================================================
+
 
 @router.get("/agents/available")
 async def list_available_agents():
@@ -423,40 +477,72 @@ async def list_available_agents():
         enhanced_agents = {
             "rag": {
                 "description": "Retrieval-Augmented Generation for document synthesis",
-                "capabilities": ["document_query", "reformulate_query", "analyze_documents"]
+                "capabilities": [
+                    "document_query",
+                    "reformulate_query",
+                    "analyze_documents",
+                ],
             },
             "chat": {
                 "description": "Conversational interactions with context awareness",
-                "capabilities": ["natural_conversation", "context_retention"]
+                "capabilities": ["natural_conversation", "context_retention"],
             },
             "research": {
                 "description": "Comprehensive research and analysis",
-                "capabilities": ["research_queries", "source_analysis", "report_generation"]
+                "capabilities": [
+                    "research_queries",
+                    "source_analysis",
+                    "report_generation",
+                ],
             },
             "web_research_assistant": {
                 "description": "Web-based research and content analysis",
-                "capabilities": ["web_search", "content_extraction", "source_validation"]
+                "capabilities": [
+                    "web_search",
+                    "content_extraction",
+                    "source_validation",
+                ],
             },
             "knowledge_extraction": {
                 "description": "Structured knowledge extraction from content",
-                "capabilities": ["entity_extraction", "fact_identification", "content_structuring"]
+                "capabilities": [
+                    "entity_extraction",
+                    "fact_identification",
+                    "content_structuring",
+                ],
             },
             "classification": {
                 "description": "Content and data classification",
-                "capabilities": ["content_categorization", "sentiment_analysis", "topic_classification"]
+                "capabilities": [
+                    "content_categorization",
+                    "sentiment_analysis",
+                    "topic_classification",
+                ],
             },
             "npu_code_search": {
                 "description": "NPU-accelerated code search and analysis",
-                "capabilities": ["code_search", "function_analysis", "pattern_detection"]
+                "capabilities": [
+                    "code_search",
+                    "function_analysis",
+                    "pattern_detection",
+                ],
             },
             "development_speedup": {
                 "description": "Development optimization and speedup analysis",
-                "capabilities": ["performance_analysis", "optimization_suggestions", "code_quality_assessment"]
+                "capabilities": [
+                    "performance_analysis",
+                    "optimization_suggestions",
+                    "code_quality_assessment",
+                ],
             },
             "system_knowledge_manager": {
                 "description": "System-wide knowledge management",
-                "capabilities": ["knowledge_coordination", "system_insights", "knowledge_synthesis"]
-            }
+                "capabilities": [
+                    "knowledge_coordination",
+                    "system_insights",
+                    "knowledge_synthesis",
+                ],
+            },
         }
 
         # Combine available agents with capability info
@@ -464,23 +550,29 @@ async def list_available_agents():
         enhanced_list = []
 
         for agent in available_list:
-            agent_info = enhanced_agents.get(agent, {
-                "description": f"AI agent: {agent}",
-                "capabilities": ["general_processing"]
-            })
+            agent_info = enhanced_agents.get(
+                agent,
+                {
+                    "description": f"AI agent: {agent}",
+                    "capabilities": ["general_processing"],
+                },
+            )
             agent_info["name"] = agent
             agent_info["status"] = "available"
             enhanced_list.append(agent_info)
 
-        return create_success_response({
-            "total_agents": len(enhanced_list),
-            "agents": enhanced_list,
-            "coordination_modes": ["parallel", "sequential", "intelligent"],
-            "multi_agent_support": True
-        })
+        return create_success_response(
+            {
+                "total_agents": len(enhanced_list),
+                "agents": enhanced_list,
+                "coordination_modes": ["parallel", "sequential", "intelligent"],
+                "multi_agent_support": True,
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "List available agents")
+
 
 @router.get("/agents/status")
 async def get_agents_status():
@@ -494,32 +586,37 @@ async def get_agents_status():
         # Get available agents
         agents_info = await ai_client.list_available_agents()
 
-        return create_success_response({
-            "ai_stack_status": health_status["status"],
-            "total_agents": len(agents_info.get("agents", [])),
-            "available_agents": agents_info.get("agents", []),
-            "multi_agent_coordination": True,
-            "npu_acceleration": "npu_code_search" in agents_info.get("agents", []),
-            "research_capabilities": any(
-                agent in agents_info.get("agents", [])
-                for agent in ["research", "web_research_assistant"]
-            ),
-            "development_tools": "development_speedup" in agents_info.get("agents", [])
-        })
+        return create_success_response(
+            {
+                "ai_stack_status": health_status["status"],
+                "total_agents": len(agents_info.get("agents", [])),
+                "available_agents": agents_info.get("agents", []),
+                "multi_agent_coordination": True,
+                "npu_acceleration": "npu_code_search" in agents_info.get("agents", []),
+                "research_capabilities": any(
+                    agent in agents_info.get("agents", [])
+                    for agent in ["research", "web_research_assistant"]
+                ),
+                "development_tools": "development_speedup"
+                in agents_info.get("agents", []),
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Agent status check")
 
+
 # ====================================================================
 # Backward Compatibility Endpoints
 # ====================================================================
+
 
 @router.post("/goal")
 async def receive_goal_compat(
     goal: str = Form(...),
     use_phi2: bool = Form(False),
     user_role: str = Form("user"),
-    request: Request = None
+    request: Request = None,
 ):
     """
     Backward compatibility endpoint for goal execution.
@@ -532,7 +629,7 @@ async def receive_goal_compat(
         goal=goal,
         coordination_mode="intelligent",
         use_knowledge_base=True,
-        include_reasoning=False
+        include_reasoning=False,
     )
 
     try:
@@ -553,7 +650,9 @@ async def receive_goal_compat(
                         main_content += f"{agent_result['content']}\n"
                 response_message = main_content.strip() or "Task completed successfully"
             else:
-                response_message = str(ai_result) if ai_result else "Task completed successfully"
+                response_message = (
+                    str(ai_result) if ai_result else "Task completed successfully"
+                )
 
             return {"message": response_message}
 
@@ -565,9 +664,11 @@ async def receive_goal_compat(
             "message": f"Goal received: {goal}. Enhanced AI capabilities temporarily unavailable."
         }
 
+
 # ====================================================================
 # Health and Status Endpoints
 # ====================================================================
+
 
 @router.get("/health/enhanced")
 async def enhanced_agent_health():
@@ -581,7 +682,7 @@ async def enhanced_agent_health():
             "ai_stack_available": health_status["status"] == "healthy",
             "multi_agent_coordination": health_status["status"] == "healthy",
             "enhanced_capabilities": health_status["status"] == "healthy",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
 
     except Exception as e:
@@ -591,5 +692,5 @@ async def enhanced_agent_health():
             "multi_agent_coordination": False,
             "enhanced_capabilities": False,
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }

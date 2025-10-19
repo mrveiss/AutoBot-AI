@@ -7,4 +7,4 @@ Re-exports the HardwareAccelerationManager from the main hardware_acceleration m
 from src.hardware_acceleration import HardwareAccelerationManager
 from src.constants.network_constants import NetworkConstants
 
-__all__ = ['HardwareAccelerationManager']
+__all__ = ["HardwareAccelerationManager"]

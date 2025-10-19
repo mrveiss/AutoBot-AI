@@ -22,7 +22,7 @@ from backend.models.npu_models import (
     NPUWorkerMetrics,
     NPUWorkerStatus,
     WorkerStatus,
-    WorkerTestResult
+    WorkerTestResult,
 )
 from src.npu_integration import NPUWorkerClient
 from src.event_manager import event_manager
@@ -42,11 +42,7 @@ class NPUWorkerManager:
     - YAML-based persistent storage
     """
 
-    def __init__(
-        self,
-        config_file: Path = None,
-        redis_client = None
-    ):
+    def __init__(self, config_file: Path = None, redis_client=None):
         """
         Initialize NPU Worker Manager.
 
@@ -69,21 +65,23 @@ class NPUWorkerManager:
         """Load worker configurations from YAML file"""
         try:
             if self.config_file.exists():
-                with open(self.config_file, 'r') as f:
+                with open(self.config_file, "r") as f:
                     data = yaml.safe_load(f) or {}
 
                 # Load workers
-                workers_data = data.get('workers', [])
+                workers_data = data.get("workers", [])
                 for worker_data in workers_data:
                     try:
                         worker = NPUWorkerConfig(**worker_data)
                         self._workers[worker.id] = worker
-                        logger.info(f"Loaded worker config: {worker.id} ({worker.name})")
+                        logger.info(
+                            f"Loaded worker config: {worker.id} ({worker.name})"
+                        )
                     except Exception as e:
                         logger.error(f"Failed to load worker config: {e}")
 
                 # Load load balancing config
-                lb_config = data.get('load_balancing', {})
+                lb_config = data.get("load_balancing", {})
                 if lb_config:
                     self._load_balancing_config = LoadBalancingConfig(**lb_config)
 
@@ -104,14 +102,12 @@ class NPUWorkerManager:
 
             # Prepare data
             data = {
-                'workers': [
-                    worker.dict() for worker in self._workers.values()
-                ],
-                'load_balancing': self._load_balancing_config.dict()
+                "workers": [worker.dict() for worker in self._workers.values()],
+                "load_balancing": self._load_balancing_config.dict(),
             }
 
             # Write to file asynchronously
-            async with aiofiles.open(self.config_file, 'w') as f:
+            async with aiofiles.open(self.config_file, "w") as f:
                 await f.write(yaml.dump(data, default_flow_style=False))
 
             logger.info(f"Saved {len(self._workers)} worker configurations")
@@ -193,18 +189,26 @@ class NPUWorkerManager:
             # Perform health check with timeout
             health_data = await asyncio.wait_for(
                 client.check_health(),
-                timeout=self._load_balancing_config.timeout_seconds
+                timeout=self._load_balancing_config.timeout_seconds,
             )
 
             # Update worker status
             status = NPUWorkerStatus(
                 id=worker_id,
-                status=WorkerStatus.ONLINE if health_data.get('status') == 'healthy' else WorkerStatus.ERROR,
-                current_load=health_data.get('current_load', 0),
-                total_tasks_completed=health_data.get('total_tasks', 0),
-                uptime_seconds=health_data.get('uptime_seconds', 0.0),
+                status=(
+                    WorkerStatus.ONLINE
+                    if health_data.get("status") == "healthy"
+                    else WorkerStatus.ERROR
+                ),
+                current_load=health_data.get("current_load", 0),
+                total_tasks_completed=health_data.get("total_tasks", 0),
+                uptime_seconds=health_data.get("uptime_seconds", 0.0),
                 last_heartbeat=datetime.utcnow(),
-                error_message=health_data.get('error') if health_data.get('status') != 'healthy' else None
+                error_message=(
+                    health_data.get("error")
+                    if health_data.get("status") != "healthy"
+                    else None
+                ),
             )
 
             # Store status in Redis
@@ -214,14 +218,16 @@ class NPUWorkerManager:
             if prev_status_value != status.status:
                 worker_details = await self.get_worker(worker_id)
                 if worker_details:
-                    await self._emit_worker_event("worker.status.changed", worker_details)
+                    await self._emit_worker_event(
+                        "worker.status.changed", worker_details
+                    )
 
         except asyncio.TimeoutError:
             logger.warning(f"Worker {worker_id} health check timed out")
             status = NPUWorkerStatus(
                 id=worker_id,
                 status=WorkerStatus.OFFLINE,
-                error_message="Health check timeout"
+                error_message="Health check timeout",
             )
             await self._store_worker_status(worker_id, status)
 
@@ -229,14 +235,14 @@ class NPUWorkerManager:
             if prev_status_value != status.status:
                 worker_details = await self.get_worker(worker_id)
                 if worker_details:
-                    await self._emit_worker_event("worker.status.changed", worker_details)
+                    await self._emit_worker_event(
+                        "worker.status.changed", worker_details
+                    )
 
         except Exception as e:
             logger.error(f"Worker {worker_id} health check failed: {e}")
             status = NPUWorkerStatus(
-                id=worker_id,
-                status=WorkerStatus.ERROR,
-                error_message=str(e)
+                id=worker_id, status=WorkerStatus.ERROR, error_message=str(e)
             )
             await self._store_worker_status(worker_id, status)
 
@@ -244,7 +250,9 @@ class NPUWorkerManager:
             if prev_status_value != status.status:
                 worker_details = await self.get_worker(worker_id)
                 if worker_details:
-                    await self._emit_worker_event("worker.status.changed", worker_details)
+                    await self._emit_worker_event(
+                        "worker.status.changed", worker_details
+                    )
 
     async def _store_worker_status(self, worker_id: str, status: NPUWorkerStatus):
         """Store worker status in Redis"""
@@ -262,7 +270,9 @@ class NPUWorkerManager:
         except Exception as e:
             logger.error(f"Failed to store worker status in Redis: {e}")
 
-    async def _emit_worker_event(self, event_type: str, worker_details: NPUWorkerDetails):
+    async def _emit_worker_event(
+        self, event_type: str, worker_details: NPUWorkerDetails
+    ):
         """Emit worker event via event_manager"""
         try:
             event_data = {
@@ -281,21 +291,37 @@ class NPUWorkerManager:
                     "id": worker_details.config.id,
                     "name": worker_details.config.name,
                     "platform": worker_details.config.platform,
-                    "ip_address": worker_details.config.url.split("//")[1].split(":")[0] if "://" in worker_details.config.url else "",
-                    "port": int(worker_details.config.url.split(":")[-1]) if ":" in worker_details.config.url else 0,
+                    "ip_address": (
+                        worker_details.config.url.split("//")[1].split(":")[0]
+                        if "://" in worker_details.config.url
+                        else ""
+                    ),
+                    "port": (
+                        int(worker_details.config.url.split(":")[-1])
+                        if ":" in worker_details.config.url
+                        else 0
+                    ),
                     "status": worker_details.status.status.value,
                     "current_load": worker_details.status.current_load,
                     "max_capacity": worker_details.config.max_concurrent_tasks,
                     "uptime": f"{int(worker_details.status.uptime_seconds)}s",
-                    "performance_metrics": worker_details.metrics.dict() if worker_details.metrics else {},
+                    "performance_metrics": (
+                        worker_details.metrics.dict() if worker_details.metrics else {}
+                    ),
                     "priority": worker_details.config.priority,
                     "weight": worker_details.config.weight,
-                    "last_heartbeat": worker_details.status.last_heartbeat.isoformat() + "Z" if worker_details.status.last_heartbeat else "",
+                    "last_heartbeat": (
+                        worker_details.status.last_heartbeat.isoformat() + "Z"
+                        if worker_details.status.last_heartbeat
+                        else ""
+                    ),
                     "created_at": "",  # Not tracked in current model
                 }
 
             await event_manager.publish(f"npu.{event_type}", event_data)
-            logger.debug(f"Emitted event {event_type} for worker {worker_details.config.id}")
+            logger.debug(
+                f"Emitted event {event_type} for worker {worker_details.config.id}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to emit worker event: {e}", exc_info=True)
@@ -324,15 +350,9 @@ class NPUWorkerManager:
         for worker_id, config in self._workers.items():
             status = await self._get_worker_status(worker_id)
             if not status:
-                status = NPUWorkerStatus(
-                    id=worker_id,
-                    status=WorkerStatus.UNKNOWN
-                )
+                status = NPUWorkerStatus(id=worker_id, status=WorkerStatus.UNKNOWN)
 
-            workers.append(NPUWorkerDetails(
-                config=config,
-                status=status
-            ))
+            workers.append(NPUWorkerDetails(config=config, status=status))
 
         return workers
 
@@ -344,19 +364,12 @@ class NPUWorkerManager:
 
         status = await self._get_worker_status(worker_id)
         if not status:
-            status = NPUWorkerStatus(
-                id=worker_id,
-                status=WorkerStatus.UNKNOWN
-            )
+            status = NPUWorkerStatus(id=worker_id, status=WorkerStatus.UNKNOWN)
 
         # Get metrics if available
         metrics = await self._get_worker_metrics(worker_id)
 
-        return NPUWorkerDetails(
-            config=config,
-            status=status,
-            metrics=metrics
-        )
+        return NPUWorkerDetails(config=config, status=status, metrics=metrics)
 
     async def add_worker(self, worker_config: NPUWorkerConfig) -> NPUWorkerDetails:
         """Add new worker to registry"""
@@ -366,7 +379,9 @@ class NPUWorkerManager:
         # Validate worker by testing connection
         test_result = await self.test_worker_connection(worker_config)
         if not test_result.success:
-            raise ValueError(f"Worker connection test failed: {test_result.error_message}")
+            raise ValueError(
+                f"Worker connection test failed: {test_result.error_message}"
+            )
 
         # Add to registry
         self._workers[worker_config.id] = worker_config
@@ -383,7 +398,9 @@ class NPUWorkerManager:
 
         return worker_details
 
-    async def update_worker(self, worker_id: str, worker_config: NPUWorkerConfig) -> NPUWorkerDetails:
+    async def update_worker(
+        self, worker_id: str, worker_config: NPUWorkerConfig
+    ) -> NPUWorkerDetails:
         """Update existing worker configuration"""
         if worker_id not in self._workers:
             raise ValueError(f"Worker with ID '{worker_id}' not found")
@@ -395,7 +412,9 @@ class NPUWorkerManager:
         # Test new configuration
         test_result = await self.test_worker_connection(worker_config)
         if not test_result.success:
-            raise ValueError(f"Worker connection test failed: {test_result.error_message}")
+            raise ValueError(
+                f"Worker connection test failed: {test_result.error_message}"
+            )
 
         # Update configuration
         self._workers[worker_id] = worker_config
@@ -451,7 +470,9 @@ class NPUWorkerManager:
             },
         )
 
-    async def test_worker_connection(self, worker_config: NPUWorkerConfig) -> WorkerTestResult:
+    async def test_worker_connection(
+        self, worker_config: NPUWorkerConfig
+    ) -> WorkerTestResult:
         """Test connection to a worker"""
         client = NPUWorkerClient(worker_config.url)
 
@@ -461,7 +482,7 @@ class NPUWorkerManager:
             # Perform health check with timeout
             health_data = await asyncio.wait_for(
                 client.check_health(),
-                timeout=self._load_balancing_config.timeout_seconds
+                timeout=self._load_balancing_config.timeout_seconds,
             )
 
             end_time = datetime.utcnow()
@@ -469,24 +490,22 @@ class NPUWorkerManager:
 
             return WorkerTestResult(
                 worker_id=worker_config.id,
-                success=health_data.get('status') == 'healthy',
+                success=health_data.get("status") == "healthy",
                 response_time_ms=response_time_ms,
                 status_code=200,
-                health_data=health_data
+                health_data=health_data,
             )
 
         except asyncio.TimeoutError:
             return WorkerTestResult(
                 worker_id=worker_config.id,
                 success=False,
-                error_message=f"Connection timeout after {self._load_balancing_config.timeout_seconds}s"
+                error_message=f"Connection timeout after {self._load_balancing_config.timeout_seconds}s",
             )
 
         except Exception as e:
             return WorkerTestResult(
-                worker_id=worker_config.id,
-                success=False,
-                error_message=str(e)
+                worker_id=worker_config.id, success=False, error_message=str(e)
             )
 
         finally:

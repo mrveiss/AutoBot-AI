@@ -149,7 +149,9 @@ class ProviderHealthManager:
         health_status = {}
         for provider, result in zip(tasks.keys(), results):
             if isinstance(result, Exception):
-                logger.error(f"Provider {provider} health check raised exception: {str(result)}")
+                logger.error(
+                    f"Provider {provider} health check raised exception: {str(result)}"
+                )
                 health_status[provider] = ProviderHealthResult(
                     status=ProviderStatus.UNKNOWN,
                     available=False,
@@ -235,11 +237,13 @@ class ProviderHealthManager:
         for provider, entry in cls._cache.items():
             age = current_time - entry.get("timestamp", 0)
             if age < cls._cache_ttl:
-                cached_providers.append({
-                    "provider": provider,
-                    "age_seconds": round(age, 2),
-                    "expires_in": round(cls._cache_ttl - age, 2),
-                })
+                cached_providers.append(
+                    {
+                        "provider": provider,
+                        "age_seconds": round(age, 2),
+                        "expires_in": round(cls._cache_ttl - age, 2),
+                    }
+                )
 
         return {
             "total_cached": len(cached_providers),

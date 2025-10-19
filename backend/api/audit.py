@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 class AuditQueryRequest(BaseModel):
     """Audit log query parameters"""
+
     start_time: Optional[datetime] = Field(None, description="Start of time range")
     end_time: Optional[datetime] = Field(None, description="End of time range")
     operation: Optional[str] = Field(None, description="Filter by operation type")
@@ -43,6 +44,7 @@ class AuditQueryRequest(BaseModel):
 
 class AuditQueryResponse(BaseModel):
     """Audit log query response"""
+
     success: bool
     total_returned: int
     has_more: bool
@@ -52,6 +54,7 @@ class AuditQueryResponse(BaseModel):
 
 class AuditStatisticsResponse(BaseModel):
     """Audit statistics response"""
+
     success: bool
     statistics: dict
     vm_info: dict
@@ -59,6 +62,7 @@ class AuditStatisticsResponse(BaseModel):
 
 class CleanupRequest(BaseModel):
     """Audit log cleanup request"""
+
     days_to_keep: int = Field(90, ge=7, le=365, description="Days of logs to retain")
     confirm: bool = Field(False, description="Confirm cleanup operation")
 
@@ -71,16 +75,14 @@ def check_admin_permission(request: Request) -> bool:
 
         if not user_data:
             raise HTTPException(
-                status_code=401,
-                detail="Authentication required for audit log access"
+                status_code=401, detail="Authentication required for audit log access"
             )
 
         # Check for admin role
         user_role = user_data.get("role", "guest")
         if user_role != "admin":
             raise HTTPException(
-                status_code=403,
-                detail="Admin permission required for audit log access"
+                status_code=403, detail="Admin permission required for audit log access"
             )
 
         return True
@@ -89,10 +91,7 @@ def check_admin_permission(request: Request) -> bool:
         raise
     except Exception as e:
         logger.error(f"Permission check failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Permission check error"
-        )
+        raise HTTPException(status_code=500, detail="Permission check error")
 
 
 @router.get("/logs", response_model=AuditQueryResponse)
@@ -107,7 +106,7 @@ async def query_audit_logs(
     result: Optional[AuditResult] = Query(None, description="Result filter"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    admin_check: bool = Depends(check_admin_permission)
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Query audit logs with filters
@@ -146,7 +145,7 @@ async def query_audit_logs(
             vm_name=vm_name,
             result=result,
             limit=limit + 1,  # Request one extra to check if more exist
-            offset=offset
+            offset=offset,
         )
 
         # Check if more results exist
@@ -170,7 +169,7 @@ async def query_audit_logs(
                 "vm_name": e.vm_name,
                 "user_role": e.user_role,
                 "details": e.details,
-                "performance_ms": e.performance_ms
+                "performance_ms": e.performance_ms,
             }
             for e in entries
         ]
@@ -189,24 +188,20 @@ async def query_audit_logs(
                 "vm_name": vm_name,
                 "result": result,
                 "limit": limit,
-                "offset": offset
-            }
+                "offset": offset,
+            },
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Audit log query failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Audit log query error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Audit log query error: {str(e)}")
 
 
 @router.get("/statistics", response_model=AuditStatisticsResponse)
 async def get_audit_statistics(
-    request: Request,
-    admin_check: bool = Depends(check_admin_permission)
+    request: Request, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Get audit logging statistics
@@ -222,23 +217,20 @@ async def get_audit_statistics(
             statistics=stats,
             vm_info={
                 "vm_source": audit_logger.vm_source,
-                "vm_name": audit_logger.vm_name
-            }
+                "vm_name": audit_logger.vm_name,
+            },
         )
 
     except Exception as e:
         logger.error(f"Failed to get audit statistics: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Statistics error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Statistics error: {str(e)}")
 
 
 @router.get("/session/{session_id}", response_model=AuditQueryResponse)
 async def get_session_audit_trail(
     request: Request,
     session_id: str,
-    admin_check: bool = Depends(check_admin_permission)
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get complete audit trail for a specific session
@@ -254,10 +246,7 @@ async def get_session_audit_trail(
         start_time = end_time - timedelta(days=30)
 
         entries = await audit_logger.query(
-            start_time=start_time,
-            end_time=end_time,
-            session_id=session_id,
-            limit=1000
+            start_time=start_time, end_time=end_time, session_id=session_id, limit=1000
         )
 
         entry_dicts = [
@@ -270,7 +259,7 @@ async def get_session_audit_trail(
                 "ip_address": e.ip_address,
                 "resource": e.resource,
                 "vm_source": e.vm_source,
-                "details": e.details
+                "details": e.details,
             }
             for e in entries
         ]
@@ -280,14 +269,13 @@ async def get_session_audit_trail(
             total_returned=len(entry_dicts),
             has_more=False,
             entries=entry_dicts,
-            query={"session_id": session_id}
+            query={"session_id": session_id},
         )
 
     except Exception as e:
         logger.error(f"Session audit trail query failed: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Session audit query error: {str(e)}"
+            status_code=500, detail=f"Session audit query error: {str(e)}"
         )
 
 
@@ -296,7 +284,7 @@ async def get_user_audit_trail(
     request: Request,
     user_id: str,
     days: int = Query(7, ge=1, le=90, description="Days of history to retrieve"),
-    admin_check: bool = Depends(check_admin_permission)
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get audit trail for a specific user
@@ -311,10 +299,7 @@ async def get_user_audit_trail(
         start_time = end_time - timedelta(days=days)
 
         entries = await audit_logger.query(
-            start_time=start_time,
-            end_time=end_time,
-            user_id=user_id,
-            limit=1000
+            start_time=start_time, end_time=end_time, user_id=user_id, limit=1000
         )
 
         entry_dicts = [
@@ -327,7 +312,7 @@ async def get_user_audit_trail(
                 "ip_address": e.ip_address,
                 "resource": e.resource,
                 "vm_source": e.vm_source,
-                "details": e.details
+                "details": e.details,
             }
             for e in entries
         ]
@@ -337,15 +322,12 @@ async def get_user_audit_trail(
             total_returned=len(entry_dicts),
             has_more=False,
             entries=entry_dicts,
-            query={"user_id": user_id, "days": days}
+            query={"user_id": user_id, "days": days},
         )
 
     except Exception as e:
         logger.error(f"User audit trail query failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"User audit query error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"User audit query error: {str(e)}")
 
 
 @router.get("/failures", response_model=AuditQueryResponse)
@@ -353,7 +335,7 @@ async def get_failed_operations(
     request: Request,
     hours: int = Query(24, ge=1, le=168, description="Hours of history to check"),
     result_filter: AuditResult = Query("denied", description="Result type to filter"),
-    admin_check: bool = Depends(check_admin_permission)
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get failed or denied operations for security monitoring
@@ -373,10 +355,7 @@ async def get_failed_operations(
         start_time = end_time - timedelta(hours=hours)
 
         entries = await audit_logger.query(
-            start_time=start_time,
-            end_time=end_time,
-            result=result_filter,
-            limit=500
+            start_time=start_time, end_time=end_time, result=result_filter, limit=500
         )
 
         entry_dicts = [
@@ -390,7 +369,7 @@ async def get_failed_operations(
                 "ip_address": e.ip_address,
                 "resource": e.resource,
                 "vm_source": e.vm_source,
-                "details": e.details
+                "details": e.details,
             }
             for e in entries
         ]
@@ -400,14 +379,13 @@ async def get_failed_operations(
             total_returned=len(entry_dicts),
             has_more=False,
             entries=entry_dicts,
-            query={"result_filter": result_filter, "hours": hours}
+            query={"result_filter": result_filter, "hours": hours},
         )
 
     except Exception as e:
         logger.error(f"Failed operations query error: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed operations query error: {str(e)}"
+            status_code=500, detail=f"Failed operations query error: {str(e)}"
         )
 
 
@@ -415,7 +393,7 @@ async def get_failed_operations(
 async def cleanup_old_logs(
     request: Request,
     cleanup_request: CleanupRequest,
-    admin_check: bool = Depends(check_admin_permission)
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Trigger cleanup of old audit logs
@@ -429,7 +407,7 @@ async def cleanup_old_logs(
         if not cleanup_request.confirm:
             raise HTTPException(
                 status_code=400,
-                detail="Cleanup requires confirmation (set 'confirm' to true)"
+                detail="Cleanup requires confirmation (set 'confirm' to true)",
             )
 
         audit_logger = await get_audit_logger()
@@ -440,23 +418,19 @@ async def cleanup_old_logs(
         return {
             "success": True,
             "message": f"Audit logs older than {cleanup_request.days_to_keep} days have been deleted",
-            "days_retained": cleanup_request.days_to_keep
+            "days_retained": cleanup_request.days_to_keep,
         }
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Audit log cleanup failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Cleanup error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Cleanup error: {str(e)}")
 
 
 @router.get("/operations")
 async def list_operation_types(
-    request: Request,
-    admin_check: bool = Depends(check_admin_permission)
+    request: Request, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     List all available operation types for filtering
@@ -477,12 +451,11 @@ async def list_operation_types(
         return {
             "success": True,
             "categories": categories,
-            "total_operations": len(OPERATION_CATEGORIES)
+            "total_operations": len(OPERATION_CATEGORIES),
         }
 
     except Exception as e:
         logger.error(f"Failed to list operations: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Operation listing error: {str(e)}"
+            status_code=500, detail=f"Operation listing error: {str(e)}"
         )

@@ -16,8 +16,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from backend.services.redis_service_manager import (RedisConnectionError,
-                                                    RedisServiceManager)
+from backend.services.redis_service_manager import (
+    RedisConnectionError,
+    RedisServiceManager,
+)
 from src.auth_middleware import auth_middleware
 
 logger = logging.getLogger(__name__)

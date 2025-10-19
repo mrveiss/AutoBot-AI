@@ -19,41 +19,44 @@ from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class ServiceEndpoint:
     """Service endpoint with health status"""
+
     host: str
     port: int
     protocol: str = "http"
     last_check: float = 0
     is_healthy: bool = False
     response_time: float = 0.0
-    
+
     @property
     def url(self) -> str:
         return f"{self.protocol}://{self.host}:{self.port}"
-    
+
     def is_stale(self, max_age: float = 30.0) -> bool:
         """Check if health status is stale"""
         return time.time() - self.last_check > max_age
 
+
 class DistributedServiceDiscovery:
     """
     Service discovery for distributed VM architecture
-    
+
     ELIMINATES DNS TIMEOUTS BY:
     - Maintaining cached service endpoints
     - Async health checking without blocking
     - Instant service resolution
     - Automatic failover to backup endpoints
     """
-    
+
     def __init__(self):
         self.services: Dict[str, ServiceEndpoint] = {}
         self.backup_endpoints: Dict[str, list] = {}
         self._health_check_task = None
         self._initialize_service_registry()
-    
+
     def _initialize_service_registry(self):
         """Initialize service registry from unified configuration"""
 
@@ -66,7 +69,10 @@ class DistributedServiceDiscovery:
         redis_config = unified_config_manager.get_redis_config()
 
         # Get system defaults for ultimate fallbacks
-        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+        system_defaults = (
+            unified_config_manager.get_config_section("service_discovery_defaults")
+            or {}
+        )
 
         # Helper to safely get host/port from config
         def get_config_value(service_name, key, default_key):
@@ -81,7 +87,9 @@ class DistributedServiceDiscovery:
 
             # If not in config, try system defaults
             if not value:
-                value = system_defaults.get(default_key, "localhost" if key == "host" else 8000)
+                value = system_defaults.get(
+                    default_key, "localhost" if key == "host" else 8000
+                )
 
             return value
 
@@ -90,37 +98,37 @@ class DistributedServiceDiscovery:
             "redis": ServiceEndpoint(
                 get_config_value("redis", "host", "redis_host"),
                 get_config_value("redis", "port", "redis_port"),
-                "redis"
+                "redis",
             ),
             "backend": ServiceEndpoint(
                 get_config_value("backend", "host", "backend_host"),
                 get_config_value("backend", "port", "backend_port"),
-                "http"
+                "http",
             ),
             "frontend": ServiceEndpoint(
                 get_config_value("frontend", "host", "frontend_host"),
                 get_config_value("frontend", "port", "frontend_port"),
-                "http"
+                "http",
             ),
             "npu_worker": ServiceEndpoint(
                 get_config_value("npu_worker", "host", "npu_worker_host"),
                 get_config_value("npu_worker", "port", "npu_worker_port"),
-                "http"
+                "http",
             ),
             "ai_stack": ServiceEndpoint(
                 get_config_value("ai_stack", "host", "ai_stack_host"),
                 get_config_value("ai_stack", "port", "ai_stack_port"),
-                "http"
+                "http",
             ),
             "browser": ServiceEndpoint(
                 get_config_value("browser_service", "host", "browser_service_host"),
                 get_config_value("browser_service", "port", "browser_service_port"),
-                "http"
+                "http",
             ),
             "ollama": ServiceEndpoint(
                 get_config_value("ollama", "host", "ollama_host"),
                 get_config_value("ollama", "port", "ollama_port"),
-                "http"
+                "http",
             ),
         }
 
@@ -130,77 +138,107 @@ class DistributedServiceDiscovery:
             "redis": [
                 ServiceEndpoint(
                     backup_configs.get("redis_backup_1_host", "localhost"),
-                    backup_configs.get("redis_backup_1_port", get_config_value("redis", "port", "redis_port")),
-                    "redis"
+                    backup_configs.get(
+                        "redis_backup_1_port",
+                        get_config_value("redis", "port", "redis_port"),
+                    ),
+                    "redis",
                 ),
                 ServiceEndpoint(
-                    backup_configs.get("redis_backup_2_host", get_config_value("backend", "host", "backend_host")),
-                    backup_configs.get("redis_backup_2_port", get_config_value("redis", "port", "redis_port")),
-                    "redis"
+                    backup_configs.get(
+                        "redis_backup_2_host",
+                        get_config_value("backend", "host", "backend_host"),
+                    ),
+                    backup_configs.get(
+                        "redis_backup_2_port",
+                        get_config_value("redis", "port", "redis_port"),
+                    ),
+                    "redis",
                 ),
             ],
             "backend": [
                 ServiceEndpoint(
                     backup_configs.get("backend_backup_1_host", "localhost"),
-                    backup_configs.get("backend_backup_1_port", get_config_value("backend", "port", "backend_port")),
-                    "http"
+                    backup_configs.get(
+                        "backend_backup_1_port",
+                        get_config_value("backend", "port", "backend_port"),
+                    ),
+                    "http",
                 ),
             ],
             "ollama": [
                 ServiceEndpoint(
-                    backup_configs.get("ollama_backup_1_host", get_config_value("ai_stack", "host", "ai_stack_host")),
-                    backup_configs.get("ollama_backup_1_port", get_config_value("ollama", "port", "ollama_port")),
-                    "http"
+                    backup_configs.get(
+                        "ollama_backup_1_host",
+                        get_config_value("ai_stack", "host", "ai_stack_host"),
+                    ),
+                    backup_configs.get(
+                        "ollama_backup_1_port",
+                        get_config_value("ollama", "port", "ollama_port"),
+                    ),
+                    "http",
                 ),
                 ServiceEndpoint(
-                    backup_configs.get("ollama_backup_2_host", get_config_value("npu_worker", "host", "npu_worker_host")),
-                    backup_configs.get("ollama_backup_2_port", get_config_value("ollama", "port", "ollama_port")),
-                    "http"
+                    backup_configs.get(
+                        "ollama_backup_2_host",
+                        get_config_value("npu_worker", "host", "npu_worker_host"),
+                    ),
+                    backup_configs.get(
+                        "ollama_backup_2_port",
+                        get_config_value("ollama", "port", "ollama_port"),
+                    ),
+                    "http",
                 ),
-            ]
+            ],
         }
 
         self.services.update(primary_services)
         self.backup_endpoints.update(backup_endpoints)
 
-        logger.info(f"🌐 Service registry initialized with {len(self.services)} services")
-    
-    async def get_service_endpoint(self, service_name: str) -> Optional[ServiceEndpoint]:
+        logger.info(
+            f"🌐 Service registry initialized with {len(self.services)} services"
+        )
+
+    async def get_service_endpoint(
+        self, service_name: str
+    ) -> Optional[ServiceEndpoint]:
         """
         Get healthy service endpoint instantly (no DNS resolution delays)
-        
+
         ELIMINATES TIMEOUTS BY:
         - Returning cached healthy endpoints immediately
         - No DNS resolution required
         - Automatic failover to backup endpoints
         """
-        
+
         # Check primary endpoint
         if service_name in self.services:
             endpoint = self.services[service_name]
-            
+
             # Return immediately if recently checked and healthy
             if not endpoint.is_stale() and endpoint.is_healthy:
                 return endpoint
-            
+
             # Quick async health check (non-blocking)
             if await self._quick_health_check(endpoint):
                 return endpoint
-        
+
         # Try backup endpoints if primary failed
         if service_name in self.backup_endpoints:
             for backup in self.backup_endpoints[service_name]:
                 if await self._quick_health_check(backup):
-                    logger.warning(f"🔄 Using backup endpoint for {service_name}: {backup.url}")
+                    logger.warning(
+                        f"🔄 Using backup endpoint for {service_name}: {backup.url}"
+                    )
                     return backup
-        
+
         # Return primary even if unhealthy (let caller handle)
         return self.services.get(service_name)
-    
+
     async def _quick_health_check(self, endpoint: ServiceEndpoint) -> bool:
         """
         Non-blocking health check with immediate return
-        
+
         ELIMINATES BLOCKING BY:
         - Using asyncio.timeout with very short duration
         - Returns immediately on success/failure
@@ -216,12 +254,12 @@ class DistributedServiceDiscovery:
             endpoint.is_healthy = False
             endpoint.last_check = time.time()
             return False
-    
+
     async def _check_redis_health(self, endpoint: ServiceEndpoint) -> bool:
         """Quick Redis connection test"""
         try:
             import redis.asyncio as redis
-            
+
             # Immediate connection test (no retries)
             client = redis.Redis(
                 host=endpoint.host,
@@ -229,36 +267,40 @@ class DistributedServiceDiscovery:
                 socket_connect_timeout=0.1,  # 100ms max
                 socket_timeout=0.1,
                 retry_on_timeout=False,
-                health_check_interval=0
+                health_check_interval=0,
             )
-            
+
             start_time = time.time()
             await client.ping()
             response_time = time.time() - start_time
             await client.aclose()
-            
+
             endpoint.is_healthy = True
             endpoint.response_time = response_time
             endpoint.last_check = time.time()
-            
+
             return True
-            
+
         except Exception:
             endpoint.is_healthy = False
             endpoint.last_check = time.time()
             return False
-    
+
     async def _check_http_health(self, endpoint: ServiceEndpoint) -> bool:
         """Quick HTTP health check"""
         try:
             timeout = aiohttp.ClientTimeout(total=0.2, connect=0.1)  # 200ms max
-            
+
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 start_time = time.time()
-                
+
                 # Try health endpoint first, then root
-                health_urls = [f"{endpoint.url}/health", f"{endpoint.url}/", endpoint.url]
-                
+                health_urls = [
+                    f"{endpoint.url}/health",
+                    f"{endpoint.url}/",
+                    endpoint.url,
+                ]
+
                 for url in health_urls:
                     try:
                         async with session.get(url) as response:
@@ -270,20 +312,20 @@ class DistributedServiceDiscovery:
                                 return True
                     except:
                         continue
-                
+
                 endpoint.is_healthy = False
                 endpoint.last_check = time.time()
                 return False
-                
+
         except Exception:
             endpoint.is_healthy = False
             endpoint.last_check = time.time()
             return False
-    
+
     async def get_redis_connection_params(self) -> Dict:
         """
         Get Redis connection parameters with instant resolution
-        
+
         ELIMINATES DNS TIMEOUT BY:
         - Using cached IP addresses
         - Immediate parameter return
@@ -292,23 +334,25 @@ class DistributedServiceDiscovery:
         endpoint = await self.get_service_endpoint("redis")
         if not endpoint:
             raise ConnectionError("No Redis endpoint available")
-        
+
         return {
-            'host': endpoint.host,
-            'port': endpoint.port,
-            'decode_responses': True,
-            'socket_connect_timeout': 0.1,  # Very short, non-blocking
-            'socket_timeout': 0.5,
-            'retry_on_timeout': False,
-            'health_check_interval': 0,
-            'max_connections': 5,
+            "host": endpoint.host,
+            "port": endpoint.port,
+            "decode_responses": True,
+            "socket_connect_timeout": 0.1,  # Very short, non-blocking
+            "socket_timeout": 0.5,
+            "retry_on_timeout": False,
+            "health_check_interval": 0,
+            "max_connections": 5,
         }
-    
+
     def start_background_health_monitoring(self):
         """Start background health monitoring (optional)"""
         if not self._health_check_task:
-            self._health_check_task = asyncio.create_task(self._background_health_monitor())
-    
+            self._health_check_task = asyncio.create_task(
+                self._background_health_monitor()
+            )
+
     async def _background_health_monitor(self):
         """Background task to keep service health updated"""
         while True:
@@ -319,18 +363,22 @@ class DistributedServiceDiscovery:
                     if endpoint.is_stale(60.0):  # Check stale services
                         task = asyncio.create_task(self._quick_health_check(endpoint))
                         tasks.append((service_name, task))
-                
+
                 if tasks:
-                    await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
-                
+                    await asyncio.gather(
+                        *[task for _, task in tasks], return_exceptions=True
+                    )
+
                 await asyncio.sleep(30)  # Check every 30 seconds
-                
+
             except Exception as e:
                 logger.error(f"Background health monitoring error: {e}")
                 await asyncio.sleep(60)  # Back off on errors
 
+
 # Global instance for easy access
 _service_discovery = None
+
 
 async def get_service_discovery() -> DistributedServiceDiscovery:
     """Get global service discovery instance"""
@@ -339,6 +387,7 @@ async def get_service_discovery() -> DistributedServiceDiscovery:
         _service_discovery = DistributedServiceDiscovery()
         _service_discovery.start_background_health_monitoring()
     return _service_discovery
+
 
 async def get_service_url(service_name: str) -> str:
     """Quick service URL resolution without DNS delays"""
@@ -351,10 +400,14 @@ async def get_service_url(service_name: str) -> str:
         return endpoint.url
     else:
         # Configuration-driven fallback
-        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+        system_defaults = (
+            unified_config_manager.get_config_section("service_discovery_defaults")
+            or {}
+        )
         fallback_host = system_defaults.get("fallback_host", "localhost")
         fallback_port = system_defaults.get("fallback_port", 8000)
         return f"http://{fallback_host}:{fallback_port}"
+
 
 # Synchronous helpers for backward compatibility with sync Redis clients
 def get_redis_connection_params_sync() -> Dict:
@@ -372,7 +425,9 @@ def get_redis_connection_params_sync() -> Dict:
 
     # Get Redis configuration from unified config manager
     redis_config = unified_config_manager.get_redis_config()
-    system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+    system_defaults = (
+        unified_config_manager.get_config_section("service_discovery_defaults") or {}
+    )
 
     # Get host and port from configuration
     host = redis_config.get("host") or system_defaults.get("redis_host", "localhost")
@@ -380,15 +435,16 @@ def get_redis_connection_params_sync() -> Dict:
 
     # Return cached endpoint parameters immediately
     return {
-        'host': host,
-        'port': int(port),
-        'decode_responses': True,
-        'socket_connect_timeout': 0.5,  # Fast timeout for distributed setup
-        'socket_timeout': 1.0,
-        'retry_on_timeout': False,
-        'health_check_interval': 0,
-        'max_connections': 10,
+        "host": host,
+        "port": int(port),
+        "decode_responses": True,
+        "socket_connect_timeout": 0.5,  # Fast timeout for distributed setup
+        "socket_timeout": 1.0,
+        "retry_on_timeout": False,
+        "health_check_interval": 0,
+        "max_connections": 10,
     }
+
 
 def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
     """
@@ -403,7 +459,9 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
     services_config = unified_config_manager.get_distributed_services_config()
     backend_config = unified_config_manager.get_backend_config()
     redis_config = unified_config_manager.get_redis_config()
-    system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+    system_defaults = (
+        unified_config_manager.get_config_section("service_discovery_defaults") or {}
+    )
 
     # Helper to get config value
     def get_value(svc_name, key, default_key, default_val):
@@ -421,38 +479,42 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
         "redis": {
             "host": get_value("redis", "host", "redis_host", "localhost"),
             "port": int(get_value("redis", "port", "redis_port", 6379)),
-            "protocol": "redis"
+            "protocol": "redis",
         },
         "backend": {
             "host": get_value("backend", "host", "backend_host", "localhost"),
             "port": int(get_value("backend", "port", "backend_port", 8001)),
-            "protocol": "http"
+            "protocol": "http",
         },
         "frontend": {
             "host": get_value("frontend", "host", "frontend_host", "localhost"),
             "port": int(get_value("frontend", "port", "frontend_port", 5173)),
-            "protocol": "http"
+            "protocol": "http",
         },
         "npu_worker": {
             "host": get_value("npu_worker", "host", "npu_worker_host", "localhost"),
             "port": int(get_value("npu_worker", "port", "npu_worker_port", 8081)),
-            "protocol": "http"
+            "protocol": "http",
         },
         "ai_stack": {
             "host": get_value("ai_stack", "host", "ai_stack_host", "localhost"),
             "port": int(get_value("ai_stack", "port", "ai_stack_port", 8080)),
-            "protocol": "http"
+            "protocol": "http",
         },
         "browser": {
-            "host": get_value("browser_service", "host", "browser_service_host", "localhost"),
-            "port": int(get_value("browser_service", "port", "browser_service_port", 3000)),
-            "protocol": "http"
+            "host": get_value(
+                "browser_service", "host", "browser_service_host", "localhost"
+            ),
+            "port": int(
+                get_value("browser_service", "port", "browser_service_port", 3000)
+            ),
+            "protocol": "http",
         },
         "ollama": {
             "host": get_value("ollama", "host", "ollama_host", "localhost"),
             "port": int(get_value("ollama", "port", "ollama_port", 11434)),
-            "protocol": "http"
-        }
+            "protocol": "http",
+        },
     }
 
     return service_endpoints.get(service_name)

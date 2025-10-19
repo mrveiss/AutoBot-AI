@@ -36,14 +36,16 @@ logger = logging.getLogger(__name__)
 class KnowledgeBaseInitializer:
     """Thread-safe knowledge base initializer with async factory pattern"""
 
-    _instance: Optional['KnowledgeBase'] = None
+    _instance: Optional["KnowledgeBase"] = None
     _initialization_lock = asyncio.Lock()
     _initialization_complete = asyncio.Event()
     _initialization_failed = False
     _initialization_error: Optional[Exception] = None
 
     @classmethod
-    async def get_instance(cls, force_reinit: bool = False) -> Optional['KnowledgeBase']:
+    async def get_instance(
+        cls, force_reinit: bool = False
+    ) -> Optional["KnowledgeBase"]:
         """Get or create knowledge base instance with proper async initialization"""
 
         # If we already have an instance and don't need to reinitialize
@@ -52,7 +54,9 @@ class KnowledgeBaseInitializer:
 
         # If initialization failed before and we're not forcing reinit
         if cls._initialization_failed and not force_reinit:
-            logger.warning(f"Knowledge base initialization previously failed: {cls._initialization_error}")
+            logger.warning(
+                f"Knowledge base initialization previously failed: {cls._initialization_error}"
+            )
             return None
 
         async with cls._initialization_lock:
@@ -92,7 +96,9 @@ class KnowledgeBaseInitializer:
                 return None
 
     @classmethod
-    async def wait_for_initialization(cls, timeout: float = 30.0) -> Optional['KnowledgeBase']:
+    async def wait_for_initialization(
+        cls, timeout: float = 30.0
+    ) -> Optional["KnowledgeBase"]:
         """Wait for initialization to complete with timeout"""
         try:
             await asyncio.wait_for(cls._initialization_complete.wait(), timeout=timeout)
@@ -110,15 +116,19 @@ class KnowledgeBaseInitializer:
     def get_initialization_status(cls) -> Dict[str, Any]:
         """Get detailed initialization status"""
         return {
-            'initialized': cls.is_initialized(),
-            'failed': cls._initialization_failed,
-            'error': str(cls._initialization_error) if cls._initialization_error else None,
-            'instance_exists': cls._instance is not None
+            "initialized": cls.is_initialized(),
+            "failed": cls._initialization_failed,
+            "error": (
+                str(cls._initialization_error) if cls._initialization_error else None
+            ),
+            "instance_exists": cls._instance is not None,
         }
 
 
 # Convenience functions for easy access
-async def get_knowledge_base(force_reinit: bool = False, timeout: float = 30.0) -> Optional['KnowledgeBase']:
+async def get_knowledge_base(
+    force_reinit: bool = False, timeout: float = 30.0
+) -> Optional["KnowledgeBase"]:
     """Get knowledge base instance with async initialization"""
     try:
         # Try to get existing instance first
@@ -135,12 +145,14 @@ async def get_knowledge_base(force_reinit: bool = False, timeout: float = 30.0) 
         return None
 
 
-def get_knowledge_base_sync() -> Optional['KnowledgeBase']:
+def get_knowledge_base_sync() -> Optional["KnowledgeBase"]:
     """Synchronous wrapper for getting knowledge base (uses existing instance only)"""
     if KnowledgeBaseInitializer.is_initialized():
         return KnowledgeBaseInitializer._instance
     else:
-        logger.warning("Knowledge base not initialized - use async get_knowledge_base() for initialization")
+        logger.warning(
+            "Knowledge base not initialized - use async get_knowledge_base() for initialization"
+        )
         return None
 
 
@@ -189,36 +201,37 @@ async def health_check() -> Dict[str, Any]:
     """Comprehensive health check for knowledge base"""
     status = KnowledgeBaseInitializer.get_initialization_status()
 
-    if status['initialized']:
+    if status["initialized"]:
         try:
             kb = KnowledgeBaseInitializer._instance
             # Test basic operations
-            redis_status = await kb.ping_redis() if hasattr(kb, 'ping_redis') else "unknown"
+            redis_status = (
+                await kb.ping_redis() if hasattr(kb, "ping_redis") else "unknown"
+            )
             vector_store_status = "healthy" if kb.vector_store else "unavailable"
 
-            status.update({
-                'redis_connection': redis_status,
-                'vector_store': vector_store_status,
-                'health': 'healthy'
-            })
+            status.update(
+                {
+                    "redis_connection": redis_status,
+                    "vector_store": vector_store_status,
+                    "health": "healthy",
+                }
+            )
         except Exception as e:
-            status.update({
-                'health': 'unhealthy',
-                'health_error': str(e)
-            })
+            status.update({"health": "unhealthy", "health_error": str(e)})
     else:
-        status['health'] = 'not_initialized'
+        status["health"] = "not_initialized"
 
     return status
 
 
 # Export main functions
 __all__ = [
-    'get_knowledge_base',
-    'get_knowledge_base_sync',
-    'knowledge_base_context',
-    'initialize_knowledge_base_background',
-    'start_background_initialization',
-    'health_check',
-    'KnowledgeBaseInitializer'
+    "get_knowledge_base",
+    "get_knowledge_base_sync",
+    "knowledge_base_context",
+    "initialize_knowledge_base_background",
+    "start_background_initialization",
+    "health_check",
+    "KnowledgeBaseInitializer",
 ]

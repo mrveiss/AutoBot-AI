@@ -50,7 +50,7 @@ def create_request_metadata(
     request_id: Optional[str] = None,
     user_id: Optional[str] = None,
     session_id: Optional[str] = None,
-    additional_data: Optional[Dict[str, Any]] = None
+    additional_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Create standardized request metadata.
@@ -65,16 +65,16 @@ def create_request_metadata(
         Dictionary with standardized request metadata
     """
     metadata = {
-        'request_id': request_id or generate_request_id(),
-        'timestamp': time.time(),
-        'iso_timestamp': datetime.now().isoformat()
+        "request_id": request_id or generate_request_id(),
+        "timestamp": time.time(),
+        "iso_timestamp": datetime.now().isoformat(),
     }
 
     if user_id:
-        metadata['user_id'] = user_id
+        metadata["user_id"] = user_id
 
     if session_id:
-        metadata['session_id'] = session_id
+        metadata["session_id"] = session_id
 
     if additional_data:
         metadata.update(additional_data)
@@ -93,14 +93,14 @@ def extract_request_info(request_data: Dict[str, Any]) -> Dict[str, Any]:
         Extracted and normalized request information
     """
     return {
-        'request_id': request_data.get('request_id', generate_request_id()),
-        'timestamp': request_data.get('timestamp', time.time()),
-        'user_agent': request_data.get('user_agent'),
-        'ip_address': request_data.get('ip_address'),
-        'method': request_data.get('method'),
-        'path': request_data.get('path'),
-        'query_params': request_data.get('query_params', {}),
-        'headers': request_data.get('headers', {})
+        "request_id": request_data.get("request_id", generate_request_id()),
+        "timestamp": request_data.get("timestamp", time.time()),
+        "user_agent": request_data.get("user_agent"),
+        "ip_address": request_data.get("ip_address"),
+        "method": request_data.get("method"),
+        "path": request_data.get("path"),
+        "query_params": request_data.get("query_params", {}),
+        "headers": request_data.get("headers", {}),
     }
 
 
@@ -122,9 +122,9 @@ class RequestTracker:
             **metadata: Additional metadata to track
         """
         self._active_requests[request_id] = {
-            'operation': operation,
-            'start_time': time.time(),
-            'metadata': metadata
+            "operation": operation,
+            "start_time": time.time(),
+            "metadata": metadata,
         }
 
     def end_request(self, request_id: str) -> Optional[Dict[str, Any]]:
@@ -142,25 +142,22 @@ class RequestTracker:
 
         request_data = self._active_requests.pop(request_id)
         end_time = time.time()
-        duration = end_time - request_data['start_time']
+        duration = end_time - request_data["start_time"]
 
         return {
-            'request_id': request_id,
-            'operation': request_data['operation'],
-            'duration': duration,
-            'start_time': request_data['start_time'],
-            'end_time': end_time,
-            'metadata': request_data['metadata']
+            "request_id": request_id,
+            "operation": request_data["operation"],
+            "duration": duration,
+            "start_time": request_data["start_time"],
+            "end_time": end_time,
+            "metadata": request_data["metadata"],
         }
 
     def get_active_requests(self) -> Dict[str, Dict[str, Any]]:
         """Get currently active requests"""
         current_time = time.time()
         return {
-            req_id: {
-                **data,
-                'current_duration': current_time - data['start_time']
-            }
+            req_id: {**data, "current_duration": current_time - data["start_time"]}
             for req_id, data in self._active_requests.items()
         }
 
@@ -176,8 +173,9 @@ class RequestTracker:
         """
         current_time = time.time()
         stale_requests = [
-            req_id for req_id, data in self._active_requests.items()
-            if current_time - data['start_time'] > max_age_seconds
+            req_id
+            for req_id, data in self._active_requests.items()
+            if current_time - data["start_time"] > max_age_seconds
         ]
 
         for req_id in stale_requests:
@@ -188,6 +186,7 @@ class RequestTracker:
 
 # Global request tracker instance
 _request_tracker = RequestTracker()
+
 
 def get_request_tracker() -> RequestTracker:
     """Get the global request tracker instance"""
@@ -221,4 +220,4 @@ def is_chat_request_id(request_id: str) -> bool:
     Returns:
         True if it's a chat request ID format
     """
-    return request_id.startswith('chat_') and len(request_id.split('_')) >= 3
+    return request_id.startswith("chat_") and len(request_id.split("_")) >= 3

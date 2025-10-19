@@ -38,9 +38,10 @@ logger = logging.getLogger(__name__)
 
 class EnforcementMode(str, Enum):
     """Access control enforcement modes for gradual rollout"""
-    DISABLED = "disabled"      # No enforcement, no logging
-    LOG_ONLY = "log_only"      # Log violations but don't block
-    ENFORCED = "enforced"      # Full enforcement, block violations
+
+    DISABLED = "disabled"  # No enforcement, no logging
+    LOG_ONLY = "log_only"  # Log violations but don't block
+    ENFORCED = "enforced"  # Full enforcement, block violations
 
 
 class FeatureFlags:
@@ -109,11 +110,13 @@ class FeatureFlags:
 
             # Record change in history
             history_key = "feature_flag:access_control:history"
-            history_entry = json.dumps({
-                "timestamp": datetime.now().isoformat(),
-                "mode": mode.value,
-                "changed_by": "system"
-            })
+            history_entry = json.dumps(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "mode": mode.value,
+                    "changed_by": "system",
+                }
+            )
             await redis._redis.lpush(history_key, history_entry)
             await redis._redis.ltrim(history_key, 0, 99)  # Keep last 100 changes
 
@@ -124,7 +127,9 @@ class FeatureFlags:
             logger.error(f"Failed to set enforcement mode: {e}")
             return False
 
-    async def get_endpoint_enforcement(self, endpoint: str) -> Optional[EnforcementMode]:
+    async def get_endpoint_enforcement(
+        self, endpoint: str
+    ) -> Optional[EnforcementMode]:
         """
         Get enforcement mode for specific endpoint (allows per-endpoint control)
 
@@ -151,9 +156,7 @@ class FeatureFlags:
             return None
 
     async def set_endpoint_enforcement(
-        self,
-        endpoint: str,
-        mode: Optional[EnforcementMode]
+        self, endpoint: str, mode: Optional[EnforcementMode]
     ) -> bool:
         """
         Set enforcement mode for specific endpoint
@@ -206,7 +209,7 @@ class FeatureFlags:
             if isinstance(value, bytes):
                 value = value.decode()
 
-            return value.lower() in ('true', '1', 'yes', 'on')
+            return value.lower() in ("true", "1", "yes", "on")
 
         except Exception as e:
             logger.error(f"Failed to get feature flag {feature_name}: {e}")
@@ -249,7 +252,9 @@ class FeatureFlags:
             mode = await self.get_enforcement_mode()
 
             # Get change history
-            history_raw = await redis._redis.lrange("feature_flag:access_control:history", 0, 9)
+            history_raw = await redis._redis.lrange(
+                "feature_flag:access_control:history", 0, 9
+            )
             history = []
             for entry in history_raw:
                 if isinstance(entry, bytes):
@@ -264,9 +269,7 @@ class FeatureFlags:
             cursor = 0
             while True:
                 cursor, keys = await redis._redis.scan(
-                    cursor,
-                    match="feature_flag:access_control:endpoint:*",
-                    count=100
+                    cursor, match="feature_flag:access_control:endpoint:*", count=100
                 )
                 endpoint_keys.extend(keys)
                 if cursor == 0:
@@ -287,15 +290,12 @@ class FeatureFlags:
                 "current_mode": mode.value,
                 "history": history,
                 "endpoint_overrides": endpoint_overrides,
-                "total_endpoints_configured": len(endpoint_overrides)
+                "total_endpoints_configured": len(endpoint_overrides),
             }
 
         except Exception as e:
             logger.error(f"Failed to get rollout statistics: {e}")
-            return {
-                "error": str(e),
-                "current_mode": "unknown"
-            }
+            return {"error": str(e), "current_mode": "unknown"}
 
     async def clear_all_flags(self) -> bool:
         """
@@ -312,9 +312,7 @@ class FeatureFlags:
             deleted = 0
             while True:
                 cursor, keys = await redis._redis.scan(
-                    cursor,
-                    match="feature_flag:*",
-                    count=100
+                    cursor, match="feature_flag:*", count=100
                 )
                 if keys:
                     deleted += await redis.delete(*keys)

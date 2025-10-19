@@ -47,7 +47,7 @@ _validation_judges = None
 def generate_fallback_report():
     """Generate fallback mock data when the dashboard generator is not available"""
     current_time = datetime.now()
-    
+
     return {
         "status": "success",
         "report": {
@@ -56,39 +56,47 @@ def generate_fallback_report():
                 "completed_phases": 8,
                 "total_phases": 12,
                 "active_capabilities": 15,
-                "system_health": "healthy"
+                "system_health": "healthy",
             },
             "phase_details": [
                 {
                     "name": "Phase 1 - Core Infrastructure",
                     "status": "completed",
                     "progress": 100,
-                    "capabilities": ["Redis", "FastAPI", "Docker"]
+                    "capabilities": ["Redis", "FastAPI", "Docker"],
                 },
                 {
                     "name": "Phase 2 - Frontend Framework",
-                    "status": "completed", 
+                    "status": "completed",
                     "progress": 100,
-                    "capabilities": ["Vue.js", "Component System", "Routing"]
+                    "capabilities": ["Vue.js", "Component System", "Routing"],
                 },
                 {
                     "name": "Phase 3 - Knowledge Management",
                     "status": "completed",
                     "progress": 95,
-                    "capabilities": ["LlamaIndex", "Vector Search", "Document Processing"]
+                    "capabilities": [
+                        "LlamaIndex",
+                        "Vector Search",
+                        "Document Processing",
+                    ],
                 },
                 {
                     "name": "Phase 4 - Chat System",
                     "status": "in_progress",
                     "progress": 80,
-                    "capabilities": ["Chat Interface", "LLM Integration", "Session Management"]
+                    "capabilities": [
+                        "Chat Interface",
+                        "LLM Integration",
+                        "Session Management",
+                    ],
                 },
                 {
                     "name": "Phase 5 - Monitoring",
-                    "status": "in_progress", 
+                    "status": "in_progress",
                     "progress": 70,
-                    "capabilities": ["System Metrics", "Log Analysis", "Health Checks"]
-                }
+                    "capabilities": ["System Metrics", "Log Analysis", "Health Checks"],
+                },
             ],
             "alerts": [
                 {
@@ -96,7 +104,7 @@ def generate_fallback_report():
                     "title": "Memory Usage High",
                     "description": "System memory usage above 80%",
                     "timestamp": (current_time - timedelta(minutes=15)).isoformat(),
-                    "severity": "medium"
+                    "severity": "medium",
                 }
             ],
             "recommendations": [
@@ -104,24 +112,24 @@ def generate_fallback_report():
                     "title": "Optimize Redis Memory Usage",
                     "description": "Consider implementing data expiration policies for Redis keys",
                     "urgency": "medium",
-                    "action": "Review Redis configuration and implement key expiration"
+                    "action": "Review Redis configuration and implement key expiration",
                 },
                 {
                     "title": "Add More Unit Tests",
                     "description": "Current test coverage could be improved",
-                    "urgency": "low", 
-                    "action": "Increase test coverage to above 80%"
-                }
+                    "urgency": "low",
+                    "action": "Increase test coverage to above 80%",
+                },
             ],
             "progression_status": {
                 "can_progress": True,
                 "current_phase": "Phase 4",
                 "next_available": ["Phase 6 - Advanced Features"],
-                "blocked_phases": []
+                "blocked_phases": [],
             },
-            "generated_at": current_time.isoformat()
+            "generated_at": current_time.isoformat(),
         },
-        "timestamp": current_time.isoformat()
+        "timestamp": current_time.isoformat(),
     }
 
 

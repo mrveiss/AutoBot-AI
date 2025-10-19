@@ -9,6 +9,7 @@ from fastapi import Depends
 
 from src.unified_config_manager import UnifiedConfigManager
 from src.constants.network_constants import NetworkConstants
+
 global_config_manager = UnifiedConfigManager()
 
 
@@ -160,9 +161,7 @@ def get_cached_knowledge_base(config: UnifiedConfigManager = Depends(get_config)
     """
     from src.knowledge_base_v2 import KnowledgeBaseV2 as KnowledgeBase
 
-    return dependency_cache.get_or_create(
-        "knowledge_base", lambda: KnowledgeBase()
-    )
+    return dependency_cache.get_or_create("knowledge_base", lambda: KnowledgeBase())
 
 
 def get_cached_orchestrator(config: UnifiedConfigManager = Depends(get_config)):

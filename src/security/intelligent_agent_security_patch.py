@@ -22,7 +22,7 @@ from typing import List, Dict, Optional
 from src.constants.network_constants import NetworkConstants
 from src.security.prompt_injection_detector import (
     get_prompt_injection_detector,
-    InjectionRisk
+    InjectionRisk,
 )
 from src.security.secure_llm_command_parser import get_secure_llm_parser
 from src.enhanced_security_layer import EnhancedSecurityLayer
@@ -34,46 +34,45 @@ class SecureIntelligentAgentMixin:
     """
     Security mixin for IntelligentAgent class
     Adds prompt injection protection and secure command parsing
-    
+
     USAGE:
     Add this mixin to IntelligentAgent class:
-    
+
     class IntelligentAgent(SecureIntelligentAgentMixin):
         def __init__(self, ...):
             super().__init__()
             self._init_security()
             ...
     """
-    
+
     def _init_security(self):
         """Initialize security components"""
         # Initialize prompt injection detector
         self.injection_detector = get_prompt_injection_detector(strict_mode=True)
-        
+
         # Initialize secure command parser
         self.secure_parser = get_secure_llm_parser(strict_mode=True)
-        
+
         # Initialize enhanced security layer for command execution
         self.security_layer = EnhancedSecurityLayer()
-        
+
         logger.info("✅ Security components initialized for IntelligentAgent")
-    
+
     def _sanitize_user_goal(self, user_input: str) -> str:
         """
         Sanitize user input before processing (Layer 1: Input Sanitization)
-        
+
         Args:
             user_input: Raw user input
-            
+
         Returns:
             Sanitized user input
         """
         # Detect injection in user input
         result = self.injection_detector.detect_injection(
-            user_input, 
-            context="user_input"
+            user_input, context="user_input"
         )
-        
+
         if result.blocked:
             logger.error(f"🚨 BLOCKED: User input contains injection patterns")
             logger.error(f"Patterns: {result.detected_patterns}")
@@ -81,17 +80,17 @@ class SecureIntelligentAgentMixin:
                 f"User input blocked due to security policy violation: "
                 f"{result.detected_patterns}"
             )
-        
+
         # Return sanitized input
         return result.sanitized_text
-    
+
     def _validate_conversation_context(self, conversation_context: List[Dict]) -> bool:
         """
         Validate conversation context for poisoning (Layer 1: Input Sanitization)
-        
+
         Args:
             conversation_context: Conversation history to validate
-            
+
         Returns:
             True if safe, raises ValueError if poisoned
         """
@@ -99,82 +98,80 @@ class SecureIntelligentAgentMixin:
         history = []
         for entry in conversation_context:
             if entry.get("type") == "user_input":
-                history.append({
-                    "user": entry.get("content", ""),
-                    "assistant": ""
-                })
+                history.append({"user": entry.get("content", ""), "assistant": ""})
             elif entry.get("type") == "processed_goal":
                 if history:
                     history[-1]["assistant"] = str(entry.get("content", ""))
-        
+
         # Validate with injection detector
         is_safe = self.injection_detector.validate_conversation_context(history)
-        
+
         if not is_safe:
             logger.error("🚨 BLOCKED: Conversation context poisoning detected")
             raise ValueError("Conversation context contains malicious patterns")
-        
+
         return True
-    
-    def _secure_parse_llm_commands(self, 
-                                    llm_response: str, 
-                                    user_goal: str) -> List[Dict[str, str]]:
+
+    def _secure_parse_llm_commands(
+        self, llm_response: str, user_goal: str
+    ) -> List[Dict[str, str]]:
         """
         Securely parse commands from LLM response (Layer 2: Output Parsing)
-        
+
         REPLACES: _parse_llm_commands() method in IntelligentAgent
-        
+
         Args:
             llm_response: LLM response text
             user_goal: Original user goal
-            
+
         Returns:
             List of validated command dictionaries
         """
         # Use secure parser with validation
         validated_commands = self.secure_parser.parse_commands(llm_response, user_goal)
-        
+
         # Convert ValidatedCommand objects to dict format
         command_dicts = []
         for validated in validated_commands:
-            command_dicts.append({
-                "command": validated.command,
-                "explanation": validated.explanation,
-                "next": validated.next_step,
-                "risk_level": validated.risk_level.value,
-                "validation_metadata": validated.validation_metadata
-            })
-        
-        logger.info(f"✅ Securely parsed {len(command_dicts)} commands from LLM response")
-        
+            command_dicts.append(
+                {
+                    "command": validated.command,
+                    "explanation": validated.explanation,
+                    "next": validated.next_step,
+                    "risk_level": validated.risk_level.value,
+                    "validation_metadata": validated.validation_metadata,
+                }
+            )
+
+        logger.info(
+            f"✅ Securely parsed {len(command_dicts)} commands from LLM response"
+        )
+
         return command_dicts
-    
-    async def _secure_execute_command(self, 
-                                       command: str, 
-                                       user_goal: str,
-                                       user_role: str = "agent") -> Dict:
+
+    async def _secure_execute_command(
+        self, command: str, user_goal: str, user_role: str = "agent"
+    ) -> Dict:
         """
         Execute command with security validation (Layer 4: Execution Safeguards)
-        
+
         Integrates with SecureCommandExecutor and EnhancedSecurityLayer
-        
+
         Args:
             command: Command to execute
             user_goal: Original user goal for context
             user_role: Role of the user/agent executing the command
-            
+
         Returns:
             Execution result with security metadata
         """
         logger.info(f"Executing command with security validation: {command}")
-        
+
         # Execute through enhanced security layer
         result = await self.security_layer.execute_command(
-            command=command,
-            user="intelligent_agent",
-            user_role=user_role
+            command=command, user="intelligent_agent", user_role=user_role
         )
-        
+
         # Add audit logging
         self.security_layer.audit_log(
             action="intelligent_agent_command_execution",
@@ -184,10 +181,10 @@ class SecureIntelligentAgentMixin:
                 "command": command,
                 "user_goal": user_goal,
                 "return_code": result.get("return_code"),
-                "security": result.get("security", {})
-            }
+                "security": result.get("security", {}),
+            },
         )
-        
+
         return result
 
 

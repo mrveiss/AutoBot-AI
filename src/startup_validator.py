@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ValidationResult:
     """Result of dependency validation"""
+
     success: bool
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -64,42 +65,42 @@ class StartupValidator:
 
         # Critical imports that must be available
         self.critical_imports = [
-            'fastapi',
-            'pydantic',
-            'redis',
-            'aioredis',
-            'jwt',
-            'bcrypt',
-            'yaml',
-            'asyncio',
-            'logging'
+            "fastapi",
+            "pydantic",
+            "redis",
+            "aioredis",
+            "jwt",
+            "bcrypt",
+            "yaml",
+            "asyncio",
+            "logging",
         ]
 
         # AutoBot modules that should be importable
         self.autobot_modules = [
-            'src.unified_config',
-            'src.auth_middleware',
-            'src.security_layer',
-            'src.knowledge_base_factory',
-            'src.knowledge_base_v2'
+            "src.unified_config",
+            "src.auth_middleware",
+            "src.security_layer",
+            "src.knowledge_base_factory",
+            "src.knowledge_base_v2",
         ]
 
         # Optional modules (warnings only if missing)
         self.optional_modules = [
-            'src.agents.kb_librarian_agent',
-            'src.agents.librarian_assistant_agent',
-            'src.agents.llm_failsafe_agent',
-            'src.conversation',
-            'src.chat_workflow_consolidated',
-            'src.llm_interface',
-            'src.circuit_breaker'
+            "src.agents.kb_librarian_agent",
+            "src.agents.librarian_assistant_agent",
+            "src.agents.llm_failsafe_agent",
+            "src.conversation",
+            "src.chat_workflow_consolidated",
+            "src.llm_interface",
+            "src.circuit_breaker",
         ]
 
         # Services to validate connectivity
         self.services = {
-            'redis': self._validate_redis_connectivity,
-            'ollama': self._validate_ollama_connectivity,
-            'config': self._validate_configuration
+            "redis": self._validate_redis_connectivity,
+            "ollama": self._validate_ollama_connectivity,
+            "config": self._validate_configuration,
         }
 
     async def validate_all(self) -> ValidationResult:
@@ -126,9 +127,13 @@ class StartupValidator:
 
         # Report results
         if self.result.success:
-            logger.info(f"✅ Startup validation completed successfully. {len(self.result.warnings)} warnings.")
+            logger.info(
+                f"✅ Startup validation completed successfully. {len(self.result.warnings)} warnings."
+            )
         else:
-            logger.error(f"❌ Startup validation failed with {len(self.result.errors)} errors and {len(self.result.warnings)} warnings.")
+            logger.error(
+                f"❌ Startup validation failed with {len(self.result.errors)} errors and {len(self.result.warnings)} warnings."
+            )
 
         for warning in self.result.warnings:
             logger.warning(f"⚠️  {warning}")
@@ -149,7 +154,7 @@ class StartupValidator:
             except ImportError as e:
                 self.result.add_error(
                     f"Critical import failed: {module_name}",
-                    {"error": str(e), "traceback": traceback.format_exc()}
+                    {"error": str(e), "traceback": traceback.format_exc()},
                 )
 
     def _validate_autobot_modules(self):
@@ -163,13 +168,13 @@ class StartupValidator:
             except ImportError as e:
                 self.result.add_error(
                     f"AutoBot module import failed: {module_name}",
-                    {"error": str(e), "traceback": traceback.format_exc()}
+                    {"error": str(e), "traceback": traceback.format_exc()},
                 )
             except Exception as e:
                 # Module imported but failed to initialize
                 self.result.add_error(
                     f"AutoBot module initialization failed: {module_name}",
-                    {"error": str(e), "traceback": traceback.format_exc()}
+                    {"error": str(e), "traceback": traceback.format_exc()},
                 )
 
     def _validate_optional_modules(self):
@@ -182,13 +187,12 @@ class StartupValidator:
                 logger.debug(f"✅ Optional module: {module_name}")
             except ImportError as e:
                 self.result.add_warning(
-                    f"Optional module not available: {module_name}",
-                    {"error": str(e)}
+                    f"Optional module not available: {module_name}", {"error": str(e)}
                 )
             except Exception as e:
                 self.result.add_warning(
                     f"Optional module initialization failed: {module_name}",
-                    {"error": str(e)}
+                    {"error": str(e)},
                 )
 
     async def _validate_configuration(self):
@@ -197,8 +201,8 @@ class StartupValidator:
 
         try:
             # Test basic config access
-            backend_host = config.get_host('backend')
-            redis_host = config.get_host('redis')
+            backend_host = config.get_host("backend")
+            redis_host = config.get_host("redis")
 
             if not backend_host:
                 self.result.add_error("Backend host not configured")
@@ -208,8 +212,8 @@ class StartupValidator:
 
             # Validate config structure
             config_validation = config.validate()
-            if not config_validation['valid']:
-                for issue in config_validation['issues']:
+            if not config_validation["valid"]:
+                for issue in config_validation["issues"]:
                     self.result.add_error(f"Configuration issue: {issue}")
 
             logger.debug("✅ Configuration validation passed")
@@ -217,7 +221,7 @@ class StartupValidator:
         except Exception as e:
             self.result.add_error(
                 "Configuration system failed",
-                {"error": str(e), "traceback": traceback.format_exc()}
+                {"error": str(e), "traceback": traceback.format_exc()},
             )
 
     async def _validate_service_connectivity(self):
@@ -232,25 +236,25 @@ class StartupValidator:
                 # Service connectivity issues are warnings, not errors
                 # The system should still start but with reduced functionality
                 self.result.add_warning(
-                    f"Service connectivity failed: {service_name}",
-                    {"error": str(e)}
+                    f"Service connectivity failed: {service_name}", {"error": str(e)}
                 )
 
     async def _validate_redis_connectivity(self):
         """Test Redis connectivity"""
         try:
             redis_config = config.get_redis_config()
-            if not redis_config['enabled']:
+            if not redis_config["enabled"]:
                 self.result.add_warning("Redis is disabled in configuration")
                 return
 
             import redis
+
             client = redis.Redis(
-                host=redis_config['host'],
-                port=redis_config['port'],
-                db=redis_config['db'],
+                host=redis_config["host"],
+                port=redis_config["port"],
+                db=redis_config["db"],
                 socket_timeout=5,
-                socket_connect_timeout=5
+                socket_connect_timeout=5,
             )
 
             # Test connection
@@ -265,7 +269,7 @@ class StartupValidator:
         try:
             import aiohttp
 
-            ollama_url = config.get_service_url('ollama')
+            ollama_url = config.get_service_url("ollama")
             health_url = f"{ollama_url}/api/tags"
 
             timeout = aiohttp.ClientTimeout(total=5)
@@ -288,12 +292,15 @@ class StartupValidator:
         # Check disk space for logs and data
         try:
             import shutil
+
             project_root = Path(__file__).parent.parent
             _, _, free_space = shutil.disk_usage(project_root)
             free_gb = free_space / (1024**3)
 
             if free_gb < 1:
-                self.result.add_error(f"Insufficient disk space: {free_gb:.1f}GB available, minimum 1GB required")
+                self.result.add_error(
+                    f"Insufficient disk space: {free_gb:.1f}GB available, minimum 1GB required"
+                )
             elif free_gb < 5:
                 self.result.add_warning(f"Low disk space: {free_gb:.1f}GB available")
 
@@ -335,9 +342,9 @@ async def validate_service_health(service_name: str) -> Tuple[bool, Optional[str
 
 # Export key functions
 __all__ = [
-    'ValidationResult',
-    'StartupValidator',
-    'validate_startup_dependencies',
-    'validate_import_quickly',
-    'validate_service_health'
+    "ValidationResult",
+    "StartupValidator",
+    "validate_startup_dependencies",
+    "validate_import_quickly",
+    "validate_service_health",
 ]
