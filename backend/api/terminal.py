@@ -376,15 +376,53 @@ class ConsolidatedTerminalWebSocket:
             )
             return
 
+        # CRITICAL FIX: Only log complete commands (when Enter is pressed)
+        # Terminal sends character-by-character, we only want to log on Enter
+        is_command_complete = '\r' in text or '\n' in text
+
+        # Build command buffer for this session
+        if not hasattr(self, '_command_buffer'):
+            self._command_buffer = ""
+
+        # CRITICAL: Log ALL input to transcript (character-by-character for complete record)
+        if self.terminal_logger and self.conversation_id:
+            try:
+                transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
+                import aiofiles
+                from pathlib import Path
+
+                transcript_path = Path("data/chats") / transcript_file
+                async with aiofiles.open(transcript_path, "a") as f:
+                    await f.write(text)
+            except Exception as e:
+                logger.error(f"Failed to write input to transcript: {e}")
+
+        if is_command_complete:
+            # Extract command before the newline
+            command = (self._command_buffer + text).split('\r')[0].split('\n')[0].strip()
+            self._command_buffer = ""  # Reset buffer
+
+            # Only log non-empty commands
+            if not command:
+                await self.send_to_terminal(text)
+                return
+
+            logger.info(f"[COMPLETE COMMAND] Session {self.session_id}: {repr(command)}")
+        else:
+            # Accumulate characters until Enter is pressed
+            self._command_buffer += text
+            await self.send_to_terminal(text)
+            return
+
         # Security assessment for commands
-        risk_level = self._assess_command_risk(text)
+        risk_level = self._assess_command_risk(command)
 
         # Log command for audit trail (internal logging)
         if self.enable_logging:
             self._log_command_activity(
                 "command_input",
                 {
-                    "command": text,
+                    "command": command,
                     "risk_level": risk_level.value,
                     "user_role": self.user_role,
                     "timestamp": datetime.now().isoformat(),
@@ -394,16 +432,16 @@ class ConsolidatedTerminalWebSocket:
         # Log to TerminalLogger for persistent storage (MANUAL commands)
         logger.info(
             f"[MANUAL CMD DEBUG] terminal_logger={self.terminal_logger is not None}, "
-            f"conversation_id={self.conversation_id}, command={text[:50]}"
+            f"conversation_id={self.conversation_id}, command={command[:50]}"
         )
         if self.terminal_logger and self.conversation_id:
             try:
                 logger.info(
-                    f"[MANUAL CMD] Logging to {self.conversation_id}: {text[:50]}"
+                    f"[MANUAL CMD] Logging to {self.conversation_id}: {command[:50]}"
                 )
                 await self.terminal_logger.log_command(
                     session_id=self.conversation_id,
-                    command=text,
+                    command=command,
                     run_type="manual",
                     status="executing",
                     user_id=None,
@@ -422,27 +460,43 @@ class ConsolidatedTerminalWebSocket:
         # Add to command history
         self.command_history.append(
             {
-                "command": text,
+                "command": command,
                 "timestamp": datetime.now(),
                 "risk_level": risk_level.value,
             }
         )
 
         # Apply security restrictions
-        if await self._should_block_command(text, risk_level):
+        if await self._should_block_command(command, risk_level):
             await self.send_message(
                 {
                     "type": "security_warning",
                     "content": f"Command blocked due to {risk_level.value} "
-                    f"risk level: {text}",
+                    f"risk level: {command}",
                     "risk_level": risk_level.value,
                     "timestamp": time.time(),
                 }
             )
             return
 
-        # Send to terminal
+        # Send to terminal (send the original text with \r to execute)
         await self.send_to_terminal(text)
+
+        # Log command sent to terminal (completion status)
+        # NOTE: For MANUAL commands, we can't easily capture output because PTY streams are async
+        # Output capture works for AUTOBOT commands because they use SecureCommandExecutor
+        # MANUAL commands are logged as "sent" - user can see full output in terminal interface
+        if self.terminal_logger and self.conversation_id:
+            try:
+                await self.terminal_logger.log_command(
+                    session_id=self.conversation_id,
+                    command=command,
+                    run_type="manual",
+                    status="sent",  # Indicates command was sent to PTY
+                    user_id=None,
+                )
+            except Exception as e:
+                logger.error(f"Failed to log command completion: {e}")
 
     async def _handle_workflow_control(self, message: dict):
         """Handle workflow automation control messages"""
@@ -558,6 +612,21 @@ class ConsolidatedTerminalWebSocket:
         }
 
         await self.send_message(message)
+
+        # CRITICAL: Log ALL terminal output to transcript file
+        # This creates a complete record of the terminal session
+        if self.terminal_logger and self.conversation_id and content:
+            try:
+                # Write raw output to transcript file
+                transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
+                import aiofiles
+                from pathlib import Path
+
+                transcript_path = Path("data/chats") / transcript_file
+                async with aiofiles.open(transcript_path, "a") as f:
+                    await f.write(content)
+            except Exception as e:
+                logger.error(f"Failed to write terminal transcript: {e}")
 
         # Log output if security logging enabled
         if self.enable_logging and len(content.strip()) > 0:

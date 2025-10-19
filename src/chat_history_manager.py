@@ -984,6 +984,87 @@ class ChatHistoryManager:
                     logging.error(f"Error reading file stats for {filename}: {str(e)}")
                     continue
 
+            # CRITICAL: Detect orphaned terminal files and auto-create chat sessions
+            # This ensures terminal logs/transcripts without chat.json appear in GUI
+            existing_chat_ids = {session["id"] for session in sessions}
+
+            # Scan for orphaned terminal files
+            orphaned_sessions_created = 0
+            for filename in os.listdir(chats_directory):
+                session_id = None
+
+                # Check for terminal log files
+                if filename.endswith("_terminal.log"):
+                    session_id = filename.replace("_terminal.log", "")
+                # Check for terminal transcript files
+                elif filename.endswith("_terminal_transcript.txt"):
+                    session_id = filename.replace("_terminal_transcript.txt", "")
+
+                # If we found a terminal file and no corresponding chat exists
+                if session_id and session_id not in existing_chat_ids:
+                    try:
+                        # Create minimal empty chat.json for this orphaned terminal session
+                        chat_file = os.path.join(chats_directory, f"{session_id}_chat.json")
+
+                        # Only create if it doesn't already exist
+                        if not os.path.exists(chat_file):
+                            empty_chat = {
+                                "id": session_id,
+                                "name": f"Terminal Session {session_id[:8]}",
+                                "messages": [],
+                                "created_at": datetime.now().isoformat(),
+                                "metadata": {
+                                    "auto_created": True,
+                                    "reason": "orphaned_terminal_files",
+                                    "source": f"Found {filename}"
+                                }
+                            }
+
+                            with open(chat_file, "w", encoding="utf-8") as f:
+                                json.dump(empty_chat, f, indent=2, ensure_ascii=False)
+
+                            # Add to existing_chat_ids to prevent duplicates
+                            existing_chat_ids.add(session_id)
+                            orphaned_sessions_created += 1
+
+                            # Get file stats for the newly created chat
+                            stat = os.stat(chat_file)
+                            created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
+                            last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+
+                            # Add to sessions list
+                            sessions.append({
+                                "id": session_id,
+                                "chatId": session_id,
+                                "title": f"Terminal Session {session_id[:8]}",
+                                "name": f"Terminal Session {session_id[:8]}",
+                                "messages": [],
+                                "messageCount": 0,
+                                "createdAt": created_time,
+                                "createdTime": created_time,
+                                "updatedAt": last_modified,
+                                "lastModified": last_modified,
+                                "isActive": False,
+                                "fileSize": stat.st_size,
+                                "fast_mode": True,
+                                "auto_created": True,  # Mark as auto-created
+                            })
+
+                            logging.info(
+                                f"Auto-created chat session for orphaned terminal file: {session_id} (from {filename})"
+                            )
+
+                    except Exception as create_err:
+                        logging.error(
+                            f"Failed to auto-create chat session for orphaned {filename}: {create_err}"
+                        )
+                        continue
+
+            if orphaned_sessions_created > 0:
+                logging.info(
+                    f"✅ Auto-created {orphaned_sessions_created} chat sessions for orphaned terminal files"
+                )
+
             # Sort by last modified time (most recent first)
             sessions.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
             return sessions
