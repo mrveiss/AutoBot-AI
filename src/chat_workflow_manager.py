@@ -1119,7 +1119,7 @@ NEVER teach commands - ALWAYS execute them."""
                                                         "return_code", 0
                                                     )
 
-                                                    # Feed result back to LLM for interpretation
+                                                    # Feed result back to LLM for interpretation (STREAMING)
                                                     interpretation_prompt = f"""The command `{command}` was approved and executed successfully.
 
 Output:
@@ -1131,16 +1131,28 @@ Return code: {return_code}
 
 Please interpret this output for the user in a clear, helpful way. Explain what it means and answer their original question."""
 
-                                                    # Get LLM interpretation of results
+                                                    # Yield execution confirmation first
+                                                    yield WorkflowMessage(
+                                                        type="response",
+                                                        content="\n\n✅ Command approved and executed! Interpreting results...\n\n",
+                                                        metadata={
+                                                            "message_type": "command_executed",
+                                                            "command": command,
+                                                            "executed": True,
+                                                            "approved": True,
+                                                        },
+                                                    )
+
+                                                    # Stream LLM interpretation of results
                                                     async with httpx.AsyncClient(
-                                                        timeout=30.0
+                                                        timeout=60.0
                                                     ) as interp_client:
                                                         interp_response = await interp_client.post(
                                                             ollama_endpoint,
                                                             json={
                                                                 "model": selected_model,
                                                                 "prompt": interpretation_prompt,
-                                                                "stream": False,
+                                                                "stream": True,  # STREAMING enabled!
                                                                 "options": {
                                                                     "temperature": 0.7,
                                                                     "top_p": 0.9,
@@ -1149,33 +1161,30 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                             },
                                                         )
 
-                                                        if (
-                                                            interp_response.status_code
-                                                            == 200
-                                                        ):
-                                                            interp_data = (
-                                                                interp_response.json()
-                                                            )
-                                                            interpretation = (
-                                                                interp_data.get(
-                                                                    "response", ""
-                                                                )
-                                                            )
+                                                        interpretation = ""
+                                                        async for line in interp_response.aiter_lines():
+                                                            if line:
+                                                                try:
+                                                                    data = json.loads(line)
+                                                                    chunk = data.get("response", "")
+                                                                    if chunk:
+                                                                        interpretation += chunk
+                                                                        # Stream each chunk
+                                                                        yield WorkflowMessage(
+                                                                            type="stream",
+                                                                            content=chunk,
+                                                                            metadata={
+                                                                                "message_type": "command_interpretation",
+                                                                                "streaming": True,
+                                                                            },
+                                                                        )
+                                                                    if data.get("done"):
+                                                                        break
+                                                                except json.JSONDecodeError:
+                                                                    continue
 
-                                                            # Yield interpretation as final response
-                                                            yield WorkflowMessage(
-                                                                type="response",
-                                                                content=f"\n\n✅ Command approved and executed!\n\n{interpretation}",
-                                                                metadata={
-                                                                    "message_type": "command_result_interpretation",
-                                                                    "command": command,
-                                                                    "executed": True,
-                                                                    "approved": True,
-                                                                },
-                                                            )
-
-                                                            # Update llm_response with results
-                                                            llm_response += f"\n\n✅ Command approved and executed!\n\n{interpretation}"
+                                                        # Update llm_response with interpretation
+                                                        llm_response += f"\n\n✅ Command approved and executed!\n\n{interpretation}"
                                                 else:
                                                     # Command failed or was denied
                                                     error = approval_result.get(

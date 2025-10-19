@@ -79,16 +79,17 @@ class SimplePTY:
         """Background thread to read from PTY"""
         while self.running and self.master_fd is not None:
             try:
-                # Check master_fd is still valid before select
-                if self.master_fd is None:
+                # Cache master_fd to prevent race condition
+                fd = self.master_fd
+                if fd is None:
                     break
 
                 # Check for data with select
-                ready, _, _ = select.select([self.master_fd], [], [], 0.1)
+                ready, _, _ = select.select([fd], [], [], 0.1)
 
                 if ready:
                     try:
-                        data = os.read(self.master_fd, 4096)
+                        data = os.read(fd, 4096)
                         if data:
                             output = data.decode("utf-8", errors="replace")
                             self.output_queue.put(("output", output))
