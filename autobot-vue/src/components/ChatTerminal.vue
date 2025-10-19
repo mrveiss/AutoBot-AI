@@ -21,7 +21,7 @@
         </div>
 
         <div class="text-xs text-gray-500">
-          Chat: {{ chatSessionId?.slice(0, 8) || 'None' }} | Terminal: {{ backendSessionId?.slice(0, 8) || 'Not Connected' }}
+          Chat: {{ chatSessionId || 'None' }} | Terminal: {{ backendSessionId || 'Not Connected' }}
         </div>
       </div>
 
@@ -107,8 +107,9 @@ const sessionId = ref(
     : `chat_terminal_${Date.now()}`
 )
 
-// Backend session ID - the actual ID used for WebSocket communication
-const backendSessionId = ref<string | null>(null)
+// Backend session IDs
+const backendSessionId = ref<string | null>(null)  // Agent terminal session ID
+const ptySessionId = ref<string | null>(null)      // PTY session ID for WebSocket connection
 
 // Terminal scrollback buffer persistence
 const SCROLLBACK_KEY = computed(() =>
@@ -260,7 +261,7 @@ const handleTerminalReady = (term: Terminal) => {
   } else {
     // Write initial message only for new sessions
     term.writeln('\x1b[1;36mChat Terminal Initialized\x1b[0m')
-    term.writeln(`Session: ${props.chatSessionId?.slice(0, 8) || 'None'}`)
+    term.writeln(`Session: ${props.chatSessionId || 'None'}`)
     term.writeln(`Control: ${controlState.value.toUpperCase()}`)
     term.writeln('')
   }
@@ -277,23 +278,28 @@ const handleTerminalData = (data: string) => {
     isAgentControlled: isAgentControlled.value,
     controlState: controlState.value,
     sessionId: sessionId.value,
-    backendSessionId: backendSessionId.value
+    backendSessionId: backendSessionId.value,
+    ptySessionId: ptySessionId.value
   })
 
-  if (isConnected.value && !isAgentControlled.value && backendSessionId.value) {
-    terminalService.sendInput(backendSessionId.value, data)
+  // Use PTY session ID for WebSocket operations
+  const wsSessionId = ptySessionId.value || backendSessionId.value
+  if (isConnected.value && !isAgentControlled.value && wsSessionId) {
+    terminalService.sendInput(wsSessionId, data)
   } else {
     console.warn('[ChatTerminal] Input blocked:', {
       isConnected: isConnected.value,
       isAgentControlled: isAgentControlled.value,
-      backendSessionId: backendSessionId.value
+      wsSessionId: wsSessionId
     })
   }
 }
 
 const handleTerminalResize = (cols: number, rows: number) => {
-  if (isConnected.value && backendSessionId.value) {
-    terminalService.resize(backendSessionId.value, rows, cols)
+  // Use PTY session ID for WebSocket operations
+  const wsSessionId = ptySessionId.value || backendSessionId.value
+  if (isConnected.value && wsSessionId) {
+    terminalService.resize(wsSessionId, rows, cols)
   }
 }
 
@@ -318,11 +324,15 @@ const connectTerminal = async () => {
 
       if (queryData.sessions && queryData.sessions.length > 0) {
         // Use existing session
-        backendSession = queryData.sessions[0].session_id
-        console.log(`[ChatTerminal] Using existing agent terminal session: ${backendSession}`)
+        const existingSession = queryData.sessions[0]
+        backendSession = existingSession.session_id
+        const ptySession = existingSession.pty_session_id
+        console.log(`[ChatTerminal] Using existing agent terminal session: ${backendSession}, PTY: ${ptySession}`)
         if (terminal.value) {
-          terminal.value.writeln(`\x1b[1;36mConnected to existing terminal session ${backendSession.slice(0, 8)}\x1b[0m`)
+          terminal.value.writeln(`\x1b[1;36mConnected to existing terminal session ${backendSession}\x1b[0m`)
         }
+        // Store PTY session ID for WebSocket connection
+        ptySessionId.value = ptySession
       }
     }
 
@@ -345,22 +355,31 @@ const connectTerminal = async () => {
       )
       const createData = await createResponse.json()
       backendSession = createData.session_id
-      console.log(`[ChatTerminal] Created new agent terminal session: ${backendSession}`)
+      const ptySession = createData.pty_session_id
+      console.log(`[ChatTerminal] Created new agent terminal session: ${backendSession}, PTY: ${ptySession}`)
       if (terminal.value) {
-        terminal.value.writeln(`\x1b[1;32mCreated new terminal session ${backendSession.slice(0, 8)}\x1b[0m`)
+        terminal.value.writeln(`\x1b[1;32mCreated new terminal session ${backendSession}\x1b[0m`)
       }
+      // Store PTY session ID for WebSocket connection
+      ptySessionId.value = ptySession
     }
 
     backendSessionId.value = backendSession
 
+    // CRITICAL: Use PTY session ID for WebSocket, NOT agent terminal session ID
+    const wsSessionId = ptySessionId.value || backendSession
+    console.log('[ChatTerminal] WebSocket will connect to:', wsSessionId)
+
     console.log('[ChatTerminal] Session IDs:', {
       frontend: sessionId.value,
       backend: backendSessionId.value,
-      chatSession: props.chatSessionId
+      pty: ptySessionId.value,
+      chatSession: props.chatSessionId,
+      websocket: wsSessionId
     })
 
-    // Connect WebSocket
-    await terminalService.connect(backendSessionId.value, {
+    // Connect WebSocket using PTY session ID
+    await terminalService.connect(wsSessionId, {
       onOutput: (output: any) => {
         if (terminal.value) {
           const content = output.content || output.data || ''
@@ -402,11 +421,14 @@ const connectTerminal = async () => {
 const disconnectTerminal = () => {
   if (!isConnected.value) return
 
-  if (backendSessionId.value) {
-    terminalService.disconnect(backendSessionId.value)
+  // Use PTY session ID for WebSocket operations
+  const wsSessionId = ptySessionId.value || backendSessionId.value
+  if (wsSessionId) {
+    terminalService.disconnect(wsSessionId)
   }
   isConnected.value = false
   backendSessionId.value = null
+  ptySessionId.value = null
   terminalStore.updateSessionStatus(sessionId.value, 'disconnected')
 
   if (terminal.value) {
@@ -451,8 +473,9 @@ watch(() => props.chatSessionId, (newSessionId, oldSessionId) => {
       ? `chat_terminal_${newSessionId}_${Date.now()}`
       : `chat_terminal_${Date.now()}`
 
-    // Clear backend session ID
+    // Clear backend session IDs
     backendSessionId.value = null
+    ptySessionId.value = null
 
     // Connect to new session if autoConnect
     if (newSessionId && props.autoConnect) {

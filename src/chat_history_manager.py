@@ -488,61 +488,30 @@ class ChatHistoryManager:
 
     def _load_history(self):
         """
-        Loads chat history from the JSON file or Redis if enabled.
+        DEPRECATED: Legacy chat history loading (for backward compatibility only).
 
-        If using Redis, it attempts to load active session data from Redis.
-        If the file exists but cannot be decoded or read properly, it starts
-        with an empty history.
-        If the file does not exist, it initializes an empty history.
+        Modern architecture uses per-session files in data/chats/ directory.
+        self.history should remain EMPTY to prevent data pollution when
+        save_session() is called without explicit messages.
+
+        CRITICAL FIX: Do NOT load old chat_history.json into self.history
+        as it causes historical messages to leak into new sessions.
         """
-        if self.use_redis and self.redis_client:
-            try:
-                # Attempt to load active session from Redis
-                history_data = self.redis_client.get("autobot:chat_history")
-                if isinstance(history_data, str):
-                    self.history = json.loads(history_data)
-                    logging.info("Loaded chat history from Redis.")
+        # BUG FIX: Initialize with empty history instead of loading old data
+        # Loading chat_history.json was causing 91+ old messages to pollute new sessions
+        self.history = []
 
-                    # Apply memory limits to loaded data
-                    self._cleanup_messages_if_needed()
-                    return
-                elif history_data is not None:
-                    logging.warning(
-                        "Received non-string data from Redis for chat "
-                        f"history: type={type(history_data)}"
-                    )
-            except Exception as e:
-                logging.error(
-                    f"Error loading history from Redis: {str(e)}. "
-                    "Falling back to file storage."
-                )
+        logging.info(
+            "ChatHistoryManager initialized with EMPTY default history. "
+            "All sessions are managed independently in data/chats/ directory."
+        )
 
-        # Default to file storage
+        # Check if obsolete chat_history.json exists and warn
         if os.path.exists(self.history_file):
-            try:
-                with open(self.history_file, "r") as f:
-                    self.history = json.load(f)
-
-                # Apply memory limits to loaded data
-                self._cleanup_messages_if_needed()
-
-            except json.JSONDecodeError as e:
-                self.history = []
-                logging.warning(
-                    f"Could not decode JSON from {self.history_file}: "
-                    f"{str(e)}. Starting with empty history."
-                )
-            except Exception as e:
-                self.history = []
-                logging.error(
-                    f"Error loading chat history from {self.history_file}: "
-                    f"{str(e)}. Starting with empty history."
-                )
-        else:
-            self.history = []
-            logging.info(
-                f"No history file found at {self.history_file}. "
-                "Starting with empty history."
+            logging.warning(
+                f"⚠️  Legacy chat_history.json file exists at {self.history_file}. "
+                "This file is NO LONGER USED. Sessions are stored in data/chats/ directory. "
+                "Consider archiving this file to prevent confusion."
             )
 
     async def _save_history(self):
@@ -1107,8 +1076,10 @@ class ChatHistoryManager:
             chat_file = f"{chats_directory}/{session_id}_chat.json"
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
-            # Use provided messages or current history
-            session_messages = self.history if messages is None else messages
+            # Use provided messages or empty list (NEVER use self.history as default)
+            # BUG FIX: Previously defaulted to self.history which contained ALL historical
+            # messages from old chat_history.json, causing new sessions to be polluted
+            session_messages = messages if messages is not None else []
 
             # PERFORMANCE: Limit session messages to prevent excessive file sizes
             if len(session_messages) > self.max_messages:
