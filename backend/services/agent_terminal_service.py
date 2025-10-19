@@ -198,7 +198,9 @@ class AgentTerminalService:
                         f"Registered PTY session {pty_session_id} with conversation_id {conversation_id} for logging"
                     )
                 except Exception as e:
-                    logger.error(f"Failed to register PTY session with session_manager: {e}")
+                    logger.error(
+                        f"Failed to register PTY session with session_manager: {e}"
+                    )
 
         except Exception as e:
             logger.error(f"Error creating PTY session: {e}")

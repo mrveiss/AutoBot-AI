@@ -379,8 +379,13 @@ class ConsolidatedTerminalWebSocket:
             )
 
         # Log to TerminalLogger for persistent storage (MANUAL commands)
+        logger.info(
+            f"[MANUAL CMD DEBUG] terminal_logger={self.terminal_logger is not None}, "
+            f"conversation_id={self.conversation_id}, command={text[:50]}"
+        )
         if self.terminal_logger and self.conversation_id:
             try:
+                logger.info(f"[MANUAL CMD] Logging to {self.conversation_id}: {text[:50]}")
                 await self.terminal_logger.log_command(
                     session_id=self.conversation_id,
                     command=text,
@@ -388,8 +393,14 @@ class ConsolidatedTerminalWebSocket:
                     status="executing",
                     user_id=None,
                 )
+                logger.info(f"[MANUAL CMD] Successfully logged to {self.conversation_id}")
             except Exception as e:
                 logger.error(f"Failed to log command to TerminalLogger: {e}")
+        else:
+            logger.warning(
+                f"[MANUAL CMD] Skipping log - terminal_logger={self.terminal_logger is not None}, "
+                f"conversation_id={self.conversation_id}"
+            )
 
         # Add to command history
         self.command_history.append(

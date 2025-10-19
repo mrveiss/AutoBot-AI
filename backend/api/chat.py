@@ -38,8 +38,6 @@ from src.utils.redis_database_manager import get_redis_client
 # from src.models.message import MessageModel
 
 
-
-
 # Create placeholder dependency functions for missing imports
 def get_current_user():
     """Placeholder for auth dependency"""
