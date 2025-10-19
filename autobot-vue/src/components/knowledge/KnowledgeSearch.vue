@@ -178,7 +178,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories/KnowledgeRepository'
+import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories'
 
 // Define types
 interface KnowledgeDocument {
