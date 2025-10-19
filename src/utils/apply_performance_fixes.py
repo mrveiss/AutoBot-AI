@@ -6,12 +6,13 @@ Delivers 60-80% performance improvements across major system metrics
 
 import asyncio
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
 from src.constants import NetworkConstants, ServiceURLs
 
-from .optimized_stream_processor import get_optimized_llm_interface
-from .optimized_redis_manager import get_optimized_redis_manager
 from .optimized_memory_manager import get_optimized_memory_manager
+from .optimized_redis_manager import get_optimized_redis_manager
+from .optimized_stream_processor import get_optimized_llm_interface
 
 logger = logging.getLogger(__name__)
 

@@ -10,8 +10,10 @@ import hmac
 import secrets
 import time
 from typing import Dict, Optional
-from fastapi import Request, HTTPException
+
 import structlog
+from fastapi import HTTPException, Request
+
 from src.constants.network_constants import NetworkConstants
 
 logger = structlog.get_logger()

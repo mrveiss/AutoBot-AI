@@ -11,8 +11,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.llm_self_awareness import get_llm_self_awareness
 from src.constants.network_constants import NetworkConstants
+from src.llm_self_awareness import get_llm_self_awareness
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

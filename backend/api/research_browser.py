@@ -13,9 +13,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from src.research_browser_manager import research_browser_manager
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.research_browser_manager import research_browser_manager
 
 logger = logging.getLogger(__name__)
 

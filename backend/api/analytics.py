@@ -21,13 +21,14 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-# Import existing monitoring infrastructure
-from .monitoring import hardware_monitor
-from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
-from src.utils.system_metrics import get_metrics_collector
 from src.config_helper import cfg
 from src.constants import PATH
 from src.constants.network_constants import NetworkConstants
+from src.utils.redis_database_manager import RedisDatabase, RedisDatabaseManager
+from src.utils.system_metrics import get_metrics_collector
+
+# Import existing monitoring infrastructure
+from .monitoring import hardware_monitor
 
 
 # Simple service address function using configuration

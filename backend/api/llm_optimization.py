@@ -12,9 +12,9 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.utils.model_optimizer import get_model_optimizer, TaskRequest, TaskComplexity
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.utils.model_optimizer import TaskComplexity, TaskRequest, get_model_optimizer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

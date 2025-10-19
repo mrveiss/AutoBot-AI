@@ -19,15 +19,15 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from src.unified_config_manager import config_manager
+from src.circuit_breaker import circuit_breaker_async
+from src.constants.network_constants import NetworkConstants
+from src.conversation import ConversationManager
+from src.llm_interface import LLMInterface
 from src.memory_manager import LongTermMemoryManager
 from src.retry_mechanism import RetryStrategy, retry_network_operation
-from src.circuit_breaker import circuit_breaker_async
-from src.llm_interface import LLMInterface
-from src.conversation import ConversationManager
-from src.task_execution_tracker import task_tracker, Priority, TaskType
+from src.task_execution_tracker import Priority, TaskType, task_tracker
+from src.unified_config_manager import config_manager
 from src.utils.logging_manager import get_logger
-from src.constants.network_constants import NetworkConstants
 
 # Import KnowledgeBase for enhanced features
 try:
@@ -78,8 +78,8 @@ try:
 except ImportError:
     WORKFLOW_TYPES_AVAILABLE = False
     # Define minimal fallback types
-    from enum import Enum
     from dataclasses import dataclass
+    from enum import Enum
 
     class WorkflowStatus(Enum):
         SCHEDULED = "scheduled"

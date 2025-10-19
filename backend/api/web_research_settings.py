@@ -6,11 +6,12 @@ Provides endpoints for managing web research configuration and preferences.
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -90,9 +91,9 @@ async def get_research_status():
 async def enable_web_research():
     """Enable web research functionality"""
     try:
+        from backend.services.config_service import ConfigService
         from src.agents.web_research_integration import get_web_research_integration
         from src.unified_unified_config_manager import unified_unified_config_manager
-        from backend.services.config_service import ConfigService
 
         # Enable in integration
         integration = get_web_research_integration()
@@ -138,9 +139,9 @@ async def enable_web_research():
 async def disable_web_research():
     """Disable web research functionality"""
     try:
+        from backend.services.config_service import ConfigService
         from src.agents.web_research_integration import get_web_research_integration
         from src.unified_unified_config_manager import unified_unified_config_manager
-        from backend.services.config_service import ConfigService
 
         # Disable in integration
         integration = get_web_research_integration()
@@ -234,8 +235,8 @@ async def get_research_settings():
 async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
-        from src.unified_config_manager import unified_config_manager
         from backend.services.config_service import ConfigService
+        from src.unified_config_manager import unified_config_manager
 
         # Update research agent settings
         unified_config_manager.set_nested("agents.research.enabled", settings.enabled)

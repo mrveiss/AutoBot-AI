@@ -6,10 +6,12 @@ Week 3 Phase 2: Comprehensive endpoint categorization and selective enforcement
 
 import os
 from typing import List, Optional
-from fastapi import Request, HTTPException
-from fastapi.responses import JSONResponse
-from backend.security.service_auth import validate_service_auth
+
 import structlog
+from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from backend.security.service_auth import validate_service_auth
 from src.constants.network_constants import NetworkConstants
 
 logger = structlog.get_logger()

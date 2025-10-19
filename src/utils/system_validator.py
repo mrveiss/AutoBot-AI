@@ -7,9 +7,9 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional, Any, Tuple
+from dataclasses import asdict, dataclass
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 import psutil
@@ -119,8 +119,8 @@ class SystemValidator:
         results = []
 
         try:
-            from src.utils.knowledge_cache import get_knowledge_cache
             from src.knowledge_base import KnowledgeBase
+            from src.utils.knowledge_cache import get_knowledge_cache
 
             # Test 1: Cache system initialization
             start_time = time.time()
@@ -278,8 +278,8 @@ class SystemValidator:
         component = "Hybrid Search"
 
         try:
-            from src.utils.hybrid_search import get_hybrid_search_engine
             from src.knowledge_base import KnowledgeBase
+            from src.utils.hybrid_search import get_hybrid_search_engine
 
             # Test 1: Hybrid search engine initialization
             start_time = time.time()
@@ -609,9 +609,9 @@ class SystemValidator:
 
         try:
             from src.utils.model_optimizer import (
-                get_model_optimizer,
-                TaskRequest,
                 TaskComplexity,
+                TaskRequest,
+                get_model_optimizer,
             )
 
             # Test 1: Model optimizer initialization

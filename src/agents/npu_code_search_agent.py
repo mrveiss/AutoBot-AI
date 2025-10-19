@@ -15,12 +15,12 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 from src.worker_node import WorkerNode
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

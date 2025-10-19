@@ -7,15 +7,15 @@ Handles vector storage configuration and embedding model selection.
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.unified_config_manager import unified_config_manager
 from backend.services.config_service import ConfigService
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.unified_config_manager import unified_config_manager
 
 logger = logging.getLogger(__name__)
 

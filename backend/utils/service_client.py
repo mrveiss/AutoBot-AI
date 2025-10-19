@@ -8,11 +8,13 @@ Usage:
     response = await client.post("http://172.16.168.22:8081/api/process", json={...})
 """
 
-import httpx
 import time
-from typing import Optional, Dict, Any
-from backend.security.service_auth import ServiceAuthManager
+from typing import Any, Dict, Optional
+
+import httpx
 import structlog
+
+from backend.security.service_auth import ServiceAuthManager
 from src.constants.network_constants import NetworkConstants
 
 logger = structlog.get_logger()

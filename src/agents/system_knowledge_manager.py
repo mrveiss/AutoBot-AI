@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from src.agents.enhanced_kb_librarian import EnhancedKBLibrarian
-from src.knowledge_base import KnowledgeBase
 from src.constants.network_constants import NetworkConstants
+from src.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
@@ -134,8 +134,8 @@ class SystemKnowledgeManager:
         """Load cached file states from Redis"""
         try:
             from src.utils.redis_database_manager import (
-                RedisDatabaseManager,
                 RedisDatabase,
+                RedisDatabaseManager,
             )
 
             db_manager = RedisDatabaseManager()
@@ -161,8 +161,8 @@ class SystemKnowledgeManager:
         """Update the cached file states in Redis"""
         try:
             from src.utils.redis_database_manager import (
-                RedisDatabaseManager,
                 RedisDatabase,
+                RedisDatabaseManager,
             )
 
             db_manager = RedisDatabaseManager()

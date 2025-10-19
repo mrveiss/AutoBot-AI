@@ -4,9 +4,9 @@ Metrics API endpoints for workflow performance monitoring
 
 from fastapi import APIRouter, HTTPException, Query
 
+from src.constants.network_constants import NetworkConstants
 from src.metrics.system_monitor import system_monitor
 from src.metrics.workflow_metrics import workflow_metrics
-from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 

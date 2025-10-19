@@ -6,9 +6,11 @@ Reduces multiple round trips by combining requests
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -68,9 +70,11 @@ async def batch_load(batch_request: BatchRequest):
         ]
     }
     """
-    from fastapi import Request
-    from backend.fast_app_factory_fix import app
     import time
+
+    from fastapi import Request
+
+    from backend.fast_app_factory_fix import app
 
     responses = {}
     errors = {}
@@ -153,10 +157,11 @@ async def batch_chat_initialization():
 # Helper functions for batch initialization
 async def get_chat_sessions():
     """Get chat sessions list using async file operations"""
-    from backend.fast_app_factory_fix import app
-    import os
     import asyncio
+    import os
     from datetime import datetime
+
+    from backend.fast_app_factory_fix import app
 
     if hasattr(app.state, "chat_history_manager") and app.state.chat_history_manager:
         try:

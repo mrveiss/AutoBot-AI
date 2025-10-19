@@ -5,18 +5,19 @@ Provides native API access to containerized Playwright functionality
 
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from src.config_helper import cfg
-from src.constants.network_constants import NetworkConstants
 from backend.services.playwright_service import (
     get_playwright_service,
     playwright_service,
     search_web_embedded,
-    test_frontend_embedded,
     send_test_message_embedded,
+    test_frontend_embedded,
 )
+from src.config_helper import cfg
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

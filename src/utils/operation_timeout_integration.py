@@ -16,25 +16,27 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
+
+import redis.asyncio as redis
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     HTTPException,
     WebSocket,
     WebSocketDisconnect,
-    BackgroundTasks,
 )
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import redis.asyncio as redis
 
 from src.constants.network_constants import NetworkConstants
+
 from .long_running_operations_framework import (
-    LongRunningOperationManager,
-    OperationType,
-    OperationStatus,
-    OperationPriority,
     LongRunningOperation,
+    LongRunningOperationManager,
+    OperationPriority,
+    OperationStatus,
+    OperationType,
     execute_codebase_indexing,
     execute_comprehensive_test_suite,
 )
@@ -374,8 +376,9 @@ class OperationIntegrationManager:
         """Wrapper for codebase indexing operations"""
 
         async def operation_func(exec_context):
-            from ..knowledge_base import KnowledgeBase
             from pathlib import Path
+
+            from ..knowledge_base import KnowledgeBase
 
             codebase_path = context.get("codebase_path", "/home/kali/Desktop/AutoBot")
             file_patterns = context.get(

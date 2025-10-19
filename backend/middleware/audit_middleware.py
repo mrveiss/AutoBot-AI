@@ -28,16 +28,16 @@ Usage Examples:
 
 import asyncio
 import functools
+import logging
 import time
 from datetime import datetime
-from typing import Callable, Optional, Any, Literal
+from typing import Any, Callable, Literal, Optional
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from backend.services.audit_logger import get_audit_logger, AuditResult
-import logging
+from backend.services.audit_logger import AuditResult, get_audit_logger
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

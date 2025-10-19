@@ -17,14 +17,14 @@ from typing import Any, Dict, List, Optional, Union
 # Import communication protocol
 from src.constants.network_constants import NetworkConstants
 from src.protocols.agent_communication import (
-    AgentIdentity,
     AgentCommunicationManager,
-    get_communication_manager,
-    MessageType,
-    MessagePriority,
-    StandardMessage,
+    AgentIdentity,
     MessageHeader,
     MessagePayload,
+    MessagePriority,
+    MessageType,
+    StandardMessage,
+    get_communication_manager,
 )
 
 logger = logging.getLogger(__name__)

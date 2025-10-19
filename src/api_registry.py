@@ -4,8 +4,10 @@ Simple API Registry for tracking registered routers and endpoints.
 """
 
 import logging
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from fastapi import APIRouter
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

@@ -12,30 +12,32 @@ Features:
 - Advanced RAG optimization with hybrid search
 """
 
+import asyncio
+import glob
+import hashlib
+import json
 import os
 import sys
-import asyncio
-import json
-import hashlib
 import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Any
-from dataclasses import dataclass, asdict
-from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 import aiofiles
-import glob
+
 from src.constants.network_constants import NetworkConstants
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.knowledge_base import KnowledgeBase
-from src.utils.semantic_chunker_gpu_optimized import (
-    get_optimized_semantic_chunker,
-    SemanticChunk,
-)
 from src.utils.logging_manager import get_llm_logger
+from src.utils.semantic_chunker_gpu_optimized import (
+    SemanticChunk,
+    get_optimized_semantic_chunker,
+)
 
 logger = get_llm_logger("knowledge_sync_incremental")
 

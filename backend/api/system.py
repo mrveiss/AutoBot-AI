@@ -7,12 +7,12 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
-from backend.utils.connection_utils import ModelManager
 
 # Add caching support for performance improvement
 from backend.utils.cache_manager import cache_response
-from src.unified_config import config
+from backend.utils.connection_utils import ModelManager
 from src.constants.network_constants import NetworkConstants
+from src.unified_config import config
 
 router = APIRouter()
 
@@ -562,8 +562,9 @@ async def get_cache_activity():
 async def get_system_metrics():
     """Get system performance metrics"""
     try:
-        import psutil
         import time
+
+        import psutil
 
         # Get system metrics
         cpu_percent = psutil.cpu_percent(interval=0.1)

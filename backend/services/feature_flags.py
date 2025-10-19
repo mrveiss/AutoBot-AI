@@ -28,7 +28,7 @@ import json
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from backend.utils.async_redis_manager import get_redis_manager
 from src.constants.network_constants import NetworkConstants

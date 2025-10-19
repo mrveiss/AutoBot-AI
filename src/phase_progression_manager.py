@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from scripts.phase_validation_system import PhaseValidationCriteria, PhaseValidator
-from src.project_state_manager import ProjectStateManager
 from src.constants.network_constants import NetworkConstants
+from src.project_state_manager import ProjectStateManager
 
 # Setup logging
 logger = logging.getLogger(__name__)

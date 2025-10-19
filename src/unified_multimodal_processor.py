@@ -26,10 +26,10 @@ from src.utils.multimodal_performance_monitor import performance_monitor
 # Import transformers models for vision processing
 try:
     from transformers import (
-        CLIPModel,
-        CLIPProcessor,
         Blip2ForConditionalGeneration,
         Blip2Processor,
+        CLIPModel,
+        CLIPProcessor,
     )
 
     VISION_MODELS_AVAILABLE = True
@@ -42,14 +42,14 @@ except ImportError:
 
 # Import models for audio processing
 try:
+    import librosa
     from transformers import (
+        Wav2Vec2ForCTC,
         Wav2Vec2Model,
         Wav2Vec2Processor,
-        Wav2Vec2ForCTC,
-        WhisperProcessor,
         WhisperForConditionalGeneration,
+        WhisperProcessor,
     )
-    import librosa
 
     AUDIO_MODELS_AVAILABLE = True
 except ImportError:

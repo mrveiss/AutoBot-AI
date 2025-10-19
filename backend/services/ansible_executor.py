@@ -5,14 +5,15 @@ Executes Ansible playbooks with real-time event streaming using ansible-runner.
 Provides async interface for integration with Celery tasks.
 """
 
-import ansible_runner
 import asyncio
 import json
-from typing import Callable, Dict, Any, Optional
-from pathlib import Path
 import logging
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional
+
+import ansible_runner
 
 logger = logging.getLogger(__name__)
 

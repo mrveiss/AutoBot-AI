@@ -9,8 +9,9 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 from src.constants.network_constants import NetworkConstants
+
+from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
 logger = logging.getLogger(__name__)
 

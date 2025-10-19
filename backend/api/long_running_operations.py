@@ -10,20 +10,22 @@ Integrated with the existing AutoBot backend architecture.
 
 import asyncio
 import logging
+import os
+import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
+    Depends,
     HTTPException,
     WebSocket,
     WebSocketDisconnect,
-    BackgroundTasks,
-    Depends,
 )
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-import sys
-import os
+
 from src.constants.network_constants import NetworkConstants
 
 # Add AutoBot paths
@@ -31,18 +33,18 @@ sys.path.append("/home/kali/Desktop/AutoBot")
 
 # Import our long-running operations framework
 try:
-    from src.utils.operation_timeout_integration import (
-        operation_integration_manager,
-        CreateOperationRequest,
-        OperationResponse,
-        OperationListResponse,
-        ProgressUpdateRequest,
-        OperationMigrator,
-    )
     from src.utils.long_running_operations_framework import (
-        OperationType,
-        OperationStatus,
         OperationPriority,
+        OperationStatus,
+        OperationType,
+    )
+    from src.utils.operation_timeout_integration import (
+        CreateOperationRequest,
+        OperationListResponse,
+        OperationMigrator,
+        OperationResponse,
+        ProgressUpdateRequest,
+        operation_integration_manager,
     )
 except ImportError as e:
     logging.warning(f"Long-running operations framework not available: {e}")

@@ -1,27 +1,29 @@
 """Knowledge Base API endpoints for content management and search with RAG integration."""
 
-import logging
 import asyncio
+import hashlib
 import json
+import logging
+import re
 import subprocess
 import sys
-import uuid
-import hashlib
 import time
-import re
+import uuid
 from datetime import datetime
-from typing import Dict, Any, List, Optional
 from pathlib import Path as PathLib
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Query, Path
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field, validator
-from backend.knowledge_factory import get_or_create_knowledge_base
+
 from backend.background_vectorization import get_background_vectorizer
+from backend.knowledge_factory import get_or_create_knowledge_base
 from src.constants.network_constants import NetworkConstants
 
 # Import RAG Agent for enhanced search capabilities
 try:
-    from src.agents.rag_agent import get_rag_agent
     from src.agents.agent_orchestrator import get_agent_orchestrator
+    from src.agents.rag_agent import get_rag_agent
 
     RAG_AVAILABLE = True
 except ImportError:
@@ -1966,6 +1968,7 @@ async def get_machine_profile(req: Request):
     """Get machine profile with system information and capabilities"""
     try:
         import platform
+
         import psutil
 
         # Gather system information

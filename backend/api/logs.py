@@ -3,18 +3,19 @@ Unified Log Viewer API
 Provides endpoints to read and stream AutoBot logs from both files and Docker containers
 """
 
+import asyncio
+import json
+import logging
 import os
 import subprocess
-import json
-from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Optional, Any
-import asyncio
-import aiofiles
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import aiofiles
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
-import logging
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

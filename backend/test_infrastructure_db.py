@@ -4,21 +4,21 @@ Test Suite for Infrastructure Database Foundation
 Comprehensive tests for SQLAlchemy models and InfrastructureDB service layer.
 """
 
+import asyncio
 import os
 import sys
-import asyncio
 from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.services.infrastructure_db import InfrastructureDB
 from backend.models.infrastructure import (
-    InfraRole,
-    InfraHost,
     InfraCredential,
     InfraDeployment,
+    InfraHost,
+    InfraRole,
 )
+from backend.services.infrastructure_db import InfrastructureDB
 
 
 def test_database_initialization():

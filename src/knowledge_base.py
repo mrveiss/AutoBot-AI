@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import aiofiles
 import aioredis
@@ -24,10 +24,10 @@ from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
 from pypdf import PdfReader
 
 from src.circuit_breaker import circuit_breaker_async
+from src.constants.network_constants import NetworkConstants
 
 # Import the centralized ConfigManager
 from src.unified_config import config
-from src.constants.network_constants import NetworkConstants
 from src.utils.knowledge_base_timeouts import kb_timeouts
 
 

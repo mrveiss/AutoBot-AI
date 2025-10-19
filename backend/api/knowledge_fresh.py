@@ -3,10 +3,12 @@ Fresh Knowledge Base Stats Endpoint - Bypasses All Caching
 This creates a completely new knowledge base instance for testing the fixes
 """
 
-from fastapi import APIRouter, Request
 import asyncio
 import logging
 import os
+
+from fastapi import APIRouter, Request
+
 from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
@@ -82,8 +84,8 @@ async def get_fresh_knowledge_stats(request: Request = None):
 async def debug_redis_connection():
     """Debug Redis connection and vector counts"""
     try:
-        import redis
         import aioredis
+        import redis
 
         # Test direct Redis connection to the knowledge base
         redis_host = os.getenv("AUTOBOT_REDIS_HOST")

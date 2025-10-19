@@ -35,8 +35,8 @@ import aioredis
 import numpy as np
 from cachetools import LRUCache
 
-from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
+from src.unified_config import config
 
 logger = logging.getLogger(__name__)
 

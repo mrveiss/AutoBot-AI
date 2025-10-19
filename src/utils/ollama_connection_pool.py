@@ -8,10 +8,12 @@ and improve performance across multiple concurrent requests.
 import asyncio
 import logging
 import time
-from typing import Dict, Optional, Callable, Any
-from dataclasses import dataclass
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Optional
+
 import aiohttp
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

@@ -10,24 +10,26 @@ This is the main integration point for the comprehensive Claude API optimization
 """
 
 import asyncio
-import logging
 import json
+import logging
 import time
-from typing import Dict, List, Any, Optional, Union, Callable
 from dataclasses import dataclass, field
-from enum import Enum
 from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Union
+
+from src.constants.network_constants import NetworkConstants
+
+from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
 
 # Import all optimization components
 from .conversation_rate_limiter import ConversationRateLimiter, RateLimitExceededError
-from .payload_optimizer import PayloadOptimizer, OptimizationResult
-from .request_batcher import IntelligentRequestBatcher, BatchableRequest
-from .graceful_degradation import GracefulDegradationManager, FallbackResponse
+from .graceful_degradation import FallbackResponse, GracefulDegradationManager
+from .payload_optimizer import OptimizationResult, PayloadOptimizer
+from .request_batcher import BatchableRequest, IntelligentRequestBatcher
 from .todowrite_optimizer import TodoWriteOptimizer, get_todowrite_optimizer
 from .tool_pattern_analyzer import ToolPatternAnalyzer, get_tool_pattern_analyzer
-from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

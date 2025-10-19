@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.enhanced_memory_manager import EnhancedMemoryManager
 from src.constants.network_constants import NetworkConstants
+from src.enhanced_memory_manager import EnhancedMemoryManager
 from src.enhanced_memory_manager_async import (
     TaskPriority,
     TaskStatus,

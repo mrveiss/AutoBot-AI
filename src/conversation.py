@@ -12,9 +12,10 @@ from typing import Any, Dict, List, Optional
 
 from src.agents import get_kb_librarian
 from src.agents.classification_agent import ClassificationAgent, ClassificationResult
-from src.unified_config_manager import config as global_config_manager
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
+from src.constants.network_constants import NetworkConstants
+from src.research_browser_manager import research_browser_manager
 from src.source_attribution import (
     SourceType,
     clear_sources,
@@ -22,8 +23,7 @@ from src.source_attribution import (
     source_manager,
     track_source,
 )
-from src.constants.network_constants import NetworkConstants
-from src.research_browser_manager import research_browser_manager
+from src.unified_config_manager import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 

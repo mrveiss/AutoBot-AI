@@ -3,10 +3,12 @@ Unified API Endpoint Registry
 Single source of truth for all API endpoints and routing configuration
 """
 
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Dict, List, Optional, Tuple
+
 from fastapi import APIRouter
+
 from src.constants.network_constants import NetworkConstants
 
 # Create FastAPI router

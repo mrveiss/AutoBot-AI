@@ -7,8 +7,8 @@ removing the need for components to directly import and use global_config_manage
 
 from fastapi import Depends
 
-from src.unified_config_manager import UnifiedConfigManager
 from src.constants.network_constants import NetworkConstants
+from src.unified_config_manager import UnifiedConfigManager
 
 global_config_manager = UnifiedConfigManager()
 

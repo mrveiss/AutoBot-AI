@@ -5,14 +5,15 @@ Prevents 413 errors and reduces API usage by analyzing and optimizing
 request payloads through compression, summarization, and intelligent chunking.
 """
 
-import logging
-import json
-import re
-import gzip
 import base64
-from typing import Any, Dict, List, Tuple, Optional, Union
+import gzip
+import json
+import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

@@ -18,13 +18,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from src.constants.network_constants import NetworkConstants
+from src.logging.terminal_logger import TerminalLogger
 from src.secure_command_executor import (
     CommandRisk,
     SecureCommandExecutor,
     SecurityPolicy,
 )
-from src.constants.network_constants import NetworkConstants
-from src.logging.terminal_logger import TerminalLogger
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +184,22 @@ class AgentTerminalService:
                 logger.info(
                     f"Reusing existing PTY session {pty_session_id} for agent terminal {session_id}"
                 )
+
+            # CRITICAL: Register PTY session with terminal session_manager for WebSocket logging
+            if pty_session_id and conversation_id:
+                try:
+                    from backend.api.terminal import session_manager
+
+                    session_manager.session_configs[pty_session_id] = {
+                        "security_level": "standard",
+                        "conversation_id": conversation_id,  # Enable TerminalLogger
+                    }
+                    logger.info(
+                        f"Registered PTY session {pty_session_id} with conversation_id {conversation_id} for logging"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to register PTY session with session_manager: {e}")
+
         except Exception as e:
             logger.error(f"Error creating PTY session: {e}")
             pty_session_id = None

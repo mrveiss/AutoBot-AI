@@ -430,8 +430,8 @@ class ConfigManager:
 # DEPRECATED: This file now imports from unified_config_manager for backward compatibility
 # All new code should import directly from src.unified_config_manager
 
-from src.unified_config_manager import unified_config_manager
 from src.constants import NetworkConstants, ServiceURLs
+from src.unified_config_manager import unified_config_manager
 
 # Backward compatibility aliases
 config_manager = unified_config_manager

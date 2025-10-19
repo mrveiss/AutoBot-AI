@@ -11,11 +11,11 @@ import time
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+from src.constants.network_constants import NetworkConstants
 from src.intelligence.goal_processor import GoalProcessor, ProcessedGoal
 
 # Import our new intelligent agent components
 from src.intelligence.os_detector import OSDetector, OSInfo, get_os_detector
-from src.constants.network_constants import NetworkConstants
 from src.intelligence.streaming_executor import (
     ChunkType,
     StreamChunk,

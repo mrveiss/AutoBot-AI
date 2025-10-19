@@ -11,30 +11,30 @@ Complete REST API for Infrastructure as Code (IaC) platform including:
 import logging
 import os
 import socket
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query, Request
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from backend.models.infrastructure import InfraHost, InfraRole
+from backend.schemas.infrastructure import (
+    DeploymentCreate,
+    DeploymentDetailResponse,
+    DeploymentResponse,
+    HostCreate,
+    HostDetailResponse,
+    HostResponse,
+    HostStatusResponse,
+    HostUpdate,
+    ProvisionKeyRequest,
+    ProvisionKeyResponse,
+    RoleResponse,
+    StatisticsResponse,
+)
 from backend.services.infrastructure_db import InfrastructureDB
 from backend.services.ssh_provisioner import SSHKeyProvisioner
 from backend.tasks.deployment_tasks import deploy_host
-from backend.schemas.infrastructure import (
-    HostCreate,
-    HostResponse,
-    HostDetailResponse,
-    HostUpdate,
-    DeploymentCreate,
-    DeploymentResponse,
-    DeploymentDetailResponse,
-    RoleResponse,
-    StatisticsResponse,
-    ProvisionKeyRequest,
-    ProvisionKeyResponse,
-    HostStatusResponse,
-)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Infrastructure as Code"])

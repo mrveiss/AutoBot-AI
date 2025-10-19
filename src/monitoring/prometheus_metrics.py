@@ -3,14 +3,15 @@ Prometheus Metrics Manager for AutoBot
 Provides centralized metrics collection and exposure.
 """
 
+from typing import Optional
+
 from prometheus_client import (
-    Counter,
-    Histogram,
-    Gauge,
     CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
     generate_latest,
 )
-from typing import Optional
 
 
 class PrometheusMetricsManager:

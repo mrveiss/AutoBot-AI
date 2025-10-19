@@ -12,8 +12,9 @@ from typing import Any, Dict
 
 import aiohttp
 
-from .utils.service_registry import get_service_url
 from src.constants.network_constants import NetworkConstants
+
+from .utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 

@@ -35,17 +35,18 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
 from src.constants.network_constants import NetworkConstants
 
 # Advanced features from chat_workflow_manager_fixed
 try:
+    from src.agents import get_kb_librarian
     from src.agents.classification_agent import (
         ClassificationAgent,
         ClassificationResult,
     )
-    from src.agents import get_kb_librarian
     from src.agents.llm_failsafe_agent import get_robust_llm_response
     from src.autobot_types import TaskComplexity
 
@@ -55,7 +56,7 @@ except ImportError:
 
 # Modern architecture from async_chat_workflow
 try:
-    from src.dependency_container import get_llm, get_config, inject_services
+    from src.dependency_container import get_config, get_llm, inject_services
     from src.llm_interface import ChatMessage, LLMResponse
 
     MODERN_ARCHITECTURE_AVAILABLE = True

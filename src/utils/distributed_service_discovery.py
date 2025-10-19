@@ -8,12 +8,13 @@ ROOT CAUSE FIX: Replaces DNS resolution delays with cached service endpoints
 """
 
 import asyncio
+import json
 import logging
 import time
-import aiohttp
-from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
-import json
+from typing import Dict, Optional, Tuple
+
+import aiohttp
 
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 

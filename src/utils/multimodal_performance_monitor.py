@@ -10,8 +10,10 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
-import psutil
+
 import numpy as np
+import psutil
+
 from src.constants.network_constants import NetworkConstants
 
 try:

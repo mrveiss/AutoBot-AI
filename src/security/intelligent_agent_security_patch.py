@@ -17,15 +17,15 @@ INSTALLATION:
 """
 
 import logging
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
+from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.security.prompt_injection_detector import (
-    get_prompt_injection_detector,
     InjectionRisk,
+    get_prompt_injection_detector,
 )
 from src.security.secure_llm_command_parser import get_secure_llm_parser
-from src.enhanced_security_layer import EnhancedSecurityLayer
 
 logger = logging.getLogger(__name__)
 

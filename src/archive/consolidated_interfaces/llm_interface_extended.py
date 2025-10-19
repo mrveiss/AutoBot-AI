@@ -6,8 +6,9 @@ Extends the existing LLM interface to add vLLM and HuggingFace model support
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-from .llm_interface import LLMInterface
 from src.constants.network_constants import NetworkConstants
+
+from .llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 

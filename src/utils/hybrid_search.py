@@ -7,8 +7,8 @@ import asyncio
 import logging
 import math
 import re
-from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants

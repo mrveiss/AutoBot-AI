@@ -9,8 +9,9 @@ from typing import Optional
 
 import aiohttp
 
-from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
 from src.constants.network_constants import NetworkConstants
+
+from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
 
 logger = logging.getLogger(__name__)
 

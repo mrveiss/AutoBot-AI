@@ -9,12 +9,13 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
-from .domain_security import DomainSecurityManager, DomainSecurityConfig
-from .input_validator import WebResearchInputValidator
-from ..agents.web_research_integration import WebResearchIntegration, ResearchType
 from src.constants.network_constants import NetworkConstants
+
+from ..agents.web_research_integration import ResearchType, WebResearchIntegration
+from .domain_security import DomainSecurityConfig, DomainSecurityManager
+from .input_validator import WebResearchInputValidator
 
 logger = logging.getLogger(__name__)
 

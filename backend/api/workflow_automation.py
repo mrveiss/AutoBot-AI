@@ -17,11 +17,11 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from backend.api.terminal import ConsolidatedTerminalWebSocket
+from src.constants.network_constants import NetworkConstants
 from src.enhanced_orchestrator import EnhancedOrchestrator
 
 # Import existing orchestrator and workflow components
 from src.orchestrator import Orchestrator
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

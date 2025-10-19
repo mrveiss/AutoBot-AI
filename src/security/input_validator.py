@@ -9,10 +9,10 @@ import html
 import logging
 import re
 import urllib.parse
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
-from src.constants.network_constants import NetworkConstants
 
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

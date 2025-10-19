@@ -5,15 +5,16 @@ Provides dynamic service resolution and health monitoring across 6 VMs
 """
 
 import asyncio
-import aiohttp
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from enum import Enum
+
+import aiohttp
 
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 

@@ -21,13 +21,15 @@ Usage:
     redis_url = config.get_service_url('redis')
 """
 
-import os
 import logging
+import os
+import re
 import threading
 from pathlib import Path
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional
+
 import yaml
-import re
+
 from src.constants import NetworkConstants, ServiceURLs
 
 logger = logging.getLogger(__name__)

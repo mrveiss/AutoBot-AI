@@ -6,10 +6,11 @@ DEPLOYMENT STRATEGY: Use this middleware file for initial rollout to observe
 authentication patterns without impacting service availability.
 """
 
+import structlog
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+
 from backend.security.service_auth import validate_service_auth
-import structlog
 from src.constants.network_constants import NetworkConstants
 
 logger = structlog.get_logger()

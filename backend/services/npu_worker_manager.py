@@ -14,7 +14,6 @@ from typing import Dict, List, Optional
 import aiofiles
 import yaml
 
-from src.constants.network_constants import NetworkConstants
 from backend.models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -24,8 +23,9 @@ from backend.models.npu_models import (
     WorkerStatus,
     WorkerTestResult,
 )
-from src.npu_integration import NPUWorkerClient
+from src.constants.network_constants import NetworkConstants
 from src.event_manager import event_manager
+from src.npu_integration import NPUWorkerClient
 
 logger = logging.getLogger(__name__)
 

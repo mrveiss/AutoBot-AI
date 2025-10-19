@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Type, Union
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

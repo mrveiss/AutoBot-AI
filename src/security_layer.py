@@ -5,9 +5,10 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from src.constants.network_constants import NetworkConstants
+
 # Import the centralized ConfigManager
 from src.unified_config_manager import config as global_config_manager
-from src.constants.network_constants import NetworkConstants
 
 
 class SecurityLayer:

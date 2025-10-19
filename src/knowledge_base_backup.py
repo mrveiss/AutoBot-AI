@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+
 from src.constants.network_constants import NetworkConstants
 
 
@@ -36,6 +37,10 @@ from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
 from pypdf import PdfReader
 
 from src.circuit_breaker import circuit_breaker_async
+from src.config_helper import cfg
+
+# Import retry mechanism and circuit breaker
+from src.retry_mechanism import RetryStrategy, retry_async
 
 # Import the centralized ConfigManager
 from src.unified_config_manager import (
@@ -44,19 +49,15 @@ from src.unified_config_manager import (
     OLLAMA_PORT,
 )
 from src.unified_config_manager import config as global_config_manager
-from src.config_helper import cfg
-
-# Import retry mechanism and circuit breaker
-from src.retry_mechanism import RetryStrategy, retry_async
 
 # Import utils
 from src.utils.logging_manager import get_llm_logger
 
-# GPU OPTIMIZATION: Use GPU-optimized semantic chunker for 5x performance improvement
-from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
-
 # Knowledge base specific settings
 from src.utils.redis_database_manager import get_redis_client
+
+# GPU OPTIMIZATION: Use GPU-optimized semantic chunker for 5x performance improvement
+from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
 
 logger = get_llm_logger("knowledge_base")
 

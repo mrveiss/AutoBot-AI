@@ -17,9 +17,9 @@ import jwt
 from fastapi import HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from src.unified_config import config
-from src.security_layer import SecurityLayer
 from src.constants.network_constants import NetworkConstants
+from src.security_layer import SecurityLayer
+from src.unified_config import config
 
 logger = logging.getLogger(__name__)
 

@@ -15,9 +15,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+from src.constants.network_constants import NetworkConstants
 from src.llm_interface import LLMInterface
 from src.utils.command_validator import CommandValidator
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

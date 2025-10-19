@@ -6,20 +6,21 @@ Integrates the batching system with AutoBot's existing Claude API infrastructure
 import asyncio
 import logging
 import time
-from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Union
 
 # Import our components
 from src.constants.network_constants import NetworkConstants
-from .request_batcher import (
-    IntelligentRequestBatcher,
-    BatchableRequest,
-    RequestPriority,
-    BatchingStrategy,
-    create_batcher,
-)
+
 from .conversation_rate_limiter import ConversationRateLimiter
 from .payload_optimizer import PayloadOptimizer
+from .request_batcher import (
+    BatchableRequest,
+    BatchingStrategy,
+    IntelligentRequestBatcher,
+    RequestPriority,
+    create_batcher,
+)
 
 logger = logging.getLogger(__name__)
 

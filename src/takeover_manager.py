@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
 from src.constants.network_constants import NetworkConstants
+from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
 
 logger = logging.getLogger(__name__)
 
